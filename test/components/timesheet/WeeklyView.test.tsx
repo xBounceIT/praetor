@@ -84,7 +84,7 @@ describe('<WeeklyView /> RBAC catalog scoping', () => {
     });
   });
 
-  test('pre-fills the form row when the catalog selection matches an existing entry', async () => {
+  test('renders an existing entry as its own row with pre-filled hours', async () => {
     const entries: TimeEntry[] = [
       {
         id: 'entry-1',
@@ -104,9 +104,6 @@ describe('<WeeklyView /> RBAC catalog scoping', () => {
 
     render(<WeeklyView entries={entries} {...alphaCatalog} {...sharedProps} />);
 
-    // The form auto-selects Alpha Task, so the entry collapses into the
-    // editable "Nuova voce" row. The pre-filled 3.5h must surface in a
-    // day-cell decimal input.
     await waitFor(() => {
       const inputs = document.body.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"]');
       const prefilled = Array.from(inputs).some((input) => input.value === '3.5');
@@ -211,10 +208,10 @@ describe('<WeeklyView /> submit mutations', () => {
     expect(updateCalls).toEqual([]);
   });
 
-  test('clearing a form-row cell that maps to an existing entry calls onDeleteEntry', async () => {
-    // The single-combo catalog auto-selects, collapsing the matching entry
-    // into the form row. Clearing it must still flow through submitRow so
-    // hasFormChanges triggers the delete instead of dropping the edit.
+  test('clearing an entry-row cell triggers onDeleteEntry even when the catalog has a single combo', async () => {
+    // With a single-combo catalog the form auto-selects that combo, but the
+    // existing entry still renders as its own Phase 1 row (keyed by entry.id).
+    // Clearing it must flow through submitRow and delete the entry.
     const today = todayDateOnly();
     const deleteCalls: string[] = [];
 
@@ -314,6 +311,116 @@ describe('<WeeklyView /> submit mutations', () => {
       expect(addCalls[0]).toHaveLength(1);
       expect(addCalls[0][0] as Record<string, unknown>).not.toHaveProperty('hourlyCost');
     });
+  });
+
+  test('renders two TimeEntries sharing (client, project, task, date) as independent rows', async () => {
+    // Regression: the old per-combo grouping wrote `baseDays[entry.date]` in
+    // a loop and the second entry overwrote the first, so duplicates were
+    // invisible in the UI. With one row per entry both must render and be
+    // independently deletable.
+    const today = todayDateOnly();
+    const deleteCalls: string[] = [];
+    const updateCalls: Array<{ id: string; updates: unknown }> = [];
+
+    render(
+      <WeeklyView
+        entries={[
+          { ...entryBOn(today), id: 'entry-b-1', duration: 2, createdAt: 1 },
+          { ...entryBOn(today), id: 'entry-b-2', duration: 5, createdAt: 2 },
+        ]}
+        {...twoComboCatalog}
+        {...sharedProps}
+        onUpdateEntry={(id, updates) => {
+          updateCalls.push({ id, updates });
+        }}
+        onDeleteEntry={(id) => {
+          deleteCalls.push(id);
+        }}
+      />,
+    );
+
+    const inputs = await waitForDurationInputs(
+      (xs) => xs.some((i) => i.value === '2') && xs.some((i) => i.value === '5'),
+    );
+    const twoInput = inputs.find((i) => i.value === '2');
+    if (!twoInput) throw new Error('expected 2h input to render');
+
+    setDurationInput(twoInput, '');
+    clickSubmit();
+
+    await waitFor(() => {
+      expect(deleteCalls).toEqual(['entry-b-1']);
+    });
+    expect(updateCalls).toEqual([]);
+  });
+
+  test('typing hours on an empty day of a Phase 1 row creates a new entry with that row combo', async () => {
+    // A Phase 1 row is keyed by an existing entry's id, but the user can fill
+    // any of its empty day cells to add a new entry against the same
+    // (client, project, task) — the row's location carries forward.
+    const today = todayDateOnly();
+    const addCalls: Array<Record<string, unknown>[]> = [];
+
+    render(
+      <WeeklyView
+        entries={[entryBOn(today)]}
+        {...twoComboCatalog}
+        {...sharedProps}
+        onAddBulkEntries={async (entries) => {
+          addCalls.push(entries as unknown as Record<string, unknown>[]);
+        }}
+      />,
+    );
+
+    const filledInput = await waitFor(() => {
+      const input = findDurationInputWithValue('3.5');
+      if (!input) throw new Error('pre-filled 3.5 input not found');
+      return input;
+    });
+
+    const row = filledInput.closest('tr');
+    if (!row) throw new Error('phase 1 row not found');
+    const emptyInRow = Array.from(
+      row.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"]'),
+    ).find((i) => i !== filledInput && i.value === '' && !i.disabled);
+    if (!emptyInRow) throw new Error('no empty day cell in the phase 1 row');
+
+    setDurationInput(emptyInRow, '1.5');
+    clickSubmit();
+
+    await waitFor(() => {
+      expect(addCalls).toHaveLength(1);
+      expect(addCalls[0]).toHaveLength(1);
+      const added = addCalls[0][0];
+      expect(added.task).toBe('Task B');
+      expect(added.clientId).toBe('client-b');
+      expect(added.projectId).toBe('project-b');
+      expect(added.duration).toBe(1.5);
+      expect(added.location).toBe('remote');
+      expect(added.date).not.toBe(today);
+    });
+  });
+
+  test('renders an out-of-week combo as an empty quick-log row', async () => {
+    // Phase 2: a combo with no current-week entries surfaces as an empty
+    // quick-log row keyed by `combo:…`. The historical entry itself is not
+    // pre-filled anywhere, but the user can type into the row to log against
+    // the same combo on any day of the visible week.
+    const lastMonth = (() => {
+      const d = new Date();
+      d.setDate(d.getDate() - 40);
+      return d.toISOString().slice(0, 10);
+    })();
+
+    render(<WeeklyView entries={[entryBOn(lastMonth)]} {...twoComboCatalog} {...sharedProps} />);
+
+    await waitFor(() => {
+      expect(document.body).toHaveTextContent('Task B');
+    });
+
+    const inputs = document.body.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"]');
+    const prefilled = Array.from(inputs).some((i) => i.value === '3.5');
+    expect(prefilled).toBe(false);
   });
 
   test('handleSubmit awaits onUpdateEntry before flashing success', async () => {

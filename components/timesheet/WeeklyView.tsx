@@ -83,6 +83,7 @@ type EntryRow = {
 };
 
 const FORM_ROW_KEY = '__form_row__';
+const EMPTY_DAY_MAP: DayMap = {};
 
 const parseDuration = (raw: string): number => {
   if (!raw) return 0;
@@ -196,91 +197,89 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     setPendingEdits({});
   }, [currentWeekStart]);
 
-  // Entries matching the form selection in the current week — used to pre-fill
-  // the "Nuova voce" row so an existing combo isn't double-rendered.
-  const formRowBaseDays = useMemo<DayMap>(() => {
-    if (!selection.clientId || !selection.projectId || !selection.taskName) return {};
-    const days: DayMap = {};
-    for (const entry of userEntries) {
-      if (entry.clientId !== selection.clientId) continue;
-      if (entry.projectId !== selection.projectId) continue;
-      if (entry.task !== selection.taskName) continue;
-      if (!weekDates.includes(entry.date)) continue;
-      days[entry.date] = {
-        duration: String(entry.duration),
-        note: entry.notes ?? '',
-        entryId: entry.id,
-      };
-    }
-    return days;
-  }, [userEntries, weekDates, selection.clientId, selection.projectId, selection.taskName]);
-
-  // Rows for previously-logged combos. Includes every distinct (client,
-  // project, task) the viewing user has used and is still in scope. Combos
-  // with entries in the current week sort first; the rest fall back to most-
-  // recent `createdAt`. The combo matching the form selection is dropped so
-  // the "Nuova voce" row at the top isn't duplicated.
+  // One row per TimeEntry in the current week (keyed by entry.id) so duplicates
+  // sharing (client, project, task, date) stay visible and independently
+  // editable. Combos with no in-week entries get an empty quick-log row keyed
+  // by `combo:…`, capped at 5; the active form-selection combo is filtered out
+  // so the "Nuova voce" row at the top isn't shadowed by an empty duplicate.
   const entryRows: EntryRow[] = useMemo(() => {
-    const groups = new Map<
-      string,
-      { row: EntryRow; maxCreatedAt: number; hasWeekEntry: boolean }
-    >();
     const clientById = new Map(clients.map((c) => [c.id, c]));
     const projectById = new Map(projects.map((p) => [p.id, p]));
     const taskKey = (projectId: string, name: string) => `${projectId}|${name}`;
     const taskSet = new Set(projectTasks.map((task) => taskKey(task.projectId, task.name)));
+    const comboKey = (cid: string, pid: string, task: string) => `${cid}|${pid}|${task}`;
 
-    for (const entry of userEntries) {
-      if (!clientById.has(entry.clientId)) continue;
-      if (!projectById.has(entry.projectId)) continue;
-      if (!taskSet.has(taskKey(entry.projectId, entry.task))) continue;
+    const scopedEntries = userEntries.filter(
+      (entry) =>
+        clientById.has(entry.clientId) &&
+        projectById.has(entry.projectId) &&
+        taskSet.has(taskKey(entry.projectId, entry.task)),
+    );
 
-      const key = `${entry.clientId}|${entry.projectId}|${entry.task}`;
-      let group = groups.get(key);
+    const scopedInWeek = scopedEntries
+      .filter((entry) => weekDates.includes(entry.date))
+      .sort((a, b) => {
+        if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+        if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
+        return a.id < b.id ? -1 : 1;
+      });
+
+    const phase1: EntryRow[] = scopedInWeek.map((entry) => ({
+      key: entry.id,
+      clientId: entry.clientId,
+      clientName: clientById.get(entry.clientId)?.name ?? '',
+      projectId: entry.projectId,
+      projectName: projectById.get(entry.projectId)?.name ?? '',
+      taskName: entry.task,
+      location: entry.location ?? defaultLocation,
+      baseDays: {
+        [entry.date]: {
+          duration: String(entry.duration),
+          note: entry.notes ?? '',
+          entryId: entry.id,
+        },
+      },
+    }));
+
+    const inWeekCombos = new Set(
+      scopedInWeek.map((e) => comboKey(e.clientId, e.projectId, e.task)),
+    );
+
+    const comboGroups = new Map<string, { row: EntryRow; maxCreatedAt: number }>();
+    for (const entry of scopedEntries) {
+      const key = comboKey(entry.clientId, entry.projectId, entry.task);
+      if (inWeekCombos.has(key)) continue;
+      const group = comboGroups.get(key);
       if (!group) {
-        const client = clientById.get(entry.clientId);
-        const project = projectById.get(entry.projectId);
-        group = {
+        comboGroups.set(key, {
           row: {
-            key,
+            key: `combo:${key}`,
             clientId: entry.clientId,
-            clientName: client?.name ?? '',
+            clientName: clientById.get(entry.clientId)?.name ?? '',
             projectId: entry.projectId,
-            projectName: project?.name ?? '',
+            projectName: projectById.get(entry.projectId)?.name ?? '',
             taskName: entry.task,
             location: entry.location ?? defaultLocation,
             baseDays: {},
           },
           maxCreatedAt: entry.createdAt,
-          hasWeekEntry: false,
-        };
-        groups.set(key, group);
-      }
-      if (entry.createdAt > group.maxCreatedAt) group.maxCreatedAt = entry.createdAt;
-      if (weekDates.includes(entry.date)) {
-        group.hasWeekEntry = true;
-        group.row.baseDays[entry.date] = {
-          duration: String(entry.duration),
-          note: entry.notes ?? '',
-          entryId: entry.id,
-        };
-        if (entry.location) group.row.location = entry.location;
+        });
+      } else if (entry.createdAt > group.maxCreatedAt) {
+        group.maxCreatedAt = entry.createdAt;
+        group.row.location = entry.location ?? group.row.location;
       }
     }
 
-    const formKey =
-      selection.clientId && selection.projectId && selection.taskName
-        ? `${selection.clientId}|${selection.projectId}|${selection.taskName}`
-        : '';
-    if (formKey) groups.delete(formKey);
+    if (selection.clientId && selection.projectId && selection.taskName) {
+      comboGroups.delete(comboKey(selection.clientId, selection.projectId, selection.taskName));
+    }
 
-    return Array.from(groups.values())
-      .sort((a, b) => {
-        if (a.hasWeekEntry !== b.hasWeekEntry) return a.hasWeekEntry ? -1 : 1;
-        return b.maxCreatedAt - a.maxCreatedAt;
-      })
+    const phase2 = Array.from(comboGroups.values())
+      .sort((a, b) => b.maxCreatedAt - a.maxCreatedAt)
       .slice(0, 5)
       .map((g) => g.row);
+
+    return [...phase1, ...phase2];
   }, [
     userEntries,
     weekDates,
@@ -383,9 +382,6 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     const newErrors: WeeklyEntryFormErrors = {};
     const formEdits = pendingEdits[FORM_ROW_KEY] ?? {};
     const hasFormHours = Object.values(formEdits).some((cell) => parseDuration(cell.duration) > 0);
-    const hasFormChanges = Object.entries(formEdits).some(
-      ([dateStr, cell]) => classifyEdit(formRowBaseDays[dateStr], cell) !== 'noop',
-    );
 
     if (hasFormHours) {
       if (!selection.clientId) newErrors.clientId = t('common:validation.clientRequired');
@@ -463,13 +459,13 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       }
     };
 
-    if (hasFormChanges) {
+    if (hasFormHours) {
       submitRow(FORM_ROW_KEY, {
         clientId: selection.clientId,
         projectId: selection.projectId,
         taskName: selection.taskName,
         location: selection.location,
-        baseDays: formRowBaseDays,
+        baseDays: EMPTY_DAY_MAP,
       });
     }
 
@@ -512,12 +508,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     for (const day of weekDays) {
       let sum = 0;
       const formEdit = pendingEdits[FORM_ROW_KEY]?.[day.dateStr];
-      if (formEdit) {
-        sum += parseDuration(formEdit.duration);
-      } else {
-        const formBase = formRowBaseDays[day.dateStr];
-        if (formBase) sum += parseDuration(formBase.duration);
-      }
+      if (formEdit) sum += parseDuration(formEdit.duration);
       for (const row of entryRows) {
         const edit = pendingEdits[row.key]?.[day.dateStr];
         if (edit) {
@@ -530,7 +521,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       totals[day.dateStr] = sum;
     }
     return totals;
-  }, [weekDays, entryRows, pendingEdits, formRowBaseDays]);
+  }, [weekDays, entryRows, pendingEdits]);
 
   const weekTotal = useMemo(() => Object.values(dayTotals).reduce((a, b) => a + b, 0), [dayTotals]);
 
@@ -584,9 +575,9 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
         ([dateStr, edit]) => classifyEdit(baseDays[dateStr], edit) !== 'noop',
       );
     };
-    if (rowHasChange(FORM_ROW_KEY, formRowBaseDays)) return true;
+    if (rowHasChange(FORM_ROW_KEY, EMPTY_DAY_MAP)) return true;
     return entryRows.some((row) => rowHasChange(row.key, row.baseDays));
-  }, [pendingEdits, formRowBaseDays, entryRows]);
+  }, [pendingEdits, entryRows]);
   const weeklyGoal = dailyGoal * 5;
 
   const handleExportToCsv = () => {
@@ -605,7 +596,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       [clientName, projectName, taskName].filter(Boolean).join(' · ');
 
     const formRowValues = visibleWeekDays.map((day) => {
-      const cell = getCellValue(FORM_ROW_KEY, day.dateStr, formRowBaseDays);
+      const cell = getCellValue(FORM_ROW_KEY, day.dateStr);
       return formatHours(parseDuration(cell.duration));
     });
     const formRowTotal = sumDayValues(formRowValues);
@@ -820,7 +811,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                       day.isWeekendOrHoliday && 'bg-destructive/5',
                     )}
                   >
-                    {renderDayCellInputs(FORM_ROW_KEY, day, formRowBaseDays)}
+                    {renderDayCellInputs(FORM_ROW_KEY, day, EMPTY_DAY_MAP)}
                   </TableCell>
                 ))}
               </TableRow>
