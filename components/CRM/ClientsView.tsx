@@ -446,14 +446,20 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       return;
     }
 
+    // On update, send `null` for empty optional text fields so the server
+    // clears the column (clientUpdateBodySchema accepts string|null). On
+    // create, send `undefined` so the key is stripped — clientCreateBodySchema
+    // only accepts strings, and a missing key correctly defaults the column
+    // to NULL.
+    const emptySentinel: null | undefined = editingClient ? null : undefined;
     const payload: Partial<Client> = {
       name: trimmedName,
       type: formData.type,
       contacts: normalizedContacts,
-      contactName: primaryContact?.fullName || null,
+      contactName: primaryContact?.fullName || emptySentinel,
       clientCode: trimmedClientCode,
-      email: primaryContact?.email?.trim() || null,
-      phone: primaryContact?.phone?.trim() || null,
+      email: primaryContact?.email?.trim() || emptySentinel,
+      phone: primaryContact?.phone?.trim() || emptySentinel,
       addressCountry: formData.addressCountry?.trim() || '',
       addressState: formData.addressState?.trim() || '',
       addressCap: formData.addressCap?.trim() || '',
@@ -461,9 +467,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       addressCivicNumber: formData.addressCivicNumber?.trim() || '',
       addressLine: formData.addressLine?.trim() || '',
       address: buildAddress(formData),
-      description: formData.description?.trim() || null,
-      atecoCode: formData.atecoCode?.trim() || null,
-      website: formData.website?.trim() || null,
+      description: formData.description?.trim() || emptySentinel,
+      atecoCode: formData.atecoCode?.trim() || emptySentinel,
+      website: formData.website?.trim() || emptySentinel,
       sector: formData.sector,
       numberOfEmployees: formData.numberOfEmployees,
       revenue: formData.revenue,

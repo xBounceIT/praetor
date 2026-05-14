@@ -93,20 +93,28 @@ describe('<ClientsView /> contact validation', () => {
     await submitClientForm(user);
 
     await waitFor(() => expect(props.onAddClient).toHaveBeenCalledTimes(1));
-    // Regression for #405: empty primary-contact fields must be sent as explicit
-    // `null` (not stripped to `undefined`) so the server clears the columns
-    // instead of silently keeping the previous values.
+    // On create, empty optional fields must be omitted (sent as `undefined`,
+    // stripped by normalizeClientPayload). `clientCreateBodySchema` only
+    // accepts strings, so sending `null` would 400 the request — see
+    // the edit-path test below for why update uses `null` instead.
     expect(props.onAddClient).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'Acme Srl',
         clientCode: 'ACME',
         fiscalCode: 'IT12345678901',
         contacts: [],
-        contactName: null,
-        email: null,
-        phone: null,
+        contactName: undefined,
+        email: undefined,
+        phone: undefined,
       }),
     );
+    const createPayload = (props.onAddClient as ReturnType<typeof mock>).mock.calls[0][0] as Record<
+      string,
+      unknown
+    >;
+    for (const field of ['contactName', 'email', 'phone', 'description', 'atecoCode', 'website']) {
+      expect(createPayload[field]).not.toBeNull();
+    }
     expect(screen.queryByText('common:validation.required')).not.toBeInTheDocument();
   });
 
