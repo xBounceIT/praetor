@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import * as realDrizzle from '../../db/drizzle.ts';
 import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
 import * as realReportsAiChatRepo from '../../repositories/reportsAiChatRepo.ts';
 import * as realReportsCatalogRepo from '../../repositories/reportsCatalogRepo.ts';
@@ -16,6 +17,8 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -27,6 +30,9 @@ const reportsClientsSnap = { ...realReportsClientsRepo };
 const reportsHoursSnap = { ...realReportsHoursRepo };
 const reportsRevenueSnap = { ...realReportsRevenueRepo };
 const workUnitsSnap = { ...realWorkUnitsRepo };
+const drizzleSnap = { ...realDrizzle };
+
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
@@ -131,6 +137,10 @@ beforeAll(async () => {
     ...workUnitsSnap,
     listManagedUserIds: listManagedUserIdsMock,
   }));
+  mock.module('../../db/drizzle.ts', () => ({
+    ...drizzleSnap,
+    withDbTransaction: withDbTransactionMock,
+  }));
 
   routePlugin = (await import('../../routes/reports.ts')).default as FastifyPluginAsync;
 
@@ -150,6 +160,7 @@ afterAll(() => {
   mock.module('../../repositories/reportsHoursRepo.ts', () => reportsHoursSnap);
   mock.module('../../repositories/reportsRevenueRepo.ts', () => reportsRevenueSnap);
   mock.module('../../repositories/workUnitsRepo.ts', () => workUnitsSnap);
+  mock.module('../../db/drizzle.ts', () => drizzleSnap);
   globalThis.fetch = originalFetch;
 });
 
@@ -208,12 +219,14 @@ const allMocks = [
   getCatalogSectionMock,
   listManagedUserIdsMock,
   fetchMock,
+  withDbTransactionMock,
 ];
 
 let testApp: FastifyInstance;
 
 beforeEach(async () => {
   for (const m of allMocks) m.mockReset();
+  resetWithDbTransactionMock();
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
@@ -844,5 +857,118 @@ describe('POST /api/reports/ai-reporting/chat/edit-stream', () => {
 
     expect(res.statusCode).toBe(404);
     expect(JSON.parse(res.body)).toEqual({ error: 'User message not found' });
+  });
+
+  // Regression for issue #413: previously the route deleted the old paired assistant
+  // BEFORE starting the AI stream, so a streaming failure permanently lost that response.
+  // Now deletion is deferred until the atomic swap that also inserts the new assistant.
+  test('preserves old paired assistant when AI provider fetch fails (deferred deletion)', async () => {
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Existing' });
+    findUserMessageMock.mockResolvedValue({ id: 'm-user', createdAt: new Date(1000) });
+    findFirstAssistantAfterMock.mockResolvedValue({
+      id: 'm-old-assistant',
+      createdAt: new Date(2000),
+    });
+    listRecentMessagesMock.mockResolvedValue([]);
+    updateMessageContentMock.mockResolvedValue(undefined);
+    fetchMock.mockRejectedValue(new Error('provider unreachable'));
+
+    await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat/edit-stream',
+      headers: authHeader(),
+      payload: { sessionId: 'rpt-chat-1', messageId: 'm-user', content: 'edited' },
+    });
+
+    // The user's edit is persisted immediately (visible regardless of stream outcome).
+    expect(updateMessageContentMock).toHaveBeenCalledWith('m-user', 'edited');
+    // Old assistant message must NOT be deleted when streaming fails — this is the
+    // core regression assertion for #413. Old code deleted it before the stream even
+    // began, so the previous assistant response was permanently lost on any failure.
+    expect(deleteMessageMock).not.toHaveBeenCalled();
+    // No new assistant inserted either — the atomic swap never ran.
+    expect(insertAssistantMessageMock).not.toHaveBeenCalled();
+    // And the swap transaction wrapper was never invoked.
+    expect(withDbTransactionMock).not.toHaveBeenCalled();
+  });
+
+  test('wraps delete-old + insert-new in a single transaction on stream success', async () => {
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Existing' });
+    findUserMessageMock.mockResolvedValue({ id: 'm-user', createdAt: new Date(1000) });
+    findFirstAssistantAfterMock.mockResolvedValue({
+      id: 'm-old-assistant',
+      createdAt: new Date(2000),
+    });
+    listRecentMessagesMock.mockResolvedValue([]);
+    updateMessageContentMock.mockResolvedValue(undefined);
+    deleteMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    touchSessionMock.mockResolvedValue(undefined);
+
+    // Streaming SSE body with a single Gemini text chunk so the stream succeeds.
+    const geminiChunk = `data: ${JSON.stringify({
+      candidates: [{ content: { parts: [{ text: 'new answer' }] } }],
+    })}\n\n`;
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(geminiChunk));
+          controller.close();
+        },
+      }),
+    } as unknown as Response);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat/edit-stream',
+      headers: authHeader(),
+      payload: { sessionId: 'rpt-chat-1', messageId: 'm-user', content: 'edited' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
+    // Both repo writes happened inside the tx callback (TX_SENTINEL is passed as exec).
+    expect(deleteMessageMock).toHaveBeenCalledWith('m-old-assistant', TX_SENTINEL);
+    expect(insertAssistantMessageMock).toHaveBeenCalledTimes(1);
+    expect(insertAssistantMessageMock.mock.calls[0]?.[1]).toBe(TX_SENTINEL);
+  });
+
+  test('skips deleteMessage in transaction when no paired assistant exists', async () => {
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Existing' });
+    findUserMessageMock.mockResolvedValue({ id: 'm-user', createdAt: new Date(1000) });
+    findFirstAssistantAfterMock.mockResolvedValue(null);
+    listRecentMessagesMock.mockResolvedValue([]);
+    updateMessageContentMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    touchSessionMock.mockResolvedValue(undefined);
+
+    const geminiChunk = `data: ${JSON.stringify({
+      candidates: [{ content: { parts: [{ text: 'first answer' }] } }],
+    })}\n\n`;
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(geminiChunk));
+          controller.close();
+        },
+      }),
+    } as unknown as Response);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat/edit-stream',
+      headers: authHeader(),
+      payload: { sessionId: 'rpt-chat-1', messageId: 'm-user', content: 'edited' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
+    expect(deleteMessageMock).not.toHaveBeenCalled();
+    expect(insertAssistantMessageMock).toHaveBeenCalledTimes(1);
+    expect(insertAssistantMessageMock.mock.calls[0]?.[1]).toBe(TX_SENTINEL);
   });
 });
