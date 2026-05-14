@@ -85,56 +85,19 @@ afterEach(() => {
   document.body.style.overflow = '';
 });
 
-describe('<ClientOffersView /> filter controls', () => {
-  test('renders both offers when no filter is applied', () => {
+describe('<ClientOffersView /> list', () => {
+  test('renders every offer passed in (no external search/status filter)', () => {
     render(<ClientOffersView {...baseProps} />);
     expect(screen.getByText('O-ACME-DRAFT')).toBeInTheDocument();
     expect(screen.getByText('O-GLOBEX-SENT')).toBeInTheDocument();
   });
 
-  test('typing in the search input hides non-matching offers (by client name)', () => {
+  test('does not render the external search input or status filter', () => {
     render(<ClientOffersView {...baseProps} />);
-    const searchInput = screen.getByPlaceholderText('sales:clientOffers.searchPlaceholder');
-    fireEvent.change(searchInput, { target: { value: 'Acme' } });
-    expect(screen.getByText('O-ACME-DRAFT')).toBeInTheDocument();
-    expect(screen.queryByText('O-GLOBEX-SENT')).not.toBeInTheDocument();
-  });
-
-  test('typing in the search input hides non-matching offers (by offer code)', () => {
-    render(<ClientOffersView {...baseProps} />);
-    const searchInput = screen.getByPlaceholderText('sales:clientOffers.searchPlaceholder');
-    fireEvent.change(searchInput, { target: { value: 'globex' } });
-    expect(screen.queryByText('O-ACME-DRAFT')).not.toBeInTheDocument();
-    expect(screen.getByText('O-GLOBEX-SENT')).toBeInTheDocument();
-  });
-
-  const pickStatusOption = (statusKey: string) => {
-    const trigger = screen.getByLabelText('sales:clientOffers.filterByStatus');
-    fireEvent.click(trigger);
-    const options = screen.getAllByRole('option');
-    const match = options.find((node) => node.textContent === statusKey);
-    if (!match) {
-      throw new Error(
-        `Could not find option ${statusKey}; saw: ${options.map((o) => o.textContent).join(', ')}`,
-      );
-    }
-    fireEvent.click(match);
-  };
-
-  test('selecting a status filter shows only offers with that status', () => {
-    render(<ClientOffersView {...baseProps} />);
-    pickStatusOption('sales:clientOffers.statusSent');
-    expect(screen.queryByText('O-ACME-DRAFT')).not.toBeInTheDocument();
-    expect(screen.getByText('O-GLOBEX-SENT')).toBeInTheDocument();
-  });
-
-  test('switching status back to "all" restores both rows', () => {
-    render(<ClientOffersView {...baseProps} />);
-    pickStatusOption('sales:clientOffers.statusSent');
-    expect(screen.queryByText('O-ACME-DRAFT')).not.toBeInTheDocument();
-    pickStatusOption('sales:clientOffers.allStatuses');
-    expect(screen.getByText('O-ACME-DRAFT')).toBeInTheDocument();
-    expect(screen.getByText('O-GLOBEX-SENT')).toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText('sales:clientOffers.searchPlaceholder'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('sales:clientOffers.filterByStatus')).not.toBeInTheDocument();
   });
 });
 
