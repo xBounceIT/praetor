@@ -94,12 +94,22 @@ describe('getDbSslConfig', () => {
     expect(getDbSslConfig()).toEqual({ rejectUnauthorized: false });
   });
 
-  test.each([
-    'verify-full',
-    'verify-ca',
-  ] as const)('DB_SSL=%s yields { rejectUnauthorized: true } without a CA when none is configured', (mode) => {
-    process.env.DB_SSL = mode;
-    expect(getDbSslConfig()).toEqual({ rejectUnauthorized: true });
+  test('DB_SSL=verify-full enforces CA and hostname validation', () => {
+    process.env.DB_SSL = 'verify-full';
+    const ssl = getDbSslConfig();
+    expect(ssl).toEqual({ rejectUnauthorized: true });
+    expect(ssl).not.toHaveProperty('checkServerIdentity');
+  });
+
+  test('DB_SSL=verify-ca enforces CA but skips hostname validation (libpq parity)', () => {
+    process.env.DB_SSL = 'verify-ca';
+    const ssl = getDbSslConfig() as {
+      rejectUnauthorized: boolean;
+      checkServerIdentity?: () => undefined;
+    };
+    expect(ssl.rejectUnauthorized).toBe(true);
+    expect(typeof ssl.checkServerIdentity).toBe('function');
+    expect(ssl.checkServerIdentity?.()).toBeUndefined();
   });
 
   test('DB_SSL_CA inline PEM is included in the ssl config', () => {

@@ -53,14 +53,19 @@ const readSslCa = (): string | undefined => {
 
 // `node-postgres` does not honor PGSSLMODE — only libpq does — so SSL must be
 // configured here in code. Defaults to off to preserve the bundled docker-compose
-// stack (Postgres image has no TLS). Enable via DB_SSL=require|verify-full.
+// stack (Postgres image has no TLS). Enable via DB_SSL=require|verify-ca|verify-full.
+// verify-ca skips the hostname check (matching libpq), verify-full keeps it.
 export const getDbSslConfig = (): PoolConfig['ssl'] => {
   const raw = process.env.DB_SSL?.trim().toLowerCase();
   if (!raw || raw === 'false' || raw === 'disable') return false;
   if (raw === 'true' || raw === 'require') return { rejectUnauthorized: false };
   if (raw === 'verify-full' || raw === 'verify-ca') {
     const ca = readSslCa();
-    return ca ? { rejectUnauthorized: true, ca } : { rejectUnauthorized: true };
+    return {
+      rejectUnauthorized: true,
+      ...(ca && { ca }),
+      ...(raw === 'verify-ca' && { checkServerIdentity: () => undefined }),
+    };
   }
   warnInvalidSsl(raw);
   return false;
