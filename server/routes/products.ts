@@ -216,7 +216,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (costUnitResult.ok) expectedCostUnit = costUnitResult.value;
       }
 
-      const id = `p-${Date.now()}`;
+      const id = generatePrefixedId('p');
       const created = await productsRepo.insertProduct({
         id,
         name: nameResult.value,

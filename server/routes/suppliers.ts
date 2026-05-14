@@ -8,6 +8,7 @@ import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getForeignKeyViolation } from '../utils/db-errors.ts';
+import { generatePrefixedId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
   badRequest,
@@ -177,7 +178,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!notesResult.ok) return badRequest(reply, notesResult.message);
 
       const now = Date.now();
-      const id = 's-' + now;
+      const id = generatePrefixedId('s');
       const created = await suppliersRepo.create({
         id,
         name: nameResult.value,

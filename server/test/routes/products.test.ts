@@ -1,4 +1,14 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
 import * as realProductsRepo from '../../repositories/productsRepo.ts';
@@ -349,6 +359,57 @@ describe('POST /api/products', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'product.created' }),
     );
+  });
+
+  test('201 generates unique ids for same-millisecond product creates', async () => {
+    const fixedNow = 1_700_000_000_000;
+    const dateNowSpy = spyOn(Date, 'now').mockReturnValue(fixedNow);
+    insertProductMock.mockImplementation(async (input: Record<string, unknown>) => ({
+      ...SAMPLE_PRODUCT,
+      ...input,
+    }));
+
+    try {
+      const [firstRes, secondRes] = await Promise.all([
+        testApp.inject({
+          method: 'POST',
+          url: '/api/products',
+          headers: authHeader(),
+          payload: {
+            name: 'Widget 1',
+            productCode: 'WGT-1',
+            costo: 10,
+            molPercentage: 30,
+            type: 'goods',
+          },
+        }),
+        testApp.inject({
+          method: 'POST',
+          url: '/api/products',
+          headers: authHeader(),
+          payload: {
+            name: 'Widget 2',
+            productCode: 'WGT-2',
+            costo: 10,
+            molPercentage: 30,
+            type: 'goods',
+          },
+        }),
+      ]);
+
+      expect(firstRes.statusCode).toBe(201);
+      expect(secondRes.statusCode).toBe(201);
+      expect(insertProductMock).toHaveBeenCalledTimes(2);
+
+      const firstInput = insertProductMock.mock.calls[0]?.[0] as { id: string };
+      const secondInput = insertProductMock.mock.calls[1]?.[0] as { id: string };
+
+      expect(firstInput.id).toMatch(/^p-/);
+      expect(secondInput.id).toMatch(/^p-/);
+      expect(firstInput.id).not.toBe(secondInput.id);
+    } finally {
+      dateNowSpy.mockRestore();
+    }
   });
 
   test('400 invalid productCode characters', async () => {
