@@ -189,6 +189,25 @@ describe('authenticateMcpToken', () => {
     expect(findAuthUserByIdMock).not.toHaveBeenCalled();
   });
 
+  test('403 when both lastUsedAt and createdAt are null (fail closed)', async () => {
+    findActiveByRawTokenMock.mockResolvedValue({
+      id: 'mcp-token-1',
+      userId: 'u1',
+      name: 'Agent',
+      scope: 'full',
+      createdAt: null,
+      lastUsedAt: null,
+    });
+    const request = makeRequest('praetor_mcp_token');
+    const reply = makeReply();
+
+    await authenticateMcpToken(request, reply);
+
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body).toEqual({ error: 'MCP token expired due to inactivity' });
+    expect(findAuthUserByIdMock).not.toHaveBeenCalled();
+  });
+
   test('falls back to createdAt for fresh tokens that have not been used yet', async () => {
     process.env.MCP_IDLE_TIMEOUT_MS = String(60 * 60 * 1000); // 1 hour
     __resetMcpIdleTimeoutCacheForTests();

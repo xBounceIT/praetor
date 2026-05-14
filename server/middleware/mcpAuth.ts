@@ -62,8 +62,10 @@ export const authenticateMcpToken = async (request: FastifyRequest, reply: Fasti
   }
 
   // Fall back to createdAt so a freshly-issued token isn't compared against epoch 0.
+  // Fail closed if neither timestamp is set: that row must have been written outside
+  // createForUser (which always supplies createdAt) and shouldn't be trusted.
   const idleReference = token.lastUsedAt ?? token.createdAt;
-  if (idleReference && Date.now() - idleReference.getTime() > getMcpIdleTimeoutMs()) {
+  if (!idleReference || Date.now() - idleReference.getTime() > getMcpIdleTimeoutMs()) {
     return reply.code(403).send({ error: 'MCP token expired due to inactivity' });
   }
 
