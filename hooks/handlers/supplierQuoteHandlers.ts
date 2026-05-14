@@ -2,6 +2,7 @@ import type React from 'react';
 import api from '../../services/api';
 import type { SupplierInvoice, SupplierQuote, SupplierSaleOrder, View } from '../../types';
 import { makeTempId } from '../../utils/tempId';
+import { toastError } from '../../utils/toast';
 
 /**
  * Supplier-quote handlers read `supplierQuoteFilterId` both before and AFTER
@@ -59,6 +60,7 @@ export const makeSupplierQuoteHandlers = (deps: SupplierQuoteHandlersDeps) => {
       setSupplierQuotes((prev) => [...prev, quote]);
     } catch (err) {
       console.error('Failed to add supplier quote:', err);
+      throw err;
     }
   };
 
@@ -74,6 +76,7 @@ export const makeSupplierQuoteHandlers = (deps: SupplierQuoteHandlersDeps) => {
       await refreshSupplierQuoteFlow();
     } catch (err) {
       console.error('Failed to update supplier quote:', err);
+      throw err;
     }
   };
 
@@ -83,6 +86,7 @@ export const makeSupplierQuoteHandlers = (deps: SupplierQuoteHandlersDeps) => {
       setSupplierQuotes((prev) => prev.filter((q) => q.id !== id));
     } catch (err) {
       console.error('Failed to delete supplier quote:', err);
+      throw err;
     }
   };
 
@@ -133,7 +137,7 @@ export const makeSupplierQuoteHandlers = (deps: SupplierQuoteHandlersDeps) => {
       }
     } catch (err) {
       console.error('Failed to create supplier order from quote:', err);
-      alert((err as Error).message || 'Failed to create supplier order from quote');
+      toastError((err as Error).message || 'Failed to create supplier order from quote');
     }
   };
 

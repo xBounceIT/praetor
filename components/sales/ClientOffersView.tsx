@@ -35,6 +35,7 @@ import {
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
+import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import FieldTooltip from '../shared/FieldTooltip';
@@ -249,6 +250,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<Partial<ClientOffer>>(getDefaultFormData());
   const [previewVersion, setPreviewVersion] = useState<OfferVersion | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const baseReadOnly = Boolean(editingOffer && editingOffer.status !== 'draft');
   const isReadOnly = baseReadOnly || previewVersion !== null;
@@ -552,7 +555,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        onUpdateOffer(row.id, { status: 'sent' });
+                        handleStatusUpdate(row.id, { status: 'sent' });
                       }}
                       className="p-2 rounded-lg transition-all text-blue-700 hover:text-blue-600 hover:bg-blue-50"
                     >
@@ -573,7 +576,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onUpdateOffer(row.id, { status: 'accepted' });
+                          handleStatusUpdate(row.id, { status: 'accepted' });
                         }}
                         className="p-2 rounded-lg transition-all text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50"
                       >
@@ -593,7 +596,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onUpdateOffer(row.id, { status: 'denied' });
+                          handleStatusUpdate(row.id, { status: 'denied' });
                         }}
                         className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
                       >
@@ -782,6 +785,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (isSubmitting) return;
 
     const nextErrors: Record<string, string> = {};
     if (!formData.clientId) {
@@ -811,12 +815,28 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       })),
     };
 
-    if (editingOffer) {
-      await onUpdateOffer(editingOffer.id, payload);
-    } else if (onAddOffer) {
-      await onAddOffer(payload);
+    setIsSubmitting(true);
+    try {
+      if (editingOffer) {
+        await onUpdateOffer(editingOffer.id, payload);
+      } else if (onAddOffer) {
+        await onAddOffer(payload);
+      }
+    } catch (err) {
+      toastError((err as Error).message || t('sales:clientOffers.failedToSave'));
+      return;
+    } finally {
+      setIsSubmitting(false);
     }
     setIsModalOpen(false);
+  };
+
+  const handleStatusUpdate = async (id: string, updates: Partial<ClientOffer>) => {
+    try {
+      await onUpdateOffer(id, updates);
+    } catch (err) {
+      toastError((err as Error).message || t('sales:clientOffers.failedToUpdateStatus'));
+    }
   };
 
   return (
@@ -1504,8 +1524,12 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                   {t('common:buttons.cancel')}
                 </Button>
                 {!isReadOnly && (
-                  <Button type="submit">
-                    {editingOffer ? t('common:buttons.update') : t('common:buttons.save')}
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting
+                      ? t('common:buttons.saving')
+                      : editingOffer
+                        ? t('common:buttons.update')
+                        : t('common:buttons.save')}
                   </Button>
                 )}
               </ModalFooter>
@@ -1526,13 +1550,25 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
       <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen}
-        onClose={() => setIsDeleteConfirmOpen(false)}
+        onClose={() => {
+          if (isDeleting) return;
+          setIsDeleteConfirmOpen(false);
+        }}
         onConfirm={async () => {
           if (!offerToDelete) return;
-          await onDeleteOffer(offerToDelete.id);
-          setIsDeleteConfirmOpen(false);
-          setOfferToDelete(null);
+          if (isDeleting) return;
+          setIsDeleting(true);
+          try {
+            await onDeleteOffer(offerToDelete.id);
+            setIsDeleteConfirmOpen(false);
+            setOfferToDelete(null);
+          } catch (err) {
+            toastError((err as Error).message || t('sales:clientOffers.failedToDelete'));
+          } finally {
+            setIsDeleting(false);
+          }
         }}
+        isDeleting={isDeleting}
         title={t('sales:clientOffers.deleteTitle', { defaultValue: 'Delete offer?' })}
         description={offerToDelete?.id ?? ''}
       />

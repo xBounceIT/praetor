@@ -24,6 +24,7 @@ import {
 } from '../../utils/date';
 import { convertUnitPrice, parseNumberInputValue } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
+import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import FieldTooltip from '../shared/FieldTooltip';
@@ -130,6 +131,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<Partial<SupplierQuote>>(getDefaultFormData());
   const [previewVersion, setPreviewVersion] = useState<SupplierQuoteVersion | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const baseReadOnly = Boolean(editingQuote && editingQuote.status !== 'draft');
   const isReadOnly = baseReadOnly || previewVersion !== null;
@@ -631,6 +634,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (isSubmitting) return;
 
     const nextErrors: Record<string, string> = {};
     if (!formData.supplierId) {
@@ -662,12 +666,19 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       })),
     };
 
-    if (editingQuote) {
-      await onUpdateQuote(editingQuote.id, payload);
-    } else {
-      await onAddQuote(payload);
+    setIsSubmitting(true);
+    try {
+      if (editingQuote) {
+        await onUpdateQuote(editingQuote.id, payload);
+      } else {
+        await onAddQuote(payload);
+      }
+    } catch (err) {
+      toastError((err as Error).message || t('sales:supplierQuotes.failedToSave'));
+      return;
+    } finally {
+      setIsSubmitting(false);
     }
-
     closeModal();
   };
 
@@ -1172,10 +1183,12 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   {t('common:buttons.cancel', { defaultValue: 'Cancel' })}
                 </Button>
                 {!isReadOnly && (
-                  <Button type="submit">
-                    {editingQuote
-                      ? t('common:buttons.update', { defaultValue: 'Update' })
-                      : t('common:buttons.save', { defaultValue: 'Save' })}
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting
+                      ? t('common:buttons.saving')
+                      : editingQuote
+                        ? t('common:buttons.update', { defaultValue: 'Update' })
+                        : t('common:buttons.save', { defaultValue: 'Save' })}
                   </Button>
                 )}
               </ModalFooter>
@@ -1196,13 +1209,25 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
       <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen}
-        onClose={() => setIsDeleteConfirmOpen(false)}
+        onClose={() => {
+          if (isDeleting) return;
+          setIsDeleteConfirmOpen(false);
+        }}
         onConfirm={async () => {
           if (!quoteToDelete) return;
-          await onDeleteQuote(quoteToDelete.id);
-          setIsDeleteConfirmOpen(false);
-          setQuoteToDelete(null);
+          if (isDeleting) return;
+          setIsDeleting(true);
+          try {
+            await onDeleteQuote(quoteToDelete.id);
+            setIsDeleteConfirmOpen(false);
+            setQuoteToDelete(null);
+          } catch (err) {
+            toastError((err as Error).message || t('sales:supplierQuotes.failedToDelete'));
+          } finally {
+            setIsDeleting(false);
+          }
         }}
+        isDeleting={isDeleting}
         title={t('sales:supplierQuotes.deleteTitle', { defaultValue: 'Delete supplier quote?' })}
         description={quoteToDelete?.id ?? ''}
       />
