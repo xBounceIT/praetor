@@ -320,7 +320,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, autoProvisionAllResult.message);
       }
 
-      const updated = await ldapRepo.update({
+      const updatePatch: ldapRepo.LdapConfigPatch = {
         enabled: enabledValue,
         serverUrl,
         baseDn,
@@ -332,7 +332,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         roleMappings: validatedMappings,
         autoProvisionAll: autoProvisionAllResult.value,
         ...tlsCaResult.patch,
-      });
+      };
+
+      const updated = isBindPasswordMasked
+        ? await ldapRepo.updatePreservingStoredBindPassword(updatePatch)
+        : await ldapRepo.update(updatePatch);
+
+      if (!updated) {
+        return reply.code(409).send({
+          error:
+            'LDAP bind credentials changed while saving; reload the configuration and try again',
+          errorCode: 'ldap_bind_credentials_changed',
+        });
+      }
 
       // Drop the cached config in the singleton LDAPService so the next
       // authenticate()/syncUsers() call re-reads from the DB. Without this,
