@@ -1,17 +1,9 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import type { RenderOptions, RenderResult } from '@testing-library/react';
-import {
-  act,
-  fireEvent,
-  render as rtlRender,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ReactNode } from 'react';
 import { THEME_STORAGE_KEY } from '../../utils/theme';
 import { installI18nMock } from '../helpers/i18n';
+import { render } from '../helpers/render';
 
 installI18nMock();
 
@@ -25,20 +17,14 @@ const readClipboardSpy = spyOn(clipboardModule, 'readTextFromClipboard').mockRes
   reason: 'unavailable',
 });
 
-const { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } = await import(
-  '../../components/ui/tooltip'
-);
+const { Tooltip, TooltipContent, TooltipTrigger } = await import('../../components/ui/tooltip');
 const { useState } = await import('react');
 const StandardTable = (await import('../../components/shared/StandardTable')).default;
 const Modal = (await import('../../components/shared/Modal')).default;
 const StatusBadge = (await import('../../components/shared/StatusBadge')).default;
 
-const render = (ui: ReactNode, options?: RenderOptions): RenderResult => {
-  const result = rtlRender(<TooltipProvider>{ui}</TooltipProvider>, options);
-  const rerender = (nextUi: ReactNode) =>
-    result.rerender(<TooltipProvider>{nextUi}</TooltipProvider>);
-  return { ...result, rerender };
-};
+const countPaddingRows = (container: HTMLElement) =>
+  container.querySelectorAll('tbody tr[aria-hidden="true"]').length;
 
 type Row = { id: string; name: string; age: number };
 
@@ -133,6 +119,17 @@ describe('<StandardTable />', () => {
     expect(screen.getByText('table.noResults')).toBeInTheDocument();
   });
 
+  test('empty state renders the shadcn Empty primitive at minimum height', () => {
+    const { container } = render(
+      <StandardTable<Row> title="People" data={[]} columns={sampleColumns} />,
+    );
+    const emptyEl = container.querySelector('[data-slot="empty"]') as HTMLElement | null;
+    expect(emptyEl).not.toBeNull();
+    expect(emptyEl?.textContent).toContain('table.noResults');
+    // Default minBodyRows = 4, body row height = 44px → at least 176px reserved.
+    expect(Number.parseInt(emptyEl?.style.minHeight ?? '0', 10)).toBeGreaterThanOrEqual(176);
+  });
+
   test('custom emptyState overrides default text', () => {
     render(
       <StandardTable<Row>
@@ -144,6 +141,61 @@ describe('<StandardTable />', () => {
     );
     expect(screen.getByText('Nothing here')).toBeInTheDocument();
     expect(screen.queryByText('table.noResults')).not.toBeInTheDocument();
+  });
+
+  test('short pages are padded with aria-hidden placeholder rows up to minBodyRows', () => {
+    const { container } = render(
+      <StandardTable<Row>
+        title="ShortPage"
+        data={sampleRows.slice(0, 1)}
+        columns={sampleColumns}
+      />,
+    );
+    const paddingRows = container.querySelectorAll('tbody tr[aria-hidden="true"]');
+    expect(paddingRows.length).toBe(3);
+    // Padding rows must be inert and excluded from the a11y tree so existing
+    // role-based queries (and screen readers) ignore them.
+    for (const padding of paddingRows) {
+      expect(padding.className).toContain('pointer-events-none');
+      expect(padding.querySelector('button')).toBeNull();
+    }
+    expect(screen.getAllByRole('row').slice(1)).toHaveLength(1);
+  });
+
+  test('full pages skip padding rows entirely', () => {
+    const many: Row[] = Array.from({ length: 5 }, (_, i) => ({
+      id: String(i + 1),
+      name: `User${i + 1}`,
+      age: 20 + i,
+    }));
+    const { container } = render(
+      <StandardTable<Row> title="FullPage" data={many} columns={sampleColumns} />,
+    );
+    expect(countPaddingRows(container)).toBe(0);
+  });
+
+  test('minBodyRows prop overrides the default padding target', () => {
+    const { container } = render(
+      <StandardTable<Row>
+        title="CustomMin"
+        data={sampleRows.slice(0, 1)}
+        columns={sampleColumns}
+        minBodyRows={2}
+      />,
+    );
+    expect(countPaddingRows(container)).toBe(1);
+  });
+
+  test('minBodyRows={0} disables padding so the body collapses to its rows', () => {
+    const { container } = render(
+      <StandardTable<Row>
+        title="NoPadding"
+        data={sampleRows.slice(0, 1)}
+        columns={sampleColumns}
+        minBodyRows={0}
+      />,
+    );
+    expect(countPaddingRows(container)).toBe(0);
   });
 
   test('renders rows in source order by default', () => {
