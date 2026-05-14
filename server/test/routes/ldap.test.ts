@@ -256,9 +256,13 @@ describe('GET /api/ldap/config', () => {
 
 describe('PUT /api/ldap/config - bindPassword masking', () => {
   test('bindPassword=MASKED_SECRET is dropped from the patch so the stored secret is preserved', async () => {
-    // The client must round-trip the SAME bindDn it received from GET when keeping the
-    // mask sentinel - otherwise the request is rejected to prevent a silent DN edit.
-    ldapGetMock.mockResolvedValue({ ...BASE_CONFIG, bindDn: 'cn=admin,dc=example,dc=com' });
+    // The client can round-trip the same bindDn it received from GET while keeping the
+    // mask sentinel; only the stored password is preserved.
+    ldapGetMock.mockResolvedValue({
+      ...BASE_CONFIG,
+      bindDn: 'cn=admin,dc=example,dc=com',
+      bindPassword: 'stored-secret',
+    });
     const response = await putConfig({
       enabled: false,
       bindDn: 'cn=admin,dc=example,dc=com',
@@ -267,20 +271,42 @@ describe('PUT /api/ldap/config - bindPassword masking', () => {
     expect(response.statusCode).toBe(200);
     const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
     expect(patch.bindPassword).toBeUndefined();
-    // bindDn must also be dropped (paired with bindPassword) so the stored credential survives
-    // unchanged; otherwise the COALESCE-on-undefined trick can't preserve the pair atomically.
+    // Unchanged bindDn is omitted from the patch, avoiding a no-op write to that column.
     expect(patch.bindDn).toBeUndefined();
   });
 
-  test('rejects a bindDn change when bindPassword is masked (no silent DN swap)', async () => {
-    ldapGetMock.mockResolvedValue({ ...BASE_CONFIG, bindDn: 'cn=admin,dc=example,dc=com' });
+  test('allows a bindDn change when bindPassword is masked by preserving the stored secret', async () => {
+    ldapGetMock.mockResolvedValue({
+      ...BASE_CONFIG,
+      bindDn: 'cn=admin,dc=example,dc=com',
+      bindPassword: 'stored-secret',
+    });
+    const response = await putConfig({
+      enabled: false,
+      bindDn: 'cn=rotated,dc=example,dc=com',
+      bindPassword: MASKED_SECRET,
+    });
+    expect(response.statusCode).toBe(200);
+    const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
+    expect(patch.bindDn).toBe('cn=rotated,dc=example,dc=com');
+    expect(patch.bindPassword).toBeUndefined();
+  });
+
+  test('rejects a masked bindPassword when there is no stored secret to preserve', async () => {
+    ldapGetMock.mockResolvedValue({
+      ...BASE_CONFIG,
+      bindDn: 'cn=admin,dc=example,dc=com',
+      bindPassword: '',
+    });
     const response = await putConfig({
       enabled: false,
       bindDn: 'cn=rotated,dc=example,dc=com',
       bindPassword: MASKED_SECRET,
     });
     expect(response.statusCode).toBe(400);
-    expect(JSON.parse(response.body).error).toContain('bindDn cannot be changed');
+    expect(JSON.parse(response.body).error).toContain(
+      'bindDn and bindPassword must be provided together',
+    );
     expect(ldapUpdateMock).not.toHaveBeenCalled();
   });
 
