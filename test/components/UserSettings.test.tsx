@@ -31,17 +31,19 @@ const onListMcpTokens = mock(() =>
       id: 'mcp-token-1',
       name: 'Agent',
       tokenPrefix: 'praetor_mcp_abcd',
+      scope: 'full' as const,
       createdAt: 1000,
       lastUsedAt: null,
     },
   ]),
 );
-const onCreateMcpToken = mock((_name: string) =>
+const onCreateMcpToken = mock((_name: string, _scope: 'read_only' | 'full' = 'full') =>
   Promise.resolve({
     token: {
       id: 'mcp-token-2',
       name: 'External Agent',
       tokenPrefix: 'praetor_mcp_efgh',
+      scope: _scope,
       createdAt: 2000,
       lastUsedAt: null,
     },
@@ -341,7 +343,7 @@ describe('<UserSettings /> MCP tokens', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /mcp.create/ }));
 
-    await waitFor(() => expect(onCreateMcpToken).toHaveBeenCalledWith('External Agent'));
+    await waitFor(() => expect(onCreateMcpToken).toHaveBeenCalledWith('External Agent', 'full'));
     expect(await screen.findByText('praetor_mcp_raw_secret')).toBeInTheDocument();
     expect(await screen.findByText('External Agent')).toBeInTheDocument();
     expect((screen.getByLabelText('mcp.promptLabel') as HTMLTextAreaElement).value).toContain(

@@ -58,7 +58,7 @@ describe('makeEntryHandlers', () => {
     apiMocks.entriesDelete.mockReset();
   });
 
-  test('add uses viewingUserId when set', async () => {
+  test('add uses viewingUserId when set and leaves cost to the server', async () => {
     apiMocks.entriesCreate.mockImplementation((data: unknown) =>
       Promise.resolve({ id: 'e-new', createdAt: 1, ...(data as object) }),
     );
@@ -71,9 +71,9 @@ describe('makeEntryHandlers', () => {
 
     await handlers.add({ duration: 1 } as never);
 
-    expect(apiMocks.entriesCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'other-user', hourlyCost: 50 }),
-    );
+    const callArg = apiMocks.entriesCreate.mock.calls[0][0] as Record<string, unknown>;
+    expect(callArg.userId).toBe('other-user');
+    expect(callArg).not.toHaveProperty('hourlyCost');
   });
 
   test('add falls back to currentUser.id when viewingUserId is empty', async () => {
@@ -121,7 +121,7 @@ describe('makeEntryHandlers', () => {
     expect(apiMocks.entriesCreate).toHaveBeenCalledTimes(2);
     for (const call of apiMocks.entriesCreate.mock.calls) {
       expect((call[0] as { userId: string }).userId).toBe('other-user');
-      expect((call[0] as { hourlyCost: number }).hourlyCost).toBe(75);
+      expect(call[0] as Record<string, unknown>).not.toHaveProperty('hourlyCost');
     }
   });
 
@@ -163,8 +163,10 @@ describe('makeEntryHandlers', () => {
     expect(entries.get()).toEqual([{ id: 'e2', userId: 'me', createdAt: 2 }]);
   });
 
-  const lastCreateArg = <K extends string>(key: K) =>
-    (apiMocks.entriesCreate.mock.calls.at(-1)?.[0] as Record<K, unknown>)[key];
+  const lastCreatePayload = () =>
+    apiMocks.entriesCreate.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+
+  const lastCreateArg = <K extends string>(key: K) => lastCreatePayload()[key];
 
   // These tests verify that handlers see fresh user-identity values when the
   // factory is rebuilt under correct memoization. They don't directly mirror
@@ -203,7 +205,7 @@ describe('makeEntryHandlers', () => {
     expect(lastCreateArg('userId')).toBe('user-B');
   });
 
-  test('handlers see the latest currentUser cost after a state change', async () => {
+  test('handlers keep cost server-owned after a currentUser cost change', async () => {
     apiMocks.entriesCreate.mockImplementation((data: unknown) =>
       Promise.resolve({ id: `e-${Date.now()}`, createdAt: Date.now(), ...(data as object) }),
     );
@@ -227,13 +229,13 @@ describe('makeEntryHandlers', () => {
     await act(async () => {
       await result.current.add({ duration: 1 } as never);
     });
-    expect(lastCreateArg('hourlyCost')).toBe(10);
+    expect(lastCreatePayload()).not.toHaveProperty('hourlyCost');
 
     rerender({ user: { id: 'me', costPerHour: 99 } });
 
     await act(async () => {
       await result.current.add({ duration: 1 } as never);
     });
-    expect(lastCreateArg('hourlyCost')).toBe(99);
+    expect(lastCreatePayload()).not.toHaveProperty('hourlyCost');
   });
 });

@@ -36,6 +36,7 @@ const getRolePermissionsMock = mock();
 
 const coExistsByIdMock = mock();
 const coFindExistingMock = mock();
+const coLockExistingByIdMock = mock();
 const coFindLinkedSaleIdMock = mock();
 const coFindFullForSnapshotMock = mock();
 const coFindItemsForOfferMock = mock();
@@ -80,6 +81,7 @@ beforeAll(async () => {
     ...clientOffersRepoSnap,
     existsById: coExistsByIdMock,
     findExisting: coFindExistingMock,
+    lockExistingById: coLockExistingByIdMock,
     findLinkedSaleId: coFindLinkedSaleIdMock,
     findFullForSnapshot: coFindFullForSnapshotMock,
     findItemsForOffer: coFindItemsForOfferMock,
@@ -200,6 +202,7 @@ const allMocks = [
   getRolePermissionsMock,
   coExistsByIdMock,
   coFindExistingMock,
+  coLockExistingByIdMock,
   coFindLinkedSaleIdMock,
   coFindFullForSnapshotMock,
   coFindItemsForOfferMock,
@@ -316,7 +319,7 @@ describe('GET /api/sales/client-offers/:id/versions/:versionId', () => {
 
 describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => {
   const setupHappyPath = () => {
-    coFindExistingMock.mockResolvedValue({
+    coLockExistingByIdMock.mockResolvedValue({
       id: 'off-1',
       linkedQuoteId: 'q-1',
       clientId: 'c1',
@@ -352,6 +355,10 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
     expect(body.id).toBe('off-1');
     expect(body.items).toHaveLength(1);
 
+    // TOCTOU guard: gate-read must use the FOR UPDATE helper, not the non-locking findExisting
+    expect(coLockExistingByIdMock).toHaveBeenCalledWith('off-1', TX_SENTINEL);
+    expect(coFindExistingMock).not.toHaveBeenCalled();
+
     // Pre-restore snapshot inserted with reason='restore'
     expect(ovInsertMock).toHaveBeenCalledWith(
       expect.objectContaining({ offerId: 'off-1', reason: 'restore', createdByUserId: 'u1' }),
@@ -385,7 +392,7 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
   });
 
   test('404 when current offer does not exist', async () => {
-    coFindExistingMock.mockResolvedValue(null);
+    coLockExistingByIdMock.mockResolvedValue(null);
 
     const res = await testApp.inject({
       method: 'POST',
@@ -399,7 +406,7 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
   });
 
   test('409 when offer is not draft', async () => {
-    coFindExistingMock.mockResolvedValue({
+    coLockExistingByIdMock.mockResolvedValue({
       id: 'off-1',
       linkedQuoteId: 'q-1',
       clientId: 'c1',
@@ -418,7 +425,7 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
   });
 
   test('409 when any linked sale exists (draft or otherwise)', async () => {
-    coFindExistingMock.mockResolvedValue({
+    coLockExistingByIdMock.mockResolvedValue({
       id: 'off-1',
       linkedQuoteId: 'q-1',
       clientId: 'c1',
@@ -469,7 +476,7 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
   });
 
   test('404 when version not found (and no cross-offer leak)', async () => {
-    coFindExistingMock.mockResolvedValue({
+    coLockExistingByIdMock.mockResolvedValue({
       id: 'off-1',
       linkedQuoteId: 'q-1',
       clientId: 'c1',

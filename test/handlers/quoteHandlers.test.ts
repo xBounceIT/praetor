@@ -33,6 +33,14 @@ const apiMocks = {
   invoicesList: mock((): Promise<unknown[]> => Promise.resolve([])),
 };
 
+const toastErrorMock = mock((_message: string) => {});
+
+mock.module('../../utils/toast', () => ({
+  toastError: (message: string) => toastErrorMock(message),
+  toastSuccess: () => {},
+  toast: { error: () => {}, success: () => {}, info: () => {} },
+}));
+
 mock.module('../../services/api', () => ({
   default: {
     quotes: {
@@ -140,18 +148,16 @@ const buildHandlers = (overrides: Record<string, unknown> = {}) => {
 
 const silenceConsole = () => {
   const originalError = console.error;
-  const originalAlert = globalThis.alert;
   console.error = mock(() => {}) as unknown as typeof console.error;
-  globalThis.alert = mock(() => {}) as unknown as typeof globalThis.alert;
   return () => {
     console.error = originalError;
-    globalThis.alert = originalAlert;
   };
 };
 
 describe('makeQuoteHandlers', () => {
   beforeEach(() => {
     for (const m of Object.values(apiMocks)) m.mockClear();
+    toastErrorMock.mockClear();
   });
 
   afterEach(() => {
@@ -192,12 +198,12 @@ describe('makeQuoteHandlers', () => {
     expect(ctx.quotes.get()[0].id).toBe('q-new');
   });
 
-  test('addQuote swallows errors', async () => {
+  test('addQuote rethrows api error', async () => {
     apiMocks.quotesCreate.mockImplementation(() => Promise.reject(new Error('boom')));
     const ctx = buildHandlers();
     const restore = silenceConsole();
     try {
-      await ctx.handlers.addQuote({} as never);
+      await expect(ctx.handlers.addQuote({} as never)).rejects.toThrow('boom');
     } finally {
       restore();
     }
@@ -255,12 +261,12 @@ describe('makeQuoteHandlers', () => {
     expect(ctx.clientQuoteFilterId.get()).toBe('q1');
   });
 
-  test('updateQuote swallows errors', async () => {
+  test('updateQuote rethrows api error', async () => {
     apiMocks.quotesUpdate.mockImplementation(() => Promise.reject(new Error('boom')));
     const ctx = buildHandlers({ quotes: [{ id: 'q1' }] });
     const restore = silenceConsole();
     try {
-      await ctx.handlers.updateQuote('q1', {} as never);
+      await expect(ctx.handlers.updateQuote('q1', {} as never)).rejects.toThrow('boom');
     } finally {
       restore();
     }
@@ -275,12 +281,12 @@ describe('makeQuoteHandlers', () => {
     expect(ctx.quotes.get()).toEqual([{ id: 'q2' }]);
   });
 
-  test('deleteQuote swallows errors', async () => {
+  test('deleteQuote rethrows api error', async () => {
     apiMocks.quotesDelete.mockImplementation(() => Promise.reject(new Error('boom')));
     const ctx = buildHandlers();
     const restore = silenceConsole();
     try {
-      await ctx.handlers.deleteQuote('q1');
+      await expect(ctx.handlers.deleteQuote('q1')).rejects.toThrow('boom');
     } finally {
       restore();
     }
@@ -371,7 +377,7 @@ describe('makeQuoteHandlers', () => {
     expect(ctx.setActiveView).toHaveBeenCalledWith('sales/client-offers');
   });
 
-  test('createClientOfferFromQuote alerts on api error', async () => {
+  test('createClientOfferFromQuote toasts on api error', async () => {
     apiMocks.clientOffersCreate.mockImplementation(() => Promise.reject(new Error('boom')));
     const ctx = buildHandlers();
     const restore = silenceConsole();
@@ -387,6 +393,8 @@ describe('makeQuoteHandlers', () => {
         items: [],
       } as never);
       expect(ctx.setActiveView).not.toHaveBeenCalled();
+      expect(toastErrorMock).toHaveBeenCalledTimes(1);
+      expect(toastErrorMock.mock.calls[0][0]).toBe('boom');
     } finally {
       restore();
     }
@@ -402,12 +410,12 @@ describe('makeQuoteHandlers', () => {
     expect(ctx.clientsOrders.get()).toEqual([{ id: 'or-fresh' }]);
   });
 
-  test('updateClientsOrder swallows errors', async () => {
+  test('updateClientsOrder rethrows api error', async () => {
     apiMocks.clientsOrdersUpdate.mockImplementation(() => Promise.reject(new Error('boom')));
     const ctx = buildHandlers();
     const restore = silenceConsole();
     try {
-      await ctx.handlers.updateClientsOrder('or-1', {} as never);
+      await expect(ctx.handlers.updateClientsOrder('or-1', {} as never)).rejects.toThrow('boom');
     } finally {
       restore();
     }
@@ -422,12 +430,12 @@ describe('makeQuoteHandlers', () => {
     expect(ctx.clientsOrders.get()).toEqual([{ id: 'or-2' }]);
   });
 
-  test('deleteClientsOrder swallows errors', async () => {
+  test('deleteClientsOrder rethrows api error', async () => {
     apiMocks.clientsOrdersDelete.mockImplementation(() => Promise.reject(new Error('nope')));
     const ctx = buildHandlers();
     const restore = silenceConsole();
     try {
-      await ctx.handlers.deleteClientsOrder('or-1');
+      await expect(ctx.handlers.deleteClientsOrder('or-1')).rejects.toThrow('nope');
     } finally {
       restore();
     }
@@ -466,7 +474,7 @@ describe('makeQuoteHandlers', () => {
     expect(refreshSupplierQuoteFlow).toHaveBeenCalled();
   });
 
-  test('createClientsOrderFromOffer alerts on api error', async () => {
+  test('createClientsOrderFromOffer toasts on api error', async () => {
     apiMocks.clientsOrdersCreate.mockImplementation(() => Promise.reject(new Error('boom')));
     const ctx = buildHandlers();
     const restore = silenceConsole();
@@ -482,6 +490,8 @@ describe('makeQuoteHandlers', () => {
         items: [],
       } as never);
       expect(ctx.setActiveView).not.toHaveBeenCalled();
+      expect(toastErrorMock).toHaveBeenCalledTimes(1);
+      expect(toastErrorMock.mock.calls[0][0]).toBe('boom');
     } finally {
       restore();
     }

@@ -19,8 +19,28 @@ Set at least:
 - `ENCRYPTION_KEY`
 - `FRONTEND_URL`
 
-Fresh installs create the bootstrap admin as `admin` / `password`. Change that password after
-the first login.
+Fresh installs create the bootstrap admin as `admin` with the password from the
+`ADMIN_DEFAULT_PASSWORD` env var (falls back to `password` when unset). The app surfaces an
+in-app warning until the admin password is changed away from any insecure default; change it
+after the first login.
+
+### PostgreSQL TLS (optional)
+
+The backend uses `node-postgres`, which does **not** honor `PGSSLMODE` — TLS must be opted
+in via the app-level `DB_SSL` env var. Accepted values mirror libpq:
+
+- `disable` / unset: no TLS. Use for the bundled compose stack (Postgres image has no TLS).
+- `require`: encrypted connection, server certificate is **not** validated.
+- `verify-ca`: encrypted connection, server certificate is validated against the CA, but
+  the hostname is **not** checked. Useful when connecting through a tunnel or by IP.
+- `verify-full`: encrypted connection, server certificate is validated against the CA, and
+  the hostname must match. Recommended for production.
+
+For `verify-ca` and `verify-full`, provide the CA either inline via `DB_SSL_CA` (PEM
+string) or as a path via `DB_SSL_CA_FILE`. Without a CA, the system trust store is used.
+
+`DB_SSL` is read by both the runtime pool and `drizzle-kit` migrations, so the same value
+applies to both paths.
 
 ## 2) Authenticate to Registry (if private)
 

@@ -90,6 +90,27 @@ describe('findExisting', () => {
   });
 });
 
+describe('lockExistingById', () => {
+  test('uses FOR UPDATE in the emitted SQL', async () => {
+    exec.enqueue({ rows: [['so-1', 'q-1', 's-1', 'Acme', 'draft']] });
+    await supplierOrdersRepo.lockExistingById('so-1', testDb);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('for update');
+    expect(exec.calls[0].params).toContain('so-1');
+  });
+
+  test('returns mapped row when present', async () => {
+    exec.enqueue({ rows: [['so-1', 'q-1', 's-1', 'Acme', 'sent']] });
+    const result = await supplierOrdersRepo.lockExistingById('so-1', testDb);
+    expect(result?.id).toBe('so-1');
+    expect(result?.status).toBe('sent');
+  });
+
+  test('returns null when row missing', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await supplierOrdersRepo.lockExistingById('so-x', testDb)).toBeNull();
+  });
+});
+
 describe('findLinkedInvoiceId', () => {
   test('returns id when found', async () => {
     exec.enqueue({ rows: [['inv-1']] });

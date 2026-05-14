@@ -4,7 +4,6 @@ import * as rolesRepo from '../repositories/rolesRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import * as ssoService from '../services/sso.ts';
 import { logAudit } from '../utils/audit.ts';
-import { MASKED_SECRET } from '../utils/crypto.ts';
 import { replyError } from '../utils/replyError.ts';
 import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/validation.ts';
 
@@ -69,6 +68,14 @@ const idParamsSchema = {
 
 const slugPattern = /^[a-z0-9][a-z0-9-]{0,98}[a-z0-9]$/;
 
+const handleProviderValidationError = (error: unknown, reply: FastifyReply): boolean => {
+  if (error instanceof ssoService.SsoProviderValidationError) {
+    badRequest(reply, error.message);
+    return true;
+  }
+  return false;
+};
+
 const validateProviderBody = async (
   body: Record<string, unknown>,
   reply: FastifyReply,
@@ -121,7 +128,7 @@ const validateProviderBody = async (
     validated.enabled = false;
   }
 
-  if (validated.enabled && validated.protocol === 'oidc') {
+  if (options.isCreate && validated.enabled && validated.protocol === 'oidc') {
     for (const field of ['issuerUrl', 'clientId', 'usernameAttribute'] as const) {
       const result = requireNonEmptyString(source[field], field);
       if (!result.ok) {
@@ -129,19 +136,6 @@ const validateProviderBody = async (
         return null;
       }
       validated[field] = result.value;
-    }
-  }
-
-  if (validated.enabled && validated.protocol === 'saml' && options.isCreate) {
-    // A masked sentinel never counts as "present" — the service preserves the existing value
-    // on update, but it can't satisfy a fresh create where there is nothing to preserve.
-    const hasMetadataXml = !!source.metadataXml?.trim() && source.metadataXml !== MASKED_SECRET;
-    const hasMetadata = !!source.metadataUrl?.trim() || hasMetadataXml;
-    const hasIdpCert = !!source.idpCert?.trim() && source.idpCert !== MASKED_SECRET;
-    const hasManual = !!source.entryPoint?.trim() && hasIdpCert;
-    if (!hasMetadata && !hasManual) {
-      badRequest(reply, 'SAML requires metadata URL/XML or manual entryPoint and idpCert');
-      return null;
     }
   }
 
@@ -233,7 +227,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         isCreate: true,
       });
       if (!input) return reply;
-      const created = await ssoService.createProvider(input);
+      let created: ssoService.AdminSsoProvider;
+      try {
+        created = await ssoService.createProvider(input);
+      } catch (error) {
+        if (handleProviderValidationError(error, reply)) return reply;
+        throw error;
+      }
       await logAudit({
         request,
         action: 'sso_provider.created',
@@ -266,7 +266,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         isCreate: false,
       });
       if (!input) return reply;
-      const updated = await ssoService.updateProvider(id, input);
+      let updated: ssoService.AdminSsoProvider | null;
+      try {
+        updated = await ssoService.updateProvider(id, input);
+      } catch (error) {
+        if (handleProviderValidationError(error, reply)) return reply;
+        throw error;
+      }
       if (!updated) {
         return replyError(request, reply, {
           statusCode: 404,

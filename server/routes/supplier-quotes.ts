@@ -409,24 +409,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const isIdOnlyUpdate =
-        nextId !== undefined &&
-        supplierId === undefined &&
-        supplierName === undefined &&
-        items === undefined &&
-        paymentTerms === undefined &&
-        status === undefined &&
-        expirationDate === undefined &&
-        notes === undefined;
-
-      const hasContentUpdate =
+      // Two related flags with different jobs: `hasNonStatusOrIdUpdates` drives the
+      // non-draft read-only guard (status transitions and id renames must still be allowed
+      // on sent/accepted/denied quotes); `hasContentUpdate` drives whether to take a
+      // version snapshot before writing (status transitions DO want a snapshot, id-only
+      // renames do not).
+      const hasNonStatusOrIdUpdates =
         supplierId !== undefined ||
         supplierName !== undefined ||
         items !== undefined ||
         paymentTerms !== undefined ||
-        status !== undefined ||
         expirationDate !== undefined ||
         notes !== undefined;
+      const hasContentUpdate = hasNonStatusOrIdUpdates || status !== undefined;
 
       const patch: supplierQuotesRepo.SupplierQuoteUpdate = {};
 
@@ -468,15 +463,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!normalizedItems) return;
       }
 
-      const [linkedOrderId, idConflict] = await Promise.all([
-        isIdOnlyUpdate
-          ? Promise.resolve(null)
-          : supplierQuotesRepo.findLinkedOrderId(idResult.value),
+      const [current, linkedOrderId, idConflict] = await Promise.all([
+        supplierQuotesRepo.findById(idResult.value),
+        supplierQuotesRepo.findLinkedOrderId(idResult.value),
         nextIdValue
           ? supplierQuotesRepo.findIdConflict(nextIdValue, idResult.value)
           : Promise.resolve(false),
       ]);
-      if (linkedOrderId && !isIdOnlyUpdate) {
+      if (!current) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Supplier quote not found',
+          action: 'supplier_quote.update.not_found',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+        });
+      }
+      if (linkedOrderId) {
         return replyError(request, reply, {
           statusCode: 409,
           message: 'Quotes become read-only once an order exists',
@@ -484,6 +487,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityType: 'supplier_quote',
           entityId: idResult.value,
           details: { secondaryLabel: 'order_exists' },
+        });
+      }
+      if (normalizeSupplierQuoteStatus(current.status) !== 'draft' && hasNonStatusOrIdUpdates) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Non-draft supplier quotes are read-only',
+          action: 'supplier_quote.update.conflict',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'non_draft_read_only', fromValue: current.status },
         });
       }
       if (idConflict) {

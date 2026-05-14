@@ -3,7 +3,7 @@ import { ArrowRight, Loader2, RefreshCw } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { logsApi } from '../../services/api';
+import { logsApi } from '../../services/api/logs';
 import type { AuditLogEntry } from '../../types';
 import DatePickerButton from '../shared/DatePickerButton';
 import SelectControl from '../shared/SelectControl';
@@ -200,6 +200,7 @@ const LogsView: React.FC<LogsViewProps> = ({
   const [error, setError] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const initialLoadRef = useRef(true);
+  const latestAuditRequestIdRef = useRef(0);
   const [selectedPreset, setSelectedPreset] = useState<TimeRange | null>('last7Days');
   const [startDate, setStartDate] = useState<Date>(() => getPresetRange('last7Days').start);
   const [endDate, setEndDate] = useState<Date>(() => getPresetRange('last7Days').end);
@@ -267,43 +268,62 @@ const LogsView: React.FC<LogsViewProps> = ({
     setSelectedPreset(null);
   }, []);
 
-  const loadAuditLogs = useCallback(async () => {
-    setError('');
-    try {
-      const data = await logsApi.listAudit({
-        startDate,
-        endDate,
-        username: debouncedUsername || undefined,
-        action: debouncedAction || undefined,
-        entityType: entityTypeFilter || undefined,
-      });
-      setRows(data);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : t('logs.errors.loadFailed');
-      setError(message || t('logs.errors.loadFailed'));
-    }
-  }, [t, startDate, endDate, debouncedUsername, debouncedAction, entityTypeFilter]);
+  const loadAuditLogs = useCallback(
+    async (requestId: number) => {
+      setError('');
+      try {
+        const data = await logsApi.listAudit({
+          startDate,
+          endDate,
+          username: debouncedUsername || undefined,
+          action: debouncedAction || undefined,
+          entityType: entityTypeFilter || undefined,
+        });
+        if (latestAuditRequestIdRef.current !== requestId) return false;
+        setRows(data);
+        return true;
+      } catch (err) {
+        if (latestAuditRequestIdRef.current !== requestId) return false;
+        const message = err instanceof Error ? err.message : t('logs.errors.loadFailed');
+        setError(message || t('logs.errors.loadFailed'));
+        return true;
+      }
+    },
+    [t, startDate, endDate, debouncedUsername, debouncedAction, entityTypeFilter],
+  );
 
   useEffect(() => {
+    const requestId = latestAuditRequestIdRef.current + 1;
+    latestAuditRequestIdRef.current = requestId;
+    const isInitialLoad = initialLoadRef.current;
+
     const load = async () => {
-      if (initialLoadRef.current) {
+      if (isInitialLoad) {
         setLoading(true);
-        await loadAuditLogs();
+        const isCurrent = await loadAuditLogs(requestId);
+        if (!isCurrent) return;
         setLoading(false);
         initialLoadRef.current = false;
       } else {
         setIsRefreshing(true);
-        await loadAuditLogs();
+        const isCurrent = await loadAuditLogs(requestId);
+        if (!isCurrent) return;
         setIsRefreshing(false);
       }
     };
 
     void load();
+    return () => {
+      latestAuditRequestIdRef.current += 1;
+    };
   }, [loadAuditLogs]);
 
   const handleRefreshLogs = async () => {
+    const requestId = latestAuditRequestIdRef.current + 1;
+    latestAuditRequestIdRef.current = requestId;
     setIsRefreshing(true);
-    await loadAuditLogs();
+    const isCurrent = await loadAuditLogs(requestId);
+    if (!isCurrent) return;
     setIsRefreshing(false);
   };
 

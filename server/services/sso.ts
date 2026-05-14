@@ -35,6 +35,13 @@ export type SsoProviderInput = Partial<Omit<ssoProvidersRepo.SsoProvider, 'id'>>
   id?: string;
 };
 
+export class SsoProviderValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SsoProviderValidationError';
+  }
+}
+
 export type SsoLoginResponseUser = usersRepo.AuthUser & {
   permissions: string[];
   availableRoles: rolesRepo.Role[];
@@ -58,6 +65,43 @@ const getProviderSecrets = (provider: ssoProvidersRepo.SsoProvider) => ({
   clientSecret: provider.clientSecret ? decrypt(provider.clientSecret) : '',
   privateKey: provider.privateKey ? decrypt(provider.privateKey) : '',
 });
+
+const hasConfigValue = (value: unknown): boolean =>
+  typeof value === 'string' && value.trim().length > 0;
+
+const assertEnabledProviderConfig = (provider: ssoProvidersRepo.SsoProvider): void => {
+  if (!provider.enabled) return;
+
+  if (provider.protocol === 'oidc') {
+    for (const field of ['issuerUrl', 'clientId', 'usernameAttribute'] as const) {
+      if (!hasConfigValue(provider[field])) {
+        throw new SsoProviderValidationError(`${field} is required`);
+      }
+    }
+    return;
+  }
+
+  const hasMetadata = hasConfigValue(provider.metadataUrl) || hasConfigValue(provider.metadataXml);
+  const hasManual = hasConfigValue(provider.entryPoint) && hasConfigValue(provider.idpCert);
+  if (!hasMetadata && !hasManual) {
+    throw new SsoProviderValidationError(
+      'SAML requires metadata URL/XML or manual entryPoint and idpCert',
+    );
+  }
+};
+
+const applyDefinedProviderPatch = (
+  provider: ssoProvidersRepo.SsoProvider,
+  patch: ssoProvidersRepo.SsoProviderPatch,
+): ssoProvidersRepo.SsoProvider => {
+  const next = { ...provider };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value !== undefined) {
+      (next as Record<string, unknown>)[key] = value;
+    }
+  }
+  return next;
+};
 
 const normalizeSlug = (slug: string) => slug.trim().toLowerCase();
 
@@ -554,7 +598,7 @@ export const createProvider = async (input: SsoProviderInput): Promise<AdminSsoP
   if (!input.slug) throw new Error('slug is required');
   if (!input.name) throw new Error('name is required');
   const patch = prepareProviderValues(input);
-  const created = await ssoProvidersRepo.insert({
+  const provider: ssoProvidersRepo.SsoProvider = {
     id: generatePrefixedId('sso'),
     protocol: input.protocol,
     slug: normalizeSlug(input.slug),
@@ -593,7 +637,9 @@ export const createProvider = async (input: SsoProviderInput): Promise<AdminSsoP
         ? ssoProvidersRepo.DEFAULT_SAML_FIELDS.groupsAttribute
         : ssoProvidersRepo.DEFAULT_OIDC_FIELDS.groupsAttribute),
     roleMappings: patch.roleMappings ?? [],
-  });
+  };
+  assertEnabledProviderConfig(provider);
+  const created = await ssoProvidersRepo.insert(provider);
   return maskProvider(created);
 };
 
@@ -604,6 +650,7 @@ export const updateProvider = async (
   const existing = await ssoProvidersRepo.findById(id);
   if (!existing) return null;
   const patch = prepareProviderValues(input, existing);
+  assertEnabledProviderConfig(applyDefinedProviderPatch(existing, patch));
   const updated = await ssoProvidersRepo.update(id, patch);
   return updated ? maskProvider(updated) : null;
 };

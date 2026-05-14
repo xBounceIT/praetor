@@ -19,11 +19,13 @@ import { Separator } from '../ui/separator';
 import EntryCatalogSelector from './EntryCatalogSelector';
 import { CUSTOM_TASK_SENTINEL, useCatalogSelection } from './useCatalogSelection';
 
+type TimeEntryDraft = Omit<TimeEntry, 'id' | 'createdAt' | 'userId' | 'hourlyCost' | 'cost'>;
+
 export interface DailyViewProps {
   clients: Client[];
   projects: Project[];
   projectTasks: ProjectTask[];
-  onAdd: (entry: Omit<TimeEntry, 'id' | 'createdAt' | 'userId' | 'hourlyCost'>) => void;
+  onAdd: (entry: TimeEntryDraft) => void;
   selectedDate: string;
   onMakeRecurring?: (
     taskId: string,

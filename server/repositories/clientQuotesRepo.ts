@@ -161,10 +161,9 @@ export const findIdConflict = async (
   return rows.length > 0;
 };
 
-// Reads the minimal set of fields needed to gate updates / restores. Named `findCurrent`
-// (not `findCurrentForUpdate`) because it does not acquire a row lock - callers run the read,
-// validate, and then issue a separate UPDATE outside any locking scope. If you need true
-// SELECT ... FOR UPDATE semantics, wrap in `withDbTransaction` and add `.for('update')`.
+// Reads the minimal set of fields needed to gate updates / restores. Does not acquire a row
+// lock - safe for non-mutating reads, but TOCTOU-prone when a write decision depends on it.
+// For SELECT ... FOR UPDATE semantics call `lockCurrentById` inside `withDbTransaction`.
 export const findCurrent = async (
   id: string,
   exec: DbExecutor = db,
@@ -181,6 +180,34 @@ export const findCurrent = async (
     })
     .from(quotes)
     .where(eq(quotes.id, id));
+  if (rows.length === 0) return null;
+  return {
+    status: rows[0].status,
+    discount: parseDbNumber(rows[0].discount, 0),
+    discountType: rows[0].discountType === 'currency' ? 'currency' : 'percentage',
+  };
+};
+
+// SELECT ... FOR UPDATE variant of `findCurrent`. Must be called inside a transaction; the
+// row lock is released on commit/rollback. Use when a subsequent write (or a gate against a
+// concurrent insert that references this row's id) depends on the read.
+export const lockCurrentById = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<{
+  status: string;
+  discount: number;
+  discountType: 'percentage' | 'currency';
+} | null> => {
+  const rows = await exec
+    .select({
+      status: quotes.status,
+      discount: quotes.discount,
+      discountType: quotes.discountType,
+    })
+    .from(quotes)
+    .where(eq(quotes.id, id))
+    .for('update');
   if (rows.length === 0) return null;
   return {
     status: rows[0].status,

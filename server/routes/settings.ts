@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { authenticateToken } from '../middleware/auth.ts';
+import { authenticateToken, generateToken } from '../middleware/auth.ts';
 import * as mcpTokensRepo from '../repositories/mcpTokensRepo.ts';
 import * as notificationsRepo from '../repositories/notificationsRepo.ts';
 import * as personalAccessTokensRepo from '../repositories/personalAccessTokensRepo.ts';
@@ -11,6 +11,7 @@ import {
   standardErrorResponses,
   standardRateLimitedErrorResponses,
 } from '../schemas/common.ts';
+import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import {
@@ -18,7 +19,7 @@ import {
   getPersonalAccessTokenDisplayPrefix,
   hashPersonalAccessToken,
 } from '../utils/personal-access-token.ts';
-import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { LOGIN_RATE_LIMIT, STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
@@ -66,16 +67,18 @@ const mcpTokenSchema = {
     id: { type: 'string' },
     name: { type: 'string' },
     tokenPrefix: { type: 'string' },
+    scope: { type: 'string', enum: [...mcpTokensRepo.MCP_TOKEN_SCOPES] },
     createdAt: { type: 'number' },
     lastUsedAt: { type: ['number', 'null'] },
   },
-  required: ['id', 'name', 'tokenPrefix', 'createdAt', 'lastUsedAt'],
+  required: ['id', 'name', 'tokenPrefix', 'scope', 'createdAt', 'lastUsedAt'],
 } as const;
 
 const mcpTokenCreateBodySchema = {
   type: 'object',
   properties: {
     name: { type: 'string' },
+    scope: { type: 'string', enum: [...mcpTokensRepo.MCP_TOKEN_SCOPES] },
   },
   required: ['name'],
 } as const;
@@ -237,10 +240,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!assertAuthenticated(request, reply)) return;
-      const { name } = request.body as { name?: unknown };
+      const { name, scope } = request.body as { name?: unknown; scope?: unknown };
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
       if (nameResult.value.length > 120) return badRequest(reply, 'name is too long');
+
+      const scopeResult = optionalEnum(scope, mcpTokensRepo.MCP_TOKEN_SCOPES, 'scope');
+      if (!scopeResult.ok) return badRequest(reply, scopeResult.message);
 
       const activeTokens = await mcpTokensRepo.listForUser(request.user.id);
       if (activeTokens.length >= MAX_ACTIVE_MCP_TOKENS_PER_USER) {
@@ -259,6 +265,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         userId: request.user.id,
         name: nameResult.value,
         rawToken,
+        scope: scopeResult.value ?? 'full',
       });
 
       return reply.code(201).send({ token, rawToken });
@@ -305,11 +312,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
-  // PUT /password - Update user password
+  // PUT /password - Update user password. LOGIN_RATE_LIMIT (not the standard
+  // per-route limit) because this verifies the current password — same threat
+  // model as login, so it gets the same anti-brute-force budget.
   fastify.put(
     '/password',
     {
-      onRequest: [authenticateToken],
+      onRequest: [fastify.rateLimit(LOGIN_RATE_LIMIT), authenticateToken],
       schema: {
         tags: ['settings'],
         summary: 'Update password',
@@ -366,7 +375,34 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const newHash = await bcrypt.hash(newPasswordResult.value, 12);
 
-      await usersRepo.updatePasswordHash(request.user.id, newHash);
+      const newSessionVersion = await usersRepo.rotatePasswordAndBumpSession(
+        request.user.id,
+        newHash,
+      );
+
+      // Re-sign x-auth-token before the admin-warning side effects below: the
+      // password is already rotated, and authenticateToken's sliding-window
+      // refresh wrote a pre-bump token in onRequest. If a downstream side
+      // effect throws, Fastify's 500 response still carries this rotated
+      // header — without it, the admin would be force-logged-out by their own
+      // password change. PAT callers have nothing to rotate.
+      if (request.auth?.source === 'session' && request.auth.sessionStart !== undefined) {
+        const refreshedToken = generateToken(
+          request.user.id,
+          request.auth.sessionStart,
+          request.user.role,
+          newSessionVersion,
+        );
+        reply.header('x-auth-token', refreshedToken);
+      }
+
+      await logAudit({
+        request,
+        action: 'password.updated',
+        entityType: 'user',
+        entityId: request.user.id,
+      });
+
       if (request.user.username === ADMIN_USERNAME) {
         if (newPasswordResult.value === DEFAULT_ADMIN_PASSWORD) {
           await notificationsRepo.upsertAdminPasswordWarning(request.user.id);

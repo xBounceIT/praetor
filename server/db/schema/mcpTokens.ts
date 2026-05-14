@@ -2,6 +2,8 @@ import { sql } from 'drizzle-orm';
 import { index, pgTable, timestamp, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 import { users } from './users.ts';
 
+export type McpTokenScope = 'read_only' | 'full';
+
 export const mcpTokens = pgTable(
   'mcp_tokens',
   {
@@ -12,6 +14,7 @@ export const mcpTokens = pgTable(
     name: varchar('name', { length: 120 }).notNull(),
     tokenPrefix: varchar('token_prefix', { length: 32 }).notNull(),
     tokenHash: varchar('token_hash', { length: 128 }).notNull(),
+    scope: varchar('scope', { length: 16 }).$type<McpTokenScope>().notNull().default('full'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
     lastUsedAt: timestamp('last_used_at'),
     revokedAt: timestamp('revoked_at'),

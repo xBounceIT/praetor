@@ -37,6 +37,7 @@ const getRolePermissionsMock = mock();
 const cqExistsByIdMock = mock();
 const cqFindLinkedOfferIdMock = mock();
 const cqFindCurrentMock = mock();
+const cqLockCurrentByIdMock = mock();
 const cqFindNonDraftLinkedSaleMock = mock();
 const cqFindAnyLinkedSaleMock = mock();
 const cqDeleteDraftSalesForQuoteMock = mock();
@@ -84,6 +85,7 @@ beforeAll(async () => {
     existsById: cqExistsByIdMock,
     findLinkedOfferId: cqFindLinkedOfferIdMock,
     findCurrent: cqFindCurrentMock,
+    lockCurrentById: cqLockCurrentByIdMock,
     findNonDraftLinkedSale: cqFindNonDraftLinkedSaleMock,
     findAnyLinkedSale: cqFindAnyLinkedSaleMock,
     deleteDraftSalesForQuote: cqDeleteDraftSalesForQuoteMock,
@@ -207,6 +209,7 @@ const allMocks = [
   cqExistsByIdMock,
   cqFindLinkedOfferIdMock,
   cqFindCurrentMock,
+  cqLockCurrentByIdMock,
   cqFindNonDraftLinkedSaleMock,
   cqFindAnyLinkedSaleMock,
   cqDeleteDraftSalesForQuoteMock,
@@ -328,7 +331,7 @@ describe('GET /api/sales/client-quotes/:id/versions/:versionId', () => {
 describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => {
   const setupHappyPath = () => {
     cqFindLinkedOfferIdMock.mockResolvedValue(null);
-    cqFindCurrentMock.mockResolvedValue({
+    cqLockCurrentByIdMock.mockResolvedValue({
       status: 'draft',
       discount: 0,
       discountType: 'percentage',
@@ -368,9 +371,12 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
       expect.objectContaining({ quoteId: 'q-1', reason: 'restore', createdByUserId: 'u1' }),
       TX_SENTINEL,
     );
-    // Quote and items applied
-    expect(clientsExistsByIdMock).toHaveBeenCalledWith('c1');
-    expect(productsGetSnapshotsMock).toHaveBeenCalledWith(['p-1']);
+    // TOCTOU guard: gate-read must use the FOR UPDATE helper, not the non-locking findCurrent
+    expect(cqLockCurrentByIdMock).toHaveBeenCalledWith('q-1', TX_SENTINEL);
+    expect(cqFindCurrentMock).not.toHaveBeenCalled();
+    // Quote and items applied (refs checked inside the same tx)
+    expect(clientsExistsByIdMock).toHaveBeenCalledWith('c1', TX_SENTINEL);
+    expect(productsGetSnapshotsMock).toHaveBeenCalledWith(['p-1'], TX_SENTINEL);
     expect(cqRestoreSnapshotQuoteMock).toHaveBeenCalledWith(
       'q-1',
       expect.objectContaining({ notes: null }),
@@ -391,6 +397,11 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
   });
 
   test('409 when linked offer exists', async () => {
+    cqLockCurrentByIdMock.mockResolvedValue({
+      status: 'draft',
+      discount: 0,
+      discountType: 'percentage',
+    });
     cqFindLinkedOfferIdMock.mockResolvedValue('off-1');
 
     const res = await testApp.inject({
@@ -406,7 +417,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
 
   test('404 when current quote does not exist', async () => {
     cqFindLinkedOfferIdMock.mockResolvedValue(null);
-    cqFindCurrentMock.mockResolvedValue(null);
+    cqLockCurrentByIdMock.mockResolvedValue(null);
 
     const res = await testApp.inject({
       method: 'POST',
@@ -420,7 +431,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
 
   test('409 when quote is confirmed', async () => {
     cqFindLinkedOfferIdMock.mockResolvedValue(null);
-    cqFindCurrentMock.mockResolvedValue({
+    cqLockCurrentByIdMock.mockResolvedValue({
       status: 'confirmed',
       discount: 0,
       discountType: 'percentage',
@@ -438,7 +449,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
 
   test('409 when non-draft linked sale exists', async () => {
     cqFindLinkedOfferIdMock.mockResolvedValue(null);
-    cqFindCurrentMock.mockResolvedValue({
+    cqLockCurrentByIdMock.mockResolvedValue({
       status: 'draft',
       discount: 0,
       discountType: 'percentage',
@@ -490,7 +501,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
 
   test('404 when version not found (and no cross-quote leak)', async () => {
     cqFindLinkedOfferIdMock.mockResolvedValue(null);
-    cqFindCurrentMock.mockResolvedValue({
+    cqLockCurrentByIdMock.mockResolvedValue({
       status: 'draft',
       discount: 0,
       discountType: 'percentage',
@@ -506,7 +517,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
 
     expect(res.statusCode).toBe(404);
     // findById should be scoped on (quoteId, versionId) so a foreign versionId returns null
-    expect(qvFindByIdMock).toHaveBeenCalledWith('q-1', 'qv-other');
+    expect(qvFindByIdMock).toHaveBeenCalledWith('q-1', 'qv-other', TX_SENTINEL);
     expect(cqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
   });
 

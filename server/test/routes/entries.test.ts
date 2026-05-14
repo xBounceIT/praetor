@@ -512,7 +512,7 @@ describe('POST /api/entries', () => {
     expect(entriesCreateMock).not.toHaveBeenCalled();
   });
 
-  test('201 manager creating for managed user', async () => {
+  test('201 manager creating for managed user uses target user cost', async () => {
     isUserManagedByMock.mockResolvedValue(true);
     findCostPerHourMock.mockResolvedValue(60);
     findIdByProjectAndNameMock.mockResolvedValue('t1');
@@ -525,12 +525,14 @@ describe('POST /api/entries', () => {
       method: 'POST',
       url: '/api/entries',
       headers: authHeader(),
-      payload: { ...validBody, userId: 'u2' },
+      payload: { ...validBody, userId: 'u2', hourlyCost: 999 },
     });
 
     expect(res.statusCode).toBe(201);
     expect(findCostPerHourMock).toHaveBeenCalledWith('u2');
-    expect(entriesCreateMock).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u2' }));
+    expect(entriesCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u2', hourlyCost: 60 }),
+    );
   });
 
   test('400 when project belongs to a different client', async () => {

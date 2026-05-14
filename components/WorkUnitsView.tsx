@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { workUnitsApi } from '../services/api/workUnits';
 import type { User, WorkUnit } from '../types';
 import { hasScopedActionPermission } from '../utils/permissions';
+import { toastError } from '../utils/toast';
 import Checkbox from './shared/Checkbox';
 import HeaderAddButton from './shared/HeaderAddButton';
 import Modal from './shared/Modal';
@@ -54,6 +55,10 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
   const [assignedUserIds, setAssignedUserIds] = useState<string[]>([]);
   const [assignmentSearch, setAssignmentSearch] = useState('');
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
+  // Tracks whether the most recent assignments load failed. While true, the
+  // Save button stays disabled — sending the empty checkbox state to the
+  // server would wipe the unit's real members.
+  const [assignmentsLoadFailed, setAssignmentsLoadFailed] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -147,11 +152,15 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
     setTargetUnit(unit);
     setIsAssignmentModalOpen(true);
     setIsLoadingAssignments(true);
+    setAssignmentsLoadFailed(false);
+    setAssignedUserIds([]);
     try {
       const userIds = await workUnitsApi.getUsers(unit.id);
       setAssignedUserIds(userIds);
     } catch (err) {
       console.error('Failed to load unit users', err);
+      setAssignmentsLoadFailed(true);
+      toastError(t('hr:workUnits.failedToLoadUnitUsers'));
     } finally {
       setIsLoadingAssignments(false);
     }
@@ -168,7 +177,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
       setTargetUnit(null);
     } catch (err) {
       console.error('Failed to save assignments', err);
-      alert(t('hr:workUnits.failedToSaveAssignments'));
+      toastError((err as Error).message || t('hr:workUnits.failedToSaveAssignments'));
     } finally {
       setIsSavingAssignments(false);
     }
@@ -579,6 +588,13 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               <div className="flex justify-center py-12">
                 <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
               </div>
+            ) : assignmentsLoadFailed ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                <i className="fa-solid fa-triangle-exclamation text-3xl text-red-500 mb-3"></i>
+                <p className="text-sm text-zinc-600 max-w-sm">
+                  {t('hr:workUnits.failedToLoadUnitUsers')}
+                </p>
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {filteredUsersForAssignment.map((user) => (
@@ -630,8 +646,8 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
             <button
               type="button"
               onClick={saveAssignments}
-              disabled={isLoadingAssignments || isSavingAssignments}
-              className="px-8 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50"
+              disabled={isLoadingAssignments || isSavingAssignments || assignmentsLoadFailed}
+              className="px-8 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSavingAssignments ? t('common:buttons.saving') : t('hr:workUnits.saveAssignments')}
             </button>

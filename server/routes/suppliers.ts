@@ -8,6 +8,7 @@ import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getForeignKeyViolation } from '../utils/db-errors.ts';
+import { generatePrefixedId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
@@ -178,7 +179,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!notesResult.ok) return badRequest(reply, notesResult.message);
 
       const now = Date.now();
-      const id = 's-' + now;
+      const id = generatePrefixedId('s');
       const created = await suppliersRepo.create({
         id,
         name: nameResult.value,
@@ -273,8 +274,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const addressResult = optionalNonEmptyString(address, 'address');
       if (!addressResult.ok) return badRequest(reply, addressResult.message);
 
-      const vatNumberResult = optionalNonEmptyString(vatNumber, 'vatNumber');
-      if (!vatNumberResult.ok) return badRequest(reply, vatNumberResult.message);
+      // POST requires vatNumber (`requireNonEmptyString`); keep PUT symmetric so an empty
+      // string can't silently null it out, which would leave a supplier in a state that the
+      // create endpoint would have rejected. `vatNumberValue` is the validated string when
+      // provided, or `undefined` when the field was omitted from the body.
+      let vatNumberValue: string | undefined;
+      if (vatNumber !== undefined) {
+        const vatNumberResult = requireNonEmptyString(vatNumber, 'vatNumber');
+        if (!vatNumberResult.ok) return badRequest(reply, vatNumberResult.message);
+        vatNumberValue = vatNumberResult.value;
+      }
 
       const taxCodeResult = optionalNonEmptyString(taxCode, 'taxCode');
       if (!taxCodeResult.ok) return badRequest(reply, taxCodeResult.message);
@@ -288,26 +297,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const isDisabledValue = isDisabled !== undefined ? parseBoolean(isDisabled) : undefined;
 
       const patch: suppliersRepo.SupplierUpdate = {};
+      // `name` is NOT NULL in the DB - an empty payload here means "don't change",
+      // not "clear it". Every other field below is nullable; an explicit "" from the
+      // client must round-trip to NULL so users can actually unset stale data.
       if (Object.hasOwn(body, 'name') && nameResult.value !== null) patch.name = nameResult.value;
       if (isDisabledValue !== undefined) patch.isDisabled = isDisabledValue;
-      if (Object.hasOwn(body, 'supplierCode') && supplierCodeResult.value !== null)
-        patch.supplierCode = supplierCodeResult.value;
-      if (Object.hasOwn(body, 'contactName') && contactNameResult.value !== null)
-        patch.contactName = contactNameResult.value;
-      if (Object.hasOwn(body, 'email') && emailResult.value !== null)
-        patch.email = emailResult.value;
-      if (Object.hasOwn(body, 'phone') && phoneResult.value !== null)
-        patch.phone = phoneResult.value;
-      if (Object.hasOwn(body, 'address') && addressResult.value !== null)
-        patch.address = addressResult.value;
-      if (Object.hasOwn(body, 'vatNumber') && vatNumberResult.value !== null)
-        patch.vatNumber = vatNumberResult.value;
-      if (Object.hasOwn(body, 'taxCode') && taxCodeResult.value !== null)
-        patch.taxCode = taxCodeResult.value;
-      if (Object.hasOwn(body, 'paymentTerms') && paymentTermsResult.value !== null)
-        patch.paymentTerms = paymentTermsResult.value;
-      if (Object.hasOwn(body, 'notes') && notesResult.value !== null)
-        patch.notes = notesResult.value;
+      if (Object.hasOwn(body, 'supplierCode')) patch.supplierCode = supplierCodeResult.value;
+      if (Object.hasOwn(body, 'contactName')) patch.contactName = contactNameResult.value;
+      if (Object.hasOwn(body, 'email')) patch.email = emailResult.value;
+      if (Object.hasOwn(body, 'phone')) patch.phone = phoneResult.value;
+      if (Object.hasOwn(body, 'address')) patch.address = addressResult.value;
+      if (vatNumberValue !== undefined) patch.vatNumber = vatNumberValue;
+      if (Object.hasOwn(body, 'taxCode')) patch.taxCode = taxCodeResult.value;
+      if (Object.hasOwn(body, 'paymentTerms')) patch.paymentTerms = paymentTermsResult.value;
+      if (Object.hasOwn(body, 'notes')) patch.notes = notesResult.value;
 
       const updated = await suppliersRepo.update(idResult.value, patch);
       if (!updated) {

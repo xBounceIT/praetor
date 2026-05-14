@@ -8,6 +8,7 @@ import { DEFAULT_ROLE_ID } from '../services/external-auth.ts';
 import { getAuditCounts, logAudit } from '../utils/audit.ts';
 import { MASKED_SECRET } from '../utils/crypto.ts';
 import { validateGroupFilterTemplate, validateUserFilterTemplate } from '../utils/ldap-filter.ts';
+import { replyError } from '../utils/replyError.ts';
 import { badRequest, parseBoolean, requireNonEmptyString } from '../utils/validation.ts';
 
 // 64 KB matches the UI's file-import size cap (AuthSettings.tsx); keeping these in
@@ -148,6 +149,18 @@ const ldapSyncResponseSchema = {
   },
   required: ['success'],
   additionalProperties: true,
+} as const;
+
+const ldapSyncErrorResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    error: { type: 'string' },
+    errorCode: { type: 'string' },
+    skipped: { type: 'boolean' },
+    reason: { type: 'string' },
+  },
+  required: ['success', 'error'],
 } as const;
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -418,12 +431,49 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         response: {
           200: ldapSyncResponseSchema,
           ...standardRateLimitedErrorResponses,
+          400: ldapSyncErrorResponseSchema,
+          503: ldapSyncErrorResponseSchema,
         },
       },
     },
-    async (request: FastifyRequest, _reply: FastifyReply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const config = await ldapRepo.get();
+      if (!config?.enabled) {
+        return replyError(request, reply, {
+          statusCode: 400,
+          message: 'LDAP is not enabled',
+          action: 'ldap.sync.invalid',
+          entityType: 'ldap_config',
+          errorCode: 'ldap_not_enabled',
+          extraBody: { success: false },
+        });
+      }
+
       const ldapService = (await import('../services/ldap.ts')).default;
-      const stats = await ldapService.syncUsers();
+      let stats: Awaited<ReturnType<typeof ldapService.syncUsers>>;
+      try {
+        stats = await ldapService.syncUsers();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        request.log.warn({ err }, 'LDAP sync request failed');
+        return reply.code(503).send({
+          success: false,
+          error: `LDAP sync failed: ${message}`,
+          errorCode: 'ldap_sync_failed',
+        });
+      }
+
+      if (stats.skipped) {
+        return replyError(request, reply, {
+          statusCode: 400,
+          message: stats.reason ?? 'LDAP sync skipped',
+          action: 'ldap.sync.invalid',
+          entityType: 'ldap_config',
+          errorCode: 'ldap_sync_skipped',
+          extraBody: { ...stats, success: false },
+        });
+      }
+
       await logAudit({
         request,
         action: 'ldap.synced',

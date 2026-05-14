@@ -83,7 +83,7 @@ describe('makeEntryHandlers', () => {
     expect(entries.get()).toEqual([]);
   });
 
-  test('add prepends created entry using viewingUserId override', async () => {
+  test('add prepends created entry using viewingUserId override without client-side cost', async () => {
     apiMocks.entriesCreate.mockImplementation((data: unknown) =>
       Promise.resolve({ id: 'e-new', createdAt: 1000, ...(data as object) }),
     );
@@ -98,7 +98,7 @@ describe('makeEntryHandlers', () => {
 
     const callArg = apiMocks.entriesCreate.mock.calls[0][0] as Record<string, unknown>;
     expect(callArg.userId).toBe('u-viewing');
-    expect(callArg.hourlyCost).toBe(50);
+    expect(callArg).not.toHaveProperty('hourlyCost');
     expect(callArg.task).toBe('work');
     expect(entries.get()).toHaveLength(2);
     expect(entries.get()[0].id).toBe('e-new');
@@ -117,7 +117,7 @@ describe('makeEntryHandlers', () => {
     await handlers.add({ task: 'work' } as never);
     const callArg = apiMocks.entriesCreate.mock.calls[0][0] as Record<string, unknown>;
     expect(callArg.userId).toBe('u-current');
-    expect(callArg.hourlyCost).toBe(0);
+    expect(callArg).not.toHaveProperty('hourlyCost');
   });
 
   test('add swallows errors and alerts user', async () => {
@@ -170,6 +170,9 @@ describe('makeEntryHandlers', () => {
     await handlers.addBulk([{ task: 'a' } as never, { task: 'b' } as never]);
 
     expect(apiMocks.entriesCreate).toHaveBeenCalledTimes(2);
+    for (const call of apiMocks.entriesCreate.mock.calls) {
+      expect(call[0] as Record<string, unknown>).not.toHaveProperty('hourlyCost');
+    }
     const result = entries.get();
     expect(result.map((e) => e.createdAt)).toEqual([200, 100, 50]);
   });
@@ -187,6 +190,38 @@ describe('makeEntryHandlers', () => {
     try {
       await handlers.addBulk([{ task: 'a' } as never]);
       expect(entries.get()).toEqual([]);
+    } finally {
+      restore();
+    }
+  });
+
+  test('addBulk merges successfully created entries even if some fail', async () => {
+    let counter = 0;
+    apiMocks.entriesCreate.mockImplementation((_data: unknown) => {
+      counter += 1;
+      if (counter === 2) return Promise.reject(new Error('boom'));
+      return Promise.resolve({ id: `e-new-${counter}`, createdAt: counter * 100 });
+    });
+    const entries = makeStubSetter<EntryLike>([{ id: 'e0', createdAt: 50 }]);
+    const handlers = makeEntryHandlers({
+      currentUser: { id: 'u1', costPerHour: 25 } as never,
+      viewingUserId: 'u2',
+      setEntries: entries.setter,
+    });
+
+    const restore = silenceConsole();
+    try {
+      await handlers.addBulk([
+        { task: 'a' } as never,
+        { task: 'b' } as never,
+        { task: 'c' } as never,
+      ]);
+      expect(apiMocks.entriesCreate).toHaveBeenCalledTimes(3);
+      const ids = entries.get().map((e) => e.id);
+      expect(ids).toContain('e-new-1');
+      expect(ids).toContain('e-new-3');
+      expect(ids).toContain('e0');
+      expect(ids).not.toContain('e-new-2');
     } finally {
       restore();
     }

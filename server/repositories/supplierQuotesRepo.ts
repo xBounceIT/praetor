@@ -94,6 +94,21 @@ export const existsById = async (id: string, exec: DbExecutor = db): Promise<boo
   return rows.length > 0;
 };
 
+// SELECT status ... FOR UPDATE. Must be called inside a transaction. Use when a write that
+// references this quote (creating a supplier order linked to it) needs to serialize against
+// concurrent inserts/updates of the same quote.
+export const lockStatusById = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<{ status: string } | null> => {
+  const rows = await exec
+    .select({ status: supplierQuotes.status })
+    .from(supplierQuotes)
+    .where(eq(supplierQuotes.id, id))
+    .for('update');
+  return rows[0] ?? null;
+};
+
 export const findItemsForQuote = async (
   quoteId: string,
   exec: DbExecutor = db,

@@ -26,6 +26,14 @@ export const validateRequiredNonDefaultEnv = (
     : `${name} must be set to a non-default value.`;
 };
 
+export const resolvePositiveDurationMs = (name: string, fallback: number): number => {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return parsed;
+};
+
 export const readRequiredNonDefaultEnv = (
   name: string,
   insecureDefaults: InsecureDefaults,

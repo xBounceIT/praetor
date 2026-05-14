@@ -32,6 +32,7 @@ const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 
+const sqFindByIdMock = mock();
 const sqExistsByIdMock = mock();
 const sqFindLinkedOrderIdMock = mock();
 const sqFindFullForSnapshotMock = mock();
@@ -75,6 +76,7 @@ beforeAll(async () => {
   }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
+    findById: sqFindByIdMock,
     existsById: sqExistsByIdMock,
     findLinkedOrderId: sqFindLinkedOrderIdMock,
     findFullForSnapshot: sqFindFullForSnapshotMock,
@@ -184,6 +186,7 @@ const allMocks = [
   findAuthUserByIdMock,
   userHasRoleMock,
   getRolePermissionsMock,
+  sqFindByIdMock,
   sqExistsByIdMock,
   sqFindLinkedOrderIdMock,
   sqFindFullForSnapshotMock,
@@ -217,6 +220,7 @@ beforeEach(async () => {
     items,
   }));
   // Default safe values for repos that PUT calls but most tests don't care about.
+  sqFindByIdMock.mockResolvedValue(SAMPLE_QUOTE);
   sqFindItemsForQuoteMock.mockResolvedValue([SAMPLE_ITEM]);
   sqFindIdConflictMock.mockResolvedValue(false);
 

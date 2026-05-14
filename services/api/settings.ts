@@ -1,10 +1,15 @@
 import { fetchApi } from './client';
 import type { PersonalAccessToken, Settings } from './contracts';
 
+export type McpTokenScope = 'read_only' | 'full';
+
+export const MCP_TOKEN_SCOPES: readonly McpTokenScope[] = ['read_only', 'full'] as const;
+
 export type McpToken = {
   id: string;
   name: string;
   tokenPrefix: string;
+  scope: McpTokenScope;
   createdAt: number;
   lastUsedAt: number | null;
 };
@@ -31,10 +36,10 @@ export const settingsApi = {
 
   listMcpTokens: (): Promise<McpToken[]> => fetchApi('/settings/mcp-tokens'),
 
-  createMcpToken: (name: string): Promise<CreatedMcpToken> =>
+  createMcpToken: (name: string, scope: McpTokenScope = 'full'): Promise<CreatedMcpToken> =>
     fetchApi('/settings/mcp-tokens', {
       method: 'POST',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, scope }),
     }),
 
   revokeMcpToken: (id: string): Promise<{ message: string }> =>

@@ -29,6 +29,6 @@ The sidebar groups the main modules. Available items depend on your role:
 
 From the user menu you can open settings, switch role when multiple profiles are available, open this documentation, and log out.
 
-The **Security** tab contains password changes and your personal access token for API use. The token inherits your user permissions; copy it when it is created or renewed, because it is shown only in masked form afterward. The token is also rejected after 30 days without use — renew it before it goes idle, or have an administrator adjust the idle window via the `PAT_IDLE_TIMEOUT_MS` server environment variable.
+The **Security** tab contains password changes and your personal access token for API use. Changing your password immediately revokes every other active session for your account: only the device you used to make the change stays signed in, and the operation is recorded in the audit logs. The token inherits your user permissions; copy it when it is created or renewed, because it is shown only in masked form afterward. The token is also rejected after 30 days without use — renew it before it goes idle, or have an administrator adjust the idle window via the `PAT_IDLE_TIMEOUT_MS` server environment variable.
 
 Always check that you are using the right role before changing administrative or accounting data.

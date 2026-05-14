@@ -132,10 +132,9 @@ export const findExistingByLinkedQuote = async (
   return rows[0]?.id ?? null;
 };
 
-// Reads the minimal set of fields needed to gate updates / restores. Named `findExisting`
-// (not `findExistingForUpdate`) because it does not acquire a row lock - callers run the read,
-// validate, and then issue a separate UPDATE outside any locking scope. If you need true
-// SELECT ... FOR UPDATE semantics, wrap in `withDbTransaction` and add `.for('update')`.
+// Reads the minimal set of fields needed to gate updates / restores. Does not acquire a row
+// lock - safe for non-mutating reads, but TOCTOU-prone when a write decision depends on it.
+// For SELECT ... FOR UPDATE semantics call `lockExistingById` inside `withDbTransaction`.
 export const findExisting = async (
   id: string,
   exec: DbExecutor = db,
@@ -156,6 +155,31 @@ export const findExisting = async (
     })
     .from(supplierSales)
     .where(eq(supplierSales.id, id));
+  return rows[0] ?? null;
+};
+
+// SELECT ... FOR UPDATE variant of `findExisting`. Must be called inside a transaction.
+export const lockExistingById = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<{
+  id: string;
+  linkedQuoteId: string | null;
+  supplierId: string;
+  supplierName: string;
+  status: string;
+} | null> => {
+  const rows = await exec
+    .select({
+      id: supplierSales.id,
+      linkedQuoteId: supplierSales.linkedQuoteId,
+      supplierId: supplierSales.supplierId,
+      supplierName: supplierSales.supplierName,
+      status: supplierSales.status,
+    })
+    .from(supplierSales)
+    .where(eq(supplierSales.id, id))
+    .for('update');
   return rows[0] ?? null;
 };
 

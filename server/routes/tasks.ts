@@ -575,6 +575,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!endResult.ok) return badRequest(reply, endResult.message);
       }
 
+      if (recurrenceStart && recurrenceEnd && recurrenceStart > recurrenceEnd) {
+        return badRequest(reply, 'recurrenceStart must be on or before recurrenceEnd');
+      }
+
       const isRecurringValue =
         isRecurring === undefined || isRecurring === null ? undefined : parseBoolean(isRecurring);
 
