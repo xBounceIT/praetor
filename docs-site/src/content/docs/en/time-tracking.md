@@ -15,6 +15,8 @@ Before saving, verify that dates are correct and that the task belongs to the se
 
 The weekly view helps you quickly review hours across days. Use it to find missing days, duplicates, or entries assigned to the wrong project.
 
+Each existing entry occupies its own row, so duplicates on the same client/project/task pair stay visible and can be edited independently. The "New entry" row at the top is for creating new entries only.
+
 ## Recurring tasks
 
 Recurring tasks generate repeated entries, such as weekly meetings or periodic administrative work.
