@@ -148,12 +148,14 @@ const canonicalizeLegacyHash = (hash: string) => {
   return hash;
 };
 
+type TimeEntryDraft = Omit<TimeEntry, 'id' | 'createdAt' | 'userId' | 'hourlyCost' | 'cost'>;
+
 const TrackerView: React.FC<{
   entries: TimeEntry[];
   clients: Client[];
   projects: Project[];
   projectTasks: ProjectTask[];
-  onAddEntry: (entry: Omit<TimeEntry, 'id' | 'createdAt' | 'userId' | 'hourlyCost'>) => void;
+  onAddEntry: (entry: TimeEntryDraft) => void;
   onDeleteEntry: (id: string) => void;
   onUpdateEntry: (id: string, updates: Partial<TimeEntry>) => void;
   startOfWeek: 'Monday' | 'Sunday';
@@ -172,7 +174,7 @@ const TrackerView: React.FC<{
   availableUsers: User[];
   currentUser: User;
   dailyGoal: number;
-  onAddBulkEntries: (entries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[]) => Promise<void>;
+  onAddBulkEntries: (entries: TimeEntryDraft[]) => Promise<void>;
   onRecurringAction: (taskId: string, action: 'stop' | 'delete_future' | 'delete_all') => void;
   defaultLocation?: TimeEntryLocation;
   onAddCustomTask: (

@@ -2,6 +2,8 @@ import type React from 'react';
 import api from '../../services/api';
 import type { TimeEntry, User } from '../../types';
 
+type TimeEntryDraft = Omit<TimeEntry, 'id' | 'createdAt' | 'userId' | 'hourlyCost' | 'cost'>;
+
 export type EntryHandlersDeps = {
   currentUser: User | null;
   viewingUserId: string;
@@ -18,15 +20,14 @@ export type EntryHandlersDeps = {
 export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
   const { currentUser, viewingUserId, setEntries } = deps;
 
-  const add = async (newEntry: Omit<TimeEntry, 'id' | 'createdAt' | 'userId' | 'hourlyCost'>) => {
+  const add = async (newEntry: TimeEntryDraft) => {
     if (!currentUser) return;
     try {
       const targetUserId = viewingUserId || currentUser.id;
       const entry = await api.entries.create({
         ...newEntry,
         userId: targetUserId,
-        hourlyCost: currentUser?.costPerHour || 0,
-      } as TimeEntry);
+      });
       setEntries((prev) => [entry, ...prev]);
     } catch (err) {
       console.error('Failed to add entry:', err);
@@ -34,7 +35,7 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
     }
   };
 
-  const addBulk = async (newEntries: Omit<TimeEntry, 'id' | 'createdAt' | 'userId'>[]) => {
+  const addBulk = async (newEntries: TimeEntryDraft[]) => {
     if (!currentUser) return;
     try {
       const targetUserId = viewingUserId || currentUser.id;
@@ -43,8 +44,7 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
           api.entries.create({
             ...entry,
             userId: targetUserId,
-            hourlyCost: currentUser?.costPerHour || 0,
-          } as TimeEntry),
+          }),
         ),
       );
       setEntries((prev) => [...createdEntries, ...prev].sort((a, b) => b.createdAt - a.createdAt));
