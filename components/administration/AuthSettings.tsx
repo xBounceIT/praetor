@@ -1,3 +1,4 @@
+import { CircleAlert } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +15,7 @@ import type {
 } from '../../types';
 import SelectControl from '../shared/SelectControl';
 import Toggle from '../shared/Toggle';
+import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Button } from '../ui/button';
 import { Switch } from '../ui/switch';
 
@@ -106,6 +108,9 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   const [isTestingLdap, setIsTestingLdap] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [savingProvider, setSavingProvider] = useState<SsoProtocol | null>(null);
+  const [providerSaveErrors, setProviderSaveErrors] = useState<
+    Partial<Record<SsoProtocol, string>>
+  >({});
   const tlsCaFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -267,7 +272,22 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     }
   };
 
+  const clearProviderSaveError = (protocol: SsoProtocol) => {
+    setProviderSaveErrors((current) => {
+      if (!current[protocol]) return current;
+      const next = { ...current };
+      delete next[protocol];
+      return next;
+    });
+  };
+
+  const getProviderSaveErrorMessage = (err: unknown) =>
+    err instanceof Error && err.message.trim()
+      ? err.message
+      : t('admin.sso.errors.saveFailed', 'Could not save provider');
+
   const updateProviderDraft = (protocol: SsoProtocol, patch: Partial<SsoProvider>) => {
+    clearProviderSaveError(protocol);
     setProviderDrafts((current) => ({
       ...current,
       [protocol]: { ...current[protocol], ...patch, protocol },
@@ -340,6 +360,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
 
   const handleSaveProvider = async (protocol: SsoProtocol, event: React.FormEvent) => {
     event.preventDefault();
+    clearProviderSaveError(protocol);
     const draft = providerDrafts[protocol];
     if (!validateProvider(draft)) return;
     setSavingProvider(protocol);
@@ -352,6 +373,11 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
       });
       setProviderDrafts((current) => ({ ...current, [protocol]: saved }));
       showSaved();
+    } catch (err) {
+      setProviderSaveErrors((current) => ({
+        ...current,
+        [protocol]: getProviderSaveErrorMessage(err),
+      }));
     } finally {
       setSavingProvider(null);
     }
@@ -470,6 +496,16 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
         </div>
 
         <div className="p-6 space-y-6">
+          {providerSaveErrors[protocol] && (
+            <Alert variant="destructive" className="border-destructive/30">
+              <CircleAlert />
+              <AlertTitle>
+                {t('admin.sso.errors.saveFailedTitle', 'Provider could not be saved')}
+              </AlertTitle>
+              <AlertDescription>{providerSaveErrors[protocol]}</AlertDescription>
+            </Alert>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Field
               label={t('admin.sso.name', 'Name')}

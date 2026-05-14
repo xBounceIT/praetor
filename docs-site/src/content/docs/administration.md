@@ -19,6 +19,8 @@ Praetor supporta autenticazione locale e integrazioni aziendali come LDAP o SSO 
 
 Prima di abilitare un provider SAML, configura una sorgente metadata valida (URL o XML) oppure la configurazione manuale con **Entry Point** e **Certificato IdP**. Praetor rifiuta il salvataggio di provider SAML abilitati senza questi dati minimi.
 
+Se il salvataggio di un provider OIDC o SAML non riesce, la scheda del provider mostra un messaggio di errore con il dettaglio restituito dal server. Correggi i campi indicati o riprova quando il servizio torna disponibile prima di considerare la configurazione aggiornata.
+
 Nella lista utenti puoi usare il menu azioni e scegliere **Cambia metodo di autenticazione** per vincolare un utente applicativo a credenziali locali, LDAP, OIDC o SAML. Per OIDC e SAML seleziona anche il provider specifico: l'utente potrà accedere solo tramite quel provider. Dipendenti interni o esterni non sono account applicativi e non possono essere vincolati a LDAP/SSO.
 
 Quando vincoli un utente a LDAP, Praetor consulta la directory e applica subito i ruoli configurati nel mapping dei gruppi LDAP, sovrascrivendo il ruolo locale. Se la directory non è raggiungibile o l'utente non vi è presente, il ruolo esistente viene mantenuto e il prossimo accesso o sincronizzazione riapplicherà il mapping.
