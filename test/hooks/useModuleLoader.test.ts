@@ -121,6 +121,58 @@ describe('useModuleLoader', () => {
     expect(result.current.isModuleLoading('crm')).toBe(false);
   });
 
+  test('loadDatasets skips stale applies and failure reporting when guard expires', async () => {
+    const { result } = renderHook(() => useModuleLoader());
+    const applyOk = mock((_data: unknown) => {});
+    const applyBroken = mock((_data: unknown) => {});
+    let isCurrent = true;
+    let resolveOk!: (value: string) => void;
+    let rejectBroken!: (reason: Error) => void;
+    const pendingOk = new Promise<string>((resolve) => {
+      resolveOk = resolve;
+    });
+    const pendingBroken = new Promise<string>((_resolve, reject) => {
+      rejectBroken = reject;
+    });
+
+    let failuresPromise!: Promise<string[]>;
+    act(() => {
+      failuresPromise = result.current.loadDatasets(
+        'crm',
+        [
+          {
+            dataset: 'clients',
+            enabled: true,
+            load: () => pendingOk,
+            apply: applyOk,
+          },
+          {
+            dataset: 'suppliers',
+            enabled: true,
+            load: () => pendingBroken,
+            apply: applyBroken,
+          },
+        ],
+        { shouldApply: () => isCurrent },
+      );
+    });
+
+    expect(result.current.loadingModules.has('crm')).toBe(true);
+
+    consoleErrorMock.mockClear();
+    isCurrent = false;
+    await act(async () => {
+      resolveOk('clients-data');
+      rejectBroken(new Error('stale network failure'));
+      expect(await failuresPromise).toEqual([]);
+    });
+
+    expect(applyOk).not.toHaveBeenCalled();
+    expect(applyBroken).not.toHaveBeenCalled();
+    expect(consoleErrorMock).not.toHaveBeenCalled();
+    expect(result.current.loadingModules.has('crm')).toBe(false);
+  });
+
   test('loadDatasets returns empty when no requests are enabled', async () => {
     const { result } = renderHook(() => useModuleLoader());
     const apply = mock((_data: unknown) => {});

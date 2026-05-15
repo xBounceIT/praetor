@@ -10,6 +10,10 @@ export type DatasetRequest<T = unknown> = {
   apply: (data: T) => void;
 };
 
+export type DatasetLoadOptions = {
+  shouldApply?: () => boolean;
+};
+
 export const listRequest = <T>(
   dataset: string,
   enabled: boolean,
@@ -23,10 +27,15 @@ export function useModuleLoader() {
   const [loadingModules, setLoadingModules] = useState<Set<string>>(new Set());
 
   const loadDatasets = useCallback(
-    // biome-ignore lint/suspicious/noExplicitAny: heterogeneous array - each request's T is internally consistent.
-    async (moduleName: string, requests: DatasetRequest<any>[]): Promise<string[]> => {
+    async (
+      moduleName: string,
+      // biome-ignore lint/suspicious/noExplicitAny: heterogeneous array - each request's T is internally consistent.
+      requests: DatasetRequest<any>[],
+      options: DatasetLoadOptions = {},
+    ): Promise<string[]> => {
       const activeRequests = requests.filter((request) => request.enabled);
       if (activeRequests.length === 0) return [];
+      const shouldApply = () => options.shouldApply?.() ?? true;
 
       setLoadingModules((prev) => {
         const next = new Set(prev);
@@ -38,11 +47,13 @@ export function useModuleLoader() {
         const results = await Promise.allSettled(activeRequests.map((request) => request.load()));
         const failures: string[] = [];
 
-        results.forEach((result, index) => {
+        for (const [index, result] of results.entries()) {
+          if (!shouldApply()) return [];
+
           const request = activeRequests[index];
           if (result.status === 'fulfilled') {
             request.apply(result.value);
-            return;
+            continue;
           }
 
           failures.push(request.dataset);
@@ -50,9 +61,9 @@ export function useModuleLoader() {
             `Failed to load ${moduleName} dataset "${request.dataset}": ${getErrorMessage(result.reason)}`,
             result.reason,
           );
-        });
+        }
 
-        return failures;
+        return shouldApply() ? failures : [];
       } finally {
         setLoadingModules((prev) => {
           const next = new Set(prev);
