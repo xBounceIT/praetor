@@ -235,8 +235,8 @@ export const getRolePermissions = async (roleId: string): Promise<Permission[]> 
   return withNotifications;
 };
 
-export const hasPermission = (permissions: string[] | undefined, permission: Permission) =>
-  !!permissions?.includes(permission);
+export const hasPermission = (permissions: string[] | undefined, permission: Permission | string) =>
+  !!permissions?.includes(normalizePermission(permission));
 
 export const scopeResourceFor = (resource: PermissionResource): PermissionResource | undefined => {
   const scoped = `${resource}_all`;
@@ -254,7 +254,7 @@ export const equivalentPermissionsFor = (
 };
 
 export const hasAnyPermission = (permissions: string[] | undefined, required: string[]) =>
-  required.some((permission) => permissions?.includes(permission));
+  required.some((permission) => hasPermission(permissions, permission));
 
 export const hasScopedActionPermission = (
   permissions: string[] | undefined,
@@ -265,7 +265,7 @@ export const hasScopedActionPermission = (
 export const requestHasPermission = (
   request: { user?: { permissions?: string[] } },
   permission: Permission | string,
-) => !!request.user?.permissions?.includes(permission);
+) => hasPermission(request.user?.permissions, permission);
 
 // Duck-typed locally so this module doesn't pull in `fastify` and create an import cycle.
 type RequestWithUser = { user?: { id?: string; permissions?: string[] } };
