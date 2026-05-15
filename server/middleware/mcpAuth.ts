@@ -95,7 +95,11 @@ export const authenticateMcpToken = async (request: FastifyRequest, reply: Fasti
 
   request.user = mcpUser;
   request.auth = { userId: user.id, sessionStart: Date.now() };
-  await mcpTokensRepo.touchLastUsed(token.id);
+  try {
+    await mcpTokensRepo.touchLastUsed(token.id);
+  } catch (err) {
+    request.log?.warn({ err }, 'Failed to update MCP token last-used timestamp');
+  }
 
   const authInfo: AuthInfo = {
     token: rawToken,
