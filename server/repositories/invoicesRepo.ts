@@ -237,20 +237,22 @@ export type InvoiceUpdate = {
   notes?: string | null;
 };
 
-const invoiceUpdateValues = (patch: InvoiceUpdate) => ({
-  id: sql`COALESCE(${patch.id ?? null}, ${invoices.id})`,
-  clientId: sql`COALESCE(${patch.clientId ?? null}, ${invoices.clientId})`,
-  clientName: sql`COALESCE(${patch.clientName ?? null}, ${invoices.clientName})`,
-  issueDate: sql`COALESCE(${patch.issueDate ?? null}::date, ${invoices.issueDate})`,
-  dueDate: sql`COALESCE(${patch.dueDate ?? null}::date, ${invoices.dueDate})`,
-  status: sql`COALESCE(${patch.status ?? null}, ${invoices.status})`,
-  subtotal: sql`COALESCE(${numericForDb(patch.subtotal) ?? null}::numeric, ${invoices.subtotal})`,
-  taxTotal: sql`COALESCE(${numericForDb(patch.taxTotal) ?? null}::numeric, ${invoices.taxTotal})`,
-  total: sql`COALESCE(${numericForDb(patch.total) ?? null}::numeric, ${invoices.total})`,
-  amountPaid: sql`COALESCE(${numericForDb(patch.amountPaid) ?? null}::numeric, ${invoices.amountPaid})`,
-  notes: sql`COALESCE(${patch.notes ?? null}, ${invoices.notes})`,
-  updatedAt: sql`CURRENT_TIMESTAMP`,
-});
+const invoiceUpdateValues = (patch: InvoiceUpdate) => {
+  const set: Record<string, unknown> = {};
+  if (patch.id !== undefined) set.id = patch.id;
+  if (patch.clientId !== undefined) set.clientId = patch.clientId;
+  if (patch.clientName !== undefined) set.clientName = patch.clientName;
+  if (patch.issueDate !== undefined) set.issueDate = patch.issueDate;
+  if (patch.dueDate !== undefined) set.dueDate = patch.dueDate;
+  if (patch.status !== undefined) set.status = patch.status;
+  if (patch.subtotal !== undefined) set.subtotal = numericForDb(patch.subtotal);
+  if (patch.taxTotal !== undefined) set.taxTotal = numericForDb(patch.taxTotal);
+  if (patch.total !== undefined) set.total = numericForDb(patch.total);
+  if (patch.amountPaid !== undefined) set.amountPaid = numericForDb(patch.amountPaid);
+  if (patch.notes !== undefined) set.notes = patch.notes;
+  set.updatedAt = sql`CURRENT_TIMESTAMP`;
+  return set;
+};
 
 export const update = async (
   id: string,

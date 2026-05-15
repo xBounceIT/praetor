@@ -808,6 +808,22 @@ describe('PUT /api/invoices/:id', () => {
     expect(patch).not.toHaveProperty('total');
   });
 
+  test('200 explicit null notes clears invoice notes', async () => {
+    updateMock.mockResolvedValue({ ...SAMPLE_INVOICE, notes: null });
+    findItemsForInvoiceMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/invoices/inv-1',
+      headers: authHeader(),
+      payload: { notes: null },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const patch = updateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(patch).toHaveProperty('notes', null);
+  });
+
   test('400 amountPaid > computed total when items provided', async () => {
     const res = await testApp.inject({
       method: 'PUT',

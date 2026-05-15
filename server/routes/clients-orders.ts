@@ -145,7 +145,7 @@ const clientOrderUpdateBodySchema = {
     discount: { type: 'number' },
     discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string' },
-    notes: { type: 'string' },
+    notes: { type: ['string', 'null'] },
   },
 } as const;
 
@@ -1102,22 +1102,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (shouldSnapshot) {
             await snapshotPreState(idResult.value, 'update', request, tx);
           }
-          const order = await clientsOrdersRepo.update(
-            idResult.value,
-            {
-              id: nextIdValue,
-              linkedOfferId: (linkedOfferIdValue as string | null | undefined) ?? null,
-              linkedQuoteId: linkedQuoteIdValue,
-              clientId: (clientIdValue as string | null | undefined) ?? null,
-              clientName: (clientNameValue as string | null | undefined) ?? null,
-              paymentTerms: (paymentTerms as string | null | undefined) ?? null,
-              discount: (discountValue as number | null | undefined) ?? null,
-              discountType: discountTypeValue ?? null,
-              status: (status as string | null | undefined) ?? null,
-              notes: (notes as string | null | undefined) ?? null,
-            },
-            tx,
-          );
+          const patch: clientsOrdersRepo.ClientOrderUpdate = {};
+          if (nextIdValue !== null) patch.id = nextIdValue;
+          if (linkedOfferId !== undefined && linkedOfferIdValue) {
+            patch.linkedOfferId = linkedOfferIdValue;
+            patch.linkedQuoteId = linkedQuoteIdValue;
+          }
+          if (clientIdValue !== undefined && clientIdValue !== null) {
+            patch.clientId = clientIdValue;
+          }
+          if (clientNameValue !== undefined && clientNameValue !== null) {
+            patch.clientName = clientNameValue;
+          }
+          if (typeof paymentTerms === 'string') patch.paymentTerms = paymentTerms;
+          if (discountValue !== undefined && discountValue !== null) {
+            patch.discount = discountValue;
+          }
+          if (discountTypeValue !== undefined) patch.discountType = discountTypeValue;
+          if (typeof status === 'string') patch.status = status;
+          if (notes !== undefined) patch.notes = notes as string | null;
+
+          const order = await clientsOrdersRepo.update(idResult.value, patch, tx);
           if (!order) return { order: null, items: [] };
 
           let nextItems: clientsOrdersRepo.ClientOrderItem[];

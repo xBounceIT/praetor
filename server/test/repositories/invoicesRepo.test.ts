@@ -256,16 +256,30 @@ describe('create', () => {
 });
 
 describe('update', () => {
-  test('uses COALESCE-per-column, sets updated_at, and includes id in WHERE', async () => {
+  test('updates only provided columns, sets updated_at, and includes id in WHERE', async () => {
     exec.enqueue({ rows: [invoiceRow()] });
     await invoicesRepo.update('INV-2026-0001', { status: 'sent', total: 200 }, testDb);
     const sql = exec.calls[0].sql.toLowerCase();
+    const setClause = sql.slice(sql.indexOf(' set ') + 5, sql.indexOf(' where '));
     expect(sql).toContain('update "invoices"');
-    expect(sql).toContain('coalesce');
+    expect(setClause).not.toContain('coalesce');
+    expect(setClause).toContain('"status"');
+    expect(setClause).toContain('"total"');
+    expect(setClause).not.toContain('"notes"');
     expect(sql).toContain('current_timestamp');
     expect(exec.calls[0].params).toContain('sent');
     expect(exec.calls[0].params).toContain('200');
     expect(exec.calls[0].params).toContain('INV-2026-0001');
+  });
+
+  test('explicit null notes clears the nullable column', async () => {
+    exec.enqueue({ rows: [invoiceRow()] });
+    await invoicesRepo.update('INV-2026-0001', { notes: null }, testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    const setClause = sql.slice(sql.indexOf(' set ') + 5, sql.indexOf(' where '));
+    expect(setClause).toContain('"notes"');
+    expect(setClause).not.toContain('coalesce');
+    expect(exec.calls[0].params).toContain(null);
   });
 
   test('returns null when no row updated', async () => {
@@ -273,10 +287,15 @@ describe('update', () => {
     expect(await invoicesRepo.update('INV-X', { status: 'sent' }, testDb)).toBeNull();
   });
 
-  test('empty patch still emits an UPDATE (every column COALESCEs to its own value)', async () => {
+  test('empty patch only updates updated_at', async () => {
     exec.enqueue({ rows: [invoiceRow()] });
     await invoicesRepo.update('INV-1', {}, testDb);
-    expect(exec.calls[0].sql.toLowerCase()).toContain('update');
+    const sql = exec.calls[0].sql.toLowerCase();
+    const setClause = sql.slice(sql.indexOf(' set ') + 5, sql.indexOf(' where '));
+    expect(sql).toContain('update');
+    expect(setClause).toContain('"updated_at" = current_timestamp');
+    expect(setClause).not.toContain('"notes"');
+    expect(setClause).not.toContain('coalesce');
     expect(exec.calls[0].params).toContain('INV-1');
   });
 });
