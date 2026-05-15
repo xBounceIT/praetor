@@ -82,6 +82,8 @@ type SessionJwtPayload = JwtPayload & {
   sessionVersion?: number;
 };
 
+type NonEmptyGuardArgs = [string, ...string[]];
+
 const loadAuthenticatedUserContext = async (
   request: FastifyRequest,
   reply: FastifyReply,
@@ -272,7 +274,11 @@ export const requireRole = (...roles: string[]) => {
   };
 };
 
-export const requirePermission = (...permissions: string[]) => {
+export const requirePermission = (...permissions: NonEmptyGuardArgs) => {
+  if (permissions.length === 0) {
+    throw new Error('requirePermission requires at least one permission');
+  }
+
   return async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) {
       return reply.code(401).send({ error: 'Authentication required' });

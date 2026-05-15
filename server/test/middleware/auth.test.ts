@@ -693,14 +693,9 @@ describe('requirePermission (ALL semantics)', () => {
     expect(reply.body).toBeUndefined();
   });
 
-  test('vacuous: empty perms list passes (Array.every over zero elements)', async () => {
-    const reply = buildFakeReply();
-    await requirePermission()(
-      { user: { ...HAPPY_USER, permissions: [] } } as never,
-      reply as never,
-    );
-    expect(reply.statusCode).toBe(0);
-    expect(reply.body).toBeUndefined();
+  test('rejects empty permission guards before a route can be registered', () => {
+    // @ts-expect-error Regression coverage for runtime JavaScript callers.
+    expect(() => requirePermission()).toThrow('requirePermission requires at least one permission');
   });
 });
 
