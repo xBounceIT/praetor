@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import { rolePermissions, roles, userRoles } from '../db/schema/roles.ts';
 import { users } from '../db/schema/users.ts';
@@ -8,6 +8,12 @@ export type Role = {
   name: string;
   isSystem: boolean;
   isAdmin: boolean;
+};
+
+export type UserHasRoleOptions = {
+  exec?: DbExecutor;
+  requireEnabledUser?: boolean;
+  expectedSessionVersion?: number;
 };
 
 const ROLE_PROJECTION = {
@@ -41,8 +47,34 @@ export const findExistingIds = async (
 export const userHasRole = async (
   userId: string,
   roleId: string,
-  exec: DbExecutor = db,
+  optionsOrExec: DbExecutor | UserHasRoleOptions = db,
 ): Promise<boolean> => {
+  const options =
+    typeof optionsOrExec === 'object' && 'select' in optionsOrExec
+      ? { exec: optionsOrExec }
+      : optionsOrExec;
+  const exec = options.exec ?? db;
+  const needsUserStateCheck =
+    options.requireEnabledUser === true || options.expectedSessionVersion !== undefined;
+
+  if (needsUserStateCheck) {
+    const conditions: SQL[] = [eq(userRoles.userId, userId), eq(userRoles.roleId, roleId)];
+    if (options.requireEnabledUser === true) {
+      conditions.push(sql`COALESCE(${users.isDisabled}, false) = false`);
+    }
+    if (options.expectedSessionVersion !== undefined) {
+      conditions.push(eq(users.sessionVersion, options.expectedSessionVersion));
+    }
+
+    const rows = await exec
+      .select({ exists: sql`1` })
+      .from(userRoles)
+      .innerJoin(users, eq(users.id, userRoles.userId))
+      .where(and(...conditions))
+      .limit(1);
+    return rows.length > 0;
+  }
+
   const rows = await exec
     .select({ exists: sql`1` })
     .from(userRoles)

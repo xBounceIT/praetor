@@ -112,13 +112,14 @@ const loadAuthenticatedUserContext = async (
 
   const effectiveRole = activeRole ?? user.role;
 
-  // Run in parallel: this middleware fires on every authenticated request and the success path
-  // (user has the role) is the hot case. The wasted permissions lookup on a 403 is cheap
-  // compared to the latency saved on the 99%+ success path.
-  const [hasRole, permissions] = await Promise.all([
-    rolesRepo.userHasRole(user.id, effectiveRole),
-    getRolePermissions(effectiveRole),
-  ]);
+  const permissions = await getRolePermissions(effectiveRole);
+  // Final authorization check: re-read enabled/session state in the same statement that
+  // verifies role membership, so revocation between the initial user read and permission
+  // loading cannot bind a stale authenticated context.
+  const hasRole = await rolesRepo.userHasRole(user.id, effectiveRole, {
+    requireEnabledUser: true,
+    expectedSessionVersion,
+  });
   if (!hasRole) {
     reply.code(403).send({ error: 'Invalid or expired token' });
     return null;

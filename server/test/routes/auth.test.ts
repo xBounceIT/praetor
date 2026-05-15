@@ -655,8 +655,11 @@ describe('POST /api/auth/switch-role', () => {
     // sessionStart preserved
     expect(decoded.sessionStart).toBe(sessionStart);
 
-    // userHasRole called for the target role
-    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'admin');
+    // userHasRole called for the target role with a final enabled/session check
+    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'admin', {
+      requireEnabledUser: true,
+      expectedSessionVersion: 1,
+    });
 
     // Audit emission with from/to
     expect(logAuditMock).toHaveBeenCalledTimes(1);
@@ -695,6 +698,9 @@ describe('POST /api/auth/switch-role', () => {
         entityId: 'admin',
       }),
     );
+    // Authentication loaded the current role once; the denied target role must not load
+    // permissions before authorization succeeds.
+    expect(getRolePermissionsMock).toHaveBeenCalledTimes(1);
   });
 
   test('403 rejects personal access tokens because role switching is session-only', async () => {

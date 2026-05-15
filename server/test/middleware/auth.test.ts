@@ -251,13 +251,18 @@ describe('authenticateToken', () => {
     expect(reply.body).toEqual({ error: 'Account disabled', errorCode: 'account_disabled' });
   });
 
-  test('403 when rolesRepo.userHasRole returns false', async () => {
+  test('403 when final constrained role check returns false', async () => {
     userHasRoleMock.mockResolvedValue(false);
     const request = buildFakeRequest(signToken({ userId: 'u1' }));
     const reply = buildFakeReply();
     await authenticateToken(request as never, reply as never);
     expect(reply.statusCode).toBe(403);
     expect(reply.body).toEqual({ error: 'Invalid or expired token' });
+    expect(getRolePermissionsMock).toHaveBeenCalledWith('manager');
+    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'manager', {
+      requireEnabledUser: true,
+      expectedSessionVersion: 1,
+    });
   });
 
   test('200 happy path: populates request.user and rotates the x-auth-token header', async () => {
@@ -338,59 +343,38 @@ describe('authenticateToken', () => {
 
     expect(reply.statusCode).toBe(0);
     expect(request.user?.role).toBe('admin');
-    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'admin');
     expect(getRolePermissionsMock).toHaveBeenCalledWith('admin');
+    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'admin', {
+      requireEnabledUser: true,
+      expectedSessionVersion: 1,
+    });
   });
 
-  test('userHasRole and getRolePermissions are invoked concurrently (no serial await)', async () => {
-    let resolveRole!: () => void;
-    let resolvePerms!: () => void;
-    let signalRoleCalled!: () => void;
-    let signalPermsCalled!: () => void;
-
-    const rolePromise = new Promise<void>((resolve) => {
-      resolveRole = resolve;
-    });
-    const permsPromise = new Promise<void>((resolve) => {
-      resolvePerms = resolve;
-    });
-    const roleCalledPromise = new Promise<void>((resolve) => {
-      signalRoleCalled = resolve;
-    });
-    const permsCalledPromise = new Promise<void>((resolve) => {
-      signalPermsCalled = resolve;
-    });
-
-    userHasRoleMock.mockImplementation(async () => {
-      signalRoleCalled();
-      await rolePromise;
-      return true;
-    });
+  test('final role check runs after permission loading with current user constraints', async () => {
+    const calls: string[] = [];
     getRolePermissionsMock.mockImplementation(async () => {
-      signalPermsCalled();
-      await permsPromise;
+      calls.push('permissions');
       return HAPPY_PERMISSIONS;
+    });
+    userHasRoleMock.mockImplementation(async () => {
+      calls.push('role-check');
+      return true;
     });
 
     const request = buildFakeRequest(signToken({ userId: 'u1' }));
     const reply = buildFakeReply();
-    const inflight = authenticateToken(request as never, reply as never);
+    await authenticateToken(request as never, reply as never);
 
-    // Deterministic sync point: both mocks signal as soon as their bodies start. If either
-    // were awaiting the other, this Promise.all would hang past the test timeout instead
-    // of relying on a fixed sleep that's flaky under CI load.
-    await Promise.all([roleCalledPromise, permsCalledPromise]);
-    expect(userHasRoleMock).toHaveBeenCalledTimes(1);
-    expect(getRolePermissionsMock).toHaveBeenCalledTimes(1);
-
-    resolveRole();
-    resolvePerms();
-    await inflight;
     expect(reply.statusCode).toBe(0);
     expect(request.user).toBeDefined();
+    expect(calls).toEqual(['permissions', 'role-check']);
+    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'manager', {
+      requireEnabledUser: true,
+      expectedSessionVersion: 1,
+    });
   });
 
-  test('a rejection in the parallel lookup produces a single 403 response', async () => {
+  test('a rejection in the final role check produces a single 403 response', async () => {
     userHasRoleMock.mockRejectedValue(new Error('db down'));
     getRolePermissionsMock.mockResolvedValue(HAPPY_PERMISSIONS);
 
@@ -424,8 +408,11 @@ describe('authenticateToken', () => {
     const expectedHash = hashPersonalAccessToken(token);
     expect(findPersonalAccessTokenByHashMock).toHaveBeenCalledWith(expectedHash);
     expect(markPersonalAccessTokenUsedMock).toHaveBeenCalledWith(expectedHash);
-    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'manager');
     expect(getRolePermissionsMock).toHaveBeenCalledWith('manager');
+    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'manager', {
+      requireEnabledUser: true,
+      expectedSessionVersion: undefined,
+    });
   });
 
   test('PAT remains authenticated when last-used tracking fails', async () => {

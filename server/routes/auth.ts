@@ -300,7 +300,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const session = requireSessionAuth(request, reply);
       if (!session) return;
 
-      const hasRole = await rolesRepo.userHasRole(session.userId, roleIdResult.value);
+      const hasRole = await rolesRepo.userHasRole(session.userId, roleIdResult.value, {
+        requireEnabledUser: true,
+        expectedSessionVersion: session.sessionVersion,
+      });
       if (!hasRole) {
         return replyError(request, reply, {
           statusCode: 403,

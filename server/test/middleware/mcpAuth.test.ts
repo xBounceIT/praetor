@@ -169,6 +169,23 @@ describe('authenticateMcpToken', () => {
       }),
     );
     expect(touchLastUsedMock).toHaveBeenCalledWith('mcp-token-1');
+    expect(getRolePermissionsMock).toHaveBeenCalledWith('manager');
+    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'manager', {
+      requireEnabledUser: true,
+    });
+  });
+
+  test('403 when final constrained role check fails', async () => {
+    userHasRoleMock.mockResolvedValue(false);
+    const request = makeRequest('praetor_mcp_token');
+    const reply = makeReply();
+
+    await authenticateMcpToken(request, reply);
+
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body).toEqual({ error: 'Invalid or revoked MCP token' });
+    expect(getRolePermissionsMock).toHaveBeenCalledWith('manager');
+    expect(touchLastUsedMock).not.toHaveBeenCalled();
   });
 
   test('does not fail authentication when last-used timestamp update fails', async () => {
