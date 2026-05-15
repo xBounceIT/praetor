@@ -1106,6 +1106,14 @@ describe('POST /api/entries/recurring/generate', () => {
     recurrenceStart: '2025-06-01',
   };
 
+  const monthlyMonthEndTask = {
+    ...dailyTask,
+    id: 't5',
+    name: 'Month-end close',
+    recurrencePattern: 'monthly',
+    recurrenceStart: '2025-01-31',
+  };
+
   const endedTask = {
     ...dailyTask,
     id: 't4',
@@ -1266,6 +1274,27 @@ describe('POST /api/entries/recurring/generate', () => {
     const inserted = entriesCreateManyMock.mock.calls[0][0] as Array<Record<string, unknown>>;
     // First Mondays of Jun/Jul/Aug 2025: 06-02 (Repubblica holiday -> skipped), 07-07, 08-04.
     expect(inserted.map((e) => e.date)).toEqual(['2025-07-07', '2025-08-04']);
+  });
+
+  test('200: monthly pattern clamps start days beyond the end of shorter months', async () => {
+    setupHappyPath();
+    listRecurringForUserMock.mockResolvedValue([monthlyMonthEndTask]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-01-01', toDate: '2025-04-30' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const inserted = entriesCreateManyMock.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(inserted.map((e) => e.date)).toEqual([
+      '2025-01-31',
+      '2025-02-28',
+      '2025-03-31',
+      '2025-04-30',
+    ]);
   });
 
   test('200: respects recurrenceEnd', async () => {

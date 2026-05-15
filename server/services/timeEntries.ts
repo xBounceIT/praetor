@@ -353,7 +353,7 @@ export const deleteTimeEntry = async (
 // Recurring time-entry generation. Supported patterns:
 //   - 'daily'                : every weekday in the window
 //   - 'weekly'               : same weekday as `recurrence_start`
-//   - 'monthly'              : same day-of-month as `recurrence_start`
+//   - 'monthly'              : same day-of-month as `recurrence_start`, clamped to month end
 //   - 'monthly:<nth>:<dow>'  : Nth (first/second/third/fourth/last) weekday of the month;
 //                              `dow` is 0=Sun..6=Sat (matches JS `Date.getDay()`)
 //
@@ -364,7 +364,10 @@ export const deleteTimeEntry = async (
 const recurrenceMatches = (day: Date, pattern: string, start: Date): boolean => {
   if (pattern === 'daily') return true;
   if (pattern === 'weekly') return day.getDay() === start.getDay();
-  if (pattern === 'monthly') return day.getDate() === start.getDate();
+  if (pattern === 'monthly') {
+    const lastDayOfMonth = new Date(day.getFullYear(), day.getMonth() + 1, 0).getDate();
+    return day.getDate() === Math.min(start.getDate(), lastDayOfMonth);
+  }
   if (pattern.startsWith('monthly:')) {
     const parts = pattern.split(':');
     if (parts.length !== 3) return false;

@@ -34,6 +34,8 @@ Each recurring template is defined on a project task and includes:
 - `recurrenceEnd` (optional): when set, generation stops on this date.
 - `recurrenceDuration`: the default duration (in hours) of each generated entry.
 
+For `monthly` recurrences, if the start-date day does not exist in a shorter month, the occurrence is generated on that month's final day.
+
 Sundays, Saturdays (when the _Treat Saturday as holiday_ setting is enabled), and Italian holidays are always skipped.
 
 ### Server-side generation
