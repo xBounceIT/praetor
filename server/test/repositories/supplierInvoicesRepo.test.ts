@@ -152,6 +152,13 @@ describe('maxSequenceForYear', () => {
     exec.enqueue({ rows: [] });
     expect(await supplierInvoicesRepo.maxSequenceForYear('2026', testDb)).toBe(0n);
   });
+
+  test('rejects non-4-digit years before building the regex', async () => {
+    await expect(supplierInvoicesRepo.maxSequenceForYear('2026.*', testDb)).rejects.toThrow(
+      'supplier invoice year must be a 4-digit year',
+    );
+    expect(exec.calls).toHaveLength(0);
+  });
 });
 
 describe('create', () => {

@@ -67,6 +67,10 @@ const mapItem = (row: typeof invoiceItems.$inferSelect): InvoiceItem => ({
 });
 
 export const generateNextId = async (year: string, exec: DbExecutor = db): Promise<string> => {
+  if (!/^\d{4}$/.test(year)) {
+    throw new TypeError('invoice year must be a 4-digit year');
+  }
+
   // PostgreSQL regex `~` operator + server-side split_part avoids round-tripping every
   // matching id back to the app just to extract the sequence number.
   const rows = await executeRows<{ maxSequence: string | number | null }>(
