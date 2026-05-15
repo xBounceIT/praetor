@@ -15,8 +15,9 @@ export const MASKED_SECRET = '********';
 
 // AES-256 key for encrypt/decrypt: PBKDF2-derived from ENCRYPTION_KEY and a per-ciphertext
 // salt. The derivation is intentionally slower than a single SHA-256 pass to make offline
-// guessing of human-chosen deployment keys more expensive. Memoized by salt because stored
-// config secrets are process-stable between edits.
+// guessing of human-chosen deployment keys more expensive. Decrypt-side keys are memoized by
+// salt because stored config secrets are process-stable between edits; encrypt-side keys use
+// fresh salts and skip the cache.
 //
 // Do NOT use this key for HMAC or other non-AES primitives — use `getHmacKey()` for
 // HMAC-keyed hashing (issue #416). Reusing the same key across primitives couples
@@ -32,18 +33,20 @@ const getRequiredEncryptionKey = (): string => {
   return key;
 };
 
-export function getEncryptionKey(salt: Buffer = DEFAULT_ENCRYPTION_KEY_SALT): Buffer {
-  const cacheKey = salt.toString('base64');
-  const cached = cachedEncryptionKeys.get(cacheKey);
-  if (cached) return cached;
-  const key = getRequiredEncryptionKey();
-  const derived = crypto.pbkdf2Sync(
-    Buffer.from(key, 'utf8'),
+const deriveEncryptionKey = (salt: Buffer): Buffer =>
+  crypto.pbkdf2Sync(
+    Buffer.from(getRequiredEncryptionKey(), 'utf8'),
     salt,
     ENCRYPTION_KEY_ITERATIONS,
     AES_KEY_LENGTH,
     ENCRYPTION_KEY_DIGEST,
   );
+
+export function getEncryptionKey(salt: Buffer = DEFAULT_ENCRYPTION_KEY_SALT): Buffer {
+  const cacheKey = salt.toString('base64');
+  const cached = cachedEncryptionKeys.get(cacheKey);
+  if (cached) return cached;
+  const derived = deriveEncryptionKey(salt);
   cachedEncryptionKeys.set(cacheKey, derived);
   return derived;
 }
@@ -61,6 +64,8 @@ export const __resetEncryptionKeyCacheForTests = () => {
   cachedEncryptionKeys.clear();
   cachedLegacyEncryptionKey = null;
 };
+
+export const __getEncryptionKeyCacheSizeForTests = () => cachedEncryptionKeys.size;
 
 // HMAC key for PAT / MCP-token hashing: HKDF-derived from ENCRYPTION_KEY with a
 // domain-separation label, independent from the AES key (issue #416). Memoized because PAT/MCP
@@ -115,7 +120,7 @@ export function isEncrypted(value: string): boolean {
 export function encrypt(plaintext: string): string {
   if (!plaintext) return '';
   const salt = crypto.randomBytes(SALT_LENGTH);
-  const key = getEncryptionKey(salt);
+  const key = deriveEncryptionKey(salt);
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
   const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);

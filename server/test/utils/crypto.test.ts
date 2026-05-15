@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import crypto from 'node:crypto';
 import {
+  __getEncryptionKeyCacheSizeForTests,
   __resetEncryptionKeyCacheForTests,
   __resetHmacKeyCacheForTests,
   decrypt,
@@ -92,6 +93,13 @@ describe('encrypt', () => {
     const [, , ivB64, authTagB64, encryptedB64] = ciphertext.split(':');
     expect(() => decryptPayloadWithAesGcmKey(ivB64, authTagB64, encryptedB64, legacyKey)).toThrow();
   });
+
+  test('does not cache one-off keys for fresh random salts', () => {
+    __resetEncryptionKeyCacheForTests();
+    encrypt('first secret');
+    encrypt('second secret');
+    expect(__getEncryptionKeyCacheSizeForTests()).toBe(0);
+  });
 });
 
 // Isolated in its own describe block so the missing-key state is set up in beforeAll
@@ -173,6 +181,15 @@ describe('getEncryptionKey', () => {
     const first = getEncryptionKey(Buffer.alloc(SALT_LENGTH, 1));
     const second = getEncryptionKey(Buffer.alloc(SALT_LENGTH, 2));
     expect(first.equals(second)).toBe(false);
+  });
+
+  test('caches decrypt-side key derivations by salt', () => {
+    __resetEncryptionKeyCacheForTests();
+    const salt = Buffer.alloc(SALT_LENGTH, 3);
+    const first = getEncryptionKey(salt);
+    const second = getEncryptionKey(salt);
+    expect(first).toBe(second);
+    expect(__getEncryptionKeyCacheSizeForTests()).toBe(1);
   });
 });
 
