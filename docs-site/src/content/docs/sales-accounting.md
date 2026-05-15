@@ -35,6 +35,8 @@ Quando una fattura esce dallo stato bozza diventa in sola lettura: non può esse
 
 L'importo pagato non può superare il totale della fattura. Quando una fattura viene impostata su **pagata**, l'importo pagato deve coprire almeno l'intero totale; in caso contrario Praetor respinge il salvataggio per mantenere coerenti scadenziari, saldi e report.
 
+Praetor arrotonda imponibili, IVA, costi e totali alla precisione monetaria di due decimali usando l'arrotondamento commerciale sui mezzi centesimi: valori come 1,005 diventano 1,01.
+
 ### IVA per riga
 
 Ogni riga della fattura cliente ha la propria aliquota IVA in percentuale. Il valore predefinito per le nuove righe è 22% (aliquota ordinaria italiana), ma puoi modificarla per riflettere aliquote ridotte (10%, 5%, 4%) o le righe esenti (0%). Il pannello di riepilogo mostra il subtotale (imponibile), l'IVA totale e il totale generale (imponibile + IVA). Le fatture precedenti alla migrazione vengono caricate con aliquota IVA pari a 0%, mantenendo invariato il loro totale.
