@@ -292,6 +292,29 @@ describe('POST /api/supplier-invoices', () => {
     );
   });
 
+  test('201 keeps auto-generated id suffix untruncated after 9999', async () => {
+    maxSequenceForYearMock.mockResolvedValue(9999);
+    createMock.mockImplementation(async (input: Record<string, unknown>) => ({
+      ...SAMPLE_INVOICE,
+      id: input.id as string,
+    }));
+    insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/supplier-invoices',
+      headers: authHeader(),
+      payload: validBody,
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'SINV-2025-10000' }),
+      expect.anything(),
+    );
+    expect(JSON.parse(res.body).id).toBe('SINV-2025-10000');
+  });
+
   test('201 uses caller-supplied id when provided', async () => {
     createMock.mockResolvedValue({ ...SAMPLE_INVOICE, id: 'CUSTOM-1' });
     insertItemsMock.mockResolvedValue([{ ...SAMPLE_ITEM, invoiceId: 'CUSTOM-1' }]);

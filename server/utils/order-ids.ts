@@ -19,6 +19,19 @@ const SEQUENCE_NAMES = {
 
 type SequentialPrefix = keyof typeof SEQUENCE_NAMES;
 
+export const ORDER_ID_SEQUENCE_MIN_DIGITS = 4;
+
+export const formatSequenceSuffix = (
+  sequence: string | number | bigint,
+  minDigits = ORDER_ID_SEQUENCE_MIN_DIGITS,
+): string => {
+  const value = String(sequence);
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`Invalid sequence value: ${value}`);
+  }
+  return value.padStart(minDigits, '0');
+};
+
 const generateSequentialId = async (
   prefix: SequentialPrefix,
   exec: DbExecutor = db,
@@ -33,8 +46,7 @@ const generateSequentialId = async (
   if (rows.length === 0 || rows[0]?.nextValue == null) {
     throw new Error(`Sequence ${sequenceName} returned no value — schema migration likely missing`);
   }
-  const nextSequence = Number(rows[0].nextValue);
-  return `${prefix}-${year}-${String(nextSequence).padStart(4, '0')}`;
+  return `${prefix}-${year}-${formatSequenceSuffix(rows[0].nextValue)}`;
 };
 
 export const generateClientOrderId = (exec?: DbExecutor) => generateSequentialId('ORD', exec);

@@ -168,7 +168,7 @@ export const maxSequenceForYear = async (year: string, exec: DbExecutor = db): P
   const pattern = `^SINV-${year}-[0-9]+$`;
   const rows = await executeRows<{ maxSequence: string | number | null }>(
     exec,
-    sql`SELECT COALESCE(MAX(CAST(split_part(id, '-', 3) AS INTEGER)), 0) AS "maxSequence"
+    sql`SELECT COALESCE(MAX(CAST(split_part(id, '-', 3) AS BIGINT)), 0) AS "maxSequence"
         FROM ${supplierInvoices} WHERE id ~ ${pattern}`,
   );
   return parseDbNumber(rows[0]?.maxSequence, 0);
