@@ -57,6 +57,23 @@ describe('userHasRole', () => {
     const result = await rolesRepo.userHasRole('user-1', 'manager', testDb);
     expect(result).toBe(false);
   });
+
+  test('can re-read enabled user and session state in the role check query', async () => {
+    exec.enqueue({ rows: [[1]] });
+    const result = await rolesRepo.userHasRole('user-1', 'manager', {
+      exec: testDb,
+      requireEnabledUser: true,
+      expectedSessionVersion: 7,
+    });
+
+    expect(result).toBe(true);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('inner join "users"');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('coalesce("users"."is_disabled"');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('"users"."session_version"');
+    expect(exec.calls[0].params).toContain('user-1');
+    expect(exec.calls[0].params).toContain('manager');
+    expect(exec.calls[0].params).toContain(7);
+  });
 });
 
 describe('listAvailableRolesForUser', () => {

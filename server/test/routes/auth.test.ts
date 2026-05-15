@@ -655,8 +655,11 @@ describe('POST /api/auth/switch-role', () => {
     // sessionStart preserved
     expect(decoded.sessionStart).toBe(sessionStart);
 
-    // userHasRole called for the target role
-    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'admin');
+    // userHasRole called for the target role with a final enabled/session check
+    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'admin', {
+      requireEnabledUser: true,
+      expectedSessionVersion: 1,
+    });
 
     // Audit emission with from/to
     expect(logAuditMock).toHaveBeenCalledTimes(1);

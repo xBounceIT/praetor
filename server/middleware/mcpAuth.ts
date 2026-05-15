@@ -74,10 +74,8 @@ export const authenticateMcpToken = async (request: FastifyRequest, reply: Fasti
     return reply.code(403).send({ error: 'Invalid or revoked MCP token' });
   }
 
-  const [hasRole, rolePermissions] = await Promise.all([
-    rolesRepo.userHasRole(user.id, user.role),
-    getRolePermissions(user.role),
-  ]);
+  const rolePermissions = await getRolePermissions(user.role);
+  const hasRole = await rolesRepo.userHasRole(user.id, user.role, { requireEnabledUser: true });
   if (!hasRole) {
     return reply.code(403).send({ error: 'Invalid or revoked MCP token' });
   }
