@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
-import { type DbExecutor, db } from '../db/drizzle.ts';
+import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { customerOffers } from '../db/schema/customerOffers.ts';
 import { quoteItems, quotes } from '../db/schema/quotes.ts';
 import { sales } from '../db/schema/sales.ts';
@@ -510,10 +510,11 @@ export const replaceItems = async (
   quoteId: string,
   items: NewClientQuoteItem[],
   exec: DbExecutor = db,
-): Promise<ClientQuoteItem[]> => {
-  await exec.delete(quoteItems).where(eq(quoteItems.quoteId, quoteId));
-  return insertItems(quoteId, items, exec);
-};
+): Promise<ClientQuoteItem[]> =>
+  runAtomically(exec, async (tx) => {
+    await tx.delete(quoteItems).where(eq(quoteItems.quoteId, quoteId));
+    return insertItems(quoteId, items, tx);
+  });
 
 export const deleteById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
   const result = await exec.delete(quotes).where(eq(quotes.id, id));
