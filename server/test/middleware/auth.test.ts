@@ -4,9 +4,11 @@ import {
   __resetPatIdleTimeoutCacheForTests,
   authenticateToken,
   generateToken,
+  getSessionAuth,
   requireAnyPermission,
   requirePermission,
   requireRole,
+  requireSessionAuth,
 } from '../../middleware/auth.ts';
 import * as realAuditLogsRepo from '../../repositories/auditLogsRepo.ts';
 import * as realPersonalAccessTokensRepo from '../../repositories/personalAccessTokensRepo.ts';
@@ -631,6 +633,55 @@ describe('requireRole', () => {
     expect(reply.statusCode).toBe(0);
     expect(reply.body).toBeUndefined();
     expect(auditLogsCreateMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('requireSessionAuth', () => {
+  test('403s as a hook when request auth is not session-backed', async () => {
+    const request = {
+      auth: { userId: 'u1', source: 'personalAccessToken' },
+    };
+    const reply = buildFakeReply();
+
+    await requireSessionAuth(request as never, reply as never);
+
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body).toEqual({ error: 'Session authentication required' });
+  });
+
+  test('does not return nullable session data from the hook', async () => {
+    const request = {
+      auth: {
+        userId: 'u1',
+        source: 'session',
+        sessionStart: 123,
+        sessionVersion: 2,
+      },
+    };
+    const reply = buildFakeReply();
+
+    const result = await requireSessionAuth(request as never, reply as never);
+
+    expect(result).toBeUndefined();
+    expect(reply.statusCode).toBe(0);
+    expect(getSessionAuth(request as never)).toEqual({
+      userId: 'u1',
+      sessionStart: 123,
+      sessionVersion: 2,
+    });
+  });
+
+  test('getSessionAuth throws a 403 error if the session guard was not satisfied', () => {
+    const request = {
+      auth: { userId: 'u1', source: 'personalAccessToken' },
+    };
+
+    expect(() => getSessionAuth(request as never)).toThrow('Session authentication required');
+    try {
+      getSessionAuth(request as never);
+    } catch (error) {
+      expect((error as { statusCode?: number }).statusCode).toBe(403);
+    }
   });
 });
 

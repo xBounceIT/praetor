@@ -84,7 +84,26 @@ type SessionJwtPayload = JwtPayload & {
   sessionVersion?: number;
 };
 
+type SessionAuthContext = {
+  userId: string;
+  sessionStart: number;
+  sessionVersion: number;
+};
+
 type NonEmptyGuardArgs = [string, ...string[]];
+
+const hasSessionAuthContext = (
+  auth: FastifyRequest['auth'],
+): auth is NonNullable<FastifyRequest['auth']> & {
+  source: 'session';
+  sessionVersion: number;
+} => auth?.source === 'session' && typeof auth.sessionVersion === 'number';
+
+const buildSessionAuthRequiredError = () => {
+  const error = new Error('Session authentication required') as Error & { statusCode: number };
+  error.statusCode = 403;
+  return error;
+};
 
 const loadAuthenticatedUserContext = async (
   request: FastifyRequest,
@@ -312,21 +331,27 @@ export const requireAnyPermission = (...permissions: string[]) => {
 export const requireScopedPermission = (resource: PermissionResource, action: PermissionAction) =>
   requireAnyPermission(...equivalentPermissionsFor(resource, action));
 
-// Narrow `request.auth` to a session-sourced context for endpoints that must not be
-// callable with a personal access token (logout, role switch). Returns null after sending
-// a response if the caller doesn't have a valid session.
-export const requireSessionAuth = (
+// Fastify guard for endpoints that must not be callable with a personal access token
+// (logout, role switch). Keep this hook response-only; handlers should call
+// `getSessionAuth` after the guard has run to read a non-null session context.
+export const requireSessionAuth = async (
   request: FastifyRequest,
   reply: FastifyReply,
-): { userId: string; sessionStart: number; sessionVersion: number } | null => {
-  if (request.auth?.source !== 'session') {
+): Promise<void> => {
+  if (!hasSessionAuthContext(request.auth)) {
     reply.code(403).send({ error: 'Session authentication required' });
-    return null;
+    return;
+  }
+};
+
+export const getSessionAuth = (request: FastifyRequest): SessionAuthContext => {
+  if (!hasSessionAuthContext(request.auth)) {
+    throw buildSessionAuthRequiredError();
   }
   return {
     userId: request.auth.userId,
     sessionStart: request.auth.sessionStart ?? Date.now(),
-    sessionVersion: request.auth.sessionVersion as number,
+    sessionVersion: request.auth.sessionVersion,
   };
 };
 
@@ -347,5 +372,7 @@ export default {
   requirePermission,
   requireAnyPermission,
   requireScopedPermission,
+  requireSessionAuth,
+  getSessionAuth,
   generateToken,
 };

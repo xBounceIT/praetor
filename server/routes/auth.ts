@@ -1,6 +1,11 @@
 import bcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { authenticateToken, generateToken, requireSessionAuth } from '../middleware/auth.ts';
+import {
+  authenticateToken,
+  generateToken,
+  getSessionAuth,
+  requireSessionAuth,
+} from '../middleware/auth.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
@@ -281,7 +286,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/switch-role',
     {
-      onRequest: [authenticateToken],
+      onRequest: [authenticateToken, requireSessionAuth],
       schema: {
         tags: ['auth'],
         summary: 'Switch active role (session-only)',
@@ -297,8 +302,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const roleIdResult = requireNonEmptyString(roleId, 'roleId');
       if (!roleIdResult.ok) return badRequest(reply, roleIdResult.message);
 
-      const session = requireSessionAuth(request, reply);
-      if (!session) return;
+      const session = getSessionAuth(request);
 
       const hasRole = await rolesRepo.userHasRole(session.userId, roleIdResult.value, {
         requireEnabledUser: true,
@@ -369,7 +373,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/logout',
     {
-      onRequest: [authenticateToken],
+      onRequest: [authenticateToken, requireSessionAuth],
       schema: {
         tags: ['auth'],
         summary: 'Logout (revoke all sessions for this user)',
@@ -380,8 +384,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const session = requireSessionAuth(request, reply);
-      if (!session) return;
+      const session = getSessionAuth(request);
 
       await Promise.all([
         usersRepo.bumpSessionVersion(session.userId),
