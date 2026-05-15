@@ -693,6 +693,21 @@ describe('requirePermission (ALL semantics)', () => {
     expect(reply.body).toBeUndefined();
   });
 
+  test('normalizes legacy permission aliases before checking all required perms', async () => {
+    const reply = buildFakeReply();
+    await requirePermission('configuration.general.view', 'suppliers.quotes.create')(
+      {
+        user: {
+          ...HAPPY_USER,
+          permissions: ['administration.general.view', 'sales.supplier_quotes.create'],
+        },
+      } as never,
+      reply as never,
+    );
+    expect(reply.statusCode).toBe(0);
+    expect(reply.body).toBeUndefined();
+  });
+
   test('rejects empty permission guards before a route can be registered', () => {
     // @ts-expect-error Regression coverage for runtime JavaScript callers.
     expect(() => requirePermission()).toThrow('requirePermission requires at least one permission');
@@ -732,6 +747,16 @@ describe('requireAnyPermission (ANY semantics)', () => {
     const reply = buildFakeReply();
     await requireAnyPermission('a.view', 'b.view')(
       { user: { ...HAPPY_USER, permissions: ['b.view'] } } as never,
+      reply as never,
+    );
+    expect(reply.statusCode).toBe(0);
+    expect(reply.body).toBeUndefined();
+  });
+
+  test('normalizes legacy permission aliases before checking any required perm', async () => {
+    const reply = buildFakeReply();
+    await requireAnyPermission('crm.clients.view', 'configuration.general.update')(
+      { user: { ...HAPPY_USER, permissions: ['administration.general.update'] } } as never,
       reply as never,
     );
     expect(reply.statusCode).toBe(0);

@@ -7,6 +7,8 @@ import { logAudit } from '../utils/audit.ts';
 import {
   equivalentPermissionsFor,
   getRolePermissions,
+  hasAnyPermission,
+  hasPermission,
   type PermissionAction,
   type PermissionResource,
 } from '../utils/permissions.ts';
@@ -285,7 +287,7 @@ export const requirePermission = (...permissions: NonEmptyGuardArgs) => {
     }
 
     const userPermissions = request.user.permissions || [];
-    const hasAll = permissions.every((permission) => userPermissions.includes(permission));
+    const hasAll = permissions.every((permission) => hasPermission(userPermissions, permission));
     if (!hasAll) {
       return denyForbidden(request, reply, 'permission', permissions);
     }
@@ -299,7 +301,7 @@ export const requireAnyPermission = (...permissions: string[]) => {
     }
 
     const userPermissions = request.user.permissions || [];
-    const hasAny = permissions.some((permission) => userPermissions.includes(permission));
+    const hasAny = hasAnyPermission(userPermissions, permissions);
     if (!hasAny) {
       return denyForbidden(request, reply, 'permission', permissions);
     }
