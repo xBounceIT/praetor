@@ -683,6 +683,8 @@ const AppContent: React.FC = () => {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   // Bumped on logout/role-switch so in-flight cursor streams stop appending stale rows.
   const entriesStreamTokenRef = useRef(0);
+  // Bumped on navigation/auth reset so stale module-load completions cannot commit state.
+  const moduleLoadTokenRef = useRef(0);
   // Flips to true once the initial entries page resolves; the recurring-entry
   // generator effect waits on this rather than relying on a setTimeout
   // heuristic to guess when entries are loaded. Reset to false on
@@ -867,6 +869,7 @@ const AppContent: React.FC = () => {
   notificationsRef.current = notifications;
 
   const clearAuthScopedAppState = useCallback(() => {
+    moduleLoadTokenRef.current++;
     resetModuleLoader();
     setHasLoadedGeneralSettings(false);
     setGeneralSettings(INITIAL_GENERAL_SETTINGS);
@@ -1092,6 +1095,9 @@ const AppContent: React.FC = () => {
 
     return hasViewAccess(currentUser.permissions, activeView as View);
   }, [activeView, currentUser, hasLoadedGeneralSettings, generalSettings.enableAiReporting]);
+  const activeLoadModuleRef = useRef<string | null>(null);
+  activeLoadModuleRef.current =
+    currentUser && isRouteAccessible ? getModuleFromView(activeView) : null;
 
   // Redirect to 404 if route is not accessible
   useEffect(() => {
@@ -1163,6 +1169,14 @@ const AppContent: React.FC = () => {
     const module = getModuleFromView(activeView);
     if (!module) return;
     if (loadedModules.has(module)) return;
+    const loadToken = ++moduleLoadTokenRef.current;
+    const isCurrentModuleLoad = () =>
+      moduleLoadTokenRef.current === loadToken && activeLoadModuleRef.current === module;
+    const cancelModuleLoad = () => {
+      if (moduleLoadTokenRef.current === loadToken && activeLoadModuleRef.current !== module) {
+        moduleLoadTokenRef.current += 1;
+      }
+    };
 
     // Clear module-scoped arrays the incoming module isn't going to refresh,
     // so leftover data from a previously-visited module doesn't leak into the
@@ -1197,13 +1211,14 @@ const AppContent: React.FC = () => {
     if (module === 'settings') {
       // Settings has no datasets to load; mark it loaded so we don't re-clear
       // and re-invalidate on every render while the user is on this view.
-      markModuleLoaded(module);
-      return;
+      if (isCurrentModuleLoad()) markModuleLoaded(module);
+      return cancelModuleLoad;
     }
 
     const loadGeneralSettings = async () => {
       if (hasLoadedGeneralSettings) return;
       const genSettings = await api.generalSettings.get();
+      if (!isCurrentModuleLoad()) return;
       setGeneralSettings({
         ...genSettings,
         currency: normalizeCurrency(genSettings.currency),
@@ -1220,6 +1235,7 @@ const AppContent: React.FC = () => {
     const loadLdapConfig = async () => {
       if (hasLoadedLdapConfig) return;
       const ldap = await api.ldap.getConfig();
+      if (!isCurrentModuleLoad()) return;
       setLdapConfig(ldap);
       setHasLoadedLdapConfig(true);
     };
@@ -1227,6 +1243,7 @@ const AppContent: React.FC = () => {
     const loadSsoProviders = async () => {
       if (hasLoadedSsoProviders) return;
       const providers = await api.sso.listProviders();
+      if (!isCurrentModuleLoad()) return;
       setSsoProviders(providers);
       setHasLoadedSsoProviders(true);
     };
@@ -1238,6 +1255,7 @@ const AppContent: React.FC = () => {
     const loadEmailConfig = async () => {
       if (hasLoadedEmailConfig) return;
       const email = await api.email.getConfig();
+      if (!isCurrentModuleLoad()) return;
       setEmailConfig(email);
       setHasLoadedEmailConfig(true);
     };
@@ -1245,6 +1263,7 @@ const AppContent: React.FC = () => {
     const loadRoles = async () => {
       if (hasLoadedRoles) return;
       const rolesData = await api.roles.list();
+      if (!isCurrentModuleLoad()) return;
       setRoles(rolesData);
       setHasLoadedRoles(true);
     };
@@ -1255,9 +1274,11 @@ const AppContent: React.FC = () => {
       load: () => Promise<void>,
       failures: string[],
     ) => {
+      if (!isCurrentModuleLoad()) return;
       try {
         await load();
       } catch (err) {
+        if (!isCurrentModuleLoad()) return;
         failures.push(dataset);
         console.error(
           `Failed to load ${moduleName} dataset "${dataset}": ${getErrorMessage(err)}`,
@@ -1270,6 +1291,7 @@ const AppContent: React.FC = () => {
       let failedDatasets: string[] = [];
 
       try {
+        if (!isCurrentModuleLoad()) return;
         const permissions = currentUser.permissions || [];
         const canViewTimesheets = hasAnyPermission(permissions, [
           ...equivalentPermissionsFor('timesheets.tracker', 'view'),
@@ -1456,41 +1478,46 @@ const AppContent: React.FC = () => {
             };
             const streamRemainingEntries = async (cursor: string | null, token: number) => {
               while (cursor) {
-                if (entriesStreamTokenRef.current !== token) return;
+                if (!isCurrentModuleLoad() || entriesStreamTokenRef.current !== token) return;
                 try {
                   const page = await api.entries.listPage({ cursor, limit: 500 });
-                  if (entriesStreamTokenRef.current !== token) return;
+                  if (!isCurrentModuleLoad() || entriesStreamTokenRef.current !== token) return;
                   setEntries((prev) => mergeById(prev, page.entries));
                   cursor = page.nextCursor;
                 } catch (err) {
+                  if (!isCurrentModuleLoad() || entriesStreamTokenRef.current !== token) return;
                   console.error('Failed to stream remaining entries:', err);
                   return;
                 }
               }
             };
-            failedDatasets = await loadDatasets(module, [
-              {
-                dataset: 'entries',
-                enabled: true,
-                load: () => api.entries.listPage({ limit: 500 }),
-                apply: (page) => {
-                  const token = ++entriesStreamTokenRef.current;
-                  setEntries((prev) => mergeById(prev, page.entries));
-                  // Signal that the initial page of entries is in state. The
-                  // recurring-entries generator effect gates on this so it
-                  // never runs against the empty-array initial state (which
-                  // used to be papered over with a setTimeout(100) heuristic
-                  // and could miss/duplicate entries under varying API
-                  // latency).
-                  setEntriesLoaded(true);
-                  if (page.nextCursor) void streamRemainingEntries(page.nextCursor, token);
+            failedDatasets = await loadDatasets(
+              module,
+              [
+                {
+                  dataset: 'entries',
+                  enabled: true,
+                  load: () => api.entries.listPage({ limit: 500 }),
+                  apply: (page) => {
+                    const token = ++entriesStreamTokenRef.current;
+                    setEntries((prev) => mergeById(prev, page.entries));
+                    // Signal that the initial page of entries is in state. The
+                    // recurring-entries generator effect gates on this so it
+                    // never runs against the empty-array initial state (which
+                    // used to be papered over with a setTimeout(100) heuristic
+                    // and could miss/duplicate entries under varying API
+                    // latency).
+                    setEntriesLoaded(true);
+                    if (page.nextCursor) void streamRemainingEntries(page.nextCursor, token);
+                  },
                 },
-              },
-              listRequest('clients', canListClients, () => api.clients.list(), setClients),
-              listRequest('projects', canListProjects, () => api.projects.list(), setProjects),
-              listRequest('tasks', canListTasks, () => api.tasks.list(), setProjectTasks),
-              listRequest('users', canListUsers, () => api.users.list(), setUsers),
-            ]);
+                listRequest('clients', canListClients, () => api.clients.list(), setClients),
+                listRequest('projects', canListProjects, () => api.projects.list(), setProjects),
+                listRequest('tasks', canListTasks, () => api.tasks.list(), setProjectTasks),
+                listRequest('users', canListUsers, () => api.users.list(), setUsers),
+              ],
+              { shouldApply: isCurrentModuleLoad },
+            );
             await loadOptionalDataset(
               module,
               'general settings',
@@ -1501,28 +1528,37 @@ const AppContent: React.FC = () => {
           }
           case 'hr': {
             if (!canViewHr) return;
-            failedDatasets = await loadDatasets(module, [
-              listRequest('users', canListUsers, () => api.users.list(), setUsers),
-              listRequest('work units', canListWorkUnits, () => api.workUnits.list(), setWorkUnits),
-              listRequest(
-                'clients',
-                canManageEmployeeAssignments && canListClients,
-                () => api.clients.list(),
-                setClients,
-              ),
-              listRequest(
-                'projects',
-                canManageEmployeeAssignments && canListProjects,
-                () => api.projects.list(),
-                setProjects,
-              ),
-              listRequest(
-                'tasks',
-                canManageEmployeeAssignments && canListTasks,
-                () => api.tasks.list(),
-                setProjectTasks,
-              ),
-            ]);
+            failedDatasets = await loadDatasets(
+              module,
+              [
+                listRequest('users', canListUsers, () => api.users.list(), setUsers),
+                listRequest(
+                  'work units',
+                  canListWorkUnits,
+                  () => api.workUnits.list(),
+                  setWorkUnits,
+                ),
+                listRequest(
+                  'clients',
+                  canManageEmployeeAssignments && canListClients,
+                  () => api.clients.list(),
+                  setClients,
+                ),
+                listRequest(
+                  'projects',
+                  canManageEmployeeAssignments && canListProjects,
+                  () => api.projects.list(),
+                  setProjects,
+                ),
+                listRequest(
+                  'tasks',
+                  canManageEmployeeAssignments && canListTasks,
+                  () => api.tasks.list(),
+                  setProjectTasks,
+                ),
+              ],
+              { shouldApply: isCurrentModuleLoad },
+            );
             await loadOptionalDataset(
               module,
               'general settings',
@@ -1536,14 +1572,18 @@ const AppContent: React.FC = () => {
             const shouldLoadUsers = canViewUserManagement;
             const shouldLoadRoles = canViewRoles || canViewAuthentication || canViewUserManagement;
 
-            failedDatasets = await loadDatasets(module, [
-              listRequest(
-                'users',
-                shouldLoadUsers && canListUsers,
-                () => api.users.list(),
-                setUsers,
-              ),
-            ]);
+            failedDatasets = await loadDatasets(
+              module,
+              [
+                listRequest(
+                  'users',
+                  shouldLoadUsers && canListUsers,
+                  () => api.users.list(),
+                  setUsers,
+                ),
+              ],
+              { shouldApply: isCurrentModuleLoad },
+            );
 
             await loadOptionalDataset(
               module,
@@ -1569,20 +1609,24 @@ const AppContent: React.FC = () => {
           }
           case 'crm': {
             if (!canViewCrm) return;
-            failedDatasets = await loadDatasets(module, [
-              listRequest(
-                'clients',
-                canViewCrmClients && canListClients,
-                () => api.clients.list(),
-                setClients,
-              ),
-              listRequest(
-                'suppliers',
-                canViewCrmSuppliers && canListSuppliers,
-                () => api.suppliers.list(),
-                setSuppliers,
-              ),
-            ]);
+            failedDatasets = await loadDatasets(
+              module,
+              [
+                listRequest(
+                  'clients',
+                  canViewCrmClients && canListClients,
+                  () => api.clients.list(),
+                  setClients,
+                ),
+                listRequest(
+                  'suppliers',
+                  canViewCrmSuppliers && canListSuppliers,
+                  () => api.suppliers.list(),
+                  setSuppliers,
+                ),
+              ],
+              { shouldApply: isCurrentModuleLoad },
+            );
             await loadOptionalDataset(
               module,
               'general settings',
@@ -1593,24 +1637,33 @@ const AppContent: React.FC = () => {
           }
           case 'sales': {
             if (!canViewSales) return;
-            failedDatasets = await loadDatasets(module, [
-              listRequest('quotes', canListQuotes, () => api.quotes.list(), setQuotes),
-              listRequest(
-                'client offers',
-                canListClientOffers,
-                () => api.clientOffers.list(),
-                setClientOffers,
-              ),
-              listRequest(
-                'supplier quotes',
-                canListSupplierQuotes,
-                () => api.supplierQuotes.list(),
-                setSupplierQuotes,
-              ),
-              listRequest('clients', canListClients, () => api.clients.list(), setClients),
-              listRequest('suppliers', canListSuppliers, () => api.suppliers.list(), setSuppliers),
-              listRequest('products', canListProducts, () => api.products.list(), setProducts),
-            ]);
+            failedDatasets = await loadDatasets(
+              module,
+              [
+                listRequest('quotes', canListQuotes, () => api.quotes.list(), setQuotes),
+                listRequest(
+                  'client offers',
+                  canListClientOffers,
+                  () => api.clientOffers.list(),
+                  setClientOffers,
+                ),
+                listRequest(
+                  'supplier quotes',
+                  canListSupplierQuotes,
+                  () => api.supplierQuotes.list(),
+                  setSupplierQuotes,
+                ),
+                listRequest('clients', canListClients, () => api.clients.list(), setClients),
+                listRequest(
+                  'suppliers',
+                  canListSuppliers,
+                  () => api.suppliers.list(),
+                  setSuppliers,
+                ),
+                listRequest('products', canListProducts, () => api.products.list(), setProducts),
+              ],
+              { shouldApply: isCurrentModuleLoad },
+            );
             await loadOptionalDataset(
               module,
               'general settings',
@@ -1621,30 +1674,39 @@ const AppContent: React.FC = () => {
           }
           case 'accounting': {
             if (!canViewAccounting) return;
-            failedDatasets = await loadDatasets(module, [
-              listRequest(
-                'client orders',
-                canListOrders,
-                () => api.clientsOrders.list(),
-                setClientsOrders,
-              ),
-              listRequest('invoices', canListInvoices, () => api.invoices.list(), setInvoices),
-              listRequest(
-                'supplier orders',
-                canListSupplierOrders,
-                () => api.supplierOrders.list(),
-                setSupplierOrders,
-              ),
-              listRequest(
-                'supplier invoices',
-                canListSupplierInvoices,
-                () => api.supplierInvoices.list(),
-                setSupplierInvoices,
-              ),
-              listRequest('clients', canListClients, () => api.clients.list(), setClients),
-              listRequest('suppliers', canListSuppliers, () => api.suppliers.list(), setSuppliers),
-              listRequest('products', canListProducts, () => api.products.list(), setProducts),
-            ]);
+            failedDatasets = await loadDatasets(
+              module,
+              [
+                listRequest(
+                  'client orders',
+                  canListOrders,
+                  () => api.clientsOrders.list(),
+                  setClientsOrders,
+                ),
+                listRequest('invoices', canListInvoices, () => api.invoices.list(), setInvoices),
+                listRequest(
+                  'supplier orders',
+                  canListSupplierOrders,
+                  () => api.supplierOrders.list(),
+                  setSupplierOrders,
+                ),
+                listRequest(
+                  'supplier invoices',
+                  canListSupplierInvoices,
+                  () => api.supplierInvoices.list(),
+                  setSupplierInvoices,
+                ),
+                listRequest('clients', canListClients, () => api.clients.list(), setClients),
+                listRequest(
+                  'suppliers',
+                  canListSuppliers,
+                  () => api.suppliers.list(),
+                  setSuppliers,
+                ),
+                listRequest('products', canListProducts, () => api.products.list(), setProducts),
+              ],
+              { shouldApply: isCurrentModuleLoad },
+            );
             await loadOptionalDataset(
               module,
               'general settings',
@@ -1655,14 +1717,18 @@ const AppContent: React.FC = () => {
           }
           case 'catalog': {
             if (!canViewCatalog) return;
-            failedDatasets = await loadDatasets(module, [
-              listRequest(
-                'products',
-                canListProducts && canViewCatalogInternal,
-                () => api.products.list(),
-                setProducts,
-              ),
-            ]);
+            failedDatasets = await loadDatasets(
+              module,
+              [
+                listRequest(
+                  'products',
+                  canListProducts && canViewCatalogInternal,
+                  () => api.products.list(),
+                  setProducts,
+                ),
+              ],
+              { shouldApply: isCurrentModuleLoad },
+            );
             await loadOptionalDataset(
               module,
               'general settings',
@@ -1673,39 +1739,57 @@ const AppContent: React.FC = () => {
           }
           case 'projects': {
             if (!canViewProjects) return;
-            failedDatasets = await loadDatasets(module, [
-              listRequest('projects', canListProjects, () => api.projects.list(), setProjects),
-              listRequest('tasks', canListTasks, () => api.tasks.list(), setProjectTasks),
-              listRequest('clients', canListClients, () => api.clients.list(), setClients),
-              listRequest('users', canListUsers, () => api.users.list(), setUsers),
-              listRequest('work units', canListWorkUnits, () => api.workUnits.list(), setWorkUnits),
-              listRequest(
-                'client orders',
-                canListOrders,
-                () => api.clientsOrders.list(),
-                setClientsOrders,
-              ),
-              listRequest(
-                'client offers',
-                canListClientOffers,
-                () => api.clientOffers.list(),
-                setClientOffers,
-              ),
-            ]);
+            failedDatasets = await loadDatasets(
+              module,
+              [
+                listRequest('projects', canListProjects, () => api.projects.list(), setProjects),
+                listRequest('tasks', canListTasks, () => api.tasks.list(), setProjectTasks),
+                listRequest('clients', canListClients, () => api.clients.list(), setClients),
+                listRequest('users', canListUsers, () => api.users.list(), setUsers),
+                listRequest(
+                  'work units',
+                  canListWorkUnits,
+                  () => api.workUnits.list(),
+                  setWorkUnits,
+                ),
+                listRequest(
+                  'client orders',
+                  canListOrders,
+                  () => api.clientsOrders.list(),
+                  setClientsOrders,
+                ),
+                listRequest(
+                  'client offers',
+                  canListClientOffers,
+                  () => api.clientOffers.list(),
+                  setClientOffers,
+                ),
+              ],
+              { shouldApply: isCurrentModuleLoad },
+            );
             break;
           }
           case 'suppliers': {
             if (!canViewSuppliersModule) return;
-            failedDatasets = await loadDatasets(module, [
-              listRequest('suppliers', canListSuppliers, () => api.suppliers.list(), setSuppliers),
-              listRequest(
-                'supplier quotes',
-                canListSupplierQuotes,
-                () => api.supplierQuotes.list(),
-                setSupplierQuotes,
-              ),
-              listRequest('products', canListProducts, () => api.products.list(), setProducts),
-            ]);
+            failedDatasets = await loadDatasets(
+              module,
+              [
+                listRequest(
+                  'suppliers',
+                  canListSuppliers,
+                  () => api.suppliers.list(),
+                  setSuppliers,
+                ),
+                listRequest(
+                  'supplier quotes',
+                  canListSupplierQuotes,
+                  () => api.supplierQuotes.list(),
+                  setSupplierQuotes,
+                ),
+                listRequest('products', canListProducts, () => api.products.list(), setProducts),
+              ],
+              { shouldApply: isCurrentModuleLoad },
+            );
             await loadOptionalDataset(
               module,
               'general settings',
@@ -1727,16 +1811,20 @@ const AppContent: React.FC = () => {
           }
         }
       } catch (err) {
+        if (!isCurrentModuleLoad()) return;
         console.error('Failed to load module data:', err);
         failedDatasets.push('module data');
       } finally {
-        const uniqueFailures = Array.from(new Set(failedDatasets));
-        recordFailures(module, uniqueFailures);
-        markModuleLoaded(module);
+        if (isCurrentModuleLoad()) {
+          const uniqueFailures = Array.from(new Set(failedDatasets));
+          recordFailures(module, uniqueFailures);
+          markModuleLoaded(module);
+        }
       }
     };
 
-    loadModuleData();
+    void loadModuleData();
+    return cancelModuleLoad;
   }, [
     activeView,
     currentUser,
