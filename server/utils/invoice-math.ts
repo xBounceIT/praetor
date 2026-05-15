@@ -6,10 +6,27 @@ type ItemMath = {
   taxRate?: number;
 };
 
+const CURRENCY_DECIMAL_PLACES = 2;
+
+const shiftDecimal = (value: number, decimalPlaces: number): number => {
+  const [coefficient, exponent = '0'] = value.toString().split('e');
+  return Number(`${coefficient}e${Number(exponent) + decimalPlaces}`);
+};
+
 // Match the NUMERIC(_, 2) precision used for invoice columns so totals computed here
 // align with what would be re-derived from the persisted rows. The frontend mirrors this
 // helper in `utils/numbers.ts` so both layers agree on rendered values.
-export const roundCurrency = (value: number) => Math.round(value * 100) / 100;
+export const roundCurrency = (value: number): number => {
+  if (!Number.isFinite(value)) return value;
+
+  const sign = Math.sign(value);
+  if (sign === 0) return 0;
+
+  const cents = Math.round(shiftDecimal(Math.abs(value), CURRENCY_DECIMAL_PLACES));
+  if (cents === 0) return 0;
+
+  return sign * shiftDecimal(cents, -CURRENCY_DECIMAL_PLACES);
+};
 
 export const computeInvoiceTotals = (
   items: ItemMath[],

@@ -33,6 +33,11 @@ describe('computeEntryCost', () => {
     expect(computeEntryCost(1, 0.015)).toBe(0.02);
   });
 
+  test('rounds floating-point half-cent boundaries up', () => {
+    expect(computeEntryCost(1, 1.005)).toBe(1.01);
+    expect(computeEntryCost(1, 1.015)).toBe(1.02);
+  });
+
   test('handles negative duration as math allows (caller is responsible for validation)', () => {
     expect(computeEntryCost(-2, 50)).toBe(-100);
   });

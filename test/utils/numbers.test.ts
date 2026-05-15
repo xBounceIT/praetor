@@ -209,6 +209,12 @@ describe('calculatePricingTotals', () => {
     expect(t.total).toBe(0.3);
   });
 
+  test('rounds floating-point half-cent boundaries in returned totals', () => {
+    const t = calculatePricingTotals([{ unitPrice: 1.005, quantity: 1 }], 0);
+    expect(t.subtotal).toBe(1.01);
+    expect(t.total).toBe(1.01);
+  });
+
   test('rounds every returned field to 2 decimal places', () => {
     // Hand-picked to drift in every field: small unit prices + percentage discount.
     const items: PricingItem[] = [{ unitPrice: 0.1, quantity: 3, productCost: 0.05, discount: 10 }];
@@ -227,6 +233,17 @@ describe('roundCurrency', () => {
 
   test('rounds halves up', () => {
     expect(roundCurrency(0.005)).toBe(0.01);
+  });
+
+  test('rounds floating-point half-cent boundaries up', () => {
+    expect(roundCurrency(1.005)).toBe(1.01);
+    expect(roundCurrency(1.015)).toBe(1.02);
+    expect(roundCurrency(10.075)).toBe(10.08);
+  });
+
+  test('does not return negative zero for sub-cent negative values', () => {
+    expect(Object.is(roundCurrency(-0.001), -0)).toBe(false);
+    expect(roundCurrency(-0.001)).toBe(0);
   });
 
   test('passes through clean values', () => {
