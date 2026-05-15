@@ -120,14 +120,40 @@ describe('create / update', () => {
     expect(result.id).toBe('co-1');
   });
 
-  test('update uses COALESCE-per-column and includes id in WHERE', async () => {
+  test('update writes only provided columns and includes id in WHERE', async () => {
     exec.enqueue({ rows: [orderRow()] });
     await repo.update('co-1', { status: 'confirmed' }, testDb);
     const sql = exec.calls[0].sql.toLowerCase();
+    const setClause = sql.slice(sql.indexOf(' set ') + 5, sql.indexOf(' where '));
     expect(sql).toContain('update "sales"');
-    expect(sql).toContain('coalesce');
+    expect(setClause).not.toContain('coalesce');
+    expect(setClause).toContain('"status"');
+    expect(setClause).not.toContain('"notes"');
+    expect(setClause).not.toContain('"linked_offer_id"');
     expect(exec.calls[0].params).toContain('confirmed');
     expect(exec.calls[0].params).toContain('co-1');
+  });
+
+  test('explicit null notes and links clear nullable columns', async () => {
+    exec.enqueue({ rows: [orderRow()] });
+    await repo.update('co-1', { linkedOfferId: null, linkedQuoteId: null, notes: null }, testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    const setClause = sql.slice(sql.indexOf(' set ') + 5, sql.indexOf(' where '));
+    expect(setClause).toContain('"linked_offer_id"');
+    expect(setClause).toContain('"linked_quote_id"');
+    expect(setClause).toContain('"notes"');
+    expect(setClause).not.toContain('coalesce');
+    expect(exec.calls[0].params.filter((param) => param === null)).toHaveLength(3);
+  });
+
+  test('empty patch only updates updated_at', async () => {
+    exec.enqueue({ rows: [orderRow()] });
+    await repo.update('co-1', {}, testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    const setClause = sql.slice(sql.indexOf(' set ') + 5, sql.indexOf(' where '));
+    expect(setClause).toContain('"updated_at" = current_timestamp');
+    expect(setClause).not.toContain('"notes"');
+    expect(setClause).not.toContain('coalesce');
   });
 
   test('update returns null when no row matches', async () => {

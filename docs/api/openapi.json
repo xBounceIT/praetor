@@ -24677,7 +24677,10 @@
                     "type": "string"
                   },
                   "notes": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 }
               }
@@ -26602,7 +26605,10 @@
                     "type": "number"
                   },
                   "notes": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "items": {
                     "type": "array",
