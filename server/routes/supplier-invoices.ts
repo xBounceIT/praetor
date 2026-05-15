@@ -202,7 +202,7 @@ const normalizeItems = (
 const generateSupplierInvoiceId = async (issueDate: string) => {
   const year = issueDate.split('-')[0];
   const maxSequence = await supplierInvoicesRepo.maxSequenceForYear(year);
-  const nextSequence = maxSequence + 1;
+  const nextSequence = maxSequence + 1n;
   return `SINV-${year}-${formatSequenceSuffix(nextSequence)}`;
 };
 

@@ -164,14 +164,14 @@ export const findIdConflict = async (
 // Matches `SINV-<year>-<sequence>` IDs and returns the largest sequence for the given year so
 // the route layer can compute the next ID. PG's POSIX `~` regex isn't expressible in Drizzle's
 // filter API, hence the raw SQL.
-export const maxSequenceForYear = async (year: string, exec: DbExecutor = db): Promise<number> => {
+export const maxSequenceForYear = async (year: string, exec: DbExecutor = db): Promise<bigint> => {
   const pattern = `^SINV-${year}-[0-9]+$`;
-  const rows = await executeRows<{ maxSequence: string | number | null }>(
+  const rows = await executeRows<{ maxSequence: string | number | bigint | null }>(
     exec,
     sql`SELECT COALESCE(MAX(CAST(split_part(id, '-', 3) AS BIGINT)), 0) AS "maxSequence"
         FROM ${supplierInvoices} WHERE id ~ ${pattern}`,
   );
-  return parseDbNumber(rows[0]?.maxSequence, 0);
+  return BigInt(rows[0]?.maxSequence ?? 0);
 };
 
 export type NewSupplierInvoice = {

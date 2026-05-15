@@ -269,7 +269,7 @@ describe('POST /api/supplier-invoices', () => {
   };
 
   test('201 creates invoice with auto-generated id', async () => {
-    maxSequenceForYearMock.mockResolvedValue(0);
+    maxSequenceForYearMock.mockResolvedValue(0n);
     createMock.mockResolvedValue(SAMPLE_INVOICE);
     insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
 
@@ -293,7 +293,7 @@ describe('POST /api/supplier-invoices', () => {
   });
 
   test('201 keeps auto-generated id suffix untruncated after 9999', async () => {
-    maxSequenceForYearMock.mockResolvedValue(9999);
+    maxSequenceForYearMock.mockResolvedValue(9999n);
     createMock.mockImplementation(async (input: Record<string, unknown>) => ({
       ...SAMPLE_INVOICE,
       id: input.id as string,
