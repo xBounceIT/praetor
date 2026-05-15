@@ -11,6 +11,8 @@ Use the tracker to record time spent on projects and tasks. Each entry should in
 
 Before saving, verify that dates are correct and that the task belongs to the selected project. This keeps reports, totals, and costs consistent.
 
+When an entry is edited, Praetor uses the API-returned `version` field to prevent concurrent overwrites. If the same entry was saved elsewhere meanwhile, `PUT /api/entries/:id` returns `409` and the entry must be reloaded before retrying.
+
 ## Weekly view
 
 The weekly view helps you quickly review hours across days. Use it to find missing days, duplicates, or entries assigned to the wrong project.

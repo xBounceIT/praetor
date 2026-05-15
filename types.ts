@@ -249,6 +249,7 @@ export interface TimeEntry {
   hourlyCost?: number;
   cost?: number;
   createdAt: number;
+  version: number;
   isPlaceholder?: boolean;
   location?: TimeEntryLocation;
 }

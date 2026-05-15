@@ -28,7 +28,10 @@ import { CUSTOM_TASK_SENTINEL, useCatalogSelection } from './useCatalogSelection
 export interface EntryEditDialogProps {
   entry: TimeEntry | null;
   onClose: () => void;
-  onSave: (id: string, updates: Partial<TimeEntry>) => Promise<void> | void;
+  onSave: (
+    id: string,
+    updates: Partial<Omit<TimeEntry, 'version'>> & Pick<TimeEntry, 'version'>,
+  ) => Promise<void> | void;
   clients: Client[];
   projects: Project[];
   projectTasks: ProjectTask[];
@@ -153,7 +156,9 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
     // (clientId, projectId, task) is a tuple on the server — send all three together when
     // any one changes so the backend never validates against a stale field. Display names
     // (clientName, projectName) are derived server-side from the IDs.
-    const patch: Partial<TimeEntry> = {};
+    const patch: Partial<Omit<TimeEntry, 'version'>> & Pick<TimeEntry, 'version'> = {
+      version: entry.version,
+    };
     if (catalogChanged) {
       patch.clientId = selection.clientId;
       patch.projectId = selection.projectId;
@@ -165,7 +170,7 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
 
     setIsSubmitting(true);
     try {
-      if (Object.keys(patch).length > 0) {
+      if (Object.keys(patch).length > 1) {
         await onSave(entry.id, patch);
       }
       onClose();

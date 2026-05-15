@@ -2,7 +2,11 @@ import type React from 'react';
 import api from '../../services/api';
 import type { TimeEntry, User } from '../../types';
 
-type TimeEntryDraft = Omit<TimeEntry, 'id' | 'createdAt' | 'userId' | 'hourlyCost' | 'cost'>;
+type TimeEntryDraft = Omit<
+  TimeEntry,
+  'id' | 'createdAt' | 'version' | 'userId' | 'hourlyCost' | 'cost'
+>;
+type TimeEntryUpdate = Partial<Omit<TimeEntry, 'version'>> & Pick<TimeEntry, 'version'>;
 
 export type EntryHandlersDeps = {
   currentUser: User | null;
@@ -73,7 +77,7 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
     }
   };
 
-  const update = async (id: string, updates: Partial<TimeEntry>) => {
+  const update = async (id: string, updates: TimeEntryUpdate) => {
     try {
       const updated = await api.entries.update(id, updates);
       setEntries((prev) => prev.map((e) => (e.id === id ? updated : e)));

@@ -26,6 +26,8 @@ import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { useCatalogSelection } from './useCatalogSelection';
 import WeeklyEntryForm, { type WeeklyEntryFormErrors } from './WeeklyEntryForm';
 
+type TimeEntryUpdate = Partial<Omit<TimeEntry, 'version'>> & Pick<TimeEntry, 'version'>;
+
 export interface WeeklyViewProps {
   entries: TimeEntry[];
   clients: Client[];
@@ -44,7 +46,7 @@ export interface WeeklyViewProps {
     >,
   ) => Promise<ProjectTask>;
   onAddBulkEntries: (entries: TimeEntryDraft[]) => Promise<void>;
-  onUpdateEntry: (id: string, updates: Partial<TimeEntry>) => void | Promise<void>;
+  onUpdateEntry: (id: string, updates: TimeEntryUpdate) => void | Promise<void>;
   onDeleteEntry: (id: string) => void | Promise<void>;
   viewingUserId: string;
   selectedDate: string;
@@ -68,9 +70,12 @@ const getWeekStart = (date: Date, startOfWeek: 'Monday' | 'Sunday'): Date => {
   return start;
 };
 
-type DayCell = { duration: string; note: string; entryId?: string };
+type DayCell = { duration: string; note: string; entryId?: string; version?: number };
 type DayMap = Record<string, DayCell>;
-type TimeEntryDraft = Omit<TimeEntry, 'id' | 'createdAt' | 'userId' | 'hourlyCost' | 'cost'>;
+type TimeEntryDraft = Omit<
+  TimeEntry,
+  'id' | 'createdAt' | 'version' | 'userId' | 'hourlyCost' | 'cost'
+>;
 
 type EntryRow = {
   key: string;
@@ -238,6 +243,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
           duration: String(entry.duration),
           note: entry.notes ?? '',
           entryId: entry.id,
+          version: entry.version,
         },
       },
     }));
@@ -333,6 +339,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
         duration: patch.duration ?? seed.duration,
         note: patch.note ?? seed.note,
         entryId: seed.entryId,
+        version: seed.version,
       };
       return { ...prev, [rowKey]: { ...rowEdits, [dateStr]: nextCell } };
     });
@@ -404,7 +411,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     }
 
     const entriesToAdd: TimeEntryDraft[] = [];
-    const entriesToUpdate: Array<{ id: string; updates: Partial<TimeEntry> }> = [];
+    const entriesToUpdate: Array<{ id: string; updates: TimeEntryUpdate }> = [];
     const entriesToDelete: string[] = [];
 
     const submitRow = (
@@ -434,6 +441,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
           entriesToUpdate.push({
             id: base.entryId,
             updates: {
+              version: base.version ?? 1,
               duration: parseDuration(edit.duration),
               notes: edit.note,
               task: meta.taskName,

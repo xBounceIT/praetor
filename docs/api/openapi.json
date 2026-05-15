@@ -6456,16 +6456,10 @@
                     "type": "string"
                   },
                   "startDate": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": "string"
                   },
                   "endDate": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": "string"
                   },
                   "revenue": {
                     "type": [
@@ -6491,7 +6485,9 @@
                 "required": [
                   "name",
                   "clientId",
-                  "offerId"
+                  "offerId",
+                  "startDate",
+                  "endDate"
                 ]
               }
             }
@@ -9274,6 +9270,10 @@
                           },
                           "createdAt": {
                             "type": "number"
+                          },
+                          "version": {
+                            "type": "integer",
+                            "minimum": 1
                           }
                         },
                         "required": [
@@ -9288,7 +9288,8 @@
                           "duration",
                           "isPlaceholder",
                           "location",
-                          "createdAt"
+                          "createdAt",
+                          "version"
                         ]
                       }
                     },
@@ -9577,6 +9578,10 @@
                     },
                     "createdAt": {
                       "type": "number"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": 1
                     }
                   },
                   "required": [
@@ -9591,7 +9596,8 @@
                     "duration",
                     "isPlaceholder",
                     "location",
-                    "createdAt"
+                    "createdAt",
+                    "version"
                   ]
                 }
               }
@@ -9932,19 +9938,42 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "date": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "clientId": {
+                    "type": "string"
+                  },
+                  "projectId": {
+                    "type": "string"
+                  },
+                  "task": {
+                    "type": "string"
+                  },
                   "duration": {
                     "type": "number"
                   },
                   "notes": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "isPlaceholder": {
                     "type": "boolean"
                   },
                   "location": {
                     "type": "string"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
                   }
-                }
+                },
+                "required": [
+                  "version"
+                ]
               }
             }
           }
@@ -10021,6 +10050,10 @@
                     },
                     "createdAt": {
                       "type": "number"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": 1
                     }
                   },
                   "required": [
@@ -10035,7 +10068,8 @@
                     "duration",
                     "isPlaceholder",
                     "location",
-                    "createdAt"
+                    "createdAt",
+                    "version"
                   ]
                 }
               }
@@ -10418,6 +10452,10 @@
                           },
                           "createdAt": {
                             "type": "number"
+                          },
+                          "version": {
+                            "type": "integer",
+                            "minimum": 1
                           }
                         },
                         "required": [
@@ -10432,7 +10470,8 @@
                           "duration",
                           "isPlaceholder",
                           "location",
-                          "createdAt"
+                          "createdAt",
+                          "version"
                         ]
                       }
                     },

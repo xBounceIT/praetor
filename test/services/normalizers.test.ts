@@ -234,6 +234,7 @@ const baseTimeEntry: TimeEntry = {
   duration: 0,
   hourlyCost: 0,
   createdAt: 0,
+  version: 1,
 };
 
 const baseProduct: Product = {
@@ -650,14 +651,16 @@ describe('normalizeClientsOrder', () => {
 });
 
 describe('normalizeTimeEntry', () => {
-  test('parses duration, hourlyCost, and cost as numbers', () => {
+  test('parses duration, version, hourlyCost, and cost as numbers', () => {
     const entry = make<TimeEntry>(baseTimeEntry, {
       duration: '2.5',
+      version: '3',
       hourlyCost: '50',
       cost: '125',
     });
     const result = normalizeTimeEntry(entry);
     expect(result.duration).toBe(2.5);
+    expect(result.version).toBe(3);
     expect(result.hourlyCost).toBe(50);
     expect(result.cost).toBe(125);
   });

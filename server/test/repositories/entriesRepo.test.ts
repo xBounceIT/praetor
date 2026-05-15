@@ -551,24 +551,33 @@ describe('mapBuilderRow (exercised via create return path)', () => {
 });
 
 describe('update', () => {
-  test('only sets provided fields, id is the last param', async () => {
-    exec.enqueue({ rows: [entryRow()] });
-    const result = await entriesRepo.update('e-1', { duration: 2 }, testDb);
+  test('only sets provided fields and filters by id plus expected version', async () => {
+    exec.enqueue({ rows: [entryRow({ 15: 2 })] });
+    const result = await entriesRepo.update('e-1', { version: 1, duration: 2 }, testDb);
     expect(result?.id).toBe('e-1');
     expect(result?.userId).toBe('u-1');
     expect(result?.duration).toBe(1.5);
     expect(result?.hourlyCost).toBe(100);
     expect(result?.isPlaceholder).toBe(false);
+    expect(result?.version).toBe(2);
     expect(exec.calls[0].sql).toContain('"duration" = $1');
     expect(exec.calls[0].sql).toContain('"id" = $2');
-    expect(exec.calls[0].params).toEqual(['2', 'e-1']);
+    expect(exec.calls[0].sql).toContain('"version" = $3');
+    expect(exec.calls[0].params).toEqual(['2', 'e-1', 1]);
   });
 
   test('builds SET list in schema column order from defined fields', async () => {
     exec.enqueue({ rows: [entryRow()] });
     await entriesRepo.update(
       'e-1',
-      { duration: 2, notes: 'updated', isPlaceholder: true, location: 'office', taskId: 't-2' },
+      {
+        version: 1,
+        duration: 2,
+        notes: 'updated',
+        isPlaceholder: true,
+        location: 'office',
+        taskId: 't-2',
+      },
       testDb,
     );
     // Drizzle emits SET columns in schema column declaration order regardless of how the
@@ -581,44 +590,58 @@ describe('update', () => {
     expect(sql).toContain('"is_placeholder" = $4');
     expect(sql).toContain('"location" = $5');
     expect(sql).toContain('"id" = $6');
-    expect(exec.calls[0].params).toEqual(['t-2', 'updated', '2', true, 'office', 'e-1']);
+    expect(sql).toContain('"version" = $7');
+    expect(exec.calls[0].params).toEqual(['t-2', 'updated', '2', true, 'office', 'e-1', 1]);
   });
 
   test('passes taskId through when set, omitting other fields', async () => {
     exec.enqueue({ rows: [entryRow()] });
-    await entriesRepo.update('e-1', { taskId: 't-2' }, testDb);
+    await entriesRepo.update('e-1', { version: 1, taskId: 't-2' }, testDb);
     expect(exec.calls[0].sql).toContain('"task_id" = $1');
     expect(exec.calls[0].sql).toContain('"id" = $2');
-    expect(exec.calls[0].params).toEqual(['t-2', 'e-1']);
+    expect(exec.calls[0].sql).toContain('"version" = $3');
+    expect(exec.calls[0].params).toEqual(['t-2', 'e-1', 1]);
   });
 
   test('omitting all fields falls back to a SELECT (no UPDATE issued)', async () => {
     exec.enqueue({ rows: [entryRow()] });
-    const result = await entriesRepo.update('e-1', {}, testDb);
+    const result = await entriesRepo.update('e-1', { version: 1 }, testDb);
     expect(exec.calls[0].sql).not.toContain('update');
     expect(exec.calls[0].sql).toContain('select');
-    expect(exec.calls[0].params).toEqual(['e-1']);
+    expect(exec.calls[0].sql).toContain('"version" = $2');
+    expect(exec.calls[0].params).toEqual(['e-1', 1]);
     expect(result?.id).toBe('e-1');
   });
 
   test('returns null when no row matched (UPDATE path)', async () => {
     exec.enqueue({ rows: [] });
-    expect(await entriesRepo.update('e-x', { duration: 2 }, testDb)).toBeNull();
+    expect(await entriesRepo.update('e-x', { version: 1, duration: 2 }, testDb)).toBeNull();
   });
 
   test('returns null when no row matched (SELECT fallback path)', async () => {
     exec.enqueue({ rows: [] });
-    expect(await entriesRepo.update('e-x', {}, testDb)).toBeNull();
+    expect(await entriesRepo.update('e-x', { version: 1 }, testDb)).toBeNull();
   });
 
   test('notes: null clears the column (distinct from undefined which is skipped)', async () => {
     exec.enqueue({ rows: [entryRow({ 9: null })] });
-    const result = await entriesRepo.update('e-1', { notes: null }, testDb);
+    const result = await entriesRepo.update('e-1', { version: 1, notes: null }, testDb);
     expect(exec.calls[0].sql).toContain('update');
     expect(exec.calls[0].sql).toContain('"notes" = $1');
     expect(exec.calls[0].sql).toContain('"id" = $2');
-    expect(exec.calls[0].params).toEqual([null, 'e-1']);
+    expect(exec.calls[0].sql).toContain('"version" = $3');
+    expect(exec.calls[0].params).toEqual([null, 'e-1', 1]);
     expect(result?.notes).toBeNull();
+  });
+
+  test('stale expected version returns null instead of overwriting', async () => {
+    exec.enqueue({ rows: [] });
+    const result = await entriesRepo.update('e-1', { version: 1, duration: 2 }, testDb);
+    expect(result).toBeNull();
+    const sql = exec.calls[0].sql;
+    expect(sql).toContain('"id" = $2');
+    expect(sql).toContain('"version" = $3');
+    expect(exec.calls[0].params).toEqual(['2', 'e-1', 1]);
   });
 });
 

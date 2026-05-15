@@ -90,6 +90,8 @@ Supported tools:
 
 Bulk time-entry tools accept up to 100 items per call. They process each item independently and return a summary with per-item successes and errors.
 
+Time-entry update tools require the `version` field returned by `praetor_list_time_entries`. If the entry changed after it was read, the update returns a conflict error and the agent should read the entry list again before retrying.
+
 Security notes:
 
 - MCP tokens inherit your current role permissions at call time, filtered by the token's scope (full or read-only).

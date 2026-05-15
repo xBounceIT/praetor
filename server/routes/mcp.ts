@@ -112,6 +112,7 @@ const createTimeEntryInputSchema = z.object({
 
 const updateTimeEntryInputSchema = z.object({
   id: z.string(),
+  version: z.number().int().positive(),
   duration: z.number().nonnegative().optional(),
   notes: z.string().nullable().optional(),
   isPlaceholder: z.boolean().optional(),
@@ -612,7 +613,8 @@ const buildServer = () => {
     'praetor_update_time_entry',
     {
       title: 'Update Time Entry',
-      description: 'Update duration, notes, placeholder state, or location for a time entry.',
+      description:
+        'Update duration, notes, placeholder state, or location for a time entry. Requires the current version from praetor_list_time_entries.',
       inputSchema: updateTimeEntryInputSchema,
       annotations: { destructiveHint: false, idempotentHint: false },
     },
@@ -627,7 +629,7 @@ const buildServer = () => {
     {
       title: 'Bulk Update Time Entries',
       description:
-        'Update multiple time entries with per-item results using the same validation and permissions as the app.',
+        'Update multiple time entries with per-item results using the same validation and permissions as the app. Each item must include the current version from praetor_list_time_entries.',
       inputSchema: z.object({
         entries: bulkItemsSchema(updateTimeEntryInputSchema),
       }),
