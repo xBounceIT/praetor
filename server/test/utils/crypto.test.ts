@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import crypto from 'node:crypto';
 import {
   __resetEncryptionKeyCacheForTests,
   __resetHmacKeyCacheForTests,
@@ -10,6 +11,28 @@ import {
 } from '../../utils/crypto.ts';
 
 const ORIGINAL_KEY = process.env.ENCRYPTION_KEY;
+const ALGORITHM = 'aes-256-gcm';
+const IV_LENGTH = 16;
+
+const deriveLegacyEncryptionKey = (key: string): Buffer =>
+  crypto.createHash('sha256').update(key).digest();
+
+const encryptWithAesGcmKey = (plaintext: string, key: Buffer): string => {
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return `${iv.toString('base64')}:${authTag.toString('base64')}:${encrypted.toString('base64')}`;
+};
+
+const decryptWithAesGcmKey = (ciphertext: string, key: Buffer): string => {
+  const [ivB64, authTagB64, encryptedB64] = ciphertext.split(':');
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, Buffer.from(ivB64, 'base64'));
+  decipher.setAuthTag(Buffer.from(authTagB64, 'base64'));
+  return (
+    decipher.update(Buffer.from(encryptedB64, 'base64'), undefined, 'utf8') + decipher.final('utf8')
+  );
+};
 
 beforeAll(() => {
   process.env.ENCRYPTION_KEY = 'test-encryption-key-for-unit-tests';
@@ -42,6 +65,12 @@ describe('encrypt', () => {
     const a = encrypt('same-plaintext');
     const b = encrypt('same-plaintext');
     expect(a).not.toBe(b);
+  });
+
+  test('does not produce ciphertext decryptable with the legacy SHA-256-derived AES key', () => {
+    const legacyKey = deriveLegacyEncryptionKey(process.env.ENCRYPTION_KEY ?? '');
+    const ciphertext = encrypt('new secret');
+    expect(() => decryptWithAesGcmKey(ciphertext, legacyKey)).toThrow();
   });
 });
 
@@ -112,6 +141,15 @@ describe('getHmacKey', () => {
   });
 });
 
+describe('getEncryptionKey', () => {
+  test('does not use a single SHA-256 digest for AES key derivation (issue #496)', () => {
+    const legacyKey = deriveLegacyEncryptionKey(process.env.ENCRYPTION_KEY ?? '');
+    const key = getEncryptionKey();
+    expect(key.length).toBe(32);
+    expect(key.equals(legacyKey)).toBe(false);
+  });
+});
+
 describe('decrypt', () => {
   test('returns empty string for empty input', () => {
     expect(decrypt('')).toBe('');
@@ -130,6 +168,12 @@ describe('decrypt', () => {
   test('round-trips strings containing colons (no false legacy detection)', () => {
     const plaintext = 'host:1234:secret';
     expect(decrypt(encrypt(plaintext))).toBe(plaintext);
+  });
+
+  test('decrypts legacy SHA-256-derived ciphertext for backward compatibility', () => {
+    const legacyKey = deriveLegacyEncryptionKey(process.env.ENCRYPTION_KEY ?? '');
+    const ciphertext = encryptWithAesGcmKey('legacy secret', legacyKey);
+    expect(decrypt(ciphertext)).toBe('legacy secret');
   });
 
   test('throws when input does not match the iv:authTag:encrypted format', () => {

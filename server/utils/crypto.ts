@@ -2,29 +2,56 @@ import crypto from 'crypto';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
+const AES_KEY_LENGTH = 32;
+const ENCRYPTION_KEY_ITERATIONS = 600_000;
+const ENCRYPTION_KEY_SALT = 'praetor:aes-256-gcm-encryption:v2';
+const ENCRYPTION_KEY_DIGEST = 'sha256';
 
 export const MASKED_SECRET = '********';
 
-// AES-256 key for encrypt/decrypt: SHA-256 of ENCRYPTION_KEY. Kept as a plain SHA-256
-// derivation (rather than HKDF) for backward-compat with secrets already encrypted at rest
-// (SMTP / LDAP / SSO). Memoized because ENCRYPTION_KEY is process-stable.
+// AES-256 key for encrypt/decrypt: PBKDF2-derived from ENCRYPTION_KEY. The derivation is
+// intentionally slower than a single SHA-256 pass to make offline guessing of human-chosen
+// deployment keys more expensive. Memoized because ENCRYPTION_KEY is process-stable.
 //
 // Do NOT use this key for HMAC or other non-AES primitives — use `getHmacKey()` for
 // HMAC-keyed hashing (issue #416). Reusing the same key across primitives couples
 // otherwise-independent security boundaries.
 let cachedEncryptionKey: Buffer | null = null;
-export function getEncryptionKey(): Buffer {
-  if (cachedEncryptionKey !== null) return cachedEncryptionKey;
+let cachedLegacyEncryptionKey: Buffer | null = null;
+
+const getRequiredEncryptionKey = (): string => {
   const key = process.env.ENCRYPTION_KEY;
   if (!key) {
     throw new Error('ENCRYPTION_KEY environment variable is required');
   }
-  cachedEncryptionKey = crypto.createHash('sha256').update(key).digest();
+  return key;
+};
+
+export function getEncryptionKey(): Buffer {
+  if (cachedEncryptionKey !== null) return cachedEncryptionKey;
+  const key = getRequiredEncryptionKey();
+  cachedEncryptionKey = crypto.pbkdf2Sync(
+    Buffer.from(key, 'utf8'),
+    ENCRYPTION_KEY_SALT,
+    ENCRYPTION_KEY_ITERATIONS,
+    AES_KEY_LENGTH,
+    ENCRYPTION_KEY_DIGEST,
+  );
   return cachedEncryptionKey;
 }
 
+const getLegacyEncryptionKey = (): Buffer => {
+  if (cachedLegacyEncryptionKey !== null) return cachedLegacyEncryptionKey;
+  cachedLegacyEncryptionKey = crypto
+    .createHash('sha256')
+    .update(getRequiredEncryptionKey())
+    .digest();
+  return cachedLegacyEncryptionKey;
+};
+
 export const __resetEncryptionKeyCacheForTests = () => {
   cachedEncryptionKey = null;
+  cachedLegacyEncryptionKey = null;
 };
 
 // HMAC key for PAT / MCP-token hashing: HKDF-derived from ENCRYPTION_KEY with a
@@ -82,17 +109,40 @@ export function encrypt(plaintext: string): string {
   return `${iv.toString('base64')}:${authTag.toString('base64')}:${encrypted.toString('base64')}`;
 }
 
-export function decrypt(ciphertext: string): string {
-  if (!ciphertext) return '';
+type EncryptedPayload = {
+  iv: Buffer;
+  authTag: Buffer;
+  encrypted: Buffer;
+};
+
+const parseEncryptedPayload = (ciphertext: string): EncryptedPayload => {
   const [ivB64, authTagB64, encryptedB64] = ciphertext.split(':');
   if (!ivB64 || !authTagB64 || !encryptedB64) {
     throw new Error('Invalid encrypted value format');
   }
-  const key = getEncryptionKey();
-  const iv = Buffer.from(ivB64, 'base64');
-  const authTag = Buffer.from(authTagB64, 'base64');
-  const encrypted = Buffer.from(encryptedB64, 'base64');
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-  decipher.setAuthTag(authTag);
-  return decipher.update(encrypted) + decipher.final('utf8');
+  return {
+    iv: Buffer.from(ivB64, 'base64'),
+    authTag: Buffer.from(authTagB64, 'base64'),
+    encrypted: Buffer.from(encryptedB64, 'base64'),
+  };
+};
+
+const decryptWithKey = (payload: EncryptedPayload, key: Buffer): string => {
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, payload.iv);
+  decipher.setAuthTag(payload.authTag);
+  return Buffer.concat([decipher.update(payload.encrypted), decipher.final()]).toString('utf8');
+};
+
+export function decrypt(ciphertext: string): string {
+  if (!ciphertext) return '';
+  const payload = parseEncryptedPayload(ciphertext);
+  try {
+    return decryptWithKey(payload, getEncryptionKey());
+  } catch (err) {
+    try {
+      return decryptWithKey(payload, getLegacyEncryptionKey());
+    } catch {
+      throw err;
+    }
+  }
 }
