@@ -32,6 +32,8 @@ Ogni template ricorrente è definito sull'attività di progetto e include:
 - `recurrenceEnd` (opzionale): se valorizzata, blocca la generazione oltre tale data.
 - `recurrenceDuration`: ore di default per ciascuna registrazione generata.
 
+Per le ricorrenze `monthly`, se il giorno della data di inizio non esiste in un mese più corto, l'occorrenza viene generata nell'ultimo giorno di quel mese.
+
 I giorni che cadono di domenica, di sabato (se l'impostazione _Tratta il sabato come festivo_ è attiva) e quelli che coincidono con festività italiane vengono sempre saltati.
 
 ### Generazione lato server
