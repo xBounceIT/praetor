@@ -223,10 +223,11 @@ describe('bindPassword encryption', () => {
       expect(hasEncryptedParam(params)).toBe(true);
     });
 
-    test('binds empty string for cleared bindPassword (encrypt("") === "")', async () => {
+    test('binds empty string for cleared bindPassword without encrypting the clear sentinel', async () => {
       exec.enqueue({ rows: [buildRow()] });
       await ldapRepo.update({ bindPassword: '' }, testDb);
       expect(exec.calls[0].params).toContain('');
+      expect(hasEncryptedParam(exec.calls[0].params)).toBe(false);
     });
 
     test('does not bind any encrypted value when bindPassword is omitted (COALESCE preserves)', async () => {

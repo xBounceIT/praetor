@@ -142,10 +142,15 @@ const buildUpdateSet = (patch: LdapConfigPatch) => {
       : patch.tlsCaCertificate === ''
         ? sql`NULL`
         : sql`${patch.tlsCaCertificate}`;
-  // bindPassword is encrypted at rest. `encrypt('')` returns '' so the explicit-clear
-  // semantic is preserved; `undefined` keeps the COALESCE preserve-existing branch.
+  // bindPassword is encrypted at rest. Empty string remains an explicit clear sentinel;
+  // `undefined` keeps the COALESCE preserve-existing branch.
   // Callers must pass plaintext — the route layer converts the masked sentinel to undefined.
-  const bindPasswordParam = patch.bindPassword === undefined ? null : encrypt(patch.bindPassword);
+  const bindPasswordParam =
+    patch.bindPassword === undefined
+      ? null
+      : patch.bindPassword === ''
+        ? ''
+        : encrypt(patch.bindPassword);
   return {
     enabled: sql`COALESCE(${patch.enabled ?? null}, ${ldapConfig.enabled})`,
     serverUrl: sql`COALESCE(${patch.serverUrl ?? null}, ${ldapConfig.serverUrl})`,

@@ -6,6 +6,7 @@ import {
   encrypt,
   getEncryptionKey,
   getHmacKey,
+  isEncrypted,
   MASKED_SECRET,
 } from '../../utils/crypto.ts';
 
@@ -25,8 +26,11 @@ afterAll(() => {
 });
 
 describe('encrypt', () => {
-  test('returns empty string for empty input', () => {
-    expect(encrypt('')).toBe('');
+  test('encrypts empty plaintext as a real ciphertext envelope', () => {
+    const out = encrypt('');
+    expect(out).not.toBe('');
+    expect(isEncrypted(out)).toBe(true);
+    expect(decrypt(out)).toBe('');
   });
 
   test('produces a three-part base64 string (iv:authTag:ciphertext)', () => {
@@ -113,8 +117,8 @@ describe('getHmacKey', () => {
 });
 
 describe('decrypt', () => {
-  test('returns empty string for empty input', () => {
-    expect(decrypt('')).toBe('');
+  test('throws for empty ciphertext input', () => {
+    expect(() => decrypt('')).toThrow(/Invalid encrypted value format/);
   });
 
   test('round-trips ASCII plaintext', () => {
