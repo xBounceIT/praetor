@@ -115,19 +115,19 @@ const loadAuthenticatedUserContext = async (
   const user = await usersRepo.findAuthUserById(userId);
 
   if (!user) {
-    reply.code(401).send({ error: 'User not found' });
+    await reply.code(401).send({ error: 'User not found' });
     return null;
   }
 
   if (user.isDisabled) {
-    reply.code(403).send({ error: 'Account disabled', errorCode: 'account_disabled' });
+    await reply.code(403).send({ error: 'Account disabled', errorCode: 'account_disabled' });
     return null;
   }
 
   // Session version mismatch means the token was issued before a logout (or other
   // forced revocation) bumped the user's session version. Reject without rotating.
   if (expectedSessionVersion !== undefined && user.sessionVersion !== expectedSessionVersion) {
-    reply.code(401).send({ error: 'Session revoked', errorCode: 'session_revoked' });
+    await reply.code(401).send({ error: 'Session revoked', errorCode: 'session_revoked' });
     return null;
   }
 
@@ -142,7 +142,7 @@ const loadAuthenticatedUserContext = async (
     expectedSessionVersion,
   });
   if (!hasRole) {
-    reply.code(403).send({ error: 'Invalid or expired token' });
+    await reply.code(403).send({ error: 'Invalid or expired token' });
     return null;
   }
 

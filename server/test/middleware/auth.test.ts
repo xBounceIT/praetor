@@ -96,7 +96,7 @@ type FakeReply = {
   headers: Record<string, string>;
   sentCount: number;
   code(c: number): FakeReply;
-  send(body: unknown): FakeReply;
+  send(body: unknown): FakeReply | Promise<FakeReply>;
   header(name: string, value: string): FakeReply;
 };
 
@@ -121,6 +121,22 @@ const buildFakeReply = (): FakeReply => {
     },
   };
   return reply;
+};
+
+const buildDeferredSendReply = () => {
+  const reply = buildFakeReply();
+  const sendNow = reply.send.bind(reply);
+  let resolveSend!: () => void;
+  const sendCompleted = new Promise<void>((resolve) => {
+    resolveSend = resolve;
+  });
+
+  reply.send = (body: unknown) => {
+    sendNow(body);
+    return sendCompleted.then(() => reply);
+  };
+
+  return { reply, resolveSend };
 };
 
 type FakeRequest = {
@@ -266,6 +282,63 @@ describe('authenticateToken', () => {
       expectedSessionVersion: 1,
     });
   });
+
+  const authContextErrorScenarios = [
+    {
+      name: 'missing user',
+      setup: () => findAuthUserByIdMock.mockResolvedValue(null),
+      token: () => signToken({ userId: 'u1' }),
+      expectedStatus: 401,
+      expectedBody: { error: 'User not found' },
+    },
+    {
+      name: 'disabled user',
+      setup: () => findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, isDisabled: true }),
+      token: () => signToken({ userId: 'u1' }),
+      expectedStatus: 403,
+      expectedBody: { error: 'Account disabled', errorCode: 'account_disabled' },
+    },
+    {
+      name: 'revoked session',
+      setup: () => findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, sessionVersion: 5 }),
+      token: () => signToken({ userId: 'u1', sessionVersion: 2 }),
+      expectedStatus: 401,
+      expectedBody: { error: 'Session revoked', errorCode: 'session_revoked' },
+    },
+    {
+      name: 'unassigned role',
+      setup: () => userHasRoleMock.mockResolvedValue(false),
+      token: () => signToken({ userId: 'u1' }),
+      expectedStatus: 403,
+      expectedBody: { error: 'Invalid or expired token' },
+    },
+  ];
+
+  for (const scenario of authContextErrorScenarios) {
+    test(`waits for async ${scenario.name} response before resolving`, async () => {
+      scenario.setup();
+      const request = buildFakeRequest(scenario.token());
+      const { reply, resolveSend } = buildDeferredSendReply();
+      let completed = false;
+
+      const inflight = authenticateToken(request as never, reply as never).then(() => {
+        completed = true;
+      });
+
+      for (let i = 0; i < 5 && reply.body === undefined; i += 1) {
+        await Promise.resolve();
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(reply.statusCode).toBe(scenario.expectedStatus);
+      expect(reply.body).toEqual(scenario.expectedBody);
+      expect(completed).toBe(false);
+
+      resolveSend();
+      await inflight;
+      expect(completed).toBe(true);
+    });
+  }
 
   test('200 happy path: populates request.user and rotates the x-auth-token header', async () => {
     const sessionStart = Date.now() - 60_000;
