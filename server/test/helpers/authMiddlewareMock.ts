@@ -30,6 +30,7 @@ export const installAuthMiddlewareMock = () => {
       wrapHook(middlewareSnap.requirePermission(...args)),
     requireAnyPermission: (...args: Parameters<typeof middlewareSnap.requireAnyPermission>) =>
       wrapHook(middlewareSnap.requireAnyPermission(...args)),
+    requireSessionAuth: wrapHook(middlewareSnap.requireSessionAuth),
   }));
 };
 
