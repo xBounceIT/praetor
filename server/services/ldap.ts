@@ -556,6 +556,7 @@ class LDAPService {
         };
       } catch (err) {
         if (options.throwOnError) throw err;
+        if (groups.size > 0) return [...groups];
         logger.warn(
           { err: serializeError(err), username },
           'LDAP group filter is invalid; skipping group role mapping',
@@ -580,6 +581,7 @@ class LDAPService {
         });
       } catch (err) {
         if (options.throwOnError) throw err;
+        if (groups.size > 0) return [...groups];
         logger.warn(
           { err: serializeError(err), username },
           'LDAP group lookup failed; skipping group role mapping',

@@ -510,6 +510,40 @@ describe('authenticate', () => {
     ]);
   });
 
+  test('keeps groups found before a later non-strict fallback search fails', async () => {
+    const syncSecAdmins = 'CN=SyncSecAdmins,OU=Internal Groups,OU=Accounts,DC=syncsec,DC=coll';
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      groupFilter: '(member={0})',
+      roleMappings: [{ ldapGroup: syncSecAdmins, role: 'admin' }],
+    });
+    nextFixture = {
+      bindResponses: [null, null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: "CN=Daniel D'Angeli,OU=Internal Accounts,OU=Accounts,DC=syncsec,DC=coll",
+              object: { sAMAccountName: 'daniel.dangeli' },
+            },
+          ],
+          status: 0,
+        },
+        {
+          entries: [{ objectName: syncSecAdmins, object: { distinguishedName: syncSecAdmins } }],
+          status: 0,
+        },
+        { err: new Error('fallback group search failed') },
+      ],
+    };
+
+    const result = await ldapService.authenticateWithProfile('daniel.dangeli', 'pw');
+
+    expect(result.authenticated).toBe(true);
+    expect(result.groups).toContain(syncSecAdmins);
+    expect(result.matchedRoleIds).toEqual(['admin']);
+  });
+
   test('rejects when the user-search stream emits an error (LDAP outage during search)', async () => {
     nextFixture = {
       bindResponses: [null],
@@ -1018,6 +1052,38 @@ describe('lookupUserGroups', () => {
     // Transient group-search failure must surface as null so the caller keeps the
     // existing role, instead of demoting the user to the default 'user' role on an
     // empty group list.
+    expect(result).toBeNull();
+    expect(lastClientStats?.unbindCalls).toBe(1);
+  });
+
+  test('returns null on fallback group-search errors in strict lookup mode', async () => {
+    const syncSecAdmins = 'CN=SyncSecAdmins,OU=Internal Groups,OU=Accounts,DC=syncsec,DC=coll';
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      groupFilter: '(member={0})',
+    });
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: "CN=Daniel D'Angeli,OU=Internal Accounts,OU=Accounts,DC=syncsec,DC=coll",
+              object: { sAMAccountName: 'daniel.dangeli' },
+            },
+          ],
+          status: 0,
+        },
+        {
+          entries: [{ objectName: syncSecAdmins, object: { distinguishedName: syncSecAdmins } }],
+          status: 0,
+        },
+        { err: new Error('fallback group search failed') },
+      ],
+    };
+
+    const result = await ldapService.lookupUserGroups('daniel.dangeli');
+
     expect(result).toBeNull();
     expect(lastClientStats?.unbindCalls).toBe(1);
   });
