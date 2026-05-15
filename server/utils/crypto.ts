@@ -63,8 +63,8 @@ const AUTH_TAG_LENGTH = 16;
 export function isEncrypted(value: string): boolean {
   const parts = value.split(':');
   if (parts.length !== 3) return false;
-  const [ivB64, authTagB64, encryptedB64] = parts;
-  if (!ivB64 || !authTagB64 || !encryptedB64) return false;
+  const [ivB64, authTagB64] = parts;
+  if (!ivB64 || !authTagB64) return false;
   return (
     Buffer.from(ivB64, 'base64').length === IV_LENGTH &&
     Buffer.from(authTagB64, 'base64').length === AUTH_TAG_LENGTH
@@ -72,7 +72,6 @@ export function isEncrypted(value: string): boolean {
 }
 
 export function encrypt(plaintext: string): string {
-  if (!plaintext) return '';
   const key = getEncryptionKey();
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
@@ -83,9 +82,12 @@ export function encrypt(plaintext: string): string {
 }
 
 export function decrypt(ciphertext: string): string {
-  if (!ciphertext) return '';
-  const [ivB64, authTagB64, encryptedB64] = ciphertext.split(':');
-  if (!ivB64 || !authTagB64 || !encryptedB64) {
+  const parts = ciphertext.split(':');
+  if (parts.length !== 3) {
+    throw new Error('Invalid encrypted value format');
+  }
+  const [ivB64, authTagB64, encryptedB64] = parts;
+  if (!ivB64 || !authTagB64) {
     throw new Error('Invalid encrypted value format');
   }
   const key = getEncryptionKey();
@@ -94,5 +96,5 @@ export function decrypt(ciphertext: string): string {
   const encrypted = Buffer.from(encryptedB64, 'base64');
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(authTag);
-  return decipher.update(encrypted) + decipher.final('utf8');
+  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
 }
