@@ -243,6 +243,13 @@ describe('getClient', () => {
     expect(createClientMock).not.toHaveBeenCalled();
   });
 
+  test('can create a diagnostic client when config.enabled is false', async () => {
+    ldapRepoGetMock.mockResolvedValue({ ...ENABLED_LDAP_CONFIG, enabled: false });
+    const client = await ldapService.getClient({ allowDisabledConfig: true });
+    expect(client).not.toBeNull();
+    expect(createClientMock).toHaveBeenCalledTimes(1);
+  });
+
   test('calls loadConfig when cache is empty', async () => {
     await ldapService.getClient();
     expect(ldapRepoGetMock).toHaveBeenCalledTimes(1);
@@ -335,6 +342,20 @@ describe('invalidateConfig', () => {
     await ldapService.getClient();
     expect(ldapRepoGetMock).toHaveBeenCalledTimes(2);
   });
+
+  test('reloadConfig re-reads the saved config even when the cache is populated', async () => {
+    await ldapService.getClient();
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      serverUrl: 'ldap://new-ldap.test:389',
+    });
+
+    await ldapService.getClient({ reloadConfig: true });
+
+    expect(ldapRepoGetMock).toHaveBeenCalledTimes(2);
+    const opts = createClientMock.mock.calls[1]?.[0] as { url: string };
+    expect(opts.url).toBe('ldap://new-ldap.test:389');
+  });
 });
 
 describe('authenticate', () => {
@@ -411,6 +432,33 @@ describe('authenticate', () => {
     );
     expect(lastClientStats?.searchCalls).toHaveLength(1);
     expect(lastClientStats?.unbindCalls).toBe(1);
+  });
+
+  test('authenticateWithProfile can use a disabled saved config for diagnostics', async () => {
+    ldapRepoGetMock.mockResolvedValue({ ...ENABLED_LDAP_CONFIG, enabled: false });
+    nextFixture = {
+      bindResponses: [null, null, null],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice' } }],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+        { entries: [], status: 0 },
+      ],
+    };
+
+    const result = await ldapService.authenticateWithProfile('alice', 'pw', {
+      allowDisabledConfig: true,
+    });
+
+    expect(result.authenticated).toBe(true);
+    expect(createClientMock).toHaveBeenCalledTimes(1);
+    expect(lastClientStats?.bindCalls).toEqual([
+      { dn: 'cn=admin,dc=test,dc=com', password: 'admin-pw' },
+      { dn: 'uid=alice,dc=test,dc=com', password: 'pw' },
+      { dn: 'cn=admin,dc=test,dc=com', password: 'admin-pw' },
+    ]);
   });
 
   test('search receives the parsed userFilter with the escaped username', async () => {

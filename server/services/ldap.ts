@@ -84,6 +84,11 @@ export type LdapUserEntry = {
   attributes: Record<string, unknown>;
 };
 
+type LdapClientOptions = {
+  allowDisabledConfig?: boolean;
+  reloadConfig?: boolean;
+};
+
 const warnRoleMappingNoMatch = (
   phase: string,
   user: { id: string; username: string; role: string },
@@ -186,12 +191,12 @@ class LDAPService {
     this.config = null;
   }
 
-  async getClient(): Promise<LdapClient | null> {
-    if (!this.config) {
+  async getClient(options: LdapClientOptions = {}): Promise<LdapClient | null> {
+    if (!this.config || options.reloadConfig) {
       await this.loadConfig();
     }
 
-    if (!this.config?.enabled) {
+    if (!this.config || (!options.allowDisabledConfig && !this.config.enabled)) {
       return null;
     }
 
@@ -234,10 +239,14 @@ class LDAPService {
     }));
   }
 
-  async authenticateWithProfile(username: string, password: string): Promise<LdapAuthResult> {
+  async authenticateWithProfile(
+    username: string,
+    password: string,
+    options: LdapClientOptions = {},
+  ): Promise<LdapAuthResult> {
     let client: LdapClient | null = null;
     try {
-      client = await this.getClient();
+      client = await this.getClient(options);
       if (!client) {
         return { authenticated: false, groups: [], matchedRoleIds: [] };
       }

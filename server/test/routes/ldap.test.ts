@@ -519,7 +519,10 @@ describe('POST /api/ldap/test', () => {
     const response = await testLdapAuth({ username: ' alice ', password: 'secret' });
 
     expect(response.statusCode).toBe(200);
-    expect(authenticateWithProfileMock).toHaveBeenCalledWith('alice', 'secret');
+    expect(authenticateWithProfileMock).toHaveBeenCalledWith('alice', 'secret', {
+      allowDisabledConfig: true,
+      reloadConfig: true,
+    });
     expect(JSON.parse(response.body)).toEqual({
       success: true,
       authenticated: true,
