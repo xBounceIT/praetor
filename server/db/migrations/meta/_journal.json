@@ -320,8 +320,15 @@
     {
       "idx": 45,
       "version": "7",
-      "when": 1778851405874,
-      "tag": "0045_add_time_entry_version",
+      "when": 1778847706254,
+      "tag": "0045_widen_email_smtp_password",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1778852263003,
+      "tag": "0046_add_time_entry_version",
       "breakpoints": true
     }
   ]
