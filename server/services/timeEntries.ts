@@ -1,4 +1,4 @@
-import { withDbTransaction } from '../db/drizzle.ts';
+import { type DbExecutor, withDbTransaction } from '../db/drizzle.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
 import type { TimeEntry } from '../repositories/entriesRepo.ts';
 import * as entriesRepo from '../repositories/entriesRepo.ts';
@@ -407,6 +407,36 @@ export type GenerateRecurringResult = {
 };
 
 const MAX_RECURRING_DAYS = 366;
+const SERIALIZATION_FAILURE_SQLSTATE = '40001';
+const MAX_RECURRING_GENERATION_ATTEMPTS = 3;
+
+const getDbErrorCode = (err: unknown, depth = 0): string | undefined => {
+  if (depth > 3) return undefined;
+  if (typeof err !== 'object' || err === null) return undefined;
+  const code = (err as { code?: unknown }).code;
+  if (typeof code === 'string') return code;
+  return getDbErrorCode((err as { cause?: unknown }).cause, depth + 1);
+};
+
+const withRecurringGenerationTransaction = async <T>(
+  callback: (tx: DbExecutor) => Promise<T>,
+): Promise<T> => {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await withDbTransaction(callback, {
+        isolationLevel: 'serializable',
+        accessMode: 'read write',
+      });
+    } catch (err) {
+      if (
+        getDbErrorCode(err) !== SERIALIZATION_FAILURE_SQLSTATE ||
+        attempt >= MAX_RECURRING_GENERATION_ATTEMPTS
+      ) {
+        throw err;
+      }
+    }
+  }
+};
 
 export const generateRecurringEntries = async (
   actor: AuthenticatedActor,
@@ -438,11 +468,10 @@ export const generateRecurringEntries = async (
     }
   }
 
-  const [recurringTasks, settings, hourlyCost, existingKeys] = await Promise.all([
+  const [recurringTasks, settings, hourlyCost] = await Promise.all([
     tasksRepo.listRecurringForUser(targetUserId),
     generalSettingsRepo.get(),
     usersRepo.findCostPerHour(targetUserId),
-    entriesRepo.findExistingRecurringKeys(targetUserId, fromDate, toDate),
   ]);
   if (recurringTasks.length === 0) {
     return {
@@ -519,10 +548,10 @@ export const generateRecurringEntries = async (
     location: settings?.defaultLocation ?? 'remote',
   });
 
-  const pending: PendingEntry[] = [];
-  let skippedExistingCount = 0;
+  type CandidateEntry = { key: string; entry: PendingEntry };
+  const candidates: CandidateEntry[] = [];
   // Track keys staged in this run so two recurring templates with the same (date, projectId,
-  // task) tuple don't insert duplicate rows in a single generation pass.
+  // task) tuple don't become duplicate insert candidates in a single generation pass.
   const stagedKeys = new Set<string>();
 
   for (const task of allowedTasks) {
@@ -552,26 +581,46 @@ export const generateRecurringEntries = async (
 
       const dateStr = formatLocalDateOnly(cursor);
       const key = `${dateStr}|${task.projectId}|${task.name}`;
-      if (existingKeys.has(key)) {
-        skippedExistingCount += 1;
-        continue;
-      }
       if (stagedKeys.has(key)) continue;
       stagedKeys.add(key);
-      pending.push(buildPendingEntry(task, project, dateStr));
+      candidates.push({ key, entry: buildPendingEntry(task, project, dateStr) });
     }
   }
 
-  if (pending.length === 0) {
+  if (candidates.length === 0) {
     return {
       generated: [],
       generatedCount: 0,
-      skippedExistingCount,
+      skippedExistingCount: 0,
       range: { fromDate, toDate },
     };
   }
 
-  const inserted = await withDbTransaction((tx) => entriesRepo.createMany(pending, tx));
+  const { inserted, skippedExistingCount } = await withRecurringGenerationTransaction(
+    async (tx) => {
+      const existingKeys = await entriesRepo.findExistingRecurringKeys(
+        targetUserId,
+        fromDate,
+        toDate,
+        tx,
+      );
+      const pending = candidates
+        .filter((candidate) => !existingKeys.has(candidate.key))
+        .map((candidate) => candidate.entry);
+
+      if (pending.length === 0) {
+        return {
+          inserted: [],
+          skippedExistingCount: candidates.length,
+        };
+      }
+
+      return {
+        inserted: await entriesRepo.createMany(pending, tx),
+        skippedExistingCount: candidates.length - pending.length,
+      };
+    },
+  );
   return {
     generated: inserted,
     generatedCount: inserted.length,

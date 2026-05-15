@@ -47,7 +47,7 @@ Recurring entries are materialized on the server via `POST /api/entries/recurrin
 }
 ```
 
-The endpoint is idempotent: re-running it with the same window does not create duplicates, since existing `(date, project, task)` tuples are skipped. The response reports `generatedCount`, `skippedExistingCount`, and the list of created entries.
+The endpoint is idempotent and safe for overlapping generation requests: re-running it with the same window does not create duplicates, since existing `(date, project, task)` tuples are skipped. The response reports `generatedCount`, `skippedExistingCount`, and the list of created entries.
 
 To prevent accidentally huge generations, the server caps the window at 366 days per call.
 

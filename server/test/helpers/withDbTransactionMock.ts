@@ -19,7 +19,10 @@ import { TX_SENTINEL } from './txSentinel.ts';
 // the value channel (the cb receives whatever we hand it). Loosening the test-side type
 // lets per-test `mockImplementation` callers pass TX_SENTINEL or a real fake executor
 // without a redundant `as unknown as DbExecutor` cast at every site.
-type WithDbTransactionMockImpl = (cb: (tx: unknown) => unknown) => Promise<unknown>;
+type WithDbTransactionMockImpl = (
+  cb: (tx: unknown) => unknown,
+  config?: unknown,
+) => Promise<unknown>;
 
 export const makeWithDbTransactionMock = () => {
   const defaultImpl: WithDbTransactionMockImpl = async (cb) => cb(TX_SENTINEL);
