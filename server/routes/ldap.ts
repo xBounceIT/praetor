@@ -373,6 +373,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['ldap'],
         summary: 'Test LDAP authentication',
+        description:
+          'Tests credentials against the latest saved LDAP configuration, even when LDAP login is disabled.',
         body: ldapTestBodySchema,
         response: {
           200: ldapTestResponseSchema,
@@ -395,6 +397,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         result = await ldapService.authenticateWithProfile(
           usernameResult.value,
           passwordResult.value,
+          { allowDisabledConfig: true, reloadConfig: true },
         );
       } catch (err) {
         // Admin diagnostic — surface the outage in the response body instead of a 500
