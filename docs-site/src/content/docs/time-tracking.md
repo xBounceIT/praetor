@@ -45,7 +45,7 @@ La materializzazione delle registrazioni ricorrenti avviene sul server tramite l
 }
 ```
 
-L'endpoint è idempotente: rieseguirlo con la stessa finestra non crea duplicati, perché le coppie già presenti `(data, progetto, attività)` vengono saltate. La risposta include `generatedCount`, `skippedExistingCount` e l'elenco delle registrazioni create.
+L'endpoint è idempotente e sicuro anche con richieste di generazione sovrapposte: rieseguirlo con la stessa finestra non crea duplicati, perché le coppie già presenti `(data, progetto, attività)` vengono saltate. La risposta include `generatedCount`, `skippedExistingCount` e l'elenco delle registrazioni create.
 
 Per evitare generazioni accidentalmente troppo ampie, il server limita la finestra a 366 giorni per chiamata.
 

@@ -12,6 +12,12 @@ export type DbExecutor = PgDatabase<
   ExtractTablesWithRelations<typeof schema>
 >;
 
+export type DbTransactionConfig = {
+  isolationLevel?: 'read uncommitted' | 'read committed' | 'repeatable read' | 'serializable';
+  accessMode?: 'read only' | 'read write';
+  deferrable?: boolean;
+};
+
 // Wraps a Drizzle transaction so the callback receives a `tx` typed as `DbExecutor`. Routes
 // call this when they need to compose multiple repo calls atomically:
 //
@@ -25,8 +31,10 @@ export type DbExecutor = PgDatabase<
 // `delete`, `execute`, `transaction` for nesting) that `DbExecutor` exposes, but the two
 // classes don't share a nominal supertype that includes both, so TS rejects the direct cast.
 // The `unknown` step is a structural-equivalence assertion, not a load-bearing contract.
-export const withDbTransaction = <T>(callback: (tx: DbExecutor) => Promise<T>): Promise<T> =>
-  db.transaction((tx) => callback(tx as unknown as DbExecutor));
+export const withDbTransaction = <T>(
+  callback: (tx: DbExecutor) => Promise<T>,
+  config?: DbTransactionConfig,
+): Promise<T> => db.transaction((tx) => callback(tx as unknown as DbExecutor), config);
 
 // Run `cb` inside a transaction only when the caller has not already supplied one.
 // Repos call this in DELETE-then-INSERT paths so a failing INSERT rolls back the prior

@@ -17,6 +17,7 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
@@ -1121,8 +1122,19 @@ describe('POST /api/entries/recurring/generate', () => {
     expect(body.skippedExistingCount).toBe(0);
     expect(body.range).toEqual({ fromDate: '2025-06-09', toDate: '2025-06-13' });
     expect(entriesCreateManyMock).toHaveBeenCalledTimes(1);
+    expect(withDbTransactionMock.mock.calls[0][1]).toEqual({
+      isolationLevel: 'serializable',
+      accessMode: 'read write',
+    });
+    expect(entriesFindExistingRecurringKeysMock).toHaveBeenCalledWith(
+      'u1',
+      '2025-06-09',
+      '2025-06-13',
+      TX_SENTINEL,
+    );
 
     const inserted = entriesCreateManyMock.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(entriesCreateManyMock.mock.calls[0][1]).toBe(TX_SENTINEL);
     expect(inserted.map((e) => e.date)).toEqual([
       '2025-06-09',
       '2025-06-10',
@@ -1399,6 +1411,43 @@ describe('POST /api/entries/recurring/generate', () => {
     expect(body.generatedCount).toBe(0);
     expect(body.skippedExistingCount).toBe(5);
     expect(entriesCreateManyMock).not.toHaveBeenCalled();
+  });
+
+  test('200: retries a serializable transaction conflict before reporting committed state', async () => {
+    setupHappyPath();
+    const generatedKeys = [
+      '2025-06-09|p1|Daily standup',
+      '2025-06-10|p1|Daily standup',
+      '2025-06-11|p1|Daily standup',
+      '2025-06-12|p1|Daily standup',
+      '2025-06-13|p1|Daily standup',
+    ];
+    entriesFindExistingRecurringKeysMock.mockReset();
+    entriesFindExistingRecurringKeysMock
+      .mockResolvedValueOnce(new Set<string>())
+      .mockResolvedValueOnce(new Set(generatedKeys));
+    withDbTransactionMock.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => {
+      await cb(TX_SENTINEL);
+      throw Object.assign(new Error('could not serialize access'), { code: '40001' });
+    });
+    withDbTransactionMock.mockImplementationOnce(async (cb: (tx: unknown) => unknown) =>
+      cb(TX_SENTINEL),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-09', toDate: '2025-06-13' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.generatedCount).toBe(0);
+    expect(body.skippedExistingCount).toBe(5);
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(2);
+    expect(entriesFindExistingRecurringKeysMock).toHaveBeenCalledTimes(2);
+    expect(entriesCreateManyMock).toHaveBeenCalledTimes(1);
   });
 
   test('200: filters out a recurring task whose client assignment was revoked', async () => {
