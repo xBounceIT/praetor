@@ -73,6 +73,13 @@ describe('generateNextId', () => {
     const id = await invoicesRepo.generateNextId('2026', testDb);
     expect(id).toBe('INV-2026-0001');
   });
+
+  test('rejects non-4-digit years before building the regex', async () => {
+    await expect(invoicesRepo.generateNextId('2026.*', testDb)).rejects.toThrow(
+      'invoice year must be a 4-digit year',
+    );
+    expect(exec.calls).toHaveLength(0);
+  });
 });
 
 describe('listAll', () => {
