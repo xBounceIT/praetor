@@ -71,6 +71,7 @@ describe('<WeeklyView /> RBAC catalog scoping', () => {
         duration: 2,
         hourlyCost: 0,
         createdAt: 1,
+        version: 1,
         location: 'remote',
       },
     ];
@@ -98,6 +99,7 @@ describe('<WeeklyView /> RBAC catalog scoping', () => {
         duration: 3.5,
         hourlyCost: 0,
         createdAt: 1700000000,
+        version: 1,
         location: 'remote',
       },
     ];
@@ -142,6 +144,7 @@ const entryBOn = (date: string): TimeEntry => ({
   duration: 3.5,
   hourlyCost: 0,
   createdAt: 1700000000,
+  version: 7,
   location: 'remote',
 });
 
@@ -307,6 +310,7 @@ describe('<WeeklyView /> submit mutations', () => {
     await waitFor(() => {
       expect(deleteCalls).toEqual(['entry-prev']);
       expect(updateCalls.map((c) => c.id)).toEqual(['entry-today']);
+      expect(updateCalls[0].updates).toMatchObject({ version: 7 });
       expect(addCalls).toHaveLength(1);
       expect(addCalls[0]).toHaveLength(1);
       expect(addCalls[0][0] as Record<string, unknown>).not.toHaveProperty('hourlyCost');

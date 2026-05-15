@@ -4,6 +4,7 @@ import {
   check,
   date,
   index,
+  integer,
   numeric,
   pgTable,
   text,
@@ -44,6 +45,7 @@ export const timeEntries = pgTable(
     isPlaceholder: boolean('is_placeholder').default(false),
     location: varchar('location', { length: 20 }).default('remote'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
+    version: integer('version').notNull().default(1),
   },
   (table) => [
     index('idx_time_entries_user_id').on(table.userId),

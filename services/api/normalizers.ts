@@ -244,7 +244,11 @@ export const normalizeTimeEntry = (e: TimeEntry): TimeEntry => {
   // `hourlyCost` / `cost` are gated behind `reports.cost.view` server-side and may be
   // entirely absent from the payload. Preserve the absence (rather than coercing to 0)
   // so the UI can branch on permission visibility instead of getting a misleading zero.
-  const normalized: TimeEntry = { ...e, duration: Number(e.duration || 0) };
+  const normalized: TimeEntry = {
+    ...e,
+    duration: Number(e.duration || 0),
+    version: Number(e.version || 1),
+  };
   if (e.hourlyCost !== undefined && e.hourlyCost !== null) {
     normalized.hourlyCost = Number(e.hourlyCost);
   } else {

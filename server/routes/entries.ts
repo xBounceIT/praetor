@@ -47,6 +47,7 @@ const entrySchema = {
     isPlaceholder: { type: 'boolean' },
     location: { type: 'string' },
     createdAt: { type: 'number' },
+    version: { type: 'integer', minimum: 1 },
   },
   // `cost` and `hourlyCost` stay out of `required` because they are stripped at response
   // time when the caller lacks `reports.cost.view`. Everything else is always present.
@@ -63,6 +64,7 @@ const entrySchema = {
     'isPlaceholder',
     'location',
     'createdAt',
+    'version',
   ],
 } as const;
 
@@ -97,7 +99,9 @@ const entryUpdateBodySchema = {
     notes: { type: ['string', 'null'] },
     isPlaceholder: { type: 'boolean' },
     location: { type: 'string' },
+    version: { type: 'integer', minimum: 1 },
   },
+  required: ['version'],
 } as const;
 
 const entriesListQuerySchema = {

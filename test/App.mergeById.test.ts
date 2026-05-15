@@ -43,6 +43,7 @@ const makeEntry = (id: string, createdAt: number, notes = id): TimeEntry => ({
   notes,
   duration: 60,
   createdAt,
+  version: 1,
 });
 
 describe('App.tsx timesheets mergeById', () => {

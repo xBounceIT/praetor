@@ -90,6 +90,8 @@ Strumenti supportati:
 
 Gli strumenti bulk per i consuntivi accettano fino a 100 elementi per chiamata. Elaborano ogni elemento in modo indipendente e restituiscono un riepilogo con successi ed errori per singolo elemento.
 
+Gli strumenti di aggiornamento dei consuntivi richiedono il campo `version` restituito da `praetor_list_time_entries`. Se la registrazione è stata modificata dopo la lettura, l'aggiornamento restituisce un errore di conflitto e l'agente deve rileggere i dati prima di riprovare.
+
 Note di sicurezza:
 
 - I token MCP ereditano i permessi del tuo ruolo corrente al momento della chiamata, filtrati dall'ambito del token (completo o sola lettura).

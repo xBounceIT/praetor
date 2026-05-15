@@ -48,6 +48,7 @@ const sampleEntry: TimeEntry = {
   isPlaceholder: false,
   location: 'remote',
   createdAt: 1_700_000_000_000,
+  version: 3,
 };
 
 const baseProps = {
@@ -104,7 +105,7 @@ describe('<EntryEditDialog />', () => {
       Partial<TimeEntry>,
     ];
     expect(id).toBe('te-1');
-    expect(patch).toEqual({ duration: 3.25, notes: 'updated notes' });
+    expect(patch).toEqual({ version: 3, duration: 3.25, notes: 'updated notes' });
     await waitFor(() => {
       expect(onClose).toHaveBeenCalled();
     });
@@ -183,7 +184,7 @@ describe('<EntryEditDialog />', () => {
       string,
       Partial<TimeEntry>,
     ];
-    expect(patch).toEqual({ notes: 'placeholder note' });
+    expect(patch).toEqual({ version: 3, notes: 'placeholder note' });
   });
 
   test('clearing the hours field still allows saving notes-only changes', async () => {
@@ -214,7 +215,7 @@ describe('<EntryEditDialog />', () => {
       Partial<TimeEntry>,
     ];
     // Blank duration is treated as "untouched" — no `duration` field in the patch.
-    expect(patch).toEqual({ notes: 'just the note' });
+    expect(patch).toEqual({ version: 3, notes: 'just the note' });
   });
 
   test('resolves seeded taskId via name lookup when the entry has no taskId FK', () => {

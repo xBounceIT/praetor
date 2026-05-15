@@ -153,7 +153,10 @@ const canonicalizeLegacyHash = (hash: string) => {
   return hash;
 };
 
-type TimeEntryDraft = Omit<TimeEntry, 'id' | 'createdAt' | 'userId' | 'hourlyCost' | 'cost'>;
+type TimeEntryDraft = Omit<
+  TimeEntry,
+  'id' | 'createdAt' | 'version' | 'userId' | 'hourlyCost' | 'cost'
+>;
 
 const TrackerView: React.FC<{
   entries: TimeEntry[];
@@ -162,7 +165,10 @@ const TrackerView: React.FC<{
   projectTasks: ProjectTask[];
   onAddEntry: (entry: TimeEntryDraft) => void;
   onDeleteEntry: (id: string) => void;
-  onUpdateEntry: (id: string, updates: Partial<TimeEntry>) => void;
+  onUpdateEntry: (
+    id: string,
+    updates: Partial<Omit<TimeEntry, 'version'>> & Pick<TimeEntry, 'version'>,
+  ) => void;
   startOfWeek: 'Monday' | 'Sunday';
   treatSaturdayAsHoliday: boolean;
   allowWeekendSelection: boolean;

@@ -707,8 +707,8 @@ describe('/api/mcp', () => {
         name: 'praetor_bulk_update_time_entries',
         arguments: {
           entries: [
-            { id: 'te-1', duration: 2, notes: 'Done' },
-            { id: 'missing', duration: 3 },
+            { id: 'te-1', version: 1, duration: 2, notes: 'Done' },
+            { id: 'missing', version: 4, duration: 3 },
           ],
         },
       },
@@ -718,20 +718,20 @@ describe('/api/mcp', () => {
     const body = parseMcpBody(res.body);
     expectOneBulkSuccessAndOneFailure(body.result.structuredContent.summary);
     expect(body.result.structuredContent.results).toEqual([
-      { index: 0, success: true, entry: { id: 'te-1', duration: 2, notes: 'Done' } },
+      { index: 0, success: true, entry: { id: 'te-1', version: 1, duration: 2, notes: 'Done' } },
       { index: 1, success: false, error: 'Entry not found' },
     ]);
     expect(updateTimeEntryMock).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ id: 'u1' }),
       'te-1',
-      { duration: 2, notes: 'Done' },
+      { version: 1, duration: 2, notes: 'Done' },
     );
     expect(updateTimeEntryMock).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ id: 'u1' }),
       'missing',
-      { duration: 3 },
+      { version: 4, duration: 3 },
     );
   });
 

@@ -19,7 +19,10 @@ import { Separator } from '../ui/separator';
 import EntryCatalogSelector from './EntryCatalogSelector';
 import { CUSTOM_TASK_SENTINEL, useCatalogSelection } from './useCatalogSelection';
 
-type TimeEntryDraft = Omit<TimeEntry, 'id' | 'createdAt' | 'userId' | 'hourlyCost' | 'cost'>;
+type TimeEntryDraft = Omit<
+  TimeEntry,
+  'id' | 'createdAt' | 'version' | 'userId' | 'hourlyCost' | 'cost'
+>;
 
 export interface DailyViewProps {
   clients: Client[];

@@ -27,6 +27,7 @@ export type TimeEntry = {
   isPlaceholder: boolean;
   location: string;
   createdAt: number;
+  version: number;
 };
 
 // Snake-case row shape returned by raw-SQL `executeRows` paths. Carries the extra
@@ -49,6 +50,7 @@ type TimeEntryRow = {
   is_placeholder: boolean | null;
   location: string | null;
   created_at: string | Date | null;
+  version: number | string | null;
   // Microsecond-precision text rep of created_at - pg returns TIMESTAMP as a JS Date (ms-only),
   // which would lose precision in the cursor and skip rows at page boundaries. Using ::text keeps
   // the full Postgres precision for cursor round-trips.
@@ -57,7 +59,7 @@ type TimeEntryRow = {
 
 const ENTRY_COLUMNS_SQL = sql`id, user_id, date, client_id, client_name, project_id,
   project_name, task, task_id, notes, duration, hourly_cost, is_placeholder, location, created_at,
-  created_at::text AS created_at_text`;
+  version, created_at::text AS created_at_text`;
 
 const mapRawRow = (row: TimeEntryRow): TimeEntry => {
   const date = normalizeNullableDateOnly(row.date, 'entry.date');
@@ -81,6 +83,7 @@ const mapRawRow = (row: TimeEntryRow): TimeEntry => {
     isPlaceholder: !!row.is_placeholder,
     location: row.location || 'remote',
     createdAt: row.created_at ? new Date(row.created_at).getTime() : 0,
+    version: Number(row.version ?? 1),
   };
 };
 
@@ -109,6 +112,7 @@ const mapBuilderRow = (row: typeof timeEntries.$inferSelect): TimeEntry => {
     isPlaceholder: !!row.isPlaceholder,
     location: row.location || 'remote',
     createdAt: row.createdAt?.getTime() ?? 0,
+    version: row.version ?? 1,
   };
 };
 
@@ -376,6 +380,7 @@ export const createMany = async (
 };
 
 export type EntryUpdate = {
+  version: number;
   date?: string;
   clientId?: string;
   clientName?: string;
@@ -413,14 +418,17 @@ export const update = async (
   if (patch.taskId !== undefined) setValues.taskId = patch.taskId;
 
   if (Object.keys(setValues).length === 0) {
-    const [row] = await exec.select().from(timeEntries).where(eq(timeEntries.id, id));
+    const [row] = await exec
+      .select()
+      .from(timeEntries)
+      .where(and(eq(timeEntries.id, id), eq(timeEntries.version, patch.version)));
     return row ? mapBuilderRow(row) : null;
   }
 
   const [row] = await exec
     .update(timeEntries)
-    .set(setValues)
-    .where(eq(timeEntries.id, id))
+    .set({ ...setValues, version: sql`${timeEntries.version} + 1` })
+    .where(and(eq(timeEntries.id, id), eq(timeEntries.version, patch.version)))
     .returning();
   return row ? mapBuilderRow(row) : null;
 };

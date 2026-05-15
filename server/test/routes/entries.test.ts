@@ -191,6 +191,7 @@ const SAMPLE_ENTRY = {
   isPlaceholder: false,
   location: 'remote',
   createdAt: 1_700_000_000_000,
+  version: 1,
 };
 
 type SampleContextOverrides = Partial<{
@@ -214,6 +215,11 @@ const sampleContext = (overrides: SampleContextOverrides = {}) => ({
   task: SAMPLE_ENTRY.task,
   taskId: SAMPLE_ENTRY.taskId as string | null,
   ...overrides,
+});
+
+const versionedPatch = <T extends Record<string, unknown>>(patch: T): T & { version: number } => ({
+  version: SAMPLE_ENTRY.version,
+  ...patch,
 });
 
 const allMocks = [
@@ -423,6 +429,7 @@ describe('POST /api/entries', () => {
     entriesCreateMock.mockImplementation(async (entry: Record<string, unknown>) => ({
       ...entry,
       createdAt: 1_700_000_000_000,
+      version: 1,
     }));
 
     const res = await testApp.inject({
@@ -455,6 +462,7 @@ describe('POST /api/entries', () => {
     entriesCreateMock.mockImplementation(async (entry: Record<string, unknown>) => ({
       ...entry,
       createdAt: 1_700_000_000_000,
+      version: 1,
     }));
 
     const res = await testApp.inject({
@@ -506,6 +514,7 @@ describe('POST /api/entries', () => {
     entriesCreateMock.mockImplementation(async (entry: Record<string, unknown>) => ({
       ...entry,
       createdAt: 1_700_000_000_000,
+      version: 1,
     }));
 
     const res = await testApp.inject({
@@ -568,6 +577,7 @@ describe('POST /api/entries', () => {
     entriesCreateMock.mockImplementation(async (entry: Record<string, unknown>) => ({
       ...entry,
       createdAt: 1_700_000_000_000,
+      version: 1,
     }));
 
     const res = await testApp.inject({
@@ -643,7 +653,7 @@ describe('PUT /api/entries/:id', () => {
       method: 'PUT',
       url: '/api/entries/te-1',
       headers: authHeader(),
-      payload: { duration: 6 },
+      payload: versionedPatch({ duration: 6 }),
     });
 
     expect(res.statusCode).toBe(200);
@@ -651,6 +661,19 @@ describe('PUT /api/entries/:id', () => {
       'te-1',
       expect.objectContaining({ duration: 6 }),
     );
+  });
+
+  test('400 when update omits the optimistic-lock version', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: { duration: 6 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(entriesFindContextMock).not.toHaveBeenCalled();
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
   });
 
   test('200 backfills taskId when context.taskId is null', async () => {
@@ -662,7 +685,7 @@ describe('PUT /api/entries/:id', () => {
       method: 'PUT',
       url: '/api/entries/te-1',
       headers: authHeader(),
-      payload: { duration: 5 },
+      payload: versionedPatch({ duration: 5 }),
     });
 
     expect(res.statusCode).toBe(200);
@@ -680,14 +703,14 @@ describe('PUT /api/entries/:id', () => {
       method: 'PUT',
       url: '/api/entries/missing',
       headers: authHeader(),
-      payload: { duration: 5 },
+      payload: versionedPatch({ duration: 5 }),
     });
 
     expect(res.statusCode).toBe(404);
     expect(JSON.parse(res.body)).toEqual({ error: 'Entry not found' });
   });
 
-  test('404 when update returns null', async () => {
+  test('409 when the row version no longer matches', async () => {
     entriesFindContextMock.mockResolvedValue(sampleContext());
     entriesUpdateMock.mockResolvedValue(null);
 
@@ -695,10 +718,13 @@ describe('PUT /api/entries/:id', () => {
       method: 'PUT',
       url: '/api/entries/te-1',
       headers: authHeader(),
-      payload: { duration: 5 },
+      payload: versionedPatch({ duration: 5 }),
     });
 
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Entry has changed since it was loaded; reload and retry',
+    });
   });
 
   test('403 cross-user update without manager link', async () => {
@@ -709,7 +735,7 @@ describe('PUT /api/entries/:id', () => {
       method: 'PUT',
       url: '/api/entries/te-1',
       headers: authHeader(),
-      payload: { duration: 5 },
+      payload: versionedPatch({ duration: 5 }),
     });
 
     expect(res.statusCode).toBe(403);
@@ -723,7 +749,7 @@ describe('PUT /api/entries/:id', () => {
       method: 'PUT',
       url: '/api/entries/te-1',
       headers: authHeader(),
-      payload: { duration: -3 },
+      payload: versionedPatch({ duration: -3 }),
     });
 
     expect(res.statusCode).toBe(400);
@@ -735,7 +761,7 @@ describe('PUT /api/entries/:id', () => {
       method: 'PUT',
       url: '/api/entries/te-1',
       headers: authHeader(),
-      payload: { isPlaceholder: 'ture' } as unknown as Record<string, unknown>,
+      payload: versionedPatch({ isPlaceholder: 'ture' } as unknown as Record<string, unknown>),
     });
 
     expect(res.statusCode).toBe(400);
@@ -750,7 +776,7 @@ describe('PUT /api/entries/:id', () => {
       method: 'PUT',
       url: '/api/entries/te-1',
       headers: authHeader(),
-      payload: { location: '' },
+      payload: versionedPatch({ location: '' }),
     });
 
     expect(res.statusCode).toBe(200);
@@ -767,7 +793,7 @@ describe('PUT /api/entries/:id', () => {
       method: 'PUT',
       url: '/api/entries/te-1',
       headers: authHeader(),
-      payload: { location: '   ' },
+      payload: versionedPatch({ location: '   ' }),
     });
 
     expect(res.statusCode).toBe(200);
@@ -784,7 +810,7 @@ describe('PUT /api/entries/:id', () => {
       method: 'PUT',
       url: '/api/entries/te-1',
       headers: authHeader(),
-      payload: { location: 'office' },
+      payload: versionedPatch({ location: 'office' }),
     });
 
     expect(res.statusCode).toBe(200);
@@ -803,7 +829,7 @@ describe('PUT /api/entries/:id', () => {
       method: 'PUT',
       url: '/api/entries/te-1',
       headers: authHeader(),
-      payload: { location: 'foo' },
+      payload: versionedPatch({ location: 'foo' }),
     });
 
     expect(res.statusCode).toBe(400);
@@ -832,6 +858,7 @@ describe('PUT /api/entries/:id', () => {
       headers: authHeader(),
       // Send caller-supplied names that the service must IGNORE and replace with repo lookups.
       payload: {
+        version: SAMPLE_ENTRY.version,
         clientId: 'c2',
         clientName: 'stale-from-client',
         projectId: 'p2',
@@ -864,6 +891,7 @@ describe('PUT /api/entries/:id', () => {
       url: '/api/entries/te-1',
       headers: authHeader(),
       payload: {
+        version: SAMPLE_ENTRY.version,
         clientId: 'c2',
         projectId: 'p2',
         task: 'QA',
@@ -887,6 +915,7 @@ describe('PUT /api/entries/:id', () => {
       url: '/api/entries/te-1',
       headers: authHeader(),
       payload: {
+        version: SAMPLE_ENTRY.version,
         clientId: 'c2',
         projectId: 'p2',
         task: 'QA',
@@ -905,7 +934,7 @@ describe('PUT /api/entries/:id', () => {
       method: 'PUT',
       url: '/api/entries/te-1',
       headers: authHeader(),
-      payload: { projectId: 'p2', projectName: 'Beta' },
+      payload: versionedPatch({ projectId: 'p2', projectName: 'Beta' }),
     });
 
     expect(res.statusCode).toBe(400);
@@ -921,7 +950,7 @@ describe('PUT /api/entries/:id', () => {
       method: 'PUT',
       url: '/api/entries/te-1',
       headers: authHeader(),
-      payload: { duration: 7 },
+      payload: versionedPatch({ duration: 7 }),
     });
 
     expect(res.statusCode).toBe(200);
@@ -945,7 +974,7 @@ describe('PUT /api/entries/:id', () => {
       method: 'PUT',
       url: '/api/entries/te-1',
       headers: authHeader(),
-      payload,
+      payload: versionedPatch(payload),
     });
 
     expect(res.statusCode).toBe(400);
@@ -961,7 +990,7 @@ describe('PUT /api/entries/:id', () => {
       method: 'PUT',
       url: '/api/entries/te-1',
       headers: authHeader(),
-      payload: { date: '2025-06-03' },
+      payload: versionedPatch({ date: '2025-06-03' }),
     });
 
     expect(res.statusCode).toBe(200);
@@ -979,7 +1008,7 @@ describe('PUT /api/entries/:id', () => {
       url: '/api/entries/te-1',
       headers: authHeader(),
       // 2025-06-07 is a Saturday.
-      payload: { date: '2025-06-07' },
+      payload: versionedPatch({ date: '2025-06-07' }),
     });
 
     expect(res.statusCode).toBe(400);
@@ -1100,7 +1129,7 @@ describe('POST /api/entries/recurring/generate', () => {
     projectsListNamesByIdsMock.mockResolvedValue(happyProjectsMap);
     entriesFindExistingRecurringKeysMock.mockResolvedValue(new Set<string>());
     entriesCreateManyMock.mockImplementation(async (rows: Array<Record<string, unknown>>) =>
-      rows.map((r) => ({ ...r, createdAt: 1_700_000_000_000 })),
+      rows.map((r) => ({ ...r, createdAt: 1_700_000_000_000, version: 1 })),
     );
   };
 
@@ -1376,7 +1405,7 @@ describe('POST /api/entries/recurring/generate', () => {
     // Second call - the keys repo now returns the previously inserted set.
     entriesCreateManyMock.mockReset();
     entriesCreateManyMock.mockImplementation(async (rows: Array<Record<string, unknown>>) =>
-      rows.map((r) => ({ ...r, createdAt: 1_700_000_000_000 })),
+      rows.map((r) => ({ ...r, createdAt: 1_700_000_000_000, version: 1 })),
     );
     entriesFindExistingRecurringKeysMock.mockResolvedValue(
       new Set([

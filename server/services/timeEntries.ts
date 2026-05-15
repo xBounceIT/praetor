@@ -73,6 +73,13 @@ const requireValid = <T>(result: { ok: true; value: T } | { ok: false; message: 
   return badRequest(result.message);
 };
 
+const parseExpectedVersion = (value: unknown): number => {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    badRequest('version must be a positive integer');
+  }
+  return value as number;
+};
+
 export const listTimeEntries = async (
   actor: AuthenticatedActor,
   input: { userId?: unknown; limit?: unknown; cursor?: unknown },
@@ -206,10 +213,12 @@ export const updateTimeEntry = async (
     notes?: unknown;
     isPlaceholder?: unknown;
     location?: unknown;
+    version?: unknown;
   },
 ): Promise<TimeEntry> => {
   if (!hasTrackerPermission(actor, 'update')) fail(403, 'Insufficient permissions');
   const entryId = requireValid(requireNonEmptyString(id, 'id'));
+  const version = parseExpectedVersion(input.version);
 
   let parsedDuration: number | undefined;
   if (input.duration !== undefined) {
@@ -303,6 +312,7 @@ export const updateTimeEntry = async (
   const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
 
   const updated = await entriesRepo.update(entryId, {
+    version,
     date,
     clientId,
     clientName: resolvedClientName,
@@ -316,7 +326,9 @@ export const updateTimeEntry = async (
     taskId: resolvedTaskId,
   });
 
-  if (updated === null) return fail(404, 'Entry not found');
+  if (updated === null) {
+    return fail(409, 'Entry has changed since it was loaded; reload and retry');
+  }
   return updated;
 };
 
