@@ -70,8 +70,11 @@ const makeReply = () => {
 const makeRequest = (token?: string) =>
   ({
     headers: token ? { authorization: `Bearer ${token}` } : {},
+    log: {
+      warn: mock(),
+    },
     raw: {},
-  }) as FastifyRequest & { raw: { auth?: unknown } };
+  }) as FastifyRequest & { log: { warn: ReturnType<typeof mock> }; raw: { auth?: unknown } };
 
 beforeEach(() => {
   for (const m of [
@@ -166,6 +169,33 @@ describe('authenticateMcpToken', () => {
       }),
     );
     expect(touchLastUsedMock).toHaveBeenCalledWith('mcp-token-1');
+  });
+
+  test('does not fail authentication when last-used timestamp update fails', async () => {
+    const updateError = new Error('database unavailable');
+    touchLastUsedMock.mockRejectedValue(updateError);
+    const request = makeRequest('praetor_mcp_token');
+    const reply = makeReply();
+
+    await authenticateMcpToken(request, reply);
+
+    expect(reply.statusCode).toBe(200);
+    expect(request.user).toEqual(
+      expect.objectContaining({
+        id: 'u1',
+        permissions: ['timesheets.tracker.view'],
+      }),
+    );
+    expect(request.raw.auth).toEqual(
+      expect.objectContaining({
+        token: 'praetor_mcp_token',
+        clientId: 'u1',
+      }),
+    );
+    expect(request.log.warn).toHaveBeenCalledWith(
+      { err: updateError },
+      'Failed to update MCP token last-used timestamp',
+    );
   });
 
   test('403 when token has been idle beyond the timeout', async () => {
