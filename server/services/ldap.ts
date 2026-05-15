@@ -116,6 +116,51 @@ const pickFirstString = (value: unknown): string | undefined => {
   return undefined;
 };
 
+const getAttributeValues = (attributes: Record<string, unknown>, name: string): string[] => {
+  const normalizedName = name.toLowerCase();
+  const values: string[] = [];
+
+  for (const [key, value] of Object.entries(attributes)) {
+    const normalizedKey = key.toLowerCase();
+    if (normalizedKey !== normalizedName && !normalizedKey.startsWith(`${normalizedName};`)) {
+      continue;
+    }
+
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed) values.push(trimmed);
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (typeof item !== 'string') continue;
+        const trimmed = item.trim();
+        if (trimmed) values.push(trimmed);
+      }
+    }
+  }
+
+  return values;
+};
+
+const addGroupEntryAliases = (
+  groups: Set<string>,
+  attributes: Record<string, unknown>,
+  objectName?: string,
+): void => {
+  if (objectName) groups.add(objectName);
+  for (const value of getAttributeValues(attributes, 'dn')) {
+    groups.add(value);
+  }
+  for (const value of getAttributeValues(attributes, 'distinguishedName')) {
+    groups.add(value);
+  }
+  for (const value of getAttributeValues(attributes, 'cn')) {
+    groups.add(value);
+  }
+};
+
 const deriveCanonicalUsername = (
   attributes: Record<string, unknown>,
   typedUsername: string,
@@ -247,6 +292,15 @@ class LDAPService {
         );
         return { authenticated: false, groups: [], matchedRoleIds: [] };
       }
+
+      // The user bind above is only a credential check. Directory reads should use the
+      // configured bind DN so group lookup follows the operator's configured search account.
+      await new Promise<void>((resolve, reject) => {
+        ldapClient.bind(config.bindDn, config.bindPassword, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
 
       // Search groups under both the canonical and typed identifiers so configs whose
       // groupFilter expects e.g. `memberUid={0}` work even when the user typed an alias
@@ -408,15 +462,15 @@ class LDAPService {
         });
       });
 
-      const userDn = await this.findUserDn(ldapClient, username);
-      if (!userDn) {
+      const userEntry = await this.findUserEntry(ldapClient, username);
+      if (!userEntry) {
         return null;
       }
 
       // Use throwOnError so a transient group-search failure surfaces here as null
       // (keep existing role) instead of falling through to applyExternalRolesForUser with
       // an empty group list, which would demote the user to the default 'user' role.
-      const groups = await this.findUserGroups(ldapClient, userDn, username, {
+      const groups = await this.findUserGroups(ldapClient, userEntry.dn, username, {
         throwOnError: true,
       });
       return { groups, roleMappings: this.getRoleMappings() };
@@ -511,6 +565,7 @@ class LDAPService {
         };
       } catch (err) {
         if (options.throwOnError) throw err;
+        if (groups.size > 0) return [...groups];
         logger.warn(
           { err: serializeError(err), username },
           'LDAP group filter is invalid; skipping group role mapping',
@@ -525,15 +580,8 @@ class LDAPService {
 
             res.on('searchEntry', (entry: LdapSearchEntry) => {
               const objectName = entry.objectName?.toString();
-              if (objectName) groups.add(objectName);
               const attributes = flattenSearchEntryAttributes(entry);
-              const cn = attributes.cn;
-              if (typeof cn === 'string') groups.add(cn);
-              else if (Array.isArray(cn)) {
-                for (const value of cn) {
-                  if (typeof value === 'string') groups.add(value);
-                }
-              }
+              addGroupEntryAliases(groups, attributes, objectName);
             });
 
             res.on('error', (err: Error) => reject(err));
@@ -542,6 +590,7 @@ class LDAPService {
         });
       } catch (err) {
         if (options.throwOnError) throw err;
+        if (groups.size > 0) return [...groups];
         logger.warn(
           { err: serializeError(err), username },
           'LDAP group lookup failed; skipping group role mapping',
