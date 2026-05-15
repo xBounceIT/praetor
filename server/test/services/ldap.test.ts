@@ -375,9 +375,9 @@ describe('authenticate', () => {
     expect(lastClientStats?.unbindCalls).toBe(1);
   });
 
-  test('returns true on bind→search→re-bind happy path; unbind still called', async () => {
+  test('returns true after user credential check and service-account rebind', async () => {
     nextFixture = {
-      bindResponses: [null, null],
+      bindResponses: [null, null, null],
       searchResponses: [
         {
           entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: {} }],
@@ -391,7 +391,26 @@ describe('authenticate', () => {
     expect(lastClientStats?.bindCalls).toEqual([
       { dn: 'cn=admin,dc=test,dc=com', password: 'admin-pw' },
       { dn: 'uid=alice,dc=test,dc=com', password: 'pw' },
+      { dn: 'cn=admin,dc=test,dc=com', password: 'admin-pw' },
     ]);
+  });
+
+  test('rejects when service-account rebind before group lookup fails', async () => {
+    nextFixture = {
+      bindResponses: [null, null, new Error('service rebind failed')],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: {} }],
+          status: 0,
+        },
+      ],
+    };
+
+    await expect(ldapService.authenticateWithProfile('alice', 'pw')).rejects.toThrow(
+      'service rebind failed',
+    );
+    expect(lastClientStats?.searchCalls).toHaveLength(1);
+    expect(lastClientStats?.unbindCalls).toBe(1);
   });
 
   test('search receives the parsed userFilter with the escaped username', async () => {
@@ -419,7 +438,7 @@ describe('authenticate', () => {
       groupFilter: '(member=uid=alice,dc=test,dc=com)',
     });
     nextFixture = {
-      bindResponses: [null, null],
+      bindResponses: [null, null, null],
       searchResponses: [
         {
           entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: {} }],
@@ -445,7 +464,7 @@ describe('authenticate', () => {
       roleMappings: [{ ldapGroup: syncSecAdmins, role: 'admin' }],
     });
     nextFixture = {
-      bindResponses: [null, null],
+      bindResponses: [null, null, null],
       searchResponses: [
         {
           entries: [
@@ -481,6 +500,14 @@ describe('authenticate', () => {
       'OU=Internal Groups,OU=Accounts,DC=syncsec,DC=coll',
     );
     expect(String(lastClientStats?.searchCalls[1]?.options.filter)).toContain('(member=');
+    expect(lastClientStats?.bindCalls).toEqual([
+      { dn: 'cn=admin,dc=test,dc=com', password: 'admin-pw' },
+      {
+        dn: "CN=Daniel D'Angeli,OU=Internal Accounts,OU=Accounts,DC=syncsec,DC=coll",
+        password: 'pw',
+      },
+      { dn: 'cn=admin,dc=test,dc=com', password: 'admin-pw' },
+    ]);
   });
 
   test('rejects when the user-search stream emits an error (LDAP outage during search)', async () => {
