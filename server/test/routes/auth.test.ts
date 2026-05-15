@@ -698,6 +698,9 @@ describe('POST /api/auth/switch-role', () => {
         entityId: 'admin',
       }),
     );
+    // Authentication loaded the current role once; the denied target role must not load
+    // permissions before authorization succeeds.
+    expect(getRolePermissionsMock).toHaveBeenCalledTimes(1);
   });
 
   test('403 rejects personal access tokens because role switching is session-only', async () => {
