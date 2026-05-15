@@ -8,6 +8,7 @@ import {
   buildPermissions,
   DEFAULT_ROLE_PERMISSIONS,
   equivalentPermissionsFor,
+  hasAnyPermission,
   hasPermission,
   hasScopedActionPermission,
   isPermissionKnown,
@@ -210,11 +211,24 @@ describe('equivalentPermissionsFor / hasScopedActionPermission', () => {
   });
 });
 
+describe('hasAnyPermission', () => {
+  test('normalizes legacy required permission aliases before checking', () => {
+    expect(hasAnyPermission(['administration.general.view'], ['configuration.general.view'])).toBe(
+      true,
+    );
+  });
+});
+
 describe('hasPermission', () => {
   test('returns true when the array contains the permission', () => {
     expect(hasPermission(['crm.clients.view', 'crm.clients.update'], 'crm.clients.view')).toBe(
       true,
     );
+  });
+
+  test('normalizes legacy permission aliases before checking', () => {
+    expect(hasPermission(['administration.general.view'], 'configuration.general.view')).toBe(true);
+    expect(hasPermission(['sales.supplier_quotes.create'], 'suppliers.quotes.create')).toBe(true);
   });
 
   test('returns false when the permission is missing', () => {
@@ -304,6 +318,11 @@ describe('requestHasPermission', () => {
   test('returns true when request.user.permissions contains the permission', () => {
     const request = { user: { permissions: ['crm.clients.view'] } };
     expect(requestHasPermission(request, 'crm.clients.view')).toBe(true);
+  });
+
+  test('normalizes legacy permission aliases before checking request permissions', () => {
+    const request = { user: { permissions: ['administration.general.update'] } };
+    expect(requestHasPermission(request, 'configuration.general.update')).toBe(true);
   });
 
   test('returns false when request has no user', () => {
