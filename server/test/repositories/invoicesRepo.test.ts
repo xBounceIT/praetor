@@ -62,6 +62,12 @@ describe('generateNextId', () => {
     expect(id).toBe('INV-2026-0008');
   });
 
+  test('keeps the suffix untruncated after 9999', async () => {
+    exec.enqueue({ rows: [{ maxSequence: '9999' }] });
+    const id = await invoicesRepo.generateNextId('2026', testDb);
+    expect(id).toBe('INV-2026-10000');
+  });
+
   test('handles missing maxSequence row', async () => {
     exec.enqueue({ rows: [] });
     const id = await invoicesRepo.generateNextId('2026', testDb);

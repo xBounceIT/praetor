@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import {
+  formatSequenceSuffix,
   generateClientOrderId,
   generatePrefixedId,
   generateSupplierOrderId,
@@ -18,6 +19,17 @@ describe('generatePrefixedId', () => {
   test('preserves multi-segment prefixes verbatim', () => {
     const id = generatePrefixedId('rpt-chat');
     expect(id.startsWith('rpt-chat-')).toBe(true);
+  });
+});
+
+describe('formatSequenceSuffix', () => {
+  test('uses 4 digits as the minimum display width', () => {
+    expect(formatSequenceSuffix(1)).toBe('0001');
+    expect(formatSequenceSuffix(9999)).toBe('9999');
+  });
+
+  test('keeps sequence suffixes untruncated after 9999', () => {
+    expect(formatSequenceSuffix(10000)).toBe('10000');
   });
 });
 
@@ -59,7 +71,7 @@ describe('generateSequentialId (sequence-backed)', () => {
     expect(new Set(ids).size).toBe(ids.length);
     const year = new Date().getFullYear();
     for (const id of ids) {
-      expect(id).toMatch(new RegExp(`^ORD-${year}-\\d{4}$`));
+      expect(id).toMatch(new RegExp(`^ORD-${year}-\\d{4,}$`));
     }
   });
 
@@ -70,7 +82,7 @@ describe('generateSequentialId (sequence-backed)', () => {
     expect(new Set(ids).size).toBe(ids.length);
     const year = new Date().getFullYear();
     for (const id of ids) {
-      expect(id).toMatch(new RegExp(`^SORD-${year}-\\d{4}$`));
+      expect(id).toMatch(new RegExp(`^SORD-${year}-\\d{4,}$`));
     }
   });
 
@@ -78,5 +90,12 @@ describe('generateSequentialId (sequence-backed)', () => {
     const id = await generateClientOrderId(mockExec as never);
     const year = new Date().getFullYear();
     expect(id).toBe(`ORD-${year}-0001`);
+  });
+
+  test('does not truncate generated ids after the 4-digit range', async () => {
+    counter = 9999;
+    const id = await generateClientOrderId(mockExec as never);
+    const year = new Date().getFullYear();
+    expect(id).toBe(`ORD-${year}-10000`);
   });
 });

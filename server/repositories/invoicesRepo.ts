@@ -2,6 +2,7 @@ import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
 import { invoiceItems, invoices } from '../db/schema/invoices.ts';
 import { requireDateOnly } from '../utils/date.ts';
+import { formatSequenceSuffix } from '../utils/order-ids.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
 
 export type Invoice = {
@@ -70,12 +71,12 @@ export const generateNextId = async (year: string, exec: DbExecutor = db): Promi
   // matching id back to the app just to extract the sequence number.
   const rows = await executeRows<{ maxSequence: string | number | null }>(
     exec,
-    sql`SELECT COALESCE(MAX(CAST(split_part(id, '-', 3) AS INTEGER)), 0) AS "maxSequence"
+    sql`SELECT COALESCE(MAX(CAST(split_part(id, '-', 3) AS BIGINT)), 0) AS "maxSequence"
           FROM invoices
          WHERE id ~ ${`^INV-${year}-[0-9]+$`}`,
   );
-  const nextSequence = Number(rows[0]?.maxSequence ?? 0) + 1;
-  return `INV-${year}-${String(nextSequence).padStart(4, '0')}`;
+  const nextSequence = BigInt(rows[0]?.maxSequence ?? 0) + 1n;
+  return `INV-${year}-${formatSequenceSuffix(nextSequence)}`;
 };
 
 export const listAll = async (exec: DbExecutor = db): Promise<Invoice[]> => {

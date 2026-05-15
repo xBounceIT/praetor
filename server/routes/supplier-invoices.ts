@@ -6,7 +6,7 @@ import * as supplierOrdersRepo from '../repositories/supplierOrdersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { type DatabaseError, getUniqueViolation } from '../utils/db-errors.ts';
-import { generateItemId } from '../utils/order-ids.ts';
+import { formatSequenceSuffix, generateItemId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
@@ -202,8 +202,8 @@ const normalizeItems = (
 const generateSupplierInvoiceId = async (issueDate: string) => {
   const year = issueDate.split('-')[0];
   const maxSequence = await supplierInvoicesRepo.maxSequenceForYear(year);
-  const nextSequence = maxSequence + 1;
-  return `SINV-${year}-${String(nextSequence).padStart(4, '0')}`;
+  const nextSequence = maxSequence + 1n;
+  return `SINV-${year}-${formatSequenceSuffix(nextSequence)}`;
 };
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {

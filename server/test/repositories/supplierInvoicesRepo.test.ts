@@ -127,14 +127,19 @@ describe('findExisting', () => {
 });
 
 describe('maxSequenceForYear', () => {
-  test('parses string maxSequence to Number', async () => {
+  test('parses string maxSequence to BigInt', async () => {
     exec.enqueue({ rows: [{ maxSequence: '42' }] });
-    expect(await supplierInvoicesRepo.maxSequenceForYear('2026', testDb)).toBe(42);
+    expect(await supplierInvoicesRepo.maxSequenceForYear('2026', testDb)).toBe(42n);
   });
 
-  test('parses numeric maxSequence as-is', async () => {
+  test('parses numeric maxSequence as BigInt', async () => {
     exec.enqueue({ rows: [{ maxSequence: 7 }] });
-    expect(await supplierInvoicesRepo.maxSequenceForYear('2026', testDb)).toBe(7);
+    expect(await supplierInvoicesRepo.maxSequenceForYear('2026', testDb)).toBe(7n);
+  });
+
+  test('preserves sequence values beyond Number safe integer precision', async () => {
+    exec.enqueue({ rows: [{ maxSequence: '9007199254740993' }] });
+    expect(await supplierInvoicesRepo.maxSequenceForYear('2026', testDb)).toBe(9007199254740993n);
   });
 
   test('uses regex parameter for the year', async () => {
@@ -145,7 +150,7 @@ describe('maxSequenceForYear', () => {
 
   test('returns 0 when no rows or null maxSequence', async () => {
     exec.enqueue({ rows: [] });
-    expect(await supplierInvoicesRepo.maxSequenceForYear('2026', testDb)).toBe(0);
+    expect(await supplierInvoicesRepo.maxSequenceForYear('2026', testDb)).toBe(0n);
   });
 });
 
