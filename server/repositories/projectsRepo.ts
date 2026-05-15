@@ -144,7 +144,7 @@ export const listByIds = async (ids: string[], exec: DbExecutor = db): Promise<P
     exec,
     sql`SELECT ${projectSelectSql}
           FROM projects p
-         WHERE p.id = ANY(${ids})
+         WHERE p.id = ANY(${sql.param(ids)}::text[])
          ORDER BY p.name`,
   );
   return rows.map(mapRawRow);
@@ -170,7 +170,7 @@ export const listNamesByIds = async (
     sql`SELECT p.id, p.name, p.client_id, c.name AS client_name
           FROM projects p
           INNER JOIN clients c ON c.id = p.client_id
-         WHERE p.id = ANY(${ids})`,
+         WHERE p.id = ANY(${sql.param(ids)}::text[])`,
   );
   return new Map(
     rows.map((row) => [

@@ -106,18 +106,41 @@ describe('listForUser', () => {
 });
 
 describe('listByIds', () => {
-  test('returns mapped projects for the provided ids', async () => {
+  test('returns mapped projects and binds ids as one array parameter', async () => {
     exec.enqueue({ rows: [rawProjectRow] });
 
-    const result = await projectsRepo.listByIds(['p-1'], testDb);
+    const result = await projectsRepo.listByIds(['p-1', 'p-2'], testDb);
 
-    expect(exec.calls[0].sql).toContain('WHERE p.id = ANY');
-    expect(exec.calls[0].params).toContain('p-1');
+    expect(exec.calls[0].sql).toContain('WHERE p.id = ANY($1::text[])');
+    expect(exec.calls[0].params).toEqual([['p-1', 'p-2']]);
     expect(result[0]).toEqual(mappedRow);
   });
 
   test('returns empty array without querying for empty ids', async () => {
     expect(await projectsRepo.listByIds([], testDb)).toEqual([]);
+    expect(exec.calls).toHaveLength(0);
+  });
+});
+
+describe('listNamesByIds', () => {
+  test('returns project/client display names and binds ids as one array parameter', async () => {
+    exec.enqueue({
+      rows: [{ id: 'p-1', name: 'Alpha', client_id: 'c-1', client_name: 'Acme' }],
+    });
+
+    const result = await projectsRepo.listNamesByIds(['p-1', 'p-2'], testDb);
+
+    expect(exec.calls[0].sql).toContain('WHERE p.id = ANY($1::text[])');
+    expect(exec.calls[0].params).toEqual([['p-1', 'p-2']]);
+    expect(result.get('p-1')).toEqual({
+      projectName: 'Alpha',
+      clientId: 'c-1',
+      clientName: 'Acme',
+    });
+  });
+
+  test('returns empty map without querying for empty ids', async () => {
+    expect(await projectsRepo.listNamesByIds([], testDb)).toEqual(new Map());
     expect(exec.calls).toHaveLength(0);
   });
 });
