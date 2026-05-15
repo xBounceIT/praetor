@@ -435,6 +435,54 @@ describe('authenticate', () => {
     expect(result.matchedRoleIds).toEqual([]);
   });
 
+  test('maps AD groups from the configured group search base and filter', async () => {
+    const syncSecAdmins = 'CN=SyncSecAdmins,OU=Internal Groups,OU=Accounts,DC=syncsec,DC=coll';
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      baseDn: 'OU=Internal Accounts,OU=Accounts,DC=syncsec,DC=coll',
+      groupBaseDn: 'OU=Internal Groups,OU=Accounts,DC=syncsec,DC=coll',
+      groupFilter: '(member={0})',
+      roleMappings: [{ ldapGroup: syncSecAdmins, role: 'admin' }],
+    });
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: "CN=Daniel D'Angeli,OU=Internal Accounts,OU=Accounts,DC=syncsec,DC=coll",
+              object: {
+                sAMAccountName: 'daniel.dangeli',
+                cn: "Daniel D'Angeli",
+              },
+            },
+          ],
+          status: 0,
+        },
+        {
+          entries: [
+            {
+              objectName: syncSecAdmins,
+              object: { cn: 'SyncSecAdmins', distinguishedName: syncSecAdmins },
+            },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+
+    const result = await ldapService.authenticateWithProfile('daniel.dangeli', 'pw');
+
+    expect(result.authenticated).toBe(true);
+    expect(result.groups).toContain(syncSecAdmins);
+    expect(result.matchedRoleIds).toEqual(['admin']);
+    expect(lastClientStats?.searchCalls[1]?.base).toBe(
+      'OU=Internal Groups,OU=Accounts,DC=syncsec,DC=coll',
+    );
+    expect(String(lastClientStats?.searchCalls[1]?.options.filter)).toContain('(member=');
+  });
+
   test('rejects when the user-search stream emits an error (LDAP outage during search)', async () => {
     nextFixture = {
       bindResponses: [null],
@@ -473,7 +521,7 @@ describe('findUserDn (direct, with config preloaded)', () => {
     return createClientMock({ url: ENABLED_LDAP_CONFIG.serverUrl, tlsOptions: {} });
   };
 
-  test('requests canonical user attributes (uid, sAMAccountName, cn, displayName)', async () => {
+  test('requests canonical user attributes for username and display-name resolution', async () => {
     const client = buildClient({
       entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice' } }],
       status: 0,
@@ -656,6 +704,56 @@ describe('syncUsers', () => {
     expect(result).toEqual({ synced: 1, created: 0 });
   });
 
+  test('sync applies role mappings from the configured group search', async () => {
+    const syncSecAdmins = 'CN=SyncSecAdmins,OU=Internal Groups,OU=Accounts,DC=syncsec,DC=coll';
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      groupFilter: '(member={0})',
+      roleMappings: [{ ldapGroup: syncSecAdmins, role: 'admin' }],
+    });
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: "CN=Daniel D'Angeli,OU=Internal Accounts,OU=Accounts,DC=syncsec,DC=coll",
+              object: {
+                sAMAccountName: 'daniel.dangeli',
+                cn: "Daniel D'Angeli",
+              },
+            },
+          ],
+          status: 0,
+        },
+        {
+          entries: [
+            {
+              objectName: syncSecAdmins,
+              object: { cn: 'SyncSecAdmins', distinguishedName: syncSecAdmins },
+            },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue({
+      ...LDAP_LOGIN_USER,
+      username: 'daniel.dangeli',
+    });
+    applyExternalRolesForUserIfMatchedMock.mockResolvedValue({ applied: true, roleIds: ['admin'] });
+
+    const result = await ldapService.syncUsers();
+
+    expect(result).toEqual({ synced: 1, created: 0 });
+    expect(applyExternalRolesForUserIfMatchedMock).toHaveBeenCalledWith(
+      LDAP_LOGIN_USER.id,
+      expect.arrayContaining([syncSecAdmins]),
+      [{ externalGroup: syncSecAdmins, role: 'admin' }],
+    );
+  });
+
   test('autoProvisionAll=false: existing users update, new entries are NOT created', async () => {
     ldapRepoGetMock.mockResolvedValue({ ...ENABLED_LDAP_CONFIG, autoProvisionAll: false });
     nextFixture = {
@@ -835,6 +933,47 @@ describe('lookupUserGroups', () => {
       { dn: 'cn=admin,dc=test,dc=com', password: 'admin-pw' },
     ]);
     expect(lastClientStats?.unbindCalls).toBe(1);
+  });
+
+  test('returns groups from the configured group search', async () => {
+    const syncSecAdmins = 'CN=SyncSecAdmins,OU=Internal Groups,OU=Accounts,DC=syncsec,DC=coll';
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      groupFilter: '(member={0})',
+      roleMappings: [{ ldapGroup: syncSecAdmins, role: 'admin' }],
+    });
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: "CN=Daniel D'Angeli,OU=Internal Accounts,OU=Accounts,DC=syncsec,DC=coll",
+              object: { sAMAccountName: 'daniel.dangeli' },
+            },
+          ],
+          status: 0,
+        },
+        {
+          entries: [
+            {
+              objectName: syncSecAdmins,
+              object: { cn: 'SyncSecAdmins', distinguishedName: syncSecAdmins },
+            },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+
+    const result = await ldapService.lookupUserGroups('daniel.dangeli');
+
+    expect(result?.groups).toContain(syncSecAdmins);
+    expect(result?.roleMappings).toEqual([{ externalGroup: syncSecAdmins, role: 'admin' }]);
+    expect(lastClientStats?.bindCalls).toEqual([
+      { dn: 'cn=admin,dc=test,dc=com', password: 'admin-pw' },
+    ]);
   });
 
   test('returns null when group lookup throws; unbind still called', async () => {
