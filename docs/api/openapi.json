@@ -14011,6 +14011,7 @@
         "tags": [
           "ldap"
         ],
+        "description": "Tests credentials against the latest saved LDAP configuration, even when LDAP login is disabled.",
         "requestBody": {
           "required": true,
           "content": {
