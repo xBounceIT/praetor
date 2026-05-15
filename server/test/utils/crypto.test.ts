@@ -7,26 +7,34 @@ import {
   encrypt,
   getEncryptionKey,
   getHmacKey,
+  isEncrypted,
   MASKED_SECRET,
 } from '../../utils/crypto.ts';
 
 const ORIGINAL_KEY = process.env.ENCRYPTION_KEY;
 const ALGORITHM = 'aes-256-gcm';
-const IV_LENGTH = 16;
+const LEGACY_IV_LENGTH = 16;
+const V2_IV_LENGTH = 12;
+const SALT_LENGTH = 16;
+const AUTH_TAG_LENGTH = 16;
 
 const deriveLegacyEncryptionKey = (key: string): Buffer =>
   crypto.createHash('sha256').update(key).digest();
 
 const encryptWithAesGcmKey = (plaintext: string, key: Buffer): string => {
-  const iv = crypto.randomBytes(IV_LENGTH);
+  const iv = crypto.randomBytes(LEGACY_IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
   const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
   const authTag = cipher.getAuthTag();
   return `${iv.toString('base64')}:${authTag.toString('base64')}:${encrypted.toString('base64')}`;
 };
 
-const decryptWithAesGcmKey = (ciphertext: string, key: Buffer): string => {
-  const [ivB64, authTagB64, encryptedB64] = ciphertext.split(':');
+const decryptPayloadWithAesGcmKey = (
+  ivB64: string,
+  authTagB64: string,
+  encryptedB64: string,
+  key: Buffer,
+): string => {
   const decipher = crypto.createDecipheriv(ALGORITHM, key, Buffer.from(ivB64, 'base64'));
   decipher.setAuthTag(Buffer.from(authTagB64, 'base64'));
   return (
@@ -52,10 +60,10 @@ describe('encrypt', () => {
     expect(encrypt('')).toBe('');
   });
 
-  test('produces a three-part base64 string (iv:authTag:ciphertext)', () => {
+  test('produces a versioned base64 string', () => {
     const out = encrypt('hello');
     const parts = out.split(':');
-    expect(parts).toHaveLength(3);
+    expect(parts).toHaveLength(5);
     parts.forEach((p) => {
       expect(p.length).toBeGreaterThan(0);
     });
@@ -67,10 +75,22 @@ describe('encrypt', () => {
     expect(a).not.toBe(b);
   });
 
+  test('produces a versioned value with random salt and AES-GCM metadata', () => {
+    const out = encrypt('hello');
+    const parts = out.split(':');
+    expect(parts).toHaveLength(5);
+    expect(parts[0]).toBe('v2');
+    expect(Buffer.from(parts[1], 'base64')).toHaveLength(SALT_LENGTH);
+    expect(Buffer.from(parts[2], 'base64')).toHaveLength(V2_IV_LENGTH);
+    expect(Buffer.from(parts[3], 'base64')).toHaveLength(AUTH_TAG_LENGTH);
+    expect(parts[4].length).toBeGreaterThan(0);
+  });
+
   test('does not produce ciphertext decryptable with the legacy SHA-256-derived AES key', () => {
     const legacyKey = deriveLegacyEncryptionKey(process.env.ENCRYPTION_KEY ?? '');
     const ciphertext = encrypt('new secret');
-    expect(() => decryptWithAesGcmKey(ciphertext, legacyKey)).toThrow();
+    const [, , ivB64, authTagB64, encryptedB64] = ciphertext.split(':');
+    expect(() => decryptPayloadWithAesGcmKey(ivB64, authTagB64, encryptedB64, legacyKey)).toThrow();
   });
 });
 
@@ -148,6 +168,12 @@ describe('getEncryptionKey', () => {
     expect(key.length).toBe(32);
     expect(key.equals(legacyKey)).toBe(false);
   });
+
+  test('uses the salt as key-derivation input', () => {
+    const first = getEncryptionKey(Buffer.alloc(SALT_LENGTH, 1));
+    const second = getEncryptionKey(Buffer.alloc(SALT_LENGTH, 2));
+    expect(first.equals(second)).toBe(false);
+  });
 });
 
 describe('decrypt', () => {
@@ -187,11 +213,26 @@ describe('decrypt', () => {
 
   test('throws when a real ciphertext has a tampered auth tag', () => {
     const real = encrypt('a real secret');
-    const [iv, tag, data] = real.split(':');
+    const [version, salt, iv, tag, data] = real.split(':');
     const tagBytes = Buffer.from(tag, 'base64');
     tagBytes[0] ^= 0xff;
-    const tampered = `${iv}:${tagBytes.toString('base64')}:${data}`;
+    const tampered = `${version}:${salt}:${iv}:${tagBytes.toString('base64')}:${data}`;
     expect(() => decrypt(tampered)).toThrow();
+  });
+});
+
+describe('isEncrypted', () => {
+  test('recognizes new versioned ciphertext', () => {
+    expect(isEncrypted(encrypt('secret'))).toBe(true);
+  });
+
+  test('recognizes legacy three-part ciphertext', () => {
+    const legacyKey = deriveLegacyEncryptionKey(process.env.ENCRYPTION_KEY ?? '');
+    expect(isEncrypted(encryptWithAesGcmKey('legacy secret', legacyKey))).toBe(true);
+  });
+
+  test('does not treat colon-delimited plaintext as ciphertext', () => {
+    expect(isEncrypted('host:1234:secret')).toBe(false);
   });
 });
 

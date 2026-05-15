@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, integer, pgTable, timestamp, varchar } from 'drizzle-orm/pg-core';
+import { boolean, check, integer, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
 
 // Single-row config table - `id` is pinned to 1 by both the column default and a CHECK.
 //
@@ -16,7 +16,7 @@ export const emailConfig = pgTable(
     smtpEncryption: varchar('smtp_encryption', { length: 20 }).default('tls'),
     smtpRejectUnauthorized: boolean('smtp_reject_unauthorized').default(true),
     smtpUser: varchar('smtp_user', { length: 255 }).default(''),
-    smtpPassword: varchar('smtp_password', { length: 255 }).default(''),
+    smtpPassword: text('smtp_password').default(''),
     fromEmail: varchar('from_email', { length: 255 }).default(''),
     fromName: varchar('from_name', { length: 255 }).default('Praetor'),
     updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),

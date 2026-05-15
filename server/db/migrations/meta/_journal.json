@@ -316,6 +316,13 @@
       "when": 1778797333182,
       "tag": "0044_add_customer_offer_delivery_date",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1778847706254,
+      "tag": "0045_widen_email_smtp_password",
+      "breakpoints": true
     }
   ]
 }
