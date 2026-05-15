@@ -122,6 +122,20 @@ describe('computeInvoiceTotals', () => {
     });
   });
 
+  test('missing quantity, unit price, or discount defaults to 0 instead of NaN', () => {
+    expect(
+      computeInvoiceTotals([
+        { quantity: 2, unitPrice: 50 },
+        { unitPrice: 50, discount: 0 },
+        { quantity: 2, discount: 0 },
+      ]),
+    ).toEqual({
+      subtotal: 100,
+      taxTotal: 0,
+      total: 100,
+    });
+  });
+
   test('total equals subtotal + taxTotal exactly (rounding consistency)', () => {
     const result = computeInvoiceTotals([
       { quantity: 3, unitPrice: 33.33, discount: 0, taxRate: 22 },

@@ -1,7 +1,7 @@
 type ItemMath = {
-  quantity: number;
-  unitPrice: number;
-  discount: number;
+  quantity?: number;
+  unitPrice?: number;
+  discount?: number;
   // Per-item Italian VAT (IVA) rate in percent. Optional so pre-tax-feature data still computes.
   taxRate?: number;
 };
@@ -34,8 +34,11 @@ export const computeInvoiceTotals = (
   let subtotalRaw = 0;
   let taxTotalRaw = 0;
   for (const item of items) {
-    const discountFactor = 1 - item.discount / 100;
-    const taxableAmount = item.quantity * item.unitPrice * discountFactor;
+    const quantity = item.quantity ?? 0;
+    const unitPrice = item.unitPrice ?? 0;
+    const discount = item.discount ?? 0;
+    const discountFactor = 1 - discount / 100;
+    const taxableAmount = quantity * unitPrice * discountFactor;
     const taxRate = item.taxRate ?? 0;
     subtotalRaw += taxableAmount;
     taxTotalRaw += (taxableAmount * taxRate) / 100;
