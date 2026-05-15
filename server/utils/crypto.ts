@@ -100,16 +100,16 @@ export const __resetHmacKeyCacheForTests = () => {
 export function isEncrypted(value: string): boolean {
   const parts = value.split(':');
   if (parts.length === 3) {
-    const [ivB64, authTagB64, encryptedB64] = parts;
-    if (!ivB64 || !authTagB64 || !encryptedB64) return false;
+    const [ivB64, authTagB64] = parts;
+    if (!ivB64 || !authTagB64) return false;
     return (
       Buffer.from(ivB64, 'base64').length === LEGACY_IV_LENGTH &&
       Buffer.from(authTagB64, 'base64').length === AUTH_TAG_LENGTH
     );
   }
   if (parts.length !== 5 || parts[0] !== ENCRYPTION_FORMAT_VERSION) return false;
-  const [, saltB64, ivB64, authTagB64, encryptedB64] = parts;
-  if (!saltB64 || !ivB64 || !authTagB64 || !encryptedB64) return false;
+  const [, saltB64, ivB64, authTagB64] = parts;
+  if (!saltB64 || !ivB64 || !authTagB64) return false;
   return (
     Buffer.from(saltB64, 'base64').length === SALT_LENGTH &&
     Buffer.from(ivB64, 'base64').length === IV_LENGTH &&
@@ -118,7 +118,6 @@ export function isEncrypted(value: string): boolean {
 }
 
 export function encrypt(plaintext: string): string {
-  if (!plaintext) return '';
   const salt = crypto.randomBytes(SALT_LENGTH);
   const key = deriveEncryptionKey(salt);
   const iv = crypto.randomBytes(IV_LENGTH);
@@ -145,7 +144,7 @@ const parseEncryptedPayload = (ciphertext: string): EncryptedPayload => {
   const parts = ciphertext.split(':');
   if (parts.length === 5 && parts[0] === ENCRYPTION_FORMAT_VERSION) {
     const [, saltB64, ivB64, authTagB64, encryptedB64] = parts;
-    if (!saltB64 || !ivB64 || !authTagB64 || !encryptedB64) {
+    if (!saltB64 || !ivB64 || !authTagB64) {
       throw new Error('Invalid encrypted value format');
     }
     return {
@@ -159,7 +158,7 @@ const parseEncryptedPayload = (ciphertext: string): EncryptedPayload => {
     throw new Error('Invalid encrypted value format');
   }
   const [ivB64, authTagB64, encryptedB64] = parts;
-  if (!ivB64 || !authTagB64 || !encryptedB64) {
+  if (!ivB64 || !authTagB64) {
     throw new Error('Invalid encrypted value format');
   }
   return {
@@ -177,7 +176,6 @@ const decryptWithKey = (payload: EncryptedPayload, key: Buffer): string => {
 };
 
 export function decrypt(ciphertext: string): string {
-  if (!ciphertext) return '';
   const payload = parseEncryptedPayload(ciphertext);
   if (payload.salt) {
     return decryptWithKey(payload, getEncryptionKey(payload.salt));

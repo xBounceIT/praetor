@@ -60,6 +60,19 @@ describe('computeInvoiceTotals', () => {
     });
   });
 
+  test('rounds floating-point half-cent boundaries up', () => {
+    expect(computeInvoiceTotals([{ quantity: 1, unitPrice: 1.005, discount: 0 }])).toEqual({
+      subtotal: 1.01,
+      taxTotal: 0,
+      total: 1.01,
+    });
+    expect(computeInvoiceTotals([{ quantity: 1, unitPrice: 1.015, discount: 0 }])).toEqual({
+      subtotal: 1.02,
+      taxTotal: 0,
+      total: 1.02,
+    });
+  });
+
   test('matches frontend formula: quantity * unitPrice * (1 - discount/100)', () => {
     // 7 * 13.50 * 0.85 = 80.325 → rounded to 80.33
     expect(computeInvoiceTotals([{ quantity: 7, unitPrice: 13.5, discount: 15 }])).toEqual({
@@ -109,6 +122,20 @@ describe('computeInvoiceTotals', () => {
     });
   });
 
+  test('missing quantity, unit price, or discount defaults to 0 instead of NaN', () => {
+    expect(
+      computeInvoiceTotals([
+        { quantity: 2, unitPrice: 50 },
+        { unitPrice: 50, discount: 0 },
+        { quantity: 2, discount: 0 },
+      ]),
+    ).toEqual({
+      subtotal: 100,
+      taxTotal: 0,
+      total: 100,
+    });
+  });
+
   test('total equals subtotal + taxTotal exactly (rounding consistency)', () => {
     const result = computeInvoiceTotals([
       { quantity: 3, unitPrice: 33.33, discount: 0, taxRate: 22 },
@@ -124,5 +151,16 @@ describe('roundCurrency', () => {
 
   test('rounds halves up', () => {
     expect(roundCurrency(0.005)).toBe(0.01);
+  });
+
+  test('rounds floating-point half-cent boundaries up', () => {
+    expect(roundCurrency(1.005)).toBe(1.01);
+    expect(roundCurrency(1.015)).toBe(1.02);
+    expect(roundCurrency(10.075)).toBe(10.08);
+  });
+
+  test('does not return negative zero for sub-cent negative values', () => {
+    expect(Object.is(roundCurrency(-0.001), -0)).toBe(false);
+    expect(roundCurrency(-0.001)).toBe(0);
   });
 });

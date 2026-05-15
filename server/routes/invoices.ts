@@ -143,7 +143,7 @@ const invoiceUpdateBodySchema = {
     dueDate: { type: 'string', format: 'date' },
     status: { type: 'string' },
     amountPaid: { type: 'number' },
-    notes: { type: 'string' },
+    notes: { type: ['string', 'null'] },
     items: { type: 'array', items: invoiceItemBodySchema },
   },
 } as const;

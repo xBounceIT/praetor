@@ -57,8 +57,11 @@ afterAll(() => {
 });
 
 describe('encrypt', () => {
-  test('returns empty string for empty input', () => {
-    expect(encrypt('')).toBe('');
+  test('encrypts empty plaintext as a real ciphertext envelope', () => {
+    const out = encrypt('');
+    expect(out).not.toBe('');
+    expect(isEncrypted(out)).toBe(true);
+    expect(decrypt(out)).toBe('');
   });
 
   test('produces a versioned base64 string', () => {
@@ -194,8 +197,8 @@ describe('getEncryptionKey', () => {
 });
 
 describe('decrypt', () => {
-  test('returns empty string for empty input', () => {
-    expect(decrypt('')).toBe('');
+  test('throws for empty ciphertext input', () => {
+    expect(() => decrypt('')).toThrow(/Invalid encrypted value format/);
   });
 
   test('round-trips ASCII plaintext', () => {

@@ -670,6 +670,38 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
     expect(res.statusCode).toBe(200);
     expect(ovInsertMock).not.toHaveBeenCalled();
     expect(coFindFullForSnapshotMock).not.toHaveBeenCalled();
+    expect(coUpdateMock).toHaveBeenCalledWith('o-1', { status: 'confirmed' }, TX_SENTINEL);
+  });
+
+  test('PUT with explicit null notes clears notes and snapshots the previous value', async () => {
+    coFindExistingMock.mockResolvedValue({
+      id: 'o-1',
+      linkedQuoteId: null,
+      linkedOfferId: null,
+      clientId: 'c1',
+      clientName: 'Client',
+      paymentTerms: 'immediate',
+      discount: 0,
+      discountType: 'percentage' as const,
+      status: 'draft',
+      notes: 'old note',
+    });
+    coFindFullForSnapshotMock.mockResolvedValue({
+      order: { ...SAMPLE_ORDER, notes: 'old note' },
+      items: [SAMPLE_ITEM],
+    });
+    coUpdateMock.mockResolvedValue({ ...SAMPLE_ORDER, notes: null });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: { notes: null },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(ovInsertMock).toHaveBeenCalled();
+    expect(coUpdateMock).toHaveBeenCalledWith('o-1', { notes: null }, TX_SENTINEL);
   });
 
   test('PUT on source-linked order does NOT snapshot (status-only edit)', async () => {

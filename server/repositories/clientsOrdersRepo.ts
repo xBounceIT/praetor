@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
-import { type DbExecutor, db } from '../db/drizzle.ts';
+import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { customerOffers } from '../db/schema/customerOffers.ts';
 import { saleItems, sales } from '../db/schema/sales.ts';
 import { supplierSaleItems, supplierSales } from '../db/schema/supplierSales.ts';
@@ -277,16 +277,32 @@ export const create = async (
 };
 
 export type ClientOrderUpdate = {
-  id?: string | null;
+  id?: string;
   linkedOfferId?: string | null;
   linkedQuoteId?: string | null;
-  clientId?: string | null;
-  clientName?: string | null;
-  paymentTerms?: string | null;
-  discount?: number | null;
-  discountType?: 'percentage' | 'currency' | null;
-  status?: string | null;
+  clientId?: string;
+  clientName?: string;
+  paymentTerms?: string;
+  discount?: number;
+  discountType?: 'percentage' | 'currency';
+  status?: string;
   notes?: string | null;
+};
+
+const orderUpdateValues = (patch: ClientOrderUpdate) => {
+  const set: Record<string, unknown> = {};
+  if (patch.id !== undefined) set.id = patch.id;
+  if (patch.linkedOfferId !== undefined) set.linkedOfferId = patch.linkedOfferId;
+  if (patch.linkedQuoteId !== undefined) set.linkedQuoteId = patch.linkedQuoteId;
+  if (patch.clientId !== undefined) set.clientId = patch.clientId;
+  if (patch.clientName !== undefined) set.clientName = patch.clientName;
+  if (patch.paymentTerms !== undefined) set.paymentTerms = patch.paymentTerms;
+  if (patch.discount !== undefined) set.discount = numericForDb(patch.discount);
+  if (patch.discountType !== undefined) set.discountType = patch.discountType;
+  if (patch.status !== undefined) set.status = patch.status;
+  if (patch.notes !== undefined) set.notes = patch.notes;
+  set.updatedAt = sql`CURRENT_TIMESTAMP`;
+  return set;
 };
 
 export const update = async (
@@ -296,19 +312,7 @@ export const update = async (
 ): Promise<ClientOrder | null> => {
   const rows = await exec
     .update(sales)
-    .set({
-      id: sql`COALESCE(${patch.id ?? null}, ${sales.id})`,
-      linkedOfferId: sql`COALESCE(${patch.linkedOfferId ?? null}, ${sales.linkedOfferId})`,
-      linkedQuoteId: sql`COALESCE(${patch.linkedQuoteId ?? null}, ${sales.linkedQuoteId})`,
-      clientId: sql`COALESCE(${patch.clientId ?? null}, ${sales.clientId})`,
-      clientName: sql`COALESCE(${patch.clientName ?? null}, ${sales.clientName})`,
-      paymentTerms: sql`COALESCE(${patch.paymentTerms ?? null}, ${sales.paymentTerms})`,
-      discount: sql`COALESCE(${numericForDb(patch.discount) ?? null}::numeric, ${sales.discount})`,
-      discountType: sql`COALESCE(${patch.discountType ?? null}, ${sales.discountType})`,
-      status: sql`COALESCE(${patch.status ?? null}, ${sales.status})`,
-      notes: sql`COALESCE(${patch.notes ?? null}, ${sales.notes})`,
-      updatedAt: sql`CURRENT_TIMESTAMP`,
-    })
+    .set(orderUpdateValues(patch))
     .where(eq(sales.id, id))
     .returning();
   return rows[0] ? mapOrder(rows[0]) : null;
@@ -418,10 +422,11 @@ export const replaceItems = async (
   orderId: string,
   items: NewClientOrderItem[],
   exec: DbExecutor = db,
-): Promise<ClientOrderItem[]> => {
-  await exec.delete(saleItems).where(eq(saleItems.saleId, orderId));
-  return insertItems(orderId, items, exec);
-};
+): Promise<ClientOrderItem[]> =>
+  runAtomically(exec, async (tx) => {
+    await tx.delete(saleItems).where(eq(saleItems.saleId, orderId));
+    return insertItems(orderId, items, tx);
+  });
 
 export const deleteById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
   const result = await exec.delete(sales).where(eq(sales.id, id));
