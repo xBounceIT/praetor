@@ -2079,7 +2079,15 @@ const AppContent: React.FC = () => {
     }
   }, []);
 
-  // Determine available users for the dropdown based on permissions
+  // `users` comes from GET /api/users, which is already scoped server-side to
+  // what the caller is allowed to see (self, managed work-unit members,
+  // visible internal/external employees, or all users for admins). The server
+  // also re-validates every downstream action (view/create/update/delete of
+  // entries, assignments, tracker catalogs), so we trust the scoped list here
+  // rather than re-filtering by `currentUser.permissions` — a client-side
+  // filter cannot tell which users the caller manages and would regress
+  // managers who don't have `_all` permissions. Fall back to [currentUser]
+  // when /api/users wasn't loaded.
   const availableUsers = useMemo(() => {
     if (!currentUser) return [];
     if (users.length > 0) return users;
