@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { compareEntriesPosition, decodeEntriesCursor } from '../services/api/entries';
+import { decodeEntriesCursor } from '../services/api/entries';
 import type { TimeEntry } from '../types';
 
 /**
@@ -30,11 +30,11 @@ const mergeById = (
   const isWithinPageWindow = (entry: TimeEntry): boolean => {
     if (!newestInPage || !oldestInPage) return false;
     if (upperBound) {
-      if (compareEntriesPosition(entry, upperBound) >= 0) return false;
-    } else if (compareEntriesPosition(entry, newestInPage) > 0) {
+      if (entry.createdAt >= upperBound.createdAt) return false;
+    } else if (entry.createdAt >= newestInPage.createdAt) {
       return false;
     }
-    if (hasMorePages && compareEntriesPosition(entry, oldestInPage) < 0) return false;
+    if (hasMorePages && entry.createdAt <= oldestInPage.createdAt) return false;
     return true;
   };
   const seen = new Set<string>();
@@ -200,5 +200,32 @@ describe('App.tsx timesheets mergeById', () => {
     const merged = mergeById([a, b], [], null, null);
 
     expect(merged.map((e) => e.id)).toEqual(['a', 'b']);
+  });
+
+  test('keeps prev entries that share their ms with the cursor (µs is ambiguous)', () => {
+    // pg-node truncates entry.createdAt to ms; the cursor preserves µs.
+    // When an entry shares its ms with the cursor, the µs ordering on the
+    // server side is unrecoverable on the client, so the merge must NOT
+    // drop the entry even if it's missing from the page response.
+    const ambiguous = makeEntry('A', 200); // ms === cursor's ms, id < cursor.id
+    const cursorRow = makeEntry('B', 200);
+    const older = makeEntry('c', 100);
+
+    const merged = mergeById([ambiguous], [older], encodeCursorFor(cursorRow), null);
+
+    expect(merged.map((e) => e.id)).toEqual(['A', 'c']);
+  });
+
+  test('keeps prev entries at the same ms as the first page boundary', () => {
+    // Same µs ambiguity at the first-page newest-row boundary, where the
+    // strict id-tiebreaker would mis-classify a row with id < newest's id.
+    const ambiguous = makeEntry('A', 30); // ms === newestInPage's ms, id < newestInPage.id
+    const b = makeEntry('b', 30);
+    const c = makeEntry('c', 20);
+
+    const merged = mergeById([ambiguous, c], [b, c], null, null);
+
+    // prev order preserved for kept rows; new page rows append at the end.
+    expect(merged.map((e) => e.id)).toEqual(['A', 'c', 'b']);
   });
 });

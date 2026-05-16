@@ -9,16 +9,6 @@ export type EntriesPage = {
 
 export type EntriesCursorPosition = { createdAt: number; id: string };
 
-// Lexicographic compare matching the server's `(created_at, id) DESC` cursor
-// ordering. Negative when `a` is older, positive when `a` is newer.
-export const compareEntriesPosition = (
-  a: EntriesCursorPosition,
-  b: EntriesCursorPosition,
-): number => {
-  if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-};
-
 // Mirror of server/repositories/entriesRepo.ts:encodeCursor. The server emits
 // base64url(JSON({createdAt: µs-text, id})); we only need ms-precision here
 // for "is this entry inside the page's coverage window" comparisons (the id

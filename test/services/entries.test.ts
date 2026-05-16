@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { compareEntriesPosition, decodeEntriesCursor } from '../../services/api/entries';
+import { decodeEntriesCursor } from '../../services/api/entries';
 
 const toBase64Url = (json: string) =>
   btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -46,20 +46,5 @@ describe('decodeEntriesCursor', () => {
   test('returns null for an unparseable createdAt', () => {
     const raw = toBase64Url(JSON.stringify({ createdAt: 'not-a-timestamp', id: 'a' }));
     expect(decodeEntriesCursor(raw)).toBeNull();
-  });
-});
-
-describe('compareEntriesPosition', () => {
-  test('orders by createdAt first, then by id lexicographically', () => {
-    expect(
-      compareEntriesPosition({ createdAt: 1, id: 'a' }, { createdAt: 2, id: 'a' }),
-    ).toBeLessThan(0);
-    expect(
-      compareEntriesPosition({ createdAt: 2, id: 'a' }, { createdAt: 1, id: 'a' }),
-    ).toBeGreaterThan(0);
-    expect(
-      compareEntriesPosition({ createdAt: 1, id: 'a' }, { createdAt: 1, id: 'b' }),
-    ).toBeLessThan(0);
-    expect(compareEntriesPosition({ createdAt: 1, id: 'a' }, { createdAt: 1, id: 'a' })).toBe(0);
   });
 });

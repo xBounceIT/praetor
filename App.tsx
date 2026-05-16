@@ -64,7 +64,7 @@ import { makeUserHandlers } from './hooks/handlers/userHandlers';
 import { useAuth } from './hooks/useAuth';
 import { listRequest, useModuleLoader } from './hooks/useModuleLoader';
 import api, { type McpTokenScope, type PersonalAccessToken, type Settings } from './services/api';
-import { compareEntriesPosition, decodeEntriesCursor } from './services/api/entries';
+import { decodeEntriesCursor } from './services/api/entries';
 import type {
   Client,
   ClientOffer,
@@ -1490,6 +1490,18 @@ const AppContent: React.FC = () => {
             //   lower: the page's oldest entry inclusive when more pages
             //          follow; -Infinity on the last page (page covered
             //          everything older).
+            //
+            // Comparisons use ms-precision only. pg-node truncates each
+            // entry's `createdAt` to a JS Date (ms), but cursors and the
+            // server-side row ordering use the column's µs precision. When
+            // an entry's ms matches a window-boundary's ms, the µs ordering
+            // is unrecoverable on the client — treat the entry as OUTSIDE
+            // the window (keep it in prev) rather than rely on an id
+            // tiebreaker that may disagree with the server at sub-ms
+            // resolution. Trade: a deletion sitting exactly at a sub-ms
+            // boundary waits until the next full reload, but we never
+            // wrongly drop a row that the server placed on the other side
+            // of the cursor.
             const mergeById = (
               prev: TimeEntry[],
               pageEntries: TimeEntry[],
@@ -1504,11 +1516,11 @@ const AppContent: React.FC = () => {
               const isWithinPageWindow = (entry: TimeEntry): boolean => {
                 if (!newestInPage || !oldestInPage) return false;
                 if (upperBound) {
-                  if (compareEntriesPosition(entry, upperBound) >= 0) return false;
-                } else if (compareEntriesPosition(entry, newestInPage) > 0) {
+                  if (entry.createdAt >= upperBound.createdAt) return false;
+                } else if (entry.createdAt >= newestInPage.createdAt) {
                   return false;
                 }
-                if (hasMorePages && compareEntriesPosition(entry, oldestInPage) < 0) return false;
+                if (hasMorePages && entry.createdAt <= oldestInPage.createdAt) return false;
                 return true;
               };
               const seen = new Set<string>();
