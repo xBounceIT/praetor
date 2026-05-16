@@ -401,7 +401,12 @@ export const updateTimeEntry = async (
   });
 
   if (updated === null) {
-    return fail(409, 'Entry has changed since it was loaded; reload and retry');
+    // Repo returns null for both "row deleted" and "version mismatch" — disambiguate
+    // so a concurrent delete surfaces as 404 instead of being masked as 409 (#625).
+    const stillExists = (await entriesRepo.findOwner(entryId)) !== null;
+    return stillExists
+      ? fail(409, 'Entry has changed since it was loaded; reload and retry')
+      : fail(404, 'Entry not found');
   }
   return updated;
 };
