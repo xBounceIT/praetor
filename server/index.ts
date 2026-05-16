@@ -3,6 +3,7 @@ import { ensureBootstrapAdmin } from './db/bootstrapAdmin.ts';
 import { runDemoSeedRefresh } from './db/demoSeed.ts';
 import { query } from './db/index.ts';
 import { prepareDatabaseForStartup } from './db/startup.ts';
+import { performShutdown } from './shutdown.ts';
 import { createChildLogger, serializeError } from './utils/logger.ts';
 import {
   INSECURE_DEFAULT_ENCRYPTION_KEYS,
@@ -34,14 +35,8 @@ const assertSecureRuntimeConfig = () => {
 };
 
 const shutdown = async (signal: string) => {
-  try {
-    logger.info({ signal }, 'Shutting down');
-    await fastify.close();
-  } catch (err) {
-    logger.error({ signal, err: serializeError(err) }, 'Shutdown error');
-  } finally {
-    process.exit(0);
-  }
+  const code = await performShutdown(fastify, signal, logger);
+  process.exit(code);
 };
 
 process.on('SIGINT', () => void shutdown('SIGINT'));
