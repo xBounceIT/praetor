@@ -211,7 +211,7 @@ class LDAPService {
 
     if (!tlsOptions.rejectUnauthorized) {
       // Audit signal so an env var leaked from a dev machine into staging/prod is not silent.
-      createChildLogger({ module: 'ldap' }).warn(
+      logger.warn(
         'LDAP_REJECT_UNAUTHORIZED=false: TLS certificate validation disabled — credentials are vulnerable to MITM',
       );
     }
