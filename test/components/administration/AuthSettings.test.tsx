@@ -236,6 +236,50 @@ describe('<AuthSettings />', () => {
     expect(acsField.value).toBe('https://api.example.com/api/auth/sso/saml/okta/callback');
   });
 
+  test('retries the ACS URL fetch on SAML re-entry after a transient error (#649 review)', async () => {
+    ssoApiMock.getSamlAcsUrlInfo.mockClear();
+    // First attempt fails (transient 503), second attempt succeeds. Without retry-on-reentry,
+    // a one-off failure would permanently disable the preview until a full page reload.
+    ssoApiMock.getSamlAcsUrlInfo.mockImplementationOnce(async () => {
+      throw new Error('temporary network failure');
+    });
+
+    renderAuthSettings();
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+    await waitFor(() => expect(ssoApiMock.getSamlAcsUrlInfo).toHaveBeenCalledTimes(1));
+
+    // Wait for the error UI so we know the first attempt resolved into the 'error' state.
+    const form = screen.getByText('admin.sso.newProvider').closest('form') as HTMLFormElement;
+    const slugLabel = [...form.querySelectorAll('label')].find(
+      (el) => el.textContent === 'admin.sso.slug',
+    );
+    const slugInput = slugLabel?.parentElement?.querySelector('input') as HTMLInputElement;
+    fireEvent.change(slugInput, { target: { value: 'okta' } });
+    await waitFor(() => {
+      if (!within(form).queryByText(/temporary network failure/)) {
+        throw new Error('Error not yet rendered');
+      }
+    });
+
+    // Leave SAML and return — the retry should fire.
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.ldap' }));
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+
+    await waitFor(() => expect(ssoApiMock.getSamlAcsUrlInfo).toHaveBeenCalledTimes(2));
+
+    const acsField = await waitFor(() => {
+      const refreshedForm = screen.getByText('admin.sso.newProvider').closest('form');
+      const label = [...(refreshedForm?.querySelectorAll('label') ?? [])].find(
+        (el) => el.textContent === 'admin.sso.acsUrl',
+      );
+      const input = label?.parentElement?.querySelector('input') as HTMLInputElement | null;
+      if (!input?.readOnly) throw new Error('ACS URL field not yet rendered');
+      return input;
+    });
+    expect(acsField.value).toBe('https://api.example.com/api/auth/sso/saml/okta/callback');
+  });
+
   test('shows an error message when the backend cannot resolve the ACS URL (issue #602)', async () => {
     ssoApiMock.getSamlAcsUrlInfo.mockClear();
     ssoApiMock.getSamlAcsUrlInfo.mockImplementationOnce(async () => {

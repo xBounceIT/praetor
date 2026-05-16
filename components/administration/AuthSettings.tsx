@@ -128,6 +128,14 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     setLdapForm(config || DEFAULT_LDAP_CONFIG);
   }, [config]);
 
+  // Re-entering the SAML tab after a transient failure resets the state to 'loading' so the
+  // fetch effect below retries. Without this, a one-off 503/network error would permanently
+  // disable the preview until a full page reload.
+  useEffect(() => {
+    if (activeTab !== 'saml') return;
+    setAcsUrlState((prev) => (prev.status === 'error' ? { status: 'loading' } : prev));
+  }, [activeTab]);
+
   // Status-gated rather than ref-gated: if the user leaves the SAML tab mid-flight, the
   // cleanup discards the result and the state stays 'loading', so re-entering the tab kicks
   // off a fresh fetch. A ref locked before the fetch settled would strand the preview in
