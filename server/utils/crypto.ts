@@ -140,6 +140,34 @@ type EncryptedPayload = {
   encrypted: Buffer;
 };
 
+const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+
+const decodeBase64Segment = (value: string, allowEmpty = false): Buffer => {
+  if (value === '') {
+    if (allowEmpty) return Buffer.alloc(0);
+    throw new Error('Invalid encrypted value format');
+  }
+  if (!BASE64_PATTERN.test(value)) {
+    throw new Error('Invalid encrypted value format');
+  }
+  const decoded = Buffer.from(value, 'base64');
+  if (decoded.toString('base64') !== value) {
+    throw new Error('Invalid encrypted value format');
+  }
+  return decoded;
+};
+
+const assertEncryptedPayloadLengths = (payload: EncryptedPayload): void => {
+  const expectedIvLength = payload.salt === null ? LEGACY_IV_LENGTH : IV_LENGTH;
+  if (
+    (payload.salt !== null && payload.salt.length !== SALT_LENGTH) ||
+    payload.iv.length !== expectedIvLength ||
+    payload.authTag.length !== AUTH_TAG_LENGTH
+  ) {
+    throw new Error('Invalid encrypted value format');
+  }
+};
+
 const parseEncryptedPayload = (ciphertext: string): EncryptedPayload => {
   const parts = ciphertext.split(':');
   if (parts.length === 5 && parts[0] === ENCRYPTION_FORMAT_VERSION) {
@@ -147,12 +175,14 @@ const parseEncryptedPayload = (ciphertext: string): EncryptedPayload => {
     if (!saltB64 || !ivB64 || !authTagB64) {
       throw new Error('Invalid encrypted value format');
     }
-    return {
-      salt: Buffer.from(saltB64, 'base64'),
-      iv: Buffer.from(ivB64, 'base64'),
-      authTag: Buffer.from(authTagB64, 'base64'),
-      encrypted: Buffer.from(encryptedB64, 'base64'),
+    const payload = {
+      salt: decodeBase64Segment(saltB64),
+      iv: decodeBase64Segment(ivB64),
+      authTag: decodeBase64Segment(authTagB64),
+      encrypted: decodeBase64Segment(encryptedB64, true),
     };
+    assertEncryptedPayloadLengths(payload);
+    return payload;
   }
   if (parts.length !== 3) {
     throw new Error('Invalid encrypted value format');
@@ -161,12 +191,14 @@ const parseEncryptedPayload = (ciphertext: string): EncryptedPayload => {
   if (!ivB64 || !authTagB64) {
     throw new Error('Invalid encrypted value format');
   }
-  return {
+  const payload = {
     salt: null,
-    iv: Buffer.from(ivB64, 'base64'),
-    authTag: Buffer.from(authTagB64, 'base64'),
-    encrypted: Buffer.from(encryptedB64, 'base64'),
+    iv: decodeBase64Segment(ivB64),
+    authTag: decodeBase64Segment(authTagB64),
+    encrypted: decodeBase64Segment(encryptedB64, true),
   };
+  assertEncryptedPayloadLengths(payload);
+  return payload;
 };
 
 const decryptWithKey = (payload: EncryptedPayload, key: Buffer): string => {
