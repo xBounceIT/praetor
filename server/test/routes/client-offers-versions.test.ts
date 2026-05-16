@@ -405,6 +405,8 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
     expect(res.statusCode).toBe(404);
     expect(coRestoreSnapshotOfferMock).not.toHaveBeenCalled();
     expect(ovInsertMock).not.toHaveBeenCalled();
+    expect(coFindLinkedSaleIdMock).not.toHaveBeenCalled();
+    expect(ovFindByIdMock).not.toHaveBeenCalled();
   });
 
   test('409 when offer is not draft', async () => {
@@ -424,6 +426,8 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
 
     expect(res.statusCode).toBe(409);
     expect(coRestoreSnapshotOfferMock).not.toHaveBeenCalled();
+    expect(coFindLinkedSaleIdMock).not.toHaveBeenCalled();
+    expect(ovFindByIdMock).not.toHaveBeenCalled();
   });
 
   test('409 when any linked sale exists (draft or otherwise)', async () => {
@@ -445,6 +449,7 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
     expect(res.statusCode).toBe(409);
     expect(coRestoreSnapshotOfferMock).not.toHaveBeenCalled();
     expect(ovInsertMock).not.toHaveBeenCalled();
+    expect(ovFindByIdMock).not.toHaveBeenCalled();
   });
 
   test('409 when snapshot client no longer exists', async () => {
@@ -623,6 +628,7 @@ describe('POST /api/sales/client-offers/:id/revert-to-draft', () => {
     expect(res.statusCode).toBe(409);
     expect(coUpdateMock).not.toHaveBeenCalled();
     expect(ovInsertMock).not.toHaveBeenCalled();
+    expect(coFindLinkedSaleIdMock).not.toHaveBeenCalled();
   });
 
   test('409 when accepted offer already has a linked sale order', async () => {

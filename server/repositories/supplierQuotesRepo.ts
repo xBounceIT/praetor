@@ -127,11 +127,13 @@ export const findFullForSnapshot = async (
   id: string,
   exec: DbExecutor = db,
 ): Promise<{ quote: SupplierQuote; items: SupplierQuoteItem[] } | null> => {
-  const [quoteRows, items] = await Promise.all([
-    exec.select().from(supplierQuotes).where(eq(supplierQuotes.id, id)).limit(1),
-    findItemsForQuote(id, exec),
-  ]);
+  const quoteRows = await exec
+    .select()
+    .from(supplierQuotes)
+    .where(eq(supplierQuotes.id, id))
+    .limit(1);
   if (quoteRows.length === 0) return null;
+  const items = await findItemsForQuote(id, exec);
   return { quote: mapQuote(quoteRows[0]), items };
 };
 

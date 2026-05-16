@@ -681,13 +681,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             // terms on the auto-created order.
             const lockedStatus = await supplierQuotesRepo.lockStatusById(sqId, tx);
             if (!lockedStatus || lockedStatus.status !== 'accepted') return false;
-            const [linkedUnderLock, supplierQuote, supplierItems] = await Promise.all([
-              supplierQuotesRepo.findLinkedOrderId(sqId, tx),
-              supplierQuotesRepo.findById(sqId, tx),
-              supplierQuotesRepo.findItemsForQuote(sqId, tx),
-            ]);
+            const linkedUnderLock = await supplierQuotesRepo.findLinkedOrderId(sqId, tx);
             if (linkedUnderLock) return false;
+            const supplierQuote = await supplierQuotesRepo.findById(sqId, tx);
             if (!supplierQuote) return false;
+            const supplierItems = await supplierQuotesRepo.findItemsForQuote(sqId, tx);
 
             const supplierOrderId = await generateSupplierOrderId(tx);
             await clientsOrdersRepo.createSupplierOrder(

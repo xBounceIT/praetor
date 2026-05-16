@@ -316,17 +316,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 tx,
               );
 
-              await Promise.all([
-                userAssignmentsRepo.assignClientToUser(
-                  request.user.id,
-                  clientIdResult.value,
-                  undefined,
-                  tx,
-                ),
-                userAssignmentsRepo.assignProjectToUser(request.user.id, id, undefined, tx),
-                userAssignmentsRepo.assignClientToTopManagers(clientIdResult.value, tx),
-                userAssignmentsRepo.assignProjectToTopManagers(id, tx),
-              ]);
+              await userAssignmentsRepo.assignClientToUser(
+                request.user.id,
+                clientIdResult.value,
+                undefined,
+                tx,
+              );
+              await userAssignmentsRepo.assignProjectToUser(request.user.id, id, undefined, tx);
+              await userAssignmentsRepo.assignClientToTopManagers(clientIdResult.value, tx);
+              await userAssignmentsRepo.assignProjectToTopManagers(id, tx);
 
               return project;
             });
@@ -605,7 +603,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           // otherwise the existing column value. We only need the existing values when the
           // client is also changing (an unchanged client means the existing link was already
           // valid). Cross-checking both is otherwise the same lookup that previously ran
-          // only against patch values — running both in parallel pipelines on one connection.
+          // only against patch values; keep the reads serialized on this transaction
+          // connection.
           const orderIdPatch = orderId === undefined ? undefined : orderId || null;
           const orderPatchPresent = orderIdPatch !== undefined;
           const existingLinks =
@@ -617,10 +616,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             ? offerIdPatch.value
             : (existingLinks?.offerId ?? null);
 
-          const [orderClientId, offerClientId] = await Promise.all([
-            finalOrderId ? clientsOrdersRepo.findClientIdById(finalOrderId, tx) : null,
-            finalOfferId ? clientOffersRepo.findClientIdById(finalOfferId, tx) : null,
-          ]);
+          const orderClientId = finalOrderId
+            ? await clientsOrdersRepo.findClientIdById(finalOrderId, tx)
+            : null;
+          const offerClientId = finalOfferId
+            ? await clientOffersRepo.findClientIdById(finalOfferId, tx)
+            : null;
           if (finalOrderId && orderClientId !== null && orderClientId !== requestedClientId) {
             throw new OrderClientMismatchError('orderId does not belong to the specified clientId');
           }

@@ -439,10 +439,8 @@ describe('findItemsForOrder', () => {
 
 describe('findFullForSnapshot', () => {
   test('returns order and items when order exists', async () => {
-    // Promise.all dispatches `findItemsForOrder(id)` first (its async body runs to its first
-    // await before the sibling thenable is consumed), so the items query dequeues first.
-    exec.enqueue({ rows: [itemRow()] });
     exec.enqueue({ rows: [orderRow()] });
+    exec.enqueue({ rows: [itemRow()] });
     const result = await repo.findFullForSnapshot('co-1', testDb);
     expect(result).not.toBeNull();
     expect(result?.order.id).toBe('co-1');

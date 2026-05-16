@@ -351,11 +351,9 @@ describe('replaceItems', () => {
 });
 
 describe('findFullForSnapshot', () => {
-  // The items helper hits its query during synchronous async-fn evaluation, so it lands
-  // ahead of the offer thenable in the enqueue queue.
   test('returns offer + items when offer exists', async () => {
-    exec.enqueue({ rows: [itemRow()] });
     exec.enqueue({ rows: [offerRow()] });
+    exec.enqueue({ rows: [itemRow()] });
     const result = await clientOffersRepo.findFullForSnapshot('co-1', testDb);
     expect(result).not.toBeNull();
     expect(result?.offer.id).toBe('co-1');

@@ -1142,11 +1142,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           };
         }
 
-        const [linkedOfferId, nonDraftLinkedSale, version] = await Promise.all([
-          clientQuotesRepo.findLinkedOfferId(idResult.value, tx),
-          clientQuotesRepo.findNonDraftLinkedSale(idResult.value, tx),
-          quoteVersionsRepo.findById(idResult.value, versionIdResult.value, tx),
-        ]);
+        const linkedOfferId = await clientQuotesRepo.findLinkedOfferId(idResult.value, tx);
+        const nonDraftLinkedSale = await clientQuotesRepo.findNonDraftLinkedSale(
+          idResult.value,
+          tx,
+        );
+        const version = await quoteVersionsRepo.findById(idResult.value, versionIdResult.value, tx);
 
         if (linkedOfferId) {
           return {
