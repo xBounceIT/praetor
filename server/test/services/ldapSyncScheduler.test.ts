@@ -56,12 +56,12 @@ describe('startLdapSyncScheduler', () => {
   });
 
   test('stop() suppresses errors from in-flight callbacks', async () => {
-    let releaseLoadConfig: (() => void) | null = null;
+    let releaseLoadConfig!: () => void;
+    const blockingLoadConfig = new Promise<void>((resolve) => {
+      releaseLoadConfig = resolve;
+    });
     const service = createServiceStub({
-      loadConfig: () =>
-        new Promise<void>((resolve) => {
-          releaseLoadConfig = resolve;
-        }),
+      loadConfig: () => blockingLoadConfig,
       syncUsers: async () => {
         throw new Error('pool has ended');
       },
@@ -75,10 +75,9 @@ describe('startLdapSyncScheduler', () => {
     });
 
     await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(releaseLoadConfig).not.toBeNull();
 
     scheduler.stop();
-    releaseLoadConfig?.();
+    releaseLoadConfig();
     await flushMicrotasks();
     await flushMicrotasks();
 
@@ -101,6 +100,33 @@ describe('startLdapSyncScheduler', () => {
 
     expect(service.loadConfig.mock.calls.length).toBeGreaterThan(0);
     expect(service.syncUsers.mock.calls.length).toBe(0);
+  });
+
+  test('inFlight guard prevents overlapping syncUsers calls', async () => {
+    let concurrent = 0;
+    let maxConcurrent = 0;
+    const service = createServiceStub({
+      syncUsers: async () => {
+        concurrent++;
+        maxConcurrent = Math.max(maxConcurrent, concurrent);
+        await new Promise((resolve) => setTimeout(resolve, 15));
+        concurrent--;
+      },
+    });
+    const logger = createLoggerStub();
+
+    const scheduler = startLdapSyncScheduler({
+      ldapService: service,
+      logger,
+      intervalMs: 1,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    scheduler.stop();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(service.syncUsers.mock.calls.length).toBeGreaterThan(0);
+    expect(maxConcurrent).toBe(1);
   });
 
   test('logs and continues when sync throws while running', async () => {
