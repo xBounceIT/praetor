@@ -171,6 +171,39 @@ describe('services/api/client', () => {
       await expect(fetchApi('/down')).rejects.toThrow('Failed to fetch');
     });
 
+    test('passes an AbortSignal to fetch so requests time out instead of hanging forever', async () => {
+      fetchMock.mockImplementationOnce(async (_input: unknown, init: unknown) => {
+        const sig = (init as { signal?: AbortSignal }).signal;
+        expect(sig).toBeInstanceOf(AbortSignal);
+        return buildResponse({ status: 200, json: () => ({}) });
+      });
+      await fetchApi('/with-timeout');
+    });
+
+    test('maps a fetch TimeoutError to ApiError "Request timed out"', async () => {
+      fetchMock.mockImplementationOnce(async () => {
+        throw new DOMException('timed out', 'TimeoutError');
+      });
+      await expect(fetchApi('/slow')).rejects.toMatchObject({
+        name: 'ApiError',
+        status: 0,
+        isNetworkError: true,
+        message: 'Request timed out',
+      });
+    });
+
+    test('combines caller-provided signal with the timeout signal', async () => {
+      const callerController = new AbortController();
+      fetchMock.mockImplementationOnce(async (_input: unknown, init: unknown) => {
+        const sig = (init as { signal: AbortSignal }).signal;
+        expect(sig.aborted).toBe(false);
+        callerController.abort(new DOMException('caller cancelled', 'AbortError'));
+        expect(sig.aborted).toBe(true);
+        return buildResponse({ status: 200, json: () => ({}) });
+      });
+      await fetchApi('/cancellable', { signal: callerController.signal });
+    });
+
     test('caller can override headers via options.headers', async () => {
       fetchMock.mockImplementationOnce(async (_input: unknown, init: unknown) => {
         const headers = (init as { headers: Record<string, string> }).headers;

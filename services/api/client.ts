@@ -1,5 +1,8 @@
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
+// Without this, a hung server (no TCP reset) leaves the UI on a spinner forever.
+const DEFAULT_TIMEOUT_MS = 30_000;
+
 let authToken: string | null = localStorage.getItem('praetor_auth_token');
 
 export const setAuthToken = (token: string | null) => {
@@ -39,14 +42,20 @@ export const fetchApi = async <T>(endpoint: string, options: RequestInit = {}): 
     ...options.headers,
   };
 
+  const timeoutSignal = AbortSignal.timeout(DEFAULT_TIMEOUT_MS);
+  const signal = options.signal ? AbortSignal.any([options.signal, timeoutSignal]) : timeoutSignal;
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
       headers,
+      signal,
     });
   } catch (err) {
-    // fetch() throws a TypeError on network failures (offline, DNS, refused).
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      throw new ApiError('Request timed out', 0, true);
+    }
     const message = err instanceof Error ? err.message : 'Network request failed';
     throw new ApiError(message, 0, true);
   }
