@@ -46,9 +46,17 @@ describe('migration 0047: adds ON UPDATE CASCADE to projects.order_id → sales(
     );
   });
 
-  test('guards the ADD with a pg_constraint probe so re-runs are no-ops', () => {
-    expect(MIGRATION).toMatch(
-      /IF NOT EXISTS \(\s*SELECT 1 FROM pg_constraint[\s\S]*?conname = 'projects_order_id_sales_id_fk'[\s\S]*?confupdtype = 'c'/,
+  test('probe gates the drop so a replay against a correct DB is a true no-op', () => {
+    // The IF NOT EXISTS probe must come before the DROPs; otherwise the DROPs run
+    // unconditionally and the probe (running inside the same DO transaction) always sees
+    // the constraint gone. Pin the order: probe → drop → add.
+    const probeIdx = MIGRATION.search(
+      /IF NOT EXISTS \(\s*SELECT 1 FROM pg_constraint[\s\S]*?confupdtype = 'c'/,
     );
+    const dropIdx = MIGRATION.indexOf('DROP CONSTRAINT IF EXISTS "projects_order_id_sales_id_fk"');
+    const addIdx = MIGRATION.search(/ADD CONSTRAINT "projects_order_id_sales_id_fk"/);
+    expect(probeIdx).toBeGreaterThanOrEqual(0);
+    expect(dropIdx).toBeGreaterThan(probeIdx);
+    expect(addIdx).toBeGreaterThan(dropIdx);
   });
 });
