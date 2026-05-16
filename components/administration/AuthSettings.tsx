@@ -8,8 +8,8 @@ import { ssoApi } from '../../services/api/sso';
 import {
   type LdapConfig,
   type LdapTestResponse,
+  MASKED_SECRET,
   type Role,
-  SSO_MASKED_SECRET,
   type SsoProtocol,
   type SsoProvider,
   type SsoRoleMapping,
@@ -23,7 +23,7 @@ import { Switch } from '../ui/switch';
 const PEM_BEGIN_MARKER = '-----BEGIN CERTIFICATE-----';
 const PEM_END_MARKER = '-----END CERTIFICATE-----';
 
-// Fields the backend masks with `SSO_MASKED_SECRET` when returning a provider. The admin form
+// Fields the backend masks with `MASKED_SECRET` when returning a provider. The admin form
 // must never let an admin type into a `'********'`-prefilled input — a single accidental
 // keystroke would otherwise overwrite the stored secret with garbage (issue #601).
 const MASKED_PROVIDER_FIELDS = ['clientSecret', 'privateKey', 'metadataXml', 'idpCert'] as const;
@@ -37,7 +37,7 @@ const buildEmptyMaskedFieldSet = (): Record<SsoProtocol, Set<MaskedProviderField
 const collectMaskedFields = (provider: Partial<SsoProvider>): Set<MaskedProviderField> => {
   const stored = new Set<MaskedProviderField>();
   for (const field of MASKED_PROVIDER_FIELDS) {
-    if (provider[field] === SSO_MASKED_SECRET) stored.add(field);
+    if (provider[field] === MASKED_SECRET) stored.add(field);
   }
   return stored;
 };
@@ -147,6 +147,11 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   // keystroke can't corrupt the stored value.
   const [replaceSecretFields, setReplaceSecretFields] =
     useState<Record<SsoProtocol, Set<MaskedProviderField>>>(buildEmptyMaskedFieldSet);
+  // Same locked-secret pattern as the SSO fields above, for LDAP's bindPassword (the only
+  // masked field in the LDAP form). See `MASKED_PROVIDER_FIELDS` and the SAML provider form
+  // for the broader rationale (issue #601).
+  const [wasLdapBindPasswordStored, setWasLdapBindPasswordStored] = useState(false);
+  const [isLdapBindPasswordReplacing, setIsLdapBindPasswordReplacing] = useState(false);
   type AcsUrlState =
     | { status: 'loading' }
     | { status: 'ready'; template: string }
@@ -156,6 +161,8 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
 
   useEffect(() => {
     setLdapForm(config || DEFAULT_LDAP_CONFIG);
+    setWasLdapBindPasswordStored(config?.bindPassword === MASKED_SECRET);
+    setIsLdapBindPasswordReplacing(false);
   }, [config]);
 
   // Re-entering the SAML tab after a transient failure resets the state to 'loading' so the
@@ -252,30 +259,38 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     setLdapForm((prev) => ({ ...prev, roleMappings }));
   };
 
-  const validateLdap = (): boolean => {
+  // Builds the payload that would actually be sent to the server, substituting the masked
+  // sentinel back into bindPassword when the admin entered Replace mode but left it empty.
+  // The server treats `MASKED_SECRET` as "preserve current value", so an accidental Replace
+  // click cannot clear the stored bind credential (issue #601).
+  const buildLdapPayload = (): LdapConfig => {
+    if (wasLdapBindPasswordStored && isLdapBindPasswordReplacing && !ldapForm.bindPassword) {
+      return { ...ldapForm, bindPassword: MASKED_SECRET };
+    }
+    return ldapForm;
+  };
+
+  const validateLdap = (payload: LdapConfig): boolean => {
     const nextErrors: Record<string, string> = {};
-    if (ldapForm.enabled) {
-      if (!ldapForm.serverUrl.trim())
+    if (payload.enabled) {
+      if (!payload.serverUrl.trim())
         nextErrors.serverUrl = t('admin.ldap.errors.serverUrlRequired');
-      if (!ldapForm.baseDn.trim()) nextErrors.baseDn = t('admin.ldap.errors.baseDnRequired');
-      if (!ldapForm.userFilter.trim())
+      if (!payload.baseDn.trim()) nextErrors.baseDn = t('admin.ldap.errors.baseDnRequired');
+      if (!payload.userFilter.trim())
         nextErrors.userFilter = t('admin.ldap.errors.userFilterRequired');
-      else if (!ldapForm.userFilter.includes('{0}')) {
+      else if (!payload.userFilter.includes('{0}')) {
         nextErrors.userFilter = t('admin.ldap.errors.userFilterPlaceholderRequired');
       }
-      if (!ldapForm.groupBaseDn.trim()) {
+      if (!payload.groupBaseDn.trim()) {
         nextErrors.groupBaseDn = t('admin.ldap.errors.groupBaseDnRequired');
       }
-      if (!ldapForm.groupFilter.trim())
+      if (!payload.groupFilter.trim())
         nextErrors.groupFilter = t('admin.ldap.errors.groupFilterRequired');
-      if (
-        (ldapForm.bindDn && !ldapForm.bindPassword) ||
-        (!ldapForm.bindDn && ldapForm.bindPassword)
-      ) {
+      if ((payload.bindDn && !payload.bindPassword) || (!payload.bindDn && payload.bindPassword)) {
         nextErrors.bindCredentials = t('admin.ldap.errors.bindCredentialsRequired');
       }
     }
-    const trimmedCa = ldapForm.tlsCaCertificate.trim();
+    const trimmedCa = payload.tlsCaCertificate.trim();
     if (
       trimmedCa !== '' &&
       (!trimmedCa.includes(PEM_BEGIN_MARKER) || !trimmedCa.includes(PEM_END_MARKER))
@@ -285,7 +300,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
         'Certificate must be PEM-encoded with BEGIN/END CERTIFICATE markers',
       );
     }
-    ldapForm.roleMappings.forEach((mapping, index) => {
+    payload.roleMappings.forEach((mapping, index) => {
       if (!mapping.ldapGroup.trim()) {
         nextErrors[`ldapRoleMapping_${index}`] = t('admin.ldap.errors.ldapGroupRequired');
       }
@@ -294,13 +309,26 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     return Object.keys(nextErrors).length === 0;
   };
 
+  const beginReplaceLdapBindPassword = () => {
+    setIsLdapBindPasswordReplacing(true);
+    setLdapForm((prev) => ({ ...prev, bindPassword: '' }));
+  };
+
+  const cancelReplaceLdapBindPassword = () => {
+    setIsLdapBindPasswordReplacing(false);
+    setLdapForm((prev) => ({ ...prev, bindPassword: MASKED_SECRET }));
+  };
+
   const handleSaveLdap = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!validateLdap()) return;
+    const payload = buildLdapPayload();
+    if (!validateLdap(payload)) return;
     setIsSaved(false);
     setIsSavingLdap(true);
     try {
-      await onSave(ldapForm);
+      await onSave(payload);
+      // The parent will re-feed `config` with the freshly-masked bindPassword; the effect
+      // above resets the stored/replacing flags from that update.
       showSaved();
     } catch (err) {
       setErrors((prev) => ({
@@ -412,7 +440,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
       next.delete(field);
       return { ...current, [protocol]: next };
     });
-    updateProviderDraft(protocol, { [field]: SSO_MASKED_SECRET } as Partial<SsoProvider>);
+    updateProviderDraft(protocol, { [field]: MASKED_SECRET } as Partial<SsoProvider>);
   };
 
   const isSecretFieldStoredAndLocked = (protocol: SsoProtocol, field: MaskedProviderField) =>
@@ -497,7 +525,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     const draft = providerDrafts[protocol];
     // If a stored secret/cert was put into Replace mode but the admin saved without typing
     // anything, substitute the mask back so the server keeps the existing value (rather than
-    // clearing the secret). The server treats `SSO_MASKED_SECRET` as "preserve current value".
+    // clearing the secret). The server treats `MASKED_SECRET` as "preserve current value".
     // Validation runs against the substituted payload so a stored-cert SAML provider doesn't
     // trip the "manual IdP fields required" check just because the user clicked Replace.
     const stored = storedMaskedFields[protocol];
@@ -510,7 +538,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     };
     for (const field of MASKED_PROVIDER_FIELDS) {
       if (stored.has(field) && replacing.has(field) && !payload[field]) {
-        (payload as Record<string, unknown>)[field] = SSO_MASKED_SECRET;
+        (payload as Record<string, unknown>)[field] = MASKED_SECRET;
       }
     }
     if (!validateProvider(payload)) return;
@@ -1012,14 +1040,31 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   monospace
                   onChange={(bindDn) => setLdapForm((prev) => ({ ...prev, bindDn }))}
                 />
-                <Field
-                  label={t('admin.ldap.bindPasswordLabel')}
-                  type="password"
-                  value={ldapForm.bindPassword}
-                  error={errors.bindCredentials}
-                  monospace
-                  onChange={(bindPassword) => setLdapForm((prev) => ({ ...prev, bindPassword }))}
-                />
+                {wasLdapBindPasswordStored && !isLdapBindPasswordReplacing ? (
+                  <StoredSecretPreview
+                    label={t('admin.ldap.bindPasswordLabel')}
+                    storedLabel={t('admin.sso.secretStored', 'Secret stored — value hidden')}
+                    replaceLabel={t('admin.sso.replaceSecret', 'Replace')}
+                    onReplace={beginReplaceLdapBindPassword}
+                  />
+                ) : (
+                  <Field
+                    label={t('admin.ldap.bindPasswordLabel')}
+                    type="password"
+                    value={ldapForm.bindPassword}
+                    error={errors.bindCredentials}
+                    monospace
+                    onChange={(bindPassword) => setLdapForm((prev) => ({ ...prev, bindPassword }))}
+                    trailing={
+                      wasLdapBindPasswordStored ? (
+                        <KeepStoredSecretButton
+                          label={t('admin.sso.keepStoredSecret', 'Keep stored value')}
+                          onClick={cancelReplaceLdapBindPassword}
+                        />
+                      ) : null
+                    }
+                  />
+                )}
                 <Field
                   label={t('admin.ldap.groupSearchBase')}
                   value={ldapForm.groupBaseDn}

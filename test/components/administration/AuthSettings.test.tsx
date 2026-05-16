@@ -3,8 +3,8 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import {
   type LdapConfig,
+  MASKED_SECRET,
   type Role,
-  SSO_MASKED_SECRET,
   type SsoProtocol,
   type SsoProvider,
 } from '../../../types';
@@ -371,7 +371,7 @@ describe('<AuthSettings />', () => {
   });
 
   test('locks stored masked secrets behind a Replace control on edit (issue #601)', async () => {
-    // The backend returns SSO_MASKED_SECRET for clientSecret/privateKey/metadataXml/idpCert
+    // The backend returns MASKED_SECRET for clientSecret/privateKey/metadataXml/idpCert
     // when reading a provider with stored values. Previously the form populated the textarea
     // directly with `'********'`; a single accidental keystroke then overwrote the stored
     // secret with garbage like `'********x'`. The form must instead render a locked preview
@@ -386,9 +386,9 @@ describe('<AuthSettings />', () => {
           enabled: true,
           idpIssuer: 'https://idp.example.com/issuer',
           entryPoint: 'https://idp.example.com/sso',
-          idpCert: SSO_MASKED_SECRET,
-          metadataXml: SSO_MASKED_SECRET,
-          privateKey: SSO_MASKED_SECRET,
+          idpCert: MASKED_SECRET,
+          metadataXml: MASKED_SECRET,
+          privateKey: MASKED_SECRET,
         }),
       ],
     });
@@ -419,9 +419,9 @@ describe('<AuthSettings />', () => {
     fireEvent.submit(form);
     await waitFor(() => expect(onSaveSsoProvider).toHaveBeenCalledTimes(1));
     const sentPayload = onSaveSsoProvider.mock.calls[0]?.[0] as Partial<SsoProvider>;
-    expect(sentPayload.idpCert).toBe(SSO_MASKED_SECRET);
-    expect(sentPayload.metadataXml).toBe(SSO_MASKED_SECRET);
-    expect(sentPayload.privateKey).toBe(SSO_MASKED_SECRET);
+    expect(sentPayload.idpCert).toBe(MASKED_SECRET);
+    expect(sentPayload.metadataXml).toBe(MASKED_SECRET);
+    expect(sentPayload.privateKey).toBe(MASKED_SECRET);
   });
 
   test('Replace control swaps in an editable empty input and sends the new secret (issue #601)', async () => {
@@ -435,7 +435,7 @@ describe('<AuthSettings />', () => {
           enabled: true,
           idpIssuer: 'https://idp.example.com/issuer',
           entryPoint: 'https://idp.example.com/sso',
-          idpCert: SSO_MASKED_SECRET,
+          idpCert: MASKED_SECRET,
         }),
       ],
     });
@@ -486,7 +486,7 @@ describe('<AuthSettings />', () => {
           enabled: true,
           idpIssuer: 'https://idp.example.com/issuer',
           entryPoint: 'https://idp.example.com/sso',
-          idpCert: SSO_MASKED_SECRET,
+          idpCert: MASKED_SECRET,
         }),
       ],
     });
@@ -502,6 +502,100 @@ describe('<AuthSettings />', () => {
 
     await waitFor(() => expect(onSaveSsoProvider).toHaveBeenCalledTimes(1));
     const sentPayload = onSaveSsoProvider.mock.calls[0]?.[0] as Partial<SsoProvider>;
-    expect(sentPayload.idpCert).toBe(SSO_MASKED_SECRET);
+    expect(sentPayload.idpCert).toBe(MASKED_SECRET);
+  });
+
+  test('locks the OIDC clientSecret behind a Replace control on edit (issue #601)', async () => {
+    // OIDC uses `<Field type="password">` rather than `<TextArea>`, so it exercises a
+    // different render path than the SAML cert/key fields covered above. Same bug class.
+    const onSaveSsoProvider = mock(async (provider: Partial<SsoProvider>) =>
+      buildProvider(provider.protocol ?? 'oidc', provider),
+    );
+    renderAuthSettings({
+      onSaveSsoProvider,
+      ssoProviders: [
+        buildProvider('oidc', {
+          enabled: true,
+          issuerUrl: 'https://idp.example.com',
+          clientId: 'praetor',
+          clientSecret: MASKED_SECRET,
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.oidc' }));
+    fireEvent.click(screen.getByRole('button', { name: 'admin.sso.editProvider' }));
+    const heading = screen.getByText('admin.sso.editProvider', { selector: 'h3' });
+    const form = heading.closest('form') as HTMLFormElement | null;
+    if (!form) throw new Error('OIDC provider form not found');
+
+    // The stored clientSecret must not render a password input — the locked preview replaces it.
+    const csLabel = [...form.querySelectorAll('label')].find(
+      (el) => el.textContent === 'admin.sso.clientSecret',
+    );
+    expect(csLabel?.parentElement?.querySelector('input[type="password"]')).toBeNull();
+
+    // Saving without touching anything must round-trip the mask.
+    fireEvent.submit(form);
+    await waitFor(() => expect(onSaveSsoProvider).toHaveBeenCalledTimes(1));
+    const sentPayload = onSaveSsoProvider.mock.calls[0]?.[0] as Partial<SsoProvider>;
+    expect(sentPayload.clientSecret).toBe(MASKED_SECRET);
+  });
+
+  test('locks the LDAP bindPassword behind a Replace control on edit (issue #601)', async () => {
+    // LDAP's bindPassword uses the same `MASKED_SECRET` sentinel as the SSO fields and the
+    // same accidental-keystroke corruption applies to it. The fix mirrors the SSO flow.
+    const onSave = mock(async (_config: LdapConfig) => {});
+    renderAuthSettings({
+      onSave,
+      config: { ...ldapConfig, bindPassword: MASKED_SECRET },
+    });
+
+    // LDAP is the default tab; submit without touching anything.
+    const bindLabel = [...document.querySelectorAll('label')].find(
+      (el) => el.textContent === 'admin.ldap.bindPasswordLabel',
+    );
+    if (!bindLabel) throw new Error('bindPassword label not found');
+    // The masked input must NOT be rendered when bindPassword is stored — the locked preview
+    // replaces it so a stray keystroke can't corrupt the stored credential.
+    expect(bindLabel.parentElement?.querySelector('input[type="password"]')).toBeNull();
+    // The Replace control must be present.
+    expect(
+      within(bindLabel.parentElement as HTMLElement).getByRole('button', {
+        name: 'admin.sso.replaceSecret',
+      }),
+    ).toBeInTheDocument();
+
+    const saveButton = screen.getByRole('button', { name: 'admin.ldap.saveConfiguration' });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    const sent = onSave.mock.calls[0]?.[0] as LdapConfig;
+    expect(sent.bindPassword).toBe(MASKED_SECRET);
+  });
+
+  test('LDAP bindPassword Replace mode left empty falls back to the mask (issue #601)', async () => {
+    // An accidental Replace click followed by Save with no typed value must not clear the
+    // stored bindPassword. The substituted payload sends the mask so the server preserves.
+    const onSave = mock(async (_config: LdapConfig) => {});
+    renderAuthSettings({
+      onSave,
+      config: { ...ldapConfig, bindPassword: MASKED_SECRET },
+    });
+
+    const bindLabel = [...document.querySelectorAll('label')].find(
+      (el) => el.textContent === 'admin.ldap.bindPasswordLabel',
+    );
+    if (!bindLabel) throw new Error('bindPassword label not found');
+    fireEvent.click(
+      within(bindLabel.parentElement as HTMLElement).getByRole('button', {
+        name: 'admin.sso.replaceSecret',
+      }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.saveConfiguration' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    const sent = onSave.mock.calls[0]?.[0] as LdapConfig;
+    expect(sent.bindPassword).toBe(MASKED_SECRET);
   });
 });
