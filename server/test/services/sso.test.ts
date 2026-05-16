@@ -192,6 +192,17 @@ describe('getSamlAcsUrlInfo', () => {
     expect(acsUrlTemplate).not.toContain('%7B');
     expect(acsUrlTemplate).not.toContain('placeholder');
   });
+
+  // PR #649 review: a naive replace() on the full URL would rewrite the first sentinel
+  // occurrence anywhere, including the host. Splice the LAST occurrence (the one we injected
+  // into the path) so a host coincidentally containing the sentinel stays intact.
+  test('preserves the base URL host even when it contains the placeholder sentinel', () => {
+    process.env.SSO_CALLBACK_BASE_URL = 'https://praetor-slug-placeholder.example.com';
+    const { acsUrlTemplate } = sso.getSamlAcsUrlInfo();
+    expect(acsUrlTemplate).toBe(
+      'https://praetor-slug-placeholder.example.com/api/auth/sso/saml/{slug}/callback',
+    );
+  });
 });
 
 const SAML_PROVIDER: realSsoProvidersRepo.SsoProvider = {

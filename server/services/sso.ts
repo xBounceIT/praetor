@@ -589,16 +589,17 @@ const createSamlClient = async (
 
 // Routed through buildCallbackUrl so the admin preview can't drift from the URL the SAML
 // library validates against. The slug is substituted via a URL-safe sentinel because new URL()
-// would percent-encode the `{}` in a literal `{slug}` placeholder.
+// would percent-encode the `{}` in a literal `{slug}` placeholder. We splice the sentinel out
+// at its LAST occurrence — the one we just injected into the path — so a sentinel substring
+// in baseUrl's host can't be rewritten by accident.
 const SAML_SLUG_SENTINEL = 'praetor-slug-placeholder';
 
 export const getSamlAcsUrlInfo = (): { acsUrlTemplate: string } => {
   const baseUrl = resolvePublicBaseUrl();
+  const built = buildCallbackUrl('saml', SAML_SLUG_SENTINEL, baseUrl);
+  const idx = built.lastIndexOf(SAML_SLUG_SENTINEL);
   return {
-    acsUrlTemplate: buildCallbackUrl('saml', SAML_SLUG_SENTINEL, baseUrl).replace(
-      SAML_SLUG_SENTINEL,
-      '{slug}',
-    ),
+    acsUrlTemplate: built.slice(0, idx) + '{slug}' + built.slice(idx + SAML_SLUG_SENTINEL.length),
   };
 };
 
