@@ -38,6 +38,11 @@ const RENAMABLE_PKS: readonly RenamablePk[] = [
 // NO ACTION on update). The options object is intentionally optional in the capture group
 // so such an FK still surfaces here — the per-FK assertion will fail because an empty
 // options block can't contain `onUpdate: 'cascade'`.
+//
+// Limitation: the lazy `[\s\S]*?` capture stops at the first `}`. If a future Drizzle
+// FK option ever introduces a nested object (e.g. `{ onDelete: 'cascade', meta: { x: 1 } }`),
+// this regex would truncate at the inner `}` and miss `onUpdate` after it. None of the
+// current Drizzle FK options nest, so keep options blocks flat or upgrade this matcher.
 const referenceRegex = (tableIdentifier: string) =>
   new RegExp(
     `\\.references\\(\\s*\\(\\s*\\)\\s*=>\\s*${tableIdentifier}\\.id\\s*(?:,\\s*\\{([\\s\\S]*?)\\})?\\s*\\)`,
