@@ -2025,11 +2025,15 @@ const AppContent: React.FC = () => {
       return;
     }
 
+    let isCancelled = false;
+
     const loadNotifications = async () => {
       try {
         const data = await api.notifications.list();
+        if (isCancelled) return;
         setNotificationsState({ items: data.notifications, unreadCount: data.unreadCount });
       } catch (err) {
+        if (isCancelled) return;
         console.error('Failed to load notifications:', err);
       }
     };
@@ -2037,7 +2041,10 @@ const AppContent: React.FC = () => {
     // Load immediately and then poll every 60 seconds
     loadNotifications();
     const interval = setInterval(loadNotifications, 60000);
-    return () => clearInterval(interval);
+    return () => {
+      isCancelled = true;
+      clearInterval(interval);
+    };
   }, [currentUser]);
 
   // Notification handlers
