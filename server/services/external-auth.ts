@@ -170,7 +170,7 @@ export const resolveExternalIdentity = async (
   const mappedRoleIds = await filterExistingRoleIds(
     mapExternalGroupsToRoleIds(input.groups, input.roleMappings),
   );
-  const primaryRole = mappedRoleIds[0];
+  const defaultPrimaryRole = mappedRoleIds[0];
 
   const resolveInTransaction = () =>
     withDbTransaction(async (tx) => {
@@ -204,7 +204,7 @@ export const resolveExternalIdentity = async (
               name,
               username,
               passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
-              role: primaryRole,
+              role: defaultPrimaryRole,
               avatarInitials,
               costPerHour: 0,
               isDisabled: false,
@@ -223,7 +223,7 @@ export const resolveExternalIdentity = async (
             id,
             name,
             username,
-            role: primaryRole,
+            role: defaultPrimaryRole,
             avatarInitials,
             isDisabled: false,
             sessionVersion: 1,
@@ -268,8 +268,15 @@ export const resolveExternalIdentity = async (
         throw new Error('User is disabled');
       }
 
+      // Preserve the user's existing primary role when the current mapping still
+      // grants it, so admin-assigned or user-chosen primaries survive SSO refresh.
+      const primaryRole =
+        !wasCreated && mappedRoleIds.includes(user.role) ? user.role : defaultPrimaryRole;
+
       await usersRepo.replaceUserRoles(user.id, mappedRoleIds, tx);
-      await usersRepo.setPrimaryRole(user.id, primaryRole, tx);
+      if (primaryRole !== user.role) {
+        await usersRepo.setPrimaryRole(user.id, primaryRole, tx);
+      }
       await userAssignmentsRepo.syncTopManagerAssignmentsForUser(user.id, tx);
 
       return {
