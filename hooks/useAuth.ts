@@ -11,11 +11,6 @@ const DEFAULT_SETTINGS: Settings = {
 
 export const AUTH_CHECK_RETRY_DELAYS_MS = [500, 1000, 2000];
 
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
-
 const isAuthRejection = (err: unknown): boolean =>
   err instanceof ApiError && (err.status === 401 || err.status === 403);
 
@@ -68,7 +63,15 @@ export function useAuth(opts: UseAuthOptions = {}) {
 
   useEffect(() => {
     let cancelled = false;
+    let pendingRetryTimer: ReturnType<typeof setTimeout> | null = null;
     const delays = retryDelaysRef.current;
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => {
+        pendingRetryTimer = setTimeout(() => {
+          pendingRetryTimer = null;
+          resolve();
+        }, ms);
+      });
     const checkAuth = async () => {
       const token = getAuthToken();
       if (!token) {
@@ -109,6 +112,10 @@ export function useAuth(opts: UseAuthOptions = {}) {
     checkAuth();
     return () => {
       cancelled = true;
+      if (pendingRetryTimer !== null) {
+        clearTimeout(pendingRetryTimer);
+        pendingRetryTimer = null;
+      }
     };
   }, [loadUserSettings]);
 
