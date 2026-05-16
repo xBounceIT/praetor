@@ -395,12 +395,21 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
         );
     }
     if (provider.enabled && provider.protocol === 'saml') {
-      const hasMetadata = !!provider.metadataUrl?.trim() || !!provider.metadataXml?.trim();
+      const hasMetadataXml = !!provider.metadataXml?.trim();
+      const hasMetadata = !!provider.metadataUrl?.trim() || hasMetadataXml;
       const hasManual = !!provider.entryPoint?.trim() && !!provider.idpCert?.trim();
       if (!hasMetadata && !hasManual) {
         nextErrors[`${prefix}samlConfig`] = t(
           'admin.sso.errors.samlConfigRequired',
           'Metadata or manual IdP fields are required',
+        );
+      }
+      // Mirror the server-side check in assertEnabledProviderConfig; the frontend cannot parse
+      // metadataXml, so it requires the field whenever inline XML is not supplied.
+      if (!hasMetadataXml && !provider.idpIssuer?.trim()) {
+        nextErrors[`${prefix}idpIssuer`] = t(
+          'admin.sso.errors.idpIssuerRequired',
+          'IdP Issuer is required unless inline metadata XML provides it',
         );
       }
     }
@@ -628,6 +637,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 label={t('admin.sso.idpIssuer', 'IdP Issuer')}
                 value={draft.idpIssuer || ''}
                 monospace
+                error={errors[`${prefix}idpIssuer`]}
                 onChange={(idpIssuer) => updateProviderDraft(protocol, { idpIssuer })}
               />
               <Field

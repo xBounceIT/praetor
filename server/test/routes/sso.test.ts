@@ -279,7 +279,9 @@ describe('PUT /api/sso/providers/:id — masked sentinel preserves existing secr
   test('metadataXml === MASKED_SECRET is dropped from patch', async () => {
     const existing = samlProvider({
       enabled: true,
-      metadataXml: '<EntityDescriptor />',
+      // entityID makes assertEnabledProviderConfig happy without forcing idpIssuer; the test
+      // is about MASKED_SECRET handling, not issuer validation.
+      metadataXml: '<EntityDescriptor entityID="https://idp.example.com/" />',
       idpCert: 'MIIDstoredcert',
     });
     findByIdMock.mockResolvedValue(existing);
@@ -346,6 +348,7 @@ describe('PUT /api/sso/providers/:id — enabled SAML configuration validation',
       enabled: false,
       entryPoint: 'https://idp.example.com/sso',
       idpCert: 'MIIDstoredcert',
+      idpIssuer: 'https://idp.example.com/',
     });
     findByIdMock.mockResolvedValue(existing);
     updateMock.mockImplementation(
