@@ -60,7 +60,10 @@ const parseTlsCaForPatch = (
       return { ok: false, message: 'tlsCaCertificate is not a valid PEM certificate' };
     }
   }
-  return { ok: true, patch: { tlsCaCertificate: normalized } };
+  // Persist only validated CERTIFICATE blocks; drop comments, stray text, or an
+  // accidentally-pasted PRIVATE KEY block instead of writing them to the DB.
+  const sanitized = `${blocks.join('\n')}\n`;
+  return { ok: true, patch: { tlsCaCertificate: sanitized } };
 };
 
 const roleMappingSchema = {
