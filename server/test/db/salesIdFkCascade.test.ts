@@ -31,8 +31,8 @@ describe('every FK to sales.id declares onUpdate: cascade', () => {
   });
 });
 
-describe('migration 0047: adds ON UPDATE CASCADE to projects.order_id → sales(id)', () => {
-  const MIGRATION = readMigrationFile('0047_add_projects_order_id_on_update_cascade.sql');
+describe('migration 0048: adds ON UPDATE CASCADE to projects.order_id → sales(id)', () => {
+  const MIGRATION = readMigrationFile('0048_add_projects_order_id_on_update_cascade.sql');
 
   test('drops the existing constraint before recreating it', () => {
     expect(MIGRATION).toContain(
