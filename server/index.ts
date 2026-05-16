@@ -3,6 +3,10 @@ import { ensureBootstrapAdmin } from './db/bootstrapAdmin.ts';
 import { runDemoSeedRefresh } from './db/demoSeed.ts';
 import { query } from './db/index.ts';
 import { prepareDatabaseForStartup } from './db/startup.ts';
+import {
+  type LdapSyncSchedulerHandle,
+  startLdapSyncScheduler,
+} from './services/ldapSyncScheduler.ts';
 import { performShutdown } from './shutdown.ts';
 import { createChildLogger, serializeError } from './utils/logger.ts';
 import {
@@ -34,7 +38,10 @@ const assertSecureRuntimeConfig = () => {
   }
 };
 
+let ldapSyncScheduler: LdapSyncSchedulerHandle | null = null;
+
 const shutdown = async (signal: string) => {
+  ldapSyncScheduler?.stop();
   const code = await performShutdown(fastify, signal, logger);
   process.exit(code);
 };
@@ -90,23 +97,13 @@ try {
 
   logger.info({ port: PORT }, 'Praetor API server running with HTTP/1.1 over HTTP');
 
-  // Periodic LDAP Sync Task (every hour)
   try {
     const ldapService = (await import('./services/ldap.ts')).default;
-
-    const SYNC_INTERVAL = 60 * 60 * 1000; // 1 hour
-    setInterval(async () => {
-      try {
-        await ldapService.loadConfig();
-        if (ldapService.config?.enabled) {
-          logger.info('Running periodic LDAP sync');
-          await ldapService.syncUsers();
-        }
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        logger.error({ errorMessage }, 'Periodic LDAP sync error');
-      }
-    }, SYNC_INTERVAL);
+    ldapSyncScheduler = startLdapSyncScheduler({
+      ldapService,
+      logger,
+      intervalMs: 60 * 60 * 1000,
+    });
   } catch (err) {
     logger.error({ err: serializeError(err) }, 'Failed to initialize LDAP sync task');
   }
