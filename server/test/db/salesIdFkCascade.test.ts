@@ -6,14 +6,20 @@ import { listSchemaFiles, readMigrationFile, readSchemaFile } from '../helpers/s
 // `sales.id` must therefore declare `onUpdate: 'cascade'`, otherwise the rename fails
 // mid-transaction with a FK violation from whichever child table didn't cascade.
 
-const SALES_ID_REFERENCE = /\.references\(\s*\(\s*\)\s*=>\s*sales\.id\s*,\s*\{([\s\S]*?)\}\s*\)/g;
+// The options object is intentionally optional in the capture group: Drizzle accepts a
+// bare `.references(() => sales.id)` with no second arg. We still want to surface such a
+// FK (it would default to NO ACTION on update and silently break the rename chain), so
+// match it here and let the per-FK assertion fail because the empty options block can't
+// contain `onUpdate: 'cascade'`.
+const SALES_ID_REFERENCE =
+  /\.references\(\s*\(\s*\)\s*=>\s*sales\.id\s*(?:,\s*\{([\s\S]*?)\})?\s*\)/g;
 
 const salesIdFks = listSchemaFiles().flatMap((file) => {
   const content = readSchemaFile(file);
   return [...content.matchAll(SALES_ID_REFERENCE)].map((match, index) => ({
     file,
     index,
-    optionsBlock: match[1],
+    optionsBlock: match[1] ?? '',
   }));
 });
 
