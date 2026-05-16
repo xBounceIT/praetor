@@ -16,6 +16,7 @@ import * as ssoStatesRepo from '../repositories/ssoStatesRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { decrypt, encrypt, MASKED_SECRET } from '../utils/crypto.ts';
 import { buildFrontendUrl } from '../utils/frontend-url.ts';
+import { NotFoundError } from '../utils/http-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
 import { ExternalAuthError, resolveExternalIdentity } from './external-auth.ts';
@@ -112,6 +113,9 @@ const assertEnabledProviderConfig = (provider: ssoProvidersRepo.SsoProvider): vo
     throw new SsoProviderValidationError(
       'SAML requires metadata URL/XML or manual entryPoint and idpCert',
     );
+  }
+  if (!hasConfigValue(provider.usernameAttribute)) {
+    throw new SsoProviderValidationError('usernameAttribute is required');
   }
 };
 
@@ -245,7 +249,7 @@ const prepareProviderValues = (
   return patch;
 };
 
-class DbSamlCacheProvider implements CacheProvider {
+export class DbSamlCacheProvider implements CacheProvider {
   constructor(private readonly providerId: string) {}
 
   async saveAsync(key: string, value: string): Promise<CacheItem | null> {
@@ -261,7 +265,7 @@ class DbSamlCacheProvider implements CacheProvider {
   }
 
   async getAsync(key: string): Promise<string | null> {
-    const state = await ssoStatesRepo.get(key);
+    const state = await ssoStatesRepo.getForProvider(key, this.providerId);
     if (!state || state.protocol !== 'saml' || state.expiresAt <= new Date()) return null;
     return state.relayState;
   }
@@ -560,13 +564,17 @@ const completeExternalLogin = async (
   return buildFrontendTicketUrl(ticket);
 };
 
+// Disabled/missing/wrong-protocol providers throw `NotFoundError` so the metadata + start GET
+// routes propagate to the global error handler and return 404 (see #600, #635). The login
+// callback routes catch this error in `handleSsoCallbackError` and map it to the stable
+// `provider_disabled` redirect code.
 const getEnabledProviderBySlug = async (
   protocol: 'oidc' | 'saml',
   slug: string,
 ): Promise<ssoProvidersRepo.SsoProvider> => {
   const provider = await ssoProvidersRepo.findBySlug(slug);
   if (!provider || provider.protocol !== protocol || !provider.enabled) {
-    throw new SsoLoginError('SSO provider is not enabled', 'provider_disabled');
+    throw new NotFoundError('SSO provider');
   }
   return provider;
 };
@@ -577,18 +585,7 @@ const getEnabledProviderById = async (
 ): Promise<ssoProvidersRepo.SsoProvider> => {
   const provider = await ssoProvidersRepo.findById(id);
   if (!provider || provider.protocol !== protocol || !provider.enabled) {
-    throw new SsoLoginError('SSO provider is not enabled', 'provider_disabled');
-  }
-  return provider;
-};
-
-const getProviderBySlug = async (
-  protocol: 'oidc' | 'saml',
-  slug: string,
-): Promise<ssoProvidersRepo.SsoProvider> => {
-  const provider = await ssoProvidersRepo.findBySlug(slug);
-  if (!provider || provider.protocol !== protocol) {
-    throw new Error('SSO provider not found');
+    throw new NotFoundError('SSO provider');
   }
   return provider;
 };
@@ -805,8 +802,12 @@ export const completeSamlLogin = async (
   if (!subject) {
     throw new SsoLoginError('SAML response did not include a subject', 'invalid_response');
   }
+  const issuer = coerceString(profile.issuer) || provider.idpIssuer;
+  if (!issuer) {
+    throw new SsoLoginError('SAML response did not include an issuer', 'invalid_response');
+  }
   return completeExternalLogin(provider, {
-    issuer: coerceString(profile.issuer) || provider.idpIssuer || provider.spIssuer,
+    issuer,
     subject,
     username: readClaim(claims, provider.usernameAttribute),
     name: readClaim(claims, provider.nameAttribute),
@@ -817,7 +818,7 @@ export const completeSamlLogin = async (
 
 export const getSamlMetadata = async (slug: string): Promise<string> => {
   const baseUrl = resolvePublicBaseUrl();
-  const provider = await getProviderBySlug('saml', slug);
+  const provider = await getEnabledProviderBySlug('saml', slug);
   const { privateKey } = getProviderSecrets(provider);
   const issuer = provider.spIssuer || buildSamlMetadataUrl(provider.slug, baseUrl);
   return generateServiceProviderMetadata({

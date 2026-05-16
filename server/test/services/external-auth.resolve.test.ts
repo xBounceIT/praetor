@@ -223,3 +223,114 @@ describe('resolveExternalIdentity auth method enforcement', () => {
     expect(insertIdentityMock).not.toHaveBeenCalled();
   });
 });
+
+describe('resolveExternalIdentity role mapping — regression #596', () => {
+  const adminUser = {
+    ...matchingSsoUser,
+    role: 'admin',
+  };
+
+  test('preserves admin role when no SAML group matches a mapping', async () => {
+    findByIdentityMock.mockResolvedValue({
+      id: 'eid-1',
+      providerId: 'sso-1',
+      protocol: 'oidc',
+      issuer: input.issuer,
+      subject: input.subject,
+      userId: 'u1',
+    });
+    findLoginUserByIdMock.mockResolvedValue(adminUser);
+
+    const result = await resolveExternalIdentity({
+      ...input,
+      groups: ['cn=guests,ou=groups,dc=example,dc=com'],
+      roleMappings: [{ externalGroup: 'admins', role: 'admin' }],
+    });
+
+    expect(result.role).toBe('admin');
+    expect(replaceUserRolesMock).not.toHaveBeenCalled();
+    expect(setPrimaryRoleMock).not.toHaveBeenCalled();
+    expect(syncTopManagerAssignmentsForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('preserves admin role when matched mapping references a deleted role', async () => {
+    findByIdentityMock.mockResolvedValue({
+      id: 'eid-1',
+      providerId: 'sso-1',
+      protocol: 'oidc',
+      issuer: input.issuer,
+      subject: input.subject,
+      userId: 'u1',
+    });
+    findLoginUserByIdMock.mockResolvedValue(adminUser);
+    findExistingIdsMock.mockResolvedValue(new Set<string>());
+
+    const result = await resolveExternalIdentity({
+      ...input,
+      groups: ['cn=ghosts,ou=groups,dc=example,dc=com'],
+      roleMappings: [{ externalGroup: 'ghosts', role: 'deleted-role' }],
+    });
+
+    expect(result.role).toBe('admin');
+    expect(replaceUserRolesMock).not.toHaveBeenCalled();
+    expect(setPrimaryRoleMock).not.toHaveBeenCalled();
+  });
+
+  test('updates primary role when SAML group matches a mapping', async () => {
+    findByIdentityMock.mockResolvedValue({
+      id: 'eid-1',
+      providerId: 'sso-1',
+      protocol: 'oidc',
+      issuer: input.issuer,
+      subject: input.subject,
+      userId: 'u1',
+    });
+    findLoginUserByIdMock.mockResolvedValue({ ...adminUser, role: 'user' });
+    findExistingIdsMock.mockResolvedValue(new Set(['admin']));
+
+    const result = await resolveExternalIdentity({
+      ...input,
+      groups: ['cn=admins,ou=groups,dc=example,dc=com'],
+      roleMappings: [{ externalGroup: 'admins', role: 'admin' }],
+    });
+
+    expect(result.role).toBe('admin');
+    expect(replaceUserRolesMock).toHaveBeenCalledWith('u1', ['admin'], expect.anything());
+    expect(setPrimaryRoleMock).toHaveBeenCalledWith('u1', 'admin', expect.anything());
+    expect(syncTopManagerAssignmentsForUserMock).toHaveBeenCalledWith('u1', expect.anything());
+  });
+
+  test('new SSO user with no matching group still gets DEFAULT_ROLE_ID assignment', async () => {
+    let createdUserId: string | undefined;
+    insertUserMock.mockImplementation(async (row: { id: string }) => {
+      createdUserId = row.id;
+    });
+    // First findByIdentity: no prior binding. Second (post-insert): returns the row we just bound.
+    findByIdentityMock
+      .mockImplementationOnce(async () => null)
+      .mockImplementationOnce(async () => ({
+        id: 'eid-1',
+        providerId: 'sso-1',
+        protocol: 'oidc',
+        issuer: input.issuer,
+        subject: input.subject,
+        userId: createdUserId,
+      }));
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
+
+    const result = await resolveExternalIdentity({
+      ...input,
+      groups: ['cn=guests,ou=groups,dc=example,dc=com'],
+      roleMappings: [{ externalGroup: 'admins', role: 'admin' }],
+    });
+
+    expect(result.wasCreated).toBe(true);
+    expect(result.role).toBe('user');
+    expect(insertUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'user' }),
+      expect.anything(),
+    );
+    expect(replaceUserRolesMock).toHaveBeenCalledWith(createdUserId, ['user'], expect.anything());
+    expect(setPrimaryRoleMock).toHaveBeenCalledWith(createdUserId, 'user', expect.anything());
+  });
+});

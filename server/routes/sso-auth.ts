@@ -4,6 +4,7 @@ import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import * as ssoService from '../services/sso.ts';
 import { logAudit } from '../utils/audit.ts';
 import { buildFrontendUrl } from '../utils/frontend-url.ts';
+import { NotFoundError } from '../utils/http-errors.ts';
 import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { badRequest, requireNonEmptyString } from '../utils/validation.ts';
 
@@ -57,6 +58,17 @@ const loginResponseSchema = {
 // The `sso_error` query param carries a stable code (e.g. `invalid_response`, `provider_disabled`)
 // — never the raw `err.message`. The frontend maps the code to a translated message; raw library
 // wording would leak implementation details and bypass i18n. See issue #604.
+//
+// NotFoundError reaches this handler when a disabled/missing/wrong-protocol provider is hit via
+// a callback URL (start/metadata routes propagate it to the global 404 handler instead). Treat
+// it as `provider_disabled` so the login screen shows a translated message rather than a
+// generic one.
+const ssoCallbackErrorCode = (err: unknown): ssoService.SsoLoginErrorCode => {
+  if (err instanceof ssoService.SsoLoginError) return err.code;
+  if (err instanceof NotFoundError) return 'provider_disabled';
+  return 'generic';
+};
+
 const handleSsoCallbackError = (
   request: FastifyRequest,
   reply: FastifyReply,
@@ -64,7 +76,7 @@ const handleSsoCallbackError = (
   context: { protocol: 'oidc' | 'saml'; slug: string },
 ) => {
   const message = err instanceof Error ? err.message : 'SSO login failed';
-  const code = err instanceof ssoService.SsoLoginError ? err.code : 'generic';
+  const code = ssoCallbackErrorCode(err);
   request.log.warn({ message, code, ...context }, 'SSO callback failed');
   return reply.redirect(buildFrontendUrl('sso_error', code), 302);
 };
