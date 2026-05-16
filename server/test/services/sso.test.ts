@@ -457,4 +457,20 @@ describe('completeSamlLogin issuer resolution', () => {
       issuer: 'https://idp.example.com/realm',
     });
   });
+
+  test('profile.issuer wins over provider.idpIssuer when both are set', async () => {
+    findBySlugMock.mockResolvedValue({
+      ...manualSamlProvider,
+      idpIssuer: 'https://idp.example.com/configured',
+    });
+    samlValidatePostMock.mockResolvedValue({
+      profile: { nameID: 'user@example.com', issuer: 'https://idp.example.com/from-response' },
+      loggedOut: false,
+    });
+    resolveExternalIdentityMock.mockRejectedValue(new Error('stop here'));
+    await expect(sso.completeSamlLogin('okta', { SAMLResponse: 'x' })).rejects.toThrow('stop here');
+    expect(resolveExternalIdentityMock.mock.calls[0][0]).toMatchObject({
+      issuer: 'https://idp.example.com/from-response',
+    });
+  });
 });
