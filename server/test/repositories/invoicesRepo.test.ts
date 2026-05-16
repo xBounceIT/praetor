@@ -94,6 +94,13 @@ describe('listAll', () => {
     expect(result[0].total).toBe(110);
     expect(result[0].amountPaid).toBe(0);
   });
+
+  test('caps the result set with LIST_ALL_LIMIT to avoid unbounded loads', async () => {
+    exec.enqueue({ rows: [] });
+    await invoicesRepo.listAll(testDb);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('limit');
+    expect(exec.calls[0].params).toContain(invoicesRepo.LIST_ALL_LIMIT);
+  });
 });
 
 describe('listAllItems', () => {

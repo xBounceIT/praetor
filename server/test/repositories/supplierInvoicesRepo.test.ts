@@ -67,6 +67,13 @@ describe('listAll mapInvoice', () => {
     expect(result[0].issueDate).toBe('2026-04-01');
     expect(result[0].dueDate).toBe('2026-04-30');
   });
+
+  test('caps the result set with LIST_ALL_LIMIT to avoid unbounded loads', async () => {
+    exec.enqueue({ rows: [] });
+    await supplierInvoicesRepo.listAll(testDb);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('limit');
+    expect(exec.calls[0].params).toContain(supplierInvoicesRepo.LIST_ALL_LIMIT);
+  });
 });
 
 describe('listAllItems', () => {
