@@ -55,6 +55,7 @@ const ldapConfig: LdapConfig = {
   roleMappings: [],
   tlsCaCertificate: '',
   autoProvisionAll: false,
+  provisionOnLogin: true,
 };
 
 const roles: Role[] = [
@@ -167,6 +168,33 @@ describe('<AuthSettings />', () => {
     await waitFor(() => {
       expect(ldapApiMock.testAuthentication).toHaveBeenCalledWith('alice', 'secret');
     });
+  });
+
+  test('Provisioning section exposes two independent switches that round-trip to onSave (#644)', async () => {
+    const onSave = mock(async (_config: LdapConfig) => {});
+    renderAuthSettings({ onSave });
+
+    const onLoginSwitch = document.getElementById('ldap-provision-on-login') as HTMLInputElement;
+    const autoAllSwitch = document.getElementById('ldap-auto-provision-all') as HTMLInputElement;
+    expect(onLoginSwitch).toBeTruthy();
+    expect(autoAllSwitch).toBeTruthy();
+    expect(onLoginSwitch.getAttribute('aria-checked')).toBe('true');
+    expect(autoAllSwitch.getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(onLoginSwitch);
+    expect(onLoginSwitch.getAttribute('aria-checked')).toBe('false');
+    expect(autoAllSwitch.getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(autoAllSwitch);
+    expect(autoAllSwitch.getAttribute('aria-checked')).toBe('true');
+    expect(onLoginSwitch.getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.saveConfiguration' }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    const submitted = onSave.mock.calls[0]?.[0] as LdapConfig;
+    expect(submitted.provisionOnLogin).toBe(false);
+    expect(submitted.autoProvisionAll).toBe(true);
   });
 
   // #638: the tester previously lied about every existing user — claiming they would be

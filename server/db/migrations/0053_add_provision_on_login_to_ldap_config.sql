@@ -1,0 +1,1 @@
+ALTER TABLE "ldap_config" ADD COLUMN "provision_on_login" boolean DEFAULT true;

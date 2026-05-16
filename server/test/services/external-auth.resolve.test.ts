@@ -171,7 +171,7 @@ describe('resolveExternalIdentity auth method enforcement', () => {
   });
 
   // Regression for #640 (codex P1): the LOWER(username) functional index in migration
-  // 0053 fires under its own constraint name, not users_username_unique. The retry
+  // 0054 fires under its own constraint name, not users_username_unique. The retry
   // detector must recognize it or concurrent first-time SSO logins surface as 500s.
   test('retries after a concurrent insert violating the LOWER(username) unique index', async () => {
     findByIdentityMock

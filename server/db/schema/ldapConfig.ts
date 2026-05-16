@@ -34,6 +34,7 @@ export const ldapConfig = pgTable(
       .default(sql`'[]'::jsonb`),
     tlsCaCertificate: text('tls_ca_certificate'),
     autoProvisionAll: boolean('auto_provision_all').default(false),
+    provisionOnLogin: boolean('provision_on_login').default(true),
     updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [check('ldap_config_id_check', sql`${table.id} = 1`)],

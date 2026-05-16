@@ -271,6 +271,7 @@ export interface LdapConfig {
   roleMappings: LdapRoleMapping[];
   tlsCaCertificate: string;
   autoProvisionAll: boolean;
+  provisionOnLogin: boolean;
 }
 
 // Discriminates which branch of the LDAP-login role-assignment logic would fire for the

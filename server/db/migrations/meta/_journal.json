@@ -376,8 +376,15 @@
     {
       "idx": 53,
       "version": "7",
-      "when": 1778966025291,
-      "tag": "0053_add_users_username_lower_unique",
+      "when": 1778966344692,
+      "tag": "0053_add_provision_on_login_to_ldap_config",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1778967639807,
+      "tag": "0054_add_users_username_lower_unique",
       "breakpoints": true
     }
   ]

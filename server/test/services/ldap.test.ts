@@ -1,4 +1,14 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from 'bun:test';
 import realLdap from 'ldapjs';
 import * as realLdapRepo from '../../repositories/ldapRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
@@ -104,11 +114,9 @@ const createClientMock = mock((opts: unknown) => {
 });
 
 const noop = () => {};
-// `warn` is a mock so we can assert on the LDAP_REJECT_UNAUTHORIZED=false audit signal.
-const loggerWarnMock = mock();
 const silentLogger = {
   info: noop,
-  warn: loggerWarnMock,
+  warn: noop,
   error: noop,
   debug: noop,
   fatal: noop,
@@ -218,7 +226,6 @@ beforeEach(() => {
   applyExternalRolesForUserMock.mockReset();
   applyExternalRolesForUserIfMatchedMock.mockReset();
   filterExistingRoleIdsMock.mockReset();
-  loggerWarnMock.mockReset();
   filterExistingRoleIdsMock.mockImplementation(async (ids: string[]) =>
     ids.length > 0 ? ids : ['user'],
   );
@@ -275,26 +282,39 @@ describe('getClient', () => {
     expect(opts.tlsOptions.rejectUnauthorized).toBe(false);
   });
 
-  test('LDAP_REJECT_UNAUTHORIZED="false" emits an audit warning about MITM exposure', async () => {
-    process.env.LDAP_REJECT_UNAUTHORIZED = 'false';
-    await ldapService.getClient();
-    expect(loggerWarnMock).toHaveBeenCalledWith(
-      expect.stringMatching(/LDAP_REJECT_UNAUTHORIZED=false.*MITM/),
-    );
-  });
+  describe('TLS audit warning', () => {
+    // ldap.ts's module-level `logger` is a pino child of `loggerSnapshot.logger` (the real
+    // root, captured before mock.module replaces the export). Pino children inherit `warn`
+    // from the root via the prototype chain, so spying on root.warn intercepts the child.
+    let warnSpy: ReturnType<typeof spyOn<typeof loggerSnapshot.logger, 'warn'>>;
+    beforeEach(() => {
+      warnSpy = spyOn(loggerSnapshot.logger, 'warn').mockImplementation(() => {});
+    });
+    afterEach(() => {
+      warnSpy.mockRestore();
+    });
 
-  test('default rejectUnauthorized=true does NOT emit the MITM warning', async () => {
-    await ldapService.getClient();
-    expect(loggerWarnMock).not.toHaveBeenCalled();
-  });
+    test('LDAP_REJECT_UNAUTHORIZED="false" emits an audit warning about MITM exposure', async () => {
+      process.env.LDAP_REJECT_UNAUTHORIZED = 'false';
+      await ldapService.getClient();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/LDAP_REJECT_UNAUTHORIZED=false.*MITM/),
+      );
+    });
 
-  test('warning re-fires on every getClient() call (no stale-cache squelching)', async () => {
-    // Audit signal must be loud — every connection attempt logs, so operators see it in
-    // periodic sync runs and not only on first boot.
-    process.env.LDAP_REJECT_UNAUTHORIZED = 'false';
-    await ldapService.getClient();
-    await ldapService.getClient();
-    expect(loggerWarnMock).toHaveBeenCalledTimes(2);
+    test('default rejectUnauthorized=true does NOT emit the MITM warning', async () => {
+      await ldapService.getClient();
+      expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    test('warning re-fires on every getClient() call (no stale-cache squelching)', async () => {
+      // Audit signal must be loud — every connection attempt logs, so operators see it in
+      // periodic sync runs and not only on first boot.
+      process.env.LDAP_REJECT_UNAUTHORIZED = 'false';
+      await ldapService.getClient();
+      await ldapService.getClient();
+      expect(warnSpy).toHaveBeenCalledTimes(2);
+    });
   });
 
   test('passes config.serverUrl to ldapjs.createClient', async () => {
@@ -1512,6 +1532,86 @@ describe('authenticateAndProvision', () => {
     });
 
     const result = await ldapService.authenticateAndProvision('alice', 'pw');
+    expect(result).toEqual({ authenticated: false });
+    expect(createUserMock).not.toHaveBeenCalled();
+    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('provisionOnLogin=false: refuses login for unknown LDAP users (no create)', async () => {
+    ldapRepoGetMock.mockResolvedValue({ ...ENABLED_LDAP_CONFIG, provisionOnLogin: false });
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=newbie,dc=test,dc=com', object: { uid: 'newbie', cn: 'Newbie' } },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
+
+    const result = await ldapService.authenticateAndProvision('newbie', 'pw');
+
+    expect(result).toEqual({ authenticated: false });
+    expect(createUserMock).not.toHaveBeenCalled();
+    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('provisionOnLogin=false: existing LDAP-bound user still logs in and roles refresh', async () => {
+    ldapRepoGetMock.mockResolvedValue({ ...ENABLED_LDAP_CONFIG, provisionOnLogin: false });
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice', cn: 'Alice' } },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(LDAP_LOGIN_USER);
+
+    const result = await ldapService.authenticateAndProvision('alice', 'pw');
+
+    expect(result).toEqual({
+      authenticated: true,
+      userId: LDAP_LOGIN_USER.id,
+      created: false,
+      canonicalUsername: 'alice',
+    });
+    expect(createUserMock).not.toHaveBeenCalled();
+    expect(applyExternalRolesForUserIfMatchedMock).toHaveBeenCalledWith(LDAP_LOGIN_USER.id, [], []);
+  });
+
+  test('provisionOnLogin=false: enforced even if config cache is invalidated mid-flight (race)', async () => {
+    ldapRepoGetMock.mockResolvedValue({ ...ENABLED_LDAP_CONFIG, provisionOnLogin: false });
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=newbie,dc=test,dc=com', object: { uid: 'newbie', cn: 'Newbie' } },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+    // Simulate a concurrent /api/ldap/config save landing between authenticateWithProfile
+    // (which loaded the cache) and the gate: invalidateConfig() nulls this.config. The gate
+    // must reload from DB instead of falling back to default-true and bypassing policy.
+    findLoginUserByNormalizedUsernameMock.mockImplementation(async () => {
+      ldapService.invalidateConfig();
+      return null;
+    });
+
+    const result = await ldapService.authenticateAndProvision('newbie', 'pw');
+
     expect(result).toEqual({ authenticated: false });
     expect(createUserMock).not.toHaveBeenCalled();
     expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();

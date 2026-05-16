@@ -31,6 +31,7 @@ export const INITIAL_LDAP_CONFIG = deepFreeze<LdapConfig>({
   roleMappings: [],
   tlsCaCertificate: '',
   autoProvisionAll: false,
+  provisionOnLogin: true,
 });
 
 export const INITIAL_GENERAL_SETTINGS = deepFreeze<GeneralSettingsState>({

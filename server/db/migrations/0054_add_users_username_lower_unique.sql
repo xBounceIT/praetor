@@ -1,4 +1,4 @@
--- Migration 0053: enforce case-insensitive uniqueness on users.username (#640).
+-- Migration 0054: enforce case-insensitive uniqueness on users.username (#640).
 -- Pre-flight aborts on existing case-only collisions: silently merging would let an
 -- attacker pick which of two shadowed rows survives, so we require manual resolution.
 

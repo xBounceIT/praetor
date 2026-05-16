@@ -212,7 +212,7 @@ class LDAPService {
 
     if (!tlsOptions.rejectUnauthorized) {
       // Audit signal so an env var leaked from a dev machine into staging/prod is not silent.
-      createChildLogger({ module: 'ldap' }).warn(
+      logger.warn(
         'LDAP_REJECT_UNAUTHORIZED=false: TLS certificate validation disabled — credentials are vulnerable to MITM',
       );
     }
@@ -388,6 +388,20 @@ class LDAPService {
         created: false,
         canonicalUsername,
       };
+    }
+
+    // Gate placement is load-bearing: it sits after the existing-user branch so already
+    // provisioned LDAP users still authenticate and refresh roles when the flag is off.
+    // Read the freshly committed config (reloading if invalidateConfig() raced after auth)
+    // so an admin save that flips provisionOnLogin off is enforced for the in-flight
+    // login instead of the default-true fallback letting it slip through.
+    const gateConfig = this.config ?? (await ldapRepo.get());
+    if (!(gateConfig?.provisionOnLogin ?? ldapRepo.DEFAULT_CONFIG.provisionOnLogin)) {
+      logger.warn(
+        { username: canonicalUsername },
+        'LDAP login authenticated for unknown user but provisionOnLogin is disabled; refusing login',
+      );
+      return { authenticated: false };
     }
 
     const name = result.displayName ?? canonicalUsername;
