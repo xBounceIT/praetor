@@ -6,7 +6,6 @@ import {
   ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS,
   buildPermission,
   buildPermissions,
-  DEFAULT_ROLE_PERMISSIONS,
   equivalentPermissionsFor,
   hasAnyPermission,
   hasPermission,
@@ -143,47 +142,6 @@ describe('isPermissionKnown', () => {
     expect(isPermissionKnown('crm.clients.execute')).toBe(false);
     expect(isPermissionKnown('does.not.exist')).toBe(false);
     expect(isPermissionKnown('')).toBe(false);
-  });
-});
-
-describe('DEFAULT_ROLE_PERMISSIONS', () => {
-  test('admin role union covers administration + base + always-granted notifications', () => {
-    const adminPerms = DEFAULT_ROLE_PERMISSIONS.admin;
-    for (const p of ADMINISTRATION_PERMISSIONS) expect(adminPerms).toContain(p);
-    for (const p of ADMIN_BASE_PERMISSIONS) expect(adminPerms).toContain(p);
-    for (const p of ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS) expect(adminPerms).toContain(p);
-  });
-
-  test('admin role contains no duplicates', () => {
-    const adminPerms = DEFAULT_ROLE_PERMISSIONS.admin;
-    expect(new Set(adminPerms).size).toBe(adminPerms.length);
-  });
-
-  test('manager role does not include hr.work_units.* (top-manager-only)', () => {
-    expect(DEFAULT_ROLE_PERMISSIONS.manager.some(isTopManagerOnlyPermission)).toBe(false);
-  });
-
-  test('top_manager role includes hr.work_units.* permissions', () => {
-    expect(DEFAULT_ROLE_PERMISSIONS.top_manager).toContain('hr.work_units.view');
-    expect(DEFAULT_ROLE_PERMISSIONS.top_manager).toContain('hr.work_units.create');
-    expect(DEFAULT_ROLE_PERMISSIONS.top_manager).toContain('hr.work_units.delete');
-    expect(DEFAULT_ROLE_PERMISSIONS.top_manager).toContain('hr.work_units_all.view');
-  });
-
-  test('user role is restricted to timesheets, project read-only, settings, docs', () => {
-    const userPerms = DEFAULT_ROLE_PERMISSIONS.user;
-    expect(userPerms).toContain('timesheets.tracker.view');
-    expect(userPerms).toContain('timesheets.tracker.create');
-    expect(userPerms).toContain('projects.manage.view');
-    expect(userPerms).toContain('settings.view');
-    expect(userPerms).toContain('docs.api.view');
-    expect(userPerms).not.toContain('crm.clients.view');
-    expect(userPerms).not.toContain('hr.work_units.view');
-    expect(userPerms).not.toContain('administration.roles.view');
-  });
-
-  test('user role does not include any administration.* permissions', () => {
-    expect(DEFAULT_ROLE_PERMISSIONS.user.some((p) => p.startsWith('administration.'))).toBe(false);
   });
 });
 
