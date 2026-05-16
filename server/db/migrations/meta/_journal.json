@@ -351,6 +351,13 @@
       "when": 1778952079520,
       "tag": "0049_cap_existing_durations_at_24h",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1778958793817,
+      "tag": "0050_add_oidc_nonce_to_sso_states",
+      "breakpoints": true
     }
   ]
 }

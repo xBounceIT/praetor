@@ -272,6 +272,7 @@ export class DbSamlCacheProvider implements CacheProvider {
       providerId: this.providerId,
       protocol: 'saml',
       codeVerifier: '',
+      nonce: '',
       relayState: value,
       expiresAt: new Date(Date.now() + SAML_REQUEST_TTL_MS),
     });
@@ -753,11 +754,15 @@ export const startOidcLogin = async (slug: string): Promise<string> => {
   const codeVerifier = oidc.randomPKCECodeVerifier();
   const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
   const state = oidc.randomState();
+  // Per OIDC Core 1.0 § 3.1.2.1, nonce binds the ID token to this browser session — defence
+  // in depth against ID-token replay if a token leaks downstream of the IdP.
+  const nonce = oidc.randomNonce();
   await ssoStatesRepo.insert({
     state,
     providerId: provider.id,
     protocol: 'oidc',
     codeVerifier,
+    nonce,
     relayState: '',
     expiresAt: new Date(Date.now() + OIDC_STATE_TTL_MS),
   });
@@ -767,6 +772,7 @@ export const startOidcLogin = async (slug: string): Promise<string> => {
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
     state,
+    nonce,
   }).href;
 };
 
@@ -790,6 +796,7 @@ export const completeOidcLogin = async (slug: string, callbackUrl: URL): Promise
   const tokens = await oidc.authorizationCodeGrant(config, publicCallbackUrl, {
     expectedState: state.state,
     pkceCodeVerifier: state.codeVerifier,
+    expectedNonce: state.nonce,
     idTokenExpected: true,
   });
   const claims = tokens.claims();

@@ -1,12 +1,14 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import * as realDns from 'node:dns/promises';
 import * as realNodeSaml from '@node-saml/node-saml';
+import * as realOidc from 'openid-client';
 import * as realSsoProvidersRepo from '../../repositories/ssoProvidersRepo.ts';
 import * as realSsoStatesRepo from '../../repositories/ssoStatesRepo.ts';
 import * as realExternalAuth from '../../services/external-auth.ts';
 
 const dnsSnap = { ...realDns };
 const nodeSamlSnap = { ...realNodeSaml };
+const oidcSnap = { ...realOidc };
 const externalAuthSnap = { ...realExternalAuth };
 const ssoProvidersRepoSnap = { ...realSsoProvidersRepo };
 const ssoStatesRepoSnap = { ...realSsoStatesRepo };
@@ -21,6 +23,10 @@ const samlValidatePostMock = mock();
 const resolveExternalIdentityMock = mock();
 const statesGetForProviderMock = mock();
 const statesInsertMock = mock();
+const oidcDiscoveryMock = mock();
+const oidcAuthorizationCodeGrantMock = mock();
+const oidcFetchUserInfoMock = mock();
+const oidcBuildAuthorizationUrlMock = mock();
 
 class StubSaml {
   validatePostResponseAsync(formBody: Record<string, string>) {
@@ -57,6 +63,13 @@ beforeAll(async () => {
     getForProvider: statesGetForProviderMock,
     insert: statesInsertMock,
   }));
+  mock.module('openid-client', () => ({
+    ...oidcSnap,
+    discovery: oidcDiscoveryMock,
+    authorizationCodeGrant: oidcAuthorizationCodeGrantMock,
+    fetchUserInfo: oidcFetchUserInfoMock,
+    buildAuthorizationUrl: oidcBuildAuthorizationUrlMock,
+  }));
 
   sso = await import('../../services/sso.ts');
 });
@@ -67,6 +80,7 @@ afterAll(() => {
   mock.module('../../services/external-auth.ts', () => externalAuthSnap);
   mock.module('../../repositories/ssoProvidersRepo.ts', () => ssoProvidersRepoSnap);
   mock.module('../../repositories/ssoStatesRepo.ts', () => ssoStatesRepoSnap);
+  mock.module('openid-client', () => oidcSnap);
 });
 
 beforeEach(() => {
@@ -81,6 +95,10 @@ beforeEach(() => {
     resolveExternalIdentityMock,
     statesGetForProviderMock,
     statesInsertMock,
+    oidcDiscoveryMock,
+    oidcAuthorizationCodeGrantMock,
+    oidcFetchUserInfoMock,
+    oidcBuildAuthorizationUrlMock,
   ])
     m.mockReset();
 });
@@ -441,6 +459,7 @@ describe('completeOidcLogin state-before-provider ordering', () => {
       providerId: 'sso-1',
       protocol: 'oidc',
       codeVerifier: 'v',
+      nonce: 'n',
       relayState: '',
       expiresAt: new Date(Date.now() + 60_000),
     });
@@ -644,6 +663,7 @@ describe('DbSamlCacheProvider provider scoping', () => {
     providerId: 'sso-A',
     protocol: 'saml' as const,
     codeVerifier: '',
+    nonce: '',
     relayState: 'relay-A',
     expiresAt: new Date(Date.now() + 60_000),
   };
@@ -690,5 +710,95 @@ describe('updateProvider config validation', () => {
     await expect(
       sso.updateProvider('sso-1', { enabled: true, usernameAttribute: '' }),
     ).rejects.toThrow(/usernameAttribute/);
+  });
+});
+
+describe('OIDC nonce wiring', () => {
+  const originalSsoBase = process.env.SSO_CALLBACK_BASE_URL;
+
+  const OIDC_PROVIDER: realSsoProvidersRepo.SsoProvider = {
+    ...SAML_PROVIDER,
+    id: 'sso-oidc-1',
+    protocol: 'oidc',
+    slug: 'google',
+    name: 'Google',
+    issuerUrl: 'https://accounts.google.com',
+    clientId: 'cid',
+    // Empty clientSecret short-circuits decrypt() in getProviderSecrets, so we don't need a
+    // real encrypted payload to exercise this path.
+    clientSecret: '',
+    scopes: 'openid email profile',
+    metadataUrl: '',
+    metadataXml: '',
+  };
+
+  beforeEach(() => {
+    process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
+    oidcDiscoveryMock.mockResolvedValue({ __fakeConfig: true });
+    // createOidcConfig SSRF-checks issuerUrl via dns.lookup({ all: true }).
+    dnsLookupMock.mockResolvedValue([{ address: '142.251.32.46', family: 4 }]);
+  });
+  afterAll(() => {
+    if (originalSsoBase === undefined) delete process.env.SSO_CALLBACK_BASE_URL;
+    else process.env.SSO_CALLBACK_BASE_URL = originalSsoBase;
+  });
+
+  test('startOidcLogin generates a nonce, persists it, and forwards it to buildAuthorizationUrl', async () => {
+    findBySlugMock.mockResolvedValue(OIDC_PROVIDER);
+    statesInsertMock.mockResolvedValue(undefined);
+    oidcBuildAuthorizationUrlMock.mockImplementation(
+      (_config: unknown, parameters: Record<string, string>) => {
+        const u = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+        for (const [k, v] of Object.entries(parameters)) u.searchParams.set(k, v);
+        return u;
+      },
+    );
+
+    const urlString = await sso.startOidcLogin('google');
+
+    expect(statesInsertMock).toHaveBeenCalledTimes(1);
+    const inserted = statesInsertMock.mock.calls[0][0];
+    expect(inserted.protocol).toBe('oidc');
+    expect(inserted.providerId).toBe('sso-oidc-1');
+    expect(typeof inserted.nonce).toBe('string');
+    expect(inserted.nonce.length).toBeGreaterThan(0);
+
+    expect(oidcBuildAuthorizationUrlMock).toHaveBeenCalledTimes(1);
+    const params = oidcBuildAuthorizationUrlMock.mock.calls[0][1];
+    expect(params.nonce).toBe(inserted.nonce);
+    expect(params.state).toBe(inserted.state);
+    expect(params.code_challenge_method).toBe('S256');
+
+    expect(new URL(urlString).searchParams.get('nonce')).toBe(inserted.nonce);
+  });
+
+  test('completeOidcLogin forwards the persisted nonce as expectedNonce to authorizationCodeGrant', async () => {
+    statesConsumeMock.mockResolvedValue({
+      state: 'st',
+      providerId: 'sso-oidc-1',
+      protocol: 'oidc',
+      codeVerifier: 'verifier',
+      nonce: 'persisted-nonce',
+      relayState: '',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    findByIdMock.mockResolvedValue(OIDC_PROVIDER);
+    // Throwing from the grant short-circuits the downstream user-lookup we don't need to
+    // exercise here; the assertion we care about is the `expectedNonce` argument.
+    oidcAuthorizationCodeGrantMock.mockRejectedValue(new Error('stop after grant'));
+
+    const callbackUrl = new URL(
+      'http://internal.invalid/api/auth/sso/oidc/google/callback?state=st&code=abc',
+    );
+    await expect(sso.completeOidcLogin('google', callbackUrl)).rejects.toThrow('stop after grant');
+
+    expect(oidcAuthorizationCodeGrantMock).toHaveBeenCalledTimes(1);
+    const checks = oidcAuthorizationCodeGrantMock.mock.calls[0][2];
+    expect(checks).toMatchObject({
+      expectedState: 'st',
+      pkceCodeVerifier: 'verifier',
+      expectedNonce: 'persisted-nonce',
+      idTokenExpected: true,
+    });
   });
 });
