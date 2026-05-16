@@ -21,7 +21,7 @@ When saving LDAP configuration, Praetor confirms the save only after the setting
 
 When editing an already saved LDAP configuration, the bind password remains masked. You can update the Bind DN without re-entering the password when the existing secret is still valid; re-enter the password only when changing it, or clear it together with the Bind DN to remove bind credentials.
 
-Before enabling a SAML provider, configure either a valid metadata source (URL or XML) or manual settings with **Entry Point** and **IdP Certificate**. Praetor rejects enabled SAML providers that are missing this minimum configuration.
+Before enabling a SAML provider, configure either a valid metadata source (URL or XML) or manual settings with **Entry Point** and **IdP Certificate**. Praetor rejects enabled SAML providers that are missing this minimum configuration. Praetor also requires the **IdP Issuer** field unless the IdP entity ID can be extracted from an inline **Metadata XML** — otherwise the `<Issuer>` element of incoming SAML responses cannot be verified.
 
 If saving an OIDC or SAML provider fails, the provider tab shows an error message with the detail returned by the server. Correct the reported fields or retry when the service is available before treating the configuration as updated.
 

@@ -81,11 +81,23 @@ const assertEnabledProviderConfig = (provider: ssoProvidersRepo.SsoProvider): vo
     return;
   }
 
-  const hasMetadata = hasConfigValue(provider.metadataUrl) || hasConfigValue(provider.metadataXml);
+  const hasMetadataXml = hasConfigValue(provider.metadataXml);
+  const hasMetadata = hasConfigValue(provider.metadataUrl) || hasMetadataXml;
   const hasManual = hasConfigValue(provider.entryPoint) && hasConfigValue(provider.idpCert);
   if (!hasMetadata && !hasManual) {
     throw new SsoProviderValidationError(
       'SAML requires metadata URL/XML or manual entryPoint and idpCert',
+    );
+  }
+
+  // node-saml silently skips <Issuer> validation when idpIssuer is empty, so the SP would accept
+  // an assertion from any IdP whose signing cert chains correctly. Require provider.idpIssuer
+  // unless we can derive it from inline metadata at save time. metadataUrl mode is caught by
+  // the runtime guard in createSamlClient instead.
+  const derivedIssuer = hasMetadataXml ? parseSamlMetadata(provider.metadataXml).idpIssuer : '';
+  if (!hasConfigValue(provider.idpIssuer) && !derivedIssuer) {
+    throw new SsoProviderValidationError(
+      'SAML requires idpIssuer when it cannot be derived from inline metadata',
     );
   }
 };
@@ -567,8 +579,9 @@ const createSamlClient = async (
   const issuer = provider.spIssuer || buildSamlMetadataUrl(provider.slug, baseUrl);
   const entryPoint = idp.entryPoint || provider.entryPoint;
   const idpCert = normalizeCertificate(idp.idpCert || provider.idpCert);
-  if (!entryPoint || !idpCert) {
-    throw new Error('SAML provider is missing entry point or IdP certificate');
+  const idpIssuer = idp.idpIssuer || provider.idpIssuer;
+  if (!entryPoint || !idpCert || !idpIssuer) {
+    throw new Error('SAML provider is missing entry point, IdP certificate, or IdP issuer');
   }
   return new SAML({
     callbackUrl,
@@ -576,7 +589,7 @@ const createSamlClient = async (
     audience: issuer,
     entryPoint,
     idpCert,
-    idpIssuer: idp.idpIssuer || provider.idpIssuer || undefined,
+    idpIssuer,
     privateKey: privateKey || undefined,
     publicCert: provider.publicCert || undefined,
     signatureAlgorithm: 'sha256',

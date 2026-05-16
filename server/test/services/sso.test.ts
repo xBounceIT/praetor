@@ -10,6 +10,8 @@ const ssoStatesRepoSnap = { ...realSsoStatesRepo };
 const dnsLookupMock = mock();
 const findBySlugMock = mock();
 const findByIdMock = mock();
+const insertMock = mock();
+const updateMock = mock();
 const statesConsumeMock = mock();
 
 let sso: typeof import('../../services/sso.ts');
@@ -24,6 +26,8 @@ beforeAll(async () => {
     ...ssoProvidersRepoSnap,
     findBySlug: findBySlugMock,
     findById: findByIdMock,
+    insert: insertMock,
+    update: updateMock,
   }));
   mock.module('../../repositories/ssoStatesRepo.ts', () => ({
     ...ssoStatesRepoSnap,
@@ -40,7 +44,15 @@ afterAll(() => {
 });
 
 beforeEach(() => {
-  for (const m of [dnsLookupMock, findBySlugMock, findByIdMock, statesConsumeMock]) m.mockReset();
+  for (const m of [
+    dnsLookupMock,
+    findBySlugMock,
+    findByIdMock,
+    insertMock,
+    updateMock,
+    statesConsumeMock,
+  ])
+    m.mockReset();
 });
 
 describe('isPrivateIp', () => {
@@ -376,5 +388,97 @@ describe('completeOidcLogin state-before-provider ordering', () => {
       'Invalid or expired SSO state',
     );
     expect(statesConsumeMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SAML provider validation requires idpIssuer', () => {
+  // node-saml silently skips <Issuer> validation when idpIssuer is empty (issue #597). The
+  // service must refuse to save/enable a SAML provider that could end up calling the library
+  // without an issuer to enforce, and the runtime SAML client must refuse to be built in that
+  // shape even when validation was bypassed via a stale DB row.
+  const baseSamlInput = {
+    protocol: 'saml' as const,
+    slug: 'okta-test',
+    name: 'Okta',
+    enabled: true,
+    entryPoint: 'https://idp.example.com/sso',
+    idpCert: 'MIIBdummyCert',
+  };
+
+  test('createProvider rejects enabled manual SAML config with empty idpIssuer', async () => {
+    await expect(sso.createProvider(baseSamlInput)).rejects.toThrow(sso.SsoProviderValidationError);
+    await expect(sso.createProvider(baseSamlInput)).rejects.toThrow(/idpIssuer/);
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  test('createProvider accepts manual SAML config when idpIssuer is set', async () => {
+    insertMock.mockImplementation(async (provider: realSsoProvidersRepo.SsoProvider) => provider);
+    const created = await sso.createProvider({
+      ...baseSamlInput,
+      idpIssuer: 'https://idp.example.com/',
+    });
+    expect(created.idpIssuer).toBe('https://idp.example.com/');
+    expect(insertMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('createProvider accepts metadataXml whose entityID supplies the issuer', async () => {
+    insertMock.mockImplementation(async (provider: realSsoProvidersRepo.SsoProvider) => provider);
+    const metadataXml = `<?xml version="1.0"?>
+<EntityDescriptor entityID="https://idp.example.com/">
+  <IDPSSODescriptor>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso"/>
+    <KeyDescriptor><KeyInfo><X509Data><X509Certificate>MIIBcert</X509Certificate></X509Data></KeyInfo></KeyDescriptor>
+  </IDPSSODescriptor>
+</EntityDescriptor>`;
+    const created = await sso.createProvider({
+      protocol: 'saml',
+      slug: 'okta-metadata',
+      name: 'Okta',
+      enabled: true,
+      metadataXml,
+    });
+    expect(created.idpIssuer).toBe('');
+    expect(insertMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('createProvider rejects metadataXml that does not expose an entityID', async () => {
+    const metadataXml = `<?xml version="1.0"?>
+<EntityDescriptor>
+  <IDPSSODescriptor>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso"/>
+  </IDPSSODescriptor>
+</EntityDescriptor>`;
+    await expect(
+      sso.createProvider({
+        protocol: 'saml',
+        slug: 'okta-no-issuer',
+        name: 'Okta',
+        enabled: true,
+        metadataXml,
+      }),
+    ).rejects.toThrow(/idpIssuer/);
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  test('startSamlLogin refuses to build SAML client when resolved idpIssuer is empty', async () => {
+    // Simulates a metadataUrl provider that slipped past save-time validation (e.g. enabled in
+    // an older release before this fix). The runtime guard in createSamlClient must still
+    // refuse to construct a SAML instance whose idpIssuer would be undefined.
+    const originalBase = process.env.SSO_CALLBACK_BASE_URL;
+    process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
+    try {
+      findBySlugMock.mockResolvedValue({
+        ...SAML_PROVIDER,
+        metadataUrl: '',
+        metadataXml: '',
+        entryPoint: 'https://idp.example.com/sso',
+        idpCert: 'MIIBdummyCert',
+        idpIssuer: '',
+      });
+      await expect(sso.startSamlLogin('okta')).rejects.toThrow(/IdP issuer/);
+    } finally {
+      if (originalBase === undefined) delete process.env.SSO_CALLBACK_BASE_URL;
+      else process.env.SSO_CALLBACK_BASE_URL = originalBase;
+    }
   });
 });

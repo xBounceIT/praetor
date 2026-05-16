@@ -177,4 +177,39 @@ describe('<AuthSettings />', () => {
 
     expect(within(form).getByRole('button', { name: 'admin.sso.saveProvider' })).toBeEnabled();
   });
+
+  test('blocks save and surfaces idpIssuer error for enabled manual SAML missing the issuer', async () => {
+    // Issue #597: node-saml silently skips <Issuer> validation when idpIssuer is empty.
+    // The form must refuse to send a save request for an enabled manual SAML config that
+    // has not specified an IdP issuer.
+    const onSaveSsoProvider = mock(async (provider: Partial<SsoProvider>) =>
+      buildProvider(provider.protocol ?? 'saml', provider),
+    );
+    renderAuthSettings({
+      onSaveSsoProvider,
+      ssoProviders: [
+        buildProvider('saml', {
+          enabled: true,
+          entryPoint: 'https://idp.example.com/sso',
+          idpCert: 'MIIBdummyCert',
+          // idpIssuer left empty — the violation under test.
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+    // The form initially renders an empty "new provider" draft. Click the pen icon on the
+    // listed SAML provider to load its values into the form.
+    fireEvent.click(screen.getByRole('button', { name: 'admin.sso.editProvider' }));
+    const heading = screen.getByText('admin.sso.editProvider', { selector: 'h3' });
+    const form = heading.closest('form') as HTMLFormElement | null;
+    if (!form) throw new Error('SAML provider form not found');
+
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(within(form).getByText('admin.sso.errors.idpIssuerRequired')).toBeInTheDocument();
+    });
+    expect(onSaveSsoProvider).not.toHaveBeenCalled();
+  });
 });
