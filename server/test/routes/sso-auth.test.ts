@@ -47,25 +47,34 @@ const samlProvider: realSsoProvidersRepo.SsoProvider = {
   roleMappings: [],
 };
 
+const oidcProvider: realSsoProvidersRepo.SsoProvider = {
+  ...samlProvider,
+  protocol: 'oidc',
+  slug: 'google',
+  issuerUrl: 'https://accounts.google.com',
+  clientId: 'client-123',
+  entryPoint: '',
+};
+
+const originalSsoBase = process.env.SSO_CALLBACK_BASE_URL;
+let testApp: FastifyInstance;
+
+beforeEach(async () => {
+  process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
+  findBySlugMock.mockReset();
+  testApp = await buildRouteTestApp(routePlugin, '/api/auth/sso');
+});
+
+afterEach(async () => {
+  await testApp.close();
+});
+
+afterAll(() => {
+  if (originalSsoBase === undefined) delete process.env.SSO_CALLBACK_BASE_URL;
+  else process.env.SSO_CALLBACK_BASE_URL = originalSsoBase;
+});
+
 describe('GET /api/auth/sso/saml/:slug/metadata', () => {
-  const originalSsoBase = process.env.SSO_CALLBACK_BASE_URL;
-  let testApp: FastifyInstance;
-
-  beforeEach(async () => {
-    process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
-    findBySlugMock.mockReset();
-    testApp = await buildRouteTestApp(routePlugin, '/api/auth/sso');
-  });
-
-  afterEach(async () => {
-    await testApp.close();
-  });
-
-  afterAll(() => {
-    if (originalSsoBase === undefined) delete process.env.SSO_CALLBACK_BASE_URL;
-    else process.env.SSO_CALLBACK_BASE_URL = originalSsoBase;
-  });
-
   test.each([
     ['disabled provider', { ...samlProvider, enabled: false }],
     ['missing provider', null],
@@ -88,5 +97,37 @@ describe('GET /api/auth/sso/saml/:slug/metadata', () => {
     expect(response.statusCode).toBe(200);
     expect(response.headers['content-type']).toContain('application/samlmetadata+xml');
     expect(response.body).toContain('EntityDescriptor');
+  });
+});
+
+// Locks in the /start-route behaviour change introduced alongside #600: missing or disabled
+// providers now surface as 404 via NotFoundError instead of the previous bare 500.
+describe('GET /api/auth/sso/saml/:slug/start', () => {
+  test.each([
+    ['disabled provider', { ...samlProvider, enabled: false }],
+    ['missing provider', null],
+    ['wrong-protocol provider', { ...samlProvider, protocol: 'oidc' as const }],
+  ])('returns 404 for %s', async (_label, mocked) => {
+    findBySlugMock.mockResolvedValue(mocked);
+    const response = await testApp.inject({
+      method: 'GET',
+      url: '/api/auth/sso/saml/okta/start',
+    });
+    expect(response.statusCode).toBe(404);
+  });
+});
+
+describe('GET /api/auth/sso/oidc/:slug/start', () => {
+  test.each([
+    ['disabled provider', { ...oidcProvider, enabled: false }],
+    ['missing provider', null],
+    ['wrong-protocol provider', { ...oidcProvider, protocol: 'saml' as const }],
+  ])('returns 404 for %s', async (_label, mocked) => {
+    findBySlugMock.mockResolvedValue(mocked);
+    const response = await testApp.inject({
+      method: 'GET',
+      url: '/api/auth/sso/oidc/google/start',
+    });
+    expect(response.statusCode).toBe(404);
   });
 });
