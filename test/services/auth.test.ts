@@ -135,6 +135,29 @@ describe('authApi', () => {
     });
   });
 
+  describe('consumeSsoTicket', () => {
+    test('POSTs to /auth/sso/consume and uses response user without /auth/me', async () => {
+      programRoutes({
+        '/auth/sso/consume': { token: 'sso-token', user: { ...canonicalUser } },
+      });
+
+      const result = await authApi.consumeSsoTicket('ticket-abc');
+
+      // No fallback /auth/me when the response user is canonical (issue #616).
+      expect(fetchMock.mock.calls).toHaveLength(1);
+      const consumeCall = fetchMock.mock.calls[0];
+      expect(String(consumeCall[0])).toContain('/auth/sso/consume');
+      expect((consumeCall[1] as { method: string }).method).toBe('POST');
+      expect((consumeCall[1] as { body: string }).body).toBe(
+        JSON.stringify({ ticket: 'ticket-abc' }),
+      );
+
+      expect(getAuthToken()).toBe('sso-token');
+      expect(result.token).toBe('sso-token');
+      expect(result.user.id).toBe('u-1');
+    });
+  });
+
   describe('me', () => {
     test('fetches /auth/me and returns the normalized canonical user', async () => {
       programRoutes({ '/auth/me': { ...canonicalUser } });
