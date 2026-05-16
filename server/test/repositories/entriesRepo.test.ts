@@ -638,9 +638,18 @@ describe('update', () => {
     const result = await entriesRepo.update('e-1', { version: 1 }, testDb);
     expect(exec.calls[0].sql).not.toContain('update');
     expect(exec.calls[0].sql).toContain('select');
-    expect(exec.calls[0].sql).toContain('"version" = $2');
-    expect(exec.calls[0].params).toEqual(['e-1', 1]);
+    // No version predicate: a concurrent bump must stay distinguishable from a
+    // deleted row, otherwise the caller's 409-vs-404 branching collapses.
+    expect(exec.calls[0].sql).not.toContain('"version" =');
+    expect(exec.calls[0].params).toEqual(['e-1']);
     expect(result?.id).toBe('e-1');
+  });
+
+  test('no-op patch returns the current row even when expected version is stale', async () => {
+    exec.enqueue({ rows: [entryRow({ 15: 7 })] });
+    const result = await entriesRepo.update('e-1', { version: 1 }, testDb);
+    expect(result?.id).toBe('e-1');
+    expect(result?.version).toBe(7);
   });
 
   test('returns null when no row matched (UPDATE path)', async () => {
