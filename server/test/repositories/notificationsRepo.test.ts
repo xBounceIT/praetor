@@ -140,6 +140,16 @@ describe('admin password warning helpers', () => {
     expect(idB).not.toEqual(LEGACY_ADMIN_WARNING_ID);
   });
 
+  // The generated id is stored in notifications.id which is varchar(50). A naive
+  // `${userId}-<long-suffix>` overflows for `u-<uuid>` shaped user ids; keep this
+  // assertion in place so the helper can't grow back past the column limit.
+  test('adminPasswordWarningNotificationId fits notifications.id varchar(50)', () => {
+    const uuidShapedUserId = 'u-00000000-0000-0000-0000-000000000000'; // 38 chars, generatePrefixedId('u') shape
+    expect(uuidShapedUserId.length).toBe(38);
+    const id = notificationsRepo.adminPasswordWarningNotificationId(uuidShapedUserId);
+    expect(id.length).toBeLessThanOrEqual(50);
+  });
+
   test('deleteAdminPasswordWarning targets per-user id and cleans up the legacy id', async () => {
     exec.enqueue({ rows: [], rowCount: 1 });
 

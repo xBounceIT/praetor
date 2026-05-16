@@ -25,8 +25,9 @@ export type Notification = {
 const LEGACY_ADMIN_PASSWORD_WARNING_NOTIFICATION_ID = 'admin-default-password-warning';
 export const ADMIN_PASSWORD_WARNING_TYPE = 'admin_password_warning';
 
-export const adminPasswordWarningNotificationId = (userId: string): string =>
-  `${userId}-admin-default-password-warning`;
+// Short prefix so that `apw-${userId}` fits inside `notifications.id`'s varchar(50)
+// even when `userId` is a `u-<uuid>` (38 chars) — full id stays at 42 chars.
+export const adminPasswordWarningNotificationId = (userId: string): string => `apw-${userId}`;
 
 const ADMIN_PASSWORD_WARNING_TITLE = 'Change the default admin password';
 const ADMIN_PASSWORD_WARNING_MESSAGE =
