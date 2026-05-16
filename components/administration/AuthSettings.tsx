@@ -21,6 +21,7 @@ import SelectControl from '../shared/SelectControl';
 import Toggle from '../shared/Toggle';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Button } from '../ui/button';
+import { FieldDescription, FieldLabel } from '../ui/field';
 import { Switch } from '../ui/switch';
 
 const PEM_BEGIN_MARKER = '-----BEGIN CERTIFICATE-----';
@@ -49,6 +50,7 @@ const DEFAULT_LDAP_CONFIG: LdapConfig = {
   roleMappings: [],
   tlsCaCertificate: '',
   autoProvisionAll: false,
+  provisionOnLogin: true,
 };
 
 const buildDefaultProvider = (protocol: SsoProtocol): Partial<SsoProvider> => ({
@@ -1012,44 +1014,51 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 />
               </div>
 
-              <div className="border-t border-zinc-100 p-6 space-y-3">
-                <div
-                  id="ldap-provisioning-heading"
-                  className="text-xs font-bold text-muted-foreground uppercase tracking-wider"
-                >
-                  {t('admin.ldap.provisioning.heading', 'User Provisioning Mode')}
-                </div>
-                <div className="flex items-center gap-4 flex-wrap">
-                  <span
-                    className={`text-sm font-medium ${!ldapForm.autoProvisionAll ? 'text-foreground' : 'text-muted-foreground'}`}
-                  >
-                    {t('admin.ldap.provisioning.onLogin', 'Provision on Login')}
-                  </span>
+              <fieldset className="border-t border-zinc-100 p-6 space-y-4">
+                <legend className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
+                  {t('admin.ldap.provisioning.heading', 'User Provisioning')}
+                </legend>
+                <div className="flex items-start gap-3">
                   <Switch
+                    id="ldap-provision-on-login"
+                    checked={ldapForm.provisionOnLogin}
+                    onCheckedChange={(provisionOnLogin) =>
+                      setLdapForm((prev) => ({ ...prev, provisionOnLogin }))
+                    }
+                  />
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <FieldLabel htmlFor="ldap-provision-on-login" className="cursor-pointer">
+                      {t('admin.ldap.provisioning.onLoginLabel', 'Provision on first login')}
+                    </FieldLabel>
+                    <FieldDescription>
+                      {t(
+                        'admin.ldap.provisioning.onLoginHelp',
+                        'When on, any LDAP user that authenticates successfully gets a local account created on first sign-in. Turn off to restrict logins to users that already have a local account (created manually or via sync).',
+                      )}
+                    </FieldDescription>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Switch
+                    id="ldap-auto-provision-all"
                     checked={ldapForm.autoProvisionAll}
                     onCheckedChange={(autoProvisionAll) =>
                       setLdapForm((prev) => ({ ...prev, autoProvisionAll }))
                     }
-                    aria-labelledby="ldap-provisioning-heading"
                   />
-                  <span
-                    className={`text-sm font-medium ${ldapForm.autoProvisionAll ? 'text-foreground' : 'text-muted-foreground'}`}
-                  >
-                    {t('admin.ldap.provisioning.autoAll', 'Auto provision all matching users')}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {ldapForm.autoProvisionAll
-                    ? t(
-                        'admin.ldap.provisioning.helpAutoAll',
-                        'Periodic sync creates a local account for every LDAP entry that matches the user filter, and keeps existing users in sync.',
-                      )
-                    : t(
-                        'admin.ldap.provisioning.helpOnLogin',
-                        'Users are created the first time they sign in. Periodic sync only refreshes display names and role mappings of existing users.',
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <FieldLabel htmlFor="ldap-auto-provision-all" className="cursor-pointer">
+                      {t('admin.ldap.provisioning.autoAllLabel', 'Bulk-provision during sync')}
+                    </FieldLabel>
+                    <FieldDescription>
+                      {t(
+                        'admin.ldap.provisioning.autoAllHelp',
+                        'When on, the periodic sync creates a local account for every LDAP entry that matches the user filter. When off, sync only refreshes display names and role mappings of users that already exist.',
                       )}
-                </p>
-              </div>
+                    </FieldDescription>
+                  </div>
+                </div>
+              </fieldset>
 
               <div className="border-t border-zinc-100 p-6">
                 <RoleMappings

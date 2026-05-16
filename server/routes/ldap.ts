@@ -88,6 +88,7 @@ const ldapConfigSchemaProperties = {
   roleMappings: { type: 'array', items: roleMappingSchema },
   tlsCaCertificate: { type: 'string' },
   autoProvisionAll: { type: 'boolean' },
+  provisionOnLogin: { type: 'boolean' },
 } as const satisfies Record<keyof ldapRepo.LdapConfig, unknown>;
 
 const ldapConfigSchema = {
@@ -108,6 +109,7 @@ const ldapConfigUpdateBodySchemaProperties = {
   roleMappings: { type: 'array', items: roleMappingSchema },
   tlsCaCertificate: { type: ['string', 'null'], maxLength: TLS_CA_MAX_LENGTH },
   autoProvisionAll: { type: 'boolean' },
+  provisionOnLogin: { type: 'boolean' },
 } as const satisfies Record<keyof ldapRepo.LdapConfig, unknown>;
 
 const ldapConfigUpdateBodySchema = {
@@ -228,6 +230,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         roleMappings?: Array<{ ldapGroup?: string; role?: string }>;
         tlsCaCertificate?: string | null;
         autoProvisionAll?: boolean;
+        provisionOnLogin?: boolean;
       };
       const { serverUrl, baseDn, userFilter, groupBaseDn, groupFilter, roleMappings } = body;
       // bindPassword === MASKED_SECRET means "preserve the stored secret" (the UI round-trips
@@ -339,6 +342,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, autoProvisionAllResult.message);
       }
 
+      const provisionOnLoginResult = parseBooleanField(body, 'provisionOnLogin');
+      if (!provisionOnLoginResult.ok) {
+        return badRequest(reply, provisionOnLoginResult.message);
+      }
+
       const updatePatch: ldapRepo.LdapConfigPatch = {
         enabled: enabledValue,
         serverUrl,
@@ -350,6 +358,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         groupFilter: normalizedGroupFilter,
         roleMappings: validatedMappings,
         autoProvisionAll: autoProvisionAllResult.value,
+        provisionOnLogin: provisionOnLoginResult.value,
         ...tlsCaResult.patch,
       };
 

@@ -1477,6 +1477,86 @@ describe('authenticateAndProvision', () => {
     expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
   });
 
+  test('provisionOnLogin=false: refuses login for unknown LDAP users (no create)', async () => {
+    ldapRepoGetMock.mockResolvedValue({ ...ENABLED_LDAP_CONFIG, provisionOnLogin: false });
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=newbie,dc=test,dc=com', object: { uid: 'newbie', cn: 'Newbie' } },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+
+    const result = await ldapService.authenticateAndProvision('newbie', 'pw');
+
+    expect(result).toEqual({ authenticated: false });
+    expect(createUserMock).not.toHaveBeenCalled();
+    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('provisionOnLogin=false: existing LDAP-bound user still logs in and roles refresh', async () => {
+    ldapRepoGetMock.mockResolvedValue({ ...ENABLED_LDAP_CONFIG, provisionOnLogin: false });
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice', cn: 'Alice' } },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue(LDAP_LOGIN_USER);
+
+    const result = await ldapService.authenticateAndProvision('alice', 'pw');
+
+    expect(result).toEqual({
+      authenticated: true,
+      userId: LDAP_LOGIN_USER.id,
+      created: false,
+      canonicalUsername: 'alice',
+    });
+    expect(createUserMock).not.toHaveBeenCalled();
+    expect(applyExternalRolesForUserIfMatchedMock).toHaveBeenCalledWith(LDAP_LOGIN_USER.id, [], []);
+  });
+
+  test('provisionOnLogin=false: enforced even if config cache is invalidated mid-flight (race)', async () => {
+    ldapRepoGetMock.mockResolvedValue({ ...ENABLED_LDAP_CONFIG, provisionOnLogin: false });
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=newbie,dc=test,dc=com', object: { uid: 'newbie', cn: 'Newbie' } },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+    // Simulate a concurrent /api/ldap/config save landing between authenticateWithProfile
+    // (which loaded the cache) and the gate: invalidateConfig() nulls this.config. The gate
+    // must reload from DB instead of falling back to default-true and bypassing policy.
+    findLoginUserByUsernameMock.mockImplementation(async () => {
+      ldapService.invalidateConfig();
+      return null;
+    });
+
+    const result = await ldapService.authenticateAndProvision('newbie', 'pw');
+
+    expect(result).toEqual({ authenticated: false });
+    expect(createUserMock).not.toHaveBeenCalled();
+    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
+  });
+
   test('races on unique constraint: re-fetches by canonical username after createUser throws 23505', async () => {
     nextFixture = {
       bindResponses: [null, null],

@@ -29,6 +29,7 @@ const ldapConfig: LdapConfig = {
   roleMappings: [],
   tlsCaCertificate: '',
   autoProvisionAll: false,
+  provisionOnLogin: true,
 };
 
 describe('makeLdapHandlers', () => {

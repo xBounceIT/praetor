@@ -42,6 +42,7 @@ const PROJECTION_KEYS = [
   'roleMappings',
   'tlsCaCertificate',
   'autoProvisionAll',
+  'provisionOnLogin',
 ] as const;
 type ProjectionKey = (typeof PROJECTION_KEYS)[number];
 type RowFields = Record<ProjectionKey, unknown>;
@@ -58,6 +59,7 @@ const baseFields: RowFields = {
   roleMappings: [] as ldapRepo.LdapRoleMapping[],
   tlsCaCertificate: null,
   autoProvisionAll: false,
+  provisionOnLogin: true,
 };
 
 const buildRow = (overrides: Partial<RowFields> = {}): unknown[] => {
@@ -208,6 +210,7 @@ describe('DEFAULT_CONFIG', () => {
       roleMappings: [],
       tlsCaCertificate: '',
       autoProvisionAll: false,
+      provisionOnLogin: true,
     });
   });
 });

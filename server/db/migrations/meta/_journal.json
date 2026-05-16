@@ -372,6 +372,13 @@
       "when": 1778964101071,
       "tag": "0052_add_sso_end_session",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1778966344692,
+      "tag": "0053_add_provision_on_login_to_ldap_config",
+      "breakpoints": true
     }
   ]
 }

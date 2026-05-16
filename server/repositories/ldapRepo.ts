@@ -23,6 +23,7 @@ export const DEFAULT_CONFIG: LdapConfig = {
   roleMappings: [],
   tlsCaCertificate: '',
   autoProvisionAll: false,
+  provisionOnLogin: true,
 };
 
 const LDAP_PROJECTION = {
@@ -37,6 +38,7 @@ const LDAP_PROJECTION = {
   roleMappings: ldapConfig.roleMappings,
   tlsCaCertificate: ldapConfig.tlsCaCertificate,
   autoProvisionAll: ldapConfig.autoProvisionAll,
+  provisionOnLogin: ldapConfig.provisionOnLogin,
 } as const;
 
 type LdapRow = {
@@ -51,6 +53,7 @@ type LdapRow = {
   roleMappings: LdapRoleMapping[] | null;
   tlsCaCertificate: string | null;
   autoProvisionAll: boolean | null;
+  provisionOnLogin: boolean | null;
 };
 
 // Schema columns are nullable but always populated at runtime via DB defaults on the seeded
@@ -83,6 +86,7 @@ const mapRow = (row: LdapRow): LdapConfig => ({
   roleMappings: row.roleMappings ?? [],
   tlsCaCertificate: row.tlsCaCertificate ?? '',
   autoProvisionAll: row.autoProvisionAll ?? DEFAULT_CONFIG.autoProvisionAll,
+  provisionOnLogin: row.provisionOnLogin ?? DEFAULT_CONFIG.provisionOnLogin,
 });
 
 // Self-heals legacy plaintext rows by re-encrypting them in place. Idempotent: subsequent
@@ -150,6 +154,7 @@ const buildUpdateSet = (patch: LdapConfigPatch) => {
     roleMappings: sql`COALESCE(${roleMappingsParam}::jsonb, ${ldapConfig.roleMappings})`,
     tlsCaCertificate: tlsCaParam,
     autoProvisionAll: sql`COALESCE(${patch.autoProvisionAll ?? null}, ${ldapConfig.autoProvisionAll})`,
+    provisionOnLogin: sql`COALESCE(${patch.provisionOnLogin ?? null}, ${ldapConfig.provisionOnLogin})`,
     updatedAt: sql`CURRENT_TIMESTAMP`,
   };
 };

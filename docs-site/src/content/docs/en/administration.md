@@ -41,14 +41,14 @@ LDAP group lookup uses the configured **Group Search Base** and **Group Member F
 
 On every LDAP login and on each periodic synchronization, Praetor recomputes the user's role from the LDAP group role mapping. If at least one of the user's LDAP groups matches a configured mapping, those mapped roles win and replace the user's current assignment. **If no LDAP group matches any configured mapping, the user's existing role is preserved** — the administrator's manual role assignment is not silently demoted to the default `User` role. To force a role change for a user with no matching mapping, update either the LDAP group membership or the role mapping configuration.
 
-When LDAP is enabled, application users that exist in the directory but not yet in Praetor are auto-provisioned on their first successful login. The new account is created with the canonical LDAP username (`uid` or `sAMAccountName`) — not the value typed at the login form — so that subsequent LDAP synchronizations key the same row even when the user signs in with an alias such as their email address. The provisioned user is bound to LDAP authentication and receives the roles mapped from their LDAP groups; new accounts with no matching mapping default to the `User` role.
+When LDAP is enabled, application users that exist in the directory but not yet in Praetor can be auto-provisioned on their first successful login. The new account is created with the canonical LDAP username (`uid` or `sAMAccountName`) — not the value typed at the login form — so that subsequent LDAP synchronizations key the same row even when the user signs in with an alias such as their email address. The provisioned user is bound to LDAP authentication and receives the roles mapped from their LDAP groups; new accounts with no matching mapping default to the `User` role.
 
-The **User Provisioning Mode** toggle in the LDAP settings controls what the periodic sync does for users that do not yet exist locally:
+The **User Provisioning** section in the LDAP settings exposes two independent switches:
 
-- **Provision on Login** (default) — periodic sync only refreshes display names and role mappings for existing application users. New users are only created the first time they sign in.
-- **Auto provision all matching users** — periodic sync also creates a local account for every LDAP entry that matches the configured user filter. Use this when you need every directory user pre-listed in Praetor before they ever log in.
+- **Provision on first login** (on by default) — when on, any LDAP user that authenticates successfully gets a local account created on first sign-in. Turn off to restrict logins to users that already have a local account (created manually or via the bulk sync below). Existing LDAP-bound users keep logging in either way; only the auto-create branch for unknown directory users is gated.
+- **Bulk-provision during sync** (off by default) — when on, the periodic sync also creates a local account for every LDAP entry that matches the configured user filter. When off, the sync only refreshes display names and role mappings of users that already exist.
 
-In both modes, on-login provisioning remains active, so a first-time login always works.
+The two switches are independent: turning both off (combined with manual user creation) is the configuration to use when you want a manually-curated set of users to be the only accounts that can sign in via LDAP.
 
 If a user cannot sign in, check credentials, user status, assigned role, and authentication logs.
 

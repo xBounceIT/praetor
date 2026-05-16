@@ -436,6 +436,43 @@ describe('PUT /api/ldap/config - autoProvisionAll', () => {
   });
 });
 
+describe('PUT /api/ldap/config - provisionOnLogin', () => {
+  test('omitting provisionOnLogin does not pass the key to ldapRepo.update', async () => {
+    const response = await putConfig({ enabled: false });
+    expect(response.statusCode).toBe(200);
+    expect(ldapUpdateMock).toHaveBeenCalledTimes(1);
+    const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
+    expect(patch.provisionOnLogin).toBeUndefined();
+  });
+
+  test('passing provisionOnLogin=false forwards it to ldapRepo.update', async () => {
+    const response = await putConfig({ enabled: false, provisionOnLogin: false });
+    expect(response.statusCode).toBe(200);
+    expect(ldapUpdateMock).toHaveBeenCalledTimes(1);
+    const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
+    expect(patch.provisionOnLogin).toBe(false);
+  });
+
+  test('passing provisionOnLogin=true forwards it to ldapRepo.update', async () => {
+    ldapGetMock.mockResolvedValue({ ...BASE_CONFIG, provisionOnLogin: false });
+    const response = await putConfig({ enabled: false, provisionOnLogin: true });
+    expect(response.statusCode).toBe(200);
+    expect(ldapUpdateMock).toHaveBeenCalledTimes(1);
+    const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
+    expect(patch.provisionOnLogin).toBe(true);
+  });
+
+  test('invalid provisionOnLogin value does not update LDAP config', async () => {
+    const response = await putConfig({
+      enabled: false,
+      provisionOnLogin: 'ture',
+    } as unknown as object);
+
+    expect(response.statusCode).toBe(400);
+    expect(ldapUpdateMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('PUT /api/ldap/config - tlsCaCertificate', () => {
   test('omitting tlsCaCertificate does not pass the key to ldapRepo.update', async () => {
     const response = await putConfig({ enabled: false });
