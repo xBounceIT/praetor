@@ -18,6 +18,7 @@ const usersRepoSnap = { ...realUsersRepo };
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 const findByIdentityMock = mock();
 const insertIdentityMock = mock();
+const existsForUserAndProviderMock = mock();
 const findExistingIdsMock = mock();
 const upsertForUserMock = mock();
 const syncTopManagerAssignmentsForUserMock = mock();
@@ -38,6 +39,7 @@ beforeAll(async () => {
     ...externalIdentitiesRepoSnap,
     findByIdentity: findByIdentityMock,
     insert: insertIdentityMock,
+    existsForUserAndProvider: existsForUserAndProviderMock,
   }));
   mock.module('../../repositories/rolesRepo.ts', () => ({
     ...rolesRepoSnap,
@@ -77,6 +79,7 @@ beforeEach(() => {
     withDbTransactionMock,
     findByIdentityMock,
     insertIdentityMock,
+    existsForUserAndProviderMock,
     findExistingIdsMock,
     upsertForUserMock,
     syncTopManagerAssignmentsForUserMock,
@@ -93,6 +96,7 @@ beforeEach(() => {
   syncTopManagerAssignmentsForUserMock.mockResolvedValue(undefined);
   replaceUserRolesMock.mockResolvedValue(undefined);
   setPrimaryRoleMock.mockResolvedValue(undefined);
+  existsForUserAndProviderMock.mockResolvedValue(false);
 });
 
 const input = {
@@ -221,6 +225,45 @@ describe('resolveExternalIdentity auth method enforcement', () => {
       'External identity is not allowed for this Praetor user',
     );
     expect(insertIdentityMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveExternalIdentity username-bind safety — regression #606', () => {
+  test('refuses to bind a new subject to a user that already has an identity on the same provider', async () => {
+    findByIdentityMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(matchingSsoUser);
+    existsForUserAndProviderMock.mockResolvedValue(true);
+
+    await expect(
+      resolveExternalIdentity({ ...input, subject: 'sub-from-recycled-account' }),
+    ).rejects.toThrow('External identity is not allowed for this Praetor user');
+
+    expect(existsForUserAndProviderMock).toHaveBeenCalledWith(
+      'u1',
+      'sso-1',
+      'oidc',
+      expect.anything(),
+    );
+    expect(insertIdentityMock).not.toHaveBeenCalled();
+    expect(replaceUserRolesMock).not.toHaveBeenCalled();
+  });
+
+  test('still binds when the username-matched user has no identity yet for this provider', async () => {
+    findByIdentityMock.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: 'eid-1',
+      providerId: 'sso-1',
+      protocol: 'oidc',
+      issuer: input.issuer,
+      subject: input.subject,
+      userId: 'u1',
+    });
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(matchingSsoUser);
+    existsForUserAndProviderMock.mockResolvedValue(false);
+
+    const result = await resolveExternalIdentity(input);
+
+    expect(result.wasBound).toBe(true);
+    expect(insertIdentityMock).toHaveBeenCalled();
   });
 });
 

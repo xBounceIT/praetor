@@ -41,3 +41,23 @@ export const findByIdentity = async (
 export const insert = async (identity: ExternalIdentity, exec: DbExecutor = db): Promise<void> => {
   await exec.insert(externalIdentities).values(identity).onConflictDoNothing();
 };
+
+export const existsForUserAndProvider = async (
+  userId: string,
+  providerId: string,
+  protocol: SsoProtocol,
+  exec: DbExecutor = db,
+): Promise<boolean> => {
+  const rows = await exec
+    .select({ id: externalIdentities.id })
+    .from(externalIdentities)
+    .where(
+      and(
+        eq(externalIdentities.userId, userId),
+        eq(externalIdentities.providerId, providerId),
+        eq(externalIdentities.protocol, protocol),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+};

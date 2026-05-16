@@ -51,6 +51,8 @@ export type ResolveExternalIdentityInput = {
   roleMappings: ExternalRoleMapping[];
 };
 
+const IDENTITY_NOT_ALLOWED_MESSAGE = 'External identity is not allowed for this Praetor user';
+
 const assertUserAllowsExternalProvider = (
   user: Pick<usersRepo.LoginUserWithAuth, 'employeeType' | 'authMethod' | 'authProviderId'>,
   input: ResolveExternalIdentityInput,
@@ -60,10 +62,7 @@ const assertUserAllowsExternalProvider = (
     user.authMethod !== input.protocol ||
     user.authProviderId !== input.providerId
   ) {
-    throw new ExternalAuthError(
-      'External identity is not allowed for this Praetor user',
-      'identity_conflict',
-    );
+    throw new ExternalAuthError(IDENTITY_NOT_ALLOWED_MESSAGE, 'identity_conflict');
   }
 };
 
@@ -268,6 +267,19 @@ export const resolveExternalIdentity = async (
           wasCreated = true;
         } else {
           assertUserAllowsExternalProvider(user, input);
+          // OIDC/SAML identity is anchored to `sub`, not `preferred_username`. If the
+          // username-matched Praetor user already has any identity row for this provider,
+          // a different IdP subject claiming the same username would silently merge two
+          // distinct IdP accounts into one Praetor user (#606). Refuse the bind instead.
+          const alreadyBound = await externalIdentitiesRepo.existsForUserAndProvider(
+            user.id,
+            input.providerId,
+            input.protocol,
+            tx,
+          );
+          if (alreadyBound) {
+            throw new ExternalAuthError(IDENTITY_NOT_ALLOWED_MESSAGE, 'identity_conflict');
+          }
         }
 
         await externalIdentitiesRepo.insert(
