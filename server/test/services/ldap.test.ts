@@ -1085,7 +1085,7 @@ describe('syncUsers', () => {
         { entries: [], status: 0 }, // bob username
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
 
     const result = await ldapService.syncUsers();
 
@@ -1325,7 +1325,7 @@ describe('authenticateAndProvision', () => {
         { err: new Error('group subtree timeout') },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
 
     await expect(ldapService.authenticateAndProvision('alice', 'pw')).rejects.toThrow(
       'group subtree timeout',

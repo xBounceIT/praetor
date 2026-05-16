@@ -26,7 +26,7 @@ const auditSnap = { ...realAudit };
 const ldapServiceSnap = { ...(realLdapService as Record<string, unknown>) };
 
 const findAuthUserByIdMock = mock();
-const findLoginUserByUsernameMock = mock();
+const findLoginUserByNormalizedUsernameMock = mock();
 const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 const ldapGetMock = mock();
@@ -46,7 +46,7 @@ beforeAll(async () => {
   mock.module('../../repositories/usersRepo.ts', () => ({
     ...usersRepoSnap,
     findAuthUserById: findAuthUserByIdMock,
-    findLoginUserByUsername: findLoginUserByUsernameMock,
+    findLoginUserByNormalizedUsername: findLoginUserByNormalizedUsernameMock,
   }));
   mock.module('../../repositories/rolesRepo.ts', () => ({
     ...rolesRepoSnap,
@@ -102,7 +102,7 @@ const BASE_CONFIG: realLdapRepo.LdapConfig = realLdapRepo.DEFAULT_CONFIG;
 
 const allMocks = [
   findAuthUserByIdMock,
-  findLoginUserByUsernameMock,
+  findLoginUserByNormalizedUsernameMock,
   userHasRoleMock,
   getRolePermissionsMock,
   ldapGetMock,
@@ -140,7 +140,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   for (const m of allMocks) m.mockReset();
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
-  findLoginUserByUsernameMock.mockResolvedValue(null);
+  findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue([
     'administration.authentication.view',
@@ -614,12 +614,12 @@ describe('POST /api/ldap/test', () => {
       groups: ['cn=engineers,ou=groups,dc=example,dc=com'],
       matchedRoleIds: [],
     });
-    findLoginUserByUsernameMock.mockResolvedValue(LDAP_USER);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(LDAP_USER);
 
     const response = await testLdapAuth({ username: 'alice', password: 'secret' });
 
     expect(response.statusCode).toBe(200);
-    expect(findLoginUserByUsernameMock).toHaveBeenCalledWith('alice');
+    expect(findLoginUserByNormalizedUsernameMock).toHaveBeenCalledWith('alice');
     const body = JSON.parse(response.body);
     expect(body.roleResolution).toBe('preserved');
     expect(body.roleIds).toEqual(['manager']);
@@ -637,15 +637,15 @@ describe('POST /api/ldap/test', () => {
       matchedRoleIds: [],
       canonicalUsername: 'alice',
     });
-    findLoginUserByUsernameMock.mockImplementation(async (username: string) =>
+    findLoginUserByNormalizedUsernameMock.mockImplementation(async (username: string) =>
       username === 'alice' ? LDAP_USER : null,
     );
 
     const response = await testLdapAuth({ username: 'alice@example.com', password: 'secret' });
 
     expect(response.statusCode).toBe(200);
-    expect(findLoginUserByUsernameMock).toHaveBeenCalledWith('alice@example.com');
-    expect(findLoginUserByUsernameMock).toHaveBeenCalledWith('alice');
+    expect(findLoginUserByNormalizedUsernameMock).toHaveBeenCalledWith('alice@example.com');
+    expect(findLoginUserByNormalizedUsernameMock).toHaveBeenCalledWith('alice');
     const body = JSON.parse(response.body);
     expect(body.roleResolution).toBe('preserved');
     expect(body.roleIds).toEqual(['manager']);
@@ -659,12 +659,12 @@ describe('POST /api/ldap/test', () => {
       matchedRoleIds: [],
       canonicalUsername: 'alice',
     });
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
 
     await testLdapAuth({ username: 'alice', password: 'secret' });
 
-    expect(findLoginUserByUsernameMock).toHaveBeenCalledTimes(1);
-    expect(findLoginUserByUsernameMock).toHaveBeenCalledWith('alice');
+    expect(findLoginUserByNormalizedUsernameMock).toHaveBeenCalledTimes(1);
+    expect(findLoginUserByNormalizedUsernameMock).toHaveBeenCalledWith('alice');
   });
 
   // #638: brand-new LDAP users still fall back to DEFAULT_ROLE_ID on real login during
@@ -676,7 +676,7 @@ describe('POST /api/ldap/test', () => {
       groups: ['cn=engineers,ou=groups,dc=example,dc=com'],
       matchedRoleIds: [],
     });
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
 
     const response = await testLdapAuth({ username: 'bob', password: 'secret' });
 
@@ -697,7 +697,7 @@ describe('POST /api/ldap/test', () => {
       groups: ['cn=engineers,ou=groups,dc=example,dc=com'],
       matchedRoleIds: [],
     });
-    findLoginUserByUsernameMock.mockResolvedValue({ ...LDAP_USER, isDisabled: true });
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({ ...LDAP_USER, isDisabled: true });
 
     const response = await testLdapAuth({ username: 'alice', password: 'secret' });
 
@@ -714,7 +714,7 @@ describe('POST /api/ldap/test', () => {
       groups: ['cn=engineers,ou=groups,dc=example,dc=com'],
       matchedRoleIds: [],
     });
-    findLoginUserByUsernameMock.mockResolvedValue({
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
       ...LDAP_USER,
       employeeType: 'internal' as const,
     });
@@ -738,7 +738,7 @@ describe('POST /api/ldap/test', () => {
       groups: ['cn=engineers,ou=groups,dc=example,dc=com'],
       matchedRoleIds: [],
     });
-    findLoginUserByUsernameMock.mockResolvedValue({ ...LDAP_USER, authMethod: 'local' });
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({ ...LDAP_USER, authMethod: 'local' });
 
     const response = await testLdapAuth({ username: 'alice', password: 'secret' });
 
@@ -770,7 +770,7 @@ describe('POST /api/ldap/test', () => {
 
     await testLdapAuth({ username: 'alice', password: 'wrong' });
 
-    expect(findLoginUserByUsernameMock).not.toHaveBeenCalled();
+    expect(findLoginUserByNormalizedUsernameMock).not.toHaveBeenCalled();
   });
 
   test('rejects blank tester credentials before reaching LDAP', async () => {
