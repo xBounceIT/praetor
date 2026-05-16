@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import api, { ApiError, getAuthToken, type Settings, setAuthToken } from '../services/api';
 import type { User } from '../types';
 import { applyLanguagePreference } from '../utils/language';
+import { isTransientError, RETRY_DELAYS_MS, sleep } from '../utils/retry';
 
 const DEFAULT_SETTINGS: Settings = {
   fullName: '',
@@ -9,24 +10,10 @@ const DEFAULT_SETTINGS: Settings = {
   language: 'auto',
 };
 
-export const AUTH_CHECK_RETRY_DELAYS_MS = [500, 1000, 2000];
-
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
+export const AUTH_CHECK_RETRY_DELAYS_MS = RETRY_DELAYS_MS;
 
 const isAuthRejection = (err: unknown): boolean =>
   err instanceof ApiError && (err.status === 401 || err.status === 403);
-
-// Anything that looks like flaky infrastructure rather than a definite client
-// or auth failure - retry these instead of logging the user out.
-const isTransientError = (err: unknown): boolean => {
-  if (err instanceof ApiError) {
-    return err.isNetworkError || err.status === 0 || err.status >= 500;
-  }
-  return true;
-};
 
 export type UseAuthOptions = {
   onLogin?: (user: User) => void;
