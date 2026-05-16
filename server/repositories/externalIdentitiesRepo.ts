@@ -63,3 +63,11 @@ export const hasOtherSubjectForUserAndProvider = async (
     .limit(1);
   return rows.length > 0;
 };
+
+export const deleteAllForUser = async (userId: string, exec: DbExecutor = db): Promise<number> => {
+  const rows = await exec
+    .delete(externalIdentities)
+    .where(eq(externalIdentities.userId, userId))
+    .returning({ id: externalIdentities.id });
+  return rows.length;
+};

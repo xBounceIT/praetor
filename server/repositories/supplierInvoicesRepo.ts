@@ -56,8 +56,16 @@ const mapItem = (row: typeof supplierInvoiceItems.$inferSelect): SupplierInvoice
   discount: parseDbNumber(row.discount, 0),
 });
 
+// Memory-side cap on unfiltered listAll. There is no index on `created_at`, so Postgres
+// still sorts the full table before applying LIMIT — this bounds heap usage, not DB work.
+export const LIST_ALL_LIMIT = 1000;
+
 export const listAll = async (exec: DbExecutor = db): Promise<SupplierInvoice[]> => {
-  const rows = await exec.select().from(supplierInvoices).orderBy(desc(supplierInvoices.createdAt));
+  const rows = await exec
+    .select()
+    .from(supplierInvoices)
+    .orderBy(desc(supplierInvoices.createdAt))
+    .limit(LIST_ALL_LIMIT);
   return rows.map(mapInvoice);
 };
 

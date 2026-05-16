@@ -94,7 +94,11 @@ import { clearAuthScopedState } from './utils/authScopedState';
 import { formatDateOnlyForLocale, getLocalDateString } from './utils/date';
 import { getTechnicalDocsViewFromPathname } from './utils/docsRoutes';
 import { getErrorMessage } from './utils/errors';
-import { canonicalizeLegacyHash, resolveHashChange } from './utils/hashCanonicalization';
+import {
+  canonicalizeLegacyHash,
+  resolveHashChange,
+  stripHashPrefix,
+} from './utils/hashCanonicalization';
 import {
   clearStaleModuleScopedState,
   getStaleModulesAfterNavigation,
@@ -783,7 +787,7 @@ const AppContent: React.FC = () => {
   const [activeView, setActiveViewState] = useState<View | '404'>(() => {
     const technicalDocsView = getTechnicalDocsViewFromPathname(window.location.pathname);
     if (technicalDocsView) return technicalDocsView;
-    const rawHash = window.location.hash.replace('#/', '').replace('#', '');
+    const rawHash = stripHashPrefix(window.location.hash);
     // We can't use the memoized VALID_VIEWS here because this runs before the initial render
     // So we define the list once for initialization
     const validViews: View[] = [
@@ -963,6 +967,11 @@ const AppContent: React.FC = () => {
       setViewingUserId('');
     },
   });
+
+  // Read by the hashchange listener (mounted once) so it sees the latest user
+  // without the effect resubscribing — events fired during teardown are lost.
+  const currentUserRef = useRef(currentUser);
+  currentUserRef.current = currentUser;
 
   const handleLogin = login;
   const handleLogout = logout;
@@ -1156,16 +1165,19 @@ const AppContent: React.FC = () => {
   // (navigation handlers, hash-change listener, Layout menu) goes through that
   // wrapper, so the four *FilterId values can never outlive a view change.
 
-  // Sync state with hash (for back/forward buttons)
+  // Sync state with hash (for back/forward buttons). Listener is mounted once
+  // and reads latest values via refs — resubscribing on every navigation would
+  // drop hashchange events that fire between removeEventListener and the next
+  // addEventListener call during rapid back/forward clicking.
   useEffect(() => {
     const handleHashChange = () => {
       if (programmaticHashTracker.consumeIfPending()) return;
-      const rawHash = window.location.hash.replace('#/', '').replace('#', '');
+      const rawHash = stripHashPrefix(window.location.hash);
       const outcome = resolveHashChange({
         rawHash,
-        activeView,
+        activeView: activeViewRef.current,
         validViews: VALID_VIEWS,
-        hasUser: !!currentUser,
+        hasUser: !!currentUserRef.current,
       });
       if (outcome.kind === 'noop') return;
       if (outcome.kind === 'rewrite-hash') {
@@ -1179,7 +1191,7 @@ const AppContent: React.FC = () => {
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [activeView, VALID_VIEWS, currentUser, setActiveView, programmaticHashTracker]);
+  }, [VALID_VIEWS, setActiveView, programmaticHashTracker]);
 
   // Reset viewingUserId when navigating away from tracker
   useEffect(() => {

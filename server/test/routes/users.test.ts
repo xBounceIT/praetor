@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, tes
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
 import * as realClientsRepo from '../../repositories/clientsRepo.ts';
+import * as realExternalIdentitiesRepo from '../../repositories/externalIdentitiesRepo.ts';
 import * as realProjectsRepo from '../../repositories/projectsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSettingsRepo from '../../repositories/settingsRepo.ts';
@@ -24,6 +25,7 @@ import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const clientsRepoSnap = { ...realClientsRepo };
+const externalIdentitiesRepoSnap = { ...realExternalIdentitiesRepo };
 const projectsRepoSnap = { ...realProjectsRepo };
 const tasksRepoSnap = { ...realTasksRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -91,6 +93,9 @@ const filterAssignedTaskIdsMock = mock();
 const ldapLookupUserGroupsMock = mock();
 const applyExternalRolesForUserMock = mock();
 
+// externalIdentitiesRepo
+const deleteAllForUserMock = mock();
+
 // audit / drizzle
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
@@ -123,6 +128,10 @@ beforeAll(async () => {
     ...clientsRepoSnap,
     list: listClientsMock,
     listByIds: listClientsByIdsMock,
+  }));
+  mock.module('../../repositories/externalIdentitiesRepo.ts', () => ({
+    ...externalIdentitiesRepoSnap,
+    deleteAllForUser: deleteAllForUserMock,
   }));
   mock.module('../../repositories/projectsRepo.ts', () => ({
     ...projectsRepoSnap,
@@ -189,6 +198,7 @@ afterAll(() => {
   restoreAuthMiddlewareMock();
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
   mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
+  mock.module('../../repositories/externalIdentitiesRepo.ts', () => externalIdentitiesRepoSnap);
   mock.module('../../repositories/projectsRepo.ts', () => projectsRepoSnap);
   mock.module('../../repositories/tasksRepo.ts', () => tasksRepoSnap);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
@@ -324,6 +334,7 @@ const allMocks = [
   filterAssignedTaskIdsMock,
   ldapLookupUserGroupsMock,
   applyExternalRolesForUserMock,
+  deleteAllForUserMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -351,6 +362,7 @@ beforeEach(async () => {
   // Default: LDAP unreachable / disabled — route falls back to existing role.
   ldapLookupUserGroupsMock.mockResolvedValue(null);
   applyExternalRolesForUserMock.mockResolvedValue(['user']);
+  deleteAllForUserMock.mockResolvedValue(0);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/users');
 });
@@ -1065,7 +1077,7 @@ describe('PUT /api/users/:id/auth-method', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(updateAuthMethodMock).toHaveBeenCalledWith('u-target', 'ldap', null);
+    expect(updateAuthMethodMock).toHaveBeenCalledWith('u-target', 'ldap', null, TX_SENTINEL);
     expect(ldapLookupUserGroupsMock).toHaveBeenCalledWith('target');
     expect(applyExternalRolesForUserMock).toHaveBeenCalledWith(
       'u-target',
@@ -1169,7 +1181,7 @@ describe('PUT /api/users/:id/auth-method', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(updateAuthMethodMock).toHaveBeenCalledWith('u-target', 'oidc', 'sso-1');
+    expect(updateAuthMethodMock).toHaveBeenCalledWith('u-target', 'oidc', 'sso-1', TX_SENTINEL);
     expect(JSON.parse(res.body)).toMatchObject({
       authMethod: 'oidc',
       authProviderId: 'sso-1',
@@ -1308,6 +1320,126 @@ describe('PUT /api/users/:id/auth-method', () => {
 
     expect(res.statusCode).toBe(403);
     expect(updateAuthMethodMock).not.toHaveBeenCalled();
+  });
+
+  // Regression: spawned follow-up from PR #659 review. Stale external_identities rows
+  // from a prior SSO binding must be wiped when an admin changes the auth method or
+  // provider, or an A → B → A flip will silently re-authenticate via the original
+  // subject. See server/services/external-auth.ts:resolveExternalIdentity.
+  describe('external_identities cleanup on auth-method change', () => {
+    test('wipes external_identities when changing OIDC user to local', async () => {
+      findCoreByIdMock.mockResolvedValue({
+        ...SAMPLE_USER_CORE,
+        authMethod: 'oidc',
+        authProviderId: 'sso-1',
+      });
+      updateAuthMethodMock.mockResolvedValue({ ...SAMPLE_USER_ROW, authMethod: 'local' });
+      deleteAllForUserMock.mockResolvedValue(2);
+
+      const res = await testApp.inject({
+        method: 'PUT',
+        url: '/api/users/u-target/auth-method',
+        headers: adminAuth(),
+        payload: { authMethod: 'local' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(updateAuthMethodMock).toHaveBeenCalledWith('u-target', 'local', null, TX_SENTINEL);
+      expect(deleteAllForUserMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+      expect(withDbTransactionMock).toHaveBeenCalled();
+    });
+
+    test('wipes external_identities when switching OIDC provider sso-1 → sso-2', async () => {
+      findCoreByIdMock.mockResolvedValue({
+        ...SAMPLE_USER_CORE,
+        authMethod: 'oidc',
+        authProviderId: 'sso-1',
+      });
+      ssoFindByIdMock.mockResolvedValue({
+        id: 'sso-2',
+        protocol: 'oidc',
+        name: 'Other OIDC',
+        enabled: true,
+      });
+      updateAuthMethodMock.mockResolvedValue({
+        ...SAMPLE_USER_ROW,
+        authMethod: 'oidc',
+        authProviderId: 'sso-2',
+      });
+      deleteAllForUserMock.mockResolvedValue(1);
+
+      const res = await testApp.inject({
+        method: 'PUT',
+        url: '/api/users/u-target/auth-method',
+        headers: adminAuth(),
+        payload: { authMethod: 'oidc', authProviderId: 'sso-2' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(deleteAllForUserMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+    });
+
+    test('wipes external_identities on A → B → A flip back to original provider', async () => {
+      // Admin had previously flipped this user away from sso-1 (so external_identities still
+      // holds the old sub). Now they're flipping back. Without the wipe, the original
+      // subject would re-authenticate the user via findByIdentity on the next login.
+      findCoreByIdMock.mockResolvedValue({
+        ...SAMPLE_USER_CORE,
+        authMethod: 'local',
+        authProviderId: null,
+      });
+      ssoFindByIdMock.mockResolvedValue({
+        id: 'sso-1',
+        protocol: 'oidc',
+        name: 'Keycloak',
+        enabled: true,
+      });
+      updateAuthMethodMock.mockResolvedValue({
+        ...SAMPLE_USER_ROW,
+        authMethod: 'oidc',
+        authProviderId: 'sso-1',
+      });
+      deleteAllForUserMock.mockResolvedValue(1);
+
+      const res = await testApp.inject({
+        method: 'PUT',
+        url: '/api/users/u-target/auth-method',
+        headers: adminAuth(),
+        payload: { authMethod: 'oidc', authProviderId: 'sso-1' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(deleteAllForUserMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+    });
+
+    test('skips wipe when method and provider are unchanged (idempotent PUT)', async () => {
+      findCoreByIdMock.mockResolvedValue({
+        ...SAMPLE_USER_CORE,
+        authMethod: 'oidc',
+        authProviderId: 'sso-1',
+      });
+      ssoFindByIdMock.mockResolvedValue({
+        id: 'sso-1',
+        protocol: 'oidc',
+        name: 'Keycloak',
+        enabled: true,
+      });
+      updateAuthMethodMock.mockResolvedValue({
+        ...SAMPLE_USER_ROW,
+        authMethod: 'oidc',
+        authProviderId: 'sso-1',
+      });
+
+      const res = await testApp.inject({
+        method: 'PUT',
+        url: '/api/users/u-target/auth-method',
+        headers: adminAuth(),
+        payload: { authMethod: 'oidc', authProviderId: 'sso-1' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(deleteAllForUserMock).not.toHaveBeenCalled();
+    });
   });
 });
 
