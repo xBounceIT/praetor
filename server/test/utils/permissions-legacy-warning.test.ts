@@ -62,4 +62,13 @@ describe('normalizePermission deprecation warning', () => {
 
     expect(warnMock).not.toHaveBeenCalled();
   });
+
+  test('does not warn (or record) when the rewrite produces an unknown permission', () => {
+    expect(normalizePermission('configuration.does.not_exist')).toBe(
+      'administration.does.not_exist',
+    );
+    expect(normalizePermission('suppliers.quotes.banana')).toBe('sales.supplier_quotes.banana');
+
+    expect(warnMock).not.toHaveBeenCalled();
+  });
 });

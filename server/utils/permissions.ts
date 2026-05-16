@@ -128,7 +128,11 @@ let warnOnLegacyPermission = defaultLegacyPermissionWarner;
 
 // Dedupe legacy-permission warnings: `normalizePermission` is on the auth hot path
 // (every `hasPermission`/`getRolePermissions` call), so a single stale DB row or
-// hardcoded legacy name would otherwise log on every request.
+// hardcoded legacy name would otherwise log on every request. Only known legacy
+// permissions get recorded — otherwise `roles.ts` validation flow would let a
+// privileged caller flood this set with `configuration.<random>.<random>` strings
+// before the unknown-permission check rejects them.
+const KNOWN_PERMISSIONS_SET = new Set<string>(ALL_PERMISSIONS);
 const warnedLegacyPermissions = new Set<string>();
 
 export const __resetLegacyPermissionWarningsForTests = () => {
@@ -148,7 +152,7 @@ export const normalizePermission = (permission: string): Permission => {
   for (const { from, to } of LEGACY_PERMISSION_REWRITES) {
     if (!permission.startsWith(from)) continue;
     const normalized = (to + permission.slice(from.length)) as Permission;
-    if (!warnedLegacyPermissions.has(permission)) {
+    if (KNOWN_PERMISSIONS_SET.has(normalized) && !warnedLegacyPermissions.has(permission)) {
       warnedLegacyPermissions.add(permission);
       warnOnLegacyPermission(permission, normalized);
     }
