@@ -330,6 +330,13 @@
       "when": 1778852263003,
       "tag": "0046_add_time_entry_version",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1778946454386,
+      "tag": "0047_add_projects_order_id_on_update_cascade",
+      "breakpoints": true
     }
   ]
 }

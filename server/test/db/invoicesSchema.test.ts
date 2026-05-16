@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readMigrationFile, readSchemaFile } from '../helpers/schemaFiles.ts';
 
 // Regression: B1. The clients/suppliers → financial-doc FKs must be ON DELETE RESTRICT, not
 // CASCADE, so deleting a counterparty cannot silently destroy financial documents. We assert
@@ -14,14 +13,7 @@ import { join } from 'node:path';
 // (server/test/routes/clients.test.ts and suppliers.test.ts) cover the runtime 409 path with
 // a faked 23503 from the FK.
 
-const SERVER_ROOT = join(import.meta.dirname, '..', '..');
-const MIGRATION = readFileSync(
-  join(SERVER_ROOT, 'db', 'migrations', '0033_restrict_financial_doc_client_supplier_fks.sql'),
-  'utf-8',
-);
-
-const readSchema = (name: string): string =>
-  readFileSync(join(SERVER_ROOT, 'db', 'schema', name), 'utf-8');
+const MIGRATION = readMigrationFile('0033_restrict_financial_doc_client_supplier_fks.sql');
 
 const CLIENT_TABLES = [
   { schemaFile: 'invoices.ts', dbTable: 'invoices' },
@@ -71,7 +63,7 @@ describe('schema definitions match the migration intent', () => {
   test.each(CLIENT_TABLES)("$schemaFile declares clientId FK with onDelete: 'restrict'", ({
     schemaFile,
   }) => {
-    const content = readSchema(schemaFile);
+    const content = readSchemaFile(schemaFile);
     // Pin the clientId .references(...) options block to onDelete: 'restrict'.
     const referencesPattern =
       /clientId:[\s\S]*?\.references\(\(\) => clients\.id,\s*\{\s*onDelete:\s*'restrict'\s*\}\)/;
@@ -85,7 +77,7 @@ describe('schema definitions match the migration intent', () => {
   test.each(SUPPLIER_TABLES)("$schemaFile declares supplierId FK with onDelete: 'restrict'", ({
     schemaFile,
   }) => {
-    const content = readSchema(schemaFile);
+    const content = readSchemaFile(schemaFile);
     const referencesPattern =
       /supplierId:[\s\S]*?\.references\(\(\) => suppliers\.id,\s*\{\s*onDelete:\s*'restrict'\s*\}\)/;
     expect(content).toMatch(referencesPattern);

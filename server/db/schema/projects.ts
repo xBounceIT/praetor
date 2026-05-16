@@ -32,8 +32,12 @@ export const projects = pgTable(
     // `projects_order_id_fkey`; the Drizzle migration renames it to the canonical
     // `projects_order_id_sales_id_fk`. `projectsRepo` translates both names into a
     // ForeignKeyError('Linked order') so installations mid-migration stay covered.
+    // `onUpdate: cascade` matches the rest of the `sales.id` FK chain (sale_items,
+    // invoices, order_versions) so renaming an order ID via PUT /api/clients-orders/:id
+    // doesn't fail when a project is linked.
     orderId: varchar('order_id', { length: 100 }).references(() => sales.id, {
       onDelete: 'set null',
+      onUpdate: 'cascade',
     }),
     offerId: varchar('offer_id', { length: 100 }).references(() => customerOffers.id, {
       onDelete: 'set null',
