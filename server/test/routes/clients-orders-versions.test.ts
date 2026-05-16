@@ -40,6 +40,7 @@ const coFindFullForSnapshotMock = mock();
 const coFindItemsForOrderMock = mock();
 const coFindIdConflictMock = mock();
 const coUpdateMock = mock();
+const coRenameMock = mock();
 const coRestoreSnapshotOrderMock = mock();
 const coReplaceItemsMock = mock();
 
@@ -83,6 +84,7 @@ beforeAll(async () => {
     findItemsForOrder: coFindItemsForOrderMock,
     findIdConflict: coFindIdConflictMock,
     update: coUpdateMock,
+    rename: coRenameMock,
     restoreSnapshotOrder: coRestoreSnapshotOrderMock,
     replaceItems: coReplaceItemsMock,
   }));
@@ -205,6 +207,7 @@ const allMocks = [
   coFindItemsForOrderMock,
   coFindIdConflictMock,
   coUpdateMock,
+  coRenameMock,
   coRestoreSnapshotOrderMock,
   coReplaceItemsMock,
   clientsExistsByIdMock,

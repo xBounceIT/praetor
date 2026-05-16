@@ -143,18 +143,20 @@ describe('findIdConflict', () => {
 });
 
 describe('update', () => {
-  test('binds patch values via COALESCE, WHERE id last', async () => {
+  test('binds patch values via COALESCE, WHERE id last - no id in SET (issue #621)', async () => {
     exec.enqueue({ rows: [orderRow()] });
     await supplierOrdersRepo.update('so-1', { status: 'sent', discount: 10 }, testDb);
     const sql = exec.calls[0].sql;
     expect(sql).toContain('update "supplier_sales"');
     expect(sql).toContain('COALESCE');
     expect(sql).toContain('CURRENT_TIMESTAMP');
-    expect(sql).toContain('"id" = $9');
-    expect(exec.calls[0].params).toHaveLength(9);
-    expect(exec.calls[0].params[4]).toBe('10'); // discount via numericForDb
-    expect(exec.calls[0].params[6]).toBe('sent'); // status
-    expect(exec.calls[0].params[8]).toBe('so-1'); // where id
+    // The SET clause must NOT touch the primary key column.
+    expect(sql).not.toMatch(/set[^"]*"id"\s*=/i);
+    expect(sql).toContain('"id" = $8');
+    expect(exec.calls[0].params).toHaveLength(8);
+    expect(exec.calls[0].params[3]).toBe('10'); // discount via numericForDb
+    expect(exec.calls[0].params[5]).toBe('sent'); // status
+    expect(exec.calls[0].params[7]).toBe('so-1'); // where id
   });
 
   test('returns null when no row updated', async () => {
@@ -169,6 +171,25 @@ describe('update', () => {
     expect(sqlText).not.toContain('update "supplier_sales"');
     expect(sqlText).toContain('select');
     expect(result?.id).toBe('so-1');
+  });
+});
+
+describe('rename', () => {
+  test('issues a dedicated UPDATE that sets the id column and returns the mapped order', async () => {
+    exec.enqueue({ rows: [orderRow({ 0: 'so-2' })] });
+    const result = await supplierOrdersRepo.rename('so-1', 'so-2', testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('update "supplier_sales"');
+    expect(sql).toMatch(/set[^"]*"id"\s*=/);
+    expect(sql).toContain('current_timestamp');
+    expect(exec.calls[0].params).toContain('so-2'); // new id
+    expect(exec.calls[0].params).toContain('so-1'); // where current id
+    expect(result?.id).toBe('so-2');
+  });
+
+  test('returns null when no row matched currentId', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await supplierOrdersRepo.rename('so-x', 'so-y', testDb)).toBeNull();
   });
 });
 

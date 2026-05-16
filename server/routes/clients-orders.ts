@@ -1102,7 +1102,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             await snapshotPreState(idResult.value, 'update', request, tx);
           }
           const patch: clientsOrdersRepo.ClientOrderUpdate = {};
-          if (nextIdValue !== null) patch.id = nextIdValue;
           if (linkedOfferId !== undefined && linkedOfferIdValue) {
             patch.linkedOfferId = linkedOfferIdValue;
             patch.linkedQuoteId = linkedQuoteIdValue;
@@ -1121,7 +1120,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (typeof status === 'string') patch.status = status;
           if (notes !== undefined) patch.notes = notes as string | null;
 
-          const order = await clientsOrdersRepo.update(idResult.value, patch, tx);
+          let renamedOrder: clientsOrdersRepo.ClientOrder | null = null;
+          if (nextIdValue && nextIdValue !== idResult.value) {
+            renamedOrder = await clientsOrdersRepo.rename(idResult.value, nextIdValue, tx);
+            if (!renamedOrder) return { order: null, items: [] };
+          }
+          // id-only renames have nothing left to write — reuse the row returned by rename().
+          const order =
+            Object.keys(patch).length === 0 && renamedOrder
+              ? renamedOrder
+              : await clientsOrdersRepo.update(renamedOrder?.id ?? idResult.value, patch, tx);
           if (!order) return { order: null, items: [] };
 
           let nextItems: clientsOrdersRepo.ClientOrderItem[];

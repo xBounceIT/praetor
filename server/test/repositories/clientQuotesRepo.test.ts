@@ -232,9 +232,35 @@ describe('update', () => {
     expect(exec.calls[0].params).toContain('cq-1');
   });
 
+  test('does not include id in the SET clause (issue #621)', async () => {
+    exec.enqueue({ rows: [quoteRow()] });
+    await clientQuotesRepo.update('cq-1', { status: 'accepted' }, testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).not.toMatch(/set[^"]*"id"\s*=/);
+  });
+
   test('returns null when no row updated', async () => {
     exec.enqueue({ rows: [] });
     expect(await clientQuotesRepo.update('cq-x', { status: 'accepted' }, testDb)).toBeNull();
+  });
+});
+
+describe('rename', () => {
+  test('issues a dedicated UPDATE that sets the id column and returns the mapped quote', async () => {
+    exec.enqueue({ rows: [quoteRow({ 0: 'cq-2' })] });
+    const result = await clientQuotesRepo.rename('cq-1', 'cq-2', testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('update "quotes"');
+    expect(sql).toMatch(/set[^"]*"id"\s*=/);
+    expect(sql).toContain('current_timestamp');
+    expect(exec.calls[0].params).toContain('cq-2'); // new id
+    expect(exec.calls[0].params).toContain('cq-1'); // current id (WHERE)
+    expect(result?.id).toBe('cq-2');
+  });
+
+  test('returns null when no row matched currentId', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await clientQuotesRepo.rename('cq-x', 'cq-y', testDb)).toBeNull();
   });
 });
 

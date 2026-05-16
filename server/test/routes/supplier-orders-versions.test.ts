@@ -42,6 +42,7 @@ const soFindFullForSnapshotMock = mock();
 const soFindItemsForOrderMock = mock();
 const soFindIdConflictMock = mock();
 const soUpdateMock = mock();
+const soRenameMock = mock();
 const soRestoreSnapshotOrderMock = mock();
 const soReplaceItemsMock = mock();
 
@@ -83,6 +84,7 @@ beforeAll(async () => {
     findItemsForOrder: soFindItemsForOrderMock,
     findIdConflict: soFindIdConflictMock,
     update: soUpdateMock,
+    rename: soRenameMock,
     restoreSnapshotOrder: soRestoreSnapshotOrderMock,
     replaceItems: soReplaceItemsMock,
   }));
@@ -203,6 +205,7 @@ const allMocks = [
   soFindItemsForOrderMock,
   soFindIdConflictMock,
   soUpdateMock,
+  soRenameMock,
   soRestoreSnapshotOrderMock,
   soReplaceItemsMock,
   suppliersExistsByIdMock,
@@ -567,7 +570,7 @@ describe('PUT /api/accounting/supplier-orders/:id snapshots pre-update state', (
       supplierName: 'Acme',
       status: 'draft',
     });
-    soUpdateMock.mockResolvedValue({ ...SAMPLE_ORDER, id: 'so-1-renamed' });
+    soRenameMock.mockResolvedValue({ ...SAMPLE_ORDER, id: 'so-1-renamed' });
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -579,5 +582,8 @@ describe('PUT /api/accounting/supplier-orders/:id snapshots pre-update state', (
     expect(res.statusCode).toBe(200);
     expect(sovInsertMock).not.toHaveBeenCalled();
     expect(soFindFullForSnapshotMock).not.toHaveBeenCalled();
+    // PK rename goes through the dedicated repo call (issue #621), not the generic update().
+    expect(soRenameMock).toHaveBeenCalledWith('so-1', 'so-1-renamed', TX_SENTINEL);
+    expect(soUpdateMock).not.toHaveBeenCalled();
   });
 });

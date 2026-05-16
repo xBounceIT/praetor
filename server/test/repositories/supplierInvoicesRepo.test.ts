@@ -224,7 +224,7 @@ describe('create', () => {
 });
 
 describe('update', () => {
-  test('binds patch values via COALESCE, WHERE id last', async () => {
+  test('binds patch values via COALESCE, WHERE id last - no id in SET (issue #621)', async () => {
     exec.enqueue({ rows: [invoiceRow()] });
     await supplierInvoicesRepo.update(
       'SINV-2026-0001',
@@ -235,11 +235,13 @@ describe('update', () => {
     expect(sql).toContain('update "supplier_invoices"');
     expect(sql).toContain('COALESCE');
     expect(sql).toContain('CURRENT_TIMESTAMP');
-    expect(sql).toContain('"id" = $11');
-    expect(exec.calls[0].params).toHaveLength(11);
-    expect(exec.calls[0].params[5]).toBe('paid'); // status
-    expect(exec.calls[0].params[8]).toBe('100'); // amountPaid via numericForDb
-    expect(exec.calls[0].params[10]).toBe('SINV-2026-0001'); // where id
+    // The SET clause must NOT touch the primary key column.
+    expect(sql).not.toMatch(/set[^"]*"id"\s*=/i);
+    expect(sql).toContain('"id" = $10');
+    expect(exec.calls[0].params).toHaveLength(10);
+    expect(exec.calls[0].params[4]).toBe('paid'); // status
+    expect(exec.calls[0].params[7]).toBe('100'); // amountPaid via numericForDb
+    expect(exec.calls[0].params[9]).toBe('SINV-2026-0001'); // where id
   });
 
   test('returns null when no row updated', async () => {
@@ -264,6 +266,25 @@ describe('update', () => {
       testDb,
     );
     expect(exec.calls[0].sql.toLowerCase()).not.toContain('update "supplier_invoices"');
+  });
+});
+
+describe('rename', () => {
+  test('issues a dedicated UPDATE that sets the id column and returns the mapped invoice', async () => {
+    exec.enqueue({ rows: [invoiceRow({ 0: 'SINV-2026-0002' })] });
+    const result = await supplierInvoicesRepo.rename('SINV-2026-0001', 'SINV-2026-0002', testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('update "supplier_invoices"');
+    expect(sql).toMatch(/set[^"]*"id"\s*=/);
+    expect(sql).toContain('current_timestamp');
+    expect(exec.calls[0].params).toContain('SINV-2026-0002'); // new id
+    expect(exec.calls[0].params).toContain('SINV-2026-0001'); // where current id
+    expect(result?.id).toBe('SINV-2026-0002');
+  });
+
+  test('returns null when no row matched currentId', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await supplierInvoicesRepo.rename('SINV-X', 'SINV-Y', testDb)).toBeNull();
   });
 });
 

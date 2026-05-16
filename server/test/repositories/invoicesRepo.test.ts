@@ -269,7 +269,7 @@ describe('create', () => {
 });
 
 describe('update', () => {
-  test('updates only provided columns, sets updated_at, and includes id in WHERE', async () => {
+  test('updates only provided columns, never id (issue #621), sets updated_at, id in WHERE', async () => {
     exec.enqueue({ rows: [invoiceRow()] });
     await invoicesRepo.update('INV-2026-0001', { status: 'sent', total: 200 }, testDb);
     const sql = exec.calls[0].sql.toLowerCase();
@@ -279,6 +279,7 @@ describe('update', () => {
     expect(setClause).toContain('"status"');
     expect(setClause).toContain('"total"');
     expect(setClause).not.toContain('"notes"');
+    expect(setClause).not.toMatch(/"id"\s*=/);
     expect(sql).toContain('current_timestamp');
     expect(exec.calls[0].params).toContain('sent');
     expect(exec.calls[0].params).toContain('200');
@@ -310,6 +311,26 @@ describe('update', () => {
     expect(setClause).not.toContain('"notes"');
     expect(setClause).not.toContain('coalesce');
     expect(exec.calls[0].params).toContain('INV-1');
+  });
+});
+
+describe('renameDraft', () => {
+  test('issues a draft-scoped UPDATE that sets the id column and returns the mapped invoice', async () => {
+    exec.enqueue({ rows: [invoiceRow({ 0: 'INV-2026-0002' })] });
+    const result = await invoicesRepo.renameDraft('INV-2026-0001', 'INV-2026-0002', testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('update "invoices"');
+    expect(sql).toMatch(/set[^"]*"id"\s*=/);
+    expect(sql).toContain('current_timestamp');
+    expect(exec.calls[0].params).toContain('INV-2026-0002'); // new id
+    expect(exec.calls[0].params).toContain('INV-2026-0001'); // where current id
+    expect(exec.calls[0].params).toContain('draft'); // draft-only predicate
+    expect(result?.id).toBe('INV-2026-0002');
+  });
+
+  test('returns null when no draft row matched currentId', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await invoicesRepo.renameDraft('INV-X', 'INV-Y', testDb)).toBeNull();
   });
 });
 

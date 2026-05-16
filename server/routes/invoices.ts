@@ -538,6 +538,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (clientNameResult.value) patch.clientName = clientNameResult.value;
       }
 
+      let nextIdValue: string | null = null;
       if (nextId !== undefined) {
         const nextIdResult = optionalNonEmptyString(nextId, 'id');
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
@@ -552,7 +553,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               details: { secondaryLabel: 'duplicate_id', toValue: nextIdResult.value },
             });
           }
-          patch.id = nextIdResult.value;
+          nextIdValue = nextIdResult.value;
         }
       }
 
@@ -700,7 +701,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
       try {
         result = await withDbTransaction(async (tx) => {
-          const updated = await invoicesRepo.updateDraft(idResult.value, patch, tx);
+          let renamedInvoice: invoicesRepo.Invoice | null = null;
+          if (nextIdValue && nextIdValue !== idResult.value) {
+            renamedInvoice = await invoicesRepo.renameDraft(idResult.value, nextIdValue, tx);
+            if (!renamedInvoice) return { invoice: null, items: [] };
+          }
+          // id-only renames have nothing left to write — reuse the row returned by renameDraft().
+          const updated =
+            Object.keys(patch).length === 0 && renamedInvoice
+              ? renamedInvoice
+              : await invoicesRepo.updateDraft(renamedInvoice?.id ?? idResult.value, patch, tx);
           if (!updated) return { invoice: null, items: [] };
           const itemsOut = normalizedItemsForUpdate
             ? await invoicesRepo.replaceItems(
