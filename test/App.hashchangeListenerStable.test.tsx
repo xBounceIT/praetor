@@ -19,6 +19,7 @@ const useHashSync = (initialView: View | '404', initialUser: Pick<User, 'id'> | 
   const activeViewRef = useRef<View | '404'>(activeView);
   activeViewRef.current = activeView;
   const currentUserRef = useRef(initialUser);
+  currentUserRef.current = initialUser;
 
   useEffect(() => {
     const handleHashChange = () => {
