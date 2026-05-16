@@ -88,6 +88,7 @@ const renderUserManagement = (overrides: Partial<ComponentProps<typeof UserManag
         emailAttribute: '',
         groupsAttribute: '',
         roleMappings: [],
+        endSessionEnabled: false,
       },
     ],
     currency: '$',

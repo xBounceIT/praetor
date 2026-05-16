@@ -371,7 +371,7 @@ describe('authenticate', () => {
     expect(lastClientStats?.unbindCalls).toBe(1);
   });
 
-  test('returns false when findUserDn yields null (no entries before end)', async () => {
+  test('returns false when findUserEntry yields null (no entries before end)', async () => {
     nextFixture = {
       bindResponses: [null],
       searchResponses: [{ entries: [], status: 0 }],
@@ -592,6 +592,36 @@ describe('authenticate', () => {
     expect(result.matchedRoleIds).toEqual(['admin']);
   });
 
+  test('returns empty groups when every parallel group search fails (non-strict auth path)', async () => {
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      groupFilter: '(member={0})',
+    });
+    nextFixture = {
+      bindResponses: [null, null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: "CN=Daniel D'Angeli,OU=Internal Accounts,OU=Accounts,DC=syncsec,DC=coll",
+              object: { sAMAccountName: 'daniel.dangeli' },
+            },
+          ],
+          status: 0,
+        },
+        { err: new Error('first group search failed') },
+        { err: new Error('second group search failed') },
+      ],
+    };
+
+    const result = await ldapService.authenticateWithProfile('daniel.dangeli', 'pw');
+
+    // Auth still succeeds — the credential check passed — but no groups can be mapped.
+    expect(result.authenticated).toBe(true);
+    expect(result.groups).toEqual([]);
+    expect(result.matchedRoleIds).toEqual([]);
+  });
+
   test('rejects when the user-search stream emits an error (LDAP outage during search)', async () => {
     nextFixture = {
       bindResponses: [null],
@@ -620,7 +650,7 @@ describe('authenticate', () => {
   });
 });
 
-describe('findUserDn (direct, with config preloaded)', () => {
+describe('findUserEntry (direct, with config preloaded)', () => {
   beforeEach(() => {
     (ldapService as unknown as { config: unknown }).config = ENABLED_LDAP_CONFIG;
   });
@@ -635,7 +665,7 @@ describe('findUserDn (direct, with config preloaded)', () => {
       entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice' } }],
       status: 0,
     });
-    await ldapService.findUserDn(client as never, 'alice');
+    await ldapService.findUserEntry(client as never, 'alice');
     const search = lastClientStats?.searchCalls[0];
     expect(search?.options.attributes).toEqual(['uid', 'sAMAccountName', 'cn', 'displayName']);
   });
@@ -648,8 +678,8 @@ describe('findUserDn (direct, with config preloaded)', () => {
       ],
       status: 0,
     });
-    const dn = await ldapService.findUserDn(client as never, 'alice');
-    expect(dn).toBe('uid=bob,dc=test,dc=com');
+    const entry = await ldapService.findUserEntry(client as never, 'alice');
+    expect(entry?.dn).toBe('uid=bob,dc=test,dc=com');
   });
 
   test('resolves to entry.objectName when a single searchEntry fires', async () => {
@@ -657,24 +687,24 @@ describe('findUserDn (direct, with config preloaded)', () => {
       entries: [{ objectName: 'uid=alice,dc=test,dc=com' }],
       status: 0,
     });
-    const dn = await ldapService.findUserDn(client as never, 'alice');
-    expect(dn).toBe('uid=alice,dc=test,dc=com');
+    const entry = await ldapService.findUserEntry(client as never, 'alice');
+    expect(entry?.dn).toBe('uid=alice,dc=test,dc=com');
   });
 
   test('resolves null when no searchEntry fires before end (status 0)', async () => {
     const client = buildClient({ entries: [], status: 0 });
-    const dn = await ldapService.findUserDn(client as never, 'alice');
-    expect(dn).toBeNull();
+    const entry = await ldapService.findUserEntry(client as never, 'alice');
+    expect(entry).toBeNull();
   });
 
   test('rejects when end fires with non-zero status', async () => {
     const client = buildClient({ entries: [], status: 32 });
-    await expect(ldapService.findUserDn(client as never, 'alice')).rejects.toThrow(/status: 32/);
+    await expect(ldapService.findUserEntry(client as never, 'alice')).rejects.toThrow(/status: 32/);
   });
 
   test('rejects when search callback returns err', async () => {
     const client = buildClient({ err: new Error('search blew up') });
-    await expect(ldapService.findUserDn(client as never, 'alice')).rejects.toThrow(
+    await expect(ldapService.findUserEntry(client as never, 'alice')).rejects.toThrow(
       'search blew up',
     );
   });
@@ -685,15 +715,15 @@ describe('findUserDn (direct, with config preloaded)', () => {
       errorEvent: new Error('ldap protocol error'),
       status: 0,
     });
-    await expect(ldapService.findUserDn(client as never, 'alice')).rejects.toThrow(
+    await expect(ldapService.findUserEntry(client as never, 'alice')).rejects.toThrow(
       'ldap protocol error',
     );
   });
 
   test('returns null when service config is unset', async () => {
     (ldapService as unknown as { config: unknown }).config = null;
-    const dn = await ldapService.findUserDn({} as never, 'alice');
-    expect(dn).toBeNull();
+    const entry = await ldapService.findUserEntry({} as never, 'alice');
+    expect(entry).toBeNull();
   });
 });
 
@@ -965,6 +995,34 @@ describe('syncUsers', () => {
     expect(result).toEqual({ synced: 0, created: 0 });
   });
 
+  test('skips entries with an empty objectName instead of running username-only group search', async () => {
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: '', object: { uid: 'ghost', cn: 'Ghost Entry' } },
+            { objectName: 'uid=ok,dc=x', object: { uid: 'ok', cn: 'Ok' } },
+          ],
+          status: 0,
+        },
+      ],
+    };
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
+    const result = await ldapService.syncUsers();
+    expect(result).toEqual({ synced: 0, created: 1 });
+    expect(createUserMock).toHaveBeenCalledTimes(1);
+    const created = createUserMock.mock.calls[0]?.[0] as { username: string };
+    expect(created.username).toBe('ok');
+    // The empty-objectName entry must NOT trigger a follow-up group search keyed on username only.
+    const groupSearchCalls = lastClientStats?.searchCalls.filter(
+      (call) => call.base === ENABLED_LDAP_CONFIG.groupBaseDn,
+    );
+    expect(groupSearchCalls?.some((call) => String(call.options.filter).includes('ghost'))).toBe(
+      false,
+    );
+  });
+
   test('skips entries without a username (no uid and no sAMAccountName)', async () => {
     nextFixture = {
       bindResponses: [null],
@@ -1032,7 +1090,7 @@ describe('lookupUserGroups', () => {
     expect(lastClientStats?.unbindCalls).toBe(1);
   });
 
-  test('returns null when findUserDn yields no entries; unbind still called', async () => {
+  test('returns null when findUserEntry yields no entries; unbind still called', async () => {
     nextFixture = {
       bindResponses: [null],
       searchResponses: [{ entries: [], status: 0 }],
@@ -1166,6 +1224,36 @@ describe('lookupUserGroups', () => {
 
     expect(result).toBeNull();
     expect(lastClientStats?.unbindCalls).toBe(1);
+  });
+
+  test('issues identifier searches in parallel and unions groups across forms', async () => {
+    // Mixed-filter config: one group lists the user by DN under `member`, the
+    // other by uid under `memberUid`. Each identifier-form search matches only
+    // one group; the result must contain both.
+    const dnGroup = 'cn=dn-matched,ou=groups,dc=test,dc=com';
+    const uidGroup = 'cn=uid-matched,ou=groups,dc=test,dc=com';
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      groupFilter: '(|(member={0})(memberUid={0}))',
+    });
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice' } }],
+          status: 0,
+        },
+        { entries: [{ objectName: dnGroup, object: { cn: 'dn-matched' } }], status: 0 },
+        { entries: [{ objectName: uidGroup, object: { cn: 'uid-matched' } }], status: 0 },
+      ],
+    };
+
+    const result = await ldapService.lookupUserGroups('alice');
+
+    expect(result?.groups).toContain(dnGroup);
+    expect(result?.groups).toContain(uidGroup);
+    // One user lookup + two parallel group searches (DN form + uid form).
+    expect(lastClientStats?.searchCalls).toHaveLength(3);
   });
 });
 
@@ -1403,6 +1491,31 @@ describe('authenticateAndProvision', () => {
       created: false,
       canonicalUsername: 'alice',
     });
+  });
+
+  test('race recovery applies roles via the with-default helper (#641), matching the winner path', async () => {
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice', cn: 'Alice' } },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 }, // loser sees no groups
+      ],
+    };
+    findLoginUserByNormalizedUsernameMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(LDAP_LOGIN_USER);
+    const uniqueErr = Object.assign(new Error('duplicate key'), { code: '23505' });
+    createUserMock.mockRejectedValueOnce(uniqueErr);
+
+    await ldapService.authenticateAndProvision('alice', 'pw');
+
+    expect(applyExternalRolesForUserMock).toHaveBeenCalledWith(LDAP_LOGIN_USER.id, [], []);
+    expect(applyExternalRolesForUserIfMatchedMock).not.toHaveBeenCalled();
   });
 
   test('uses displayName when cn is absent', async () => {

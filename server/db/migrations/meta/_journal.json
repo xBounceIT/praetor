@@ -369,8 +369,15 @@
     {
       "idx": 52,
       "version": "7",
-      "when": 1778964218293,
-      "tag": "0052_add_users_username_lower_unique",
+      "when": 1778964101071,
+      "tag": "0052_add_sso_end_session",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1778966025291,
+      "tag": "0053_add_users_username_lower_unique",
       "breakpoints": true
     }
   ]

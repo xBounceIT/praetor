@@ -113,19 +113,24 @@ const allMocks = [
 
 let testApp: FastifyInstance;
 let validPemCert: string;
+let validPemCert2: string;
 
 beforeAll(async () => {
-  // Generate a real, parseable self-signed cert once per file. `selfsigned.generate` is async
+  // Generate real, parseable self-signed certs once per file. `selfsigned.generate` is async
   // when called without a callback. Using `selfsigned` (already a server dependency for the
   // dev HTTPS cert) avoids hand-rolled fake PEMs that X509Certificate would correctly reject.
   // `days` is supported at runtime but missing from the package's TS typing.
-  const pems = await selfsigned.generate([{ name: 'commonName', value: 'praetor-test-ca' }], {
-    keySize: 2048,
-    days: 1,
-  } as Parameters<typeof selfsigned.generate>[1]);
+  type SelfsignedOpts = Parameters<typeof selfsigned.generate>[1];
+  const opts: SelfsignedOpts = { keySize: 2048, days: 1 } as SelfsignedOpts;
+  const [pems, pems2] = await Promise.all([
+    selfsigned.generate([{ name: 'commonName', value: 'praetor-test-ca' }], opts),
+    selfsigned.generate([{ name: 'commonName', value: 'praetor-test-ca-2' }], opts),
+  ]);
   validPemCert = pems.cert;
-  // Sanity check: the generated PEM must round-trip through node:crypto.
+  validPemCert2 = pems2.cert;
+  // Sanity check: the generated PEMs must round-trip through node:crypto.
   new X509Certificate(validPemCert);
+  new X509Certificate(validPemCert2);
 });
 
 beforeEach(async () => {
@@ -487,6 +492,31 @@ describe('PUT /api/ldap/config - tlsCaCertificate', () => {
     expect(response.statusCode).toBe(400);
     expect(ldapUpdateMock).not.toHaveBeenCalled();
     expect(JSON.parse(response.body).error).toMatch(/not a valid PEM certificate/i);
+  });
+
+  test('strips non-CERTIFICATE blocks (incl. accidental PRIVATE KEY) and surrounding text before persistence', async () => {
+    const accidentalPrivateKey =
+      '-----BEGIN PRIVATE KEY-----\nMIIBVQIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEA\n-----END PRIVATE KEY-----';
+    const payload = [
+      '# operator note: trust chain assembled 2026-05-16',
+      validPemCert.trim(),
+      'free-text-between-blocks',
+      accidentalPrivateKey,
+      validPemCert2.trim(),
+      '# trailing comment',
+    ].join('\n');
+
+    const response = await putConfig({ enabled: false, tlsCaCertificate: payload });
+
+    expect(response.statusCode).toBe(200);
+    expect(ldapUpdateMock).toHaveBeenCalledTimes(1);
+    const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
+    const persisted = patch.tlsCaCertificate ?? '';
+    expect(persisted.match(/-----BEGIN CERTIFICATE-----/g)?.length).toBe(2);
+    expect(persisted.match(/-----END CERTIFICATE-----/g)?.length).toBe(2);
+    expect(persisted).not.toMatch(
+      /PRIVATE KEY|operator note|free-text-between-blocks|trailing comment/,
+    );
   });
 
   test('successful update invalidates the LDAP service config cache', async () => {

@@ -13,9 +13,10 @@ import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as ssoLoginTicketsRepo from '../repositories/ssoLoginTicketsRepo.ts';
 import * as ssoProvidersRepo from '../repositories/ssoProvidersRepo.ts';
 import * as ssoStatesRepo from '../repositories/ssoStatesRepo.ts';
+import * as ssoUserSessionsRepo from '../repositories/ssoUserSessionsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { decrypt, encrypt, MASKED_SECRET } from '../utils/crypto.ts';
-import { buildFrontendUrl } from '../utils/frontend-url.ts';
+import { buildFrontendUrl, requireFrontendBaseUrl } from '../utils/frontend-url.ts';
 import { NotFoundError } from '../utils/http-errors.ts';
 import { createChildLogger } from '../utils/logger.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
@@ -609,6 +610,8 @@ const completeExternalLogin = async (
     name?: string;
     email?: string;
     groups: string[];
+    // Stored encrypted at rest for later use as `id_token_hint` on RP-Initiated Logout.
+    idToken?: string;
   },
 ): Promise<string> => {
   let user: Awaited<ReturnType<typeof resolveExternalIdentity>>;
@@ -627,7 +630,21 @@ const completeExternalLogin = async (
   } catch (err) {
     throw mapResolveExternalError(err);
   }
-  const ticket = await createLoginTicket(user.id, user.role);
+  // Replace any previously-tracked SSO session: OIDC records the new id_token; everything
+  // else clears the row so a stale OIDC id_token can't drive an end-session redirect on
+  // the next logout. The "OIDC without id_token" case (rare — some IdPs omit it on
+  // re-auth) lands in the clear branch, dropping a still-valid prior token. Accepted
+  // trade-off: we'd rather lose the hint than redirect with a hint that doesn't match
+  // the current login.
+  const recordSession =
+    provider.protocol === 'oidc' && identity.idToken
+      ? ssoUserSessionsRepo.upsert({
+          userId: user.id,
+          providerId: provider.id,
+          idToken: encrypt(identity.idToken),
+        })
+      : ssoUserSessionsRepo.deleteByUserId(user.id);
+  const [, ticket] = await Promise.all([recordSession, createLoginTicket(user.id, user.role)]);
   return buildFrontendTicketUrl(ticket);
 };
 
@@ -778,6 +795,7 @@ export const createProvider = async (input: SsoProviderInput): Promise<AdminSsoP
         ? ssoProvidersRepo.DEFAULT_SAML_FIELDS.groupsAttribute
         : ssoProvidersRepo.DEFAULT_OIDC_FIELDS.groupsAttribute),
     roleMappings: patch.roleMappings ?? [],
+    endSessionEnabled: patch.endSessionEnabled ?? false,
   };
   assertEnabledProviderConfig(provider);
   const created = await ssoProvidersRepo.insert(provider);
@@ -873,6 +891,9 @@ export const completeOidcLogin = async (slug: string, callbackUrl: URL): Promise
       providerId: provider.id,
       protocol: provider.protocol,
     }),
+    // Persisted unconditionally: the admin may flip `endSessionEnabled` on later, and an
+    // id_token captured now is the only `id_token_hint` we'll ever have for this session.
+    idToken: typeof tokens.id_token === 'string' ? tokens.id_token : undefined,
   });
 };
 
@@ -930,6 +951,48 @@ export const getSamlMetadata = async (slug: string): Promise<string> => {
     signatureAlgorithm: 'sha256',
     digestAlgorithm: 'sha256',
   });
+};
+
+/**
+ * If `userId` has a stored OIDC session whose provider opted in to RP-Initiated Logout,
+ * returns the IdP's `end_session_endpoint` URL with `id_token_hint` + `post_logout_redirect_uri`.
+ * Returns null when there is nothing to redirect to. Transient IdP failures (network,
+ * malformed discovery) throw so the row is kept for the next attempt; the caller is
+ * responsible for swallowing the rejection so a broken IdP cannot block the local logout.
+ */
+export const endOidcSession = async (userId: string): Promise<string | null> => {
+  const row = await ssoUserSessionsRepo.findActiveOidcByUserId(userId);
+  if (!row) return null;
+
+  let idToken: string;
+  try {
+    idToken = decrypt(row.session.idToken);
+  } catch {
+    // Ciphertext is unreadable (e.g. ENCRYPTION_KEY rotated). Drop the row; the next OIDC
+    // login will rewrite it.
+    await ssoUserSessionsRepo.deleteByUserId(userId);
+    return null;
+  }
+
+  // Run discovery + URL build first; only consume the row once we know we have a real URL
+  // to hand back. A transient failure here throws — the caller catches and logs.
+  const config = await createOidcConfig(row.provider);
+  const { end_session_endpoint } = config.serverMetadata();
+  const url = end_session_endpoint
+    ? oidc.buildEndSessionUrl(config, {
+        id_token_hint: idToken,
+        // Admins must register this URI with their IdP; most IdPs validate
+        // `post_logout_redirect_uri` against a pre-registered allowlist.
+        post_logout_redirect_uri: requireFrontendBaseUrl(),
+        client_id: row.provider.clientId,
+      })
+    : null;
+  // One-shot: the row is consumed even if the browser later fails to follow the redirect
+  // (popup blocker, CSP, network drop). `session_version` is bumped right after, so the
+  // Praetor JWT is dead regardless — the worst case is a leftover IdP cookie until its
+  // natural expiry, which is the pre-existing behaviour we're already escaping.
+  await ssoUserSessionsRepo.deleteByUserId(userId);
+  return url ? url.href : null;
 };
 
 export const consumeLoginTicket = async (ticket: string): Promise<ConsumedSsoLogin | null> => {

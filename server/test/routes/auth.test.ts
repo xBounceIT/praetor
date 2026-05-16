@@ -6,6 +6,7 @@ import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realExternalAuth from '../../services/external-auth.ts';
 import * as realLdapService from '../../services/ldap.ts';
+import * as realSsoService from '../../services/sso.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import { hashPersonalAccessToken } from '../../utils/personal-access-token.ts';
@@ -29,6 +30,7 @@ const auditSnap = { ...realAudit };
 const bcryptSnap = { ...(realBcrypt as Record<string, unknown>) };
 const ldapServiceSnap = { ...(realLdapService as Record<string, unknown>) };
 const externalAuthSnap = { ...realExternalAuth };
+const ssoServiceSnap = { ...realSsoService };
 
 // Auth-middleware deps: the real authenticateToken runs end-to-end on /me and /switch-role,
 // so we mock its three downstream calls.
@@ -51,6 +53,7 @@ const ldapAuthenticateMock = mock();
 const ldapAuthenticateWithProfileMock = mock();
 const ldapAuthenticateAndProvisionMock = mock();
 const applyExternalRoleIdsForUserIfMatchedMock = mock();
+const endOidcSessionMock = mock();
 
 let authRoutePlugin: FastifyPluginAsync;
 
@@ -89,6 +92,10 @@ beforeAll(async () => {
     ...externalAuthSnap,
     applyExternalRoleIdsForUserIfMatched: applyExternalRoleIdsForUserIfMatchedMock,
   }));
+  mock.module('../../services/sso.ts', () => ({
+    ...ssoServiceSnap,
+    endOidcSession: endOidcSessionMock,
+  }));
   mock.module('../../services/ldap.ts', () => ({
     default: {
       authenticate: ldapAuthenticateMock,
@@ -109,6 +116,7 @@ afterAll(() => {
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('bcryptjs', () => bcryptSnap);
   mock.module('../../services/external-auth.ts', () => externalAuthSnap);
+  mock.module('../../services/sso.ts', () => ssoServiceSnap);
   mock.module('../../services/ldap.ts', () => ldapServiceSnap);
 });
 
@@ -153,6 +161,7 @@ const allMocks = [
   ldapAuthenticateWithProfileMock,
   ldapAuthenticateAndProvisionMock,
   applyExternalRoleIdsForUserIfMatchedMock,
+  endOidcSessionMock,
 ];
 
 let testApp: FastifyInstance;
@@ -187,6 +196,9 @@ beforeEach(async () => {
     matchedRoleIds: [],
   });
   ldapAuthenticateAndProvisionMock.mockResolvedValue({ authenticated: false });
+  // Default: no OIDC session row for the test user. Tests opting into the RP-Initiated
+  // Logout path mock this explicitly.
+  endOidcSessionMock.mockResolvedValue(null);
   findLoginUserByIdMock.mockResolvedValue(null);
   applyExternalRoleIdsForUserIfMatchedMock.mockImplementation(
     async (_userId: string, roleIds: string[]) =>
@@ -775,14 +787,15 @@ describe('POST /api/auth/logout', () => {
     expect(bumpSessionVersionMock).not.toHaveBeenCalled();
   });
 
-  test('204 happy path: bumps session_version and audits user.logout', async () => {
+  test('200 happy path: bumps session_version, audits user.logout, returns null endSessionUrl', async () => {
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/auth/logout',
       headers: authHeader('u1'),
     });
 
-    expect(res.statusCode).toBe(204);
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ endSessionUrl: null });
     expect(bumpSessionVersionMock).toHaveBeenCalledTimes(1);
     expect(bumpSessionVersionMock).toHaveBeenCalledWith('u1');
     expect(logAuditMock).toHaveBeenCalledWith(
@@ -796,6 +809,45 @@ describe('POST /api/auth/logout', () => {
     // BEFORE the handler bumps session_version. Returning that token to the client would
     // re-populate localStorage with an already-revoked token. The handler must strip it.
     expect(res.headers['x-auth-token']).toBeUndefined();
+  });
+
+  // Issue #610: OIDC RP-Initiated Logout. When the user authenticated via an OIDC provider
+  // that has end_session_enabled, the response carries the IdP's end-session URL — the
+  // frontend redirects the browser there so the IdP session cookie is also killed.
+  test('200 with endSessionUrl when ssoService.endOidcSession returns one', async () => {
+    endOidcSessionMock.mockResolvedValue(
+      'https://idp.example.com/logout?id_token_hint=tok&post_logout_redirect_uri=https%3A%2F%2Fapp.example.com%2F',
+    );
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/logout',
+      headers: authHeader('u1'),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      endSessionUrl:
+        'https://idp.example.com/logout?id_token_hint=tok&post_logout_redirect_uri=https%3A%2F%2Fapp.example.com%2F',
+    });
+    expect(endOidcSessionMock).toHaveBeenCalledWith('u1');
+    // The local logout MUST still happen — a working IdP redirect is not a substitute for
+    // bumping session_version.
+    expect(bumpSessionVersionMock).toHaveBeenCalledWith('u1');
+  });
+
+  // A broken IdP (network failure, malformed discovery doc) must never block the local
+  // logout. The handler logs and swallows the rejection.
+  test('200 with null endSessionUrl when endOidcSession throws', async () => {
+    endOidcSessionMock.mockRejectedValue(new Error('discovery failed'));
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/logout',
+      headers: authHeader('u1'),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ endSessionUrl: null });
+    expect(bumpSessionVersionMock).toHaveBeenCalledWith('u1');
   });
 
   test('subsequent request with the old token (stale sessionVersion) is rejected', async () => {
