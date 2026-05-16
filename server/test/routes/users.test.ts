@@ -984,7 +984,7 @@ describe('PUT /api/users/:id', () => {
     );
   });
 
-  test('settings upsert failure aborts the request before post-commit work runs', async () => {
+  test('settings upsert failure rolls back the user update (regression for #615)', async () => {
     findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
     updateUserDynamicMock.mockResolvedValue({
       ...SAMPLE_USER_CORE,
@@ -1002,9 +1002,16 @@ describe('PUT /api/users/:id', () => {
       payload: { name: 'Renamed', email: 'new@x.com' },
     });
 
-    // The error propagating out of the tx callback prevents findById/audit from running;
-    // if it didn't, we'd be responding with stale data after a partial commit.
     expect(res.statusCode).not.toBe(200);
+    // The load-bearing assertion: when the upsert fails, it must have been called with the
+    // transaction handle (TX_SENTINEL). On the pre-fix code the upsert ran outside the tx
+    // with no executor, so the user update would have already committed — this assertion
+    // would fail on that buggy code path.
+    expect(settingsUpsertForUserMock).toHaveBeenCalledWith(
+      'u-target',
+      expect.anything(),
+      TX_SENTINEL,
+    );
     expect(findByIdMock).not.toHaveBeenCalled();
     expect(logAuditMock).not.toHaveBeenCalled();
   });
