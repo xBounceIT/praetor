@@ -63,5 +63,13 @@ export const timeEntries = pgTable(
       'time_entries_location_check',
       sql`${table.location} IN ('remote', 'office', 'customer_premise', 'transfer')`,
     ),
+    // Storage-layer backstop for the 24h cap enforced in
+    // `server/services/timeEntries.ts` (MAX_DURATION_HOURS). Without this,
+    // pre-#590 rows with duration > 24 (e.g. the `1_000_000` typo that
+    // triggered #516) survive and continue poisoning cost/billing aggregates.
+    check(
+      'time_entries_duration_max_check',
+      sql`${table.duration} >= 0 AND ${table.duration} <= 24`,
+    ),
   ],
 );
