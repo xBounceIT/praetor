@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { Role, User } from '../../types';
 import { TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
+import { toastError } from '../../utils/toast';
 import Modal from './Modal';
 import {
   ModalBody,
@@ -185,7 +186,7 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
       handleClose();
     } catch (err) {
       console.error('Failed to save assignments', err);
-      alert(t('assignment.saveFailed'));
+      toastError(t('assignment.saveFailed'));
     }
   }, [disabled, saveAssignedUserIds, assignedUserIds, handleClose, t]);
 

@@ -13,6 +13,14 @@ const apiMocks = {
   ),
 };
 
+const toastErrorMock = mock((_message: string) => {});
+
+mock.module('../../utils/toast', () => ({
+  toastError: (message: string) => toastErrorMock(message),
+  toastSuccess: () => {},
+  toast: { error: () => {}, success: () => {}, info: () => {} },
+}));
+
 mock.module('../../services/api', () => ({
   default: {
     supplierInvoices: {
@@ -52,12 +60,10 @@ const makeStubSetter = <T>(initial: T[]) => {
 
 const silenceConsole = () => {
   const originalError = console.error;
-  const originalAlert = globalThis.alert;
   console.error = mock(() => {}) as unknown as typeof console.error;
-  globalThis.alert = mock(() => {}) as unknown as typeof globalThis.alert;
+  toastErrorMock.mockClear();
   return () => {
     console.error = originalError;
-    globalThis.alert = originalAlert;
   };
 };
 
@@ -215,7 +221,7 @@ describe('makeSupplierInvoiceHandlers', () => {
     expect(callArg.total).toBe(0);
   });
 
-  test('createFromOrder alerts and swallows on api error', async () => {
+  test('createFromOrder surfaces error via toast and swallows on api error', async () => {
     apiMocks.supplierInvoicesCreate.mockImplementation(() => Promise.reject(new Error('boom')));
     const invoices = makeStubSetter<SupplierInvoiceLike>([{ id: 'si-existing' }]);
     const setActiveView = mock(() => {});
@@ -236,6 +242,8 @@ describe('makeSupplierInvoiceHandlers', () => {
       } as never);
       expect(invoices.get()).toEqual([{ id: 'si-existing' }]);
       expect(setActiveView).not.toHaveBeenCalled();
+      expect(toastErrorMock).toHaveBeenCalledTimes(1);
+      expect((toastErrorMock.mock.calls[0]?.[0] as string) ?? '').toContain('boom');
     } finally {
       restore();
     }

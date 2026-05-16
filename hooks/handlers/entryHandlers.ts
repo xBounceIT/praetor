@@ -1,6 +1,7 @@
 import type React from 'react';
 import api from '../../services/api';
 import type { TimeEntry, User } from '../../types';
+import { toastError } from '../../utils/toast';
 
 type TimeEntryDraft = Omit<
   TimeEntry,
@@ -35,7 +36,7 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
       setEntries((prev) => [entry, ...prev]);
     } catch (err) {
       console.error('Failed to add entry:', err);
-      alert('Failed to add time entry');
+      toastError('Failed to add time entry');
     }
   };
 
@@ -64,7 +65,7 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
 
     if (failures.length > 0) {
       for (const err of failures) console.error('Failed to add bulk entry:', err);
-      alert('Failed to add some time entries');
+      toastError('Failed to add some time entries');
     }
   };
 

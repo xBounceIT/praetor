@@ -21,6 +21,14 @@ const apiMocks = {
   clientsDeleteProfileOption: mock((..._args: unknown[]): Promise<void> => Promise.resolve()),
 };
 
+const toastErrorMock = mock((_message: string) => {});
+
+mock.module('../../utils/toast', () => ({
+  toastError: (message: string) => toastErrorMock(message),
+  toastSuccess: () => {},
+  toast: { error: () => {}, success: () => {}, info: () => {} },
+}));
+
 mock.module('../../services/api', () => ({
   default: {
     clients: {
@@ -66,6 +74,7 @@ describe('makeClientHandlers', () => {
     apiMocks.clientsCreateProfileOption.mockClear();
     apiMocks.clientsUpdateProfileOption.mockClear();
     apiMocks.clientsDeleteProfileOption.mockClear();
+    toastErrorMock.mockClear();
   });
 
   afterEach(() => {
@@ -122,6 +131,30 @@ describe('makeClientHandlers', () => {
     await handlers.update('c1', { name: 'Alpha-renamed' });
     expect(clients.get()[0]).toEqual({ id: 'c1', name: 'Alpha-renamed' });
     expect(clients.get()[1]).toEqual({ id: 'c2', name: 'Beta' });
+  });
+
+  test('delete surfaces error via toast and swallows on api error', async () => {
+    apiMocks.clientsDelete.mockImplementation(() => Promise.reject(new Error('boom')));
+    const clients = makeStubSetter<ClientLike>([{ id: 'c1' }]);
+    const handlers = makeClientHandlers({
+      getProjects: () => [],
+      setClients: clients.setter,
+      setProjects: makeStubSetter<ProjectLike>([]).setter,
+      setProjectTasks: makeStubSetter<TaskLike>([]).setter,
+    });
+
+    const originalError = console.error;
+    console.error = mock(() => {}) as unknown as typeof console.error;
+    try {
+      await handlers.delete('c1');
+      expect(clients.get()).toEqual([{ id: 'c1' }]);
+      expect(toastErrorMock).toHaveBeenCalledTimes(1);
+      expect((toastErrorMock.mock.calls[0]?.[0] as string) ?? '').toContain(
+        'Failed to delete client',
+      );
+    } finally {
+      console.error = originalError;
+    }
   });
 
   test('delete cascades to projects and projectTasks', async () => {

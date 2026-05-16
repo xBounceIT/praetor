@@ -3,6 +3,7 @@ import api from '../../services/api';
 import type { SupplierInvoice, SupplierSaleOrder, View } from '../../types';
 import { addDaysToDateOnly, getLocalDateString } from '../../utils/date';
 import { makeTempId } from '../../utils/tempId';
+import { toastError } from '../../utils/toast';
 
 export type SupplierInvoiceHandlersDeps = {
   setSupplierInvoices: React.Dispatch<React.SetStateAction<SupplierInvoice[]>>;
@@ -73,7 +74,11 @@ export const makeSupplierInvoiceHandlers = (deps: SupplierInvoiceHandlersDeps) =
       setActiveView('accounting/supplier-invoices');
     } catch (err) {
       console.error('Failed to create supplier invoice from order:', err);
-      alert((err as Error).message || 'Failed to create supplier invoice from order');
+      toastError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Failed to create supplier invoice from order',
+      );
     }
   };
 

@@ -49,6 +49,14 @@ const apiMocks = {
   workUnitsList: mock((): Promise<unknown[]> => Promise.resolve([])),
 };
 
+const toastErrorMock = mock((_message: string) => {});
+
+mock.module('../../utils/toast', () => ({
+  toastError: (message: string) => toastErrorMock(message),
+  toastSuccess: () => {},
+  toast: { error: () => {}, success: () => {}, info: () => {} },
+}));
+
 mock.module('../../services/api', () => ({
   default: {
     users: {
@@ -135,12 +143,10 @@ const buildHandlers = (overrides: Record<string, unknown> = {}) => {
 
 const silenceConsole = () => {
   const originalError = console.error;
-  const originalAlert = globalThis.alert;
   console.error = mock(() => {}) as unknown as typeof console.error;
-  globalThis.alert = mock(() => {}) as unknown as typeof globalThis.alert;
+  toastErrorMock.mockClear();
   return () => {
     console.error = originalError;
-    globalThis.alert = originalAlert;
   };
 };
 
@@ -185,13 +191,15 @@ describe('makeUserHandlers - users', () => {
     expect(ctx.users.get()[0]).toEqual({ id: 'u1', name: 'New' });
   });
 
-  test('updateUser alerts and swallows on error', async () => {
+  test('updateUser surfaces error via toast and swallows', async () => {
     apiMocks.usersUpdate.mockImplementation(() => Promise.reject(new Error('boom')));
     const ctx = buildHandlers({ users: [{ id: 'u1' }] });
     const restore = silenceConsole();
     try {
       await ctx.handlers.updateUser('u1', { name: 'X' });
       expect(ctx.users.get()).toEqual([{ id: 'u1' }]);
+      expect(toastErrorMock).toHaveBeenCalledTimes(1);
+      expect((toastErrorMock.mock.calls[0]?.[0] as string) ?? '').toContain('boom');
     } finally {
       restore();
     }

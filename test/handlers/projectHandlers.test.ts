@@ -16,6 +16,14 @@ const apiMocks = {
   ),
 };
 
+const toastErrorMock = mock((_message: string) => {});
+
+mock.module('../../utils/toast', () => ({
+  toastError: (message: string) => toastErrorMock(message),
+  toastSuccess: () => {},
+  toast: { error: () => {}, success: () => {}, info: () => {} },
+}));
+
 mock.module('../../services/api', () => ({
   default: {
     projects: {
@@ -56,6 +64,7 @@ describe('makeProjectHandlers', () => {
     Object.values(apiMocks).forEach((m) => {
       m.mockClear();
     });
+    toastErrorMock.mockClear();
   });
 
   afterEach(() => {
@@ -163,7 +172,7 @@ describe('makeProjectHandlers', () => {
     expect(tasks.get()).toHaveLength(2);
   });
 
-  test('add surfaces error when clientId is missing', async () => {
+  test('add surfaces error to user via toast when clientId is missing', async () => {
     const projects = makeStubSetter<ProjectLike>([]);
     const handlers = makeProjectHandlers({
       setProjects: projects.setter,
@@ -172,23 +181,19 @@ describe('makeProjectHandlers', () => {
     });
 
     const originalError = console.error;
-    const originalAlert = globalThis.alert;
     console.error = mock(() => {}) as unknown as typeof console.error;
-    const alertMock = mock((_msg?: string) => {});
-    globalThis.alert = alertMock as unknown as typeof globalThis.alert;
     try {
       await handlers.add({ name: 'P', clientId: '', offerId: 'of-1' });
       expect(apiMocks.projectsCreate).not.toHaveBeenCalled();
       expect(projects.get()).toEqual([]);
-      expect(alertMock).toHaveBeenCalledTimes(1);
-      expect((alertMock.mock.calls[0]?.[0] as string) ?? '').toContain('Client is required');
+      expect(toastErrorMock).toHaveBeenCalledTimes(1);
+      expect((toastErrorMock.mock.calls[0]?.[0] as string) ?? '').toContain('Client is required');
     } finally {
       console.error = originalError;
-      globalThis.alert = originalAlert;
     }
   });
 
-  test('add surfaces api error to user', async () => {
+  test('add surfaces api error to user via toast', async () => {
     apiMocks.projectsCreate.mockImplementation(() => Promise.reject(new Error('api down')));
     const projects = makeStubSetter<ProjectLike>([]);
     const handlers = makeProjectHandlers({
@@ -198,18 +203,14 @@ describe('makeProjectHandlers', () => {
     });
 
     const originalError = console.error;
-    const originalAlert = globalThis.alert;
     console.error = mock(() => {}) as unknown as typeof console.error;
-    const alertMock = mock((_msg?: string) => {});
-    globalThis.alert = alertMock as unknown as typeof globalThis.alert;
     try {
       await handlers.add({ name: 'P', clientId: 'c1', orderId: 'order-1', offerId: 'of-1' });
       expect(projects.get()).toEqual([]);
-      expect(alertMock).toHaveBeenCalledTimes(1);
-      expect((alertMock.mock.calls[0]?.[0] as string) ?? '').toContain('api down');
+      expect(toastErrorMock).toHaveBeenCalledTimes(1);
+      expect((toastErrorMock.mock.calls[0]?.[0] as string) ?? '').toContain('api down');
     } finally {
       console.error = originalError;
-      globalThis.alert = originalAlert;
     }
   });
 

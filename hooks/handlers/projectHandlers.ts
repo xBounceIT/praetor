@@ -2,6 +2,8 @@ import type React from 'react';
 import type { AddProjectFormInput } from '../../components/projects/ProjectsView';
 import api from '../../services/api';
 import type { Project, ProjectTask, TimeEntry } from '../../types';
+import { getErrorMessage } from '../../utils/errors';
+import { toastError } from '../../utils/toast';
 
 export type ProjectHandlersDeps = {
   setProjects: React.Dispatch<React.SetStateAction<Project[]>>;
@@ -55,7 +57,7 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
       }
     } catch (err) {
       console.error('Failed to add project:', err);
-      alert('Failed to add project: ' + (err as Error).message);
+      toastError(`Failed to add project: ${getErrorMessage(err)}`);
     }
   };
 
@@ -87,7 +89,7 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
       return task;
     } catch (err) {
       console.error('Failed to add task:', err);
-      alert('Failed to add task: ' + (err as Error).message);
+      toastError(`Failed to add task: ${getErrorMessage(err)}`);
       throw err;
     }
   };
@@ -98,7 +100,7 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
       setProjects((prev) => prev.map((p) => (p.id === id ? updated : p)));
     } catch (err) {
       console.error('Failed to update project:', err);
-      alert('Failed to update project');
+      toastError('Failed to update project');
     }
   };
 
@@ -110,7 +112,7 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
       setEntries((prev) => prev.filter((e) => e.projectId !== id));
     } catch (err) {
       console.error('Failed to delete project:', err);
-      alert('Failed to delete project');
+      toastError('Failed to delete project');
     }
   };
 

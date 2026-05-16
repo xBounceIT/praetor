@@ -1,7 +1,9 @@
 import type React from 'react';
 import api from '../../services/api';
 import type { Role, User, UserAuthMethod, WorkUnit } from '../../types';
+import { getErrorMessage } from '../../utils/errors';
 import { TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
+import { toastError } from '../../utils/toast';
 
 export type UserHandlersDeps = {
   currentUser: User | null;
@@ -38,7 +40,7 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
       setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));
     } catch (err) {
       console.error('Failed to update user:', err);
-      alert('Failed to update user: ' + (err as Error).message);
+      toastError(`Failed to update user: ${getErrorMessage(err)}`);
     }
   };
 
@@ -61,7 +63,7 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
       );
     } catch (err) {
       console.error('Failed to update user roles:', err);
-      alert('Failed to update user roles: ' + (err as Error).message);
+      toastError(`Failed to update user roles: ${getErrorMessage(err)}`);
       throw err;
     }
   };
@@ -76,7 +78,7 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
       setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));
     } catch (err) {
       console.error('Failed to update user authentication method:', err);
-      alert('Failed to update user authentication method: ' + (err as Error).message);
+      toastError(`Failed to update user authentication method: ${getErrorMessage(err)}`);
       throw err;
     }
   };
@@ -91,7 +93,7 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
       setUsers((prev) => prev.filter((u) => u.id !== id));
     } catch (err) {
       console.error('Failed to delete user:', err);
-      alert('Failed to delete user: ' + (err as Error).message);
+      toastError(`Failed to delete user: ${getErrorMessage(err)}`);
     }
   };
 
