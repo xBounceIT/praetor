@@ -238,7 +238,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [authenticateToken, requireScopedPermission('timesheets.tracker', 'create')],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        authenticateToken,
+        requireScopedPermission('timesheets.tracker', 'create'),
+      ],
       schema: {
         tags: ['entries'],
         summary: 'Create time entry',
@@ -248,7 +252,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         body: entryCreateBodySchema,
         response: {
           201: entrySchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
