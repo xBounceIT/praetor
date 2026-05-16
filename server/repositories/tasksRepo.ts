@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
 import { tasks, userTasks } from '../db/schema/tasks.ts';
 import { timeEntries } from '../db/schema/timeEntries.ts';
 import {
@@ -153,6 +153,18 @@ export const create = async (task: NewTask, exec: DbExecutor = db): Promise<Task
   }
 };
 
+const lockBillingTypeById = async (
+  id: string,
+  exec: DbExecutor,
+): Promise<StoredBillingType | null> => {
+  const rows = await exec
+    .select({ billingType: tasks.billingType })
+    .from(tasks)
+    .where(eq(tasks.id, id))
+    .for('update');
+  return rows[0]?.billingType ?? null;
+};
+
 export type TaskUpdate = {
   name?: string | null;
   description?: string | null;
@@ -196,14 +208,17 @@ export const update = async (
     set.billingType = nextBillingType;
     set.billingFrequency = normalizeBillingFrequency(nextBillingType, patch.billingFrequency);
   } else if (patch.billingFrequency !== undefined) {
-    const currentRows = await exec
-      .select({ billingType: tasks.billingType })
-      .from(tasks)
-      .where(eq(tasks.id, id));
-    set.billingFrequency = normalizeBillingFrequency(
-      currentRows[0]?.billingType ?? DEFAULT_BILLING_TYPE,
-      patch.billingFrequency,
-    );
+    // Lock billing_type while we normalize against it: a concurrent UPDATE of billing_type
+    // between the SELECT and our UPDATE would otherwise leave billing_frequency mismatched.
+    return runAtomically(exec, async (tx) => {
+      const billingType = await lockBillingTypeById(id, tx);
+      set.billingFrequency = normalizeBillingFrequency(
+        billingType ?? DEFAULT_BILLING_TYPE,
+        patch.billingFrequency,
+      );
+      const rows = await tx.update(tasks).set(set).where(eq(tasks.id, id)).returning();
+      return rows[0] ? mapRow(rows[0]) : null;
+    });
   }
 
   if (Object.keys(set).length === 0) {
