@@ -756,19 +756,37 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'No fields to update');
       }
 
-      if (hasFieldUpdates) {
-        // Sync runs inside the transaction so the role replacement and the resulting
-        // top-manager auto-assignments commit (or roll back) together.
-        const updatedRow = await withDbTransaction(async (tx) => {
-          const row = await usersRepo.updateUserDynamic(idResult.value, fields, tx);
-          if (row && roleValue !== null) {
-            await usersRepo.replaceUserRoles(idResult.value, [roleValue], tx);
-            await userAssignmentsRepo.syncTopManagerAssignmentsForUser(idResult.value, tx);
+      const needsSettingsUpsert = fields.name !== undefined || validatedEmail !== undefined;
+
+      if (hasFieldUpdates || needsSettingsUpsert) {
+        // Single transaction so users.name/email and the mirrored settings row commit (or
+        // roll back) together. Previously the settings upsert ran after the users-update
+        // transaction had already committed, so a failed upsert left users updated while
+        // settings stayed stale, and findById's LEFT JOIN returned an inconsistent row.
+        const txResult = await withDbTransaction(async (tx) => {
+          if (hasFieldUpdates) {
+            const row = await usersRepo.updateUserDynamic(idResult.value, fields, tx);
+            if (!row) return { userExists: false };
+            if (roleValue !== null) {
+              await usersRepo.replaceUserRoles(idResult.value, [roleValue], tx);
+              await userAssignmentsRepo.syncTopManagerAssignmentsForUser(idResult.value, tx);
+            }
           }
-          return row;
+          if (needsSettingsUpsert) {
+            await settingsRepo.upsertForUser(
+              idResult.value,
+              {
+                fullName: fields.name ?? null,
+                email: validatedEmail ?? null,
+                language: null,
+              },
+              tx,
+            );
+          }
+          return { userExists: true };
         });
 
-        if (!updatedRow) {
+        if (!txResult.userExists) {
           return replyError(request, reply, {
             statusCode: 404,
             message: 'User not found',
@@ -796,16 +814,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      // Settings upsert must complete before findById - findById LEFT JOINs settings to
-      // populate `email`, and parallel reads on different pool connections can observe the
-      // pre-update row under read-committed isolation, returning stale email in the response.
-      if (fields.name !== undefined || validatedEmail !== undefined) {
-        await settingsRepo.upsertForUser(idResult.value, {
-          fullName: fields.name ?? null,
-          email: validatedEmail ?? null,
-          language: null,
-        });
-      }
       const fullUser = await usersRepo.findById(idResult.value);
       if (!fullUser) {
         return replyError(request, reply, {

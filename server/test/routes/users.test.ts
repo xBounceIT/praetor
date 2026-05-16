@@ -937,9 +937,83 @@ describe('PUT /api/users/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(settingsUpsertForUserMock).toHaveBeenCalled();
+    // Even with only an email change, settings upsert must run inside the same
+    // withDbTransaction wrapper so users.email and settings.email stay consistent.
+    expect(settingsUpsertForUserMock).toHaveBeenCalledWith(
+      'u-target',
+      expect.objectContaining({ email: 'new@x.com' }),
+      TX_SENTINEL,
+    );
     // No dynamic field update needed → updateUserDynamic not called
     expect(updateUserDynamicMock).not.toHaveBeenCalled();
+  });
+
+  test('200 name + email change: settings upsert runs inside the user-update transaction', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      name: 'Renamed',
+      avatarInitials: 'R',
+      costPerHour: 50,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({
+      ...SAMPLE_USER_ROW,
+      name: 'Renamed',
+      email: 'new@x.com',
+    });
+    settingsUpsertForUserMock.mockResolvedValue({});
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { name: 'Renamed', email: 'new@x.com' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateUserDynamicMock).toHaveBeenCalledWith(
+      'u-target',
+      expect.objectContaining({ name: 'Renamed' }),
+      TX_SENTINEL,
+    );
+    expect(settingsUpsertForUserMock).toHaveBeenCalledWith(
+      'u-target',
+      expect.objectContaining({ fullName: 'Renamed', email: 'new@x.com' }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('settings upsert failure rolls back the user update (regression for #615)', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      name: 'Renamed',
+      avatarInitials: 'R',
+      costPerHour: 50,
+      isDisabled: false,
+    });
+    settingsUpsertForUserMock.mockRejectedValue(new Error('settings upsert failed'));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { name: 'Renamed', email: 'new@x.com' },
+    });
+
+    expect(res.statusCode).not.toBe(200);
+    // The load-bearing assertion: when the upsert fails, it must have been called with the
+    // transaction handle (TX_SENTINEL). On the pre-fix code the upsert ran outside the tx
+    // with no executor, so the user update would have already committed — this assertion
+    // would fail on that buggy code path.
+    expect(settingsUpsertForUserMock).toHaveBeenCalledWith(
+      'u-target',
+      expect.anything(),
+      TX_SENTINEL,
+    );
+    expect(findByIdMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 
   test('400 invalid email', async () => {

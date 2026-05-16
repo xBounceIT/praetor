@@ -2,12 +2,11 @@ import { and, count, desc, eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import { notifications } from '../db/schema/notifications.ts';
 
-// `is_read IS NOT TRUE` matches both `false` and NULL rows so list / count / markAll
-// agree on what "unread" means (mapRow coerces null → false). Drizzle's `eq(col, false)`
-// would parameterize the comparison and miss NULL. The partial index
-// `idx_notifications_user_unread` (predicate `is_read = false`) is not matched by this
-// predicate - the NULL-handling consistency is the tradeoff we want.
-const isUnread = sql`${notifications.isRead} IS NOT TRUE`;
+// Matches the predicate of the partial index `idx_notifications_user_unread`
+// (`WHERE is_read = false`) so countUnreadForUser / markAllReadForUser can
+// use it instead of a sequential scan. `is_read` is NOT NULL since migration
+// 0050, so `= false` cannot miss legacy NULL rows.
+const isUnread = eq(notifications.isRead, false);
 
 export type Notification = {
   id: string;
@@ -35,7 +34,7 @@ const mapRow = (row: typeof notifications.$inferSelect): Notification => ({
   title: row.title,
   message: row.message ?? '',
   data: row.data,
-  isRead: row.isRead ?? false,
+  isRead: row.isRead,
   // `created_at` is nullable in the schema (mirrors `schema.sql`) but has
   // DEFAULT CURRENT_TIMESTAMP, so the runtime invariant is that it always has a value;
   // `?? 0` is a TS-strict appeasement for the unreachable branch.

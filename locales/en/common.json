@@ -307,5 +307,9 @@
     "title": "Something went wrong",
     "message": "Something went wrong — refresh to try again.",
     "refresh": "Refresh"
+  },
+  "secretField": {
+    "replace": "Replace",
+    "keepStored": "Keep stored value"
   }
 }

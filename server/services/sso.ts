@@ -17,9 +17,12 @@ import * as usersRepo from '../repositories/usersRepo.ts';
 import { decrypt, encrypt, MASKED_SECRET } from '../utils/crypto.ts';
 import { buildFrontendUrl } from '../utils/frontend-url.ts';
 import { NotFoundError } from '../utils/http-errors.ts';
+import { createChildLogger } from '../utils/logger.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
 import { ExternalAuthError, resolveExternalIdentity } from './external-auth.ts';
+
+const logger = createChildLogger({ module: 'sso' });
 
 const OIDC_STATE_TTL_MS = 10 * 60 * 1000;
 const SAML_REQUEST_TTL_MS = 10 * 60 * 1000;
@@ -158,20 +161,69 @@ const coerceString = (value: unknown): string => {
   return '';
 };
 
-const coerceStringArray = (value: unknown): string[] => {
-  if (Array.isArray(value)) return value.flatMap(coerceStringArray);
-  const normalized = coerceString(value);
-  return normalized ? [normalized] : [];
-};
-
 const readClaim = (claims: Record<string, unknown>, name: string): string => {
   if (name === 'nameID') return coerceString(claims.nameID);
   return coerceString(claims[name]);
 };
 
-const readClaimArray = (claims: Record<string, unknown>, name: string): string[] => {
-  if (name === 'nameID') return coerceStringArray(claims.nameID);
-  return coerceStringArray(claims[name]);
+// Unlike coerceString — which intentionally collapses objects to '' so identifier-like
+// fields (subject, username, issuer, nameID) cannot absorb a structured claim — the groups
+// path must accept structured group objects. Auth0 / Okta sometimes ship custom claims as
+// `groups: [{id, name: 'admins'}, ...]`, and some Keycloak role mappers emit `[{name}, ...]`.
+// Without this carveout, every object entry falls through to '' and the user logs in with
+// zero recognised groups, silently landing on DEFAULT_ROLE_ID. See issue #609.
+const GROUP_VALUE_KEYS = ['name', 'displayName', 'cn', 'groupName'] as const;
+
+const coerceGroupValue = (value: unknown): string => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    for (const key of GROUP_VALUE_KEYS) {
+      const candidate = (value as Record<string, unknown>)[key];
+      if (typeof candidate !== 'string') continue;
+      const trimmed = candidate.trim();
+      if (trimmed) return trimmed;
+    }
+    return '';
+  }
+  return coerceString(value);
+};
+
+const coerceGroupArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value.flatMap(coerceGroupArray);
+  const normalized = coerceGroupValue(value);
+  return normalized ? [normalized] : [];
+};
+
+const isNonEmptyClaimValue = (value: unknown): boolean => {
+  if (value === null || value === undefined) return false;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'string') return value.trim().length > 0;
+  return true;
+};
+
+const readGroupsClaim = (
+  claims: Record<string, unknown>,
+  attribute: string,
+  context: { providerId: string; protocol: 'oidc' | 'saml' },
+): string[] => {
+  const raw = claims[attribute];
+  const groups = coerceGroupArray(raw);
+  if (groups.length === 0 && isNonEmptyClaimValue(raw)) {
+    // A present-but-empty-after-coercion claim almost always means the IdP shipped group
+    // objects under a key we don't recognise (or a deeply nested shape). Surface it so the
+    // failure mode isn't a silent "user always lands on DEFAULT_ROLE_ID with no warning".
+    logger.warn(
+      {
+        providerId: context.providerId,
+        protocol: context.protocol,
+        attribute,
+        rawType: typeof raw,
+        isArray: Array.isArray(raw),
+        arrayLength: Array.isArray(raw) ? raw.length : undefined,
+      },
+      'SSO groups claim was present but resolved to zero recognised groups — role mapping skipped',
+    );
+  }
+  return groups;
 };
 
 const isLocalLoopbackHostname = (hostname: string): boolean =>
@@ -817,7 +869,10 @@ export const completeOidcLogin = async (slug: string, callbackUrl: URL): Promise
     username: readClaim(mergedClaims, provider.usernameAttribute),
     name: readClaim(mergedClaims, provider.nameAttribute),
     email: readClaim(mergedClaims, provider.emailAttribute),
-    groups: readClaimArray(mergedClaims, provider.groupsAttribute),
+    groups: readGroupsClaim(mergedClaims, provider.groupsAttribute, {
+      providerId: provider.id,
+      protocol: provider.protocol,
+    }),
   });
 };
 
@@ -855,7 +910,10 @@ export const completeSamlLogin = async (
     username: readClaim(claims, provider.usernameAttribute),
     name: readClaim(claims, provider.nameAttribute),
     email: readClaim(claims, provider.emailAttribute),
-    groups: readClaimArray(claims, provider.groupsAttribute),
+    groups: readGroupsClaim(claims, provider.groupsAttribute, {
+      providerId: provider.id,
+      protocol: provider.protocol,
+    }),
   });
 };
 

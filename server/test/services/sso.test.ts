@@ -657,6 +657,86 @@ describe('completeSamlLogin issuer resolution', () => {
   });
 });
 
+// Issue #609: structured group claims (Auth0/Okta `[{id, name}]`, Keycloak role-mapper
+// `[{name}]`, AD-style `[{cn}]`) used to coerce to '' and silently drop every role mapping.
+describe('groups claim coercion accepts structured group objects (issue #609)', () => {
+  const originalSsoBase = process.env.SSO_CALLBACK_BASE_URL;
+
+  const samlProvider: realSsoProvidersRepo.SsoProvider = {
+    ...SAML_PROVIDER,
+    metadataUrl: '',
+    entryPoint: 'https://idp.example.com/sso',
+    idpCert: 'CERT',
+    idpIssuer: 'https://idp.example.com/realm',
+  };
+
+  beforeEach(() => {
+    process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
+    findBySlugMock.mockResolvedValue(samlProvider);
+    // Reject at resolveExternalIdentity so the test stops with `groups` already passed in
+    // and inspectable, without needing to mock the rest of the login pipeline.
+    resolveExternalIdentityMock.mockRejectedValue(new Error('stop here'));
+  });
+
+  afterAll(() => {
+    if (originalSsoBase === undefined) delete process.env.SSO_CALLBACK_BASE_URL;
+    else process.env.SSO_CALLBACK_BASE_URL = originalSsoBase;
+  });
+
+  test('extracts group names from objects across every supported key', async () => {
+    samlValidatePostMock.mockResolvedValue({
+      profile: {
+        nameID: 'u@example.com',
+        issuer: samlProvider.idpIssuer,
+        groups: [
+          { id: 'g-1', name: 'admins' },
+          { displayName: 'Domain Admins' },
+          { cn: 'developers' },
+          { groupName: 'auditors' },
+        ],
+      },
+      loggedOut: false,
+    });
+    await expect(sso.completeSamlLogin('okta', { SAMLResponse: 'x' })).rejects.toThrow('stop here');
+    expect(resolveExternalIdentityMock.mock.calls[0][0].groups).toEqual([
+      'admins',
+      'Domain Admins',
+      'developers',
+      'auditors',
+    ]);
+  });
+
+  test('preserves plain-string groups alongside object groups in the same array', async () => {
+    samlValidatePostMock.mockResolvedValue({
+      profile: {
+        nameID: 'u@example.com',
+        issuer: samlProvider.idpIssuer,
+        groups: ['plain-group', { name: 'object-group' }, 42],
+      },
+      loggedOut: false,
+    });
+    await expect(sso.completeSamlLogin('okta', { SAMLResponse: 'x' })).rejects.toThrow('stop here');
+    expect(resolveExternalIdentityMock.mock.calls[0][0].groups).toEqual([
+      'plain-group',
+      'object-group',
+      '42',
+    ]);
+  });
+
+  test('groups whose objects lack a known name key resolve to an empty array (not undefined)', async () => {
+    samlValidatePostMock.mockResolvedValue({
+      profile: {
+        nameID: 'u@example.com',
+        issuer: samlProvider.idpIssuer,
+        groups: [{ id: 'g-1' }, { id: 'g-2' }],
+      },
+      loggedOut: false,
+    });
+    await expect(sso.completeSamlLogin('okta', { SAMLResponse: 'x' })).rejects.toThrow('stop here');
+    expect(resolveExternalIdentityMock.mock.calls[0][0].groups).toEqual([]);
+  });
+});
+
 describe('DbSamlCacheProvider provider scoping', () => {
   const fakeRow = {
     state: 'in-response-to-1',

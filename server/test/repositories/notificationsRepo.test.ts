@@ -49,13 +49,12 @@ describe('listForUser', () => {
     expect(result.data).toEqual(data);
   });
 
-  test('coerces null message/isRead/createdAt to defaults', async () => {
+  test('coerces null message/createdAt to defaults', async () => {
     exec.enqueue({
-      rows: [['n1', 'user-1', 'task', 't', null, null, null, null]],
+      rows: [['n1', 'user-1', 'task', 't', null, null, false, null]],
     });
     const [result] = await notificationsRepo.listForUser('user-1', testDb);
     expect(result.message).toBe('');
-    expect(result.isRead).toBe(false);
     expect(result.createdAt).toBe(0);
   });
 });
@@ -77,6 +76,16 @@ describe('countUnreadForUser', () => {
     exec.enqueue({ rows: [['0']] });
     await notificationsRepo.countUnreadForUser('user-1', testDb);
     expect(exec.calls[0].params).toContain('user-1');
+  });
+
+  // Regression test for #614: `IS NOT TRUE` does not match the predicate of
+  // partial index `idx_notifications_user_unread` (`is_read = false`), so the
+  // unread predicate must compile to `= $N` with a `false` parameter.
+  test('uses an `= false` predicate that matches the partial index', async () => {
+    exec.enqueue({ rows: [['0']] });
+    await notificationsRepo.countUnreadForUser('user-1', testDb);
+    expect(exec.calls[0].sql.toLowerCase()).not.toContain('is not true');
+    expect(exec.calls[0].params).toContain(false);
   });
 });
 
