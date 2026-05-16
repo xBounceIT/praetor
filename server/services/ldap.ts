@@ -719,7 +719,21 @@ class LDAPService {
           }
           syncedCount++;
         } else if (config.autoProvisionAll) {
-          const groups = await this.findUserGroups(ldapClient, entry.objectName, username);
+          // throwOnError so a transient group-search failure skips this user instead of
+          // creating them with mapExternalGroupsToRoleIds([]) → [DEFAULT_ROLE_ID], which
+          // would silently demote a new admin/manager. Sibling of #637.
+          let groups: string[];
+          try {
+            groups = await this.findUserGroups(ldapClient, entry.objectName, username, {
+              throwOnError: true,
+            });
+          } catch (err) {
+            logger.warn(
+              { err: serializeError(err), username },
+              'LDAP sync skipped auto-provision for user: group search failed',
+            );
+            continue;
+          }
           const roleIds = mapExternalGroupsToRoleIds(groups, roleMappings);
           const id = generatePrefixedId('u');
           await usersRepo.createUser({

@@ -1030,6 +1030,42 @@ describe('syncUsers', () => {
     await expect(ldapService.syncUsers()).rejects.toThrow('LDAP search failed status: 1');
     expect(lastClientStats?.unbindCalls).toBe(1);
   });
+
+  test('auto-provision skips users whose group search throws — sibling of #637', async () => {
+    // Without the throw guard, alice would be created with mapExternalGroupsToRoleIds([])
+    // → [DEFAULT_ROLE_ID], silently demoting a new admin. The sync continues with bob so
+    // a single transient error doesn't abort the whole run. findUserGroups issues the
+    // two identifier searches in parallel, so each user consumes two responses even when
+    // Promise.all rejects fast.
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=alice,dc=x', object: { uid: 'alice', cn: 'Alice' } },
+            { objectName: 'uid=bob,dc=x', object: { uid: 'bob', cn: 'Bob' } },
+          ],
+          status: 0,
+        },
+        { err: new Error('group subtree timeout') }, // alice userDn → throws
+        { entries: [], status: 0 }, // alice username (parallel; result discarded)
+        { entries: [], status: 0 }, // bob userDn
+        { entries: [], status: 0 }, // bob username
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+
+    const result = await ldapService.syncUsers();
+
+    expect(result).toEqual({ synced: 0, created: 1 });
+    expect(createUserMock).toHaveBeenCalledTimes(1);
+    const created = createUserMock.mock.calls[0]?.[0] as { username: string };
+    expect(created.username).toBe('bob');
+    const createdUsernames = createUserMock.mock.calls.map(
+      (call) => (call[0] as { username: string }).username,
+    );
+    expect(createdUsernames).not.toContain('alice');
+  });
 });
 
 describe('lookupUserGroups', () => {
