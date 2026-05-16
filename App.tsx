@@ -93,6 +93,7 @@ import { clearAuthScopedState } from './utils/authScopedState';
 import { formatDateOnlyForLocale, getLocalDateString } from './utils/date';
 import { getTechnicalDocsViewFromPathname } from './utils/docsRoutes';
 import { getErrorMessage } from './utils/errors';
+import { canonicalizeLegacyHash, resolveHashChange } from './utils/hashCanonicalization';
 import {
   clearStaleModuleScopedState,
   getStaleModulesAfterNavigation,
@@ -144,14 +145,6 @@ const getModuleFromView = (view: View | '404'): string | null => {
   if (view.startsWith('administration/')) return 'administration';
   if (view === 'settings') return 'settings';
   return null;
-};
-
-const canonicalizeLegacyHash = (hash: string) => {
-  if (hash === 'suppliers/manage') return 'crm/suppliers';
-  if (hash === 'suppliers/quotes') return 'sales/supplier-quotes';
-  if (hash === 'sales/supplier-offers') return 'sales/supplier-quotes';
-  if (hash === 'administration/work-units') return 'hr/work-units';
-  return hash;
 };
 
 type TimeEntryDraft = Omit<
@@ -834,6 +827,11 @@ const AppContent: React.FC = () => {
   // refs so in-flight awaits still observe the latest value.
   const activeViewRef = useRef<View | '404'>(activeView);
   activeViewRef.current = activeView;
+  // Tracks the full `#/...` value we last wrote to window.location.hash so
+  // the hashchange listener can short-circuit on events fired by our own
+  // writes. Prevents an infinite rewrite loop if canonicalizeLegacyHash ever
+  // becomes non-idempotent (see issue #540).
+  const programmaticHashRef = useRef<string | null>(null);
   const setActiveView = useCallback<React.Dispatch<React.SetStateAction<View | '404'>>>((next) => {
     const resolved =
       typeof next === 'function'
@@ -1131,11 +1129,11 @@ const AppContent: React.FC = () => {
       }
       return;
     }
-    if (!currentUser) {
-      if (window.location.hash !== '#/login') window.location.hash = '/login';
-      return;
+    const nextHash = currentUser ? `#/${activeView}` : '#/login';
+    if (window.location.hash !== nextHash) {
+      programmaticHashRef.current = nextHash;
+      window.location.hash = nextHash.slice(1);
     }
-    window.location.hash = '/' + activeView;
   }, [activeView, currentUser, isLoading]);
 
   // Filter-id cleanup now happens inside `setActiveView` itself - any caller
@@ -1145,27 +1143,27 @@ const AppContent: React.FC = () => {
   // Sync state with hash (for back/forward buttons)
   useEffect(() => {
     const handleHashChange = () => {
+      if (programmaticHashRef.current === window.location.hash) {
+        programmaticHashRef.current = null;
+        return;
+      }
+      programmaticHashRef.current = null;
       const rawHash = window.location.hash.replace('#/', '').replace('#', '');
-      if (rawHash === 'login') {
-        if (currentUser) {
-          setActiveView('timesheets/tracker');
-        }
-        return;
+      const outcome = resolveHashChange({
+        rawHash,
+        activeView,
+        validViews: VALID_VIEWS,
+        hasUser: !!currentUser,
+      });
+      if (outcome.kind === 'noop') return;
+      if (outcome.kind === 'rewrite-hash') {
+        // Apply the resolved view in this same call: the follow-up hashchange
+        // fired by the rewrite below will be short-circuited by the guard
+        // above, so we cannot rely on it to set the view.
+        programmaticHashRef.current = outcome.newHash;
+        window.location.hash = outcome.newHash.slice(1);
       }
-      const canonicalHash = canonicalizeLegacyHash(rawHash);
-      if (canonicalHash !== rawHash) {
-        window.location.hash = `/${canonicalHash}`;
-        return;
-      }
-      const hash = canonicalHash as View;
-      const nextView = VALID_VIEWS.includes(hash)
-        ? hash
-        : canonicalHash === ''
-          ? 'timesheets/tracker'
-          : '404';
-      if (nextView !== activeView) {
-        setActiveView(nextView);
-      }
+      setActiveView(outcome.view);
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
