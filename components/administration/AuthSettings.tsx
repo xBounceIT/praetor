@@ -122,16 +122,18 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     | { status: 'ready'; template: string }
     | { status: 'error'; message: string };
   const [acsUrlState, setAcsUrlState] = useState<AcsUrlState>({ status: 'loading' });
-  const acsUrlFetchedRef = useRef(false);
   const tlsCaFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setLdapForm(config || DEFAULT_LDAP_CONFIG);
   }, [config]);
 
+  // Status-gated rather than ref-gated: if the user leaves the SAML tab mid-flight, the
+  // cleanup discards the result and the state stays 'loading', so re-entering the tab kicks
+  // off a fresh fetch. A ref locked before the fetch settled would strand the preview in
+  // 'loading' forever.
   useEffect(() => {
-    if (activeTab !== 'saml' || acsUrlFetchedRef.current) return;
-    acsUrlFetchedRef.current = true;
+    if (activeTab !== 'saml' || acsUrlState.status !== 'loading') return;
     let cancelled = false;
     ssoApi
       .getSamlAcsUrlInfo()
@@ -149,7 +151,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [activeTab]);
+  }, [activeTab, acsUrlState.status]);
 
   const handleTlsCaFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

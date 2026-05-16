@@ -200,6 +200,42 @@ describe('<AuthSettings />', () => {
     expect(acsField.value).toBe('https://api.example.com/api/auth/sso/saml/okta/callback');
   });
 
+  test('retries the ACS URL fetch if the user left SAML before the first request settled (#649 review)', async () => {
+    ssoApiMock.getSamlAcsUrlInfo.mockClear();
+    // First attempt never settles, simulating a slow network the user gives up on. The bug
+    // guarded by this test: a ref-based lock set before settle would prevent the second
+    // visit from refetching, stranding the preview in 'loading' forever.
+    ssoApiMock.getSamlAcsUrlInfo.mockImplementationOnce(() => new Promise(() => {}));
+
+    renderAuthSettings();
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+    await waitFor(() => expect(ssoApiMock.getSamlAcsUrlInfo).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.ldap' }));
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+
+    await waitFor(() => expect(ssoApiMock.getSamlAcsUrlInfo).toHaveBeenCalledTimes(2));
+
+    // And the retry produces a usable URL.
+    const form = screen.getByText('admin.sso.newProvider').closest('form') as HTMLFormElement;
+    const slugLabel = [...form.querySelectorAll('label')].find(
+      (el) => el.textContent === 'admin.sso.slug',
+    );
+    const slugInput = slugLabel?.parentElement?.querySelector('input') as HTMLInputElement;
+    fireEvent.change(slugInput, { target: { value: 'okta' } });
+
+    const acsField = await waitFor(() => {
+      const label = [...form.querySelectorAll('label')].find(
+        (el) => el.textContent === 'admin.sso.acsUrl',
+      );
+      const input = label?.parentElement?.querySelector('input') as HTMLInputElement | null;
+      if (!input?.readOnly) throw new Error('ACS URL field not yet rendered');
+      return input;
+    });
+    expect(acsField.value).toBe('https://api.example.com/api/auth/sso/saml/okta/callback');
+  });
+
   test('shows an error message when the backend cannot resolve the ACS URL (issue #602)', async () => {
     ssoApiMock.getSamlAcsUrlInfo.mockClear();
     ssoApiMock.getSamlAcsUrlInfo.mockImplementationOnce(async () => {
