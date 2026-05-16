@@ -42,6 +42,10 @@ describe('normalizeNullableDateOnly', () => {
     expect(normalizeNullableDateOnly('2026-05-15T10:30:00Z', 'startDate')).toBe('2026-05-15');
   });
 
+  test('strips a time component from a space-separated datetime string', () => {
+    expect(normalizeNullableDateOnly('2026-05-15 10:30:00', 'startDate')).toBe('2026-05-15');
+  });
+
   test('passes a plain YYYY-MM-DD string through unchanged', () => {
     expect(normalizeNullableDateOnly('2026-05-15', 'startDate')).toBe('2026-05-15');
   });
@@ -100,5 +104,9 @@ describe('isPastLocalDate', () => {
 
   test('strips a time component from the input before comparing', () => {
     expect(isPastLocalDate('2026-05-14T23:59:59Z', reference)).toBe(true);
+  });
+
+  test('strips a space-separated time component before comparing', () => {
+    expect(isPastLocalDate('2026-05-14 23:59:59', reference)).toBe(true);
   });
 });

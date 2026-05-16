@@ -30,6 +30,10 @@ describe('normalizeDateOnlyString', () => {
     expect(normalizeDateOnlyString('2026-05-15T10:30:00Z')).toBe('2026-05-15');
   });
 
+  test('strips a time component from a space-separated datetime string', () => {
+    expect(normalizeDateOnlyString('2026-05-15 10:30:00')).toBe('2026-05-15');
+  });
+
   test('passes a plain YYYY-MM-DD string through unchanged', () => {
     expect(normalizeDateOnlyString('2026-05-15')).toBe('2026-05-15');
   });
