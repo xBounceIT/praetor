@@ -54,7 +54,15 @@ const runCanonicalAuthFlow = async (
     const token = ensureToken(response.token);
     setAuthToken(token);
 
-    const user = await fetchCanonicalAuthUser();
+    // Login/switch-role/sso-consume responses already carry the canonical user
+    // (server enforces loginResponseSchema). Fall back to /auth/me only if the
+    // payload fails our guards — i.e. on contract drift.
+    let user: User;
+    try {
+      user = normalizeAuthUser(response.user);
+    } catch {
+      user = await fetchCanonicalAuthUser();
+    }
     return {
       token: getAuthToken() || token,
       user,
