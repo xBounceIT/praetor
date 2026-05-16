@@ -41,6 +41,7 @@ const PROJECTION_KEYS = [
   'groupFilter',
   'roleMappings',
   'tlsCaCertificate',
+  'autoProvisionAll',
 ] as const;
 type ProjectionKey = (typeof PROJECTION_KEYS)[number];
 type RowFields = Record<ProjectionKey, unknown>;
@@ -56,6 +57,7 @@ const baseFields: RowFields = {
   groupFilter: '(member={0})',
   roleMappings: [] as ldapRepo.LdapRoleMapping[],
   tlsCaCertificate: null,
+  autoProvisionAll: false,
 };
 
 const buildRow = (overrides: Partial<RowFields> = {}): unknown[] => {

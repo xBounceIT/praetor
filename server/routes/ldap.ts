@@ -72,51 +72,43 @@ const roleMappingSchema = {
   required: ['ldapGroup', 'role'],
 } as const;
 
+const ldapConfigSchemaProperties = {
+  enabled: { type: 'boolean' },
+  serverUrl: { type: 'string' },
+  baseDn: { type: 'string' },
+  bindDn: { type: 'string' },
+  bindPassword: { type: 'string' },
+  userFilter: { type: 'string' },
+  groupBaseDn: { type: 'string' },
+  groupFilter: { type: 'string' },
+  roleMappings: { type: 'array', items: roleMappingSchema },
+  tlsCaCertificate: { type: 'string' },
+  autoProvisionAll: { type: 'boolean' },
+} as const satisfies Record<keyof ldapRepo.LdapConfig, unknown>;
+
 const ldapConfigSchema = {
   type: 'object',
-  properties: {
-    enabled: { type: 'boolean' },
-    serverUrl: { type: 'string' },
-    baseDn: { type: 'string' },
-    bindDn: { type: 'string' },
-    bindPassword: { type: 'string' },
-    userFilter: { type: 'string' },
-    groupBaseDn: { type: 'string' },
-    groupFilter: { type: 'string' },
-    roleMappings: { type: 'array', items: roleMappingSchema },
-    tlsCaCertificate: { type: 'string' },
-    autoProvisionAll: { type: 'boolean' },
-  },
-  required: [
-    'enabled',
-    'serverUrl',
-    'baseDn',
-    'bindDn',
-    'bindPassword',
-    'userFilter',
-    'groupBaseDn',
-    'groupFilter',
-    'roleMappings',
-    'tlsCaCertificate',
-    'autoProvisionAll',
-  ],
+  properties: ldapConfigSchemaProperties,
+  required: Object.keys(ldapConfigSchemaProperties),
 } as const;
+
+const ldapConfigUpdateBodySchemaProperties = {
+  enabled: { type: 'boolean' },
+  serverUrl: { type: 'string' },
+  baseDn: { type: 'string' },
+  bindDn: { type: 'string' },
+  bindPassword: { type: 'string' },
+  userFilter: { type: 'string' },
+  groupBaseDn: { type: 'string' },
+  groupFilter: { type: 'string' },
+  roleMappings: { type: 'array', items: roleMappingSchema },
+  tlsCaCertificate: { type: ['string', 'null'], maxLength: TLS_CA_MAX_LENGTH },
+  autoProvisionAll: { type: 'boolean' },
+} as const satisfies Record<keyof ldapRepo.LdapConfig, unknown>;
 
 const ldapConfigUpdateBodySchema = {
   type: 'object',
-  properties: {
-    enabled: { type: 'boolean' },
-    serverUrl: { type: 'string' },
-    baseDn: { type: 'string' },
-    bindDn: { type: 'string' },
-    bindPassword: { type: 'string' },
-    userFilter: { type: 'string' },
-    groupBaseDn: { type: 'string' },
-    groupFilter: { type: 'string' },
-    roleMappings: { type: 'array', items: roleMappingSchema },
-    tlsCaCertificate: { type: ['string', 'null'], maxLength: TLS_CA_MAX_LENGTH },
-    autoProvisionAll: { type: 'boolean' },
-  },
+  properties: ldapConfigUpdateBodySchemaProperties,
 } as const;
 
 const ldapTestBodySchema = {

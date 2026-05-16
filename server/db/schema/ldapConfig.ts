@@ -13,8 +13,8 @@ import {
 // Single-row config table - `id` is pinned to 1 by both the column default and a CHECK.
 //
 // `role_mappings` uses a structural `$type<...>()` rather than importing the named
-// `LdapRoleMapping` from `ldapRepo.ts` - keeping schema → repo as a one-way dependency
-// (matches every other repo's convention of owning its domain types).
+// `LdapRoleMapping` from `server/types/ldap.ts`, keeping schema independent from domain
+// payload types (matches every other repo's convention of owning its domain types).
 export const ldapConfig = pgTable(
   'ldap_config',
   {
