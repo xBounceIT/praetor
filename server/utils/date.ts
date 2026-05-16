@@ -1,7 +1,9 @@
 const padDatePart = (value: number) => String(value).padStart(2, '0');
 
+const DATE_TIME_SEPARATOR = /[T ]/;
+
 const extractDateOnlyString = (value: string) => {
-  const separatorIndex = value.indexOf('T');
+  const separatorIndex = value.search(DATE_TIME_SEPARATOR);
   return separatorIndex >= 0 ? value.slice(0, separatorIndex) : value;
 };
 
