@@ -334,3 +334,75 @@ describe('resolveExternalIdentity role mapping — regression #596', () => {
     expect(setPrimaryRoleMock).toHaveBeenCalledWith(createdUserId, 'user', expect.anything());
   });
 });
+
+describe('resolveExternalIdentity primary role preservation — regression #603', () => {
+  const multiRoleInput = {
+    ...input,
+    groups: ['Managers', 'Admins'],
+    roleMappings: [
+      { externalGroup: 'Managers', role: 'manager' },
+      { externalGroup: 'Admins', role: 'admin' },
+    ],
+  };
+
+  const existingIdentity = {
+    id: 'eid-1',
+    providerId: 'sso-1',
+    protocol: 'oidc' as const,
+    issuer: multiRoleInput.issuer,
+    subject: multiRoleInput.subject,
+    userId: 'u1',
+  };
+
+  test('keeps existing primary role when still permitted by the current mapping', async () => {
+    findExistingIdsMock.mockResolvedValue(new Set(['manager', 'admin']));
+    findByIdentityMock.mockResolvedValue(existingIdentity);
+    findLoginUserByIdMock.mockResolvedValue({ ...matchingSsoUser, role: 'admin' });
+
+    const result = await resolveExternalIdentity(multiRoleInput);
+
+    expect(result.role).toBe('admin');
+    expect(setPrimaryRoleMock).toHaveBeenCalledWith('u1', 'admin', expect.anything());
+    expect(replaceUserRolesMock).toHaveBeenCalledWith(
+      'u1',
+      ['manager', 'admin'],
+      expect.anything(),
+    );
+  });
+
+  test('falls back to first mapped role when existing primary is no longer permitted', async () => {
+    findExistingIdsMock.mockResolvedValue(new Set(['manager']));
+    findByIdentityMock.mockResolvedValue(existingIdentity);
+    findLoginUserByIdMock.mockResolvedValue({ ...matchingSsoUser, role: 'admin' });
+
+    const result = await resolveExternalIdentity({
+      ...multiRoleInput,
+      groups: ['Managers'],
+    });
+
+    expect(result.role).toBe('manager');
+    expect(setPrimaryRoleMock).toHaveBeenCalledWith('u1', 'manager', expect.anything());
+  });
+
+  test('new users get the first mapped role as their primary', async () => {
+    findExistingIdsMock.mockResolvedValue(new Set(['manager', 'admin']));
+    let createdUserId: string | undefined;
+    insertUserMock.mockImplementation(async (row: { id: string }) => {
+      createdUserId = row.id;
+    });
+    findByIdentityMock
+      .mockImplementationOnce(async () => null)
+      .mockImplementationOnce(async () => ({ ...existingIdentity, userId: createdUserId }));
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
+
+    const result = await resolveExternalIdentity(multiRoleInput);
+
+    expect(result.wasCreated).toBe(true);
+    expect(result.role).toBe('manager');
+    expect(insertUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'manager' }),
+      expect.anything(),
+    );
+    expect(setPrimaryRoleMock).toHaveBeenCalledWith(createdUserId, 'manager', expect.anything());
+  });
+});

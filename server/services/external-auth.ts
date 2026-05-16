@@ -115,9 +115,10 @@ const writeExternalRoleIdsTx = async (
   userId: string,
   roleIds: string[],
   tx: DbExecutor,
+  primaryRoleId: string = roleIds[0],
 ): Promise<void> => {
   await usersRepo.replaceUserRoles(userId, roleIds, tx);
-  await usersRepo.setPrimaryRole(userId, roleIds[0], tx);
+  await usersRepo.setPrimaryRole(userId, primaryRoleId, tx);
   await userAssignmentsRepo.syncTopManagerAssignmentsForUser(userId, tx);
 };
 
@@ -283,8 +284,12 @@ export const resolveExternalIdentity = async (
       const rolesToWrite =
         matchedRoleIds.length > 0 ? matchedRoleIds : wasCreated ? [DEFAULT_ROLE_ID] : null;
       if (rolesToWrite) {
-        await writeExternalRoleIdsTx(user.id, rolesToWrite, tx);
-        effectivePrimaryRole = rolesToWrite[0];
+        // Keep the existing primary when the current mapping still grants it, so
+        // admin-assigned or user-chosen primaries survive SSO refresh (#603).
+        const primaryRoleId =
+          !wasCreated && rolesToWrite.includes(user.role) ? user.role : rolesToWrite[0];
+        await writeExternalRoleIdsTx(user.id, rolesToWrite, tx, primaryRoleId);
+        effectivePrimaryRole = primaryRoleId;
       }
 
       return {
