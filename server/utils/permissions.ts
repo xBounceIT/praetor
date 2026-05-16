@@ -1,4 +1,7 @@
 import * as rolesRepo from '../repositories/rolesRepo.ts';
+import { createChildLogger } from './logger.ts';
+
+const logger = createChildLogger({ module: 'permissions' });
 
 export type PermissionAction = 'view' | 'create' | 'update' | 'delete';
 export type PermissionResource = string;
@@ -109,12 +112,50 @@ export const ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS: Permission[] = buildPermis
   VIEW_UPDATE_DELETE,
 );
 
-export const normalizePermission = (permission: string): Permission =>
-  (permission.startsWith('configuration.')
-    ? permission.replace('configuration.', 'administration.')
-    : permission.startsWith('suppliers.quotes.')
-      ? permission.replace('suppliers.quotes.', 'sales.supplier_quotes.')
-      : permission) as Permission;
+const LEGACY_PERMISSION_REWRITES: ReadonlyArray<{ from: string; to: string }> = [
+  { from: 'configuration.', to: 'administration.' },
+  { from: 'suppliers.quotes.', to: 'sales.supplier_quotes.' },
+];
+
+const defaultLegacyPermissionWarner = (legacy: string, normalized: string) => {
+  logger.warn(
+    { legacyPermission: legacy, normalizedPermission: normalized },
+    'Encountered legacy permission name; rewrote on the fly. Update stored values and callers to use the new name — silent rewrites will be removed in a future release.',
+  );
+};
+
+let warnOnLegacyPermission = defaultLegacyPermissionWarner;
+
+// Dedupe legacy-permission warnings: `normalizePermission` is on the auth hot path
+// (every `hasPermission`/`getRolePermissions` call), so a single stale DB row or
+// hardcoded legacy name would otherwise log on every request.
+const warnedLegacyPermissions = new Set<string>();
+
+export const __resetLegacyPermissionWarningsForTests = () => {
+  warnedLegacyPermissions.clear();
+};
+
+// Bun shares the module cache across test files, so `mock.module('logger.ts')` cannot
+// reach the child logger captured at this module's load time. Injecting the warner is
+// the only way to assert the warning fires in the multi-file suite.
+export const __setLegacyPermissionWarnerForTests = (
+  warner: ((legacy: string, normalized: string) => void) | null,
+) => {
+  warnOnLegacyPermission = warner ?? defaultLegacyPermissionWarner;
+};
+
+export const normalizePermission = (permission: string): Permission => {
+  for (const { from, to } of LEGACY_PERMISSION_REWRITES) {
+    if (!permission.startsWith(from)) continue;
+    const normalized = (to + permission.slice(from.length)) as Permission;
+    if (!warnedLegacyPermissions.has(permission)) {
+      warnedLegacyPermissions.add(permission);
+      warnOnLegacyPermission(permission, normalized);
+    }
+    return normalized;
+  }
+  return permission as Permission;
+};
 
 export const isTopManagerOnlyPermission = (permission: string) =>
   permission.startsWith('hr.work_units.') || permission.startsWith('hr.work_units_all.');
