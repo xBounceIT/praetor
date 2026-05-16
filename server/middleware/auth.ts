@@ -167,6 +167,11 @@ const loadAuthenticatedUserContext = async (
     expectedTokenVersion,
   });
   if (!hasRole) {
+    // Generic 403 here covers role/enabled/version failure indistinguishably:
+    // the fast-fail branches above emit specific errorCodes (`session_revoked`,
+    // `token_revoked`) for the common case. A client that sees this generic
+    // response after a fast-fail pass has hit the rare race where revocation
+    // committed between the initial user read and this re-assert.
     await reply.code(403).send({ error: 'Invalid or expired token' });
     return null;
   }

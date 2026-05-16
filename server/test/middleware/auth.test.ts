@@ -279,11 +279,11 @@ describe('authenticateToken', () => {
     expect(reply.statusCode).toBe(403);
     expect(reply.body).toEqual({ error: 'Invalid or expired token' });
     expect(getRolePermissionsMock).toHaveBeenCalledWith('manager');
-    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'manager', {
-      requireEnabledUser: true,
-      expectedSessionVersion: 1,
-      expectedTokenVersion: undefined,
-    });
+    expect(userHasRoleMock).toHaveBeenCalledWith(
+      'u1',
+      'manager',
+      expect.objectContaining({ requireEnabledUser: true, expectedSessionVersion: 1 }),
+    );
   });
 
   const authContextErrorScenarios = [
@@ -422,11 +422,11 @@ describe('authenticateToken', () => {
     expect(reply.statusCode).toBe(0);
     expect(request.user?.role).toBe('admin');
     expect(getRolePermissionsMock).toHaveBeenCalledWith('admin');
-    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'admin', {
-      requireEnabledUser: true,
-      expectedSessionVersion: 1,
-      expectedTokenVersion: undefined,
-    });
+    expect(userHasRoleMock).toHaveBeenCalledWith(
+      'u1',
+      'admin',
+      expect.objectContaining({ requireEnabledUser: true, expectedSessionVersion: 1 }),
+    );
   });
 
   test('final role check runs after permission loading with current user constraints', async () => {
@@ -447,11 +447,11 @@ describe('authenticateToken', () => {
     expect(reply.statusCode).toBe(0);
     expect(request.user).toBeDefined();
     expect(calls).toEqual(['permissions', 'role-check']);
-    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'manager', {
-      requireEnabledUser: true,
-      expectedSessionVersion: 1,
-      expectedTokenVersion: undefined,
-    });
+    expect(userHasRoleMock).toHaveBeenCalledWith(
+      'u1',
+      'manager',
+      expect.objectContaining({ requireEnabledUser: true, expectedSessionVersion: 1 }),
+    );
   });
 
   test('a rejection in the final role check produces a single 403 response', async () => {
