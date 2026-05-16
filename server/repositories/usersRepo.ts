@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
 import type { UserAuthMethod } from '../db/schema/users.ts';
 import { users } from '../db/schema/users.ts';
 import { NotFoundError } from '../utils/http-errors.ts';
@@ -580,14 +580,18 @@ export const replaceUserRoles = async (
   roleIds: string[],
   exec: DbExecutor = db,
 ): Promise<void> => {
-  await executeRows(exec, sql`DELETE FROM user_roles WHERE user_id = ${userId}`);
-  if (roleIds.length === 0) return;
+  // A partial failure (INSERT throws after the DELETE commits) would otherwise wipe
+  // the user's secondary roles.
+  await runAtomically(exec, async (tx) => {
+    await executeRows(tx, sql`DELETE FROM user_roles WHERE user_id = ${userId}`);
+    if (roleIds.length === 0) return;
 
-  const valueRows = roleIds.map((roleId) => sql`(${userId}, ${roleId})`);
-  await executeRows(
-    exec,
-    sql`INSERT INTO user_roles (user_id, role_id) VALUES ${sql.join(valueRows, sql`, `)} ON CONFLICT DO NOTHING`,
-  );
+    const valueRows = roleIds.map((roleId) => sql`(${userId}, ${roleId})`);
+    await executeRows(
+      tx,
+      sql`INSERT INTO user_roles (user_id, role_id) VALUES ${sql.join(valueRows, sql`, `)} ON CONFLICT DO NOTHING`,
+    );
+  });
 };
 
 export const setPrimaryRole = async (
