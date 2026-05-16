@@ -249,4 +249,28 @@ describe('<Login />', () => {
     });
     expect(window.location.search).not.toContain('sso_ticket');
   });
+
+  // Issue #604 — the URL `sso_error` param carries a stable code; the UI must translate it.
+  // It must never render the code or any raw text from the URL verbatim.
+  test('sso_error code is translated, not rendered verbatim', () => {
+    setTestUrl('http://localhost/?sso_error=invalid_response');
+
+    render(<Login onLogin={() => {}} />);
+
+    expect(screen.getByText('auth:admin.sso.loginErrors.invalid_response')).toBeInTheDocument();
+    // Negative assertion: the raw code must not be visible to the user.
+    expect(screen.queryByText('invalid_response')).not.toBeInTheDocument();
+    // The query param is cleaned from the URL after read.
+    expect(window.location.search).not.toContain('sso_error');
+  });
+
+  test('unknown sso_error value falls back to the generic translation', () => {
+    // Hand-crafted URL with attacker-influenced text — must never reach the DOM.
+    setTestUrl('http://localhost/?sso_error=SAML+response+did+not+include+a+subject');
+
+    render(<Login onLogin={() => {}} />);
+
+    expect(screen.getByText('auth:admin.sso.loginErrors.generic')).toBeInTheDocument();
+    expect(screen.queryByText(/SAML response did not include a subject/)).not.toBeInTheDocument();
+  });
 });
