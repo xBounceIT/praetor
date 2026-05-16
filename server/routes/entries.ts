@@ -390,8 +390,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { projectId, task, futureOnly, placeholderOnly } = request.query as {
         projectId: string;
         task: string;
-        futureOnly?: string;
-        placeholderOnly?: string;
+        futureOnly?: unknown;
+        placeholderOnly?: unknown;
       };
       try {
         await bulkDeleteTimeEntries(actorFromRequest(request), {

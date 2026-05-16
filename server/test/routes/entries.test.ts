@@ -1629,6 +1629,58 @@ describe('DELETE /api/entries (bulk)', () => {
     expect(callArgs.fromDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
+  test('204 futureOnly=false leaves fromDate unset', async () => {
+    entriesBulkDeleteMock.mockResolvedValue(1);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/entries?projectId=p1&task=Dev&futureOnly=false',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(entriesBulkDeleteMock).toHaveBeenCalledTimes(1);
+    const callArgs = entriesBulkDeleteMock.mock.calls[0][0];
+    expect(callArgs.fromDate).toBeUndefined();
+  });
+
+  test('204 placeholderOnly=true restricts tracker deletes to placeholders', async () => {
+    entriesBulkDeleteMock.mockResolvedValue(1);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/entries?projectId=p1&task=Dev&placeholderOnly=true',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(entriesBulkDeleteMock).toHaveBeenCalledWith(
+      expect.objectContaining({ placeholderOnly: true }),
+    );
+  });
+
+  test('400 invalid boolean query value does not delete', async () => {
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/entries?projectId=p1&task=Dev&futureOnly=1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(entriesBulkDeleteMock).not.toHaveBeenCalled();
+  });
+
+  test('400 repeated boolean query value does not delete', async () => {
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/entries?projectId=p1&task=Dev&placeholderOnly=true&placeholderOnly=false',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(entriesBulkDeleteMock).not.toHaveBeenCalled();
+  });
+
   test('400 missing projectId (Fastify schema)', async () => {
     const res = await testApp.inject({
       method: 'DELETE',
