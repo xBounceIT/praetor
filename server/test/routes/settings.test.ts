@@ -605,6 +605,7 @@ describe('PUT /api/settings/password', () => {
 
     expect(res.statusCode).toBe(200);
     expect(deleteAdminPasswordWarningMock).toHaveBeenCalledTimes(1);
+    expect(deleteAdminPasswordWarningMock).toHaveBeenCalledWith('u1');
     expect(upsertAdminPasswordWarningMock).not.toHaveBeenCalled();
   });
 
