@@ -111,7 +111,9 @@ import {
   TOP_MANAGER_ROLE_ID,
   VIEW_PERMISSION_MAP,
 } from './utils/permissions';
+import { retryTransient } from './utils/retry';
 import { applyTheme, getTheme } from './utils/theme';
+import { toastError } from './utils/toast';
 import {
   filterTrackerCatalogs,
   type TrackerAssignmentState,
@@ -703,6 +705,7 @@ const AppContent: React.FC = () => {
     markModuleLoaded,
     invalidateModules,
     recordFailures,
+    appendFailure,
     reset: resetModuleLoader,
   } = useModuleLoader();
   const [hasLoadedGeneralSettings, setHasLoadedGeneralSettings] = useState(false);
@@ -1490,18 +1493,30 @@ const AppContent: React.FC = () => {
               return merged;
             };
             const streamRemainingEntries = async (cursor: string | null, token: number) => {
+              const isCancelled = () =>
+                !isCurrentModuleLoad() || entriesStreamTokenRef.current !== token;
               while (cursor) {
-                if (!isCurrentModuleLoad() || entriesStreamTokenRef.current !== token) return;
+                const pageCursor = cursor;
+                let result: Awaited<ReturnType<typeof api.entries.listPage>> | null;
                 try {
-                  const page = await api.entries.listPage({ cursor, limit: 500 });
-                  if (!isCurrentModuleLoad() || entriesStreamTokenRef.current !== token) return;
-                  setEntries((prev) => mergeById(prev, page.entries));
-                  cursor = page.nextCursor;
+                  result = await retryTransient(
+                    () => api.entries.listPage({ cursor: pageCursor, limit: 500 }),
+                    { isCancelled },
+                  );
                 } catch (err) {
-                  if (!isCurrentModuleLoad() || entriesStreamTokenRef.current !== token) return;
+                  if (isCancelled()) return;
                   console.error('Failed to stream remaining entries:', err);
+                  appendFailure(module, 'additional entries');
+                  toastError(
+                    'Some time entries could not be loaded. Displayed data may be incomplete.',
+                  );
                   return;
                 }
+                if (result === null) return;
+                // Bind to a const so TS narrowing survives into the setState closure.
+                const page = result;
+                setEntries((prev) => mergeById(prev, page.entries));
+                cursor = page.nextCursor;
               }
             };
             failedDatasets = await loadDatasets(
@@ -1847,6 +1862,7 @@ const AppContent: React.FC = () => {
     markModuleLoaded,
     invalidateModules,
     recordFailures,
+    appendFailure,
     hasLoadedGeneralSettings,
     hasLoadedLdapConfig,
     hasLoadedSsoProviders,

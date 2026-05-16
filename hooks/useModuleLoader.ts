@@ -123,6 +123,16 @@ export function useModuleLoader() {
     });
   }, []);
 
+  // Additive counterpart to recordFailures, for async tail-work that completes
+  // after the initial failure list has been written.
+  const appendFailure = useCallback((moduleName: string, failure: string) => {
+    setModuleLoadErrors((prev) => {
+      const existing = prev[moduleName] ?? [];
+      if (existing.includes(failure)) return prev;
+      return { ...prev, [moduleName]: [...existing, failure] };
+    });
+  }, []);
+
   const reset = useCallback(() => {
     setLoadedModules(new Set());
     setModuleLoadErrors({});
@@ -148,6 +158,7 @@ export function useModuleLoader() {
     markModuleLoaded,
     invalidateModules,
     recordFailures,
+    appendFailure,
     reset,
   };
 }
