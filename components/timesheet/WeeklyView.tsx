@@ -374,6 +374,8 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
             updateCell(rowKey, day.dateStr, { note: e.target.value }, baseDays[day.dateStr])
           }
           className={cn('h-7 text-xs rounded', day.isForbidden && 'opacity-40 cursor-not-allowed')}
+          // Kept in sync with server MAX_NOTES_LENGTH (server/services/timeEntries.ts).
+          maxLength={2000}
         />
       </div>
     );

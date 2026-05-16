@@ -21,6 +21,7 @@ import {
   createTimeEntry,
   deleteTimeEntry,
   listTimeEntries,
+  MAX_NOTES_LENGTH,
   TimeEntryServiceError,
   updateTimeEntry,
 } from '../services/timeEntries.ts';
@@ -103,7 +104,7 @@ const createTimeEntryInputSchema = z.object({
   projectId: z.string(),
   projectName: z.string(),
   task: z.string(),
-  notes: z.string().optional(),
+  notes: z.string().max(MAX_NOTES_LENGTH).optional(),
   duration: z.number().nonnegative().optional(),
   isPlaceholder: z.boolean().optional(),
   userId: z.string().optional(),
@@ -114,7 +115,7 @@ const updateTimeEntryInputSchema = z.object({
   id: z.string(),
   version: z.number().int().positive(),
   duration: z.number().nonnegative().optional(),
-  notes: z.string().nullable().optional(),
+  notes: z.string().max(MAX_NOTES_LENGTH).nullable().optional(),
   isPlaceholder: z.boolean().optional(),
   location: z.string().optional(),
 });

@@ -23,6 +23,12 @@ import {
   requireNonEmptyString,
 } from '../utils/validation.ts';
 
+// Cap matches the UI maxLength on the notes inputs (EntryEditDialog,
+// WeeklyEntryForm). Bounded server-side so the API rejects oversize
+// payloads even when the schema validator is bypassed (e.g., direct
+// service calls from MCP tool handlers).
+export const MAX_NOTES_LENGTH = 2000;
+
 export type AuthenticatedActor = {
   id: string;
   permissions: string[];
@@ -71,6 +77,17 @@ const badRequest = (message: string): never => fail(400, message);
 const requireValid = <T>(result: { ok: true; value: T } | { ok: false; message: string }): T => {
   if (result.ok) return result.value;
   return badRequest(result.message);
+};
+
+const parseOptionalNotes = (value: unknown): string | null => {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string') {
+    return badRequest('notes must be a string');
+  }
+  if (value.length > MAX_NOTES_LENGTH) {
+    return badRequest(`notes must be ${MAX_NOTES_LENGTH} characters or fewer`);
+  }
+  return value === '' ? null : value;
 };
 
 const parseExpectedVersion = (value: unknown): number => {
@@ -234,7 +251,7 @@ export const createTimeEntry = async (
         projectName,
         task,
         taskId: resolvedTaskId,
-        notes: typeof input.notes === 'string' ? input.notes : null,
+        notes: parseOptionalNotes(input.notes),
         duration: duration ?? 0,
         hourlyCost,
         isPlaceholder: parsedIsPlaceholder ?? false,
@@ -271,7 +288,7 @@ export const updateTimeEntry = async (
 
   let validatedNotes: string | null | undefined;
   if (input.notes !== undefined) {
-    validatedNotes = requireValid(optionalNonEmptyString(input.notes, 'notes'));
+    validatedNotes = parseOptionalNotes(input.notes);
   }
 
   const context = await entriesRepo.findContext(entryId);
