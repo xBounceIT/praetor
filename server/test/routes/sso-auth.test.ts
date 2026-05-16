@@ -13,7 +13,7 @@ const completeSamlLoginMock = mock();
 let routePlugin: FastifyPluginAsync;
 
 beforeAll(async () => {
-  // Set FRONTEND_URL so `buildFrontendErrorUrl` produces a stable absolute URL we can assert on.
+  // Set FRONTEND_URL so `handleSsoCallbackError` produces a stable absolute URL we can assert on.
   process.env.FRONTEND_URL = 'https://app.example.com';
 
   mock.module('../../services/sso.ts', () => ({
@@ -101,17 +101,11 @@ describe('SSO callbacks — sso_error carries a stable code (issue #604)', () =>
   });
 
   test('sso_error is always one of the known stable codes', async () => {
-    // This protects against regressions where a contributor reverts to passing err.message:
-    // any string in the allow-list set passes; arbitrary library messages would not.
-    const KNOWN = new Set([
-      'invalid_state',
-      'invalid_response',
-      'provider_disabled',
-      'provider_misconfigured',
-      'account_disabled',
-      'identity_conflict',
-      'generic',
-    ]);
+    // Regression guard: if a contributor reverts to passing err.message, the raw library
+    // wording below would replace the code in the redirect URL and miss the allow-list.
+    // Sourcing the allow-list from the service ensures any new code added there is
+    // automatically covered.
+    const KNOWN = new Set<string>(realSsoService.SSO_LOGIN_ERROR_CODES);
 
     completeSamlLoginMock.mockRejectedValue(
       new realSsoService.SsoLoginError(
