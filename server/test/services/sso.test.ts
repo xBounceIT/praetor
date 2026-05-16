@@ -13,7 +13,6 @@ const findByIdMock = mock();
 const statesConsumeMock = mock();
 const statesGetForProviderMock = mock();
 const statesInsertMock = mock();
-const statesRemoveMock = mock();
 
 let sso: typeof import('../../services/sso.ts');
 
@@ -33,7 +32,6 @@ beforeAll(async () => {
     consume: statesConsumeMock,
     getForProvider: statesGetForProviderMock,
     insert: statesInsertMock,
-    remove: statesRemoveMock,
   }));
 
   sso = await import('../../services/sso.ts');
@@ -53,7 +51,6 @@ beforeEach(() => {
     statesConsumeMock,
     statesGetForProviderMock,
     statesInsertMock,
-    statesRemoveMock,
   ])
     m.mockReset();
 });
