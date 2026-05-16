@@ -550,55 +550,52 @@ class LDAPService {
     const groups = new Set<string>();
     const username = usernameList[0] ?? userDn;
 
-    for (const searchValue of searchValues) {
-      let searchOptions: {
-        scope: 'sub';
-        filter: ReturnType<typeof buildGroupLookupFilter>;
-        attributes: string[];
-      };
-
-      try {
-        searchOptions = {
-          scope: 'sub',
-          filter: buildGroupLookupFilter(config.groupFilter, searchValue),
-          attributes: ['cn', 'dn', 'distinguishedName'],
+    const searchFor = (searchValue: string) =>
+      new Promise<void>((resolve, reject) => {
+        let searchOptions: {
+          scope: 'sub';
+          filter: ReturnType<typeof buildGroupLookupFilter>;
+          attributes: string[];
         };
-      } catch (err) {
-        if (options.throwOnError) throw err;
-        if (groups.size > 0) return [...groups];
-        logger.warn(
-          { err: serializeError(err), username },
-          'LDAP group filter is invalid; skipping group role mapping',
-        );
-        return [];
-      }
-
-      try {
-        await new Promise<void>((resolve, reject) => {
-          client.search(config.groupBaseDn, searchOptions, (err, res) => {
-            if (err) return reject(err);
-
-            res.on('searchEntry', (entry: LdapSearchEntry) => {
-              const objectName = entry.objectName?.toString();
-              const attributes = flattenSearchEntryAttributes(entry);
-              addGroupEntryAliases(groups, attributes, objectName);
-            });
-
-            res.on('error', (err: Error) => reject(err));
-            res.on('end', () => resolve());
+        try {
+          searchOptions = {
+            scope: 'sub',
+            filter: buildGroupLookupFilter(config.groupFilter, searchValue),
+            attributes: ['cn', 'dn', 'distinguishedName'],
+          };
+        } catch (err) {
+          return reject(err);
+        }
+        client.search(config.groupBaseDn, searchOptions, (err, res) => {
+          if (err) return reject(err);
+          res.on('searchEntry', (entry: LdapSearchEntry) => {
+            const objectName = entry.objectName?.toString();
+            const attributes = flattenSearchEntryAttributes(entry);
+            addGroupEntryAliases(groups, attributes, objectName);
           });
+          res.on('error', (err: Error) => reject(err));
+          res.on('end', () => resolve());
         });
-      } catch (err) {
-        if (options.throwOnError) throw err;
-        if (groups.size > 0) return [...groups];
+      });
+
+    // Issue identifier searches in parallel. Mixed configs like
+    // `(|(member={0})(memberUid={0}))` need results unioned across DN and uid
+    // forms — a short-circuit would silently drop the groups that only the
+    // second form matches.
+    if (options.throwOnError) {
+      await Promise.all(searchValues.map(searchFor));
+      return [...groups];
+    }
+    const results = await Promise.allSettled(searchValues.map(searchFor));
+    if (groups.size === 0) {
+      const failure = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+      if (failure) {
         logger.warn(
-          { err: serializeError(err), username },
+          { err: serializeError(failure.reason), username },
           'LDAP group lookup failed; skipping group role mapping',
         );
-        return [];
       }
     }
-
     return [...groups];
   }
 

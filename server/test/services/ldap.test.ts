@@ -1135,6 +1135,36 @@ describe('lookupUserGroups', () => {
     expect(result).toBeNull();
     expect(lastClientStats?.unbindCalls).toBe(1);
   });
+
+  test('issues identifier searches in parallel and unions groups across forms', async () => {
+    // Mixed-filter config: one group lists the user by DN under `member`, the
+    // other by uid under `memberUid`. Each identifier-form search matches only
+    // one group; the result must contain both.
+    const dnGroup = 'cn=dn-matched,ou=groups,dc=test,dc=com';
+    const uidGroup = 'cn=uid-matched,ou=groups,dc=test,dc=com';
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      groupFilter: '(|(member={0})(memberUid={0}))',
+    });
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice' } }],
+          status: 0,
+        },
+        { entries: [{ objectName: dnGroup, object: { cn: 'dn-matched' } }], status: 0 },
+        { entries: [{ objectName: uidGroup, object: { cn: 'uid-matched' } }], status: 0 },
+      ],
+    };
+
+    const result = await ldapService.lookupUserGroups('alice');
+
+    expect(result?.groups).toContain(dnGroup);
+    expect(result?.groups).toContain(uidGroup);
+    // One user lookup + two parallel group searches (DN form + uid form).
+    expect(lastClientStats?.searchCalls).toHaveLength(3);
+  });
 });
 
 describe('authenticateAndProvision', () => {
