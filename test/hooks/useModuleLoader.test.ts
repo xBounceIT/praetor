@@ -20,6 +20,7 @@ describe('useModuleLoader', () => {
     expect(result.current.loadedModules.size).toBe(0);
     expect(result.current.moduleLoadErrors).toEqual({});
     expect(result.current.loadingModules.size).toBe(0);
+    expect(result.current.isModuleLoaded('crm')).toBe(false);
     expect(result.current.isModuleLoading('crm')).toBe(false);
   });
 
@@ -195,12 +196,48 @@ describe('useModuleLoader', () => {
       result.current.markModuleLoaded('crm');
     });
     expect(result.current.loadedModules.has('crm')).toBe(true);
+    expect(result.current.isModuleLoaded('crm')).toBe(true);
 
     act(() => {
       result.current.markModuleLoaded('hr');
     });
     expect(result.current.loadedModules.has('hr')).toBe(true);
+    expect(result.current.isModuleLoaded('hr')).toBe(true);
     expect(result.current.loadedModules.size).toBe(2);
+  });
+
+  test('isModuleLoaded keeps a stable identity while reading current loaded modules', () => {
+    const { result } = renderHook(() => useModuleLoader());
+    const isModuleLoaded = result.current.isModuleLoaded;
+
+    act(() => {
+      result.current.markModuleLoaded('crm');
+    });
+
+    expect(result.current.isModuleLoaded).toBe(isModuleLoaded);
+    expect(isModuleLoaded('crm')).toBe(true);
+
+    act(() => {
+      result.current.invalidateModules(['crm']);
+    });
+
+    expect(result.current.isModuleLoaded).toBe(isModuleLoaded);
+    expect(isModuleLoaded('crm')).toBe(false);
+  });
+
+  test('markModuleLoaded is a no-op when the module is already loaded', () => {
+    const { result } = renderHook(() => useModuleLoader());
+
+    act(() => {
+      result.current.markModuleLoaded('crm');
+    });
+    const loadedModules = result.current.loadedModules;
+
+    act(() => {
+      result.current.markModuleLoaded('crm');
+    });
+
+    expect(result.current.loadedModules).toBe(loadedModules);
   });
 
   test('recordFailures sets errors for module', () => {
@@ -246,6 +283,8 @@ describe('useModuleLoader', () => {
     expect(result.current.loadedModules.has('crm')).toBe(false);
     expect(result.current.loadedModules.has('sales')).toBe(false);
     expect(result.current.loadedModules.has('projects')).toBe(true);
+    expect(result.current.isModuleLoaded('crm')).toBe(false);
+    expect(result.current.isModuleLoaded('projects')).toBe(true);
     expect(result.current.moduleLoadErrors.crm).toBeUndefined();
     expect(result.current.moduleLoadErrors.sales).toBeUndefined();
   });
@@ -277,6 +316,7 @@ describe('useModuleLoader', () => {
       result.current.reset();
     });
     expect(result.current.loadedModules.size).toBe(0);
+    expect(result.current.isModuleLoaded('crm')).toBe(false);
     expect(result.current.moduleLoadErrors).toEqual({});
     expect(result.current.loadingModules.size).toBe(0);
   });

@@ -703,6 +703,7 @@ const AppContent: React.FC = () => {
   const {
     loadedModules,
     moduleLoadErrors,
+    isModuleLoaded,
     isModuleLoading,
     loadDatasets,
     markModuleLoaded,
@@ -1174,7 +1175,7 @@ const AppContent: React.FC = () => {
     if (!isRouteAccessible) return;
     const module = getModuleFromView(activeView);
     if (!module) return;
-    if (loadedModules.has(module)) return;
+    if (isModuleLoaded(module)) return;
     const loadToken = ++moduleLoadTokenRef.current;
     const isCurrentModuleLoad = () =>
       moduleLoadTokenRef.current === loadToken && activeLoadModuleRef.current === module;
@@ -1835,7 +1836,7 @@ const AppContent: React.FC = () => {
     activeView,
     currentUser,
     isRouteAccessible,
-    loadedModules,
+    isModuleLoaded,
     loadDatasets,
     markModuleLoaded,
     invalidateModules,

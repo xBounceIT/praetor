@@ -13,8 +13,11 @@ describe('App.tsx module-load cancellation', () => {
 
     expect(source).toContain('const moduleLoadTokenRef = useRef(0);');
     expect(source).toContain('const activeLoadModuleRef = useRef<string | null>(null);');
+    expect(source).toContain('isModuleLoaded,');
     expect(effectBody).toContain('const loadToken = ++moduleLoadTokenRef.current;');
     expect(effectBody).toContain('activeLoadModuleRef.current === module');
+    expect(effectBody).toContain('if (isModuleLoaded(module)) return;');
+    expect(effectBody).not.toContain('if (loadedModules.has(module)) return;');
     expect(effectBody).toContain('return cancelModuleLoad;');
     expect(effectBody).toContain('moduleLoadTokenRef.current += 1;');
     expect(effectBody).toContain('if (isCurrentModuleLoad()) {');
@@ -23,5 +26,13 @@ describe('App.tsx module-load cancellation', () => {
     const guardedDatasetCalls = effectBody.match(/shouldApply: isCurrentModuleLoad/g) ?? [];
     expect(loadDatasetCalls.length).toBeGreaterThan(0);
     expect(guardedDatasetCalls).toHaveLength(loadDatasetCalls.length);
+
+    const dependencyStart = source.indexOf('  }, [\n    activeView,', end);
+    expect(dependencyStart).toBeGreaterThanOrEqual(end);
+    const dependencyEnd = source.indexOf('  ]);', dependencyStart);
+    expect(dependencyEnd).toBeGreaterThan(dependencyStart);
+    const dependencies = source.slice(dependencyStart, dependencyEnd);
+    expect(dependencies).toContain('isModuleLoaded');
+    expect(dependencies).not.toContain('loadedModules');
   });
 });
