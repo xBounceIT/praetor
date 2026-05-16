@@ -45,6 +45,7 @@ const cqFindFullForSnapshotMock = mock();
 const cqFindItemsForQuoteMock = mock();
 const cqFindIdConflictMock = mock();
 const cqUpdateMock = mock();
+const cqRenameMock = mock();
 const cqRestoreSnapshotQuoteMock = mock();
 const cqReplaceItemsMock = mock();
 
@@ -93,6 +94,7 @@ beforeAll(async () => {
     findItemsForQuote: cqFindItemsForQuoteMock,
     findIdConflict: cqFindIdConflictMock,
     update: cqUpdateMock,
+    rename: cqRenameMock,
     restoreSnapshotQuote: cqRestoreSnapshotQuoteMock,
     replaceItems: cqReplaceItemsMock,
   }));
@@ -217,6 +219,7 @@ const allMocks = [
   cqFindItemsForQuoteMock,
   cqFindIdConflictMock,
   cqUpdateMock,
+  cqRenameMock,
   cqRestoreSnapshotQuoteMock,
   cqReplaceItemsMock,
   clientsExistsByIdMock,
@@ -593,7 +596,7 @@ describe('PUT /api/sales/client-quotes/:id snapshots pre-update state', () => {
       discount: 0,
       discountType: 'percentage',
     });
-    cqUpdateMock.mockResolvedValue({ ...SAMPLE_QUOTE, id: 'q-1-renamed' });
+    cqRenameMock.mockResolvedValue({ ...SAMPLE_QUOTE, id: 'q-1-renamed' });
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -605,5 +608,8 @@ describe('PUT /api/sales/client-quotes/:id snapshots pre-update state', () => {
     expect(res.statusCode).toBe(200);
     expect(qvInsertMock).not.toHaveBeenCalled();
     expect(cqFindFullForSnapshotMock).not.toHaveBeenCalled();
+    // PK rename goes through the dedicated repo call (issue #621), not the generic update().
+    expect(cqRenameMock).toHaveBeenCalledWith('q-1', 'q-1-renamed', TX_SENTINEL);
+    expect(cqUpdateMock).not.toHaveBeenCalled();
   });
 });

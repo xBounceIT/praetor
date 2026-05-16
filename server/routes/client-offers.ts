@@ -825,23 +825,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (!isIdOnlyUpdate) {
             await snapshotPreState(idResult.value, 'update', request, tx);
           }
-          const offer = await clientOffersRepo.update(
-            idResult.value,
-            {
-              id: (nextIdValue as string | null | undefined) ?? null,
-              clientId: (clientIdValue as string | null | undefined) ?? null,
-              clientName: (clientNameValue as string | null | undefined) ?? null,
-              paymentTerms: (paymentTerms as string | null | undefined) ?? null,
-              discount: (discountValue as number | null | undefined) ?? null,
-              discountType: discountTypeValue ?? null,
-              status: (status as string | null | undefined) ?? null,
-              deliveryDate:
-                (deliveryDateValue as string | null | undefined) ?? automaticDeliveryDate ?? null,
-              expirationDate: (expirationDateValue as string | null | undefined) ?? null,
-              notes: (notes as string | null | undefined) ?? null,
-            },
-            tx,
-          );
+          let renamedOffer: clientOffersRepo.ClientOffer | null = null;
+          if (nextIdValue && nextIdValue !== idResult.value) {
+            renamedOffer = await clientOffersRepo.rename(idResult.value, nextIdValue, tx);
+            if (!renamedOffer) return { offer: null, items: [] };
+          }
+          // id-only renames have nothing left to write — reuse the row returned by rename().
+          const offer =
+            isIdOnlyUpdate && renamedOffer
+              ? renamedOffer
+              : await clientOffersRepo.update(
+                  renamedOffer?.id ?? idResult.value,
+                  {
+                    clientId: (clientIdValue as string | null | undefined) ?? null,
+                    clientName: (clientNameValue as string | null | undefined) ?? null,
+                    paymentTerms: (paymentTerms as string | null | undefined) ?? null,
+                    discount: (discountValue as number | null | undefined) ?? null,
+                    discountType: discountTypeValue ?? null,
+                    status: (status as string | null | undefined) ?? null,
+                    deliveryDate:
+                      (deliveryDateValue as string | null | undefined) ??
+                      automaticDeliveryDate ??
+                      null,
+                    expirationDate: (expirationDateValue as string | null | undefined) ?? null,
+                    notes: (notes as string | null | undefined) ?? null,
+                  },
+                  tx,
+                );
           if (!offer) return { offer: null, items: [] };
           const updatedItems = normalizedItemsForUpdate
             ? await clientOffersRepo.replaceItems(

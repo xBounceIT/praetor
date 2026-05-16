@@ -509,8 +509,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           details: { secondaryLabel: 'duplicate_id' },
         });
       }
-      if (nextIdValue !== null) patch.id = nextIdValue;
-
       let updated: supplierQuotesRepo.SupplierQuote | null;
       let resultItems: supplierQuotesRepo.SupplierQuoteItem[];
       try {
@@ -521,7 +519,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (hasContentUpdate) {
             await snapshotPreState(idResult.value, 'update', request, tx);
           }
-          const quote = await supplierQuotesRepo.update(idResult.value, patch, tx);
+          let renamedQuote: supplierQuotesRepo.SupplierQuote | null = null;
+          if (nextIdValue && nextIdValue !== idResult.value) {
+            renamedQuote = await supplierQuotesRepo.rename(idResult.value, nextIdValue, tx);
+            if (!renamedQuote) {
+              return { quote: null, items: [] as supplierQuotesRepo.SupplierQuoteItem[] };
+            }
+          }
+          // id-only renames have nothing left to write — reuse the row returned by rename().
+          const quote =
+            Object.keys(patch).length === 0 && renamedQuote
+              ? renamedQuote
+              : await supplierQuotesRepo.update(renamedQuote?.id ?? idResult.value, patch, tx);
           if (!quote) return { quote: null, items: [] as supplierQuotesRepo.SupplierQuoteItem[] };
           const finalItems = normalizedItems
             ? await supplierQuotesRepo.replaceItems(quote.id, normalizedItems, tx)

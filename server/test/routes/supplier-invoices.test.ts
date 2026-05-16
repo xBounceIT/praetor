@@ -37,6 +37,7 @@ const insertItemsMock = mock();
 const findExistingMock = mock();
 const findIdConflictMock = mock();
 const updateMock = mock();
+const renameMock = mock();
 const replaceItemsMock = mock();
 const findItemsForInvoiceMock = mock();
 const findStatusAndSupplierNameMock = mock();
@@ -75,6 +76,7 @@ beforeAll(async () => {
     findExisting: findExistingMock,
     findIdConflict: findIdConflictMock,
     update: updateMock,
+    rename: renameMock,
     replaceItems: replaceItemsMock,
     findItemsForInvoice: findItemsForInvoiceMock,
     findStatusAndSupplierName: findStatusAndSupplierNameMock,
@@ -182,6 +184,7 @@ const allMocks = [
   findExistingMock,
   findIdConflictMock,
   updateMock,
+  renameMock,
   replaceItemsMock,
   findItemsForInvoiceMock,
   findStatusAndSupplierNameMock,

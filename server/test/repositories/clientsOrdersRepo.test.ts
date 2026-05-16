@@ -120,7 +120,7 @@ describe('create / update', () => {
     expect(result.id).toBe('co-1');
   });
 
-  test('update writes only provided columns and includes id in WHERE', async () => {
+  test('update writes only provided columns, never id (issue #621), includes id in WHERE', async () => {
     exec.enqueue({ rows: [orderRow()] });
     await repo.update('co-1', { status: 'confirmed' }, testDb);
     const sql = exec.calls[0].sql.toLowerCase();
@@ -130,6 +130,7 @@ describe('create / update', () => {
     expect(setClause).toContain('"status"');
     expect(setClause).not.toContain('"notes"');
     expect(setClause).not.toContain('"linked_offer_id"');
+    expect(setClause).not.toMatch(/"id"\s*=/);
     expect(exec.calls[0].params).toContain('confirmed');
     expect(exec.calls[0].params).toContain('co-1');
   });
@@ -159,6 +160,25 @@ describe('create / update', () => {
   test('update returns null when no row matches', async () => {
     exec.enqueue({ rows: [] });
     expect(await repo.update('co-x', { status: 'confirmed' }, testDb)).toBeNull();
+  });
+});
+
+describe('rename', () => {
+  test('issues a dedicated UPDATE that sets the id column and returns the mapped order', async () => {
+    exec.enqueue({ rows: [orderRow({ 0: 'co-2' })] });
+    const result = await repo.rename('co-1', 'co-2', testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('update "sales"');
+    expect(sql).toMatch(/set[^"]*"id"\s*=/);
+    expect(sql).toContain('current_timestamp');
+    expect(exec.calls[0].params).toContain('co-2'); // new id
+    expect(exec.calls[0].params).toContain('co-1'); // where current id
+    expect(result?.id).toBe('co-2');
+  });
+
+  test('returns null when no row matched currentId', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await repo.rename('co-x', 'co-y', testDb)).toBeNull();
   });
 });
 
