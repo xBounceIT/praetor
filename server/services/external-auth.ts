@@ -268,16 +268,19 @@ export const resolveExternalIdentity = async (
         } else {
           assertUserAllowsExternalProvider(user, input);
           // OIDC/SAML identity is anchored to `sub`, not `preferred_username`. If the
-          // username-matched Praetor user already has any identity row for this provider,
-          // a different IdP subject claiming the same username would silently merge two
-          // distinct IdP accounts into one Praetor user (#606). Refuse the bind instead.
-          const alreadyBound = await externalIdentitiesRepo.existsForUserAndProvider(
+          // username-matched Praetor user already has an identity row for this provider
+          // with a *different* subject, a different IdP account is claiming the same
+          // username and would silently merge two distinct IdP accounts into one Praetor
+          // user (#606). Refuse the bind. Rows with the same subject under a different
+          // issuer (e.g., IdP URL normalization) are not a conflict — bind a fresh row.
+          const conflictingSubject = await externalIdentitiesRepo.hasOtherSubjectForUserAndProvider(
             user.id,
             input.providerId,
             input.protocol,
+            input.subject,
             tx,
           );
-          if (alreadyBound) {
+          if (conflictingSubject) {
             throw new ExternalAuthError(IDENTITY_NOT_ALLOWED_MESSAGE, 'identity_conflict');
           }
         }

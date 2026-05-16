@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import { externalIdentities, type SsoProtocol } from '../db/schema/sso.ts';
 
@@ -42,10 +42,11 @@ export const insert = async (identity: ExternalIdentity, exec: DbExecutor = db):
   await exec.insert(externalIdentities).values(identity).onConflictDoNothing();
 };
 
-export const existsForUserAndProvider = async (
+export const hasOtherSubjectForUserAndProvider = async (
   userId: string,
   providerId: string,
   protocol: SsoProtocol,
+  subject: string,
   exec: DbExecutor = db,
 ): Promise<boolean> => {
   const rows = await exec
@@ -56,6 +57,7 @@ export const existsForUserAndProvider = async (
         eq(externalIdentities.userId, userId),
         eq(externalIdentities.providerId, providerId),
         eq(externalIdentities.protocol, protocol),
+        ne(externalIdentities.subject, subject),
       ),
     )
     .limit(1);

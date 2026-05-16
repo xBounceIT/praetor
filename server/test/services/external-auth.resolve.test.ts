@@ -18,7 +18,7 @@ const usersRepoSnap = { ...realUsersRepo };
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 const findByIdentityMock = mock();
 const insertIdentityMock = mock();
-const existsForUserAndProviderMock = mock();
+const hasOtherSubjectForUserAndProviderMock = mock();
 const findExistingIdsMock = mock();
 const upsertForUserMock = mock();
 const syncTopManagerAssignmentsForUserMock = mock();
@@ -39,7 +39,7 @@ beforeAll(async () => {
     ...externalIdentitiesRepoSnap,
     findByIdentity: findByIdentityMock,
     insert: insertIdentityMock,
-    existsForUserAndProvider: existsForUserAndProviderMock,
+    hasOtherSubjectForUserAndProvider: hasOtherSubjectForUserAndProviderMock,
   }));
   mock.module('../../repositories/rolesRepo.ts', () => ({
     ...rolesRepoSnap,
@@ -79,7 +79,7 @@ beforeEach(() => {
     withDbTransactionMock,
     findByIdentityMock,
     insertIdentityMock,
-    existsForUserAndProviderMock,
+    hasOtherSubjectForUserAndProviderMock,
     findExistingIdsMock,
     upsertForUserMock,
     syncTopManagerAssignmentsForUserMock,
@@ -96,7 +96,7 @@ beforeEach(() => {
   syncTopManagerAssignmentsForUserMock.mockResolvedValue(undefined);
   replaceUserRolesMock.mockResolvedValue(undefined);
   setPrimaryRoleMock.mockResolvedValue(undefined);
-  existsForUserAndProviderMock.mockResolvedValue(false);
+  hasOtherSubjectForUserAndProviderMock.mockResolvedValue(false);
 });
 
 const input = {
@@ -232,16 +232,17 @@ describe('resolveExternalIdentity username-bind safety — regression #606', () 
   test('refuses to bind a new subject to a user that already has an identity on the same provider', async () => {
     findByIdentityMock.mockResolvedValue(null);
     findLoginUserByNormalizedUsernameMock.mockResolvedValue(matchingSsoUser);
-    existsForUserAndProviderMock.mockResolvedValue(true);
+    hasOtherSubjectForUserAndProviderMock.mockResolvedValue(true);
 
     await expect(
       resolveExternalIdentity({ ...input, subject: 'sub-from-recycled-account' }),
     ).rejects.toThrow('External identity is not allowed for this Praetor user');
 
-    expect(existsForUserAndProviderMock).toHaveBeenCalledWith(
+    expect(hasOtherSubjectForUserAndProviderMock).toHaveBeenCalledWith(
       'u1',
       'sso-1',
       'oidc',
+      'sub-from-recycled-account',
       expect.anything(),
     );
     expect(insertIdentityMock).not.toHaveBeenCalled();
@@ -258,12 +259,48 @@ describe('resolveExternalIdentity username-bind safety — regression #606', () 
       userId: 'u1',
     });
     findLoginUserByNormalizedUsernameMock.mockResolvedValue(matchingSsoUser);
-    existsForUserAndProviderMock.mockResolvedValue(false);
+    hasOtherSubjectForUserAndProviderMock.mockResolvedValue(false);
 
     const result = await resolveExternalIdentity(input);
 
     expect(result.wasBound).toBe(true);
     expect(insertIdentityMock).toHaveBeenCalled();
+  });
+
+  // The previous behavior threw `identity_conflict` for any prior identity row on the
+  // same `(providerId, protocol)`. That over-rejected the legitimate "issuer string
+  // changed but the IdP sub is identical" case (e.g., admin re-normalized the issuer
+  // URL): findByIdentity misses on the new issuer, the username path matches, and the
+  // user gets locked out of an account they still control. The helper now keys on
+  // `subject != input.subject`, so the same subject under a new issuer binds a fresh
+  // row instead of refusing.
+  test('binds a fresh row when an existing identity has the same subject under a different issuer', async () => {
+    findByIdentityMock.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: 'eid-new-issuer',
+      providerId: 'sso-1',
+      protocol: 'oidc',
+      issuer: 'https://idp.example.com/renamed',
+      subject: input.subject,
+      userId: 'u1',
+    });
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(matchingSsoUser);
+    // Same subject, only the issuer differs → helper returns false (no *other* subject).
+    hasOtherSubjectForUserAndProviderMock.mockResolvedValue(false);
+
+    const result = await resolveExternalIdentity({
+      ...input,
+      issuer: 'https://idp.example.com/renamed',
+    });
+
+    expect(result.wasBound).toBe(true);
+    expect(insertIdentityMock).toHaveBeenCalled();
+    expect(hasOtherSubjectForUserAndProviderMock).toHaveBeenCalledWith(
+      'u1',
+      'sso-1',
+      'oidc',
+      input.subject,
+      expect.anything(),
+    );
   });
 });
 
