@@ -19,7 +19,7 @@ Praetor supporta autenticazione locale e integrazioni aziendali come LDAP o SSO 
 
 Quando salvi la configurazione LDAP, Praetor conferma il salvataggio solo dopo la persistenza riuscita. Se il server rifiuta le impostazioni, la schermata mostra il messaggio di errore e mantiene visibili i valori da correggere.
 
-Quando modifichi una configurazione LDAP già salvata, la password di bind resta mascherata. Puoi aggiornare il Bind DN senza reinserire la password se il segreto esistente resta valido; reinserisci la password solo quando vuoi cambiarla o cancellala insieme al Bind DN per rimuovere le credenziali di bind.
+Quando modifichi una configurazione LDAP già salvata, la password di bind è nascosta dietro un badge **Segreto memorizzato — Sostituisci**. Aggiorna il Bind DN o qualunque altro campo e salva senza toccare la password — il segreto memorizzato viene preservato. Clicca **Sostituisci** solo quando vuoi inserire una nuova password; usa **Mantieni valore memorizzato** per annullare prima di salvare, oppure lascia il campo vuoto dopo Sostituisci per rimuovere le credenziali di bind. Lo stesso schema Memorizzato / Sostituisci protegge la password SMTP (Impostazioni Email) e i segreti SSO (client secret OIDC, certificato IdP SAML, chiave privata di firma e XML del metadata), così digitare per errore in questi campi non sovrascrive più il valore memorizzato.
 
 Prima di abilitare un provider SAML, configura una sorgente metadata valida (URL o XML) oppure la configurazione manuale con **Entry Point** e **Certificato IdP**. Praetor rifiuta il salvataggio di provider SAML abilitati senza questi dati minimi.
 
