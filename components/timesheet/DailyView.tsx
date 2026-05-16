@@ -295,6 +295,8 @@ const DailyView: React.FC<DailyViewProps> = ({
               onChange={(e) => setNotes(e.target.value)}
               placeholder={t('entry.notesPlaceholder')}
               className="h-10 rounded-lg"
+              // Kept in sync with server MAX_NOTES_LENGTH (server/services/timeEntries.ts).
+              maxLength={2000}
             />
           </Field>
 
