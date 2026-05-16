@@ -1,1 +1,0 @@
-ALTER TABLE "sso_states" ADD COLUMN "nonce" text DEFAULT '';
