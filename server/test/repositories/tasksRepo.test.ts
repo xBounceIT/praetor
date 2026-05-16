@@ -186,6 +186,21 @@ describe('update', () => {
     expect(exec.calls[1].params).not.toContain('one_time');
   });
 
+  // Without a row lock, a concurrent UPDATE that flips billingType between this SELECT and
+  // the following UPDATE would make our normalization stale and write a billingFrequency
+  // matched against the old billingType. The locking SELECT serializes the read against any
+  // concurrent writer of the same row.
+  test('billingFrequency-only update reads current billingType with FOR UPDATE', async () => {
+    exec.enqueue({ rows: [makeRow(['retainer'])] });
+    exec.enqueue({ rows: [taskRow({ 14: 'retainer', 15: 'one_time' })] });
+
+    await tasksRepo.update('t-1', { billingFrequency: 'one_time' }, testDb);
+
+    const selectSql = exec.calls[0].sql.toLowerCase();
+    expect(selectSql).toContain('select');
+    expect(selectSql).toContain('for update');
+  });
+
   test('returns null when UPDATE finds no row', async () => {
     exec.enqueue({ rows: [] });
     expect(await tasksRepo.update('t-x', { name: 'X' }, testDb)).toBeNull();
