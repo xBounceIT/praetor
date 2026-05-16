@@ -841,11 +841,9 @@ const AppContent: React.FC = () => {
   // refs so in-flight awaits still observe the latest value.
   const activeViewRef = useRef<View | '404'>(activeView);
   activeViewRef.current = activeView;
-  // Counts pending programmatic hash writes so the hashchange listener can
-  // short-circuit events fired by our own writes. Each write that actually
-  // changes the hash registers one expected event; each event consumes one
-  // pending entry. A single-value flag (the previous design) raced under
-  // rapid navigation — see issue #623. Still prevents an infinite rewrite
+  // Short-circuits hashchange events fired by our own writes. See
+  // utils/programmaticHashTracker.ts for why this is a counter rather than a
+  // single-value marker (issue #623). Also still prevents an infinite rewrite
   // loop if canonicalizeLegacyHash ever becomes non-idempotent (issue #540).
   const programmaticHashTrackerRef = useRef<ProgrammaticHashTracker | null>(null);
   if (programmaticHashTrackerRef.current === null) {

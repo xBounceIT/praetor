@@ -40,11 +40,16 @@ describe('createProgrammaticHashTracker', () => {
     expect(tracker.consumeIfPending()).toBe(false);
   });
 
-  test('a user-initiated event between programmatic writes is not swallowed', () => {
-    // Programmatic write → its hashchange fires and is consumed → counter
-    // back to 0 → next event (user-initiated) sees consumeIfPending → false
-    // and is processed normally.
+  test('a user-initiated event between programmatic writes is processed', () => {
+    // Programmatic write → its hashchange fires and is consumed (counter back
+    // to 0) → user-initiated hashchange fires and consumeIfPending returns
+    // false so the listener processes it → next programmatic write registers
+    // and is consumed on its event. The user event must not be swallowed and
+    // must not throw the counter out of sync with later writes.
     const tracker = createProgrammaticHashTracker();
+    tracker.registerWrite();
+    expect(tracker.consumeIfPending()).toBe(true);
+    expect(tracker.consumeIfPending()).toBe(false);
     tracker.registerWrite();
     expect(tracker.consumeIfPending()).toBe(true);
     expect(tracker.consumeIfPending()).toBe(false);
