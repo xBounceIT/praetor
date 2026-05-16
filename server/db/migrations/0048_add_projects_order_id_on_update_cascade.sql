@@ -14,10 +14,16 @@
 -- DDL, no ACCESS EXCLUSIVE lock acquired on projects/sales). The inner DROPs handle the
 -- two states that still need fixing: the canonical name present without CASCADE (from
 -- migration 0037), or the legacy auto-generated name from the pre-Drizzle schema.sql.
+-- The probe is scoped on `conrelid` / `confrelid` so an unrelated constraint with the
+-- same name on another table can't mask the FK we actually care about
+-- (`pg_constraint.conname` is unique only within (table, namespace), not globally).
 DO $$ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM pg_constraint
-        WHERE conname = 'projects_order_id_sales_id_fk' AND confupdtype = 'c'
+        WHERE conname = 'projects_order_id_sales_id_fk'
+          AND conrelid = 'public.projects'::regclass
+          AND confrelid = 'public.sales'::regclass
+          AND confupdtype = 'c'
     ) THEN
         ALTER TABLE "projects" DROP CONSTRAINT IF EXISTS "projects_order_id_sales_id_fk";
         ALTER TABLE "projects" DROP CONSTRAINT IF EXISTS "projects_order_id_fkey";

@@ -65,4 +65,13 @@ describe('migration 0048: adds ON UPDATE CASCADE to projects.order_id → sales(
     expect(dropIdx).toBeGreaterThan(probeIdx);
     expect(addIdx).toBeGreaterThan(dropIdx);
   });
+
+  test('probe scopes to projects.order_id → sales.id so a same-named FK on another table cannot mask it', () => {
+    // `pg_constraint.conname` is unique within (conrelid, connamespace), not globally.
+    // The probe must filter on `conrelid` and `confrelid` so a same-named FK on a
+    // different table can't make the IF NOT EXISTS check falsely return true and skip
+    // the migration.
+    expect(MIGRATION).toMatch(/conrelid\s*=\s*'public\.projects'::regclass/);
+    expect(MIGRATION).toMatch(/confrelid\s*=\s*'public\.sales'::regclass/);
+  });
 });
