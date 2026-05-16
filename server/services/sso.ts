@@ -587,6 +587,21 @@ const createSamlClient = async (
   });
 };
 
+// Routed through buildCallbackUrl so the admin preview can't drift from the URL the SAML
+// library validates against. The slug is substituted via a URL-safe sentinel because new URL()
+// would percent-encode the `{}` in a literal `{slug}` placeholder.
+const SAML_SLUG_SENTINEL = 'praetor-slug-placeholder';
+
+export const getSamlAcsUrlInfo = (): { acsUrlTemplate: string } => {
+  const baseUrl = resolvePublicBaseUrl();
+  return {
+    acsUrlTemplate: buildCallbackUrl('saml', SAML_SLUG_SENTINEL, baseUrl).replace(
+      SAML_SLUG_SENTINEL,
+      '{slug}',
+    ),
+  };
+};
+
 export const listAdminProviders = async (): Promise<AdminSsoProvider[]> =>
   (await ssoProvidersRepo.list()).map(maskProvider);
 

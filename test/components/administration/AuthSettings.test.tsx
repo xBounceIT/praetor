@@ -19,8 +19,21 @@ const ldapApiMock = {
   })),
 };
 
+const ssoApiMock = {
+  // Issue #602: the admin form must render the URL the backend will validate against, not
+  // one built from the frontend's API base. Default the mock to a split-host setup so any
+  // test that surfaces the ACS URL exercises the divergent-origin path.
+  getSamlAcsUrlInfo: mock(async () => ({
+    acsUrlTemplate: 'https://api.example.com/api/auth/sso/saml/{slug}/callback',
+  })),
+};
+
 mock.module('../../../services/api/ldap', () => ({
   ldapApi: ldapApiMock,
+}));
+
+mock.module('../../../services/api/sso', () => ({
+  ssoApi: ssoApiMock,
 }));
 
 clearSpyStateAfterAll();
@@ -157,6 +170,64 @@ describe('<AuthSettings />', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('Role mapping references a missing role');
     });
     expect(screen.queryByText('admin.ldap.changesSaved')).not.toBeInTheDocument();
+  });
+
+  test('renders the SAML ACS URL using the backend-authoritative template (issue #602)', async () => {
+    ssoApiMock.getSamlAcsUrlInfo.mockClear();
+    renderAuthSettings();
+
+    // Open SAML tab and type a slug into the new-provider form.
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+    const form = screen.getByText('admin.sso.newProvider').closest('form') as HTMLFormElement;
+    const slugLabel = [...form.querySelectorAll('label')].find(
+      (el) => el.textContent === 'admin.sso.slug',
+    );
+    const slugInput = slugLabel?.parentElement?.querySelector('input') as HTMLInputElement;
+    fireEvent.change(slugInput, { target: { value: 'okta' } });
+
+    // The endpoint resolves asynchronously on mount, so wait for the URL to appear.
+    const acsField = await waitFor(() => {
+      const label = [...form.querySelectorAll('label')].find(
+        (el) => el.textContent === 'admin.sso.acsUrl',
+      );
+      const input = label?.parentElement?.querySelector('input') as HTMLInputElement | null;
+      if (!input?.readOnly) throw new Error('ACS URL field not yet rendered');
+      return input;
+    });
+
+    expect(ssoApiMock.getSamlAcsUrlInfo).toHaveBeenCalledTimes(1);
+    // Backend origin (api.example.com) wins over any frontend-derived value.
+    expect(acsField.value).toBe('https://api.example.com/api/auth/sso/saml/okta/callback');
+  });
+
+  test('shows an error message when the backend cannot resolve the ACS URL (issue #602)', async () => {
+    ssoApiMock.getSamlAcsUrlInfo.mockClear();
+    ssoApiMock.getSamlAcsUrlInfo.mockImplementationOnce(async () => {
+      throw new Error('SSO_CALLBACK_BASE_URL or FRONTEND_URL must be configured for SSO');
+    });
+
+    renderAuthSettings();
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+    const form = screen.getByText('admin.sso.newProvider').closest('form') as HTMLFormElement;
+    const slugLabel = [...form.querySelectorAll('label')].find(
+      (el) => el.textContent === 'admin.sso.slug',
+    );
+    const slugInput = slugLabel?.parentElement?.querySelector('input') as HTMLInputElement;
+    fireEvent.change(slugInput, { target: { value: 'okta' } });
+
+    const message = await waitFor(() => {
+      const node = within(form).queryByText(/SSO_CALLBACK_BASE_URL or FRONTEND_URL/);
+      if (!node) throw new Error('Configuration hint not rendered');
+      return node;
+    });
+    expect(message).toBeInTheDocument();
+
+    // The misleading editable ACS URL field must NOT appear when the backend can't resolve it.
+    const acsLabel = [...form.querySelectorAll('label')].find(
+      (el) => el.textContent === 'admin.sso.acsUrl',
+    );
+    expect(acsLabel?.parentElement?.querySelector('input')).toBeNull();
   });
 
   test('surfaces SSO provider save failures inline and restores the save button', async () => {

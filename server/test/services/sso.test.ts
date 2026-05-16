@@ -147,6 +147,53 @@ describe('resolvePublicBaseUrl', () => {
   });
 });
 
+describe('getSamlAcsUrlInfo', () => {
+  const originalSsoBase = process.env.SSO_CALLBACK_BASE_URL;
+  const originalFrontend = process.env.FRONTEND_URL;
+
+  beforeEach(() => {
+    process.env.SSO_CALLBACK_BASE_URL = '';
+    process.env.FRONTEND_URL = '';
+  });
+
+  afterAll(() => {
+    if (originalSsoBase === undefined) delete process.env.SSO_CALLBACK_BASE_URL;
+    else process.env.SSO_CALLBACK_BASE_URL = originalSsoBase;
+    if (originalFrontend === undefined) delete process.env.FRONTEND_URL;
+    else process.env.FRONTEND_URL = originalFrontend;
+  });
+
+  // Issue #602: the admin UI used to build the ACS URL from the frontend's API base, which in
+  // split-host deployments doesn't match the backend's resolved SSO callback origin. The
+  // template returned here must be anchored to the backend's resolved base URL.
+  test('returns a template anchored to SSO_CALLBACK_BASE_URL, not the frontend origin', () => {
+    process.env.SSO_CALLBACK_BASE_URL = 'https://api.example.com';
+    process.env.FRONTEND_URL = 'https://app.example.com';
+    expect(sso.getSamlAcsUrlInfo()).toEqual({
+      acsUrlTemplate: 'https://api.example.com/api/auth/sso/saml/{slug}/callback',
+    });
+  });
+
+  test('falls back to FRONTEND_URL when SSO_CALLBACK_BASE_URL is unset', () => {
+    process.env.FRONTEND_URL = 'https://app.example.com';
+    expect(sso.getSamlAcsUrlInfo().acsUrlTemplate).toBe(
+      'https://app.example.com/api/auth/sso/saml/{slug}/callback',
+    );
+  });
+
+  test('throws when no base URL is configured (callers should map to 503)', () => {
+    expect(() => sso.getSamlAcsUrlInfo()).toThrow(/SSO_CALLBACK_BASE_URL or FRONTEND_URL/);
+  });
+
+  test('template leaves `{slug}` literal so the client can interpolate', () => {
+    process.env.SSO_CALLBACK_BASE_URL = 'https://api.example.com';
+    const { acsUrlTemplate } = sso.getSamlAcsUrlInfo();
+    expect(acsUrlTemplate).toContain('{slug}');
+    expect(acsUrlTemplate).not.toContain('%7B');
+    expect(acsUrlTemplate).not.toContain('placeholder');
+  });
+});
+
 const SAML_PROVIDER: realSsoProvidersRepo.SsoProvider = {
   id: 'sso-1',
   protocol: 'saml',

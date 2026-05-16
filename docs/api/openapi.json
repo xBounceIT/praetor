@@ -7796,7 +7796,8 @@
                     "type": "string"
                   },
                   "recurrenceDuration": {
-                    "type": "number"
+                    "type": "number",
+                    "maximum": 24
                   },
                   "expectedEffort": {
                     "type": "number"
@@ -8410,7 +8411,8 @@
                     "type": "string"
                   },
                   "recurrenceDuration": {
-                    "type": "number"
+                    "type": "number",
+                    "maximum": 24
                   },
                   "expectedEffort": {
                     "type": "number"
@@ -9490,10 +9492,12 @@
                     "type": "string"
                   },
                   "notes": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 2000
                   },
                   "duration": {
-                    "type": "number"
+                    "type": "number",
+                    "maximum": 24
                   },
                   "isPlaceholder": {
                     "type": "boolean"
@@ -9689,6 +9693,27 @@
             }
           },
           "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
             "description": "Default Response",
             "content": {
               "application/json": {
@@ -9953,13 +9978,15 @@
                     "type": "string"
                   },
                   "duration": {
-                    "type": "number"
+                    "type": "number",
+                    "maximum": 24
                   },
                   "notes": {
                     "type": [
                       "string",
                       "null"
-                    ]
+                    ],
+                    "maxLength": 2000
                   },
                   "isPlaceholder": {
                     "type": "boolean"
@@ -12831,6 +12858,181 @@
                     "name",
                     "enabled",
                     "roleMappings"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sso/saml/acs-url-info": {
+      "get": {
+        "summary": "SAML ACS URL templates the backend will validate against",
+        "tags": [
+          "sso"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "acsUrlTemplate": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "acsUrlTemplate"
                   ]
                 }
               }
