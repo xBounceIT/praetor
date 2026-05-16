@@ -104,9 +104,11 @@ const createClientMock = mock((opts: unknown) => {
 });
 
 const noop = () => {};
+// `warn` is a mock so we can assert on the LDAP_REJECT_UNAUTHORIZED=false audit signal.
+const loggerWarnMock = mock();
 const silentLogger = {
   info: noop,
-  warn: noop,
+  warn: loggerWarnMock,
   error: noop,
   debug: noop,
   fatal: noop,
@@ -216,6 +218,7 @@ beforeEach(() => {
   applyExternalRolesForUserMock.mockReset();
   applyExternalRolesForUserIfMatchedMock.mockReset();
   filterExistingRoleIdsMock.mockReset();
+  loggerWarnMock.mockReset();
   filterExistingRoleIdsMock.mockImplementation(async (ids: string[]) =>
     ids.length > 0 ? ids : ['user'],
   );
@@ -270,6 +273,28 @@ describe('getClient', () => {
       tlsOptions: { rejectUnauthorized: boolean };
     };
     expect(opts.tlsOptions.rejectUnauthorized).toBe(false);
+  });
+
+  test('LDAP_REJECT_UNAUTHORIZED="false" emits an audit warning about MITM exposure', async () => {
+    process.env.LDAP_REJECT_UNAUTHORIZED = 'false';
+    await ldapService.getClient();
+    expect(loggerWarnMock).toHaveBeenCalledWith(
+      expect.stringMatching(/LDAP_REJECT_UNAUTHORIZED=false.*MITM/),
+    );
+  });
+
+  test('default rejectUnauthorized=true does NOT emit the MITM warning', async () => {
+    await ldapService.getClient();
+    expect(loggerWarnMock).not.toHaveBeenCalled();
+  });
+
+  test('warning re-fires on every getClient() call (no stale-cache squelching)', async () => {
+    // Audit signal must be loud — every connection attempt logs, so operators see it in
+    // periodic sync runs and not only on first boot.
+    process.env.LDAP_REJECT_UNAUTHORIZED = 'false';
+    await ldapService.getClient();
+    await ldapService.getClient();
+    expect(loggerWarnMock).toHaveBeenCalledTimes(2);
   });
 
   test('passes config.serverUrl to ldapjs.createClient', async () => {

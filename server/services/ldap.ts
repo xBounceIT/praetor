@@ -209,6 +209,13 @@ class LDAPService {
       rejectUnauthorized: process.env.LDAP_REJECT_UNAUTHORIZED !== 'false',
     };
 
+    if (!tlsOptions.rejectUnauthorized) {
+      // Audit signal so an env var leaked from a dev machine into staging/prod is not silent.
+      createChildLogger({ module: 'ldap' }).warn(
+        'LDAP_REJECT_UNAUTHORIZED=false: TLS certificate validation disabled — credentials are vulnerable to MITM',
+      );
+    }
+
     // CA precedence: DB-stored PEM wins; otherwise fall back to LDAP_TLS_CA_FILE.
     // Node's TLS layer accepts a single Buffer with one or more concatenated
     // PEM blocks, so chain certs in the textarea work without extra parsing.
