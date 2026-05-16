@@ -444,10 +444,10 @@ export const update = async (
   if (patch.taskId !== undefined) setValues.taskId = patch.taskId;
 
   if (Object.keys(setValues).length === 0) {
-    // No-op patch: skip optimistic-lock filtering so a stale `patch.version` stays
-    // distinguishable from a deleted row. Null here means "row not found"; a caller
-    // wanting to detect concurrent bumps can compare the returned `version`.
-    const [row] = await exec.select().from(timeEntries).where(eq(timeEntries.id, id));
+    const [row] = await exec
+      .select()
+      .from(timeEntries)
+      .where(and(eq(timeEntries.id, id), eq(timeEntries.version, patch.version)));
     return row ? mapBuilderRow(row) : null;
   }
 

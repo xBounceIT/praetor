@@ -829,6 +829,7 @@ describe('PUT /api/entries/:id', () => {
   test('409 when the row version no longer matches', async () => {
     entriesFindContextMock.mockResolvedValue(sampleContext());
     entriesUpdateMock.mockResolvedValue(null);
+    entriesFindOwnerMock.mockResolvedValue('u1');
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -841,6 +842,22 @@ describe('PUT /api/entries/:id', () => {
     expect(JSON.parse(res.body)).toEqual({
       error: 'Entry has changed since it was loaded; reload and retry',
     });
+  });
+
+  test('404 when the row is deleted between findContext and update (#625)', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+    entriesUpdateMock.mockResolvedValue(null);
+    entriesFindOwnerMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: versionedPatch({ duration: 5 }),
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Entry not found' });
   });
 
   test('403 cross-user update without manager link', async () => {
