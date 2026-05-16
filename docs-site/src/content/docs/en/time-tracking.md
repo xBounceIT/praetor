@@ -11,13 +11,15 @@ Use the tracker to record time spent on projects and tasks. Each entry should in
 
 Before saving, verify that dates are correct and that the task belongs to the selected project. This keeps reports, totals, and costs consistent.
 
+Praetor does not allow a second entry for the same user, date, project, and task: `POST /api/entries` returns `409` when that combination already exists. Update the existing entry instead of creating a duplicate.
+
 When an entry is edited, Praetor uses the API-returned `version` field to prevent concurrent overwrites. If the same entry was saved elsewhere meanwhile, `PUT /api/entries/:id` returns `409` and the entry must be reloaded before retrying.
 
 ## Weekly view
 
 The weekly view helps you quickly review hours across days. Use it to find missing days, duplicates, or entries assigned to the wrong project.
 
-Each existing entry occupies its own row, so duplicates on the same client/project/task pair stay visible and can be edited independently. The "New entry" row at the top is for creating new entries only.
+Each existing entry occupies its own row, so any historical duplicate data stays visible and can be edited independently. The "New entry" row at the top is for creating new entries only and follows the duplicate-entry guard.
 
 ## Recurring tasks
 

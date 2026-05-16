@@ -241,6 +241,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['entries'],
         summary: 'Create time entry',
+        description:
+          'Creates one time entry. Returns 409 when the target user already has an entry ' +
+          'for the same date, project, and task.',
         body: entryCreateBodySchema,
         response: {
           201: entrySchema,

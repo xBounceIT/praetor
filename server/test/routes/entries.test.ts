@@ -54,6 +54,7 @@ const entriesBulkDeleteMock = mock();
 const entriesFindContextMock = mock();
 const entriesFindOwnerMock = mock();
 const entriesFindExistingRecurringKeysMock = mock();
+const entriesExistsForEntryKeyMock = mock();
 const entriesDecodeCursorMock = mock();
 const entriesEncodeCursorMock = mock((c: unknown) => `enc:${JSON.stringify(c)}`);
 const projectsFindClientIdMock = mock();
@@ -98,6 +99,7 @@ beforeAll(async () => {
     findContext: entriesFindContextMock,
     findOwner: entriesFindOwnerMock,
     findExistingRecurringKeys: entriesFindExistingRecurringKeysMock,
+    existsForEntryKey: entriesExistsForEntryKeyMock,
     decodeCursor: entriesDecodeCursorMock,
     encodeCursor: entriesEncodeCursorMock,
   }));
@@ -243,6 +245,7 @@ const allMocks = [
   entriesFindContextMock,
   entriesFindOwnerMock,
   entriesFindExistingRecurringKeysMock,
+  entriesExistsForEntryKeyMock,
   entriesDecodeCursorMock,
   projectsFindClientIdMock,
   projectsFindClientIdAndNameMock,
@@ -275,6 +278,7 @@ beforeEach(async () => {
   projectsFindClientIdMock.mockResolvedValue('c1');
   projectsFindClientIdAndNameMock.mockResolvedValue({ clientId: 'c1', name: 'Project' });
   clientsFindNameMock.mockResolvedValue('Client');
+  entriesExistsForEntryKeyMock.mockResolvedValue(false);
   isClientAssignedToUserMock.mockResolvedValue(true);
   isProjectAssignedToUserMock.mockResolvedValue(true);
   isTaskAssignedToUserMock.mockResolvedValue(true);
@@ -454,6 +458,15 @@ describe('POST /api/entries', () => {
         notes: 'hello',
         isPlaceholder: false,
       }),
+      TX_SENTINEL,
+    );
+    expect(withDbTransactionMock.mock.calls[0][1]).toEqual({
+      isolationLevel: 'serializable',
+      accessMode: 'read write',
+    });
+    expect(entriesExistsForEntryKeyMock).toHaveBeenCalledWith(
+      { userId: 'u1', date: '2025-06-02', projectId: 'p1', task: 'Dev' },
+      TX_SENTINEL,
     );
   });
 
@@ -476,7 +489,31 @@ describe('POST /api/entries', () => {
     expect(res.statusCode).toBe(201);
     expect(entriesCreateMock).toHaveBeenCalledWith(
       expect.objectContaining({ duration: 0, taskId: null, isPlaceholder: false }),
+      TX_SENTINEL,
     );
+  });
+
+  test('409 duplicate date/project/task for the target user does not create entry', async () => {
+    entriesExistsForEntryKeyMock.mockResolvedValue(true);
+    findCostPerHourMock.mockResolvedValue(50);
+    findIdByProjectAndNameMock.mockResolvedValue('t1');
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: validBody,
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'A time entry already exists for this date, project, and task',
+    });
+    expect(entriesExistsForEntryKeyMock).toHaveBeenCalledWith(
+      { userId: 'u1', date: '2025-06-02', projectId: 'p1', task: 'Dev' },
+      TX_SENTINEL,
+    );
+    expect(entriesCreateMock).not.toHaveBeenCalled();
   });
 
   test('400 invalid isPlaceholder value does not create entry', async () => {
@@ -592,6 +629,11 @@ describe('POST /api/entries', () => {
     expect(findCostPerHourMock).toHaveBeenCalledWith('u2');
     expect(entriesCreateMock).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'u2', hourlyCost: 60 }),
+      TX_SENTINEL,
+    );
+    expect(entriesExistsForEntryKeyMock).toHaveBeenCalledWith(
+      { userId: 'u2', date: '2025-06-02', projectId: 'p1', task: 'Dev' },
+      TX_SENTINEL,
     );
   });
 

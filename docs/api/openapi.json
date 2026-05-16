@@ -9462,6 +9462,7 @@
         "tags": [
           "entries"
         ],
+        "description": "Creates one time entry. Returns 409 when the target user already has an entry for the same date, project, and task.",
         "requestBody": {
           "required": true,
           "content": {

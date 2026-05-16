@@ -11,13 +11,15 @@ Usa il tracker per registrare il tempo lavorato su progetto e attività. Ogni re
 
 Prima di salvare, verifica che le date siano corrette e che l'attività appartenga al progetto selezionato. Questo mantiene coerenti report, consuntivi e costi.
 
+Praetor non consente di creare una seconda registrazione per lo stesso utente, data, progetto e attività: `POST /api/entries` risponde con `409` se la combinazione esiste già. Aggiorna la registrazione esistente invece di crearne una duplicata.
+
 Quando una registrazione viene modificata, Praetor usa il campo `version` restituito dall'API per impedire sovrascritture concorrenti. Se la stessa registrazione è stata salvata altrove nel frattempo, `PUT /api/entries/:id` risponde con `409` e occorre ricaricare la registrazione prima di riprovare.
 
 ## Vista settimanale
 
 La vista settimanale aiuta a controllare rapidamente le ore distribuite sui giorni. È utile per individuare giornate mancanti, duplicazioni o attività attribuite al progetto sbagliato.
 
-Ogni registrazione esistente occupa una propria riga, così eventuali duplicazioni sulla stessa coppia cliente/progetto/attività restano visibili e modificabili in modo indipendente. La riga "Nuova voce" in alto serve esclusivamente a creare nuove registrazioni.
+Ogni registrazione esistente occupa una propria riga, così eventuali dati storici duplicati restano visibili e modificabili in modo indipendente. La riga "Nuova voce" in alto serve esclusivamente a creare nuove registrazioni e rispetta il controllo anti-duplicato.
 
 ## Attività ricorrenti
 
