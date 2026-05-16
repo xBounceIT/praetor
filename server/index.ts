@@ -7,6 +7,7 @@ import {
   type LdapSyncSchedulerHandle,
   startLdapSyncScheduler,
 } from './services/ldapSyncScheduler.ts';
+import { performShutdown } from './shutdown.ts';
 import { createChildLogger, serializeError } from './utils/logger.ts';
 import {
   INSECURE_DEFAULT_ENCRYPTION_KEYS,
@@ -40,15 +41,9 @@ const assertSecureRuntimeConfig = () => {
 let ldapSyncScheduler: LdapSyncSchedulerHandle | null = null;
 
 const shutdown = async (signal: string) => {
-  try {
-    logger.info({ signal }, 'Shutting down');
-    ldapSyncScheduler?.stop();
-    await fastify.close();
-  } catch (err) {
-    logger.error({ signal, err: serializeError(err) }, 'Shutdown error');
-  } finally {
-    process.exit(0);
-  }
+  ldapSyncScheduler?.stop();
+  const code = await performShutdown(fastify, signal, logger);
+  process.exit(code);
 };
 
 process.on('SIGINT', () => void shutdown('SIGINT'));

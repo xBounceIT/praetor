@@ -1,5 +1,7 @@
 import type { View } from '../types';
 
+export const stripHashPrefix = (hash: string): string => hash.replace('#/', '').replace('#', '');
+
 // Maps legacy hash aliases to their current canonical form. Must remain
 // idempotent: canonicalize(canonicalize(x)) === canonicalize(x) for all x.
 // Non-idempotent additions would, in concert with the bidirectional
