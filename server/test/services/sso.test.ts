@@ -474,3 +474,18 @@ describe('completeSamlLogin issuer resolution', () => {
     });
   });
 });
+
+describe('updateProvider config validation', () => {
+  test('rejects enabling a SAML provider with empty usernameAttribute', async () => {
+    findByIdMock.mockResolvedValue({
+      ...SAML_PROVIDER,
+      metadataUrl: 'https://idp.example.com/metadata',
+    });
+    await expect(
+      sso.updateProvider('sso-1', { enabled: true, usernameAttribute: '' }),
+    ).rejects.toThrow(sso.SsoProviderValidationError);
+    await expect(
+      sso.updateProvider('sso-1', { enabled: true, usernameAttribute: '' }),
+    ).rejects.toThrow(/usernameAttribute/);
+  });
+});
