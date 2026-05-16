@@ -16,6 +16,7 @@ import * as ssoStatesRepo from '../repositories/ssoStatesRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { decrypt, encrypt, MASKED_SECRET } from '../utils/crypto.ts';
 import { buildFrontendUrl } from '../utils/frontend-url.ts';
+import { NotFoundError } from '../utils/http-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
 import { resolveExternalIdentity } from './external-auth.ts';
@@ -520,7 +521,7 @@ const getEnabledProviderBySlug = async (
 ): Promise<ssoProvidersRepo.SsoProvider> => {
   const provider = await ssoProvidersRepo.findBySlug(slug);
   if (!provider || provider.protocol !== protocol || !provider.enabled) {
-    throw new Error('SSO provider is not enabled');
+    throw new NotFoundError('SSO provider');
   }
   return provider;
 };
@@ -531,18 +532,7 @@ const getEnabledProviderById = async (
 ): Promise<ssoProvidersRepo.SsoProvider> => {
   const provider = await ssoProvidersRepo.findById(id);
   if (!provider || provider.protocol !== protocol || !provider.enabled) {
-    throw new Error('SSO provider is not enabled');
-  }
-  return provider;
-};
-
-const getProviderBySlug = async (
-  protocol: 'oidc' | 'saml',
-  slug: string,
-): Promise<ssoProvidersRepo.SsoProvider> => {
-  const provider = await ssoProvidersRepo.findBySlug(slug);
-  if (!provider || provider.protocol !== protocol) {
-    throw new Error('SSO provider not found');
+    throw new NotFoundError('SSO provider');
   }
   return provider;
 };
@@ -761,7 +751,7 @@ export const completeSamlLogin = async (
 
 export const getSamlMetadata = async (slug: string): Promise<string> => {
   const baseUrl = resolvePublicBaseUrl();
-  const provider = await getProviderBySlug('saml', slug);
+  const provider = await getEnabledProviderBySlug('saml', slug);
   const { privateKey } = getProviderSecrets(provider);
   const issuer = provider.spIssuer || buildSamlMetadataUrl(provider.slug, baseUrl);
   return generateServiceProviderMetadata({
