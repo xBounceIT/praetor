@@ -937,9 +937,76 @@ describe('PUT /api/users/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(settingsUpsertForUserMock).toHaveBeenCalled();
+    // Even with only an email change, settings upsert must run inside the same
+    // withDbTransaction wrapper so users.email and settings.email stay consistent.
+    expect(settingsUpsertForUserMock).toHaveBeenCalledWith(
+      'u-target',
+      expect.objectContaining({ email: 'new@x.com' }),
+      TX_SENTINEL,
+    );
     // No dynamic field update needed → updateUserDynamic not called
     expect(updateUserDynamicMock).not.toHaveBeenCalled();
+  });
+
+  test('200 name + email change: settings upsert runs inside the user-update transaction', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      name: 'Renamed',
+      avatarInitials: 'R',
+      costPerHour: 50,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({
+      ...SAMPLE_USER_ROW,
+      name: 'Renamed',
+      email: 'new@x.com',
+    });
+    settingsUpsertForUserMock.mockResolvedValue({});
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { name: 'Renamed', email: 'new@x.com' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateUserDynamicMock).toHaveBeenCalledWith(
+      'u-target',
+      expect.objectContaining({ name: 'Renamed' }),
+      TX_SENTINEL,
+    );
+    expect(settingsUpsertForUserMock).toHaveBeenCalledWith(
+      'u-target',
+      expect.objectContaining({ fullName: 'Renamed', email: 'new@x.com' }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('settings upsert failure aborts the request before post-commit work runs', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      name: 'Renamed',
+      avatarInitials: 'R',
+      costPerHour: 50,
+      isDisabled: false,
+    });
+    settingsUpsertForUserMock.mockRejectedValue(new Error('settings upsert failed'));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { name: 'Renamed', email: 'new@x.com' },
+    });
+
+    // The error propagating out of the tx callback prevents findById/audit from running;
+    // if it didn't, we'd be responding with stale data after a partial commit.
+    expect(res.statusCode).not.toBe(200);
+    expect(findByIdMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 
   test('400 invalid email', async () => {
