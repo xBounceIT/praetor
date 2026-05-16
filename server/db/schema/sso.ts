@@ -42,6 +42,7 @@ export const ssoStates = pgTable(
       .references(() => ssoProviders.id, { onDelete: 'cascade' }),
     protocol: varchar('protocol', { length: 20 }).$type<SsoProtocol>().notNull(),
     codeVerifier: text('code_verifier').default(''),
+    nonce: text('nonce').default(''),
     relayState: text('relay_state').default(''),
     expiresAt: timestamp('expires_at').notNull(),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),

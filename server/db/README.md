@@ -115,6 +115,7 @@ From `server/`:
 | `bun run db:migrate` | Apply pending migrations to the DB pointed to by `DB_*` env vars. |
 | `bun run db:check` | Verify that snapshots and migration SQL are consistent (run in CI to catch drift). |
 | `bun run db:studio` | Open Drizzle Studio (browser-based DB explorer). **Local dev only — never point at prod credentials.** |
+| `bun run db:audit:external-identities` | Read-only diagnostic for [#606](https://github.com/xBounceIT/praetor/issues/606): lists every `external_identities` group where one Praetor user is bound to >1 IdP subject on the same `(provider_id, protocol)`. Exits 1 when duplicates exist. Run before adding any future `UNIQUE (user_id, provider_id, protocol)` constraint. |
 
 ### Why not `drizzle-kit migrate`?
 

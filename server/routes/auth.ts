@@ -397,16 +397,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const session = getSessionAuth(request);
 
-      // Resolve the IdP end-session URL before bumping session_version: a broken IdP
-      // must never block the local logout, so we swallow the rejection and proceed.
-      let endSessionUrl: string | null = null;
-      try {
-        endSessionUrl = await ssoService.endOidcSession(session.userId);
-      } catch (err) {
-        request.log.warn({ err, userId: session.userId }, 'OIDC end-session URL build failed');
-      }
-
-      await Promise.all([
+      // The local revocation MUST NOT wait on `endOidcSession` — that path performs OIDC
+      // discovery against the IdP, and a slow / unreachable IdP would otherwise keep the
+      // user's JWT live for the duration of the failed network attempt. Fire all three in
+      // parallel and tolerate the end-session arm rejecting; the response still includes a
+      // null `endSessionUrl` and the JWT is dead the moment `bumpSessionVersion` commits.
+      const [endSessionResult] = await Promise.all([
+        ssoService.endOidcSession(session.userId).catch((err: unknown) => {
+          request.log.warn({ err, userId: session.userId }, 'OIDC end-session URL build failed');
+          return null;
+        }),
         usersRepo.bumpSessionVersion(session.userId),
         logAudit({
           request,
@@ -424,7 +424,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // to x-auth-token. After the bump above, that token is revoked — strip it so the
       // client doesn't persist a doomed token into localStorage.
       reply.removeHeader('x-auth-token');
-      return { endSessionUrl };
+      return { endSessionUrl: endSessionResult };
     },
   );
 }

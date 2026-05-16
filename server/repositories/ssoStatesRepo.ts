@@ -7,6 +7,7 @@ export type SsoState = {
   providerId: string;
   protocol: SsoProtocol;
   codeVerifier: string;
+  nonce: string;
   relayState: string;
   expiresAt: Date;
 };
@@ -16,6 +17,7 @@ const STATE_PROJECTION = {
   providerId: ssoStates.providerId,
   protocol: ssoStates.protocol,
   codeVerifier: ssoStates.codeVerifier,
+  nonce: ssoStates.nonce,
   relayState: ssoStates.relayState,
   expiresAt: ssoStates.expiresAt,
 } as const;
@@ -25,6 +27,7 @@ const mapRow = (row: {
   providerId: string;
   protocol: SsoProtocol;
   codeVerifier: string | null;
+  nonce: string | null;
   relayState: string | null;
   expiresAt: Date;
 }): SsoState => ({
@@ -32,6 +35,7 @@ const mapRow = (row: {
   providerId: row.providerId,
   protocol: row.protocol,
   codeVerifier: row.codeVerifier ?? '',
+  nonce: row.nonce ?? '',
   relayState: row.relayState ?? '',
   expiresAt: row.expiresAt,
 });

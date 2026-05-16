@@ -1,5 +1,8 @@
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
+// Without this, a hung server (no TCP reset) leaves the UI on a spinner forever.
+const DEFAULT_TIMEOUT_MS = 30_000;
+
 let authToken: string | null = localStorage.getItem('praetor_auth_token');
 
 export const setAuthToken = (token: string | null) => {
@@ -32,21 +35,41 @@ export class ApiError extends Error {
   }
 }
 
-export const fetchApi = async <T>(endpoint: string, options: RequestInit = {}): Promise<T> => {
+export interface FetchApiOptions extends RequestInit {
+  // Override the default 30s request timeout. `null` disables it — use for endpoints
+  // that may legitimately take longer (e.g. AI completions) and that supply their
+  // own AbortSignal for cancellation.
+  timeoutMs?: number | null;
+}
+
+export const fetchApi = async <T>(endpoint: string, options: FetchApiOptions = {}): Promise<T> => {
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal: callerSignal, ...fetchOptions } = options;
+
   const headers: HeadersInit = {
-    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(fetchOptions.body ? { 'Content-Type': 'application/json' } : {}),
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-    ...options.headers,
+    ...fetchOptions.headers,
   };
+
+  const timeoutSignal = timeoutMs == null ? null : AbortSignal.timeout(timeoutMs);
+  let signal: AbortSignal | undefined;
+  if (timeoutSignal && callerSignal) {
+    signal = AbortSignal.any([callerSignal, timeoutSignal]);
+  } else {
+    signal = timeoutSignal ?? callerSignal ?? undefined;
+  }
 
   let response: Response;
   try {
     response = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
+      ...fetchOptions,
       headers,
+      signal,
     });
   } catch (err) {
-    // fetch() throws a TypeError on network failures (offline, DNS, refused).
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      throw new ApiError('Request timed out', 0, true);
+    }
     const message = err instanceof Error ? err.message : 'Network request failed';
     throw new ApiError(message, 0, true);
   }

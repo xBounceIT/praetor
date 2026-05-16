@@ -330,6 +330,224 @@ describe('<AuthSettings />', () => {
     expect(within(form).getByRole('button', { name: 'admin.sso.saveProvider' })).toBeEnabled();
   });
 
+  describe('masked secret guard (issue #601)', () => {
+    const MASKED = '********';
+
+    const editSamlProvider = (provider: SsoProvider) => {
+      fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+      const editButton = screen
+        .getByText(provider.name)
+        .closest('div.p-4')
+        ?.querySelector('button[title="admin.sso.editProvider"]') as HTMLButtonElement | null;
+      if (!editButton) throw new Error('Edit provider button not found');
+      fireEvent.click(editButton);
+      const heading = screen.getByText('admin.sso.editProvider');
+      const form = heading.closest('form') as HTMLFormElement | null;
+      if (!form) throw new Error('SAML provider form not found');
+      return form;
+    };
+
+    test('SAML masked metadataXml/idpCert/privateKey render as a "Secret stored" badge instead of a textarea pre-filled with the mask', () => {
+      const provider = buildProvider('saml', {
+        id: 'saml-stored',
+        name: 'SAML Stored',
+        slug: 'saml-stored',
+        enabled: true,
+        entryPoint: 'https://idp.example.com/sso',
+        metadataXml: MASKED,
+        idpCert: MASKED,
+        privateKey: MASKED,
+      });
+      renderAuthSettings({ ssoProviders: [provider] });
+      const form = editSamlProvider(provider);
+
+      expect(within(form).queryAllByText('admin.sso.metadataXmlStored')).toHaveLength(1);
+      expect(within(form).queryAllByText('admin.sso.idpCertStored')).toHaveLength(1);
+      expect(within(form).queryAllByText('admin.sso.privateKeyStored')).toHaveLength(1);
+
+      // No textarea should be pre-filled with the masked sentinel — that was the bug.
+      for (const textarea of within(form).queryAllByRole('textbox')) {
+        expect((textarea as HTMLTextAreaElement).value).not.toBe(MASKED);
+      }
+    });
+
+    test('saving a SAML provider in Stored mode round-trips MASKED_SECRET so the server preserves the stored values', async () => {
+      const provider = buildProvider('saml', {
+        id: 'saml-stored',
+        name: 'SAML Stored',
+        slug: 'saml-stored',
+        enabled: true,
+        entryPoint: 'https://idp.example.com/sso',
+        metadataXml: MASKED,
+        idpCert: MASKED,
+        privateKey: MASKED,
+      });
+      const onSaveSsoProvider = mock(async (next: Partial<SsoProvider>) => ({
+        ...provider,
+        ...next,
+      }));
+      renderAuthSettings({ ssoProviders: [provider], onSaveSsoProvider });
+      const form = editSamlProvider(provider);
+
+      fireEvent.submit(form);
+
+      await waitFor(() => expect(onSaveSsoProvider).toHaveBeenCalledTimes(1));
+      const submitted = onSaveSsoProvider.mock.calls[0]?.[0] as Partial<SsoProvider>;
+      // The server preserves the stored value when it sees MASKED_SECRET exactly; the bug was
+      // sending `MASKED_SECRET + typed characters`.
+      expect(submitted.metadataXml).toBe(MASKED);
+      expect(submitted.idpCert).toBe(MASKED);
+      expect(submitted.privateKey).toBe(MASKED);
+    });
+
+    test('clicking Replace clears the field and lets the admin type a new value that is sent to the server', async () => {
+      const provider = buildProvider('saml', {
+        id: 'saml-stored',
+        name: 'SAML Stored',
+        slug: 'saml-stored',
+        enabled: true,
+        entryPoint: 'https://idp.example.com/sso',
+        metadataXml: MASKED,
+        idpCert: MASKED,
+        privateKey: MASKED,
+      });
+      const onSaveSsoProvider = mock(async (next: Partial<SsoProvider>) => ({
+        ...provider,
+        ...next,
+      }));
+      renderAuthSettings({ ssoProviders: [provider], onSaveSsoProvider });
+      const form = editSamlProvider(provider);
+
+      const idpCertBlock = within(form).getByText('admin.sso.idpCertStored').closest('div')
+        ?.parentElement as HTMLElement;
+      fireEvent.click(within(idpCertBlock).getByRole('button', { name: 'secretField.replace' }));
+
+      const idpCertLabel = within(form)
+        .getAllByText('admin.sso.idpCert')
+        .find((node) => node.tagName === 'LABEL') as HTMLLabelElement | undefined;
+      const idpCertField = idpCertLabel?.closest('div')?.parentElement as HTMLElement;
+      const idpCertTextarea = within(idpCertField).getByRole('textbox') as HTMLTextAreaElement;
+      expect(idpCertTextarea.value).toBe('');
+
+      fireEvent.change(idpCertTextarea, { target: { value: 'NEW-CERT-PEM' } });
+      fireEvent.submit(form);
+
+      await waitFor(() => expect(onSaveSsoProvider).toHaveBeenCalledTimes(1));
+      const submitted = onSaveSsoProvider.mock.calls[0]?.[0] as Partial<SsoProvider>;
+      expect(submitted.idpCert).toBe('NEW-CERT-PEM');
+      // The fields the admin did not replace still round-trip the mask.
+      expect(submitted.metadataXml).toBe(MASKED);
+      expect(submitted.privateKey).toBe(MASKED);
+    });
+
+    test('"Keep stored value" restores the mask after entering Replace mode so the admin can back out', () => {
+      const provider = buildProvider('saml', {
+        id: 'saml-stored',
+        name: 'SAML Stored',
+        slug: 'saml-stored',
+        enabled: true,
+        entryPoint: 'https://idp.example.com/sso',
+        metadataXml: MASKED,
+        idpCert: MASKED,
+        privateKey: MASKED,
+      });
+      renderAuthSettings({ ssoProviders: [provider] });
+      const form = editSamlProvider(provider);
+
+      const idpCertBlock = within(form).getByText('admin.sso.idpCertStored').closest('div')
+        ?.parentElement as HTMLElement;
+      fireEvent.click(within(idpCertBlock).getByRole('button', { name: 'secretField.replace' }));
+
+      fireEvent.click(within(form).getByRole('button', { name: 'secretField.keepStored' }));
+
+      // After cancelling, the field is back to Stored mode — no textarea, only the badge.
+      expect(within(form).queryAllByText('admin.sso.idpCertStored')).toHaveLength(1);
+    });
+
+    test('OIDC clientSecret with a masked value renders as a Stored badge and round-trips the mask on save', async () => {
+      const provider = buildProvider('oidc', {
+        id: 'oidc-stored',
+        name: 'OIDC Stored',
+        slug: 'oidc-stored',
+        enabled: true,
+        issuerUrl: 'https://idp.example.com',
+        clientId: 'praetor',
+        clientSecret: MASKED,
+      });
+      const onSaveSsoProvider = mock(async (next: Partial<SsoProvider>) => ({
+        ...provider,
+        ...next,
+      }));
+      renderAuthSettings({ ssoProviders: [provider], onSaveSsoProvider });
+
+      fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.oidc' }));
+      const editButton = screen
+        .getByText('OIDC Stored')
+        .closest('div.p-4')
+        ?.querySelector('button[title="admin.sso.editProvider"]') as HTMLButtonElement | null;
+      if (!editButton) throw new Error('Edit provider button not found');
+      fireEvent.click(editButton);
+
+      const heading = screen.getByText('admin.sso.editProvider');
+      const form = heading.closest('form') as HTMLFormElement;
+
+      // Stored badge present; no password input is rendered with the mask as its value.
+      expect(within(form).queryAllByText('admin.sso.secretStored')).toHaveLength(1);
+      for (const passwordInput of form.querySelectorAll('input[type="password"]')) {
+        expect((passwordInput as HTMLInputElement).value).not.toBe(MASKED);
+      }
+
+      fireEvent.submit(form);
+      await waitFor(() => expect(onSaveSsoProvider).toHaveBeenCalledTimes(1));
+      const submitted = onSaveSsoProvider.mock.calls[0]?.[0] as Partial<SsoProvider>;
+      expect(submitted.clientSecret).toBe(MASKED);
+    });
+
+    test('LDAP bindPassword with a masked value renders as a Stored badge and round-trips the mask on save', async () => {
+      const onSave = mock(async (_config: LdapConfig) => {});
+      renderAuthSettings({
+        config: { ...ldapConfig, bindPassword: MASKED },
+        onSave,
+      });
+
+      // Stored badge appears for the bind password — no input pre-filled with the mask.
+      expect(screen.getByTestId('ldap-bind-password')).toBeInTheDocument();
+      expect(screen.queryByTestId('ldap-bind-password-input')).toBeNull();
+
+      // Make some unrelated change so isLdapDirty is true, then save.
+      const bindDnInput = screen
+        .getByText('admin.ldap.bindDnLabel')
+        .parentElement?.querySelector('input') as HTMLInputElement;
+      fireEvent.change(bindDnInput, { target: { value: 'cn=admin2,dc=example,dc=com' } });
+
+      fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.saveConfiguration' }));
+
+      await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+      const submitted = onSave.mock.calls[0]?.[0] as LdapConfig;
+      expect(submitted.bindPassword).toBe(MASKED);
+    });
+
+    test('clicking Replace on LDAP bindPassword clears the field and lets the admin type a new password', async () => {
+      const onSave = mock(async (_config: LdapConfig) => {});
+      renderAuthSettings({
+        config: { ...ldapConfig, bindPassword: MASKED },
+        onSave,
+      });
+
+      fireEvent.click(screen.getByTestId('ldap-bind-password-replace'));
+
+      const passwordInput = screen.getByTestId('ldap-bind-password-input') as HTMLInputElement;
+      expect(passwordInput.value).toBe('');
+
+      fireEvent.change(passwordInput, { target: { value: 'new-pw' } });
+      fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.saveConfiguration' }));
+
+      await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+      const submitted = onSave.mock.calls[0]?.[0] as LdapConfig;
+      expect(submitted.bindPassword).toBe('new-pw');
+    });
+  });
+
   test('blocks save and surfaces idpIssuer error for enabled manual SAML missing the issuer', async () => {
     // Issue #597: node-saml silently skips <Issuer> validation when idpIssuer is empty.
     // The form must refuse to send a save request for an enabled manual SAML config that

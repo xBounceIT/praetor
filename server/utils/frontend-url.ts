@@ -13,10 +13,12 @@ export const buildFrontendUrl = (param: string, value: string): string => {
 
 // Throws when FRONTEND_URL is unset: the IdP-facing `post_logout_redirect_uri` must be an
 // absolute URL that has been pre-registered with the IdP — there is no meaningful fallback.
+// Returns the configured URL with its path intact (subpath deployments like
+// `https://host/praetor` must keep `/praetor` so the IdP-registered redirect still matches).
 export const requireFrontendBaseUrl = (): string => {
   const configured = process.env.FRONTEND_URL?.trim();
   if (!configured) {
     throw new Error('FRONTEND_URL must be configured to build a post-logout redirect URI');
   }
-  return new URL('/', configured).href;
+  return new URL(configured).href;
 };

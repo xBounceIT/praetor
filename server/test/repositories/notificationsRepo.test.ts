@@ -49,13 +49,12 @@ describe('listForUser', () => {
     expect(result.data).toEqual(data);
   });
 
-  test('coerces null message/isRead/createdAt to defaults', async () => {
+  test('coerces null message/createdAt to defaults', async () => {
     exec.enqueue({
-      rows: [['n1', 'user-1', 'task', 't', null, null, null, null]],
+      rows: [['n1', 'user-1', 'task', 't', null, null, false, null]],
     });
     const [result] = await notificationsRepo.listForUser('user-1', testDb);
     expect(result.message).toBe('');
-    expect(result.isRead).toBe(false);
     expect(result.createdAt).toBe(0);
   });
 });
@@ -77,6 +76,16 @@ describe('countUnreadForUser', () => {
     exec.enqueue({ rows: [['0']] });
     await notificationsRepo.countUnreadForUser('user-1', testDb);
     expect(exec.calls[0].params).toContain('user-1');
+  });
+
+  // Regression test for #614: `IS NOT TRUE` does not match the predicate of
+  // partial index `idx_notifications_user_unread` (`is_read = false`), so the
+  // unread predicate must compile to `= $N` with a `false` parameter.
+  test('uses an `= false` predicate that matches the partial index', async () => {
+    exec.enqueue({ rows: [['0']] });
+    await notificationsRepo.countUnreadForUser('user-1', testDb);
+    expect(exec.calls[0].sql.toLowerCase()).not.toContain('is not true');
+    expect(exec.calls[0].params).toContain(false);
   });
 });
 
@@ -110,30 +119,55 @@ describe('markAllReadForUser', () => {
   });
 });
 
+const LEGACY_ADMIN_WARNING_ID = 'admin-default-password-warning';
+
 describe('admin password warning helpers', () => {
-  test('upsertAdminPasswordWarning inserts a deterministic unread warning', async () => {
+  test('upsertAdminPasswordWarning inserts a per-user unread warning', async () => {
+    exec.enqueue({ rows: [], rowCount: 0 });
     exec.enqueue({ rows: [], rowCount: 1 });
 
     const result = await notificationsRepo.upsertAdminPasswordWarning('admin-1', testDb);
+    const expectedId = notificationsRepo.adminPasswordWarningNotificationId('admin-1');
 
     expect(result).toBeUndefined();
-    expect(exec.calls[0].sql.toLowerCase()).toContain('on conflict');
-    expect(exec.calls[0].params).toContain(
-      notificationsRepo.ADMIN_PASSWORD_WARNING_NOTIFICATION_ID,
-    );
-    expect(exec.calls[0].params).toContain(notificationsRepo.ADMIN_PASSWORD_WARNING_TYPE);
-    expect(exec.calls[0].params).toContain('admin-1');
-    expect(exec.calls[0].params).toContain(false);
+    expect(exec.calls).toHaveLength(2);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('delete from');
+    expect(exec.calls[0].params).toContain(LEGACY_ADMIN_WARNING_ID);
+    expect(exec.calls[1].sql.toLowerCase()).toContain('on conflict');
+    expect(exec.calls[1].params).toContain(expectedId);
+    expect(exec.calls[1].params).toContain(notificationsRepo.ADMIN_PASSWORD_WARNING_TYPE);
+    expect(exec.calls[1].params).toContain('admin-1');
+    expect(exec.calls[1].params).toContain(false);
   });
 
-  test('deleteAdminPasswordWarning deletes by deterministic id', async () => {
+  // Regression for issue #612: per-user ids must not collide across admins.
+  test('upsertAdminPasswordWarning uses distinct ids for different admins', async () => {
+    const idA = notificationsRepo.adminPasswordWarningNotificationId('admin-a');
+    const idB = notificationsRepo.adminPasswordWarningNotificationId('admin-b');
+    expect(idA).not.toEqual(idB);
+    expect(idA).not.toEqual(LEGACY_ADMIN_WARNING_ID);
+    expect(idB).not.toEqual(LEGACY_ADMIN_WARNING_ID);
+  });
+
+  // The generated id is stored in notifications.id which is varchar(50). A naive
+  // `${userId}-<long-suffix>` overflows for `u-<uuid>` shaped user ids; keep this
+  // assertion in place so the helper can't grow back past the column limit.
+  test('adminPasswordWarningNotificationId fits notifications.id varchar(50)', () => {
+    const uuidShapedUserId = 'u-00000000-0000-0000-0000-000000000000'; // 38 chars, generatePrefixedId('u') shape
+    expect(uuidShapedUserId.length).toBe(38);
+    const id = notificationsRepo.adminPasswordWarningNotificationId(uuidShapedUserId);
+    expect(id.length).toBeLessThanOrEqual(50);
+  });
+
+  test('deleteAdminPasswordWarning targets per-user id and cleans up the legacy id', async () => {
     exec.enqueue({ rows: [], rowCount: 1 });
 
-    const result = await notificationsRepo.deleteAdminPasswordWarning(testDb);
+    const result = await notificationsRepo.deleteAdminPasswordWarning('admin-1', testDb);
 
     expect(result).toBeUndefined();
     expect(exec.calls[0].params).toContain(
-      notificationsRepo.ADMIN_PASSWORD_WARNING_NOTIFICATION_ID,
+      notificationsRepo.adminPasswordWarningNotificationId('admin-1'),
     );
+    expect(exec.calls[0].params).toContain(LEGACY_ADMIN_WARNING_ID);
   });
 });

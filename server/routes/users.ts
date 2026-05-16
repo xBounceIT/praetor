@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
+import * as externalIdentitiesRepo from '../repositories/externalIdentitiesRepo.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as settingsRepo from '../repositories/settingsRepo.ts';
@@ -756,19 +757,37 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'No fields to update');
       }
 
-      if (hasFieldUpdates) {
-        // Sync runs inside the transaction so the role replacement and the resulting
-        // top-manager auto-assignments commit (or roll back) together.
-        const updatedRow = await withDbTransaction(async (tx) => {
-          const row = await usersRepo.updateUserDynamic(idResult.value, fields, tx);
-          if (row && roleValue !== null) {
-            await usersRepo.replaceUserRoles(idResult.value, [roleValue], tx);
-            await userAssignmentsRepo.syncTopManagerAssignmentsForUser(idResult.value, tx);
+      const needsSettingsUpsert = fields.name !== undefined || validatedEmail !== undefined;
+
+      if (hasFieldUpdates || needsSettingsUpsert) {
+        // Single transaction so users.name/email and the mirrored settings row commit (or
+        // roll back) together. Previously the settings upsert ran after the users-update
+        // transaction had already committed, so a failed upsert left users updated while
+        // settings stayed stale, and findById's LEFT JOIN returned an inconsistent row.
+        const txResult = await withDbTransaction(async (tx) => {
+          if (hasFieldUpdates) {
+            const row = await usersRepo.updateUserDynamic(idResult.value, fields, tx);
+            if (!row) return { userExists: false };
+            if (roleValue !== null) {
+              await usersRepo.replaceUserRoles(idResult.value, [roleValue], tx);
+              await userAssignmentsRepo.syncTopManagerAssignmentsForUser(idResult.value, tx);
+            }
           }
-          return row;
+          if (needsSettingsUpsert) {
+            await settingsRepo.upsertForUser(
+              idResult.value,
+              {
+                fullName: fields.name ?? null,
+                email: validatedEmail ?? null,
+                language: null,
+              },
+              tx,
+            );
+          }
+          return { userExists: true };
         });
 
-        if (!updatedRow) {
+        if (!txResult.userExists) {
           return replyError(request, reply, {
             statusCode: 404,
             message: 'User not found',
@@ -796,16 +815,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      // Settings upsert must complete before findById - findById LEFT JOINs settings to
-      // populate `email`, and parallel reads on different pool connections can observe the
-      // pre-update row under read-committed isolation, returning stale email in the response.
-      if (fields.name !== undefined || validatedEmail !== undefined) {
-        await settingsRepo.upsertForUser(idResult.value, {
-          fullName: fields.name ?? null,
-          email: validatedEmail ?? null,
-          language: null,
-        });
-      }
       const fullUser = await usersRepo.findById(idResult.value);
       if (!fullUser) {
         return replyError(request, reply, {
@@ -926,11 +935,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'authProviderId is allowed only for OIDC or SAML');
       }
 
-      const updated = await usersRepo.updateAuthMethod(
-        idResult.value,
-        methodResult.value,
-        resolvedProviderId,
-      );
+      // Changing auth method or provider invalidates any prior external_identities rows:
+      // those rows are keyed on the IdP subject that was bound *before* the switch, and
+      // would silently re-authenticate the same user if the admin ever flips back to the
+      // original provider (A → B → A). Wipe them inside the same transaction as the user
+      // update so the auth-method change either fully succeeds (clean slate) or rolls back
+      // (no orphaned writes).
+      const authStateChanged =
+        targetUser.authMethod !== methodResult.value ||
+        targetUser.authProviderId !== resolvedProviderId;
+
+      const updated = await withDbTransaction(async (tx) => {
+        const result = await usersRepo.updateAuthMethod(
+          idResult.value,
+          methodResult.value,
+          resolvedProviderId,
+          tx,
+        );
+        if (!result) return null;
+        if (authStateChanged) {
+          await externalIdentitiesRepo.deleteAllForUser(idResult.value, tx);
+        }
+        return result;
+      });
       if (!updated) {
         return replyError(request, reply, {
           statusCode: 404,

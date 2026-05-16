@@ -1,6 +1,6 @@
 {
-  "id": "f4a45563-1cdb-4751-8106-977ab890f1fd",
-  "prevId": "8eb197bf-e14c-48f5-8868-7ba5547b6d06",
+  "id": "6220d45d-ac17-423e-9e31-d1fa54f03aa6",
+  "prevId": "e822563c-0b77-47ef-9e51-659304aa58fb",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1675,7 +1675,7 @@
           "name": "is_read",
           "type": "boolean",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": false
         },
         "created_at": {
@@ -4452,6 +4452,13 @@
         },
         "code_verifier": {
           "name": "code_verifier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
+        "nonce": {
+          "name": "nonce",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

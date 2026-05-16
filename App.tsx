@@ -94,7 +94,11 @@ import { clearAuthScopedState } from './utils/authScopedState';
 import { formatDateOnlyForLocale, getLocalDateString } from './utils/date';
 import { getTechnicalDocsViewFromPathname } from './utils/docsRoutes';
 import { getErrorMessage } from './utils/errors';
-import { canonicalizeLegacyHash, resolveHashChange } from './utils/hashCanonicalization';
+import {
+  canonicalizeLegacyHash,
+  resolveHashChange,
+  stripHashPrefix,
+} from './utils/hashCanonicalization';
 import {
   clearStaleModuleScopedState,
   getStaleModulesAfterNavigation,
@@ -779,7 +783,7 @@ const AppContent: React.FC = () => {
   const [activeView, setActiveViewState] = useState<View | '404'>(() => {
     const technicalDocsView = getTechnicalDocsViewFromPathname(window.location.pathname);
     if (technicalDocsView) return technicalDocsView;
-    const rawHash = window.location.hash.replace('#/', '').replace('#', '');
+    const rawHash = stripHashPrefix(window.location.hash);
     // We can't use the memoized VALID_VIEWS here because this runs before the initial render
     // So we define the list once for initialization
     const validViews: View[] = [
@@ -956,6 +960,11 @@ const AppContent: React.FC = () => {
     },
   });
 
+  // Read by the hashchange listener (mounted once) so it sees the latest user
+  // without the effect resubscribing — events fired during teardown are lost.
+  const currentUserRef = useRef(currentUser);
+  currentUserRef.current = currentUser;
+
   const handleLogin = login;
   const handleLogout = logout;
   const handleSwitchRole = useCallback(
@@ -964,7 +973,7 @@ const AppContent: React.FC = () => {
         await switchRole(roleId);
       } catch (err) {
         console.error('Failed to switch role:', err);
-        alert('Failed to switch role: ' + (err as Error).message);
+        toastError(`Failed to switch role: ${getErrorMessage(err)}`);
       }
     },
     [switchRole],
@@ -1148,7 +1157,10 @@ const AppContent: React.FC = () => {
   // (navigation handlers, hash-change listener, Layout menu) goes through that
   // wrapper, so the four *FilterId values can never outlive a view change.
 
-  // Sync state with hash (for back/forward buttons)
+  // Sync state with hash (for back/forward buttons). Listener is mounted once
+  // and reads latest values via refs — resubscribing on every navigation would
+  // drop hashchange events that fire between removeEventListener and the next
+  // addEventListener call during rapid back/forward clicking.
   useEffect(() => {
     const handleHashChange = () => {
       if (programmaticHashRef.current === window.location.hash) {
@@ -1156,12 +1168,12 @@ const AppContent: React.FC = () => {
         return;
       }
       programmaticHashRef.current = null;
-      const rawHash = window.location.hash.replace('#/', '').replace('#', '');
+      const rawHash = stripHashPrefix(window.location.hash);
       const outcome = resolveHashChange({
         rawHash,
-        activeView,
+        activeView: activeViewRef.current,
         validViews: VALID_VIEWS,
-        hasUser: !!currentUser,
+        hasUser: !!currentUserRef.current,
       });
       if (outcome.kind === 'noop') return;
       if (outcome.kind === 'rewrite-hash') {
@@ -1175,7 +1187,7 @@ const AppContent: React.FC = () => {
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [activeView, VALID_VIEWS, currentUser, setActiveView]);
+  }, [VALID_VIEWS, setActiveView]);
 
   // Reset viewingUserId when navigating away from tracker
   useEffect(() => {
@@ -1600,6 +1612,12 @@ const AppContent: React.FC = () => {
               ],
               { shouldApply: isCurrentModuleLoad },
             );
+            // The recurring-entry generator gates on entriesLoaded but
+            // fetches from the server independently of the local entries
+            // array, so unblock it even when the initial entries fetch fails.
+            if (failedDatasets.includes('entries')) {
+              setEntriesLoaded(true);
+            }
             await loadOptionalDataset(
               module,
               'general settings',
@@ -2019,11 +2037,15 @@ const AppContent: React.FC = () => {
       return;
     }
 
+    let isCancelled = false;
+
     const loadNotifications = async () => {
       try {
         const data = await api.notifications.list();
+        if (isCancelled) return;
         setNotificationsState({ items: data.notifications, unreadCount: data.unreadCount });
       } catch (err) {
+        if (isCancelled) return;
         console.error('Failed to load notifications:', err);
       }
     };
@@ -2031,7 +2053,10 @@ const AppContent: React.FC = () => {
     // Load immediately and then poll every 60 seconds
     loadNotifications();
     const interval = setInterval(loadNotifications, 60000);
-    return () => clearInterval(interval);
+    return () => {
+      isCancelled = true;
+      clearInterval(interval);
+    };
   }, [currentUser]);
 
   // Notification handlers
@@ -2079,7 +2104,15 @@ const AppContent: React.FC = () => {
     }
   }, []);
 
-  // Determine available users for the dropdown based on permissions
+  // `users` comes from GET /api/users, which is already scoped server-side to
+  // what the caller is allowed to see (self, managed work-unit members,
+  // visible internal/external employees, or all users for admins). The server
+  // also re-validates every downstream action (view/create/update/delete of
+  // entries, assignments, tracker catalogs), so we trust the scoped list here
+  // rather than re-filtering by `currentUser.permissions` — a client-side
+  // filter cannot tell which users the caller manages and would regress
+  // managers who don't have `_all` permissions. Fall back to [currentUser]
+  // when /api/users wasn't loaded.
   const availableUsers = useMemo(() => {
     if (!currentUser) return [];
     if (users.length > 0) return users;
@@ -2234,7 +2267,7 @@ const AppContent: React.FC = () => {
       });
     } catch (err) {
       console.error('Failed to update general settings:', err);
-      alert('Failed to update settings');
+      toastError('Failed to update settings');
     }
   };
 
@@ -2244,7 +2277,7 @@ const AppContent: React.FC = () => {
       setUserSettings((prev) => ({ ...prev, ...updated }));
     } catch (err) {
       console.error('Failed to update user settings:', err);
-      alert('Failed to update settings');
+      toastError('Failed to update settings');
       throw err;
     }
   };
@@ -2778,7 +2811,7 @@ const AppContent: React.FC = () => {
                       setProjectTasks((prev) => prev.filter((t) => t.id !== id));
                     } catch (err) {
                       console.error('Failed to delete task:', err);
-                      alert('Failed to delete task');
+                      toastError('Failed to delete task');
                     }
                   }}
                   onViewOrder={(orderId) => {

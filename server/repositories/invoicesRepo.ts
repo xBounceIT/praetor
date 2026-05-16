@@ -83,8 +83,16 @@ export const generateNextId = async (year: string, exec: DbExecutor = db): Promi
   return `INV-${year}-${formatSequenceSuffix(nextSequence)}`;
 };
 
+// Memory-side cap on unfiltered listAll. There is no index on `created_at`, so Postgres
+// still sorts the full table before applying LIMIT — this bounds heap usage, not DB work.
+export const LIST_ALL_LIMIT = 1000;
+
 export const listAll = async (exec: DbExecutor = db): Promise<Invoice[]> => {
-  const rows = await exec.select().from(invoices).orderBy(desc(invoices.createdAt));
+  const rows = await exec
+    .select()
+    .from(invoices)
+    .orderBy(desc(invoices.createdAt))
+    .limit(LIST_ALL_LIMIT);
   return rows.map(mapInvoice);
 };
 

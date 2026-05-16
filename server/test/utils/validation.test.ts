@@ -175,9 +175,17 @@ describe('parseNumber', () => {
     expect(parseNumber('3.14')).toEqual({ ok: true, value: 3.14 });
   });
 
-  test('rejects NaN', () => {
-    const result = parseNumber(NaN);
-    expect(result.ok).toBe(false);
+  test('rejects non-finite number', () => {
+    expect(parseNumber(NaN).ok).toBe(false);
+    expect(parseNumber(Infinity).ok).toBe(false);
+    expect(parseNumber(-Infinity).ok).toBe(false);
+  });
+
+  test('rejects strings that parse to non-finite values', () => {
+    expect(parseNumber('Infinity').ok).toBe(false);
+    expect(parseNumber('-Infinity').ok).toBe(false);
+    expect(parseNumber('1e999').ok).toBe(false);
+    expect(parseNumber('-1e999').ok).toBe(false);
   });
 
   test('rejects empty trimmed string', () => {

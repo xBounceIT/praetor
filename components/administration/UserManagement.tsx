@@ -29,6 +29,7 @@ import type {
   UserAuthMethod,
 } from '../../types';
 import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
+import { toastError } from '../../utils/toast';
 import Checkbox from '../shared/Checkbox';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
@@ -327,7 +328,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
       closeAssignments();
     } catch (err) {
       console.error('Failed to save assignments', err);
-      alert(t('hr:workUnits.failedToSaveAssignments'));
+      toastError(t('hr:workUnits.failedToSaveAssignments'));
     }
   };
 

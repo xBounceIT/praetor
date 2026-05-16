@@ -169,6 +169,9 @@ export const reportsApi = {
       method: 'POST',
       body: JSON.stringify(data),
       signal,
+      // AI completions can exceed the default 30s budget; rely on the
+      // caller-supplied signal for cancellation instead.
+      timeoutMs: null,
     }),
 
   chatStream: async (

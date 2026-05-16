@@ -355,8 +355,22 @@
     {
       "idx": 50,
       "version": "7",
-      "when": 1778959177914,
-      "tag": "0050_add_sso_end_session",
+      "when": 1778958751892,
+      "tag": "0050_notifications_is_read_not_null",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1778960547636,
+      "tag": "0051_add_oidc_nonce_to_sso_states",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1778964101071,
+      "tag": "0052_add_sso_end_session",
       "breakpoints": true
     }
   ]

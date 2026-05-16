@@ -53,15 +53,16 @@ afterAll(() => {
 
 describe('authApi', () => {
   describe('login', () => {
-    test('POSTs to /auth/login, persists token, fetches /auth/me, returns canonical response', async () => {
+    test('POSTs to /auth/login, persists token, uses response user without /auth/me', async () => {
       programRoutes({
-        '/auth/login': { token: 'login-token', user: { id: 'ignored' } },
-        '/auth/me': { ...canonicalUser },
+        '/auth/login': { token: 'login-token', user: { ...canonicalUser } },
       });
 
       const result = await authApi.login('alice', 'secret');
 
-      // First call sends credentials.
+      // Exactly one network call — /auth/me must not be invoked when the
+      // login response already carries a canonical user (issue #616).
+      expect(fetchMock.mock.calls).toHaveLength(1);
       const loginCall = fetchMock.mock.calls[0];
       expect(String(loginCall[0])).toContain('/auth/login');
       expect((loginCall[1] as { method: string }).method).toBe('POST');
@@ -69,14 +70,24 @@ describe('authApi', () => {
         JSON.stringify({ username: 'alice', password: 'secret' }),
       );
 
-      // Second call fetches the canonical user.
-      expect(String(fetchMock.mock.calls[1][0])).toContain('/auth/me');
-
       // Token was persisted via setAuthToken (visible through getAuthToken).
       expect(getAuthToken()).toBe('login-token');
       expect(result.token).toBe('login-token');
       expect(result.user.id).toBe('u-1');
       expect(result.user.username).toBe('canonical');
+    });
+
+    test('falls back to /auth/me when the login response user fails normalization', async () => {
+      programRoutes({
+        '/auth/login': { token: 'login-token', user: { id: 'ignored' } },
+        '/auth/me': { ...canonicalUser },
+      });
+
+      const result = await authApi.login('alice', 'secret');
+
+      expect(fetchMock.mock.calls).toHaveLength(2);
+      expect(String(fetchMock.mock.calls[1][0])).toContain('/auth/me');
+      expect(result.user.id).toBe('u-1');
     });
 
     test('rejects when login response has a blank token, restores previous token', async () => {
@@ -124,6 +135,29 @@ describe('authApi', () => {
     });
   });
 
+  describe('consumeSsoTicket', () => {
+    test('POSTs to /auth/sso/consume and uses response user without /auth/me', async () => {
+      programRoutes({
+        '/auth/sso/consume': { token: 'sso-token', user: { ...canonicalUser } },
+      });
+
+      const result = await authApi.consumeSsoTicket('ticket-abc');
+
+      // No fallback /auth/me when the response user is canonical (issue #616).
+      expect(fetchMock.mock.calls).toHaveLength(1);
+      const consumeCall = fetchMock.mock.calls[0];
+      expect(String(consumeCall[0])).toContain('/auth/sso/consume');
+      expect((consumeCall[1] as { method: string }).method).toBe('POST');
+      expect((consumeCall[1] as { body: string }).body).toBe(
+        JSON.stringify({ ticket: 'ticket-abc' }),
+      );
+
+      expect(getAuthToken()).toBe('sso-token');
+      expect(result.token).toBe('sso-token');
+      expect(result.user.id).toBe('u-1');
+    });
+  });
+
   describe('me', () => {
     test('fetches /auth/me and returns the normalized canonical user', async () => {
       programRoutes({ '/auth/me': { ...canonicalUser } });
@@ -141,14 +175,15 @@ describe('authApi', () => {
   });
 
   describe('switchRole', () => {
-    test('POSTs to /auth/switch-role with the requested roleId and returns canonical response', async () => {
+    test('POSTs to /auth/switch-role and uses response user without /auth/me', async () => {
       programRoutes({
-        '/auth/switch-role': { token: 'role-token', user: {} },
-        '/auth/me': { ...canonicalUser, role: 'admin' },
+        '/auth/switch-role': { token: 'role-token', user: { ...canonicalUser, role: 'admin' } },
       });
 
       const result = await authApi.switchRole('admin');
 
+      // No fallback /auth/me when the response user is canonical (issue #616).
+      expect(fetchMock.mock.calls).toHaveLength(1);
       const switchCall = fetchMock.mock.calls[0];
       expect(String(switchCall[0])).toContain('/auth/switch-role');
       expect((switchCall[1] as { method: string }).method).toBe('POST');
@@ -156,6 +191,19 @@ describe('authApi', () => {
 
       expect(getAuthToken()).toBe('role-token');
       expect(result.token).toBe('role-token');
+      expect(result.user.role).toBe('admin');
+    });
+
+    test('falls back to /auth/me when the switch-role response user fails normalization', async () => {
+      programRoutes({
+        '/auth/switch-role': { token: 'role-token', user: {} },
+        '/auth/me': { ...canonicalUser, role: 'admin' },
+      });
+
+      const result = await authApi.switchRole('admin');
+
+      expect(fetchMock.mock.calls).toHaveLength(2);
+      expect(String(fetchMock.mock.calls[1][0])).toContain('/auth/me');
       expect(result.user.role).toBe('admin');
     });
 

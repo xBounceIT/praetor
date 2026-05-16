@@ -3,6 +3,7 @@ import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { siOpenid } from 'simple-icons';
+import { useSecretReplaceState } from '../../hooks/useSecretReplaceState';
 import { ldapApi } from '../../services/api/ldap';
 import { ssoApi } from '../../services/api/sso';
 import type {
@@ -13,6 +14,8 @@ import type {
   SsoProvider,
   SsoRoleMapping,
 } from '../../types';
+import { isStoredSecret, MASKED_SECRET } from '../../utils/maskedSecret';
+import SecretField from '../shared/SecretField';
 import SelectControl from '../shared/SelectControl';
 import Toggle from '../shared/Toggle';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
@@ -21,6 +24,8 @@ import { Switch } from '../ui/switch';
 
 const PEM_BEGIN_MARKER = '-----BEGIN CERTIFICATE-----';
 const PEM_END_MARKER = '-----END CERTIFICATE-----';
+
+type SsoSecretFieldKey = 'clientSecret' | 'privateKey' | 'metadataXml' | 'idpCert';
 
 export interface AuthSettingsProps {
   config: LdapConfig;
@@ -102,10 +107,18 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   const { t } = useTranslation('auth');
   const [activeTab, setActiveTab] = useState<'ldap' | SsoProtocol>('ldap');
   const [ldapForm, setLdapForm] = useState<LdapConfig>(config || DEFAULT_LDAP_CONFIG);
+  const bindPasswordReplace = useSecretReplaceState(
+    ldapForm.bindPassword,
+    (bindPassword) => setLdapForm((prev) => ({ ...prev, bindPassword })),
+    config,
+  );
   const [providerDrafts, setProviderDrafts] = useState<Record<SsoProtocol, Partial<SsoProvider>>>({
     oidc: buildDefaultProvider('oidc'),
     saml: buildDefaultProvider('saml'),
   });
+  const [replacingSecrets, setReplacingSecrets] = useState<
+    Record<SsoProtocol, Partial<Record<SsoSecretFieldKey, boolean>>>
+  >({ oidc: {}, saml: {} });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [testUsername, setTestUsername] = useState('');
   const [testPassword, setTestPassword] = useState('');
@@ -353,6 +366,30 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     }));
   };
 
+  // Loading or resetting a draft must also clear any per-field "replace stored secret" flags so
+  // that masked fields render as a "Secret stored — Replace" badge again.
+  const loadProviderDraft = (protocol: SsoProtocol, next: Partial<SsoProvider>) => {
+    clearProviderSaveError(protocol);
+    setProviderDrafts((current) => ({ ...current, [protocol]: { ...next, protocol } }));
+    setReplacingSecrets((current) => ({ ...current, [protocol]: {} }));
+  };
+
+  const startReplaceSecret = (protocol: SsoProtocol, field: SsoSecretFieldKey) => {
+    updateProviderDraft(protocol, { [field]: '' } as Partial<SsoProvider>);
+    setReplacingSecrets((current) => ({
+      ...current,
+      [protocol]: { ...current[protocol], [field]: true },
+    }));
+  };
+
+  const cancelReplaceSecret = (protocol: SsoProtocol, field: SsoSecretFieldKey) => {
+    updateProviderDraft(protocol, { [field]: MASKED_SECRET } as Partial<SsoProvider>);
+    setReplacingSecrets((current) => ({
+      ...current,
+      [protocol]: { ...current[protocol], [field]: false },
+    }));
+  };
+
   const updateProviderMapping = (
     protocol: SsoProtocol,
     index: number,
@@ -439,7 +476,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
         slug: draft.slug?.trim().toLowerCase(),
         name: draft.name?.trim(),
       });
-      setProviderDrafts((current) => ({ ...current, [protocol]: saved }));
+      loadProviderDraft(protocol, saved);
       showSaved();
     } catch (err) {
       setProviderSaveErrors((current) => ({
@@ -511,7 +548,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => updateProviderDraft(protocol, provider)}
+                  onClick={() => loadProviderDraft(protocol, provider)}
                   className="text-muted-foreground hover:text-primary"
                   title={t('admin.sso.editProvider', 'Edit provider')}
                 >
@@ -607,12 +644,20 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   monospace
                   onChange={(clientId) => updateProviderDraft(protocol, { clientId })}
                 />
-                <Field
+                <SecretField
                   label={t('admin.sso.clientSecret', 'Client Secret')}
-                  type="password"
                   value={draft.clientSecret || ''}
                   monospace
+                  isStored={isStoredSecret(draft.clientSecret)}
+                  isReplacing={!!replacingSecrets[protocol].clientSecret}
+                  onStartReplace={() => startReplaceSecret(protocol, 'clientSecret')}
+                  onCancelReplace={() => cancelReplaceSecret(protocol, 'clientSecret')}
                   onChange={(clientSecret) => updateProviderDraft(protocol, { clientSecret })}
+                  storedLabel={t('admin.sso.secretStored', 'Secret stored')}
+                  storedHelp={t(
+                    'admin.sso.secretStoredHelp',
+                    'Leave as-is to keep the stored secret, or click Replace to overwrite it.',
+                  )}
                 />
                 <Field
                   label={t('admin.sso.scopes', 'Scopes')}
@@ -668,20 +713,53 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 monospace
                 onChange={(spIssuer) => updateProviderDraft(protocol, { spIssuer })}
               />
-              <TextArea
+              <SecretField
+                multiline
+                monospace
                 label={t('admin.sso.metadataXml', 'Metadata XML')}
                 value={draft.metadataXml || ''}
+                isStored={isStoredSecret(draft.metadataXml)}
+                isReplacing={!!replacingSecrets[protocol].metadataXml}
+                onStartReplace={() => startReplaceSecret(protocol, 'metadataXml')}
+                onCancelReplace={() => cancelReplaceSecret(protocol, 'metadataXml')}
                 onChange={(metadataXml) => updateProviderDraft(protocol, { metadataXml })}
+                storedLabel={t('admin.sso.metadataXmlStored', 'Metadata XML stored')}
+                storedHelp={t(
+                  'admin.sso.metadataXmlStoredHelp',
+                  'Leave as-is to keep the stored metadata, or click Replace to overwrite it.',
+                )}
               />
-              <TextArea
+              <SecretField
+                multiline
+                monospace
                 label={t('admin.sso.idpCert', 'IdP Certificate')}
                 value={draft.idpCert || ''}
+                isStored={isStoredSecret(draft.idpCert)}
+                isReplacing={!!replacingSecrets[protocol].idpCert}
+                onStartReplace={() => startReplaceSecret(protocol, 'idpCert')}
+                onCancelReplace={() => cancelReplaceSecret(protocol, 'idpCert')}
                 onChange={(idpCert) => updateProviderDraft(protocol, { idpCert })}
+                storedLabel={t('admin.sso.idpCertStored', 'Certificate stored')}
+                storedHelp={t(
+                  'admin.sso.idpCertStoredHelp',
+                  'Leave as-is to keep the stored certificate, or click Replace to overwrite it.',
+                )}
               />
-              <TextArea
+              <SecretField
+                multiline
+                monospace
                 label={t('admin.sso.privateKey', 'Signing Private Key')}
                 value={draft.privateKey || ''}
+                isStored={isStoredSecret(draft.privateKey)}
+                isReplacing={!!replacingSecrets[protocol].privateKey}
+                onStartReplace={() => startReplaceSecret(protocol, 'privateKey')}
+                onCancelReplace={() => cancelReplaceSecret(protocol, 'privateKey')}
                 onChange={(privateKey) => updateProviderDraft(protocol, { privateKey })}
+                storedLabel={t('admin.sso.privateKeyStored', 'Private key stored')}
+                storedHelp={t(
+                  'admin.sso.privateKeyStoredHelp',
+                  'Leave as-is to keep the stored key, or click Replace to overwrite it.',
+                )}
               />
               <TextArea
                 label={t('admin.sso.publicCert', 'Signing Public Certificate')}
@@ -787,7 +865,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => updateProviderDraft(protocol, buildDefaultProvider(protocol))}
+            onClick={() => loadProviderDraft(protocol, buildDefaultProvider(protocol))}
             className="font-bold text-muted-foreground hover:text-foreground"
           >
             {t('admin.sso.clearForm', 'Clear')}
@@ -885,13 +963,19 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   monospace
                   onChange={(bindDn) => setLdapForm((prev) => ({ ...prev, bindDn }))}
                 />
-                <Field
+                <SecretField
+                  {...bindPasswordReplace}
                   label={t('admin.ldap.bindPasswordLabel')}
-                  type="password"
                   value={ldapForm.bindPassword}
-                  error={errors.bindCredentials}
                   monospace
                   onChange={(bindPassword) => setLdapForm((prev) => ({ ...prev, bindPassword }))}
+                  storedLabel={t('admin.ldap.bindPasswordStored', 'Bind password stored')}
+                  storedHelp={t(
+                    'admin.ldap.bindPasswordStoredHelp',
+                    'Leave as-is to keep the stored password, or click Replace to overwrite it.',
+                  )}
+                  error={errors.bindCredentials}
+                  testId="ldap-bind-password"
                 />
                 <Field
                   label={t('admin.ldap.groupSearchBase')}
