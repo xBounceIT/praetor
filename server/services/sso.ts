@@ -88,6 +88,9 @@ const assertEnabledProviderConfig = (provider: ssoProvidersRepo.SsoProvider): vo
       'SAML requires metadata URL/XML or manual entryPoint and idpCert',
     );
   }
+  if (!hasConfigValue(provider.usernameAttribute)) {
+    throw new SsoProviderValidationError('usernameAttribute is required');
+  }
 };
 
 const applyDefinedProviderPatch = (
