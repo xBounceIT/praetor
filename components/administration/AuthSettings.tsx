@@ -8,6 +8,7 @@ import { ldapApi } from '../../services/api/ldap';
 import { ssoApi } from '../../services/api/sso';
 import type {
   LdapConfig,
+  LdapRoleResolution,
   LdapTestResponse,
   Role,
   SsoProtocol,
@@ -94,6 +95,21 @@ const renderProviderIcon = (protocol: SsoProtocol, className?: string) =>
 const SLUG_PLACEHOLDER = '{slug}';
 const fillSlugTemplate = (template: string, slug: string): string =>
   template.replace(SLUG_PLACEHOLDER, encodeURIComponent(slug));
+
+// Per-state translation keys for the LDAP tester role panel (#638). Matched is the default
+// "Mapped Roles" label; preserved/default get their own label plus a help line clarifying
+// what the real login would do. `none` is unreachable here because the help row only renders
+// when `authenticated === true`.
+const LDAP_ROLE_RESOLUTION_LABEL_KEYS: Record<LdapRoleResolution, string> = {
+  matched: 'admin.ldap.test.roleIds',
+  preserved: 'admin.ldap.test.preservedRoleLabel',
+  default: 'admin.ldap.test.defaultRoleLabel',
+  none: 'admin.ldap.test.roleIds',
+};
+const LDAP_ROLE_RESOLUTION_HELP_KEYS: Partial<Record<LdapRoleResolution, string>> = {
+  preserved: 'admin.ldap.test.preservedRoleHelp',
+  default: 'admin.ldap.test.defaultRoleHelp',
+};
 
 const AuthSettings: React.FC<AuthSettingsProps> = ({
   config,
@@ -337,6 +353,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
             : t('admin.ldap.test.failureMessage', 'Authentication failed.'),
         groups: [],
         roleIds: [],
+        roleResolution: 'none',
       });
     } finally {
       setIsTestingLdap(false);
@@ -1217,10 +1234,18 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                       <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-2 text-zinc-400">
                         <span>{t('admin.ldap.test.userDn', 'User DN')}</span>
                         <span className="text-zinc-200 break-all">{testResult.userDn || '-'}</span>
-                        <span>{t('admin.ldap.test.roleIds', 'Mapped Roles')}</span>
+                        <span>{t(LDAP_ROLE_RESOLUTION_LABEL_KEYS[testResult.roleResolution])}</span>
                         <span className="text-zinc-200">
                           {testResult.roleIds.length ? testResult.roleIds.join(', ') : '-'}
                         </span>
+                        {LDAP_ROLE_RESOLUTION_HELP_KEYS[testResult.roleResolution] && (
+                          <span
+                            className="col-span-2 text-xs text-zinc-500"
+                            data-testid="ldap-test-role-resolution-help"
+                          >
+                            {t(LDAP_ROLE_RESOLUTION_HELP_KEYS[testResult.roleResolution]!)}
+                          </span>
+                        )}
                         <span>{t('admin.ldap.test.groupsFound', 'Groups Found:')}</span>
                         <span className="text-zinc-200">
                           {testResult.groups.length ? testResult.groups.join(', ') : '-'}

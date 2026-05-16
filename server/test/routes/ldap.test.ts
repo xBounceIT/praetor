@@ -6,6 +6,7 @@ import selfsigned from 'selfsigned';
 import * as realLdapRepo from '../../repositories/ldapRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import { DEFAULT_ROLE_ID } from '../../services/external-auth.ts';
 import * as realLdapService from '../../services/ldap.ts';
 import * as realAudit from '../../utils/audit.ts';
 import { MASKED_SECRET } from '../../utils/crypto.ts';
@@ -25,6 +26,7 @@ const auditSnap = { ...realAudit };
 const ldapServiceSnap = { ...(realLdapService as Record<string, unknown>) };
 
 const findAuthUserByIdMock = mock();
+const findLoginUserByUsernameMock = mock();
 const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 const ldapGetMock = mock();
@@ -44,6 +46,7 @@ beforeAll(async () => {
   mock.module('../../repositories/usersRepo.ts', () => ({
     ...usersRepoSnap,
     findAuthUserById: findAuthUserByIdMock,
+    findLoginUserByUsername: findLoginUserByUsernameMock,
   }));
   mock.module('../../repositories/rolesRepo.ts', () => ({
     ...rolesRepoSnap,
@@ -99,6 +102,7 @@ const BASE_CONFIG: realLdapRepo.LdapConfig = realLdapRepo.DEFAULT_CONFIG;
 
 const allMocks = [
   findAuthUserByIdMock,
+  findLoginUserByUsernameMock,
   userHasRoleMock,
   getRolePermissionsMock,
   ldapGetMock,
@@ -131,6 +135,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   for (const m of allMocks) m.mockReset();
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
+  findLoginUserByUsernameMock.mockResolvedValue(null);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue([
     'administration.authentication.view',
@@ -508,6 +513,21 @@ describe('PUT /api/ldap/config - tlsCaCertificate', () => {
 });
 
 describe('POST /api/ldap/test', () => {
+  const LDAP_USER = {
+    id: 'u-alice',
+    name: 'Alice',
+    username: 'alice',
+    role: 'manager',
+    avatarInitials: 'AL',
+    isDisabled: false,
+    sessionVersion: 1,
+    tokenVersion: 1,
+    passwordHash: null,
+    employeeType: 'app_user' as const,
+    authMethod: 'ldap' as const,
+    authProviderId: null,
+  };
+
   test('returns the server LDAP authentication profile for valid credentials', async () => {
     authenticateWithProfileMock.mockResolvedValue({
       authenticated: true,
@@ -531,6 +551,7 @@ describe('POST /api/ldap/test', () => {
       userDn: 'uid=alice,ou=people,dc=example,dc=com',
       groups: ['cn=admins,ou=groups,dc=example,dc=com'],
       roleIds: ['admin'],
+      roleResolution: 'matched',
     });
   });
 
@@ -550,7 +571,93 @@ describe('POST /api/ldap/test', () => {
       username: 'alice',
       groups: [],
       roleIds: [],
+      roleResolution: 'none',
     });
+  });
+
+  // #638: existing LDAP-bound users would keep their admin-assigned role on real login
+  // when no group maps to a role. Previously the tester wrongly reported DEFAULT_ROLE_ID.
+  test('reports roleResolution=preserved with the user current role when no group matched but the user exists and is LDAP-bound', async () => {
+    authenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      userDn: 'uid=alice,ou=people,dc=example,dc=com',
+      groups: ['cn=engineers,ou=groups,dc=example,dc=com'],
+      matchedRoleIds: [],
+    });
+    findLoginUserByUsernameMock.mockResolvedValue(LDAP_USER);
+
+    const response = await testLdapAuth({ username: 'alice', password: 'secret' });
+
+    expect(response.statusCode).toBe(200);
+    expect(findLoginUserByUsernameMock).toHaveBeenCalledWith('alice');
+    const body = JSON.parse(response.body);
+    expect(body.roleResolution).toBe('preserved');
+    expect(body.roleIds).toEqual(['manager']);
+  });
+
+  // #638: brand-new LDAP users still fall back to DEFAULT_ROLE_ID on real login during
+  // first-time provisioning, so the tester must report that for usernames with no local user.
+  test('reports roleResolution=default when no group matched and no local user exists', async () => {
+    authenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      userDn: 'uid=bob,ou=people,dc=example,dc=com',
+      groups: ['cn=engineers,ou=groups,dc=example,dc=com'],
+      matchedRoleIds: [],
+    });
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+
+    const response = await testLdapAuth({ username: 'bob', password: 'secret' });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.roleResolution).toBe('default');
+    expect(body.roleIds).toEqual([DEFAULT_ROLE_ID]);
+  });
+
+  // #638: a local-auth user with the same username would not even reach LDAP role assignment
+  // on real login, so the tester reports the safe default rather than preserving the local
+  // role. Treated the same as "no local user" — we do not have a meaningful "current role"
+  // to preserve from an LDAP-login perspective.
+  test('reports roleResolution=default when no group matched and the local user is not LDAP-bound', async () => {
+    authenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      userDn: 'uid=alice,ou=people,dc=example,dc=com',
+      groups: ['cn=engineers,ou=groups,dc=example,dc=com'],
+      matchedRoleIds: [],
+    });
+    findLoginUserByUsernameMock.mockResolvedValue({ ...LDAP_USER, authMethod: 'local' });
+
+    const response = await testLdapAuth({ username: 'alice', password: 'secret' });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.roleResolution).toBe('default');
+    expect(body.roleIds).toEqual([DEFAULT_ROLE_ID]);
+  });
+
+  test('reports roleResolution=none when LDAP connection fails', async () => {
+    authenticateWithProfileMock.mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+    const response = await testLdapAuth({ username: 'alice', password: 'secret' });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.authenticated).toBe(false);
+    expect(body.roleResolution).toBe('none');
+    expect(body.roleIds).toEqual([]);
+    expect(body.message).toContain('LDAP server unreachable');
+  });
+
+  test('does not look up the local user when authentication fails', async () => {
+    authenticateWithProfileMock.mockResolvedValue({
+      authenticated: false,
+      groups: [],
+      matchedRoleIds: [],
+    });
+
+    await testLdapAuth({ username: 'alice', password: 'wrong' });
+
+    expect(findLoginUserByUsernameMock).not.toHaveBeenCalled();
   });
 
   test('rejects blank tester credentials before reaching LDAP', async () => {

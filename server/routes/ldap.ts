@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as ldapRepo from '../repositories/ldapRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
+import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { DEFAULT_ROLE_ID } from '../services/external-auth.ts';
 import { getAuditCounts, logAudit } from '../utils/audit.ts';
@@ -120,6 +121,17 @@ const ldapTestBodySchema = {
   required: ['username', 'password'],
 } as const;
 
+// `roleResolution` mirrors the four branches the real login path takes when assigning roles
+// after LDAP authenticates. The tester used to claim DEFAULT_ROLE_ID for every unmatched login,
+// which lies about existing LDAP-bound users whose admin-assigned role would actually be
+// preserved (#638). The discriminator lets the UI render the truth instead.
+const LDAP_ROLE_RESOLUTIONS = ['matched', 'preserved', 'default', 'none'] as const;
+type LdapRoleResolution = (typeof LDAP_ROLE_RESOLUTIONS)[number];
+const ldapRoleResolutionSchema = {
+  type: 'string',
+  enum: LDAP_ROLE_RESOLUTIONS,
+} as const;
+
 const ldapTestResponseSchema = {
   type: 'object',
   properties: {
@@ -130,8 +142,17 @@ const ldapTestResponseSchema = {
     userDn: { type: 'string' },
     groups: { type: 'array', items: { type: 'string' } },
     roleIds: { type: 'array', items: { type: 'string' } },
+    roleResolution: ldapRoleResolutionSchema,
   },
-  required: ['success', 'authenticated', 'username', 'message', 'groups', 'roleIds'],
+  required: [
+    'success',
+    'authenticated',
+    'username',
+    'message',
+    'groups',
+    'roleIds',
+    'roleResolution',
+  ],
 } as const;
 
 const ldapSyncResponseSchema = {
@@ -403,9 +424,32 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           message: `LDAP server unreachable: ${message}`,
           groups: [],
           roleIds: [],
+          roleResolution: 'none' as const,
         };
       }
       const authenticated = result.authenticated;
+
+      // Replicate the real-login branching so the tester does not lie about which role the
+      // user would end up with (#638). The real login path only falls back to DEFAULT_ROLE_ID
+      // during first-login provisioning; existing LDAP-bound users keep their current role
+      // when no group maps to a Praetor role.
+      let roleResolution: LdapRoleResolution = 'none';
+      let roleIds: string[] = [];
+      if (authenticated) {
+        if (result.matchedRoleIds.length > 0) {
+          roleResolution = 'matched';
+          roleIds = result.matchedRoleIds;
+        } else {
+          const existingUser = await usersRepo.findLoginUserByUsername(usernameResult.value);
+          if (existingUser && existingUser.authMethod === 'ldap') {
+            roleResolution = 'preserved';
+            roleIds = [existingUser.role];
+          } else {
+            roleResolution = 'default';
+            roleIds = [DEFAULT_ROLE_ID];
+          }
+        }
+      }
 
       return {
         success: authenticated,
@@ -416,11 +460,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           : 'LDAP authentication failed. Verify the credentials and saved LDAP configuration.',
         userDn: result.userDn,
         groups: authenticated ? result.groups : [],
-        roleIds: authenticated
-          ? result.matchedRoleIds.length > 0
-            ? result.matchedRoleIds
-            : [DEFAULT_ROLE_ID]
-          : [],
+        roleIds,
+        roleResolution,
       };
     },
   );
