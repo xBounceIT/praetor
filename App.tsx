@@ -1497,9 +1497,9 @@ const AppContent: React.FC = () => {
                 !isCurrentModuleLoad() || entriesStreamTokenRef.current !== token;
               while (cursor) {
                 const pageCursor = cursor;
-                let page: Awaited<ReturnType<typeof api.entries.listPage>> | null;
+                let result: Awaited<ReturnType<typeof api.entries.listPage>> | null;
                 try {
-                  page = await retryTransient(
+                  result = await retryTransient(
                     () => api.entries.listPage({ cursor: pageCursor, limit: 500 }),
                     { isCancelled },
                   );
@@ -1512,7 +1512,9 @@ const AppContent: React.FC = () => {
                   );
                   return;
                 }
-                if (page === null) return;
+                if (result === null) return;
+                // Bind to a const so TS narrowing survives into the setState closure.
+                const page = result;
                 setEntries((prev) => mergeById(prev, page.entries));
                 cursor = page.nextCursor;
               }

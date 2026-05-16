@@ -36,6 +36,6 @@ describe('App.tsx streamRemainingEntries', () => {
   });
 
   test('bails out silently on cancellation (retryTransient returns null)', () => {
-    expect(body).toContain('if (page === null) return;');
+    expect(body).toContain('if (result === null) return;');
   });
 });
