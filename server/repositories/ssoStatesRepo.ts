@@ -58,11 +58,15 @@ export const consume = async (
   return rows[0] ? mapRow(rows[0]) : null;
 };
 
-export const get = async (state: string, exec: DbExecutor = db): Promise<SsoState | null> => {
+export const getForProvider = async (
+  state: string,
+  providerId: string,
+  exec: DbExecutor = db,
+): Promise<SsoState | null> => {
   const rows = await exec
     .select(STATE_PROJECTION)
     .from(ssoStates)
-    .where(eq(ssoStates.state, state));
+    .where(and(eq(ssoStates.state, state), eq(ssoStates.providerId, providerId)));
   return rows[0] ? mapRow(rows[0]) : null;
 };
 

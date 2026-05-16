@@ -17,6 +17,8 @@ const findByIdMock = mock();
 const statesConsumeMock = mock();
 const samlValidatePostMock = mock();
 const resolveExternalIdentityMock = mock();
+const statesGetForProviderMock = mock();
+const statesInsertMock = mock();
 
 class StubSaml {
   validatePostResponseAsync(formBody: Record<string, string>) {
@@ -48,6 +50,8 @@ beforeAll(async () => {
   mock.module('../../repositories/ssoStatesRepo.ts', () => ({
     ...ssoStatesRepoSnap,
     consume: statesConsumeMock,
+    getForProvider: statesGetForProviderMock,
+    insert: statesInsertMock,
   }));
 
   sso = await import('../../services/sso.ts');
@@ -69,6 +73,8 @@ beforeEach(() => {
     statesConsumeMock,
     samlValidatePostMock,
     resolveExternalIdentityMock,
+    statesGetForProviderMock,
+    statesInsertMock,
   ])
     m.mockReset();
 });
@@ -472,6 +478,46 @@ describe('completeSamlLogin issuer resolution', () => {
     expect(resolveExternalIdentityMock.mock.calls[0][0]).toMatchObject({
       issuer: 'https://idp.example.com/from-response',
     });
+  });
+});
+
+describe('DbSamlCacheProvider provider scoping', () => {
+  const fakeRow = {
+    state: 'in-response-to-1',
+    providerId: 'sso-A',
+    protocol: 'saml' as const,
+    codeVerifier: '',
+    relayState: 'relay-A',
+    expiresAt: new Date(Date.now() + 60_000),
+  };
+
+  beforeEach(() => {
+    statesGetForProviderMock.mockImplementation(async (state: string, providerId: string) =>
+      state === fakeRow.state && providerId === fakeRow.providerId ? fakeRow : null,
+    );
+  });
+
+  test("returns the value when queried by the same provider's cache", async () => {
+    const cache = new sso.DbSamlCacheProvider('sso-A');
+    expect(await cache.getAsync('in-response-to-1')).toBe('relay-A');
+    expect(statesGetForProviderMock).toHaveBeenCalledWith('in-response-to-1', 'sso-A');
+  });
+
+  test("returns null when a different provider's cache instance queries the same key", async () => {
+    const cache = new sso.DbSamlCacheProvider('sso-B');
+    expect(await cache.getAsync('in-response-to-1')).toBeNull();
+    expect(statesGetForProviderMock).toHaveBeenCalledWith('in-response-to-1', 'sso-B');
+  });
+
+  test('saveAsync records the cache provider providerId', async () => {
+    statesInsertMock.mockResolvedValue(undefined);
+    const cache = new sso.DbSamlCacheProvider('sso-A');
+    await cache.saveAsync('k', 'v');
+    const inserted = statesInsertMock.mock.calls[0][0];
+    expect(inserted.state).toBe('k');
+    expect(inserted.providerId).toBe('sso-A');
+    expect(inserted.protocol).toBe('saml');
+    expect(inserted.relayState).toBe('v');
   });
 });
 
