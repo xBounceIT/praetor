@@ -427,6 +427,9 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
 
     expect(res.statusCode).toBe(404);
     expect(cqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
+    expect(cqFindLinkedOfferIdMock).not.toHaveBeenCalled();
+    expect(cqFindNonDraftLinkedSaleMock).not.toHaveBeenCalled();
+    expect(qvFindByIdMock).not.toHaveBeenCalled();
   });
 
   test('409 when quote is confirmed', async () => {
@@ -445,6 +448,9 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
 
     expect(res.statusCode).toBe(409);
     expect(cqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
+    expect(cqFindLinkedOfferIdMock).not.toHaveBeenCalled();
+    expect(cqFindNonDraftLinkedSaleMock).not.toHaveBeenCalled();
+    expect(qvFindByIdMock).not.toHaveBeenCalled();
   });
 
   test('409 when non-draft linked sale exists', async () => {

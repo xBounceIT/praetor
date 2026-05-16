@@ -415,6 +415,8 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
 
     expect(res.statusCode).toBe(404);
     expect(soRestoreSnapshotOrderMock).not.toHaveBeenCalled();
+    expect(soFindLinkedInvoiceIdMock).not.toHaveBeenCalled();
+    expect(sovFindByIdMock).not.toHaveBeenCalled();
   });
 
   test('409 when order is non-draft', async () => {
@@ -435,6 +437,8 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
 
     expect(res.statusCode).toBe(409);
     expect(soRestoreSnapshotOrderMock).not.toHaveBeenCalled();
+    expect(soFindLinkedInvoiceIdMock).not.toHaveBeenCalled();
+    expect(sovFindByIdMock).not.toHaveBeenCalled();
   });
 
   test('409 when snapshot supplier no longer exists', async () => {

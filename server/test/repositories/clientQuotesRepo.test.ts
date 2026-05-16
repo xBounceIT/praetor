@@ -389,11 +389,8 @@ describe('findItemsForQuote', () => {
 
 describe('findFullForSnapshot', () => {
   test('returns quote and items when quote exists', async () => {
-    // Promise.all dispatches `findItemsForQuote(id)` first (its async body runs to its first
-    // await before the sibling thenable is consumed), so the items query is what dequeues the
-    // first response.
-    exec.enqueue({ rows: [itemRow()] });
     exec.enqueue({ rows: [quoteRow()] });
+    exec.enqueue({ rows: [itemRow()] });
     const result = await clientQuotesRepo.findFullForSnapshot('cq-1', testDb);
     expect(result).not.toBeNull();
     expect(result?.quote.id).toBe('cq-1');

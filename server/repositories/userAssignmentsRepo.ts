@@ -256,51 +256,46 @@ export const syncTopManagerAssignmentsForUser = async (
   userId: string,
   exec: DbExecutor = db,
 ): Promise<void> => {
-  const isTopManager = await userHasTopManagerRole(userId, exec);
-
-  // Each branch mutates multiple tables in parallel; the wrap rolls back the others when
-  // one Promise.all leg fails. (`runAtomically`'s default doc covers the simpler
-  // DELETE-then-INSERT case, not the multi-table parallel case.)
+  // Keep the role read and assignment fan-out in one atomic scope for standalone callers;
+  // callers that already supplied a transaction reuse it via runAtomically.
   await runAtomically(exec, async (tx) => {
+    const isTopManager = await userHasTopManagerRole(userId, tx);
+
+    // These branches often run inside an existing transaction. Keep the statements
+    // serialized because Drizzle's transaction executor is backed by a single pg client.
     if (!isTopManager) {
-      await Promise.all([
-        tx
-          .delete(userClients)
-          .where(
-            and(
-              eq(userClients.userId, userId),
-              eq(userClients.assignmentSource, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE),
-            ),
+      await tx
+        .delete(userClients)
+        .where(
+          and(
+            eq(userClients.userId, userId),
+            eq(userClients.assignmentSource, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE),
           ),
-        tx
-          .delete(userProjects)
-          .where(
-            and(
-              eq(userProjects.userId, userId),
-              eq(userProjects.assignmentSource, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE),
-            ),
+        );
+      await tx
+        .delete(userProjects)
+        .where(
+          and(
+            eq(userProjects.userId, userId),
+            eq(userProjects.assignmentSource, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE),
           ),
-        tx
-          .delete(userTasks)
-          .where(
-            and(
-              eq(userTasks.userId, userId),
-              eq(userTasks.assignmentSource, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE),
-            ),
+        );
+      await tx
+        .delete(userTasks)
+        .where(
+          and(
+            eq(userTasks.userId, userId),
+            eq(userTasks.assignmentSource, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE),
           ),
-      ]);
-      // Cascade rebuild reads from `user_projects`, which the parallel deletes above just
-      // modified - sequenced after the `await Promise.all(...)` so it sees the final state,
-      // never an interleaved view.
+        );
+      // Cascade rebuild reads from `user_projects`, which the deletes above just modified.
       await applyProjectCascadeToClients(userId, tx);
       return;
     }
 
-    await Promise.all([
-      assignAllToUserAsTopManager(ASSIGNMENT_SPECS.clients, userId, tx),
-      assignAllToUserAsTopManager(ASSIGNMENT_SPECS.projects, userId, tx),
-      assignAllToUserAsTopManager(ASSIGNMENT_SPECS.tasks, userId, tx),
-    ]);
+    await assignAllToUserAsTopManager(ASSIGNMENT_SPECS.clients, userId, tx);
+    await assignAllToUserAsTopManager(ASSIGNMENT_SPECS.projects, userId, tx);
+    await assignAllToUserAsTopManager(ASSIGNMENT_SPECS.tasks, userId, tx);
   });
 };
 

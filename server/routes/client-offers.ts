@@ -1210,11 +1210,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // and the restore write.
       const result: RestoreOutcome = await withDbTransaction(async (tx) => {
         const current = await clientOffersRepo.lockExistingById(idResult.value, tx);
-        const [linkedSaleId, version] = await Promise.all([
-          clientOffersRepo.findLinkedSaleId(idResult.value, tx),
-          offerVersionsRepo.findById(idResult.value, versionIdResult.value, tx),
-        ]);
-
         if (!current) {
           return {
             ok: false,
@@ -1233,6 +1228,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             extraBody: { currentStatus: current.status },
           };
         }
+
+        const linkedSaleId = await clientOffersRepo.findLinkedSaleId(idResult.value, tx);
         if (linkedSaleId) {
           return {
             ok: false,
@@ -1242,6 +1239,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             secondaryLabel: 'sale_order_exists',
           };
         }
+
+        const version = await offerVersionsRepo.findById(idResult.value, versionIdResult.value, tx);
         if (!version) {
           return {
             ok: false,

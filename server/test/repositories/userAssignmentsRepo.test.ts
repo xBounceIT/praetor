@@ -149,7 +149,7 @@ describe('syncTopManagerAssignmentsForUser', () => {
     // Role check returns no row → not a top manager → 3 deletes + cascade rebuild.
     const enqueueNonTopManager = () => {
       exec.enqueue({ rows: [] }); // userHasTopManagerRole → false
-      exec.enqueueEmptyN(4); // 3 parallel deletes + 1 cascade rebuild
+      exec.enqueueEmptyN(4); // 3 deletes + 1 cascade rebuild
     };
 
     test('runs the role check first', async () => {
@@ -161,7 +161,6 @@ describe('syncTopManagerAssignmentsForUser', () => {
     test('deletes top_manager_auto rows from user_clients/user_projects/user_tasks', async () => {
       enqueueNonTopManager();
       await syncTopManagerAssignmentsForUser('u-1', testDb);
-      // Promise.all order isn't deterministic; assert each delete by table name.
       for (const table of ['user_clients', 'user_projects', 'user_tasks']) {
         const call = findCall((s) => s.toLowerCase().includes(`delete from "${table}"`));
         expect(call).toBeDefined();
@@ -198,7 +197,7 @@ describe('syncTopManagerAssignmentsForUser', () => {
     // Role check returns a row → top manager → 3 INSERTs (no deletes).
     const enqueueTopManager = () => {
       exec.enqueue({ rows: [[1]] }); // userHasTopManagerRole → true
-      exec.enqueueEmptyN(3); // 3 parallel INSERTs
+      exec.enqueueEmptyN(3); // 3 INSERTs
     };
 
     test('runs the role check first', async () => {

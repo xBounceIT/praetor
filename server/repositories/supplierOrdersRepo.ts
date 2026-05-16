@@ -88,11 +88,13 @@ export const findFullForSnapshot = async (
   id: string,
   exec: DbExecutor = db,
 ): Promise<{ order: SupplierOrder; items: SupplierOrderItem[] } | null> => {
-  const [orderRows, items] = await Promise.all([
-    exec.select().from(supplierSales).where(eq(supplierSales.id, id)).limit(1),
-    findItemsForOrder(id, exec),
-  ]);
+  const orderRows = await exec
+    .select()
+    .from(supplierSales)
+    .where(eq(supplierSales.id, id))
+    .limit(1);
   if (orderRows.length === 0) return null;
+  const items = await findItemsForOrder(id, exec);
   return { order: mapOrder(orderRows[0]), items };
 };
 

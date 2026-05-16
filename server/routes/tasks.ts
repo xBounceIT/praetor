@@ -314,24 +314,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             tx,
           );
 
-          const assignments: Promise<void>[] = [
-            userAssignmentsRepo.assignProjectToUser(
-              request.user.id,
-              projectIdResult.value,
-              undefined,
-              tx,
-            ),
-            userAssignmentsRepo.assignTaskToUser(request.user.id, id, undefined, tx),
-            userAssignmentsRepo.assignProjectToTopManagers(projectIdResult.value, tx),
-            userAssignmentsRepo.assignTaskToTopManagers(id, tx),
-          ];
+          await userAssignmentsRepo.assignProjectToUser(
+            request.user.id,
+            projectIdResult.value,
+            undefined,
+            tx,
+          );
+          await userAssignmentsRepo.assignTaskToUser(request.user.id, id, undefined, tx);
+          await userAssignmentsRepo.assignProjectToTopManagers(projectIdResult.value, tx);
+          await userAssignmentsRepo.assignTaskToTopManagers(id, tx);
           if (clientId) {
-            assignments.push(
-              userAssignmentsRepo.assignClientToUser(request.user.id, clientId, undefined, tx),
-              userAssignmentsRepo.assignClientToTopManagers(clientId, tx),
-            );
+            await userAssignmentsRepo.assignClientToUser(request.user.id, clientId, undefined, tx);
+            await userAssignmentsRepo.assignClientToTopManagers(clientId, tx);
           }
-          await Promise.all(assignments);
 
           return task;
         });

@@ -220,11 +220,13 @@ export const findFullForSnapshot = async (
   id: string,
   exec: DbExecutor = db,
 ): Promise<{ offer: ClientOffer; items: ClientOfferItem[] } | null> => {
-  const [offerRows, items] = await Promise.all([
-    exec.select().from(customerOffers).where(eq(customerOffers.id, id)).limit(1),
-    findItemsForOffer(id, exec),
-  ]);
+  const offerRows = await exec
+    .select()
+    .from(customerOffers)
+    .where(eq(customerOffers.id, id))
+    .limit(1);
   if (offerRows.length === 0) return null;
+  const items = await findItemsForOffer(id, exec);
   return { offer: mapOffer(offerRows[0]), items };
 };
 
