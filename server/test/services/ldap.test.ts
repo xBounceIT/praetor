@@ -797,6 +797,15 @@ describe('syncUsers', () => {
     expect(updateNameByUsernameMock).toHaveBeenCalledWith('jdoe', 'John Doe Updated');
     expect(createUserMock).not.toHaveBeenCalled();
     expect(result).toEqual({ synced: 1, created: 0 });
+
+    // OpenLDAP's caseExactIA5Match memberUid attribute requires the directory-spelling
+    // value, so we pass both the lowercased canonical and the raw uid to the group filter.
+    const groupSearches = (lastClientStats?.searchCalls ?? []).filter(
+      (c) => c.base === 'ou=groups,dc=test,dc=com',
+    );
+    const groupFilterTexts = groupSearches.map((c) => String(c.options.filter));
+    expect(groupFilterTexts.some((f) => f.includes('member=jdoe'))).toBe(true);
+    expect(groupFilterTexts.some((f) => f.includes('member=JDoe'))).toBe(true);
   });
 
   test('flattens single-element arrays for uid and name attributes', async () => {

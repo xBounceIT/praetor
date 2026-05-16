@@ -706,7 +706,13 @@ class LDAPService {
             );
             continue;
           }
-          const groups = await this.findUserGroups(ldapClient, entry.objectName, username);
+          // Pass both the normalized and the raw directory value so a groupFilter that
+          // does case-sensitive substitution (e.g. OpenLDAP's caseExactIA5Match on memberUid)
+          // still matches; findUserGroups dedups identical values.
+          const groups = await this.findUserGroups(ldapClient, entry.objectName, [
+            username,
+            candidate,
+          ]);
           // Update by the row's stored username so a pre-migration mixed-case row still
           // matches via LOWER() instead of a raw-bytes WHERE that wouldn't.
           await usersRepo.updateNameByUsername(existing.username, name);
@@ -724,7 +730,10 @@ class LDAPService {
           }
           syncedCount++;
         } else if (config.autoProvisionAll) {
-          const groups = await this.findUserGroups(ldapClient, entry.objectName, username);
+          const groups = await this.findUserGroups(ldapClient, entry.objectName, [
+            username,
+            candidate,
+          ]);
           const roleIds = mapExternalGroupsToRoleIds(groups, roleMappings);
           const id = generatePrefixedId('u');
           await usersRepo.createUser({
