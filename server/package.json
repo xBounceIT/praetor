@@ -14,6 +14,7 @@
     "db:generate:custom": "drizzle-kit generate --custom",
     "db:migrate": "bun run scripts/run-migrations.ts",
     "db:ready": "bun run scripts/check-db-ready.ts",
+    "db:audit:external-identities": "bun run scripts/audit-external-identities-duplicates.ts",
     "db:check": "drizzle-kit check",
     "db:studio": "drizzle-kit studio"
   },
