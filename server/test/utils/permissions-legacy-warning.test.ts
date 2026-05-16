@@ -64,10 +64,12 @@ describe('normalizePermission deprecation warning', () => {
   });
 
   test('does not warn (or record) when the rewrite produces an unknown permission', () => {
-    expect(normalizePermission('configuration.does.not_exist')).toBe(
-      'administration.does.not_exist',
+    expect(normalizePermission('configuration.does_not_exist.view')).toBe(
+      'administration.does_not_exist.view',
     );
-    expect(normalizePermission('suppliers.quotes.banana')).toBe('sales.supplier_quotes.banana');
+    expect(normalizePermission('suppliers.quotes.banana.view')).toBe(
+      'sales.supplier_quotes.banana.view',
+    );
 
     expect(warnMock).not.toHaveBeenCalled();
   });
