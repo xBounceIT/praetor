@@ -47,6 +47,10 @@ export const ssoProviders = pgTable(
     groupsAttribute: varchar('groups_attribute', { length: 255 }).default('groups'),
     roleMappings: jsonb('role_mappings').$type<StoredSsoRoleMapping[]>().default(sql`'[]'::jsonb`),
 
+    // OIDC RP-Initiated Logout opt-in. Off by default because some IdPs have hostile
+    // end-session UX (forced confirmation pages, broken post-logout redirects).
+    endSessionEnabled: boolean('end_session_enabled').default(false),
+
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
     updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
   },

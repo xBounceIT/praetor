@@ -125,8 +125,17 @@ export function useAuth(opts: UseAuthOptions = {}) {
   );
 
   const logout = useCallback((reason?: 'inactivity') => {
-    // Best-effort: clear local state regardless of server reachability.
-    api.auth.logout().catch(() => {});
+    // Local state clears immediately so the user is logged out of Praetor regardless of
+    // server reachability. If the server returns an IdP end-session URL we additionally
+    // hand the browser to it, so the IdP's session cookie dies alongside our JWT.
+    api.auth
+      .logout()
+      .then((res) => {
+        if (res?.endSessionUrl) {
+          window.location.assign(res.endSessionUrl);
+        }
+      })
+      .catch(() => {});
     setAuthToken(null);
     setCurrentUser(null);
     const finalReason = reason ?? null;
