@@ -716,9 +716,15 @@ const AppContent: React.FC = () => {
   const [roles, setRoles] = useState<Role[]>([]);
   const [hasLoadedRoles, setHasLoadedRoles] = useState(false);
 
-  // Notifications state
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  // Items and unread count share one state so handlers can derive both from
+  // `prev` in a single updater — splitting them races the 60s polling refresh
+  // (issue #513).
+  const [notificationsState, setNotificationsState] = useState<{
+    items: Notification[];
+    unreadCount: number;
+  }>({ items: [], unreadCount: 0 });
+  const notifications = notificationsState.items;
+  const unreadNotificationCount = notificationsState.unreadCount;
 
   const [viewingUserId, setViewingUserId] = useState<string>('');
   const [viewingUserAssignmentState, setViewingUserAssignmentState] =
@@ -862,7 +868,6 @@ const AppContent: React.FC = () => {
   const clientOfferFilterIdRef = useRef(clientOfferFilterId);
   const supplierQuoteFilterIdRef = useRef(supplierQuoteFilterId);
   const projectsRef = useRef(projects);
-  const notificationsRef = useRef(notifications);
   // Sync in render rather than a passive effect: an in-flight promise can
   // resume between commit and useEffect (microtask vs effect-task), reading
   // a stale ref. React allows writing to refs during render as long as the
@@ -872,7 +877,6 @@ const AppContent: React.FC = () => {
   clientOfferFilterIdRef.current = clientOfferFilterId;
   supplierQuoteFilterIdRef.current = supplierQuoteFilterId;
   projectsRef.current = projects;
-  notificationsRef.current = notifications;
 
   const clearAuthScopedAppState = useCallback(() => {
     // Bump cancellation tokens before any setter call so in-flight async
@@ -1945,16 +1949,14 @@ const AppContent: React.FC = () => {
       !currentUser ||
       !hasPermission(currentUser.permissions, buildPermission('notifications', 'view'))
     ) {
-      setNotifications([]);
-      setUnreadNotificationCount(0);
+      setNotificationsState({ items: [], unreadCount: 0 });
       return;
     }
 
     const loadNotifications = async () => {
       try {
         const data = await api.notifications.list();
-        setNotifications(data.notifications);
-        setUnreadNotificationCount(data.unreadCount);
+        setNotificationsState({ items: data.notifications, unreadCount: data.unreadCount });
       } catch (err) {
         console.error('Failed to load notifications:', err);
       }
@@ -1970,8 +1972,14 @@ const AppContent: React.FC = () => {
   const handleMarkNotificationAsRead = useCallback(async (id: string) => {
     try {
       await api.notifications.markAsRead(id);
-      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
-      setUnreadNotificationCount((prev) => Math.max(0, prev - 1));
+      setNotificationsState((prev) => {
+        const target = prev.items.find((n) => n.id === id);
+        const wasUnread = !!target && !target.isRead;
+        return {
+          items: prev.items.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
+          unreadCount: wasUnread ? Math.max(0, prev.unreadCount - 1) : prev.unreadCount,
+        };
+      });
     } catch (err) {
       console.error('Failed to mark notification as read:', err);
     }
@@ -1980,8 +1988,10 @@ const AppContent: React.FC = () => {
   const handleMarkAllNotificationsAsRead = useCallback(async () => {
     try {
       await api.notifications.markAllAsRead();
-      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-      setUnreadNotificationCount(0);
+      setNotificationsState((prev) => ({
+        items: prev.items.map((n) => ({ ...n, isRead: true })),
+        unreadCount: 0,
+      }));
     } catch (err) {
       console.error('Failed to mark all notifications as read:', err);
     }
@@ -1990,17 +2000,14 @@ const AppContent: React.FC = () => {
   const handleDeleteNotification = useCallback(async (id: string) => {
     try {
       await api.notifications.delete(id);
-      // Look up wasUnread BEFORE the state update so the setNotifications
-      // updater stays pure. StrictMode invokes updaters twice to surface
-      // impurity; nesting `setUnreadNotificationCount` inside the updater
-      // would queue the decrement twice and skew the unread count by 2.
-      // `notificationsRef` is synced in render with the latest `notifications`
-      // so this read can't lag a previous state change.
-      const target = notificationsRef.current.find((n) => n.id === id);
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
-      if (target && !target.isRead) {
-        setUnreadNotificationCount((c) => Math.max(0, c - 1));
-      }
+      setNotificationsState((prev) => {
+        const target = prev.items.find((n) => n.id === id);
+        const wasUnread = !!target && !target.isRead;
+        return {
+          items: prev.items.filter((n) => n.id !== id),
+          unreadCount: wasUnread ? Math.max(0, prev.unreadCount - 1) : prev.unreadCount,
+        };
+      });
     } catch (err) {
       console.error('Failed to delete notification:', err);
     }
