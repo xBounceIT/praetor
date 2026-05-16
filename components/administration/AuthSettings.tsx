@@ -97,18 +97,20 @@ const fillSlugTemplate = (template: string, slug: string): string =>
   template.replace(SLUG_PLACEHOLDER, encodeURIComponent(slug));
 
 // Per-state translation keys for the LDAP tester role panel (#638). Matched is the default
-// "Mapped Roles" label; preserved/default get their own label plus a help line clarifying
-// what the real login would do. `none` is unreachable here because the help row only renders
-// when `authenticated === true`.
+// "Mapped Roles" label; preserved/default/rejected each get their own label plus a help line
+// clarifying what real login would do. `none` is unreachable here because the help row only
+// renders when `authenticated === true`.
 const LDAP_ROLE_RESOLUTION_LABEL_KEYS: Record<LdapRoleResolution, string> = {
   matched: 'admin.ldap.test.roleIds',
   preserved: 'admin.ldap.test.preservedRoleLabel',
   default: 'admin.ldap.test.defaultRoleLabel',
+  rejected: 'admin.ldap.test.rejectedRoleLabel',
   none: 'admin.ldap.test.roleIds',
 };
 const LDAP_ROLE_RESOLUTION_HELP_KEYS: Partial<Record<LdapRoleResolution, string>> = {
   preserved: 'admin.ldap.test.preservedRoleHelp',
   default: 'admin.ldap.test.defaultRoleHelp',
+  rejected: 'admin.ldap.test.rejectedRoleHelp',
 };
 
 const AuthSettings: React.FC<AuthSettingsProps> = ({

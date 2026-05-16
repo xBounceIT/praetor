@@ -656,6 +656,47 @@ describe('POST /api/ldap/test', () => {
     expect(body.roleIds).toEqual([DEFAULT_ROLE_ID]);
   });
 
+  // #638 review: real login rejects disabled or non-`app_user` rows at the eligibility guard
+  // (auth.ts:134) before any role assignment runs, so reporting `preserved` for them would
+  // be a lie — admin would expect the user to log in and keep their role, but production
+  // would 401 them.
+  test('reports roleResolution=rejected when the existing LDAP user is disabled', async () => {
+    authenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      userDn: 'uid=alice,ou=people,dc=example,dc=com',
+      groups: ['cn=engineers,ou=groups,dc=example,dc=com'],
+      matchedRoleIds: [],
+    });
+    findLoginUserByUsernameMock.mockResolvedValue({ ...LDAP_USER, isDisabled: true });
+
+    const response = await testLdapAuth({ username: 'alice', password: 'secret' });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.roleResolution).toBe('rejected');
+    expect(body.roleIds).toEqual([]);
+  });
+
+  test('reports roleResolution=rejected when the existing user is not an app_user', async () => {
+    authenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      userDn: 'uid=alice,ou=people,dc=example,dc=com',
+      groups: ['cn=engineers,ou=groups,dc=example,dc=com'],
+      matchedRoleIds: [],
+    });
+    findLoginUserByUsernameMock.mockResolvedValue({
+      ...LDAP_USER,
+      employeeType: 'internal' as const,
+    });
+
+    const response = await testLdapAuth({ username: 'alice', password: 'secret' });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.roleResolution).toBe('rejected');
+    expect(body.roleIds).toEqual([]);
+  });
+
   // #638: a local-auth user with the same username would not even reach LDAP role assignment
   // on real login, so the tester reports the safe default rather than preserving the local
   // role. Treated the same as "no local user" — we do not have a meaningful "current role"

@@ -121,11 +121,14 @@ const ldapTestBodySchema = {
   required: ['username', 'password'],
 } as const;
 
-// `roleResolution` mirrors the four branches the real login path takes when assigning roles
-// after LDAP authenticates. The tester used to claim DEFAULT_ROLE_ID for every unmatched login,
-// which lies about existing LDAP-bound users whose admin-assigned role would actually be
-// preserved (#638). The discriminator lets the UI render the truth instead.
-const LDAP_ROLE_RESOLUTIONS = ['matched', 'preserved', 'default', 'none'] as const;
+// `roleResolution` mirrors the branches the real login path takes when assigning roles
+// after LDAP authenticates. The tester used to claim DEFAULT_ROLE_ID for every unmatched
+// login, which lies about existing LDAP-bound users whose admin-assigned role would actually
+// be preserved (#638). The discriminator lets the UI render the truth instead. `rejected`
+// captures disabled / non-`app_user` rows that the real-login eligibility guard at
+// `auth.ts` (`user.isDisabled || user.employeeType !== 'app_user'`) would reject with 401
+// before any role assignment runs — so reporting "Current Role" for them would be a lie too.
+const LDAP_ROLE_RESOLUTIONS = ['matched', 'preserved', 'default', 'rejected', 'none'] as const;
 type LdapRoleResolution = (typeof LDAP_ROLE_RESOLUTIONS)[number];
 const ldapRoleResolutionSchema = {
   type: 'string',
@@ -455,7 +458,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ) {
             existingUser = await usersRepo.findLoginUserByUsername(result.canonicalUsername);
           }
-          if (existingUser && existingUser.authMethod === 'ldap') {
+          if (
+            existingUser &&
+            (existingUser.isDisabled || existingUser.employeeType !== 'app_user')
+          ) {
+            // Real login rejects this row at the eligibility guard (auth.ts:134) before any
+            // role assignment, so we cannot honestly report `preserved` or `default` here.
+            roleResolution = 'rejected';
+            roleIds = [];
+          } else if (existingUser && existingUser.authMethod === 'ldap') {
             roleResolution = 'preserved';
             roleIds = [existingUser.role];
           } else {

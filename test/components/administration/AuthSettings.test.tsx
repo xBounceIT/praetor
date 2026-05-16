@@ -225,6 +225,17 @@ describe('<AuthSettings />', () => {
         'admin.ldap.test.defaultRoleHelp',
       );
     });
+
+    // Surface the production-rejection case so the admin does not mistake it for `preserved`.
+    test('renders the Login Rejected label and rejected hint for disabled or non-app_user rows', async () => {
+      await runTest({ roleResolution: 'rejected', roleIds: [] });
+      await waitFor(() => {
+        expect(screen.getByText('admin.ldap.test.rejectedRoleLabel')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('ldap-test-role-resolution-help')).toHaveTextContent(
+        'admin.ldap.test.rejectedRoleHelp',
+      );
+    });
   });
 
   test('shows the server error instead of the saved notification when LDAP save fails', async () => {

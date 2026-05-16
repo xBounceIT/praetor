@@ -275,8 +275,10 @@ export interface LdapConfig {
 
 // Discriminates which branch of the LDAP-login role-assignment logic would fire for the
 // tester input, so the UI can stop misreporting DEFAULT_ROLE_ID for existing users whose
-// admin-assigned role would actually be preserved on real login (#638).
-export type LdapRoleResolution = 'matched' | 'preserved' | 'default' | 'none';
+// admin-assigned role would actually be preserved on real login (#638). `rejected` covers
+// disabled / non-`app_user` rows that real login would reject at the eligibility guard
+// before any role assignment runs.
+export type LdapRoleResolution = 'matched' | 'preserved' | 'default' | 'rejected' | 'none';
 
 export interface LdapTestResponse {
   success: boolean;
