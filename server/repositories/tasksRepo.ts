@@ -329,6 +329,10 @@ export const findIdByProjectAndName = async (
   return rows[0]?.id ?? null;
 };
 
+// When `userId` is undefined this aggregates ALL time entries for the given projects with
+// no user filter — it is a deliberate "show everything" mode, not the absence of a filter.
+// Callers must authorize that broader scope before invoking. Do not pass `undefined` simply
+// because no user is at hand.
 export const sumHoursByProjects = async (
   projectIds: string[],
   userId: string | undefined,
