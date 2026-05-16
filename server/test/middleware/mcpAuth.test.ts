@@ -93,6 +93,7 @@ beforeEach(() => {
     scope: 'full',
     createdAt: new Date(),
     lastUsedAt: null,
+    tokenVersionAtIssue: 1,
   });
   findAuthUserByIdMock.mockResolvedValue({
     id: 'u1',
@@ -101,6 +102,8 @@ beforeEach(() => {
     role: 'manager',
     avatarInitials: 'AL',
     isDisabled: false,
+    sessionVersion: 1,
+    tokenVersion: 1,
   });
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(['timesheets.tracker.view']);
@@ -139,6 +142,8 @@ describe('authenticateMcpToken', () => {
       role: 'manager',
       avatarInitials: 'AL',
       isDisabled: true,
+      sessionVersion: 1,
+      tokenVersion: 1,
     });
     const request = makeRequest('praetor_mcp_token');
     const reply = makeReply();
@@ -146,6 +151,39 @@ describe('authenticateMcpToken', () => {
     await authenticateMcpToken(request, reply);
 
     expect(reply.statusCode).toBe(403);
+  });
+
+  test('403 when token tokenVersionAtIssue is behind users.token_version', async () => {
+    findActiveByRawTokenMock.mockResolvedValue({
+      id: 'mcp-token-1',
+      userId: 'u1',
+      name: 'Agent',
+      scope: 'full',
+      createdAt: new Date(),
+      lastUsedAt: null,
+      tokenVersionAtIssue: 3,
+    });
+    findAuthUserByIdMock.mockResolvedValue({
+      id: 'u1',
+      name: 'Alice',
+      username: 'alice',
+      role: 'manager',
+      avatarInitials: 'AL',
+      isDisabled: false,
+      sessionVersion: 1,
+      tokenVersion: 7,
+    });
+    const request = makeRequest('praetor_mcp_token');
+    const reply = makeReply();
+
+    await authenticateMcpToken(request, reply);
+
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body).toEqual({
+      error: 'Invalid or revoked MCP token',
+      errorCode: 'token_revoked',
+    });
+    expect(touchLastUsedMock).not.toHaveBeenCalled();
   });
 
   test('populates request user and MCP raw auth on success', async () => {
@@ -172,6 +210,7 @@ describe('authenticateMcpToken', () => {
     expect(getRolePermissionsMock).toHaveBeenCalledWith('manager');
     expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'manager', {
       requireEnabledUser: true,
+      expectedTokenVersion: 1,
     });
   });
 
@@ -265,6 +304,7 @@ describe('authenticateMcpToken', () => {
       scope: 'full',
       createdAt: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
       lastUsedAt: null,
+      tokenVersionAtIssue: 1,
     });
     const request = makeRequest('praetor_mcp_token');
     const reply = makeReply();
@@ -285,6 +325,7 @@ describe('authenticateMcpToken', () => {
       scope: 'read_only',
       createdAt: new Date(),
       lastUsedAt: null,
+      tokenVersionAtIssue: 1,
     });
     getRolePermissionsMock.mockResolvedValue([
       'timesheets.tracker.view',
@@ -317,6 +358,7 @@ describe('authenticateMcpToken', () => {
       scope: 'full',
       createdAt: new Date(),
       lastUsedAt: null,
+      tokenVersionAtIssue: 1,
     });
     getRolePermissionsMock.mockResolvedValue([
       'timesheets.tracker.view',

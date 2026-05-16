@@ -86,6 +86,7 @@ const HAPPY_USER = {
   avatarInitials: 'AL',
   isDisabled: false,
   sessionVersion: 1,
+  tokenVersion: 1,
 };
 
 const HAPPY_PERMISSIONS = ['timesheets.tracker.view', 'timesheets.tracker.create'];
@@ -180,6 +181,7 @@ beforeEach(() => {
     createdAt: new Date(),
     updatedAt: new Date(),
     lastUsedAt: null,
+    tokenVersionAtIssue: 1,
   });
   markPersonalAccessTokenUsedMock.mockResolvedValue(undefined);
 });
@@ -277,10 +279,11 @@ describe('authenticateToken', () => {
     expect(reply.statusCode).toBe(403);
     expect(reply.body).toEqual({ error: 'Invalid or expired token' });
     expect(getRolePermissionsMock).toHaveBeenCalledWith('manager');
-    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'manager', {
-      requireEnabledUser: true,
-      expectedSessionVersion: 1,
-    });
+    expect(userHasRoleMock).toHaveBeenCalledWith(
+      'u1',
+      'manager',
+      expect.objectContaining({ requireEnabledUser: true, expectedSessionVersion: 1 }),
+    );
   });
 
   const authContextErrorScenarios = [
@@ -431,10 +434,11 @@ describe('authenticateToken', () => {
     expect(reply.statusCode).toBe(0);
     expect(request.user?.role).toBe('admin');
     expect(getRolePermissionsMock).toHaveBeenCalledWith('admin');
-    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'admin', {
-      requireEnabledUser: true,
-      expectedSessionVersion: 1,
-    });
+    expect(userHasRoleMock).toHaveBeenCalledWith(
+      'u1',
+      'admin',
+      expect.objectContaining({ requireEnabledUser: true, expectedSessionVersion: 1 }),
+    );
   });
 
   test('final role check runs after permission loading with current user constraints', async () => {
@@ -455,10 +459,11 @@ describe('authenticateToken', () => {
     expect(reply.statusCode).toBe(0);
     expect(request.user).toBeDefined();
     expect(calls).toEqual(['permissions', 'role-check']);
-    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'manager', {
-      requireEnabledUser: true,
-      expectedSessionVersion: 1,
-    });
+    expect(userHasRoleMock).toHaveBeenCalledWith(
+      'u1',
+      'manager',
+      expect.objectContaining({ requireEnabledUser: true, expectedSessionVersion: 1 }),
+    );
   });
 
   test('a rejection in the final role check produces a single 403 response', async () => {
@@ -499,6 +504,7 @@ describe('authenticateToken', () => {
     expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'manager', {
       requireEnabledUser: true,
       expectedSessionVersion: undefined,
+      expectedTokenVersion: 1,
     });
   });
 
@@ -552,6 +558,47 @@ describe('authenticateToken', () => {
 
     expect(reply.statusCode).toBe(403);
     expect(reply.body).toEqual({ error: 'Invalid or expired token' });
+    expect(markPersonalAccessTokenUsedMock).not.toHaveBeenCalled();
+  });
+
+  test('PAT rejects token whose tokenVersionAtIssue is behind users.token_version', async () => {
+    findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, tokenVersion: 7 });
+    findPersonalAccessTokenByHashMock.mockResolvedValue({
+      userId: 'u1',
+      tokenHash: hashPersonalAccessToken('praetor_pat_valid-token'),
+      tokenPrefix: 'praetor_pat_valid',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      lastUsedAt: null,
+      tokenVersionAtIssue: 3,
+    });
+    const request = buildFakeRequest('praetor_pat_valid-token');
+    const reply = buildFakeReply();
+
+    await authenticateToken(request as never, reply as never);
+
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body).toEqual({ error: 'Token revoked', errorCode: 'token_revoked' });
+    expect(markPersonalAccessTokenUsedMock).not.toHaveBeenCalled();
+  });
+
+  // Guards the race where users.token_version is bumped between findAuthUserById
+  // and the final userHasRole check. The first check passes (snapshot still
+  // matches), but userHasRole must atomically re-assert the version and return
+  // false — otherwise one request slips through with a now-revoked PAT.
+  test('PAT 403s when userHasRole rejects on the token-version re-assert', async () => {
+    userHasRoleMock.mockResolvedValue(false);
+    const request = buildFakeRequest('praetor_pat_valid-token');
+    const reply = buildFakeReply();
+
+    await authenticateToken(request as never, reply as never);
+
+    expect(reply.statusCode).toBe(403);
+    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'manager', {
+      requireEnabledUser: true,
+      expectedSessionVersion: undefined,
+      expectedTokenVersion: 1,
+    });
     expect(markPersonalAccessTokenUsedMock).not.toHaveBeenCalled();
   });
 

@@ -119,13 +119,19 @@ const buildSessionAuthRequiredError = () => {
   return error;
 };
 
+type LoadAuthContextOptions = {
+  activeRole?: string;
+  expectedSessionVersion?: number;
+  expectedTokenVersion?: number;
+};
+
 const loadAuthenticatedUserContext = async (
   request: FastifyRequest,
   reply: FastifyReply,
   userId: string,
-  activeRole?: string,
-  expectedSessionVersion?: number,
+  options: LoadAuthContextOptions = {},
 ) => {
+  const { activeRole, expectedSessionVersion, expectedTokenVersion } = options;
   const user = await usersRepo.findAuthUserById(userId);
 
   if (!user) {
@@ -145,17 +151,31 @@ const loadAuthenticatedUserContext = async (
     return null;
   }
 
+  // PATs and MCP tokens are gated by users.token_version. A bump (currently fired
+  // by password rotation) invalidates every long-lived credential the user holds
+  // without needing to touch the token rows themselves.
+  if (expectedTokenVersion !== undefined && user.tokenVersion !== expectedTokenVersion) {
+    await reply.code(403).send({ error: 'Token revoked', errorCode: 'token_revoked' });
+    return null;
+  }
+
   const effectiveRole = activeRole ?? user.role;
 
   const permissions = await getRolePermissions(effectiveRole);
-  // Final authorization check: re-read enabled/session state in the same statement that
-  // verifies role membership, so revocation between the initial user read and permission
-  // loading cannot bind a stale authenticated context.
+  // Final authorization check: re-read enabled/session/token state in the same statement
+  // that verifies role membership, so revocation between the initial user read and
+  // permission loading cannot bind a stale authenticated context.
   const hasRole = await rolesRepo.userHasRole(user.id, effectiveRole, {
     requireEnabledUser: true,
     expectedSessionVersion,
+    expectedTokenVersion,
   });
   if (!hasRole) {
+    // Generic 403 here covers role/enabled/version failure indistinguishably:
+    // the fast-fail branches above emit specific errorCodes (`session_revoked`,
+    // `token_revoked`) for the common case. A client that sees this generic
+    // response after a fast-fail pass has hit the rare race where revocation
+    // committed between the initial user read and this re-assert.
     await reply.code(403).send({ error: 'Invalid or expired token' });
     return null;
   }
@@ -223,13 +243,10 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
       source: 'session',
     };
 
-    const userContext = await loadAuthenticatedUserContext(
-      request,
-      reply,
-      decoded.userId,
-      decoded.activeRole,
-      decoded.sessionVersion,
-    );
+    const userContext = await loadAuthenticatedUserContext(request, reply, decoded.userId, {
+      activeRole: decoded.activeRole,
+      expectedSessionVersion: decoded.sessionVersion,
+    });
     if (!userContext) return;
 
     // Sliding window: reset the 30m idle timer while preserving sessionStart (8h cap)
@@ -269,7 +286,9 @@ const authenticatePersonalAccessToken = async (
 
     request.auth = { userId: tokenRecord.userId, source: 'personalAccessToken' };
 
-    const userContext = await loadAuthenticatedUserContext(request, reply, tokenRecord.userId);
+    const userContext = await loadAuthenticatedUserContext(request, reply, tokenRecord.userId, {
+      expectedTokenVersion: tokenRecord.tokenVersionAtIssue,
+    });
     if (!userContext) return;
 
     try {

@@ -17,6 +17,7 @@ export type AuthUser = {
   avatarInitials: string;
   isDisabled: boolean;
   sessionVersion: number;
+  tokenVersion: number;
 };
 
 export type LoginUser = AuthUser & {
@@ -40,6 +41,7 @@ const LOGIN_USER_PROJECTION = {
   authMethod: users.authMethod,
   authProviderId: users.authProviderId,
   sessionVersion: users.sessionVersion,
+  tokenVersion: users.tokenVersion,
 } as const;
 
 type LoginUserRow = {
@@ -54,6 +56,7 @@ type LoginUserRow = {
   authMethod: AuthMethod | null;
   authProviderId: string | null;
   sessionVersion: number;
+  tokenVersion: number;
 };
 
 const mapLoginUserRow = (row: LoginUserRow): LoginUserWithAuth => ({
@@ -68,6 +71,7 @@ const mapLoginUserRow = (row: LoginUserRow): LoginUserWithAuth => ({
   authMethod: row.authMethod ?? 'local',
   authProviderId: row.authProviderId ?? null,
   sessionVersion: row.sessionVersion,
+  tokenVersion: row.tokenVersion,
 });
 
 export const findAuthUserById = async (
@@ -83,6 +87,7 @@ export const findAuthUserById = async (
       avatarInitials: users.avatarInitials,
       isDisabled: users.isDisabled,
       sessionVersion: users.sessionVersion,
+      tokenVersion: users.tokenVersion,
     })
     .from(users)
     .where(eq(users.id, userId));
@@ -95,6 +100,7 @@ export const findAuthUserById = async (
     avatarInitials: rows[0].avatarInitials,
     isDisabled: rows[0].isDisabled ?? false,
     sessionVersion: rows[0].sessionVersion,
+    tokenVersion: rows[0].tokenVersion,
   };
 };
 
@@ -105,10 +111,20 @@ export const bumpSessionVersion = async (userId: string, exec: DbExecutor = db):
     .where(eq(users.id, userId));
 };
 
-// Atomic credential rotation: bumping `session_version` in the same UPDATE that
-// stores the new hash guarantees no window in which the new password is live but
-// stolen tokens still validate. Returns the new session_version so the caller
-// can re-sign their own x-auth-token and stay logged in.
+// Subquery resolving the user's current token_version inside an INSERT, so the
+// freshly-issued PAT or MCP token records the value atomically instead of
+// falling back to the column default. Bridges the issue/bump race so a token
+// issued the instant before a password rotation is invalidated by the next auth.
+export const currentTokenVersionSubquery = (userId: string) =>
+  sql<number>`(SELECT ${users.tokenVersion} FROM ${users} WHERE ${users.id} = ${userId})`;
+
+// Atomic credential rotation: bumping `session_version` AND `token_version` in
+// the same UPDATE that stores the new hash guarantees no window in which the new
+// password is live but stolen tokens still validate. Session JWTs key off
+// session_version; PATs and MCP tokens key off token_version, so this single
+// rotation revokes every long- and short-lived credential the user holds.
+// Returns the new session_version so the caller can re-sign their own
+// x-auth-token and stay logged in.
 export const rotatePasswordAndBumpSession = async (
   userId: string,
   passwordHash: string,
@@ -116,7 +132,11 @@ export const rotatePasswordAndBumpSession = async (
 ): Promise<number> => {
   const rows = await exec
     .update(users)
-    .set({ passwordHash, sessionVersion: sql`${users.sessionVersion} + 1` })
+    .set({
+      passwordHash,
+      sessionVersion: sql`${users.sessionVersion} + 1`,
+      tokenVersion: sql`${users.tokenVersion} + 1`,
+    })
     .where(eq(users.id, userId))
     .returning({ sessionVersion: users.sessionVersion });
   if (!rows[0]) throw new NotFoundError('User');

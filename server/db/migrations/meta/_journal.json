@@ -330,6 +330,13 @@
       "when": 1778852263003,
       "tag": "0046_add_time_entry_version",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1778944620632,
+      "tag": "0047_add_token_version_for_pat_mcp_revocation",
+      "breakpoints": true
     }
   ]
 }
