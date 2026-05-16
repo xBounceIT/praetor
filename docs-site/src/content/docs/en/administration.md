@@ -35,7 +35,7 @@ LDAP synchronization updates only application users that are already set to LDAP
 
 Manual LDAP synchronization requires an enabled LDAP configuration. If LDAP is disabled or not configured, the request is rejected and is not recorded as a successful sync; if the directory is unreachable, Praetor reports the error instead of reporting success.
 
-The LDAP connection tester uses the saved configuration and can run while LDAP is still disabled. Save configuration edits first, validate credentials and groups with the tester, then enable LDAP after the validation succeeds.
+The LDAP connection tester uses the saved configuration and can run while LDAP is still disabled. Save configuration edits first, validate credentials and groups with the tester, then enable LDAP after the validation succeeds. When LDAP authenticates but no group matches a mapping, the tester reports the role the **real login** would assign: it preserves the current role for an existing LDAP-bound user, and falls back to the default `User` role only for first-time logins.
 
 LDAP group lookup uses the configured **Group Search Base** and **Group Member Filter**. In Active Directory, when you want to search group entries under a group OU by the user's DN, the usual filter is `(member={0})`: `{0}` is replaced with the user DN and the search runs under the configured group base.
 
