@@ -414,6 +414,22 @@ export const listScopedForManager = async (
 
   const whereClause = sql.join(conditions, sql` OR `);
 
+  // Gate the shared-work-unit relaxation on canViewManagedUsers so callers with only
+  // hr.internal/hr.external view (and no managed-users permission) don't see top managers
+  // leaked through their incidental work_unit_managers rows.
+  const topManagerFilter = options.canViewManagedUsers
+    ? sql`(
+           NOT EXISTS (
+             SELECT 1 FROM user_roles ur_tm
+             WHERE ur_tm.user_id = u.id AND ur_tm.role_id = ${TOP_MANAGER_ROLE_ID}
+           )
+           OR wum.user_id = ${viewerId}
+         )`
+    : sql`NOT EXISTS (
+           SELECT 1 FROM user_roles ur_tm
+           WHERE ur_tm.user_id = u.id AND ur_tm.role_id = ${TOP_MANAGER_ROLE_ID}
+         )`;
+
   const rows = await executeRows<UserListRowDb>(
     exec,
     sql`SELECT DISTINCT u.id,
@@ -435,10 +451,7 @@ export const listScopedForManager = async (
        LEFT JOIN user_work_units uw ON u.id = uw.user_id
        LEFT JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
        WHERE (${whereClause})
-         AND NOT EXISTS (
-           SELECT 1 FROM user_roles ur_tm
-           WHERE ur_tm.user_id = u.id AND ur_tm.role_id = ${TOP_MANAGER_ROLE_ID}
-         )
+         AND ${topManagerFilter}
        ORDER BY u.name`,
   );
   return rows.map(mapUserListRow);

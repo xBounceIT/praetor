@@ -267,11 +267,26 @@ describe('listScopedForManager', () => {
     exec.enqueue({ rows: [] });
     await usersRepo.listScopedForManager(
       'viewer-1',
-      { canViewManagedUsers: false, canViewInternal: false, canViewExternal: false },
+      { canViewManagedUsers: false, canViewInternal: true, canViewExternal: false },
       testDb,
     );
-    expect(exec.calls[0].sql).toContain('NOT EXISTS');
+    const sql = exec.calls[0].sql.replace(/\s+/g, ' ');
+    expect(sql).toContain('NOT EXISTS');
     expect(exec.calls[0].params).toContain('top_manager');
+    // Without canViewManagedUsers, the shared-work-unit relaxation must not apply, or callers
+    // with only hr.internal/hr.external view could see top managers via incidental wum rows.
+    expect(sql).not.toMatch(/NOT EXISTS[\s\S]+OR wum\.user_id =/);
+  });
+
+  test('still includes top managers reachable via the viewer’s managed work units', async () => {
+    exec.enqueue({ rows: [] });
+    await usersRepo.listScopedForManager(
+      'viewer-1',
+      { canViewManagedUsers: true, canViewInternal: false, canViewExternal: false },
+      testDb,
+    );
+    const sql = exec.calls[0].sql.replace(/\s+/g, ' ');
+    expect(sql).toMatch(/NOT EXISTS[\s\S]+OR wum\.user_id =/);
   });
 });
 
