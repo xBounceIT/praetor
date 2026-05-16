@@ -304,8 +304,11 @@ class LDAPService {
 
       // Search groups under both the canonical and typed identifiers so configs whose
       // groupFilter expects e.g. `memberUid={0}` work even when the user typed an alias
-      // (email/UPN) that userFilter accepted.
-      const groups = await this.findUserGroups(ldapClient, userDn, [canonicalUsername, username]);
+      // (email/UPN) that userFilter accepted. throwOnError: a transient subtree error
+      // returning [] would silently demote new admins/managers to the default role (#637).
+      const groups = await this.findUserGroups(ldapClient, userDn, [canonicalUsername, username], {
+        throwOnError: true,
+      });
 
       return {
         authenticated: true,
