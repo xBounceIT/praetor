@@ -1525,19 +1525,26 @@ const AppContent: React.FC = () => {
               };
               const seen = new Set<string>();
               const merged: TimeEntry[] = [];
+              let changed = false;
               for (const entry of prev) {
                 const replacement = incoming.get(entry.id);
                 if (replacement) {
                   merged.push(replacement);
                   seen.add(entry.id);
+                  if (replacement !== entry) changed = true;
                 } else if (!isWithinPageWindow(entry)) {
                   merged.push(entry);
+                } else {
+                  changed = true;
                 }
               }
               for (const entry of pageEntries) {
-                if (!seen.has(entry.id)) merged.push(entry);
+                if (!seen.has(entry.id)) {
+                  merged.push(entry);
+                  changed = true;
+                }
               }
-              return merged;
+              return changed ? merged : prev;
             };
             const streamRemainingEntries = async (cursor: string | null, token: number) => {
               const isCancelled = () =>

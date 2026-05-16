@@ -15,6 +15,8 @@ import type { TimeEntry } from '../types';
  *   - prev entries that fall inside the page's (createdAt, id) coverage
  *     window but aren't in the response are dropped — those were deleted on
  *     the server (issue #519)
+ *   - returns `prev` by reference on structural no-ops so `setEntries` can
+ *     short-circuit via `Object.is` and skip the re-render (issue #591)
  */
 const mergeById = (
   prev: TimeEntry[],
@@ -39,19 +41,26 @@ const mergeById = (
   };
   const seen = new Set<string>();
   const merged: TimeEntry[] = [];
+  let changed = false;
   for (const entry of prev) {
     const replacement = incoming.get(entry.id);
     if (replacement) {
       merged.push(replacement);
       seen.add(entry.id);
+      if (replacement !== entry) changed = true;
     } else if (!isWithinPageWindow(entry)) {
       merged.push(entry);
+    } else {
+      changed = true;
     }
   }
   for (const entry of pageEntries) {
-    if (!seen.has(entry.id)) merged.push(entry);
+    if (!seen.has(entry.id)) {
+      merged.push(entry);
+      changed = true;
+    }
   }
-  return merged;
+  return changed ? merged : prev;
 };
 
 const makeEntry = (id: string, createdAt: number, notes = id): TimeEntry => ({
@@ -214,6 +223,60 @@ describe('App.tsx timesheets mergeById', () => {
     const merged = mergeById([ambiguous], [older], encodeCursorFor(cursorRow), null);
 
     expect(merged.map((e) => e.id)).toEqual(['A', 'c']);
+  });
+
+  test('returns prev by reference when an empty page produces a no-op (issue #591)', () => {
+    // Empty continuation pages must not trigger redundant re-renders by
+    // returning a fresh array reference when nothing in prev changed.
+    const a = makeEntry('a', 30);
+    const b = makeEntry('b', 20);
+    const prev = [a, b];
+
+    const merged = mergeById(prev, [], encodeCursorFor(b), null);
+
+    expect(merged).toBe(prev);
+  });
+
+  test('returns prev by reference when page rows are identical references (issue #591)', () => {
+    // A reload whose page entries are the same object refs already in prev
+    // is a structural no-op: setEntries must short-circuit via Object.is.
+    const a = makeEntry('a', 30);
+    const b = makeEntry('b', 20);
+    const prev = [a, b];
+
+    const merged = mergeById(prev, [a, b], null, null);
+
+    expect(merged).toBe(prev);
+  });
+
+  test('returns a new array reference when prev contains a server-deleted row (issue #591)', () => {
+    // Sanity guard for the changed-flag: a drop inside the page window must
+    // still produce a new reference so consumers re-render.
+    const a = makeEntry('a', 30);
+    const deleted = makeEntry('deleted', 20);
+    const c = makeEntry('c', 10);
+    const prev = [a, deleted, c];
+
+    const merged = mergeById(prev, [a, c], null, null);
+
+    expect(merged).not.toBe(prev);
+    expect(merged.map((e) => e.id)).toEqual(['a', 'c']);
+  });
+
+  test('returns a new array reference when page rows are field-equal but different objects (issue #591)', () => {
+    // The common real-world case: server returns freshly-parsed rows whose
+    // refs differ from prev. The merge must produce a new array so subtree
+    // updates that depend on row identity (e.g. version bumps) still fire.
+    const a = makeEntry('a', 30);
+    const b = makeEntry('b', 20);
+    const prev = [a, b];
+    const aCopy = makeEntry('a', 30);
+    const bCopy = makeEntry('b', 20);
+
+    const merged = mergeById(prev, [aCopy, bCopy], null, null);
+
+    expect(merged).not.toBe(prev);
+    expect(merged.map((e) => e.id)).toEqual(['a', 'b']);
   });
 
   test('keeps prev entries at the same ms as the first page boundary', () => {
