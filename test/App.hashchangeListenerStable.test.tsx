@@ -3,6 +3,10 @@ import { act, renderHook } from '@testing-library/react';
 import { useEffect, useRef, useState } from 'react';
 import type { User, View } from '../types';
 import { resolveHashChange, stripHashPrefix } from '../utils/hashCanonicalization';
+import {
+  createProgrammaticHashTracker,
+  type ProgrammaticHashTracker,
+} from '../utils/programmaticHashTracker';
 import { clearSpyStateAfterAll } from './helpers/mockCleanup.ts';
 
 // App.tsx is too tangled to mount the full tree (see test/App.notifications.test.tsx),
@@ -14,7 +18,11 @@ const VALID_VIEWS: View[] = ['timesheets/tracker', 'crm/clients', 'crm/suppliers
 
 const useHashSync = (initialView: View | '404', initialUser: Pick<User, 'id'> | null) => {
   const [activeView, setActiveView] = useState<View | '404'>(initialView);
-  const programmaticHashRef = useRef<string | null>(null);
+  const programmaticHashTrackerRef = useRef<ProgrammaticHashTracker | null>(null);
+  if (programmaticHashTrackerRef.current === null) {
+    programmaticHashTrackerRef.current = createProgrammaticHashTracker();
+  }
+  const programmaticHashTracker = programmaticHashTrackerRef.current;
 
   const activeViewRef = useRef<View | '404'>(activeView);
   activeViewRef.current = activeView;
@@ -23,11 +31,7 @@ const useHashSync = (initialView: View | '404', initialUser: Pick<User, 'id'> | 
 
   useEffect(() => {
     const handleHashChange = () => {
-      if (programmaticHashRef.current === window.location.hash) {
-        programmaticHashRef.current = null;
-        return;
-      }
-      programmaticHashRef.current = null;
+      if (programmaticHashTracker.consumeIfPending()) return;
       const outcome = resolveHashChange({
         rawHash: stripHashPrefix(window.location.hash),
         activeView: activeViewRef.current,
@@ -36,14 +40,14 @@ const useHashSync = (initialView: View | '404', initialUser: Pick<User, 'id'> | 
       });
       if (outcome.kind === 'noop') return;
       if (outcome.kind === 'rewrite-hash') {
-        programmaticHashRef.current = outcome.newHash;
+        programmaticHashTracker.registerWrite();
         window.location.hash = outcome.newHash.slice(1);
       }
       setActiveView(outcome.view);
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
+  }, [programmaticHashTracker]);
 
   return { activeView, setActiveView };
 };

@@ -116,6 +116,10 @@ import {
   TOP_MANAGER_ROLE_ID,
   VIEW_PERMISSION_MAP,
 } from './utils/permissions';
+import {
+  createProgrammaticHashTracker,
+  type ProgrammaticHashTracker,
+} from './utils/programmaticHashTracker';
 import { retryTransient } from './utils/retry';
 import { applyTheme, getTheme } from './utils/theme';
 import { toastError } from './utils/toast';
@@ -841,11 +845,15 @@ const AppContent: React.FC = () => {
   // refs so in-flight awaits still observe the latest value.
   const activeViewRef = useRef<View | '404'>(activeView);
   activeViewRef.current = activeView;
-  // Tracks the full `#/...` value we last wrote to window.location.hash so
-  // the hashchange listener can short-circuit on events fired by our own
-  // writes. Prevents an infinite rewrite loop if canonicalizeLegacyHash ever
-  // becomes non-idempotent (see issue #540).
-  const programmaticHashRef = useRef<string | null>(null);
+  // Short-circuits hashchange events fired by our own writes. See
+  // utils/programmaticHashTracker.ts for why this is a counter rather than a
+  // single-value marker (issue #623). Also still prevents an infinite rewrite
+  // loop if canonicalizeLegacyHash ever becomes non-idempotent (issue #540).
+  const programmaticHashTrackerRef = useRef<ProgrammaticHashTracker | null>(null);
+  if (programmaticHashTrackerRef.current === null) {
+    programmaticHashTrackerRef.current = createProgrammaticHashTracker();
+  }
+  const programmaticHashTracker = programmaticHashTrackerRef.current;
   const setActiveView = useCallback<React.Dispatch<React.SetStateAction<View | '404'>>>((next) => {
     const resolved =
       typeof next === 'function'
@@ -1148,10 +1156,10 @@ const AppContent: React.FC = () => {
     }
     const nextHash = currentUser ? `#/${activeView}` : '#/login';
     if (window.location.hash !== nextHash) {
-      programmaticHashRef.current = nextHash;
+      programmaticHashTracker.registerWrite();
       window.location.hash = nextHash.slice(1);
     }
-  }, [activeView, currentUser, isLoading]);
+  }, [activeView, currentUser, isLoading, programmaticHashTracker]);
 
   // Filter-id cleanup now happens inside `setActiveView` itself - any caller
   // (navigation handlers, hash-change listener, Layout menu) goes through that
@@ -1163,11 +1171,7 @@ const AppContent: React.FC = () => {
   // addEventListener call during rapid back/forward clicking.
   useEffect(() => {
     const handleHashChange = () => {
-      if (programmaticHashRef.current === window.location.hash) {
-        programmaticHashRef.current = null;
-        return;
-      }
-      programmaticHashRef.current = null;
+      if (programmaticHashTracker.consumeIfPending()) return;
       const rawHash = stripHashPrefix(window.location.hash);
       const outcome = resolveHashChange({
         rawHash,
@@ -1180,14 +1184,14 @@ const AppContent: React.FC = () => {
         // Apply the resolved view in this same call: the follow-up hashchange
         // fired by the rewrite below will be short-circuited by the guard
         // above, so we cannot rely on it to set the view.
-        programmaticHashRef.current = outcome.newHash;
+        programmaticHashTracker.registerWrite();
         window.location.hash = outcome.newHash.slice(1);
       }
       setActiveView(outcome.view);
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [VALID_VIEWS, setActiveView]);
+  }, [VALID_VIEWS, setActiveView, programmaticHashTracker]);
 
   // Reset viewingUserId when navigating away from tracker
   useEffect(() => {
