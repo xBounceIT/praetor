@@ -592,6 +592,36 @@ describe('authenticate', () => {
     expect(result.matchedRoleIds).toEqual(['admin']);
   });
 
+  test('returns empty groups when every parallel group search fails (non-strict auth path)', async () => {
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      groupFilter: '(member={0})',
+    });
+    nextFixture = {
+      bindResponses: [null, null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: "CN=Daniel D'Angeli,OU=Internal Accounts,OU=Accounts,DC=syncsec,DC=coll",
+              object: { sAMAccountName: 'daniel.dangeli' },
+            },
+          ],
+          status: 0,
+        },
+        { err: new Error('first group search failed') },
+        { err: new Error('second group search failed') },
+      ],
+    };
+
+    const result = await ldapService.authenticateWithProfile('daniel.dangeli', 'pw');
+
+    // Auth still succeeds — the credential check passed — but no groups can be mapped.
+    expect(result.authenticated).toBe(true);
+    expect(result.groups).toEqual([]);
+    expect(result.matchedRoleIds).toEqual([]);
+  });
+
   test('rejects when the user-search stream emits an error (LDAP outage during search)', async () => {
     nextFixture = {
       bindResponses: [null],
@@ -1162,6 +1192,36 @@ describe('lookupUserGroups', () => {
 
     expect(result).toBeNull();
     expect(lastClientStats?.unbindCalls).toBe(1);
+  });
+
+  test('issues identifier searches in parallel and unions groups across forms', async () => {
+    // Mixed-filter config: one group lists the user by DN under `member`, the
+    // other by uid under `memberUid`. Each identifier-form search matches only
+    // one group; the result must contain both.
+    const dnGroup = 'cn=dn-matched,ou=groups,dc=test,dc=com';
+    const uidGroup = 'cn=uid-matched,ou=groups,dc=test,dc=com';
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      groupFilter: '(|(member={0})(memberUid={0}))',
+    });
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice' } }],
+          status: 0,
+        },
+        { entries: [{ objectName: dnGroup, object: { cn: 'dn-matched' } }], status: 0 },
+        { entries: [{ objectName: uidGroup, object: { cn: 'uid-matched' } }], status: 0 },
+      ],
+    };
+
+    const result = await ldapService.lookupUserGroups('alice');
+
+    expect(result?.groups).toContain(dnGroup);
+    expect(result?.groups).toContain(uidGroup);
+    // One user lookup + two parallel group searches (DN form + uid form).
+    expect(lastClientStats?.searchCalls).toHaveLength(3);
   });
 });
 
