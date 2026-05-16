@@ -6,6 +6,8 @@ export const ssoApi = {
 
   listProviders: (): Promise<SsoProvider[]> => fetchApi('/sso/providers'),
 
+  getSamlAcsUrlInfo: (): Promise<{ acsUrlTemplate: string }> => fetchApi('/sso/saml/acs-url-info'),
+
   createProvider: (provider: Partial<SsoProvider>): Promise<SsoProvider> =>
     fetchApi('/sso/providers', {
       method: 'POST',
