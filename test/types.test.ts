@@ -1,12 +1,27 @@
 import { describe, expect, test } from 'bun:test';
-import type { KnownPermission, KnownUserRole, Permission, UserRole } from '../types';
+import type {
+  LdapConfig as BackendLdapConfig,
+  LdapRoleMapping as BackendLdapRoleMapping,
+} from '../server/types/ldap.ts';
+import type {
+  LdapConfig as FrontendLdapConfig,
+  LdapRoleMapping as FrontendLdapRoleMapping,
+  KnownPermission,
+  KnownUserRole,
+  Permission,
+  UserRole,
+} from '../types';
 
 // Compile-time assertion helpers. These checks run during `tsc --noEmit`: any failure
 // here surfaces as a TypeScript error, which prevents `bun run lint` / typecheck from
 // succeeding. The runtime `expect(true).toBe(true)` keeps Bun's test reporter happy.
 type AssertExtends<T, U> = T extends U ? true : false;
 type AssertEqual<T, U> =
-  AssertExtends<T, U> extends true ? (AssertExtends<U, T> extends true ? true : false) : false;
+  (<V>() => V extends T ? 1 : 2) extends <V>() => V extends U ? 1 : 2
+    ? (<V>() => V extends U ? 1 : 2) extends <V>() => V extends T ? 1 : 2
+      ? true
+      : false
+    : false;
 
 const trueValue: true = true;
 
@@ -74,5 +89,26 @@ describe('Permission literal union', () => {
     > = trueValue;
     // Compile-time assertion of a type relationship; runtime value is trivially true.
     expect(knownExtendsPermission).toBe(true);
+  });
+});
+
+describe('LDAP config contract', () => {
+  test('frontend and backend role mapping shapes stay aligned', () => {
+    const sameRoleMappingShape: AssertEqual<BackendLdapRoleMapping, FrontendLdapRoleMapping> =
+      trueValue;
+    expect(sameRoleMappingShape).toBe(true);
+  });
+
+  test('frontend and backend config shapes stay aligned', () => {
+    type BackendOnlyKey = Exclude<keyof BackendLdapConfig, keyof FrontendLdapConfig>;
+    type FrontendOnlyKey = Exclude<keyof FrontendLdapConfig, keyof BackendLdapConfig>;
+
+    const noBackendOnlyKeys: AssertEqual<BackendOnlyKey, never> = trueValue;
+    const noFrontendOnlyKeys: AssertEqual<FrontendOnlyKey, never> = trueValue;
+    const sameConfigShape: AssertEqual<BackendLdapConfig, FrontendLdapConfig> = trueValue;
+
+    expect(noBackendOnlyKeys).toBe(true);
+    expect(noFrontendOnlyKeys).toBe(true);
+    expect(sameConfigShape).toBe(true);
   });
 });

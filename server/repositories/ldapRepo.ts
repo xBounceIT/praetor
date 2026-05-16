@@ -1,26 +1,13 @@
 import { eq, type SQL, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import { ldapConfig } from '../db/schema/ldapConfig.ts';
+import type { LdapConfig, LdapRoleMapping } from '../types/ldap.ts';
 import { decrypt, encrypt, isEncrypted } from '../utils/crypto.ts';
 import { createChildLogger, serializeError } from '../utils/logger.ts';
 
 const logger = createChildLogger({ module: 'ldapRepo' });
 
-export type LdapRoleMapping = { ldapGroup: string; role: string };
-
-export type LdapConfig = {
-  enabled: boolean;
-  serverUrl: string;
-  baseDn: string;
-  bindDn: string;
-  bindPassword: string;
-  userFilter: string;
-  groupBaseDn: string;
-  groupFilter: string;
-  roleMappings: LdapRoleMapping[];
-  tlsCaCertificate: string;
-  autoProvisionAll: boolean;
-};
+export type { LdapConfig, LdapRoleMapping } from '../types/ldap.ts';
 
 export type LdapConfigPatch = Partial<LdapConfig>;
 
