@@ -353,6 +353,50 @@ describe('useAuth', () => {
     expect(onLoginB).toHaveBeenLastCalledWith({ id: 'check-b' });
   });
 
+  test('pending retry-sleep timer is cleared on unmount (no leaked setTimeout)', async () => {
+    tokenStore.token = 'good-token';
+    apiMocks.authMe.mockImplementation(() => Promise.reject(new ApiErrorStub('offline', 0, true)));
+
+    // Pick a delay long enough that the timer cannot naturally fire before we
+    // unmount, so a `clearTimeout` call is the only way the timer goes away.
+    const SLEEP_MS = 5000;
+    const sleepTimerIds = new Set<unknown>();
+    const clearedIds: unknown[] = [];
+    const realSetTimeout = globalThis.setTimeout;
+    const realClearTimeout = globalThis.clearTimeout;
+    // Use plain assignment instead of spyOn so @testing-library doesn't treat
+    // setTimeout as a jest-fake-timer mock (which makes waitFor explode).
+    globalThis.setTimeout = ((
+      cb: (...args: unknown[]) => void,
+      ms?: number,
+      ...rest: unknown[]
+    ) => {
+      const id = (realSetTimeout as unknown as (...a: unknown[]) => unknown)(cb, ms, ...rest);
+      if (ms === SLEEP_MS) sleepTimerIds.add(id);
+      return id;
+    }) as unknown as typeof setTimeout;
+    globalThis.clearTimeout = ((id: unknown) => {
+      clearedIds.push(id);
+      return (realClearTimeout as unknown as (i: unknown) => void)(id);
+    }) as unknown as typeof clearTimeout;
+
+    try {
+      const { unmount } = renderHook(() => useAuth({ retryDelaysMs: [SLEEP_MS] }));
+
+      // Wait until the retry loop enters sleep() — observable via a setTimeout
+      // call with our distinctive delay.
+      await waitFor(() => expect(sleepTimerIds.size).toBeGreaterThan(0));
+
+      unmount();
+
+      const cleared = clearedIds.some((id) => sleepTimerIds.has(id));
+      expect(cleared).toBe(true);
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+      globalThis.clearTimeout = realClearTimeout;
+    }
+  });
+
   test('switchRole calls api and applies returned user/token via login', async () => {
     const onLogin = mock((_u: unknown) => {});
     apiMocks.authSwitchRole.mockImplementation((_roleId: string) =>
