@@ -32,7 +32,17 @@ const resolveJwtSecret = () => {
   return readRequiredNonDefaultEnv('JWT_SECRET', INSECURE_DEFAULT_JWT_SECRETS);
 };
 
-const JWT_SECRET = resolveJwtSecret();
+// Lazy + reset hook so tests can rotate JWT_SECRET between cases — see
+// getSessionMaxDurationMs below for the same pattern.
+let cachedJwtSecret: string | null = null;
+const getJwtSecret = (): string => {
+  if (cachedJwtSecret === null) cachedJwtSecret = resolveJwtSecret();
+  return cachedJwtSecret;
+};
+
+export const __resetJwtSecretCacheForTests = () => {
+  cachedJwtSecret = null;
+};
 
 // JWT signing algorithm. `jwt.sign` (see generateToken below) defaults to HS256, so we pin
 // verification to the same algorithm to prevent algorithm-confusion attacks (e.g. forged
@@ -171,7 +181,7 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET, {
+    const decoded = jwt.verify(token, getJwtSecret(), {
       algorithms: [JWT_ALGORITHM],
     }) as SessionJwtPayload;
     const sessionStart = decoded.sessionStart ?? Date.now();
@@ -361,7 +371,7 @@ export const generateToken = (
   activeRole: string | undefined,
   sessionVersion: number,
 ) =>
-  jwt.sign({ userId, sessionStart, activeRole, sessionVersion }, JWT_SECRET, {
+  jwt.sign({ userId, sessionStart, activeRole, sessionVersion }, getJwtSecret(), {
     expiresIn: '30m',
     algorithm: JWT_ALGORITHM,
   });
