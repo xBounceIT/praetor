@@ -380,6 +380,8 @@ class LDAPService {
 
     // Gate placement is load-bearing: it sits after the existing-user branch so already
     // provisioned LDAP users still authenticate and refresh roles when the flag is off.
+    // The explicit DEFAULT_CONFIG fallback handles a `this.config === null` race after
+    // `invalidateConfig()` — fail safe by allowing provisioning rather than locking out.
     if (!(this.config?.provisionOnLogin ?? ldapRepo.DEFAULT_CONFIG.provisionOnLogin)) {
       logger.warn(
         { username: canonicalUsername },

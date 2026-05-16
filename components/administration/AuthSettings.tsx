@@ -973,13 +973,10 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 />
               </div>
 
-              <div className="border-t border-zinc-100 p-6 space-y-4">
-                <div
-                  id="ldap-provisioning-heading"
-                  className="text-xs font-bold text-muted-foreground uppercase tracking-wider"
-                >
+              <fieldset className="border-t border-zinc-100 p-6 space-y-4">
+                <legend className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
                   {t('admin.ldap.provisioning.heading', 'User Provisioning')}
-                </div>
+                </legend>
                 <div className="flex items-start gap-3">
                   <Switch
                     id="ldap-provision-on-login"
@@ -1020,7 +1017,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                     </FieldDescription>
                   </div>
                 </div>
-              </div>
+              </fieldset>
 
               <div className="border-t border-zinc-100 p-6">
                 <RoleMappings
