@@ -40,9 +40,19 @@ describe('migration 0049: 24h duration cap is enforced at the DB layer', () => {
       );
     });
 
-    test('clamp UPDATEs run before the ADD CONSTRAINT (otherwise the constraint fails on bad rows)', () => {
-      const updateIdx = MIGRATION.search(/UPDATE\s+"time_entries"/i);
-      const constraintIdx = MIGRATION.search(/ADD CONSTRAINT\s+"time_entries_duration_max_check"/i);
+    // Check both pairs separately — a single global "any UPDATE before any ADD CONSTRAINT"
+    // check would miss a regression that flips just one pair (e.g. tasks ADD CONSTRAINT
+    // ending up before tasks UPDATE while the time_entries pair stays correct).
+    test.each([
+      [
+        'time_entries',
+        /UPDATE\s+"time_entries"/i,
+        /ADD CONSTRAINT\s+"time_entries_duration_max_check"/i,
+      ],
+      ['tasks', /UPDATE\s+"tasks"/i, /ADD CONSTRAINT\s+"tasks_recurrence_duration_max_check"/i],
+    ])('%s: clamp UPDATE runs before its ADD CONSTRAINT', (_label, updatePattern, constraintPattern) => {
+      const updateIdx = MIGRATION.search(updatePattern);
+      const constraintIdx = MIGRATION.search(constraintPattern);
       expect(updateIdx).toBeGreaterThanOrEqual(0);
       expect(constraintIdx).toBeGreaterThan(updateIdx);
     });
@@ -65,8 +75,7 @@ describe('migration 0049: 24h duration cap is enforced at the DB layer', () => {
       // Two DO blocks, one per constraint. Pattern: SELECT 1 FROM pg_constraint with the
       // canonical name, then ADD CONSTRAINT only if it does not already exist.
       const probeMatches = MIGRATION.match(/IF NOT EXISTS \(\s*SELECT 1\s+FROM pg_constraint/gi);
-      expect(probeMatches).not.toBeNull();
-      expect(probeMatches!.length).toBeGreaterThanOrEqual(2);
+      expect(probeMatches?.length ?? 0).toBeGreaterThanOrEqual(2);
     });
   });
 });
