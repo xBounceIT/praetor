@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
+import * as externalIdentitiesRepo from '../repositories/externalIdentitiesRepo.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as settingsRepo from '../repositories/settingsRepo.ts';
@@ -934,11 +935,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'authProviderId is allowed only for OIDC or SAML');
       }
 
-      const updated = await usersRepo.updateAuthMethod(
-        idResult.value,
-        methodResult.value,
-        resolvedProviderId,
-      );
+      // Changing auth method or provider invalidates any prior external_identities rows:
+      // those rows are keyed on the IdP subject that was bound *before* the switch, and
+      // would silently re-authenticate the same user if the admin ever flips back to the
+      // original provider (A → B → A). Wipe them inside the same transaction as the user
+      // update so the auth-method change either fully succeeds (clean slate) or rolls back
+      // (no orphaned writes).
+      const authStateChanged =
+        targetUser.authMethod !== methodResult.value ||
+        targetUser.authProviderId !== resolvedProviderId;
+
+      const updated = await withDbTransaction(async (tx) => {
+        const result = await usersRepo.updateAuthMethod(
+          idResult.value,
+          methodResult.value,
+          resolvedProviderId,
+          tx,
+        );
+        if (!result) return null;
+        if (authStateChanged) {
+          await externalIdentitiesRepo.deleteAllForUser(idResult.value, tx);
+        }
+        return result;
+      });
       if (!updated) {
         return replyError(request, reply, {
           statusCode: 404,
