@@ -72,12 +72,8 @@ const hasConfigValue = (value: unknown): boolean =>
 const assertEnabledProviderConfig = (provider: ssoProvidersRepo.SsoProvider): void => {
   if (!provider.enabled) return;
 
-  if (!hasConfigValue(provider.usernameAttribute)) {
-    throw new SsoProviderValidationError('usernameAttribute is required');
-  }
-
   if (provider.protocol === 'oidc') {
-    for (const field of ['issuerUrl', 'clientId'] as const) {
+    for (const field of ['issuerUrl', 'clientId', 'usernameAttribute'] as const) {
       if (!hasConfigValue(provider[field])) {
         throw new SsoProviderValidationError(`${field} is required`);
       }
@@ -91,6 +87,9 @@ const assertEnabledProviderConfig = (provider: ssoProvidersRepo.SsoProvider): vo
     throw new SsoProviderValidationError(
       'SAML requires metadata URL/XML or manual entryPoint and idpCert',
     );
+  }
+  if (!hasConfigValue(provider.usernameAttribute)) {
+    throw new SsoProviderValidationError('usernameAttribute is required');
   }
 };
 
