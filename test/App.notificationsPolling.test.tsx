@@ -111,4 +111,28 @@ describe('App notifications polling cancellation (#618)', () => {
 
     expect(result.current.state).toEqual({ items: [], unreadCount: 0 });
   });
+
+  // Positive control: guards against a future regression where the
+  // cancellation flag is always-firing (e.g. flipped on the wrong code path)
+  // which would silently break the steady-state polling.
+  test('resolved list() applies to state when the user stays logged in', async () => {
+    apiList.mockClear();
+    resolveList = null;
+
+    const { result } = renderHook(() => useNotificationsPolling({ id: 'u1' }));
+
+    await waitFor(() => expect(apiList).toHaveBeenCalledTimes(1));
+    const pendingResolve = resolveList as ((value: NotificationsListResult) => void) | null;
+    if (!pendingResolve) throw new Error('expected list() to have stored its resolver');
+
+    await act(async () => {
+      pendingResolve({
+        notifications: [makeNotification('n1'), makeNotification('n2', true)],
+        unreadCount: 1,
+      });
+    });
+
+    expect(result.current.state.items.map((n) => n.id)).toEqual(['n1', 'n2']);
+    expect(result.current.state.unreadCount).toBe(1);
+  });
 });
