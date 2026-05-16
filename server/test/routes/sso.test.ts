@@ -279,7 +279,9 @@ describe('PUT /api/sso/providers/:id — masked sentinel preserves existing secr
   test('metadataXml === MASKED_SECRET is dropped from patch', async () => {
     const existing = samlProvider({
       enabled: true,
-      metadataXml: '<EntityDescriptor />',
+      // entityID makes assertEnabledProviderConfig happy without forcing idpIssuer; the test
+      // is about MASKED_SECRET handling, not issuer validation.
+      metadataXml: '<EntityDescriptor entityID="https://idp.example.com/" />',
       idpCert: 'MIIDstoredcert',
     });
     findByIdMock.mockResolvedValue(existing);
@@ -346,6 +348,7 @@ describe('PUT /api/sso/providers/:id — enabled SAML configuration validation',
       enabled: false,
       entryPoint: 'https://idp.example.com/sso',
       idpCert: 'MIIDstoredcert',
+      idpIssuer: 'https://idp.example.com/',
     });
     findByIdMock.mockResolvedValue(existing);
     updateMock.mockImplementation(
@@ -509,5 +512,51 @@ describe('POST /api/sso/providers — validateProviderBody', () => {
 
     expect(response.statusCode).toBe(400);
     expect(insertMock).not.toHaveBeenCalled();
+  });
+});
+
+// Issue #602: the admin UI previously built the ACS URL from the frontend's API base, which
+// can diverge from the backend's resolved callback origin in split-host deployments. This
+// endpoint surfaces the backend-authoritative URL templates so the admin form renders what
+// the SAML library will actually validate against.
+describe('GET /api/sso/saml/acs-url-info', () => {
+  const originalSsoBase = process.env.SSO_CALLBACK_BASE_URL;
+  const originalFrontend = process.env.FRONTEND_URL;
+
+  afterAll(() => {
+    if (originalSsoBase === undefined) delete process.env.SSO_CALLBACK_BASE_URL;
+    else process.env.SSO_CALLBACK_BASE_URL = originalSsoBase;
+    if (originalFrontend === undefined) delete process.env.FRONTEND_URL;
+    else process.env.FRONTEND_URL = originalFrontend;
+  });
+
+  test('returns a template anchored to the backend-configured base URL', async () => {
+    process.env.SSO_CALLBACK_BASE_URL = 'https://api.example.com';
+    process.env.FRONTEND_URL = 'https://app.example.com';
+
+    const response = await testApp.inject({
+      method: 'GET',
+      url: '/api/sso/saml/acs-url-info',
+      headers: authHeader(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toEqual({
+      acsUrlTemplate: 'https://api.example.com/api/auth/sso/saml/{slug}/callback',
+    });
+  });
+
+  test('returns 503 with a configuration hint when no base URL is set', async () => {
+    process.env.SSO_CALLBACK_BASE_URL = '';
+    process.env.FRONTEND_URL = '';
+
+    const response = await testApp.inject({
+      method: 'GET',
+      url: '/api/sso/saml/acs-url-info',
+      headers: authHeader(),
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(JSON.parse(response.body).error).toMatch(/SSO_CALLBACK_BASE_URL or FRONTEND_URL/);
   });
 });

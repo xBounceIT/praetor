@@ -1,4 +1,4 @@
-import { withDbTransaction } from '../db/drizzle.ts';
+import { type DbExecutor, withDbTransaction } from '../db/drizzle.ts';
 import type { SsoProtocol } from '../db/schema/sso.ts';
 import * as externalIdentitiesRepo from '../repositories/externalIdentitiesRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
@@ -10,6 +10,24 @@ import { computeAvatarInitials } from '../utils/initials.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 
 export const DEFAULT_ROLE_ID = 'user';
+
+// Discriminant for failure modes from `resolveExternalIdentity`. Lets callers map domain-level
+// failures (missing claims, conflict, disabled) to transport-level codes (HTTP redirect / status)
+// without depending on the human-readable English message text.
+export type ExternalAuthErrorCode =
+  | 'missing_username'
+  | 'missing_subject'
+  | 'user_disabled'
+  | 'identity_conflict';
+
+export class ExternalAuthError extends Error {
+  readonly code: ExternalAuthErrorCode;
+  constructor(message: string, code: ExternalAuthErrorCode) {
+    super(message);
+    this.name = 'ExternalAuthError';
+    this.code = code;
+  }
+}
 
 export type ExternalRoleMapping = {
   externalGroup: string;
@@ -42,7 +60,10 @@ const assertUserAllowsExternalProvider = (
     user.authMethod !== input.protocol ||
     user.authProviderId !== input.providerId
   ) {
-    throw new Error('External identity is not allowed for this Praetor user');
+    throw new ExternalAuthError(
+      'External identity is not allowed for this Praetor user',
+      'identity_conflict',
+    );
   }
 };
 
@@ -111,13 +132,19 @@ export const filterExistingRoleIds = async (roleIds: string[]): Promise<string[]
   return filtered.length > 0 ? filtered : [DEFAULT_ROLE_ID];
 };
 
-const writeExternalRoleIds = async (userId: string, roleIds: string[]): Promise<void> => {
-  await withDbTransaction(async (tx) => {
-    await usersRepo.replaceUserRoles(userId, roleIds, tx);
-    await usersRepo.setPrimaryRole(userId, roleIds[0], tx);
-    await userAssignmentsRepo.syncTopManagerAssignmentsForUser(userId, tx);
-  });
+const writeExternalRoleIdsTx = async (
+  userId: string,
+  roleIds: string[],
+  tx: DbExecutor,
+  primaryRoleId: string = roleIds[0],
+): Promise<void> => {
+  await usersRepo.replaceUserRoles(userId, roleIds, tx);
+  await usersRepo.setPrimaryRole(userId, primaryRoleId, tx);
+  await userAssignmentsRepo.syncTopManagerAssignmentsForUser(userId, tx);
 };
+
+const writeExternalRoleIds = (userId: string, roleIds: string[]): Promise<void> =>
+  withDbTransaction((tx) => writeExternalRoleIdsTx(userId, roleIds, tx));
 
 const applyExternalRoleIdsForUser = async (
   userId: string,
@@ -161,16 +188,18 @@ export const resolveExternalIdentity = async (
   const username = input.username.trim();
   const normalizedUsername = normalizeExternalUsername(username);
   if (!normalizedUsername) {
-    throw new Error('External identity did not include a username');
+    throw new ExternalAuthError('External identity did not include a username', 'missing_username');
   }
   if (!input.subject.trim()) {
-    throw new Error('External identity did not include a subject');
+    throw new ExternalAuthError('External identity did not include a subject', 'missing_subject');
   }
 
-  const mappedRoleIds = await filterExistingRoleIds(
-    mapExternalGroupsToRoleIds(input.groups, input.roleMappings),
+  // Match-only role IDs: empty when no SSO group mapped to an existing Praetor role.
+  // Preserve admin-assigned roles for existing users in that case (#596); new users
+  // still fall back to DEFAULT_ROLE_ID at provisioning so they get a baseline assignment.
+  const matchedRoleIds = await filterToExistingRoleIds(
+    mapExternalGroupsToMatchedRoleIds(input.groups, input.roleMappings),
   );
-  const primaryRole = mappedRoleIds[0];
 
   const resolveInTransaction = () =>
     withDbTransaction(async (tx) => {
@@ -190,7 +219,9 @@ export const resolveExternalIdentity = async (
 
       if (existingIdentity) {
         user = await usersRepo.findLoginUserById(existingIdentity.userId, tx);
-        if (!user) throw new Error('Bound Praetor user no longer exists');
+        if (!user) {
+          throw new ExternalAuthError('Bound Praetor user no longer exists', 'identity_conflict');
+        }
         assertUserAllowsExternalProvider(user, input);
       } else {
         user = await usersRepo.findLoginUserByNormalizedUsername(normalizedUsername, tx);
@@ -198,13 +229,14 @@ export const resolveExternalIdentity = async (
           const name = input.name?.trim() || username;
           const avatarInitials = computeAvatarInitials(name);
           const id = generatePrefixedId('u');
+          const initialRole = matchedRoleIds[0] ?? DEFAULT_ROLE_ID;
           await usersRepo.insertUser(
             {
               id,
               name,
               username,
               passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
-              role: primaryRole,
+              role: initialRole,
               avatarInitials,
               costPerHour: 0,
               isDisabled: false,
@@ -223,7 +255,7 @@ export const resolveExternalIdentity = async (
             id,
             name,
             username,
-            role: primaryRole,
+            role: initialRole,
             avatarInitials,
             isDisabled: false,
             sessionVersion: 1,
@@ -259,24 +291,38 @@ export const resolveExternalIdentity = async (
           tx,
         );
         if (!persistedIdentity || persistedIdentity.userId !== user.id) {
-          throw new Error('External identity is already bound to another user');
+          throw new ExternalAuthError(
+            'External identity is already bound to another user',
+            'identity_conflict',
+          );
         }
         wasBound = true;
       }
 
       if (user.isDisabled) {
-        throw new Error('User is disabled');
+        throw new ExternalAuthError('User is disabled', 'user_disabled');
       }
 
-      await usersRepo.replaceUserRoles(user.id, mappedRoleIds, tx);
-      await usersRepo.setPrimaryRole(user.id, primaryRole, tx);
-      await userAssignmentsRepo.syncTopManagerAssignmentsForUser(user.id, tx);
+      // Write roles when SSO mapped to one, or when provisioning a brand-new user (whose
+      // user_roles row would otherwise be missing). Skip writes for an existing user with
+      // no match so admin-assigned roles are preserved (#596).
+      let effectivePrimaryRole = user.role;
+      const rolesToWrite =
+        matchedRoleIds.length > 0 ? matchedRoleIds : wasCreated ? [DEFAULT_ROLE_ID] : null;
+      if (rolesToWrite) {
+        // Keep the existing primary when the current mapping still grants it, so
+        // admin-assigned or user-chosen primaries survive SSO refresh (#603).
+        const primaryRoleId =
+          !wasCreated && rolesToWrite.includes(user.role) ? user.role : rolesToWrite[0];
+        await writeExternalRoleIdsTx(user.id, rolesToWrite, tx, primaryRoleId);
+        effectivePrimaryRole = primaryRoleId;
+      }
 
       return {
         id: user.id,
         name: user.name,
         username: user.username,
-        role: primaryRole,
+        role: effectivePrimaryRole,
         avatarInitials: user.avatarInitials,
         isDisabled: user.isDisabled,
         sessionVersion: user.sessionVersion,

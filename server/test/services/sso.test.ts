@@ -1,16 +1,32 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import * as realDns from 'node:dns/promises';
+import * as realNodeSaml from '@node-saml/node-saml';
 import * as realSsoProvidersRepo from '../../repositories/ssoProvidersRepo.ts';
 import * as realSsoStatesRepo from '../../repositories/ssoStatesRepo.ts';
+import * as realExternalAuth from '../../services/external-auth.ts';
 
 const dnsSnap = { ...realDns };
+const nodeSamlSnap = { ...realNodeSaml };
+const externalAuthSnap = { ...realExternalAuth };
 const ssoProvidersRepoSnap = { ...realSsoProvidersRepo };
 const ssoStatesRepoSnap = { ...realSsoStatesRepo };
 
 const dnsLookupMock = mock();
 const findBySlugMock = mock();
 const findByIdMock = mock();
+const insertMock = mock();
+const updateMock = mock();
 const statesConsumeMock = mock();
+const samlValidatePostMock = mock();
+const resolveExternalIdentityMock = mock();
+const statesGetForProviderMock = mock();
+const statesInsertMock = mock();
+
+class StubSaml {
+  validatePostResponseAsync(formBody: Record<string, string>) {
+    return samlValidatePostMock(formBody);
+  }
+}
 
 let sso: typeof import('../../services/sso.ts');
 
@@ -20,14 +36,26 @@ beforeAll(async () => {
     default: { ...dnsSnap, lookup: dnsLookupMock },
     lookup: dnsLookupMock,
   }));
+  mock.module('@node-saml/node-saml', () => ({
+    ...nodeSamlSnap,
+    SAML: StubSaml,
+  }));
+  mock.module('../../services/external-auth.ts', () => ({
+    ...externalAuthSnap,
+    resolveExternalIdentity: resolveExternalIdentityMock,
+  }));
   mock.module('../../repositories/ssoProvidersRepo.ts', () => ({
     ...ssoProvidersRepoSnap,
     findBySlug: findBySlugMock,
     findById: findByIdMock,
+    insert: insertMock,
+    update: updateMock,
   }));
   mock.module('../../repositories/ssoStatesRepo.ts', () => ({
     ...ssoStatesRepoSnap,
     consume: statesConsumeMock,
+    getForProvider: statesGetForProviderMock,
+    insert: statesInsertMock,
   }));
 
   sso = await import('../../services/sso.ts');
@@ -35,12 +63,26 @@ beforeAll(async () => {
 
 afterAll(() => {
   mock.module('node:dns/promises', () => dnsSnap);
+  mock.module('@node-saml/node-saml', () => nodeSamlSnap);
+  mock.module('../../services/external-auth.ts', () => externalAuthSnap);
   mock.module('../../repositories/ssoProvidersRepo.ts', () => ssoProvidersRepoSnap);
   mock.module('../../repositories/ssoStatesRepo.ts', () => ssoStatesRepoSnap);
 });
 
 beforeEach(() => {
-  for (const m of [dnsLookupMock, findBySlugMock, findByIdMock, statesConsumeMock]) m.mockReset();
+  for (const m of [
+    dnsLookupMock,
+    findBySlugMock,
+    findByIdMock,
+    insertMock,
+    updateMock,
+    statesConsumeMock,
+    samlValidatePostMock,
+    resolveExternalIdentityMock,
+    statesGetForProviderMock,
+    statesInsertMock,
+  ])
+    m.mockReset();
 });
 
 describe('isPrivateIp', () => {
@@ -144,6 +186,64 @@ describe('resolvePublicBaseUrl', () => {
   test('rejects http:// for non-loopback hosts', () => {
     process.env.SSO_CALLBACK_BASE_URL = 'http://praetor.example.com';
     expect(() => sso.resolvePublicBaseUrl()).toThrow(/https:\/\/ for non-loopback/);
+  });
+});
+
+describe('getSamlAcsUrlInfo', () => {
+  const originalSsoBase = process.env.SSO_CALLBACK_BASE_URL;
+  const originalFrontend = process.env.FRONTEND_URL;
+
+  beforeEach(() => {
+    process.env.SSO_CALLBACK_BASE_URL = '';
+    process.env.FRONTEND_URL = '';
+  });
+
+  afterAll(() => {
+    if (originalSsoBase === undefined) delete process.env.SSO_CALLBACK_BASE_URL;
+    else process.env.SSO_CALLBACK_BASE_URL = originalSsoBase;
+    if (originalFrontend === undefined) delete process.env.FRONTEND_URL;
+    else process.env.FRONTEND_URL = originalFrontend;
+  });
+
+  // Issue #602: the admin UI used to build the ACS URL from the frontend's API base, which in
+  // split-host deployments doesn't match the backend's resolved SSO callback origin. The
+  // template returned here must be anchored to the backend's resolved base URL.
+  test('returns a template anchored to SSO_CALLBACK_BASE_URL, not the frontend origin', () => {
+    process.env.SSO_CALLBACK_BASE_URL = 'https://api.example.com';
+    process.env.FRONTEND_URL = 'https://app.example.com';
+    expect(sso.getSamlAcsUrlInfo()).toEqual({
+      acsUrlTemplate: 'https://api.example.com/api/auth/sso/saml/{slug}/callback',
+    });
+  });
+
+  test('falls back to FRONTEND_URL when SSO_CALLBACK_BASE_URL is unset', () => {
+    process.env.FRONTEND_URL = 'https://app.example.com';
+    expect(sso.getSamlAcsUrlInfo().acsUrlTemplate).toBe(
+      'https://app.example.com/api/auth/sso/saml/{slug}/callback',
+    );
+  });
+
+  test('throws when no base URL is configured (callers should map to 503)', () => {
+    expect(() => sso.getSamlAcsUrlInfo()).toThrow(/SSO_CALLBACK_BASE_URL or FRONTEND_URL/);
+  });
+
+  test('template leaves `{slug}` literal so the client can interpolate', () => {
+    process.env.SSO_CALLBACK_BASE_URL = 'https://api.example.com';
+    const { acsUrlTemplate } = sso.getSamlAcsUrlInfo();
+    expect(acsUrlTemplate).toContain('{slug}');
+    expect(acsUrlTemplate).not.toContain('%7B');
+    expect(acsUrlTemplate).not.toContain('placeholder');
+  });
+
+  // PR #649 review: a naive replace() on the full URL would rewrite the first sentinel
+  // occurrence anywhere, including the host. Splice the LAST occurrence (the one we injected
+  // into the path) so a host coincidentally containing the sentinel stays intact.
+  test('preserves the base URL host even when it contains the placeholder sentinel', () => {
+    process.env.SSO_CALLBACK_BASE_URL = 'https://praetor-slug-placeholder.example.com';
+    const { acsUrlTemplate } = sso.getSamlAcsUrlInfo();
+    expect(acsUrlTemplate).toBe(
+      'https://praetor-slug-placeholder.example.com/api/auth/sso/saml/{slug}/callback',
+    );
   });
 });
 
@@ -376,5 +476,219 @@ describe('completeOidcLogin state-before-provider ordering', () => {
       'Invalid or expired SSO state',
     );
     expect(statesConsumeMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SAML provider validation requires idpIssuer', () => {
+  // node-saml silently skips <Issuer> validation when idpIssuer is empty (issue #597). The
+  // service must refuse to save/enable a SAML provider that could end up calling the library
+  // without an issuer to enforce, and the runtime SAML client must refuse to be built in that
+  // shape even when validation was bypassed via a stale DB row.
+  const baseSamlInput = {
+    protocol: 'saml' as const,
+    slug: 'okta-test',
+    name: 'Okta',
+    enabled: true,
+    entryPoint: 'https://idp.example.com/sso',
+    idpCert: 'MIIBdummyCert',
+  };
+
+  test('createProvider rejects enabled manual SAML config with empty idpIssuer', async () => {
+    await expect(sso.createProvider(baseSamlInput)).rejects.toThrow(sso.SsoProviderValidationError);
+    await expect(sso.createProvider(baseSamlInput)).rejects.toThrow(/idpIssuer/);
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  test('createProvider accepts manual SAML config when idpIssuer is set', async () => {
+    insertMock.mockImplementation(async (provider: realSsoProvidersRepo.SsoProvider) => provider);
+    const created = await sso.createProvider({
+      ...baseSamlInput,
+      idpIssuer: 'https://idp.example.com/',
+    });
+    expect(created.idpIssuer).toBe('https://idp.example.com/');
+    expect(insertMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('createProvider accepts metadataXml whose entityID supplies the issuer', async () => {
+    insertMock.mockImplementation(async (provider: realSsoProvidersRepo.SsoProvider) => provider);
+    const metadataXml = `<?xml version="1.0"?>
+<EntityDescriptor entityID="https://idp.example.com/">
+  <IDPSSODescriptor>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso"/>
+    <KeyDescriptor><KeyInfo><X509Data><X509Certificate>MIIBcert</X509Certificate></X509Data></KeyInfo></KeyDescriptor>
+  </IDPSSODescriptor>
+</EntityDescriptor>`;
+    const created = await sso.createProvider({
+      protocol: 'saml',
+      slug: 'okta-metadata',
+      name: 'Okta',
+      enabled: true,
+      metadataXml,
+    });
+    expect(created.idpIssuer).toBe('');
+    expect(insertMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('createProvider rejects metadataXml that does not expose an entityID', async () => {
+    const metadataXml = `<?xml version="1.0"?>
+<EntityDescriptor>
+  <IDPSSODescriptor>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso"/>
+  </IDPSSODescriptor>
+</EntityDescriptor>`;
+    await expect(
+      sso.createProvider({
+        protocol: 'saml',
+        slug: 'okta-no-issuer',
+        name: 'Okta',
+        enabled: true,
+        metadataXml,
+      }),
+    ).rejects.toThrow(/idpIssuer/);
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  test('startSamlLogin refuses to build SAML client when resolved idpIssuer is empty', async () => {
+    // Simulates a metadataUrl provider that slipped past save-time validation (e.g. enabled in
+    // an older release before this fix). The runtime guard in createSamlClient must still
+    // refuse to construct a SAML instance whose idpIssuer would be undefined.
+    const originalBase = process.env.SSO_CALLBACK_BASE_URL;
+    process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
+    try {
+      findBySlugMock.mockResolvedValue({
+        ...SAML_PROVIDER,
+        metadataUrl: '',
+        metadataXml: '',
+        entryPoint: 'https://idp.example.com/sso',
+        idpCert: 'MIIBdummyCert',
+        idpIssuer: '',
+      });
+      await expect(sso.startSamlLogin('okta')).rejects.toThrow(/IdP issuer/);
+    } finally {
+      if (originalBase === undefined) delete process.env.SSO_CALLBACK_BASE_URL;
+      else process.env.SSO_CALLBACK_BASE_URL = originalBase;
+    }
+  });
+});
+
+describe('completeSamlLogin issuer resolution', () => {
+  const originalSsoBase = process.env.SSO_CALLBACK_BASE_URL;
+
+  const manualSamlProvider: realSsoProvidersRepo.SsoProvider = {
+    ...SAML_PROVIDER,
+    metadataUrl: '',
+    entryPoint: 'https://idp.example.com/sso',
+    idpCert: 'CERT',
+    idpIssuer: '',
+    spIssuer: 'https://app.example.com/sp/okta',
+  };
+
+  beforeEach(() => {
+    process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
+  });
+  afterAll(() => {
+    if (originalSsoBase === undefined) delete process.env.SSO_CALLBACK_BASE_URL;
+    else process.env.SSO_CALLBACK_BASE_URL = originalSsoBase;
+  });
+
+  test('fails before validatePostResponseAsync when provider.idpIssuer is empty (does NOT fall back to spIssuer)', async () => {
+    // Under PR #597, createSamlClient now refuses to construct the SAML instance when
+    // idpIssuer is empty — node-saml would otherwise silently skip <Issuer> validation. The
+    // older "SAML response did not include an issuer" path is therefore unreachable for
+    // manual mode with empty idpIssuer; the spIssuer-not-a-fallback guarantee still holds.
+    findBySlugMock.mockResolvedValue(manualSamlProvider);
+    await expect(sso.completeSamlLogin('okta', { SAMLResponse: 'x' })).rejects.toThrow(
+      /IdP issuer/,
+    );
+    expect(samlValidatePostMock).not.toHaveBeenCalled();
+    expect(resolveExternalIdentityMock).not.toHaveBeenCalled();
+  });
+
+  test('falls back to provider.idpIssuer when profile.issuer is missing', async () => {
+    findBySlugMock.mockResolvedValue({
+      ...manualSamlProvider,
+      idpIssuer: 'https://idp.example.com/realm',
+    });
+    samlValidatePostMock.mockResolvedValue({
+      profile: { nameID: 'user@example.com', issuer: '' },
+      loggedOut: false,
+    });
+    resolveExternalIdentityMock.mockRejectedValue(new Error('stop here'));
+    await expect(sso.completeSamlLogin('okta', { SAMLResponse: 'x' })).rejects.toThrow('stop here');
+    expect(resolveExternalIdentityMock).toHaveBeenCalledTimes(1);
+    expect(resolveExternalIdentityMock.mock.calls[0][0]).toMatchObject({
+      issuer: 'https://idp.example.com/realm',
+    });
+  });
+
+  test('profile.issuer wins over provider.idpIssuer when both are set', async () => {
+    findBySlugMock.mockResolvedValue({
+      ...manualSamlProvider,
+      idpIssuer: 'https://idp.example.com/configured',
+    });
+    samlValidatePostMock.mockResolvedValue({
+      profile: { nameID: 'user@example.com', issuer: 'https://idp.example.com/from-response' },
+      loggedOut: false,
+    });
+    resolveExternalIdentityMock.mockRejectedValue(new Error('stop here'));
+    await expect(sso.completeSamlLogin('okta', { SAMLResponse: 'x' })).rejects.toThrow('stop here');
+    expect(resolveExternalIdentityMock.mock.calls[0][0]).toMatchObject({
+      issuer: 'https://idp.example.com/from-response',
+    });
+  });
+});
+
+describe('DbSamlCacheProvider provider scoping', () => {
+  const fakeRow = {
+    state: 'in-response-to-1',
+    providerId: 'sso-A',
+    protocol: 'saml' as const,
+    codeVerifier: '',
+    relayState: 'relay-A',
+    expiresAt: new Date(Date.now() + 60_000),
+  };
+
+  beforeEach(() => {
+    statesGetForProviderMock.mockImplementation(async (state: string, providerId: string) =>
+      state === fakeRow.state && providerId === fakeRow.providerId ? fakeRow : null,
+    );
+  });
+
+  test("returns the value when queried by the same provider's cache", async () => {
+    const cache = new sso.DbSamlCacheProvider('sso-A');
+    expect(await cache.getAsync('in-response-to-1')).toBe('relay-A');
+    expect(statesGetForProviderMock).toHaveBeenCalledWith('in-response-to-1', 'sso-A');
+  });
+
+  test("returns null when a different provider's cache instance queries the same key", async () => {
+    const cache = new sso.DbSamlCacheProvider('sso-B');
+    expect(await cache.getAsync('in-response-to-1')).toBeNull();
+    expect(statesGetForProviderMock).toHaveBeenCalledWith('in-response-to-1', 'sso-B');
+  });
+
+  test('saveAsync records the cache provider providerId', async () => {
+    statesInsertMock.mockResolvedValue(undefined);
+    const cache = new sso.DbSamlCacheProvider('sso-A');
+    await cache.saveAsync('k', 'v');
+    const inserted = statesInsertMock.mock.calls[0][0];
+    expect(inserted.state).toBe('k');
+    expect(inserted.providerId).toBe('sso-A');
+    expect(inserted.protocol).toBe('saml');
+    expect(inserted.relayState).toBe('v');
+  });
+});
+
+describe('updateProvider config validation', () => {
+  test('rejects enabling a SAML provider with empty usernameAttribute', async () => {
+    findByIdMock.mockResolvedValue({
+      ...SAML_PROVIDER,
+      metadataUrl: 'https://idp.example.com/metadata',
+    });
+    await expect(
+      sso.updateProvider('sso-1', { enabled: true, usernameAttribute: '' }),
+    ).rejects.toThrow(sso.SsoProviderValidationError);
+    await expect(
+      sso.updateProvider('sso-1', { enabled: true, usernameAttribute: '' }),
+    ).rejects.toThrow(/usernameAttribute/);
   });
 });

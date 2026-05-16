@@ -213,6 +213,34 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async () => ssoService.listAdminProviders(),
   );
 
+  fastify.get(
+    '/saml/acs-url-info',
+    {
+      onRequest: [authenticateToken, requirePermission('administration.authentication.view')],
+      schema: {
+        tags: ['sso'],
+        summary: 'SAML ACS URL templates the backend will validate against',
+        response: {
+          200: {
+            type: 'object',
+            properties: { acsUrlTemplate: { type: 'string' } },
+            required: ['acsUrlTemplate'],
+          },
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (_request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        return ssoService.getSamlAcsUrlInfo();
+      } catch (err) {
+        return reply.code(503).send({
+          error: err instanceof Error ? err.message : 'SSO public base URL is not configured',
+        });
+      }
+    },
+  );
+
   fastify.post(
     '/providers',
     {

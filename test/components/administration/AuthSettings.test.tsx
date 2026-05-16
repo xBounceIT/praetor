@@ -19,8 +19,21 @@ const ldapApiMock = {
   })),
 };
 
+const ssoApiMock = {
+  // Issue #602: the admin form must render the URL the backend will validate against, not
+  // one built from the frontend's API base. Default the mock to a split-host setup so any
+  // test that surfaces the ACS URL exercises the divergent-origin path.
+  getSamlAcsUrlInfo: mock(async () => ({
+    acsUrlTemplate: 'https://api.example.com/api/auth/sso/saml/{slug}/callback',
+  })),
+};
+
 mock.module('../../../services/api/ldap', () => ({
   ldapApi: ldapApiMock,
+}));
+
+mock.module('../../../services/api/sso', () => ({
+  ssoApi: ssoApiMock,
 }));
 
 clearSpyStateAfterAll();
@@ -157,6 +170,144 @@ describe('<AuthSettings />', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('Role mapping references a missing role');
     });
     expect(screen.queryByText('admin.ldap.changesSaved')).not.toBeInTheDocument();
+  });
+
+  test('renders the SAML ACS URL using the backend-authoritative template (issue #602)', async () => {
+    ssoApiMock.getSamlAcsUrlInfo.mockClear();
+    renderAuthSettings();
+
+    // Open SAML tab and type a slug into the new-provider form.
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+    const form = screen.getByText('admin.sso.newProvider').closest('form') as HTMLFormElement;
+    const slugLabel = [...form.querySelectorAll('label')].find(
+      (el) => el.textContent === 'admin.sso.slug',
+    );
+    const slugInput = slugLabel?.parentElement?.querySelector('input') as HTMLInputElement;
+    fireEvent.change(slugInput, { target: { value: 'okta' } });
+
+    // The endpoint resolves asynchronously on mount, so wait for the URL to appear.
+    const acsField = await waitFor(() => {
+      const label = [...form.querySelectorAll('label')].find(
+        (el) => el.textContent === 'admin.sso.acsUrl',
+      );
+      const input = label?.parentElement?.querySelector('input') as HTMLInputElement | null;
+      if (!input?.readOnly) throw new Error('ACS URL field not yet rendered');
+      return input;
+    });
+
+    expect(ssoApiMock.getSamlAcsUrlInfo).toHaveBeenCalledTimes(1);
+    // Backend origin (api.example.com) wins over any frontend-derived value.
+    expect(acsField.value).toBe('https://api.example.com/api/auth/sso/saml/okta/callback');
+  });
+
+  test('retries the ACS URL fetch if the user left SAML before the first request settled (#649 review)', async () => {
+    ssoApiMock.getSamlAcsUrlInfo.mockClear();
+    // First attempt never settles, simulating a slow network the user gives up on. The bug
+    // guarded by this test: a ref-based lock set before settle would prevent the second
+    // visit from refetching, stranding the preview in 'loading' forever.
+    ssoApiMock.getSamlAcsUrlInfo.mockImplementationOnce(() => new Promise(() => {}));
+
+    renderAuthSettings();
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+    await waitFor(() => expect(ssoApiMock.getSamlAcsUrlInfo).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.ldap' }));
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+
+    await waitFor(() => expect(ssoApiMock.getSamlAcsUrlInfo).toHaveBeenCalledTimes(2));
+
+    // And the retry produces a usable URL.
+    const form = screen.getByText('admin.sso.newProvider').closest('form') as HTMLFormElement;
+    const slugLabel = [...form.querySelectorAll('label')].find(
+      (el) => el.textContent === 'admin.sso.slug',
+    );
+    const slugInput = slugLabel?.parentElement?.querySelector('input') as HTMLInputElement;
+    fireEvent.change(slugInput, { target: { value: 'okta' } });
+
+    const acsField = await waitFor(() => {
+      const label = [...form.querySelectorAll('label')].find(
+        (el) => el.textContent === 'admin.sso.acsUrl',
+      );
+      const input = label?.parentElement?.querySelector('input') as HTMLInputElement | null;
+      if (!input?.readOnly) throw new Error('ACS URL field not yet rendered');
+      return input;
+    });
+    expect(acsField.value).toBe('https://api.example.com/api/auth/sso/saml/okta/callback');
+  });
+
+  test('retries the ACS URL fetch on SAML re-entry after a transient error (#649 review)', async () => {
+    ssoApiMock.getSamlAcsUrlInfo.mockClear();
+    // First attempt fails (transient 503), second attempt succeeds. Without retry-on-reentry,
+    // a one-off failure would permanently disable the preview until a full page reload.
+    ssoApiMock.getSamlAcsUrlInfo.mockImplementationOnce(async () => {
+      throw new Error('temporary network failure');
+    });
+
+    renderAuthSettings();
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+    await waitFor(() => expect(ssoApiMock.getSamlAcsUrlInfo).toHaveBeenCalledTimes(1));
+
+    // Wait for the error UI so we know the first attempt resolved into the 'error' state.
+    const form = screen.getByText('admin.sso.newProvider').closest('form') as HTMLFormElement;
+    const slugLabel = [...form.querySelectorAll('label')].find(
+      (el) => el.textContent === 'admin.sso.slug',
+    );
+    const slugInput = slugLabel?.parentElement?.querySelector('input') as HTMLInputElement;
+    fireEvent.change(slugInput, { target: { value: 'okta' } });
+    await waitFor(() => {
+      if (!within(form).queryByText(/temporary network failure/)) {
+        throw new Error('Error not yet rendered');
+      }
+    });
+
+    // Leave SAML and return — the retry should fire.
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.ldap' }));
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+
+    await waitFor(() => expect(ssoApiMock.getSamlAcsUrlInfo).toHaveBeenCalledTimes(2));
+
+    const acsField = await waitFor(() => {
+      const refreshedForm = screen.getByText('admin.sso.newProvider').closest('form');
+      const label = [...(refreshedForm?.querySelectorAll('label') ?? [])].find(
+        (el) => el.textContent === 'admin.sso.acsUrl',
+      );
+      const input = label?.parentElement?.querySelector('input') as HTMLInputElement | null;
+      if (!input?.readOnly) throw new Error('ACS URL field not yet rendered');
+      return input;
+    });
+    expect(acsField.value).toBe('https://api.example.com/api/auth/sso/saml/okta/callback');
+  });
+
+  test('shows an error message when the backend cannot resolve the ACS URL (issue #602)', async () => {
+    ssoApiMock.getSamlAcsUrlInfo.mockClear();
+    ssoApiMock.getSamlAcsUrlInfo.mockImplementationOnce(async () => {
+      throw new Error('SSO_CALLBACK_BASE_URL or FRONTEND_URL must be configured for SSO');
+    });
+
+    renderAuthSettings();
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+    const form = screen.getByText('admin.sso.newProvider').closest('form') as HTMLFormElement;
+    const slugLabel = [...form.querySelectorAll('label')].find(
+      (el) => el.textContent === 'admin.sso.slug',
+    );
+    const slugInput = slugLabel?.parentElement?.querySelector('input') as HTMLInputElement;
+    fireEvent.change(slugInput, { target: { value: 'okta' } });
+
+    const message = await waitFor(() => {
+      const node = within(form).queryByText(/SSO_CALLBACK_BASE_URL or FRONTEND_URL/);
+      if (!node) throw new Error('Configuration hint not rendered');
+      return node;
+    });
+    expect(message).toBeInTheDocument();
+
+    // The misleading editable ACS URL field must NOT appear when the backend can't resolve it.
+    const acsLabel = [...form.querySelectorAll('label')].find(
+      (el) => el.textContent === 'admin.sso.acsUrl',
+    );
+    expect(acsLabel?.parentElement?.querySelector('input')).toBeNull();
   });
 
   test('surfaces SSO provider save failures inline and restores the save button', async () => {
@@ -394,5 +545,40 @@ describe('<AuthSettings />', () => {
       const submitted = onSave.mock.calls[0]?.[0] as LdapConfig;
       expect(submitted.bindPassword).toBe('new-pw');
     });
+  });
+
+  test('blocks save and surfaces idpIssuer error for enabled manual SAML missing the issuer', async () => {
+    // Issue #597: node-saml silently skips <Issuer> validation when idpIssuer is empty.
+    // The form must refuse to send a save request for an enabled manual SAML config that
+    // has not specified an IdP issuer.
+    const onSaveSsoProvider = mock(async (provider: Partial<SsoProvider>) =>
+      buildProvider(provider.protocol ?? 'saml', provider),
+    );
+    renderAuthSettings({
+      onSaveSsoProvider,
+      ssoProviders: [
+        buildProvider('saml', {
+          enabled: true,
+          entryPoint: 'https://idp.example.com/sso',
+          idpCert: 'MIIBdummyCert',
+          // idpIssuer left empty — the violation under test.
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+    // The form initially renders an empty "new provider" draft. Click the pen icon on the
+    // listed SAML provider to load its values into the form.
+    fireEvent.click(screen.getByRole('button', { name: 'admin.sso.editProvider' }));
+    const heading = screen.getByText('admin.sso.editProvider', { selector: 'h3' });
+    const form = heading.closest('form') as HTMLFormElement | null;
+    if (!form) throw new Error('SAML provider form not found');
+
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(within(form).getByText('admin.sso.errors.idpIssuerRequired')).toBeInTheDocument();
+    });
+    expect(onSaveSsoProvider).not.toHaveBeenCalled();
   });
 });

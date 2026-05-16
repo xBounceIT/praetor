@@ -16,9 +16,10 @@ import * as ssoStatesRepo from '../repositories/ssoStatesRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { decrypt, encrypt, MASKED_SECRET } from '../utils/crypto.ts';
 import { buildFrontendUrl } from '../utils/frontend-url.ts';
+import { NotFoundError } from '../utils/http-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
-import { resolveExternalIdentity } from './external-auth.ts';
+import { ExternalAuthError, resolveExternalIdentity } from './external-auth.ts';
 
 const OIDC_STATE_TTL_MS = 10 * 60 * 1000;
 const SAML_REQUEST_TTL_MS = 10 * 60 * 1000;
@@ -39,6 +40,31 @@ export class SsoProviderValidationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'SsoProviderValidationError';
+  }
+}
+
+// Stable codes redirected to the frontend as `?sso_error=<code>`. The frontend keeps an aligned
+// list in `types.ts` (`SSO_LOGIN_ERROR_CODES`) — the server's tsconfig rootDir prevents importing
+// it directly. The i18n catalog under `auth.admin.sso.loginErrors.*` must cover every code here.
+// Raw `err.message` (often library wording) must never reach the URL. See issue #604.
+export const SSO_LOGIN_ERROR_CODES = [
+  'invalid_state',
+  'invalid_response',
+  'provider_disabled',
+  'provider_misconfigured',
+  'account_disabled',
+  'identity_conflict',
+  'generic',
+] as const;
+
+export type SsoLoginErrorCode = (typeof SSO_LOGIN_ERROR_CODES)[number];
+
+export class SsoLoginError extends Error {
+  readonly code: SsoLoginErrorCode;
+  constructor(message: string, code: SsoLoginErrorCode) {
+    super(message);
+    this.name = 'SsoLoginError';
+    this.code = code;
   }
 }
 
@@ -81,11 +107,28 @@ const assertEnabledProviderConfig = (provider: ssoProvidersRepo.SsoProvider): vo
     return;
   }
 
-  const hasMetadata = hasConfigValue(provider.metadataUrl) || hasConfigValue(provider.metadataXml);
+  const hasMetadataXml = hasConfigValue(provider.metadataXml);
+  const hasMetadata = hasConfigValue(provider.metadataUrl) || hasMetadataXml;
   const hasManual = hasConfigValue(provider.entryPoint) && hasConfigValue(provider.idpCert);
   if (!hasMetadata && !hasManual) {
     throw new SsoProviderValidationError(
       'SAML requires metadata URL/XML or manual entryPoint and idpCert',
+    );
+  }
+  if (!hasConfigValue(provider.usernameAttribute)) {
+    throw new SsoProviderValidationError('usernameAttribute is required');
+  }
+
+  // node-saml silently skips <Issuer> validation when idpIssuer is empty, so the SP would accept
+  // an assertion from any IdP whose signing cert chains correctly. Require provider.idpIssuer
+  // unless we can derive it from inline metadata at save time. metadataUrl mode is caught by
+  // the runtime guard in createSamlClient instead.
+  if (
+    !hasConfigValue(provider.idpIssuer) &&
+    !(hasMetadataXml && parseSamlMetadata(provider.metadataXml).idpIssuer)
+  ) {
+    throw new SsoProviderValidationError(
+      'SAML requires idpIssuer when it cannot be derived from inline metadata',
     );
   }
 };
@@ -220,7 +263,7 @@ const prepareProviderValues = (
   return patch;
 };
 
-class DbSamlCacheProvider implements CacheProvider {
+export class DbSamlCacheProvider implements CacheProvider {
   constructor(private readonly providerId: string) {}
 
   async saveAsync(key: string, value: string): Promise<CacheItem | null> {
@@ -236,7 +279,7 @@ class DbSamlCacheProvider implements CacheProvider {
   }
 
   async getAsync(key: string): Promise<string | null> {
-    const state = await ssoStatesRepo.get(key);
+    const state = await ssoStatesRepo.getForProvider(key, this.providerId);
     if (!state || state.protocol !== 'saml' || state.expiresAt <= new Date()) return null;
     return state.relayState;
   }
@@ -485,6 +528,25 @@ const createLoginTicket = async (userId: string, activeRole: string): Promise<st
   return ticket;
 };
 
+// `resolveExternalIdentity` throws domain-typed `ExternalAuthError`s (kept decoupled from HTTP
+// concerns and shared with the LDAP path). Translate each discriminant to its SSO login code at
+// the service-to-route boundary so the frontend never sees raw library wording.
+const EXTERNAL_AUTH_CODE_TO_SSO: Record<ExternalAuthError['code'], SsoLoginErrorCode> = {
+  missing_username: 'invalid_response',
+  missing_subject: 'invalid_response',
+  user_disabled: 'account_disabled',
+  identity_conflict: 'identity_conflict',
+};
+
+const mapResolveExternalError = (err: unknown): SsoLoginError => {
+  if (err instanceof SsoLoginError) return err;
+  if (err instanceof ExternalAuthError) {
+    return new SsoLoginError(err.message, EXTERNAL_AUTH_CODE_TO_SSO[err.code]);
+  }
+  const message = err instanceof Error ? err.message : '';
+  return new SsoLoginError(message || 'SSO login failed', 'generic');
+};
+
 const completeExternalLogin = async (
   provider: ssoProvidersRepo.SsoProvider,
   identity: {
@@ -496,28 +558,37 @@ const completeExternalLogin = async (
     groups: string[];
   },
 ): Promise<string> => {
-  const user = await resolveExternalIdentity({
-    providerId: provider.id,
-    protocol: provider.protocol,
-    issuer: identity.issuer,
-    subject: identity.subject,
-    username: identity.username,
-    name: identity.name,
-    email: identity.email,
-    groups: identity.groups,
-    roleMappings: provider.roleMappings,
-  });
+  let user: Awaited<ReturnType<typeof resolveExternalIdentity>>;
+  try {
+    user = await resolveExternalIdentity({
+      providerId: provider.id,
+      protocol: provider.protocol,
+      issuer: identity.issuer,
+      subject: identity.subject,
+      username: identity.username,
+      name: identity.name,
+      email: identity.email,
+      groups: identity.groups,
+      roleMappings: provider.roleMappings,
+    });
+  } catch (err) {
+    throw mapResolveExternalError(err);
+  }
   const ticket = await createLoginTicket(user.id, user.role);
   return buildFrontendTicketUrl(ticket);
 };
 
+// Disabled/missing/wrong-protocol providers throw `NotFoundError` so the metadata + start GET
+// routes propagate to the global error handler and return 404 (see #600, #635). The login
+// callback routes catch this error in `handleSsoCallbackError` and map it to the stable
+// `provider_disabled` redirect code.
 const getEnabledProviderBySlug = async (
   protocol: 'oidc' | 'saml',
   slug: string,
 ): Promise<ssoProvidersRepo.SsoProvider> => {
   const provider = await ssoProvidersRepo.findBySlug(slug);
   if (!provider || provider.protocol !== protocol || !provider.enabled) {
-    throw new Error('SSO provider is not enabled');
+    throw new NotFoundError('SSO provider');
   }
   return provider;
 };
@@ -528,18 +599,7 @@ const getEnabledProviderById = async (
 ): Promise<ssoProvidersRepo.SsoProvider> => {
   const provider = await ssoProvidersRepo.findById(id);
   if (!provider || provider.protocol !== protocol || !provider.enabled) {
-    throw new Error('SSO provider is not enabled');
-  }
-  return provider;
-};
-
-const getProviderBySlug = async (
-  protocol: 'oidc' | 'saml',
-  slug: string,
-): Promise<ssoProvidersRepo.SsoProvider> => {
-  const provider = await ssoProvidersRepo.findBySlug(slug);
-  if (!provider || provider.protocol !== protocol) {
-    throw new Error('SSO provider not found');
+    throw new NotFoundError('SSO provider');
   }
   return provider;
 };
@@ -547,7 +607,10 @@ const getProviderBySlug = async (
 const createOidcConfig = async (provider: ssoProvidersRepo.SsoProvider) => {
   const { clientSecret } = getProviderSecrets(provider);
   if (!provider.issuerUrl || !provider.clientId) {
-    throw new Error('OIDC provider is missing issuer URL or client ID');
+    throw new SsoLoginError(
+      'OIDC provider is missing issuer URL or client ID',
+      'provider_misconfigured',
+    );
   }
   // Reuse the same SSRF pre-flight as the SAML metadata fetch. openid-client.discovery does its
   // own HTTPS fetch internally, but our pre-flight catches the obvious cases (http://, private
@@ -567,8 +630,17 @@ const createSamlClient = async (
   const issuer = provider.spIssuer || buildSamlMetadataUrl(provider.slug, baseUrl);
   const entryPoint = idp.entryPoint || provider.entryPoint;
   const idpCert = normalizeCertificate(idp.idpCert || provider.idpCert);
-  if (!entryPoint || !idpCert) {
-    throw new Error('SAML provider is missing entry point or IdP certificate');
+  const idpIssuer = idp.idpIssuer || provider.idpIssuer;
+  const missing = [
+    !entryPoint && 'entry point',
+    !idpCert && 'IdP certificate',
+    !idpIssuer && 'IdP issuer',
+  ].filter(Boolean);
+  if (missing.length > 0) {
+    throw new SsoLoginError(
+      `SAML provider is missing ${missing.join(', ')}`,
+      'provider_misconfigured',
+    );
   }
   return new SAML({
     callbackUrl,
@@ -576,7 +648,7 @@ const createSamlClient = async (
     audience: issuer,
     entryPoint,
     idpCert,
-    idpIssuer: idp.idpIssuer || provider.idpIssuer || undefined,
+    idpIssuer,
     privateKey: privateKey || undefined,
     publicCert: provider.publicCert || undefined,
     signatureAlgorithm: 'sha256',
@@ -585,6 +657,22 @@ const createSamlClient = async (
     requestIdExpirationPeriodMs: SAML_REQUEST_TTL_MS,
     cacheProvider: new DbSamlCacheProvider(provider.id),
   });
+};
+
+// Routed through buildCallbackUrl so the admin preview can't drift from the URL the SAML
+// library validates against. The slug is substituted via a URL-safe sentinel because new URL()
+// would percent-encode the `{}` in a literal `{slug}` placeholder. We splice the sentinel out
+// at its LAST occurrence — the one we just injected into the path — so a sentinel substring
+// in baseUrl's host can't be rewritten by accident.
+const SAML_SLUG_SENTINEL = 'praetor-slug-placeholder';
+
+export const getSamlAcsUrlInfo = (): { acsUrlTemplate: string } => {
+  const baseUrl = resolvePublicBaseUrl();
+  const built = buildCallbackUrl('saml', SAML_SLUG_SENTINEL, baseUrl);
+  const idx = built.lastIndexOf(SAML_SLUG_SENTINEL);
+  return {
+    acsUrlTemplate: built.slice(0, idx) + '{slug}' + built.slice(idx + SAML_SLUG_SENTINEL.length),
+  };
 };
 
 export const listAdminProviders = async (): Promise<AdminSsoProvider[]> =>
@@ -690,10 +778,10 @@ export const completeOidcLogin = async (slug: string, callbackUrl: URL): Promise
   // provider's tokens. The slug is only used as a defence-in-depth cross-check below.
   const stateValue = callbackUrl.searchParams.get('state') || '';
   const state = await ssoStatesRepo.consume(stateValue, 'oidc');
-  if (!state) throw new Error('Invalid or expired SSO state');
+  if (!state) throw new SsoLoginError('Invalid or expired SSO state', 'invalid_state');
   const provider = await getEnabledProviderById('oidc', state.providerId);
   if (provider.slug !== normalizeSlug(slug)) {
-    throw new Error('Invalid or expired SSO state');
+    throw new SsoLoginError('Invalid or expired SSO state', 'invalid_state');
   }
   const config = await createOidcConfig(provider);
   const publicCallbackUrl = new URL(buildCallbackUrl('oidc', provider.slug, baseUrl));
@@ -705,7 +793,9 @@ export const completeOidcLogin = async (slug: string, callbackUrl: URL): Promise
     idTokenExpected: true,
   });
   const claims = tokens.claims();
-  if (!claims?.sub) throw new Error('OIDC response did not include a subject');
+  if (!claims?.sub) {
+    throw new SsoLoginError('OIDC response did not include a subject', 'invalid_response');
+  }
   let userInfo: Record<string, unknown> = {};
   if (tokens.access_token) {
     userInfo = (await oidc.fetchUserInfo(config, tokens.access_token, claims.sub)) as Record<
@@ -739,13 +829,21 @@ export const completeSamlLogin = async (
   const provider = await getEnabledProviderBySlug('saml', slug);
   const saml = await createSamlClient(provider, baseUrl);
   const result = await saml.validatePostResponseAsync(formBody);
-  if (!result.profile || result.loggedOut) throw new Error('SAML response did not include a login');
+  if (!result.profile || result.loggedOut) {
+    throw new SsoLoginError('SAML response did not include a login', 'invalid_response');
+  }
   const profile = result.profile as Profile & Record<string, unknown>;
   const claims = profile as Record<string, unknown>;
   const subject = coerceString(profile.nameID);
-  if (!subject) throw new Error('SAML response did not include a subject');
+  if (!subject) {
+    throw new SsoLoginError('SAML response did not include a subject', 'invalid_response');
+  }
+  const issuer = coerceString(profile.issuer) || provider.idpIssuer;
+  if (!issuer) {
+    throw new SsoLoginError('SAML response did not include an issuer', 'invalid_response');
+  }
   return completeExternalLogin(provider, {
-    issuer: coerceString(profile.issuer) || provider.idpIssuer || provider.spIssuer,
+    issuer,
     subject,
     username: readClaim(claims, provider.usernameAttribute),
     name: readClaim(claims, provider.nameAttribute),
@@ -756,7 +854,7 @@ export const completeSamlLogin = async (
 
 export const getSamlMetadata = async (slug: string): Promise<string> => {
   const baseUrl = resolvePublicBaseUrl();
-  const provider = await getProviderBySlug('saml', slug);
+  const provider = await getEnabledProviderBySlug('saml', slug);
   const { privateKey } = getProviderSecrets(provider);
   const issuer = provider.spIssuer || buildSamlMetadataUrl(provider.slug, baseUrl);
   return generateServiceProviderMetadata({

@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { siOpenid } from 'simple-icons';
 import { useSecretReplaceState } from '../../hooks/useSecretReplaceState';
-import { getApiBase } from '../../services/api/client';
 import { ldapApi } from '../../services/api/ldap';
+import { ssoApi } from '../../services/api/sso';
 import type {
   LdapConfig,
   LdapTestResponse,
@@ -87,8 +87,13 @@ const renderProviderIcon = (protocol: SsoProtocol, className?: string) =>
     <i className={`fa-solid fa-building-shield ${className ?? ''}`.trim()}></i>
   );
 
-const buildSamlAcsUrl = (slug: string): string =>
-  `${getApiBase()}/auth/sso/saml/${encodeURIComponent(slug)}/callback`;
+// The backend builds the SAML callback URL from SSO_CALLBACK_BASE_URL/FRONTEND_URL, not from
+// the frontend's API base. In split-host deployments those origins differ, so we ask the server
+// for the templated URL and render that — otherwise admins copy a URL the SAML library will
+// later reject. See issue #602.
+const SLUG_PLACEHOLDER = '{slug}';
+const fillSlugTemplate = (template: string, slug: string): string =>
+  template.replace(SLUG_PLACEHOLDER, encodeURIComponent(slug));
 
 const AuthSettings: React.FC<AuthSettingsProps> = ({
   config,
@@ -125,11 +130,49 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   const [providerSaveErrors, setProviderSaveErrors] = useState<
     Partial<Record<SsoProtocol, string>>
   >({});
+  type AcsUrlState =
+    | { status: 'loading' }
+    | { status: 'ready'; template: string }
+    | { status: 'error'; message: string };
+  const [acsUrlState, setAcsUrlState] = useState<AcsUrlState>({ status: 'loading' });
   const tlsCaFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setLdapForm(config || DEFAULT_LDAP_CONFIG);
   }, [config]);
+
+  // Re-entering the SAML tab after a transient failure resets the state to 'loading' so the
+  // fetch effect below retries. Without this, a one-off 503/network error would permanently
+  // disable the preview until a full page reload.
+  useEffect(() => {
+    if (activeTab !== 'saml') return;
+    setAcsUrlState((prev) => (prev.status === 'error' ? { status: 'loading' } : prev));
+  }, [activeTab]);
+
+  // Status-gated rather than ref-gated: if the user leaves the SAML tab mid-flight, the
+  // cleanup discards the result and the state stays 'loading', so re-entering the tab kicks
+  // off a fresh fetch. A ref locked before the fetch settled would strand the preview in
+  // 'loading' forever.
+  useEffect(() => {
+    if (activeTab !== 'saml' || acsUrlState.status !== 'loading') return;
+    let cancelled = false;
+    ssoApi
+      .getSamlAcsUrlInfo()
+      .then(({ acsUrlTemplate }) => {
+        if (cancelled) return;
+        setAcsUrlState({ status: 'ready', template: acsUrlTemplate });
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setAcsUrlState({
+          status: 'error',
+          message: err instanceof Error ? err.message : '',
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, acsUrlState.status]);
 
   const handleTlsCaFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -389,12 +432,21 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
         );
     }
     if (provider.enabled && provider.protocol === 'saml') {
-      const hasMetadata = !!provider.metadataUrl?.trim() || !!provider.metadataXml?.trim();
+      const hasMetadataXml = !!provider.metadataXml?.trim();
+      const hasMetadata = !!provider.metadataUrl?.trim() || hasMetadataXml;
       const hasManual = !!provider.entryPoint?.trim() && !!provider.idpCert?.trim();
       if (!hasMetadata && !hasManual) {
         nextErrors[`${prefix}samlConfig`] = t(
           'admin.sso.errors.samlConfigRequired',
           'Metadata or manual IdP fields are required',
+        );
+      }
+      // Mirror the server-side check in assertEnabledProviderConfig; the frontend cannot parse
+      // metadataXml, so it requires the field whenever inline XML is not supplied.
+      if (!hasMetadataXml && !provider.idpIssuer?.trim()) {
+        nextErrors[`${prefix}idpIssuer`] = t(
+          'admin.sso.errors.idpIssuerRequired',
+          'IdP Issuer is required unless inline metadata XML provides it',
         );
       }
     }
@@ -630,6 +682,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 label={t('admin.sso.idpIssuer', 'IdP Issuer')}
                 value={draft.idpIssuer || ''}
                 monospace
+                error={errors[`${prefix}idpIssuer`]}
                 onChange={(idpIssuer) => updateProviderDraft(protocol, { idpIssuer })}
               />
               <Field
@@ -691,12 +744,32 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 value={draft.publicCert || ''}
                 onChange={(publicCert) => updateProviderDraft(protocol, { publicCert })}
               />
-              {!!draft.slug?.trim() && (
-                <ReadOnlyField
-                  label={t('admin.sso.acsUrl', 'ACS URL')}
-                  value={buildSamlAcsUrl(draft.slug.trim().toLowerCase())}
-                  monospace
-                />
+              {!!draft.slug?.trim() && acsUrlState.status !== 'loading' && (
+                <div className="md:col-span-2">
+                  {acsUrlState.status === 'ready' ? (
+                    <ReadOnlyField
+                      label={t('admin.sso.acsUrl', 'ACS URL')}
+                      value={fillSlugTemplate(
+                        acsUrlState.template,
+                        draft.slug.trim().toLowerCase(),
+                      )}
+                      monospace
+                    />
+                  ) : (
+                    <>
+                      <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
+                        {t('admin.sso.acsUrl', 'ACS URL')}
+                      </label>
+                      <p className="text-xs text-red-500 font-bold">
+                        {acsUrlState.message ||
+                          t(
+                            'admin.sso.errors.acsUrlUnavailable',
+                            'ACS URL unavailable: configure SSO_CALLBACK_BASE_URL on the backend.',
+                          )}
+                      </p>
+                    </>
+                  )}
+                </div>
               )}
               {errors[`${prefix}samlConfig`] && (
                 <p className="md:col-span-2 text-red-500 text-xs font-bold">
