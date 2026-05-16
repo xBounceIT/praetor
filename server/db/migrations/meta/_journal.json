@@ -337,6 +337,13 @@
       "when": 1778944620632,
       "tag": "0047_add_token_version_for_pat_mcp_revocation",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1778948038261,
+      "tag": "0048_add_projects_order_id_on_update_cascade",
+      "breakpoints": true
     }
   ]
 }
