@@ -1,7 +1,9 @@
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSecretReplaceState } from '../../hooks/useSecretReplaceState';
 import type { EmailConfig, SmtpEncryption } from '../../types';
+import SecretField from '../shared/SecretField';
 import SelectControl from '../shared/SelectControl';
 import Toggle from '../shared/Toggle';
 
@@ -40,6 +42,11 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
   const [isSaved, setIsSaved] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [testErrors, setTestErrors] = useState<Record<string, string>>({});
+  const smtpPasswordReplace = useSecretReplaceState(
+    formData.smtpPassword,
+    (smtpPassword) => setFormData((prev) => ({ ...prev, smtpPassword })),
+    config,
+  );
 
   // Sync formData when config prop changes (e.g., after API fetch)
   useEffect(() => {
@@ -268,17 +275,18 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-                {t('email.password', 'Password')}
-              </label>
-              <input
-                type="password"
-                value={formData.smtpPassword}
-                onChange={(e) => setFormData((prev) => ({ ...prev, smtpPassword: e.target.value }))}
-                className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm"
-              />
-            </div>
+            <SecretField
+              {...smtpPasswordReplace}
+              label={t('email.password', 'Password')}
+              value={formData.smtpPassword}
+              onChange={(smtpPassword) => setFormData((prev) => ({ ...prev, smtpPassword }))}
+              storedLabel={t('email.passwordStored', 'Password stored')}
+              storedHelp={t(
+                'email.passwordStoredHelp',
+                'Leave as-is to keep the stored password, or click Replace to overwrite it.',
+              )}
+              testId="smtp-password"
+            />
 
             <div className="md:col-span-2">
               <div className="flex items-center gap-3">

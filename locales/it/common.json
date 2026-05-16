@@ -307,5 +307,9 @@
     "title": "Qualcosa è andato storto",
     "message": "Qualcosa è andato storto — aggiorna la pagina per riprovare.",
     "refresh": "Aggiorna"
+  },
+  "secretField": {
+    "replace": "Sostituisci",
+    "keepStored": "Mantieni valore memorizzato"
   }
 }
