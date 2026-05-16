@@ -389,6 +389,18 @@ describe('authenticateToken', () => {
     expect(findAuthUserByIdMock).not.toHaveBeenCalled();
   });
 
+  test('401 when token has no sessionStart (cannot bypass max-duration check)', async () => {
+    const request = buildFakeRequest(signToken({ userId: 'u1', sessionStart: null }));
+    const reply = buildFakeReply();
+    await authenticateToken(request as never, reply as never);
+    expect(reply.statusCode).toBe(401);
+    expect(reply.body).toEqual({
+      error: 'Session token outdated, please log in again',
+      errorCode: 'session_outdated',
+    });
+    expect(findAuthUserByIdMock).not.toHaveBeenCalled();
+  });
+
   test('401 when token sessionVersion does not match the user (logout/revocation)', async () => {
     findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, sessionVersion: 5 });
     const request = buildFakeRequest(signToken({ userId: 'u1', sessionVersion: 2 }));
