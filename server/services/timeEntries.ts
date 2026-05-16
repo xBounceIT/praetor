@@ -80,6 +80,37 @@ const parseExpectedVersion = (value: unknown): number => {
   return value as number;
 };
 
+const SERIALIZATION_FAILURE_SQLSTATE = '40001';
+const MAX_SERIALIZABLE_WRITE_ATTEMPTS = 3;
+
+const getDbErrorCode = (err: unknown, depth = 0): string | undefined => {
+  if (depth > 3) return undefined;
+  if (typeof err !== 'object' || err === null) return undefined;
+  const code = (err as { code?: unknown }).code;
+  if (typeof code === 'string') return code;
+  return getDbErrorCode((err as { cause?: unknown }).cause, depth + 1);
+};
+
+const withSerializableWriteTransaction = async <T>(
+  callback: (tx: DbExecutor) => Promise<T>,
+): Promise<T> => {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await withDbTransaction(callback, {
+        isolationLevel: 'serializable',
+        accessMode: 'read write',
+      });
+    } catch (err) {
+      if (
+        getDbErrorCode(err) !== SERIALIZATION_FAILURE_SQLSTATE ||
+        attempt >= MAX_SERIALIZABLE_WRITE_ATTEMPTS
+      ) {
+        throw err;
+      }
+    }
+  }
+};
+
 export const listTimeEntries = async (
   actor: AuthenticatedActor,
   input: { userId?: unknown; limit?: unknown; cursor?: unknown },
@@ -183,21 +214,34 @@ export const createTimeEntry = async (
   const location = parseOptionalLocation(input.location, fail) ?? 'remote';
   const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
 
-  return entriesRepo.create({
-    id: generatePrefixedId('te'),
-    userId: targetUserId,
-    date,
-    clientId,
-    clientName,
-    projectId,
-    projectName,
-    task,
-    taskId: resolvedTaskId,
-    notes: typeof input.notes === 'string' ? input.notes : null,
-    duration: duration ?? 0,
-    hourlyCost,
-    isPlaceholder: parsedIsPlaceholder ?? false,
-    location,
+  return withSerializableWriteTransaction(async (tx) => {
+    const duplicateExists = await entriesRepo.existsForEntryKey(
+      { userId: targetUserId, date, projectId, task },
+      tx,
+    );
+    if (duplicateExists) {
+      fail(409, 'A time entry already exists for this date, project, and task');
+    }
+
+    return entriesRepo.create(
+      {
+        id: generatePrefixedId('te'),
+        userId: targetUserId,
+        date,
+        clientId,
+        clientName,
+        projectId,
+        projectName,
+        task,
+        taskId: resolvedTaskId,
+        notes: typeof input.notes === 'string' ? input.notes : null,
+        duration: duration ?? 0,
+        hourlyCost,
+        isPlaceholder: parsedIsPlaceholder ?? false,
+        location,
+      },
+      tx,
+    );
   });
 };
 
@@ -410,36 +454,6 @@ export type GenerateRecurringResult = {
 };
 
 const MAX_RECURRING_DAYS = 366;
-const SERIALIZATION_FAILURE_SQLSTATE = '40001';
-const MAX_RECURRING_GENERATION_ATTEMPTS = 3;
-
-const getDbErrorCode = (err: unknown, depth = 0): string | undefined => {
-  if (depth > 3) return undefined;
-  if (typeof err !== 'object' || err === null) return undefined;
-  const code = (err as { code?: unknown }).code;
-  if (typeof code === 'string') return code;
-  return getDbErrorCode((err as { cause?: unknown }).cause, depth + 1);
-};
-
-const withRecurringGenerationTransaction = async <T>(
-  callback: (tx: DbExecutor) => Promise<T>,
-): Promise<T> => {
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      return await withDbTransaction(callback, {
-        isolationLevel: 'serializable',
-        accessMode: 'read write',
-      });
-    } catch (err) {
-      if (
-        getDbErrorCode(err) !== SERIALIZATION_FAILURE_SQLSTATE ||
-        attempt >= MAX_RECURRING_GENERATION_ATTEMPTS
-      ) {
-        throw err;
-      }
-    }
-  }
-};
 
 export const generateRecurringEntries = async (
   actor: AuthenticatedActor,
@@ -599,31 +613,29 @@ export const generateRecurringEntries = async (
     };
   }
 
-  const { inserted, skippedExistingCount } = await withRecurringGenerationTransaction(
-    async (tx) => {
-      const existingKeys = await entriesRepo.findExistingRecurringKeys(
-        targetUserId,
-        fromDate,
-        toDate,
-        tx,
-      );
-      const pending = candidates
-        .filter((candidate) => !existingKeys.has(candidate.key))
-        .map((candidate) => candidate.entry);
+  const { inserted, skippedExistingCount } = await withSerializableWriteTransaction(async (tx) => {
+    const existingKeys = await entriesRepo.findExistingRecurringKeys(
+      targetUserId,
+      fromDate,
+      toDate,
+      tx,
+    );
+    const pending = candidates
+      .filter((candidate) => !existingKeys.has(candidate.key))
+      .map((candidate) => candidate.entry);
 
-      if (pending.length === 0) {
-        return {
-          inserted: [],
-          skippedExistingCount: candidates.length,
-        };
-      }
-
+    if (pending.length === 0) {
       return {
-        inserted: await entriesRepo.createMany(pending, tx),
-        skippedExistingCount: candidates.length - pending.length,
+        inserted: [],
+        skippedExistingCount: candidates.length,
       };
-    },
-  );
+    }
+
+    return {
+      inserted: await entriesRepo.createMany(pending, tx),
+      skippedExistingCount: candidates.length - pending.length,
+    };
+  });
   return {
     generated: inserted,
     generatedCount: inserted.length,
