@@ -7,6 +7,44 @@ export type EntriesPage = {
   nextCursor: string | null;
 };
 
+export type EntriesCursorPosition = { createdAt: number; id: string };
+
+// Mirror of server/repositories/entriesRepo.ts:encodeCursor. The server emits
+// base64url(JSON({createdAt: µs-text, id})); we only need ms-precision here
+// for "is this entry inside the page's coverage window" comparisons (the id
+// tiebreaker handles same-ms collisions).
+//
+// `created_at::text` from a Postgres TIMESTAMP (without time zone) has no
+// zone marker (e.g. `2026-05-16 10:32:45.123456`). pg-node parses TIMESTAMP
+// columns as UTC server-side, so each entry's `createdAt` in the payload is
+// UTC ms-since-epoch. The cursor text MUST be parsed in the same domain —
+// `new Date(cursorText)` alone would interpret a no-zone string as local
+// time and shift the window boundary by the browser's UTC offset, dropping
+// or keeping the wrong rows.
+export const decodeEntriesCursor = (raw: string | null): EntriesCursorPosition | null => {
+  if (!raw) return null;
+  try {
+    const padded = raw.length % 4 === 0 ? raw : raw + '='.repeat(4 - (raw.length % 4));
+    const json = atob(padded.replace(/-/g, '+').replace(/_/g, '/'));
+    const parsed: unknown = JSON.parse(json);
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      typeof (parsed as { createdAt?: unknown }).createdAt === 'string' &&
+      typeof (parsed as { id?: unknown }).id === 'string'
+    ) {
+      const c = parsed as { createdAt: string; id: string };
+      const hasZone = /Z$|[+-]\d{2}(?::?\d{2})?$/.test(c.createdAt);
+      const isoLike = c.createdAt.replace(' ', 'T') + (hasZone ? '' : 'Z');
+      const ms = new Date(isoLike).getTime();
+      if (Number.isFinite(ms)) return { createdAt: ms, id: c.id };
+    }
+  } catch {
+    // fallthrough - corrupt/foreign cursor is treated as "no info"
+  }
+  return null;
+};
+
 export type GenerateRecurringResponse = {
   generated: TimeEntry[];
   generatedCount: number;

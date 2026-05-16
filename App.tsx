@@ -64,6 +64,7 @@ import { makeUserHandlers } from './hooks/handlers/userHandlers';
 import { useAuth } from './hooks/useAuth';
 import { listRequest, useModuleLoader } from './hooks/useModuleLoader';
 import api, { type McpTokenScope, type PersonalAccessToken, type Settings } from './services/api';
+import { decodeEntriesCursor } from './services/api/entries';
 import type {
   Client,
   ClientOffer,
@@ -1478,8 +1479,50 @@ const AppContent: React.FC = () => {
             // prepending page would reverse chunk order for any user with more
             // than 500 entries. Server still wins on id collisions because
             // matching prev rows are replaced with the page version in place.
-            const mergeById = (prev: TimeEntry[], page: TimeEntry[]): TimeEntry[] => {
-              const incoming = new Map(page.map((entry) => [entry.id, entry]));
+            //
+            // Drop prev entries that fall inside this page's authoritative
+            // (createdAt, id) window but weren't returned — those were deleted
+            // on the server (issue #519). Window bounds:
+            //   upper: inputCursor exclusive (continuation page); the page's
+            //          newest entry inclusive on the first page (preserves
+            //          concurrent optimistic inserts whose createdAt is newer
+            //          than the snapshot).
+            //   lower: the page's oldest entry inclusive when more pages
+            //          follow; -Infinity on the last page (page covered
+            //          everything older).
+            //
+            // Comparisons use ms-precision only. pg-node truncates each
+            // entry's `createdAt` to a JS Date (ms), but cursors and the
+            // server-side row ordering use the column's µs precision. When
+            // an entry's ms matches a window-boundary's ms, the µs ordering
+            // is unrecoverable on the client — treat the entry as OUTSIDE
+            // the window (keep it in prev) rather than rely on an id
+            // tiebreaker that may disagree with the server at sub-ms
+            // resolution. Trade: a deletion sitting exactly at a sub-ms
+            // boundary waits until the next full reload, but we never
+            // wrongly drop a row that the server placed on the other side
+            // of the cursor.
+            const mergeById = (
+              prev: TimeEntry[],
+              pageEntries: TimeEntry[],
+              inputCursor: string | null,
+              nextCursor: string | null,
+            ): TimeEntry[] => {
+              const incoming = new Map(pageEntries.map((entry) => [entry.id, entry]));
+              const upperBound = decodeEntriesCursor(inputCursor);
+              const newestInPage = pageEntries[0] ?? null;
+              const oldestInPage = pageEntries[pageEntries.length - 1] ?? null;
+              const hasMorePages = nextCursor !== null;
+              const isWithinPageWindow = (entry: TimeEntry): boolean => {
+                if (!newestInPage || !oldestInPage) return false;
+                if (upperBound) {
+                  if (entry.createdAt >= upperBound.createdAt) return false;
+                } else if (entry.createdAt >= newestInPage.createdAt) {
+                  return false;
+                }
+                if (hasMorePages && entry.createdAt <= oldestInPage.createdAt) return false;
+                return true;
+              };
               const seen = new Set<string>();
               const merged: TimeEntry[] = [];
               for (const entry of prev) {
@@ -1487,11 +1530,11 @@ const AppContent: React.FC = () => {
                 if (replacement) {
                   merged.push(replacement);
                   seen.add(entry.id);
-                } else {
+                } else if (!isWithinPageWindow(entry)) {
                   merged.push(entry);
                 }
               }
-              for (const entry of page) {
+              for (const entry of pageEntries) {
                 if (!seen.has(entry.id)) merged.push(entry);
               }
               return merged;
@@ -1519,7 +1562,7 @@ const AppContent: React.FC = () => {
                 if (result === null) return;
                 // Bind to a const so TS narrowing survives into the setState closure.
                 const page = result;
-                setEntries((prev) => mergeById(prev, page.entries));
+                setEntries((prev) => mergeById(prev, page.entries, pageCursor, page.nextCursor));
                 cursor = page.nextCursor;
               }
             };
@@ -1532,7 +1575,7 @@ const AppContent: React.FC = () => {
                   load: () => api.entries.listPage({ limit: 500 }),
                   apply: (page) => {
                     const token = ++entriesStreamTokenRef.current;
-                    setEntries((prev) => mergeById(prev, page.entries));
+                    setEntries((prev) => mergeById(prev, page.entries, null, page.nextCursor));
                     // Signal that the initial page of entries is in state. The
                     // recurring-entries generator effect gates on this so it
                     // never runs against the empty-array initial state (which
