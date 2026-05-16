@@ -12,4 +12,5 @@ export type LdapConfig = {
   roleMappings: LdapRoleMapping[];
   tlsCaCertificate: string;
   autoProvisionAll: boolean;
+  provisionOnLogin: boolean;
 };

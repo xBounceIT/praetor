@@ -378,6 +378,16 @@ class LDAPService {
       };
     }
 
+    // Gate placement is load-bearing: it sits after the existing-user branch so already
+    // provisioned LDAP users still authenticate and refresh roles when the flag is off.
+    if (!(this.config?.provisionOnLogin ?? ldapRepo.DEFAULT_CONFIG.provisionOnLogin)) {
+      logger.warn(
+        { username: canonicalUsername },
+        'LDAP login authenticated for unknown user but provisionOnLogin is disabled; refusing login',
+      );
+      return { authenticated: false };
+    }
+
     const name = result.displayName ?? canonicalUsername;
     const id = generatePrefixedId('u');
     // Filter against existing role rows so a mapping referencing a deleted role doesn't
