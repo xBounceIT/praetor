@@ -116,8 +116,11 @@ export const normalizePermission = (permission: string): Permission =>
       ? permission.replace('suppliers.quotes.', 'sales.supplier_quotes.')
       : permission) as Permission;
 
-export const isTopManagerOnlyPermission = (permission: string) =>
-  permission.startsWith('hr.work_units.') || permission.startsWith('hr.work_units_all.');
+export const isTopManagerOnlyPermission = (permission: string) => {
+  const matchesResource = (resource: string) =>
+    permission === resource || permission.startsWith(`${resource}.`);
+  return matchesResource('hr.work_units') || matchesResource('hr.work_units_all');
+};
 
 export const isPermissionKnown = (permission: string) =>
   ALL_PERMISSIONS.includes(normalizePermission(permission));
