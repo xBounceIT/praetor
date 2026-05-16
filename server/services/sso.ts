@@ -744,8 +744,10 @@ export const completeSamlLogin = async (
   const claims = profile as Record<string, unknown>;
   const subject = coerceString(profile.nameID);
   if (!subject) throw new Error('SAML response did not include a subject');
+  const issuer = coerceString(profile.issuer) || provider.idpIssuer;
+  if (!issuer) throw new Error('SAML response did not include an issuer');
   return completeExternalLogin(provider, {
-    issuer: coerceString(profile.issuer) || provider.idpIssuer || provider.spIssuer,
+    issuer,
     subject,
     username: readClaim(claims, provider.usernameAttribute),
     name: readClaim(claims, provider.nameAttribute),

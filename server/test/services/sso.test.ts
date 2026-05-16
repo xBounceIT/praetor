@@ -1,9 +1,13 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import * as realDns from 'node:dns/promises';
+import * as realNodeSaml from '@node-saml/node-saml';
 import * as realSsoProvidersRepo from '../../repositories/ssoProvidersRepo.ts';
 import * as realSsoStatesRepo from '../../repositories/ssoStatesRepo.ts';
+import * as realExternalAuth from '../../services/external-auth.ts';
 
 const dnsSnap = { ...realDns };
+const nodeSamlSnap = { ...realNodeSaml };
+const externalAuthSnap = { ...realExternalAuth };
 const ssoProvidersRepoSnap = { ...realSsoProvidersRepo };
 const ssoStatesRepoSnap = { ...realSsoStatesRepo };
 
@@ -11,6 +15,14 @@ const dnsLookupMock = mock();
 const findBySlugMock = mock();
 const findByIdMock = mock();
 const statesConsumeMock = mock();
+const samlValidatePostMock = mock();
+const resolveExternalIdentityMock = mock();
+
+class StubSaml {
+  validatePostResponseAsync(formBody: Record<string, string>) {
+    return samlValidatePostMock(formBody);
+  }
+}
 
 let sso: typeof import('../../services/sso.ts');
 
@@ -19,6 +31,14 @@ beforeAll(async () => {
     ...dnsSnap,
     default: { ...dnsSnap, lookup: dnsLookupMock },
     lookup: dnsLookupMock,
+  }));
+  mock.module('@node-saml/node-saml', () => ({
+    ...nodeSamlSnap,
+    SAML: StubSaml,
+  }));
+  mock.module('../../services/external-auth.ts', () => ({
+    ...externalAuthSnap,
+    resolveExternalIdentity: resolveExternalIdentityMock,
   }));
   mock.module('../../repositories/ssoProvidersRepo.ts', () => ({
     ...ssoProvidersRepoSnap,
@@ -35,12 +55,22 @@ beforeAll(async () => {
 
 afterAll(() => {
   mock.module('node:dns/promises', () => dnsSnap);
+  mock.module('@node-saml/node-saml', () => nodeSamlSnap);
+  mock.module('../../services/external-auth.ts', () => externalAuthSnap);
   mock.module('../../repositories/ssoProvidersRepo.ts', () => ssoProvidersRepoSnap);
   mock.module('../../repositories/ssoStatesRepo.ts', () => ssoStatesRepoSnap);
 });
 
 beforeEach(() => {
-  for (const m of [dnsLookupMock, findBySlugMock, findByIdMock, statesConsumeMock]) m.mockReset();
+  for (const m of [
+    dnsLookupMock,
+    findBySlugMock,
+    findByIdMock,
+    statesConsumeMock,
+    samlValidatePostMock,
+    resolveExternalIdentityMock,
+  ])
+    m.mockReset();
 });
 
 describe('isPrivateIp', () => {
@@ -376,5 +406,55 @@ describe('completeOidcLogin state-before-provider ordering', () => {
       'Invalid or expired SSO state',
     );
     expect(statesConsumeMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('completeSamlLogin issuer resolution', () => {
+  const originalSsoBase = process.env.SSO_CALLBACK_BASE_URL;
+
+  const manualSamlProvider: realSsoProvidersRepo.SsoProvider = {
+    ...SAML_PROVIDER,
+    metadataUrl: '',
+    entryPoint: 'https://idp.example.com/sso',
+    idpCert: 'CERT',
+    idpIssuer: '',
+    spIssuer: 'https://app.example.com/sp/okta',
+  };
+
+  beforeEach(() => {
+    process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
+  });
+  afterAll(() => {
+    if (originalSsoBase === undefined) delete process.env.SSO_CALLBACK_BASE_URL;
+    else process.env.SSO_CALLBACK_BASE_URL = originalSsoBase;
+  });
+
+  test('throws when neither profile.issuer nor provider.idpIssuer is set (does NOT fall back to spIssuer)', async () => {
+    findBySlugMock.mockResolvedValue(manualSamlProvider);
+    samlValidatePostMock.mockResolvedValue({
+      profile: { nameID: 'user@example.com', issuer: '' },
+      loggedOut: false,
+    });
+    await expect(sso.completeSamlLogin('okta', { SAMLResponse: 'x' })).rejects.toThrow(
+      'SAML response did not include an issuer',
+    );
+    expect(resolveExternalIdentityMock).not.toHaveBeenCalled();
+  });
+
+  test('falls back to provider.idpIssuer when profile.issuer is missing', async () => {
+    findBySlugMock.mockResolvedValue({
+      ...manualSamlProvider,
+      idpIssuer: 'https://idp.example.com/realm',
+    });
+    samlValidatePostMock.mockResolvedValue({
+      profile: { nameID: 'user@example.com', issuer: '' },
+      loggedOut: false,
+    });
+    resolveExternalIdentityMock.mockRejectedValue(new Error('stop here'));
+    await expect(sso.completeSamlLogin('okta', { SAMLResponse: 'x' })).rejects.toThrow('stop here');
+    expect(resolveExternalIdentityMock).toHaveBeenCalledTimes(1);
+    expect(resolveExternalIdentityMock.mock.calls[0][0]).toMatchObject({
+      issuer: 'https://idp.example.com/realm',
+    });
   });
 });
