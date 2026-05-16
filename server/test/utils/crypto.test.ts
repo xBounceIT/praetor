@@ -43,6 +43,9 @@ const decryptPayloadWithAesGcmKey = (
   );
 };
 
+const base64Bytes = (length: number, fill = 0): string =>
+  Buffer.alloc(length, fill).toString('base64');
+
 beforeAll(() => {
   process.env.ENCRYPTION_KEY = 'test-encryption-key-for-unit-tests';
   __resetEncryptionKeyCacheForTests();
@@ -222,12 +225,48 @@ describe('decrypt', () => {
     expect(decrypt(ciphertext)).toBe('legacy secret');
   });
 
+  test('decrypts legacy empty plaintext ciphertext for backward compatibility', () => {
+    const legacyKey = deriveLegacyEncryptionKey(process.env.ENCRYPTION_KEY ?? '');
+    const ciphertext = encryptWithAesGcmKey('', legacyKey);
+    expect(decrypt(ciphertext)).toBe('');
+  });
+
   test('throws when input does not match the iv:authTag:encrypted format', () => {
     expect(() => decrypt('plaintext-no-colons')).toThrow(/Invalid encrypted value format/);
   });
 
+  test('throws a format error before Node crypto handles malformed decoded lengths', () => {
+    const malformedCiphertexts = [
+      `v2:${base64Bytes(SALT_LENGTH - 1)}:${base64Bytes(V2_IV_LENGTH)}:${base64Bytes(AUTH_TAG_LENGTH)}:`,
+      `v2:${base64Bytes(SALT_LENGTH)}:${base64Bytes(V2_IV_LENGTH - 1)}:${base64Bytes(AUTH_TAG_LENGTH)}:`,
+      `v2:${base64Bytes(SALT_LENGTH)}:${base64Bytes(V2_IV_LENGTH)}:${base64Bytes(AUTH_TAG_LENGTH - 1)}:`,
+      `${base64Bytes(LEGACY_IV_LENGTH - 1)}:${base64Bytes(AUTH_TAG_LENGTH)}:`,
+      `${base64Bytes(LEGACY_IV_LENGTH)}:${base64Bytes(AUTH_TAG_LENGTH - 1)}:`,
+    ];
+
+    for (const ciphertext of malformedCiphertexts) {
+      expect(() => decrypt(ciphertext)).toThrow(/Invalid encrypted value format/);
+    }
+  });
+
+  test('throws a format error for non-canonical base64 segments before decrypting', () => {
+    const malformedCiphertexts = [
+      `v2:${base64Bytes(SALT_LENGTH)}!:${base64Bytes(V2_IV_LENGTH)}:${base64Bytes(AUTH_TAG_LENGTH)}:`,
+      `v2:${base64Bytes(SALT_LENGTH)}:${base64Bytes(V2_IV_LENGTH)}!:${base64Bytes(AUTH_TAG_LENGTH)}:`,
+      `v2:${base64Bytes(SALT_LENGTH)}:${base64Bytes(V2_IV_LENGTH)}:${base64Bytes(AUTH_TAG_LENGTH)}!:`,
+      `v2:${base64Bytes(SALT_LENGTH)}:${base64Bytes(V2_IV_LENGTH)}:${base64Bytes(AUTH_TAG_LENGTH)}:!!!!`,
+      `${base64Bytes(LEGACY_IV_LENGTH)}!:${base64Bytes(AUTH_TAG_LENGTH)}:`,
+      `${base64Bytes(LEGACY_IV_LENGTH)}:${base64Bytes(AUTH_TAG_LENGTH)}!:`,
+      `${base64Bytes(LEGACY_IV_LENGTH)}:${base64Bytes(AUTH_TAG_LENGTH)}:!!!!`,
+    ];
+
+    for (const ciphertext of malformedCiphertexts) {
+      expect(() => decrypt(ciphertext)).toThrow(/Invalid encrypted value format/);
+    }
+  });
+
   test('throws when ciphertext parses but GCM auth tag verification fails', () => {
-    const fakeCiphertext = `${Buffer.from('iv').toString('base64')}:${Buffer.from('tag').toString('base64')}:${Buffer.from('data').toString('base64')}`;
+    const fakeCiphertext = `${base64Bytes(LEGACY_IV_LENGTH, 1)}:${base64Bytes(AUTH_TAG_LENGTH, 2)}:${Buffer.from('data').toString('base64')}`;
     expect(() => decrypt(fakeCiphertext)).toThrow();
   });
 
