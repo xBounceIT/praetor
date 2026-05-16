@@ -1230,28 +1230,36 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                         : t('admin.ldap.test.failure', 'FAILURE')}
                       ] {testResult.message}
                     </div>
-                    {testResult.authenticated && (
-                      <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-2 text-zinc-400">
-                        <span>{t('admin.ldap.test.userDn', 'User DN')}</span>
-                        <span className="text-zinc-200 break-all">{testResult.userDn || '-'}</span>
-                        <span>{t(LDAP_ROLE_RESOLUTION_LABEL_KEYS[testResult.roleResolution])}</span>
-                        <span className="text-zinc-200">
-                          {testResult.roleIds.length ? testResult.roleIds.join(', ') : '-'}
-                        </span>
-                        {LDAP_ROLE_RESOLUTION_HELP_KEYS[testResult.roleResolution] && (
-                          <span
-                            className="col-span-2 text-xs text-zinc-500"
-                            data-testid="ldap-test-role-resolution-help"
-                          >
-                            {t(LDAP_ROLE_RESOLUTION_HELP_KEYS[testResult.roleResolution]!)}
-                          </span>
-                        )}
-                        <span>{t('admin.ldap.test.groupsFound', 'Groups Found:')}</span>
-                        <span className="text-zinc-200">
-                          {testResult.groups.length ? testResult.groups.join(', ') : '-'}
-                        </span>
-                      </div>
-                    )}
+                    {testResult.authenticated &&
+                      (() => {
+                        const helpKey = LDAP_ROLE_RESOLUTION_HELP_KEYS[testResult.roleResolution];
+                        return (
+                          <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-2 text-zinc-400">
+                            <span>{t('admin.ldap.test.userDn', 'User DN')}</span>
+                            <span className="text-zinc-200 break-all">
+                              {testResult.userDn || '-'}
+                            </span>
+                            <span>
+                              {t(LDAP_ROLE_RESOLUTION_LABEL_KEYS[testResult.roleResolution])}
+                            </span>
+                            <span className="text-zinc-200">
+                              {testResult.roleIds.length ? testResult.roleIds.join(', ') : '-'}
+                            </span>
+                            {helpKey && (
+                              <span
+                                className="col-span-2 text-xs text-zinc-500"
+                                data-testid="ldap-test-role-resolution-help"
+                              >
+                                {t(helpKey)}
+                              </span>
+                            )}
+                            <span>{t('admin.ldap.test.groupsFound', 'Groups Found:')}</span>
+                            <span className="text-zinc-200">
+                              {testResult.groups.length ? testResult.groups.join(', ') : '-'}
+                            </span>
+                          </div>
+                        );
+                      })()}
                     <div className="border-t border-zinc-800 pt-3">
                       <div className="text-zinc-500 mb-2">
                         {t('admin.ldap.test.serverResponse', 'Server Response')}
