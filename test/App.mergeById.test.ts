@@ -70,12 +70,18 @@ const makeEntry = (id: string, createdAt: number, notes = id): TimeEntry => ({
 });
 
 // Build the same base64url(JSON({createdAt, id})) shape the server emits so
-// decodeEntriesCursor lines up with an entry's ms-precision createdAt.
+// decodeEntriesCursor lines up with an entry's ms-precision createdAt. The
+// `createdAt` is rendered as Postgres `created_at::text` would emit it:
+// `YYYY-MM-DD HH:MM:SS.fff` with no zone marker (the column is TIMESTAMP
+// WITHOUT TIME ZONE). Using `.toISOString()` here would silently mask the
+// timezone-handling bug fixed alongside issue #519.
 const encodeCursorFor = (entry: { createdAt: number; id: string }): string => {
-  const json = JSON.stringify({
-    createdAt: new Date(entry.createdAt).toISOString(),
-    id: entry.id,
-  });
+  const d = new Date(entry.createdAt);
+  const pad = (n: number, len = 2) => String(n).padStart(len, '0');
+  const text =
+    `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
+    `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}.${pad(d.getUTCMilliseconds(), 3)}`;
+  const json = JSON.stringify({ createdAt: text, id: entry.id });
   return btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 };
 
