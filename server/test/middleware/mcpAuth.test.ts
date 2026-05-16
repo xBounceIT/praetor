@@ -210,6 +210,7 @@ describe('authenticateMcpToken', () => {
     expect(getRolePermissionsMock).toHaveBeenCalledWith('manager');
     expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'manager', {
       requireEnabledUser: true,
+      expectedTokenVersion: 1,
     });
   });
 

@@ -158,12 +158,13 @@ const loadAuthenticatedUserContext = async (
   const effectiveRole = activeRole ?? user.role;
 
   const permissions = await getRolePermissions(effectiveRole);
-  // Final authorization check: re-read enabled/session state in the same statement that
-  // verifies role membership, so revocation between the initial user read and permission
-  // loading cannot bind a stale authenticated context.
+  // Final authorization check: re-read enabled/session/token state in the same statement
+  // that verifies role membership, so revocation between the initial user read and
+  // permission loading cannot bind a stale authenticated context.
   const hasRole = await rolesRepo.userHasRole(user.id, effectiveRole, {
     requireEnabledUser: true,
     expectedSessionVersion,
+    expectedTokenVersion,
   });
   if (!hasRole) {
     await reply.code(403).send({ error: 'Invalid or expired token' });

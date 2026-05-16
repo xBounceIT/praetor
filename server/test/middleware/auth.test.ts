@@ -282,6 +282,7 @@ describe('authenticateToken', () => {
     expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'manager', {
       requireEnabledUser: true,
       expectedSessionVersion: 1,
+      expectedTokenVersion: undefined,
     });
   });
 
@@ -424,6 +425,7 @@ describe('authenticateToken', () => {
     expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'admin', {
       requireEnabledUser: true,
       expectedSessionVersion: 1,
+      expectedTokenVersion: undefined,
     });
   });
 
@@ -448,6 +450,7 @@ describe('authenticateToken', () => {
     expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'manager', {
       requireEnabledUser: true,
       expectedSessionVersion: 1,
+      expectedTokenVersion: undefined,
     });
   });
 
@@ -489,6 +492,7 @@ describe('authenticateToken', () => {
     expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'manager', {
       requireEnabledUser: true,
       expectedSessionVersion: undefined,
+      expectedTokenVersion: 1,
     });
   });
 
@@ -563,6 +567,26 @@ describe('authenticateToken', () => {
 
     expect(reply.statusCode).toBe(403);
     expect(reply.body).toEqual({ error: 'Token revoked', errorCode: 'token_revoked' });
+    expect(markPersonalAccessTokenUsedMock).not.toHaveBeenCalled();
+  });
+
+  // Guards the race where users.token_version is bumped between findAuthUserById
+  // and the final userHasRole check. The first check passes (snapshot still
+  // matches), but userHasRole must atomically re-assert the version and return
+  // false — otherwise one request slips through with a now-revoked PAT.
+  test('PAT 403s when userHasRole rejects on the token-version re-assert', async () => {
+    userHasRoleMock.mockResolvedValue(false);
+    const request = buildFakeRequest('praetor_pat_valid-token');
+    const reply = buildFakeReply();
+
+    await authenticateToken(request as never, reply as never);
+
+    expect(reply.statusCode).toBe(403);
+    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'manager', {
+      requireEnabledUser: true,
+      expectedSessionVersion: undefined,
+      expectedTokenVersion: 1,
+    });
     expect(markPersonalAccessTokenUsedMock).not.toHaveBeenCalled();
   });
 
