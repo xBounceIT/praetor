@@ -29,4 +29,17 @@ describe('server isItalianHoliday', () => {
     expect(isItalianHoliday(new Date(2025, 3, 20))).toBe('Pasqua');
     expect(isItalianHoliday(new Date(2025, 3, 21))).toBe("Lunedì dell'Angelo");
   });
+
+  test('getEaster returns a fresh Date each call so callers can mutate safely', () => {
+    const a = getEaster(2025);
+    const b = getEaster(2025);
+    expect(a).not.toBe(b);
+    expect(a.getTime()).toBe(b.getTime());
+
+    // Mutating the returned Date must not poison subsequent calls.
+    a.setDate(a.getDate() + 10);
+    const c = getEaster(2025);
+    expect(c.getMonth()).toBe(3);
+    expect(c.getDate()).toBe(20);
+  });
 });

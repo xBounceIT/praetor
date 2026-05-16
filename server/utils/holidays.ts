@@ -6,17 +6,24 @@
  * UI does, so the two implementations must stay in sync.
  */
 
+const easterCache = new Map<number, { month: number; day: number }>();
+
 export const getEaster = (year: number): Date => {
-  const floor = Math.floor;
-  const G = year % 19;
-  const C = floor(year / 100);
-  const H = (C - floor(C / 4) - floor((8 * C + 13) / 25) + 19 * G + 15) % 30;
-  const I = H - floor(H / 28) * (1 - floor(29 / (H + 1)) * floor((21 - G) / 11));
-  const J = (year + floor(year / 4) + I + 2 - C + floor(C / 4)) % 7;
-  const L = I - J;
-  const month = 3 + floor((L + 40) / 44);
-  const day = L + 28 - 31 * floor(month / 4);
-  return new Date(year, month - 1, day);
+  let cached = easterCache.get(year);
+  if (!cached) {
+    const floor = Math.floor;
+    const G = year % 19;
+    const C = floor(year / 100);
+    const H = (C - floor(C / 4) - floor((8 * C + 13) / 25) + 19 * G + 15) % 30;
+    const I = H - floor(H / 28) * (1 - floor(29 / (H + 1)) * floor((21 - G) / 11));
+    const J = (year + floor(year / 4) + I + 2 - C + floor(C / 4)) % 7;
+    const L = I - J;
+    const month = 3 + floor((L + 40) / 44);
+    const day = L + 28 - 31 * floor(month / 4);
+    cached = { month, day };
+    easterCache.set(year, cached);
+  }
+  return new Date(year, cached.month - 1, cached.day);
 };
 
 const FIXED_HOLIDAYS: Record<string, string> = {
