@@ -595,6 +595,48 @@ describe('POST /api/ldap/test', () => {
     expect(body.roleIds).toEqual(['manager']);
   });
 
+  // #638 review: real login resolves aliases (UPN / email) via `canonicalUsername` from LDAP
+  // before checking for an existing LDAP-bound row (see services/ldap.ts authenticateAndProvision).
+  // The tester must do the same fallback, otherwise admins typing `alice@example.com` for a row
+  // stored as `alice` would see `default` even though real login would preserve their role.
+  test('falls back to canonicalUsername for the existing-user lookup when the typed input is an alias', async () => {
+    authenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      userDn: 'uid=alice,ou=people,dc=example,dc=com',
+      groups: ['cn=engineers,ou=groups,dc=example,dc=com'],
+      matchedRoleIds: [],
+      canonicalUsername: 'alice',
+    });
+    findLoginUserByUsernameMock.mockImplementation(async (username: string) =>
+      username === 'alice' ? LDAP_USER : null,
+    );
+
+    const response = await testLdapAuth({ username: 'alice@example.com', password: 'secret' });
+
+    expect(response.statusCode).toBe(200);
+    expect(findLoginUserByUsernameMock).toHaveBeenCalledWith('alice@example.com');
+    expect(findLoginUserByUsernameMock).toHaveBeenCalledWith('alice');
+    const body = JSON.parse(response.body);
+    expect(body.roleResolution).toBe('preserved');
+    expect(body.roleIds).toEqual(['manager']);
+  });
+
+  test('does not duplicate the lookup when canonicalUsername equals the typed input', async () => {
+    authenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      userDn: 'uid=alice,ou=people,dc=example,dc=com',
+      groups: ['cn=engineers,ou=groups,dc=example,dc=com'],
+      matchedRoleIds: [],
+      canonicalUsername: 'alice',
+    });
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+
+    await testLdapAuth({ username: 'alice', password: 'secret' });
+
+    expect(findLoginUserByUsernameMock).toHaveBeenCalledTimes(1);
+    expect(findLoginUserByUsernameMock).toHaveBeenCalledWith('alice');
+  });
+
   // #638: brand-new LDAP users still fall back to DEFAULT_ROLE_ID on real login during
   // first-time provisioning, so the tester must report that for usernames with no local user.
   test('reports roleResolution=default when no group matched and no local user exists', async () => {
