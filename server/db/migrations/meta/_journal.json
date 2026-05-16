@@ -351,6 +351,13 @@
       "when": 1778952079520,
       "tag": "0049_cap_existing_durations_at_24h",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1778958751892,
+      "tag": "0050_notifications_is_read_not_null",
+      "breakpoints": true
     }
   ]
 }
