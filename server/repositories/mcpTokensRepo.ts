@@ -3,6 +3,7 @@ import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import { type McpTokenScope, mcpTokens } from '../db/schema/mcpTokens.ts';
 import { getHmacKey } from '../utils/crypto.ts';
+import { currentTokenVersionSubquery } from './usersRepo.ts';
 
 export const MCP_TOKEN_PREFIX = 'praetor_mcp_';
 
@@ -25,6 +26,7 @@ export type ActiveMcpToken = {
   scope: McpTokenScope;
   createdAt: Date | null;
   lastUsedAt: Date | null;
+  tokenVersionAtIssue: number;
 };
 
 export const generateRawToken = (): string =>
@@ -75,6 +77,7 @@ export const createForUser = async (
       tokenPrefix: displayPrefix(input.rawToken),
       tokenHash: hashToken(input.rawToken),
       scope: input.scope ?? 'full',
+      tokenVersionAtIssue: currentTokenVersionSubquery(input.userId),
     })
     .returning();
   return mapSummary(row);
@@ -93,6 +96,7 @@ export const findActiveByRawToken = async (
       scope: mcpTokens.scope,
       createdAt: mcpTokens.createdAt,
       lastUsedAt: mcpTokens.lastUsedAt,
+      tokenVersionAtIssue: mcpTokens.tokenVersionAtIssue,
     })
     .from(mcpTokens)
     .where(and(eq(mcpTokens.tokenHash, hashToken(rawToken)), isNull(mcpTokens.revokedAt)))

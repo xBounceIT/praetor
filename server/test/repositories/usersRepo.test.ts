@@ -37,8 +37,9 @@ describe('getPasswordHash', () => {
 
 describe('findAuthUserById', () => {
   test('returns the mapped user when the row exists', async () => {
-    // Projection: id, name, username, role, avatarInitials, isDisabled, sessionVersion
-    exec.enqueue({ rows: [['user-1', 'Alice', 'alice', 'manager', 'AL', false, 3]] });
+    // Projection: id, name, username, role, avatarInitials, isDisabled, sessionVersion,
+    // tokenVersion
+    exec.enqueue({ rows: [['user-1', 'Alice', 'alice', 'manager', 'AL', false, 3, 2]] });
     const result = await usersRepo.findAuthUserById('user-1', testDb);
     expect(result).toEqual({
       id: 'user-1',
@@ -48,6 +49,7 @@ describe('findAuthUserById', () => {
       avatarInitials: 'AL',
       isDisabled: false,
       sessionVersion: 3,
+      tokenVersion: 2,
     });
     expect(exec.calls[0].params).toContain('user-1');
   });
@@ -61,7 +63,7 @@ describe('findAuthUserById', () => {
 describe('findLoginUserByUsername', () => {
   test('returns the mapped login user when the row exists', async () => {
     // Projection: id, name, username, role, passwordHash, avatarInitials, isDisabled,
-    // employeeType, authMethod, authProviderId, sessionVersion
+    // employeeType, authMethod, authProviderId, sessionVersion, tokenVersion
     exec.enqueue({
       rows: [
         [
@@ -75,6 +77,7 @@ describe('findLoginUserByUsername', () => {
           'app_user',
           'local',
           null,
+          1,
           1,
         ],
       ],
@@ -92,6 +95,7 @@ describe('findLoginUserByUsername', () => {
       authMethod: 'local',
       authProviderId: null,
       sessionVersion: 1,
+      tokenVersion: 1,
     });
     expect(exec.calls[0].params).toContain('alice');
   });
@@ -109,6 +113,14 @@ describe('rotatePasswordAndBumpSession', () => {
     expect(result).toBe(5);
     expect(exec.calls[0].params).toContain('new-hash');
     expect(exec.calls[0].params).toContain('user-1');
+  });
+
+  test('bumps both session_version and token_version in the SET clause', async () => {
+    exec.enqueue({ rows: [[1]], rowCount: 1 });
+    await usersRepo.rotatePasswordAndBumpSession('user-1', 'new-hash', testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('"session_version"');
+    expect(sql).toContain('"token_version"');
   });
 
   test('throws NotFoundError when no row matched the userId', async () => {

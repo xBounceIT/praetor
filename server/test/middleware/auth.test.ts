@@ -86,6 +86,7 @@ const HAPPY_USER = {
   avatarInitials: 'AL',
   isDisabled: false,
   sessionVersion: 1,
+  tokenVersion: 1,
 };
 
 const HAPPY_PERMISSIONS = ['timesheets.tracker.view', 'timesheets.tracker.create'];
@@ -180,6 +181,7 @@ beforeEach(() => {
     createdAt: new Date(),
     updatedAt: new Date(),
     lastUsedAt: null,
+    tokenVersionAtIssue: 1,
   });
   markPersonalAccessTokenUsedMock.mockResolvedValue(undefined);
 });
@@ -540,6 +542,27 @@ describe('authenticateToken', () => {
 
     expect(reply.statusCode).toBe(403);
     expect(reply.body).toEqual({ error: 'Invalid or expired token' });
+    expect(markPersonalAccessTokenUsedMock).not.toHaveBeenCalled();
+  });
+
+  test('PAT rejects token whose tokenVersionAtIssue is behind users.token_version', async () => {
+    findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, tokenVersion: 7 });
+    findPersonalAccessTokenByHashMock.mockResolvedValue({
+      userId: 'u1',
+      tokenHash: hashPersonalAccessToken('praetor_pat_valid-token'),
+      tokenPrefix: 'praetor_pat_valid',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      lastUsedAt: null,
+      tokenVersionAtIssue: 3,
+    });
+    const request = buildFakeRequest('praetor_pat_valid-token');
+    const reply = buildFakeReply();
+
+    await authenticateToken(request as never, reply as never);
+
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body).toEqual({ error: 'Token revoked', errorCode: 'token_revoked' });
     expect(markPersonalAccessTokenUsedMock).not.toHaveBeenCalled();
   });
 

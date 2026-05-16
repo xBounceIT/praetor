@@ -36,6 +36,11 @@ export const users = pgTable(
       onDelete: 'set null',
     }),
     sessionVersion: integer('session_version').notNull().default(1),
+    // Bumped on password rotation (and any future bulk-revocation event). Personal
+    // access tokens and MCP tokens record the value at issue and are rejected when
+    // the user's current `token_version` has moved past it — same mechanism as
+    // `session_version` provides for JWTs, but on the long-lived API credentials.
+    tokenVersion: integer('token_version').notNull().default(1),
   },
   (table) => [
     check(

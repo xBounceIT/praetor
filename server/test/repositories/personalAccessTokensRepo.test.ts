@@ -17,6 +17,7 @@ const tokenRow = [
   createdAt,
   updatedAt,
   lastUsedAt,
+  1, // tokenVersionAtIssue
 ];
 
 beforeEach(() => {
@@ -36,6 +37,7 @@ describe('findByUserId', () => {
       createdAt,
       updatedAt,
       lastUsedAt,
+      tokenVersionAtIssue: 1,
     });
     expect(exec.calls[0].params).toContain('user-1');
   });
@@ -114,7 +116,11 @@ describe('createForUserIfMissing', () => {
 
 describe('renewForUser', () => {
   test('upserts the new hash and clears lastUsedAt', async () => {
-    exec.enqueue({ rows: [[...tokenRow.slice(0, 5), null]] });
+    exec.enqueue({
+      // Projection: userId, tokenHash, tokenPrefix, createdAt, updatedAt, lastUsedAt,
+      // tokenVersionAtIssue
+      rows: [['user-1', 'b'.repeat(64), 'praetor_pat_newtoken', createdAt, updatedAt, null, 1]],
+    });
 
     const result = await personalAccessTokensRepo.renewForUser(
       'user-1',
@@ -128,6 +134,25 @@ describe('renewForUser', () => {
     expect(sql).toContain('do update');
     expect(exec.calls[0].params).toContain('b'.repeat(64));
     expect(result.lastUsedAt).toBeNull();
+  });
+
+  test('re-snapshots users.token_version in both insert and update branches', async () => {
+    exec.enqueue({
+      rows: [['user-1', 'b'.repeat(64), 'praetor_pat_newtoken', createdAt, updatedAt, null, 7]],
+    });
+
+    await personalAccessTokensRepo.renewForUser(
+      'user-1',
+      'b'.repeat(64),
+      'praetor_pat_newtoken',
+      testDb,
+    );
+
+    const sql = exec.calls[0].sql;
+    // Subquery against users.token_version appears in both the INSERT values and
+    // the ON CONFLICT DO UPDATE SET clause.
+    const tokenVersionRefs = sql.match(/"token_version"/g) ?? [];
+    expect(tokenVersionRefs.length).toBeGreaterThanOrEqual(2);
   });
 });
 

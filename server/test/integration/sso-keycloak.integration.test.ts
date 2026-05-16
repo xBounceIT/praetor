@@ -229,6 +229,7 @@ const toAuthUser = (user: StoredUser): AuthUser => ({
   avatarInitials: user.avatarInitials,
   isDisabled: user.isDisabled,
   sessionVersion: user.sessionVersion,
+  tokenVersion: user.tokenVersion,
 });
 
 const resetStores = (): void => {
@@ -244,6 +245,7 @@ const resetStores = (): void => {
     avatarInitials: 'LA',
     isDisabled: false,
     sessionVersion: 1,
+    tokenVersion: 1,
     passwordHash: EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
     costPerHour: 0,
     employeeType: 'app_user',
@@ -348,6 +350,7 @@ describe.skipIf(SHOULD_SKIP_SSO)('SSO integration: Keycloak OIDC and SAML', () =
           ...user,
           passwordHash: user.passwordHash,
           sessionVersion: 1,
+          tokenVersion: 1,
           roles: [user.role],
         });
       },

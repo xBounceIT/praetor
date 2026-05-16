@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { personalAccessTokens } from '../db/schema/personalAccessTokens.ts';
+import { currentTokenVersionSubquery } from './usersRepo.ts';
 
 export type PersonalAccessTokenRecord = {
   userId: string;
@@ -9,6 +10,7 @@ export type PersonalAccessTokenRecord = {
   createdAt: Date;
   updatedAt: Date;
   lastUsedAt: Date | null;
+  tokenVersionAtIssue: number;
 };
 
 const TOKEN_PROJECTION = {
@@ -18,6 +20,7 @@ const TOKEN_PROJECTION = {
   createdAt: personalAccessTokens.createdAt,
   updatedAt: personalAccessTokens.updatedAt,
   lastUsedAt: personalAccessTokens.lastUsedAt,
+  tokenVersionAtIssue: personalAccessTokens.tokenVersionAtIssue,
 } as const;
 
 export const findByUserId = async (
@@ -56,7 +59,12 @@ export const createForUserIfMissing = async (
 
     const inserted = await tx
       .insert(personalAccessTokens)
-      .values({ userId, tokenHash, tokenPrefix })
+      .values({
+        userId,
+        tokenHash,
+        tokenPrefix,
+        tokenVersionAtIssue: currentTokenVersionSubquery(userId),
+      })
       .onConflictDoNothing({ target: personalAccessTokens.userId })
       .returning(TOKEN_PROJECTION);
 
@@ -78,9 +86,12 @@ export const renewForUser = async (
   tokenPrefix: string,
   exec: DbExecutor = db,
 ): Promise<PersonalAccessTokenRecord> => {
+  // Re-snapshot the user's current token_version in both branches so a renewed
+  // PAT survives any prior bumps — the old PAT is being thrown away anyway.
+  const currentVersion = currentTokenVersionSubquery(userId);
   const rows = await exec
     .insert(personalAccessTokens)
-    .values({ userId, tokenHash, tokenPrefix })
+    .values({ userId, tokenHash, tokenPrefix, tokenVersionAtIssue: currentVersion })
     .onConflictDoUpdate({
       target: personalAccessTokens.userId,
       set: {
@@ -88,6 +99,7 @@ export const renewForUser = async (
         tokenPrefix,
         updatedAt: sql`CURRENT_TIMESTAMP`,
         lastUsedAt: null,
+        tokenVersionAtIssue: currentVersion,
       },
     })
     .returning(TOKEN_PROJECTION);

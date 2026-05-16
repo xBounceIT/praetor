@@ -115,13 +115,19 @@ const buildSessionAuthRequiredError = () => {
   return error;
 };
 
+type LoadAuthContextOptions = {
+  activeRole?: string;
+  expectedSessionVersion?: number;
+  expectedTokenVersion?: number;
+};
+
 const loadAuthenticatedUserContext = async (
   request: FastifyRequest,
   reply: FastifyReply,
   userId: string,
-  activeRole?: string,
-  expectedSessionVersion?: number,
+  options: LoadAuthContextOptions = {},
 ) => {
+  const { activeRole, expectedSessionVersion, expectedTokenVersion } = options;
   const user = await usersRepo.findAuthUserById(userId);
 
   if (!user) {
@@ -138,6 +144,14 @@ const loadAuthenticatedUserContext = async (
   // forced revocation) bumped the user's session version. Reject without rotating.
   if (expectedSessionVersion !== undefined && user.sessionVersion !== expectedSessionVersion) {
     await reply.code(401).send({ error: 'Session revoked', errorCode: 'session_revoked' });
+    return null;
+  }
+
+  // PATs and MCP tokens are gated by users.token_version. A bump (currently fired
+  // by password rotation) invalidates every long-lived credential the user holds
+  // without needing to touch the token rows themselves.
+  if (expectedTokenVersion !== undefined && user.tokenVersion !== expectedTokenVersion) {
+    await reply.code(403).send({ error: 'Token revoked', errorCode: 'token_revoked' });
     return null;
   }
 
@@ -210,13 +224,10 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
       source: 'session',
     };
 
-    const userContext = await loadAuthenticatedUserContext(
-      request,
-      reply,
-      decoded.userId,
-      decoded.activeRole,
-      decoded.sessionVersion,
-    );
+    const userContext = await loadAuthenticatedUserContext(request, reply, decoded.userId, {
+      activeRole: decoded.activeRole,
+      expectedSessionVersion: decoded.sessionVersion,
+    });
     if (!userContext) return;
 
     // Sliding window: reset the 30m idle timer while preserving sessionStart (8h cap)
@@ -256,7 +267,9 @@ const authenticatePersonalAccessToken = async (
 
     request.auth = { userId: tokenRecord.userId, source: 'personalAccessToken' };
 
-    const userContext = await loadAuthenticatedUserContext(request, reply, tokenRecord.userId);
+    const userContext = await loadAuthenticatedUserContext(request, reply, tokenRecord.userId, {
+      expectedTokenVersion: tokenRecord.tokenVersionAtIssue,
+    });
     if (!userContext) return;
 
     try {
