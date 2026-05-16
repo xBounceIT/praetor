@@ -39,7 +39,7 @@ const findPersonalAccessTokenByHashMock = mock();
 const markPersonalAccessTokenUsedMock = mock();
 
 // Auth route deps
-const findLoginUserByUsernameMock = mock();
+const findLoginUserByNormalizedUsernameMock = mock();
 const findLoginUserByIdMock = mock();
 const bumpSessionVersionMock = mock();
 const listAvailableRolesForUserMock = mock();
@@ -59,7 +59,7 @@ beforeAll(async () => {
   mock.module('../../repositories/usersRepo.ts', () => ({
     ...usersRepoSnap,
     findAuthUserById: findAuthUserByIdMock,
-    findLoginUserByUsername: findLoginUserByUsernameMock,
+    findLoginUserByNormalizedUsername: findLoginUserByNormalizedUsernameMock,
     findLoginUserById: findLoginUserByIdMock,
     bumpSessionVersion: bumpSessionVersionMock,
   }));
@@ -143,7 +143,7 @@ const allMocks = [
   getRolePermissionsMock,
   findPersonalAccessTokenByHashMock,
   markPersonalAccessTokenUsedMock,
-  findLoginUserByUsernameMock,
+  findLoginUserByNormalizedUsernameMock,
   findLoginUserByIdMock,
   bumpSessionVersionMock,
   listAvailableRolesForUserMock,
@@ -207,7 +207,7 @@ const authHeader = (userId = 'u1', activeRole?: string, sessionStart?: number) =
 
 describe('POST /api/auth/login', () => {
   test('200 happy path: local password match', async () => {
-    findLoginUserByUsernameMock.mockResolvedValue(LOGIN_USER);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(LOGIN_USER);
     bcryptCompareMock.mockResolvedValue(true);
 
     const res = await testApp.inject({
@@ -250,7 +250,7 @@ describe('POST /api/auth/login', () => {
   });
 
   test('200: LDAP success skips bcrypt', async () => {
-    findLoginUserByUsernameMock.mockResolvedValue({ ...LOGIN_USER, authMethod: 'ldap' });
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({ ...LOGIN_USER, authMethod: 'ldap' });
     ldapAuthenticateWithProfileMock.mockResolvedValue({
       authenticated: true,
       groups: ['admins'],
@@ -272,7 +272,7 @@ describe('POST /api/auth/login', () => {
   });
 
   test('200: LDAP login with no matching role mapping preserves admin-assigned role (regression #318)', async () => {
-    findLoginUserByUsernameMock.mockResolvedValue({ ...LOGIN_USER, authMethod: 'ldap' });
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({ ...LOGIN_USER, authMethod: 'ldap' });
     // LDAP authenticates but the user's groups don't map to any configured role.
     ldapAuthenticateWithProfileMock.mockResolvedValue({
       authenticated: true,
@@ -293,7 +293,7 @@ describe('POST /api/auth/login', () => {
   });
 
   test('200: LDAP returns false, bcrypt succeeds (fallback)', async () => {
-    findLoginUserByUsernameMock.mockResolvedValue(LOGIN_USER);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(LOGIN_USER);
     ldapAuthenticateWithProfileMock.mockResolvedValue({
       authenticated: false,
       groups: [],
@@ -313,7 +313,7 @@ describe('POST /api/auth/login', () => {
   });
 
   test('503: LDAP user login returns ldap_unavailable when LDAP throws (regression #368)', async () => {
-    findLoginUserByUsernameMock.mockResolvedValue({ ...LOGIN_USER, authMethod: 'ldap' });
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({ ...LOGIN_USER, authMethod: 'ldap' });
     ldapAuthenticateWithProfileMock.mockRejectedValue(new Error('LDAP server unreachable'));
     bcryptCompareMock.mockResolvedValue(true);
 
@@ -332,7 +332,7 @@ describe('POST /api/auth/login', () => {
   });
 
   test('503: unknown-user LDAP auto-provision returns ldap_unavailable when LDAP throws (regression #368)', async () => {
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
     ldapAuthenticateAndProvisionMock.mockRejectedValue(new Error('connect ECONNREFUSED'));
 
     const res = await testApp.inject({
@@ -350,7 +350,7 @@ describe('POST /api/auth/login', () => {
   });
 
   test('401: SSO-only user cannot sign in with local password', async () => {
-    findLoginUserByUsernameMock.mockResolvedValue({
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
       ...LOGIN_USER,
       authMethod: 'oidc',
       authProviderId: 'sso-1',
@@ -369,7 +369,7 @@ describe('POST /api/auth/login', () => {
   });
 
   test('200: empty availableRoles falls back to user.role synthetic role', async () => {
-    findLoginUserByUsernameMock.mockResolvedValue(LOGIN_USER);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(LOGIN_USER);
     bcryptCompareMock.mockResolvedValue(true);
     listAvailableRolesForUserMock.mockResolvedValue([]);
 
@@ -387,7 +387,7 @@ describe('POST /api/auth/login', () => {
   });
 
   test('401 user not found (LDAP auto-provision also fails)', async () => {
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
     ldapAuthenticateAndProvisionMock.mockResolvedValue({ authenticated: false });
 
     const res = await testApp.inject({
@@ -403,7 +403,7 @@ describe('POST /api/auth/login', () => {
   });
 
   test('200: unknown user auto-provisioned via LDAP on first login', async () => {
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
     ldapAuthenticateAndProvisionMock.mockResolvedValue({
       authenticated: true,
       userId: 'u-new',
@@ -447,7 +447,7 @@ describe('POST /api/auth/login', () => {
   });
 
   test('200: typed alias resolves to existing canonical LDAP user (no creation)', async () => {
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
     ldapAuthenticateAndProvisionMock.mockResolvedValue({
       authenticated: true,
       userId: 'u-existing',
@@ -479,7 +479,7 @@ describe('POST /api/auth/login', () => {
   });
 
   test('401: auto-provisioned user disabled is rejected', async () => {
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
     ldapAuthenticateAndProvisionMock.mockResolvedValue({
       authenticated: true,
       userId: 'u-new',
@@ -504,7 +504,7 @@ describe('POST /api/auth/login', () => {
   });
 
   test('401 disabled user', async () => {
-    findLoginUserByUsernameMock.mockResolvedValue({ ...LOGIN_USER, isDisabled: true });
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({ ...LOGIN_USER, isDisabled: true });
 
     const res = await testApp.inject({
       method: 'POST',
@@ -517,7 +517,10 @@ describe('POST /api/auth/login', () => {
   });
 
   test('401 non-app user cannot sign in with a local password', async () => {
-    findLoginUserByUsernameMock.mockResolvedValue({ ...LOGIN_USER, employeeType: 'internal' });
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
+      ...LOGIN_USER,
+      employeeType: 'internal',
+    });
     bcryptCompareMock.mockResolvedValue(true);
 
     const res = await testApp.inject({
@@ -533,7 +536,7 @@ describe('POST /api/auth/login', () => {
   });
 
   test('401 wrong password (LDAP off, bcrypt fails)', async () => {
-    findLoginUserByUsernameMock.mockResolvedValue(LOGIN_USER);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(LOGIN_USER);
     ldapAuthenticateWithProfileMock.mockResolvedValue({
       authenticated: false,
       groups: [],
@@ -549,6 +552,31 @@ describe('POST /api/auth/login', () => {
 
     expect(res.statusCode).toBe(401);
     expect(JSON.parse(res.body)).toEqual({ error: 'Invalid username or password' });
+  });
+
+  // Regression #640: typed 'JDoe' must resolve to a canonical 'jdoe' row.
+  test('200: typed mixed-case username resolves to canonical LDAP-bound row (#640)', async () => {
+    findLoginUserByNormalizedUsernameMock.mockImplementation(async (username: string) =>
+      username.trim().toLowerCase() === 'jdoe'
+        ? { ...LOGIN_USER, username: 'jdoe', authMethod: 'ldap' as const }
+        : null,
+    );
+    ldapAuthenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      groups: [],
+      matchedRoleIds: [],
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'JDoe', password: 'secret' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(findLoginUserByNormalizedUsernameMock).toHaveBeenCalledWith('JDoe');
+    const body = JSON.parse(res.body);
+    expect(body.user.username).toBe('jdoe');
   });
 
   test('400 whitespace-only username triggers in-handler validator', async () => {

@@ -103,7 +103,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, passwordResult.message);
       }
 
-      let user = await usersRepo.findLoginUserByUsername(usernameResult.value);
+      let user = await usersRepo.findLoginUserByNormalizedUsername(usernameResult.value);
       let ldapAutoProvisionSuccess = false;
       let ldapAutoProvisioned = false;
 

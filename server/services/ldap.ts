@@ -17,6 +17,7 @@ import {
   filterExistingRoleIds,
   mapExternalGroupsToMatchedRoleIds,
   mapExternalGroupsToRoleIds,
+  normalizeExternalUsername,
 } from './external-auth.ts';
 
 const logger = createChildLogger({ module: 'ldap' });
@@ -339,10 +340,11 @@ class LDAPService {
     if (!result.authenticated) {
       return { authenticated: false };
     }
-    const canonicalUsername = result.canonicalUsername ?? username;
+    const canonicalUsername = normalizeExternalUsername(result.canonicalUsername ?? username);
     const roleMappings = this.getRoleMappings();
 
-    const existingByCanonical = await usersRepo.findLoginUserByUsername(canonicalUsername);
+    const existingByCanonical =
+      await usersRepo.findLoginUserByNormalizedUsername(canonicalUsername);
     if (existingByCanonical) {
       if (
         existingByCanonical.employeeType !== 'app_user' ||
@@ -401,7 +403,7 @@ class LDAPService {
       });
     } catch (err) {
       if (isUniqueViolationError(err)) {
-        const racedUser = await usersRepo.findLoginUserByUsername(canonicalUsername);
+        const racedUser = await usersRepo.findLoginUserByNormalizedUsername(canonicalUsername);
         if (racedUser && racedUser.employeeType === 'app_user' && racedUser.authMethod === 'ldap') {
           const applied = await applyExternalRolesForUserIfMatched(
             racedUser.id,
@@ -670,19 +672,21 @@ class LDAPService {
       const roleMappings = this.getRoleMappings();
 
       for (const entry of entries) {
-        let username = entry.uid;
-        if (Array.isArray(username)) username = username[0];
+        let candidate = entry.uid;
+        if (Array.isArray(candidate)) candidate = candidate[0];
 
         // Fallback for AD, where the username attribute is sAMAccountName rather than uid.
-        if (!username && entry.sAMAccountName) {
-          username = entry.sAMAccountName;
-          if (Array.isArray(username)) username = username[0];
+        if (!candidate && entry.sAMAccountName) {
+          candidate = entry.sAMAccountName;
+          if (Array.isArray(candidate)) candidate = candidate[0];
         }
 
-        if (!username) {
+        if (!candidate) {
           logger.warn('Skipping LDAP entry without username');
           continue;
         }
+
+        const username = normalizeExternalUsername(candidate);
 
         const nameValue: string | string[] | undefined = entry.cn || entry.displayName;
         let name: string;
@@ -692,7 +696,7 @@ class LDAPService {
           name = username;
         }
 
-        const existing = await usersRepo.findLoginUserByUsername(username);
+        const existing = await usersRepo.findLoginUserByNormalizedUsername(username);
 
         if (existing) {
           if (existing.employeeType !== 'app_user' || existing.authMethod !== 'ldap') {
@@ -703,7 +707,9 @@ class LDAPService {
             continue;
           }
           const groups = await this.findUserGroups(ldapClient, entry.objectName, username);
-          await usersRepo.updateNameByUsername(username, name);
+          // Update by the row's stored username so a pre-migration mixed-case row still
+          // matches via LOWER() instead of a raw-bytes WHERE that wouldn't.
+          await usersRepo.updateNameByUsername(existing.username, name);
           const applied = await applyExternalRolesForUserIfMatched(
             existing.id,
             groups,
