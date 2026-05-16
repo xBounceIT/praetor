@@ -10,6 +10,7 @@ import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { applyExternalRoleIdsForUserIfMatched } from '../services/external-auth.ts';
+import * as ssoService from '../services/sso.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
 import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -369,7 +370,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   );
 
   // Bumping session_version invalidates the caller's token (and any other live tokens
-  // for the same user) on the next authenticated request.
+  // for the same user) on the next authenticated request. For OIDC users on a provider
+  // with `endSessionEnabled`, the response also carries `endSessionUrl` so the frontend
+  // can redirect to the IdP's RP-Initiated Logout endpoint — otherwise the IdP cookie
+  // outlives the Praetor session and a fresh SSO attempt silently re-enters as the
+  // previous user.
   fastify.post(
     '/logout',
     {
@@ -378,13 +383,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         tags: ['auth'],
         summary: 'Logout (revoke all sessions for this user)',
         response: {
-          204: { type: 'null' },
+          200: {
+            type: 'object',
+            properties: {
+              endSessionUrl: { type: ['string', 'null'] },
+            },
+            required: ['endSessionUrl'],
+          },
           ...standardRateLimitedErrorResponses,
         },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const session = getSessionAuth(request);
+
+      // Resolve the IdP end-session URL before bumping session_version: a broken IdP
+      // must never block the local logout, so we swallow the rejection and proceed.
+      let endSessionUrl: string | null = null;
+      try {
+        endSessionUrl = await ssoService.endOidcSession(session.userId);
+      } catch (err) {
+        request.log.warn({ err, userId: session.userId }, 'OIDC end-session URL build failed');
+      }
 
       await Promise.all([
         usersRepo.bumpSessionVersion(session.userId),
@@ -404,7 +424,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // to x-auth-token. After the bump above, that token is revoked — strip it so the
       // client doesn't persist a doomed token into localStorage.
       reply.removeHeader('x-auth-token');
-      return reply.code(204).send();
+      return { endSessionUrl };
     },
   );
 }

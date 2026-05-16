@@ -67,6 +67,7 @@ const buildDefaultProvider = (protocol: SsoProtocol): Partial<SsoProvider> => ({
   emailAttribute: 'email',
   groupsAttribute: 'groups',
   roleMappings: [],
+  endSessionEnabled: false,
 });
 
 const OpenIdIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -590,35 +591,56 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
           </div>
 
           {protocol === 'oidc' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Field
-                label={t('admin.sso.issuerUrl', 'Issuer URL')}
-                value={draft.issuerUrl || ''}
-                error={errors[`${prefix}issuerUrl`]}
-                monospace
-                onChange={(issuerUrl) => updateProviderDraft(protocol, { issuerUrl })}
-              />
-              <Field
-                label={t('admin.sso.clientId', 'Client ID')}
-                value={draft.clientId || ''}
-                error={errors[`${prefix}clientId`]}
-                monospace
-                onChange={(clientId) => updateProviderDraft(protocol, { clientId })}
-              />
-              <Field
-                label={t('admin.sso.clientSecret', 'Client Secret')}
-                type="password"
-                value={draft.clientSecret || ''}
-                monospace
-                onChange={(clientSecret) => updateProviderDraft(protocol, { clientSecret })}
-              />
-              <Field
-                label={t('admin.sso.scopes', 'Scopes')}
-                value={draft.scopes || 'openid profile email'}
-                monospace
-                onChange={(scopes) => updateProviderDraft(protocol, { scopes })}
-              />
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Field
+                  label={t('admin.sso.issuerUrl', 'Issuer URL')}
+                  value={draft.issuerUrl || ''}
+                  error={errors[`${prefix}issuerUrl`]}
+                  monospace
+                  onChange={(issuerUrl) => updateProviderDraft(protocol, { issuerUrl })}
+                />
+                <Field
+                  label={t('admin.sso.clientId', 'Client ID')}
+                  value={draft.clientId || ''}
+                  error={errors[`${prefix}clientId`]}
+                  monospace
+                  onChange={(clientId) => updateProviderDraft(protocol, { clientId })}
+                />
+                <Field
+                  label={t('admin.sso.clientSecret', 'Client Secret')}
+                  type="password"
+                  value={draft.clientSecret || ''}
+                  monospace
+                  onChange={(clientSecret) => updateProviderDraft(protocol, { clientSecret })}
+                />
+                <Field
+                  label={t('admin.sso.scopes', 'Scopes')}
+                  value={draft.scopes || 'openid profile email'}
+                  monospace
+                  onChange={(scopes) => updateProviderDraft(protocol, { scopes })}
+                />
+              </div>
+              <div className="flex items-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                <Toggle
+                  checked={!!draft.endSessionEnabled}
+                  onChange={(endSessionEnabled) =>
+                    updateProviderDraft(protocol, { endSessionEnabled })
+                  }
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-zinc-700">
+                    {t('admin.sso.endSessionEnabled', 'Call IdP end-session endpoint on logout')}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t(
+                      'admin.sso.endSessionHint',
+                      "When enabled, logging out of Praetor also terminates the user's session at the IdP (OIDC RP-Initiated Logout). Requires the IdP's discovery document to advertise an end_session_endpoint and the post-logout redirect URI to be registered with the IdP.",
+                    )}
+                  </p>
+                </div>
+              </div>
+            </>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Field

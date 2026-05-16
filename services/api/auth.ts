@@ -95,5 +95,6 @@ export const authApi = {
       }),
     ),
 
-  logout: (): Promise<void> => fetchApi('/auth/logout', { method: 'POST' }),
+  logout: (): Promise<{ endSessionUrl: string | null }> =>
+    fetchApi('/auth/logout', { method: 'POST' }),
 };

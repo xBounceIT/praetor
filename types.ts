@@ -313,6 +313,7 @@ export interface SsoProvider {
   emailAttribute: string;
   groupsAttribute: string;
   roleMappings: SsoRoleMapping[];
+  endSessionEnabled: boolean;
 }
 
 export type PublicSsoProvider = Pick<SsoProvider, 'protocol' | 'slug' | 'name'>;

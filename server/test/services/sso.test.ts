@@ -1,15 +1,19 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import * as realDns from 'node:dns/promises';
 import * as realNodeSaml from '@node-saml/node-saml';
+import * as realOidcClient from 'openid-client';
 import * as realSsoProvidersRepo from '../../repositories/ssoProvidersRepo.ts';
 import * as realSsoStatesRepo from '../../repositories/ssoStatesRepo.ts';
+import * as realSsoUserSessionsRepo from '../../repositories/ssoUserSessionsRepo.ts';
 import * as realExternalAuth from '../../services/external-auth.ts';
 
 const dnsSnap = { ...realDns };
 const nodeSamlSnap = { ...realNodeSaml };
+const oidcSnap = { ...realOidcClient };
 const externalAuthSnap = { ...realExternalAuth };
 const ssoProvidersRepoSnap = { ...realSsoProvidersRepo };
 const ssoStatesRepoSnap = { ...realSsoStatesRepo };
+const ssoUserSessionsRepoSnap = { ...realSsoUserSessionsRepo };
 
 const dnsLookupMock = mock();
 const findBySlugMock = mock();
@@ -21,6 +25,11 @@ const samlValidatePostMock = mock();
 const resolveExternalIdentityMock = mock();
 const statesGetForProviderMock = mock();
 const statesInsertMock = mock();
+const userSessionsFindActiveOidcByUserIdMock = mock();
+const userSessionsUpsertMock = mock();
+const userSessionsDeleteByUserIdMock = mock();
+const oidcDiscoveryMock = mock();
+const oidcBuildEndSessionUrlMock = mock();
 
 class StubSaml {
   validatePostResponseAsync(formBody: Record<string, string>) {
@@ -57,6 +66,20 @@ beforeAll(async () => {
     getForProvider: statesGetForProviderMock,
     insert: statesInsertMock,
   }));
+  mock.module('../../repositories/ssoUserSessionsRepo.ts', () => ({
+    ...ssoUserSessionsRepoSnap,
+    findActiveOidcByUserId: userSessionsFindActiveOidcByUserIdMock,
+    upsert: userSessionsUpsertMock,
+    deleteByUserId: userSessionsDeleteByUserIdMock,
+  }));
+  // openid-client mocks are scoped to endOidcSession tests; the OIDC login paths in this
+  // test file all reject before reaching `discovery`, so the default mock.module wiring
+  // here doesn't break anything.
+  mock.module('openid-client', () => ({
+    ...oidcSnap,
+    discovery: oidcDiscoveryMock,
+    buildEndSessionUrl: oidcBuildEndSessionUrlMock,
+  }));
 
   sso = await import('../../services/sso.ts');
 });
@@ -67,6 +90,8 @@ afterAll(() => {
   mock.module('../../services/external-auth.ts', () => externalAuthSnap);
   mock.module('../../repositories/ssoProvidersRepo.ts', () => ssoProvidersRepoSnap);
   mock.module('../../repositories/ssoStatesRepo.ts', () => ssoStatesRepoSnap);
+  mock.module('../../repositories/ssoUserSessionsRepo.ts', () => ssoUserSessionsRepoSnap);
+  mock.module('openid-client', () => oidcSnap);
 });
 
 beforeEach(() => {
@@ -81,6 +106,11 @@ beforeEach(() => {
     resolveExternalIdentityMock,
     statesGetForProviderMock,
     statesInsertMock,
+    userSessionsFindActiveOidcByUserIdMock,
+    userSessionsUpsertMock,
+    userSessionsDeleteByUserIdMock,
+    oidcDiscoveryMock,
+    oidcBuildEndSessionUrlMock,
   ])
     m.mockReset();
 });
@@ -270,6 +300,7 @@ const SAML_PROVIDER: realSsoProvidersRepo.SsoProvider = {
   emailAttribute: 'email',
   groupsAttribute: 'groups',
   roleMappings: [],
+  endSessionEnabled: false,
 };
 
 describe('startSamlLogin SSRF protections', () => {
@@ -690,5 +721,134 @@ describe('updateProvider config validation', () => {
     await expect(
       sso.updateProvider('sso-1', { enabled: true, usernameAttribute: '' }),
     ).rejects.toThrow(/usernameAttribute/);
+  });
+});
+
+// endOidcSession returns null for any case where there is nothing to redirect to (no row,
+// provider disabled / opted-out / wrong protocol — all collapsed into the single-query
+// JOIN filter — plus discovery doc without `end_session_endpoint`). Transient IdP failures
+// throw so the caller (the logout route) catches and falls back to a Praetor-only logout.
+describe('endOidcSession', () => {
+  const originalSsoBase = process.env.SSO_CALLBACK_BASE_URL;
+  const originalFrontend = process.env.FRONTEND_URL;
+  const originalEncryptionKey = process.env.ENCRYPTION_KEY;
+
+  const OIDC_PROVIDER: realSsoProvidersRepo.SsoProvider = {
+    id: 'sso-oidc-1',
+    protocol: 'oidc',
+    slug: 'okta',
+    name: 'Okta',
+    enabled: true,
+    issuerUrl: 'https://idp.example.com',
+    clientId: 'praetor-client',
+    clientSecret: '',
+    scopes: 'openid profile email',
+    metadataUrl: '',
+    metadataXml: '',
+    entryPoint: '',
+    idpIssuer: '',
+    idpCert: '',
+    spIssuer: '',
+    privateKey: '',
+    publicCert: '',
+    usernameAttribute: 'preferred_username',
+    nameAttribute: 'name',
+    emailAttribute: 'email',
+    groupsAttribute: 'groups',
+    roleMappings: [],
+    endSessionEnabled: true,
+  };
+
+  let encryptedIdToken: string;
+
+  beforeAll(async () => {
+    process.env.ENCRYPTION_KEY = 'test-encryption-key-32-bytes-long!!';
+    const { encrypt } = await import('../../utils/crypto.ts');
+    encryptedIdToken = encrypt('eyJ.fake.idtoken');
+  });
+
+  beforeEach(() => {
+    process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
+    process.env.FRONTEND_URL = 'https://app.example.com';
+    dnsLookupMock.mockResolvedValue([{ address: '203.0.113.10', family: 4 }]);
+  });
+
+  afterAll(() => {
+    if (originalSsoBase === undefined) delete process.env.SSO_CALLBACK_BASE_URL;
+    else process.env.SSO_CALLBACK_BASE_URL = originalSsoBase;
+    if (originalFrontend === undefined) delete process.env.FRONTEND_URL;
+    else process.env.FRONTEND_URL = originalFrontend;
+    if (originalEncryptionKey === undefined) delete process.env.ENCRYPTION_KEY;
+    else process.env.ENCRYPTION_KEY = originalEncryptionKey;
+  });
+
+  const activeRow = (overrides: Partial<{ idToken: string }> = {}) => ({
+    session: {
+      userId: 'u1',
+      providerId: 'sso-oidc-1',
+      idToken: overrides.idToken ?? encryptedIdToken,
+    },
+    provider: OIDC_PROVIDER,
+  });
+
+  test('returns null when the JOIN finds no active OIDC session', async () => {
+    userSessionsFindActiveOidcByUserIdMock.mockResolvedValue(null);
+    expect(await sso.endOidcSession('u1')).toBeNull();
+    expect(oidcDiscoveryMock).not.toHaveBeenCalled();
+    expect(userSessionsDeleteByUserIdMock).not.toHaveBeenCalled();
+  });
+
+  test('returns null and drops the row when the discovery doc has no end_session_endpoint', async () => {
+    userSessionsFindActiveOidcByUserIdMock.mockResolvedValue(activeRow());
+    oidcDiscoveryMock.mockResolvedValue({ serverMetadata: () => ({}) });
+
+    expect(await sso.endOidcSession('u1')).toBeNull();
+    expect(userSessionsDeleteByUserIdMock).toHaveBeenCalledWith('u1');
+    expect(oidcBuildEndSessionUrlMock).not.toHaveBeenCalled();
+  });
+
+  test('happy path: returns the IdP end-session URL and deletes the row', async () => {
+    userSessionsFindActiveOidcByUserIdMock.mockResolvedValue(activeRow());
+    oidcDiscoveryMock.mockResolvedValue({
+      serverMetadata: () => ({ end_session_endpoint: 'https://idp.example.com/logout' }),
+    });
+    oidcBuildEndSessionUrlMock.mockReturnValue(
+      new URL(
+        'https://idp.example.com/logout?id_token_hint=eyJ.fake.idtoken&post_logout_redirect_uri=https%3A%2F%2Fapp.example.com%2F&client_id=praetor-client',
+      ),
+    );
+
+    const url = await sso.endOidcSession('u1');
+    expect(url).toBe(
+      'https://idp.example.com/logout?id_token_hint=eyJ.fake.idtoken&post_logout_redirect_uri=https%3A%2F%2Fapp.example.com%2F&client_id=praetor-client',
+    );
+    // The id_token passed to the IdP must be the DECRYPTED form — passing the ciphertext
+    // would not work as id_token_hint and is the regression this assertion guards.
+    expect(oidcBuildEndSessionUrlMock).toHaveBeenCalledTimes(1);
+    expect(oidcBuildEndSessionUrlMock.mock.calls[0][1]).toEqual({
+      id_token_hint: 'eyJ.fake.idtoken',
+      post_logout_redirect_uri: 'https://app.example.com/',
+      client_id: 'praetor-client',
+    });
+    expect(userSessionsDeleteByUserIdMock).toHaveBeenCalledWith('u1');
+  });
+
+  test('returns null and drops the row when the stored ciphertext cannot be decrypted', async () => {
+    userSessionsFindActiveOidcByUserIdMock.mockResolvedValue(
+      activeRow({ idToken: 'not-actually-encrypted' }),
+    );
+
+    expect(await sso.endOidcSession('u1')).toBeNull();
+    expect(userSessionsDeleteByUserIdMock).toHaveBeenCalledWith('u1');
+    expect(oidcDiscoveryMock).not.toHaveBeenCalled();
+  });
+
+  test('throws (caller catches) but does NOT drop the row when discovery fails', async () => {
+    // Transient IdP outage — the row must survive so the next attempt can succeed.
+    userSessionsFindActiveOidcByUserIdMock.mockResolvedValue(activeRow());
+    oidcDiscoveryMock.mockRejectedValue(new Error('connect ETIMEDOUT'));
+
+    await expect(sso.endOidcSession('u1')).rejects.toThrow(/connect ETIMEDOUT/);
+    expect(userSessionsDeleteByUserIdMock).not.toHaveBeenCalled();
   });
 });

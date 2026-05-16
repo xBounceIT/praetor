@@ -87,6 +87,7 @@ const buildProvider = (protocol: SsoProtocol, patch: Partial<SsoProvider> = {}):
   emailAttribute: 'email',
   groupsAttribute: 'groups',
   roleMappings: [],
+  endSessionEnabled: false,
   ...patch,
 });
 

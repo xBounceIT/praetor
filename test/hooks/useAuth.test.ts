@@ -8,7 +8,9 @@ const apiMocks = {
   authSwitchRole: mock(
     (_roleId: string): Promise<unknown> => Promise.resolve({ user: { id: 'u1' }, token: 't1' }),
   ),
-  authLogout: mock((): Promise<void> => Promise.resolve()),
+  authLogout: mock(
+    (): Promise<{ endSessionUrl: string | null }> => Promise.resolve({ endSessionUrl: null }),
+  ),
   settingsGet: mock(
     (): Promise<unknown> => Promise.resolve({ fullName: '', email: '', language: 'auto' }),
   ),
@@ -63,7 +65,7 @@ describe('useAuth', () => {
     apiMocks.authSwitchRole.mockImplementation((_roleId: string) =>
       Promise.resolve({ user: { id: 'u2', name: 'switched' }, token: 'new-token' }),
     );
-    apiMocks.authLogout.mockImplementation(() => Promise.resolve());
+    apiMocks.authLogout.mockImplementation(() => Promise.resolve({ endSessionUrl: null }));
     apiMocks.settingsGet.mockImplementation(() =>
       Promise.resolve({ fullName: 'F', email: 'e@e', language: 'auto' }),
     );
@@ -293,6 +295,72 @@ describe('useAuth', () => {
     expect(result.current.currentUser).toBeNull();
     expect(result.current.logoutReason).toBe('inactivity');
     expect(onLogout).toHaveBeenCalledWith('inactivity');
+  });
+
+  // Issue #610: when the server returns an `endSessionUrl` (OIDC RP-Initiated Logout), the
+  // hook hands the browser to that URL after clearing local state — otherwise the IdP
+  // session cookie stays alive and the next tab silently SSOs back in as the previous user.
+  test('logout redirects to endSessionUrl when the server returns one', async () => {
+    const originalAssign = window.location.assign;
+    const assignMock = mock((_url: string) => {});
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: { ...window.location, assign: assignMock },
+    });
+    apiMocks.authLogout.mockImplementation(() =>
+      Promise.resolve({ endSessionUrl: 'https://idp.example.com/logout?id_token_hint=tok' }),
+    );
+
+    try {
+      const { result } = renderHook(() => useAuth());
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      await act(async () => {
+        result.current.logout();
+        // Microtask flush so the .then() chain in logout fires before the assertion.
+        await Promise.resolve();
+      });
+
+      await waitFor(() =>
+        expect(assignMock).toHaveBeenCalledWith('https://idp.example.com/logout?id_token_hint=tok'),
+      );
+      // Local clear still happens before the redirect (synchronous) — the user is logged out
+      // of Praetor regardless of what the IdP does with the redirect.
+      expect(result.current.currentUser).toBeNull();
+      expect(setAuthTokenMock).toHaveBeenLastCalledWith(null);
+    } finally {
+      Object.defineProperty(window, 'location', {
+        writable: true,
+        value: { ...window.location, assign: originalAssign },
+      });
+    }
+  });
+
+  test('logout does NOT redirect when endSessionUrl is null', async () => {
+    const originalAssign = window.location.assign;
+    const assignMock = mock((_url: string) => {});
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: { ...window.location, assign: assignMock },
+    });
+    apiMocks.authLogout.mockImplementation(() => Promise.resolve({ endSessionUrl: null }));
+
+    try {
+      const { result } = renderHook(() => useAuth());
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      await act(async () => {
+        result.current.logout();
+        await Promise.resolve();
+      });
+
+      expect(assignMock).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(window, 'location', {
+        writable: true,
+        value: { ...window.location, assign: originalAssign },
+      });
+    }
   });
 
   test('logout without reason sets logoutReason to null', async () => {

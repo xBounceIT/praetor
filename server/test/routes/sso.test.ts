@@ -109,6 +109,7 @@ const baseProvider: realSsoProvidersRepo.SsoProvider = {
   emailAttribute: 'email',
   groupsAttribute: 'groups',
   roleMappings: [],
+  endSessionEnabled: false,
 };
 
 const samlProvider = (
