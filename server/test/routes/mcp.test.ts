@@ -691,6 +691,46 @@ describe('/api/mcp', () => {
     );
   });
 
+  test('bulk_create_time_entries rejects duration above 24h via Zod, never reaching the service', async () => {
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 80,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_bulk_create_time_entries',
+        arguments: {
+          entries: [{ ...makeCreateTimeEntryArgs('Task One'), duration: 25 }],
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = parseMcpBody(res.body);
+    expect(body.result.isError).toBe(true);
+    expect(body.result.content[0].text).toMatch(/duration.*<=\s*24/i);
+    expect(createTimeEntryMock).not.toHaveBeenCalled();
+  });
+
+  test('bulk_update_time_entries rejects duration above 24h via Zod, never reaching the service', async () => {
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 81,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_bulk_update_time_entries',
+        arguments: {
+          entries: [{ id: 'te-1', version: 1, duration: 25 }],
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = parseMcpBody(res.body);
+    expect(body.result.isError).toBe(true);
+    expect(body.result.content[0].text).toMatch(/duration.*<=\s*24/i);
+    expect(updateTimeEntryMock).not.toHaveBeenCalled();
+  });
+
   test('bulk updates time entries in input order with partial per-item results', async () => {
     updateTimeEntryMock.mockImplementationOnce((_user, id, patch) =>
       Promise.resolve({ id, ...patch }),
