@@ -18,7 +18,7 @@ import {
   saveSupplierQuoteAttachment,
 } from '../utils/fileStorage.ts';
 import { createChildLogger } from '../utils/logger.ts';
-import { generatePrefixedId } from '../utils/order-ids.ts';
+import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
@@ -172,7 +172,7 @@ const validateAndNormalizeItems = (
       return null;
     }
     result.push({
-      id: generatePrefixedId('sqi'),
+      id: generatePrefixedId(ITEM_ID_PREFIXES.supplierQuoteItem),
       productId: item.productId || null,
       productName: productNameResult.value,
       quantity: quantityResult.value,
@@ -766,7 +766,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const snapshotItems: supplierQuotesRepo.NewSupplierQuoteItem[] = version.snapshot.items.map(
         ({ quoteId: _q, ...rest }) => ({
           ...rest,
-          id: generatePrefixedId('sqi'),
+          id: generatePrefixedId(ITEM_ID_PREFIXES.supplierQuoteItem),
           productId: rest.productId || null,
           unitType: rest.unitType ?? 'unit',
           note: rest.note ?? null,

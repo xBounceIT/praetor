@@ -10,7 +10,7 @@ import {
   getUniqueViolation,
 } from '../utils/db-errors.ts';
 import { computeInvoiceTotals, roundCurrency } from '../utils/invoice-math.ts';
-import { generatePrefixedId } from '../utils/order-ids.ts';
+import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
@@ -247,7 +247,7 @@ const validateAndNormalizeItems = (
 
 const buildItemsForInsert = (items: NormalizedInvoiceItemInput[]): invoicesRepo.NewInvoiceItem[] =>
   items.map((item) => ({
-    id: generatePrefixedId('inv-item'),
+    id: generatePrefixedId(ITEM_ID_PREFIXES.invoiceItem),
     productId: item.productId,
     description: item.description,
     unitOfMeasure: item.unitOfMeasure,

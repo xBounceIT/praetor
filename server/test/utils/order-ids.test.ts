@@ -4,6 +4,8 @@ import {
   generateClientOrderId,
   generatePrefixedId,
   generateSupplierOrderId,
+  ITEM_ID_COLUMN_LENGTH,
+  ITEM_ID_PREFIXES,
 } from '../../utils/order-ids.ts';
 
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
@@ -21,6 +23,27 @@ describe('generatePrefixedId', () => {
   test('preserves multi-segment prefixes verbatim', () => {
     const id = generatePrefixedId('rpt-chat');
     expect(id.startsWith('rpt-chat-')).toBe(true);
+  });
+});
+
+describe('ITEM_ID_PREFIXES (per-line-item id generation)', () => {
+  // Regression guard for #524: every item-id prefix must produce a `<prefix>-<UUID>` shape
+  // (i.e. the crypto-backed `generatePrefixedId` path), not the previous Date.now+Math.random
+  // body that this PR removed.
+  test.each(
+    Object.entries(ITEM_ID_PREFIXES),
+  )('ITEM_ID_PREFIXES.%s yields a `<prefix>-<uuid>` id', (_key, prefix) => {
+    const id = generatePrefixedId(prefix);
+    expect(id).toMatch(new RegExp(`^${prefix}-${UUID_RE.source}$`));
+  });
+
+  // The id columns in `server/db/schema/*` are `varchar(50)`. Adding a longer prefix here
+  // without widening those columns would silently truncate inserts; this asserts the invariant
+  // so a future prefix addition fails the test instead of the database.
+  test.each(
+    Object.entries(ITEM_ID_PREFIXES),
+  )('ITEM_ID_PREFIXES.%s fits within ITEM_ID_COLUMN_LENGTH', (_key, prefix) => {
+    expect(generatePrefixedId(prefix).length).toBeLessThanOrEqual(ITEM_ID_COLUMN_LENGTH);
   });
 });
 

@@ -10,7 +10,7 @@ import { standardErrorResponses, standardRateLimitedErrorResponses } from '../sc
 import { logAudit } from '../utils/audit.ts';
 import { todayLocalDateOnly } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
-import { generatePrefixedId } from '../utils/order-ids.ts';
+import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -268,7 +268,7 @@ const normalizeItems = (
 
 const buildItemsForInsert = (items: NormalizedOfferItem[]): clientOffersRepo.NewClientOfferItem[] =>
   items.map((item) => ({
-    id: generatePrefixedId('coi'),
+    id: generatePrefixedId(ITEM_ID_PREFIXES.clientOfferItem),
     productId: item.productId,
     productName: item.productName,
     quantity: item.quantity,
@@ -1273,7 +1273,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const snapshotItems: clientOffersRepo.NewClientOfferItem[] = version.snapshot.items.map(
           ({ id: _itemId, offerId: _offerId, ...rest }) => ({
             ...rest,
-            id: generatePrefixedId('coi'),
+            id: generatePrefixedId(ITEM_ID_PREFIXES.clientOfferItem),
           }),
         );
 

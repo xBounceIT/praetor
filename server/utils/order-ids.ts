@@ -4,6 +4,23 @@ import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 
 export const generatePrefixedId = (prefix: string): string => `${prefix}-${randomUUID()}`;
 
+// Mirrors the `varchar('id', { length: 50 })` constraint on every per-line-item ID column in
+// `server/db/schema/*` (sales, quotes, customerOfferItems, invoices, supplierQuotes,
+// supplierInvoices, *Versions). Tests assert every prefix below stays under this ceiling.
+export const ITEM_ID_COLUMN_LENGTH = 50;
+
+// Single source of truth for the prefixes used on per-line-item IDs. Routes reference these
+// instead of bare strings so a typo in one site is a TS error instead of a silently-divergent id.
+export const ITEM_ID_PREFIXES = {
+  saleItem: 'si',
+  supplierItem: 'ssi',
+  clientQuoteItem: 'qi',
+  clientOfferItem: 'coi',
+  supplierQuoteItem: 'sqi',
+  invoiceItem: 'inv-item',
+  supplierInvoiceItem: 'sinv-item',
+} as const;
+
 // Per-prefix sequences. `0038_add_order_id_sequences` creates these as standalone Postgres
 // SEQUENCEs and initializes them past the historical MAX, so existing IDs can't collide
 // with new ones. nextval() is atomic and lock-free; this eliminates the previous

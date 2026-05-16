@@ -10,7 +10,7 @@ import { standardErrorResponses, standardRateLimitedErrorResponses } from '../sc
 import { logAudit } from '../utils/audit.ts';
 import { isPastLocalDate } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
-import { generatePrefixedId } from '../utils/order-ids.ts';
+import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
@@ -396,7 +396,7 @@ const quoteUpdateBodySchema = {
 
 const buildItemsForInsert = (items: ResolvedQuoteItem[]): clientQuotesRepo.NewClientQuoteItem[] =>
   items.map((item) => ({
-    id: generatePrefixedId('qi'),
+    id: generatePrefixedId(ITEM_ID_PREFIXES.clientQuoteItem),
     productId: item.productId || null,
     productName: item.productName,
     quantity: item.quantity,
@@ -1198,7 +1198,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const snapshotItems: clientQuotesRepo.NewClientQuoteItem[] = version.snapshot.items.map(
           ({ quoteId: _q, ...rest }) => ({
             ...rest,
-            id: generatePrefixedId('qi'),
+            id: generatePrefixedId(ITEM_ID_PREFIXES.clientQuoteItem),
             // `productId: ''` slips through the snapshot when sourced from a supplier quote;
             // the `quote_items` row needs NULL there.
             productId: rest.productId || null,

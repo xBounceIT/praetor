@@ -9,7 +9,11 @@ import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
-import { generatePrefixedId, generateSupplierOrderId } from '../utils/order-ids.ts';
+import {
+  generatePrefixedId,
+  generateSupplierOrderId,
+  ITEM_ID_PREFIXES,
+} from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
@@ -165,7 +169,7 @@ const normalizeItems = (
       return null;
     }
     normalizedItems.push({
-      id: generatePrefixedId('ssi'),
+      id: generatePrefixedId(ITEM_ID_PREFIXES.supplierItem),
       productId: item.productId || null,
       productName: productNameResult.value,
       quantity: quantityResult.value,
@@ -911,7 +915,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const snapshotItems: supplierOrdersRepo.NewSupplierOrderItem[] = version.snapshot.items.map(
           ({ orderId: _o, ...rest }) => ({
             ...rest,
-            id: generatePrefixedId('ssi'),
+            id: generatePrefixedId(ITEM_ID_PREFIXES.supplierItem),
             // Empty-string productIds slip through some snapshots; the DB column needs NULL.
             productId: rest.productId || null,
           }),
