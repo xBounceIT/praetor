@@ -37,7 +37,7 @@ export const syncDefaultAdminPasswordWarning = async (
   if (usesInsecurePassword) {
     await notificationsRepo.upsertAdminPasswordWarning(adminId);
   } else {
-    await notificationsRepo.deleteAdminPasswordWarning();
+    await notificationsRepo.deleteAdminPasswordWarning(adminId);
   }
 };
 

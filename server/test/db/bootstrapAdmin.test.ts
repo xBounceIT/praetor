@@ -134,6 +134,7 @@ describe('ensureBootstrapAdmin', () => {
     );
     expect(upsertAdminPasswordWarningMock).not.toHaveBeenCalled();
     expect(deleteAdminPasswordWarningMock).toHaveBeenCalledTimes(1);
+    expect(deleteAdminPasswordWarningMock).toHaveBeenCalledWith('u1');
   });
 
   test('fresh admin uses ADMIN_DEFAULT_PASSWORD when set', async () => {
@@ -154,6 +155,7 @@ describe('ensureBootstrapAdmin', () => {
     );
     expect(upsertAdminPasswordWarningMock).not.toHaveBeenCalled();
     expect(deleteAdminPasswordWarningMock).toHaveBeenCalledTimes(1);
+    expect(deleteAdminPasswordWarningMock).toHaveBeenCalledWith('u1');
   });
 
   test('fresh admin falls back to literal default when env var is whitespace', async () => {

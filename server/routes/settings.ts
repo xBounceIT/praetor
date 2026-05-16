@@ -407,7 +407,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (newPasswordResult.value === DEFAULT_ADMIN_PASSWORD) {
           await notificationsRepo.upsertAdminPasswordWarning(request.user.id);
         } else {
-          await notificationsRepo.deleteAdminPasswordWarning();
+          await notificationsRepo.deleteAdminPasswordWarning(request.user.id);
         }
       }
 

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import { notifications } from '../db/schema/notifications.ts';
 
@@ -20,8 +20,13 @@ export type Notification = {
   createdAt: number;
 };
 
-export const ADMIN_PASSWORD_WARNING_NOTIFICATION_ID = 'admin-default-password-warning';
+// Sweep rows written under the pre-#612 global id; can be removed once no
+// pre-#612 binary is in service.
+const LEGACY_ADMIN_PASSWORD_WARNING_NOTIFICATION_ID = 'admin-default-password-warning';
 export const ADMIN_PASSWORD_WARNING_TYPE = 'admin_password_warning';
+
+export const adminPasswordWarningNotificationId = (userId: string): string =>
+  `${userId}-admin-default-password-warning`;
 
 const ADMIN_PASSWORD_WARNING_TITLE = 'Change the default admin password';
 const ADMIN_PASSWORD_WARNING_MESSAGE =
@@ -110,9 +115,13 @@ export const upsertAdminPasswordWarning = async (
   };
 
   await exec
+    .delete(notifications)
+    .where(eq(notifications.id, LEGACY_ADMIN_PASSWORD_WARNING_NOTIFICATION_ID));
+
+  await exec
     .insert(notifications)
     .values({
-      id: ADMIN_PASSWORD_WARNING_NOTIFICATION_ID,
+      id: adminPasswordWarningNotificationId(userId),
       ...warning,
     })
     .onConflictDoUpdate({
@@ -124,8 +133,16 @@ export const upsertAdminPasswordWarning = async (
     });
 };
 
-export const deleteAdminPasswordWarning = async (exec: DbExecutor = db): Promise<void> => {
+export const deleteAdminPasswordWarning = async (
+  userId: string,
+  exec: DbExecutor = db,
+): Promise<void> => {
   await exec
     .delete(notifications)
-    .where(eq(notifications.id, ADMIN_PASSWORD_WARNING_NOTIFICATION_ID));
+    .where(
+      inArray(notifications.id, [
+        adminPasswordWarningNotificationId(userId),
+        LEGACY_ADMIN_PASSWORD_WARNING_NOTIFICATION_ID,
+      ]),
+    );
 };
