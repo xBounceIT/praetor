@@ -94,8 +94,10 @@ const assertEnabledProviderConfig = (provider: ssoProvidersRepo.SsoProvider): vo
   // an assertion from any IdP whose signing cert chains correctly. Require provider.idpIssuer
   // unless we can derive it from inline metadata at save time. metadataUrl mode is caught by
   // the runtime guard in createSamlClient instead.
-  const derivedIssuer = hasMetadataXml ? parseSamlMetadata(provider.metadataXml).idpIssuer : '';
-  if (!hasConfigValue(provider.idpIssuer) && !derivedIssuer) {
+  if (
+    !hasConfigValue(provider.idpIssuer) &&
+    !(hasMetadataXml && parseSamlMetadata(provider.metadataXml).idpIssuer)
+  ) {
     throw new SsoProviderValidationError(
       'SAML requires idpIssuer when it cannot be derived from inline metadata',
     );
@@ -580,8 +582,13 @@ const createSamlClient = async (
   const entryPoint = idp.entryPoint || provider.entryPoint;
   const idpCert = normalizeCertificate(idp.idpCert || provider.idpCert);
   const idpIssuer = idp.idpIssuer || provider.idpIssuer;
-  if (!entryPoint || !idpCert || !idpIssuer) {
-    throw new Error('SAML provider is missing entry point, IdP certificate, or IdP issuer');
+  const missing = [
+    !entryPoint && 'entry point',
+    !idpCert && 'IdP certificate',
+    !idpIssuer && 'IdP issuer',
+  ].filter(Boolean);
+  if (missing.length > 0) {
+    throw new Error(`SAML provider is missing ${missing.join(', ')}`);
   }
   return new SAML({
     callbackUrl,
