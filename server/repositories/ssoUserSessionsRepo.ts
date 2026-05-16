@@ -2,6 +2,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import { ssoUserSessions } from '../db/schema/sso.ts';
 import { ssoProviders } from '../db/schema/ssoProviders.ts';
+import { users } from '../db/schema/users.ts';
 import type { SsoProvider } from './ssoProvidersRepo.ts';
 
 export type SsoUserSession = {
@@ -36,8 +37,12 @@ export const deleteByUserId = async (userId: string, exec: DbExecutor = db): Pro
 
 /**
  * Returns the user's stored OIDC session together with its provider, but only when the
- * provider currently warrants an RP-Initiated Logout call (enabled, protocol=oidc,
- * endSessionEnabled). One round-trip instead of two sequential queries on the logout path.
+ * provider currently warrants an RP-Initiated Logout call AND the user's *current* binding
+ * matches the stored row. The user-side guards (`auth_method = 'oidc'` and
+ * `auth_provider_id` matches the row) drop the redirect for stale rows left over from an
+ * admin-driven auth-method or provider change — without them, a user who had OIDC swapped
+ * out for local/LDAP would still get bounced to the old IdP on logout. One round-trip
+ * instead of two sequential queries.
  */
 export const findActiveOidcByUserId = async (
   userId: string,
@@ -74,9 +79,12 @@ export const findActiveOidcByUserId = async (
     })
     .from(ssoUserSessions)
     .innerJoin(ssoProviders, eq(ssoUserSessions.providerId, ssoProviders.id))
+    .innerJoin(users, eq(ssoUserSessions.userId, users.id))
     .where(
       and(
         eq(ssoUserSessions.userId, userId),
+        eq(users.authMethod, 'oidc'),
+        eq(users.authProviderId, ssoUserSessions.providerId),
         eq(ssoProviders.protocol, 'oidc'),
         eq(ssoProviders.enabled, true),
         eq(ssoProviders.endSessionEnabled, true),
