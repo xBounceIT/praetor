@@ -76,7 +76,7 @@ export function parseNumber(
   value: unknown,
   fieldName: string = 'value',
 ): { ok: true; value: number } | { ok: false; message: string } {
-  if (typeof value === 'number' && !Number.isNaN(value)) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
     return { ok: true, value };
   }
   if (typeof value === 'string') {
@@ -85,7 +85,7 @@ export function parseNumber(
       return { ok: false, message: `${fieldName} cannot be an empty string` };
     }
     const parsed = parseFloat(trimmed);
-    if (!Number.isNaN(parsed)) {
+    if (Number.isFinite(parsed)) {
       return { ok: true, value: parsed };
     }
   }
