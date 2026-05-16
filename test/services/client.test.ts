@@ -204,6 +204,33 @@ describe('services/api/client', () => {
       await fetchApi('/cancellable', { signal: callerController.signal });
     });
 
+    test('timeoutMs: null disables the timeout and forwards only the caller signal', async () => {
+      const callerController = new AbortController();
+      fetchMock.mockImplementationOnce(async (_input: unknown, init: unknown) => {
+        const sig = (init as { signal: AbortSignal | undefined }).signal;
+        expect(sig).toBe(callerController.signal);
+        return buildResponse({ status: 200, json: () => ({}) });
+      });
+      await fetchApi('/long', { signal: callerController.signal, timeoutMs: null });
+    });
+
+    test('timeoutMs: null with no caller signal leaves signal undefined', async () => {
+      fetchMock.mockImplementationOnce(async (_input: unknown, init: unknown) => {
+        const sig = (init as { signal: AbortSignal | undefined }).signal;
+        expect(sig).toBeUndefined();
+        return buildResponse({ status: 200, json: () => ({}) });
+      });
+      await fetchApi('/long', { timeoutMs: null });
+    });
+
+    test('timeoutMs is not forwarded to fetch', async () => {
+      fetchMock.mockImplementationOnce(async (_input: unknown, init: unknown) => {
+        expect((init as Record<string, unknown>).timeoutMs).toBeUndefined();
+        return buildResponse({ status: 200, json: () => ({}) });
+      });
+      await fetchApi('/x', { timeoutMs: 5000 });
+    });
+
     test('caller can override headers via options.headers', async () => {
       fetchMock.mockImplementationOnce(async (_input: unknown, init: unknown) => {
         const headers = (init as { headers: Record<string, string> }).headers;

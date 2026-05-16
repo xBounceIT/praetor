@@ -35,20 +35,34 @@ export class ApiError extends Error {
   }
 }
 
-export const fetchApi = async <T>(endpoint: string, options: RequestInit = {}): Promise<T> => {
+export interface FetchApiOptions extends RequestInit {
+  // Override the default 30s request timeout. `null` disables it — use for endpoints
+  // that may legitimately take longer (e.g. AI completions) and that supply their
+  // own AbortSignal for cancellation.
+  timeoutMs?: number | null;
+}
+
+export const fetchApi = async <T>(endpoint: string, options: FetchApiOptions = {}): Promise<T> => {
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal: callerSignal, ...fetchOptions } = options;
+
   const headers: HeadersInit = {
-    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(fetchOptions.body ? { 'Content-Type': 'application/json' } : {}),
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-    ...options.headers,
+    ...fetchOptions.headers,
   };
 
-  const timeoutSignal = AbortSignal.timeout(DEFAULT_TIMEOUT_MS);
-  const signal = options.signal ? AbortSignal.any([options.signal, timeoutSignal]) : timeoutSignal;
+  const timeoutSignal = timeoutMs == null ? null : AbortSignal.timeout(timeoutMs);
+  let signal: AbortSignal | undefined;
+  if (timeoutSignal && callerSignal) {
+    signal = AbortSignal.any([callerSignal, timeoutSignal]);
+  } else {
+    signal = timeoutSignal ?? callerSignal ?? undefined;
+  }
 
   let response: Response;
   try {
     response = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
+      ...fetchOptions,
       headers,
       signal,
     });
