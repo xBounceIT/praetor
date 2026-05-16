@@ -488,11 +488,6 @@ class LDAPService {
     }
   }
 
-  async findUserDn(client: LdapClient, username: string): Promise<string | null> {
-    const entry = await this.findUserEntry(client, username);
-    return entry?.dn ?? null;
-  }
-
   async findUserEntry(client: LdapClient, username: string): Promise<LdapUserEntry | null> {
     const config = this.config;
     if (!config) {

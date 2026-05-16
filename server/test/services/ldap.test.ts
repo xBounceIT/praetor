@@ -371,7 +371,7 @@ describe('authenticate', () => {
     expect(lastClientStats?.unbindCalls).toBe(1);
   });
 
-  test('returns false when findUserDn yields null (no entries before end)', async () => {
+  test('returns false when findUserEntry yields null (no entries before end)', async () => {
     nextFixture = {
       bindResponses: [null],
       searchResponses: [{ entries: [], status: 0 }],
@@ -620,7 +620,7 @@ describe('authenticate', () => {
   });
 });
 
-describe('findUserDn (direct, with config preloaded)', () => {
+describe('findUserEntry (direct, with config preloaded)', () => {
   beforeEach(() => {
     (ldapService as unknown as { config: unknown }).config = ENABLED_LDAP_CONFIG;
   });
@@ -635,7 +635,7 @@ describe('findUserDn (direct, with config preloaded)', () => {
       entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice' } }],
       status: 0,
     });
-    await ldapService.findUserDn(client as never, 'alice');
+    await ldapService.findUserEntry(client as never, 'alice');
     const search = lastClientStats?.searchCalls[0];
     expect(search?.options.attributes).toEqual(['uid', 'sAMAccountName', 'cn', 'displayName']);
   });
@@ -648,8 +648,8 @@ describe('findUserDn (direct, with config preloaded)', () => {
       ],
       status: 0,
     });
-    const dn = await ldapService.findUserDn(client as never, 'alice');
-    expect(dn).toBe('uid=bob,dc=test,dc=com');
+    const entry = await ldapService.findUserEntry(client as never, 'alice');
+    expect(entry?.dn).toBe('uid=bob,dc=test,dc=com');
   });
 
   test('resolves to entry.objectName when a single searchEntry fires', async () => {
@@ -657,24 +657,24 @@ describe('findUserDn (direct, with config preloaded)', () => {
       entries: [{ objectName: 'uid=alice,dc=test,dc=com' }],
       status: 0,
     });
-    const dn = await ldapService.findUserDn(client as never, 'alice');
-    expect(dn).toBe('uid=alice,dc=test,dc=com');
+    const entry = await ldapService.findUserEntry(client as never, 'alice');
+    expect(entry?.dn).toBe('uid=alice,dc=test,dc=com');
   });
 
   test('resolves null when no searchEntry fires before end (status 0)', async () => {
     const client = buildClient({ entries: [], status: 0 });
-    const dn = await ldapService.findUserDn(client as never, 'alice');
-    expect(dn).toBeNull();
+    const entry = await ldapService.findUserEntry(client as never, 'alice');
+    expect(entry).toBeNull();
   });
 
   test('rejects when end fires with non-zero status', async () => {
     const client = buildClient({ entries: [], status: 32 });
-    await expect(ldapService.findUserDn(client as never, 'alice')).rejects.toThrow(/status: 32/);
+    await expect(ldapService.findUserEntry(client as never, 'alice')).rejects.toThrow(/status: 32/);
   });
 
   test('rejects when search callback returns err', async () => {
     const client = buildClient({ err: new Error('search blew up') });
-    await expect(ldapService.findUserDn(client as never, 'alice')).rejects.toThrow(
+    await expect(ldapService.findUserEntry(client as never, 'alice')).rejects.toThrow(
       'search blew up',
     );
   });
@@ -685,15 +685,15 @@ describe('findUserDn (direct, with config preloaded)', () => {
       errorEvent: new Error('ldap protocol error'),
       status: 0,
     });
-    await expect(ldapService.findUserDn(client as never, 'alice')).rejects.toThrow(
+    await expect(ldapService.findUserEntry(client as never, 'alice')).rejects.toThrow(
       'ldap protocol error',
     );
   });
 
   test('returns null when service config is unset', async () => {
     (ldapService as unknown as { config: unknown }).config = null;
-    const dn = await ldapService.findUserDn({} as never, 'alice');
-    expect(dn).toBeNull();
+    const entry = await ldapService.findUserEntry({} as never, 'alice');
+    expect(entry).toBeNull();
   });
 });
 
@@ -1000,7 +1000,7 @@ describe('lookupUserGroups', () => {
     expect(lastClientStats?.unbindCalls).toBe(1);
   });
 
-  test('returns null when findUserDn yields no entries; unbind still called', async () => {
+  test('returns null when findUserEntry yields no entries; unbind still called', async () => {
     nextFixture = {
       bindResponses: [null],
       searchResponses: [{ entries: [], status: 0 }],
