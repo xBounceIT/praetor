@@ -179,7 +179,10 @@ describe('authenticateMcpToken', () => {
     await authenticateMcpToken(request, reply);
 
     expect(reply.statusCode).toBe(403);
-    expect(reply.body).toEqual({ error: 'Invalid or revoked MCP token' });
+    expect(reply.body).toEqual({
+      error: 'Invalid or revoked MCP token',
+      errorCode: 'token_revoked',
+    });
     expect(touchLastUsedMock).not.toHaveBeenCalled();
   });
 
