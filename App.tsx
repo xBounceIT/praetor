@@ -2275,15 +2275,20 @@ const AppContent: React.FC = () => {
 
   const activeModule = activeView === '404' ? null : getModuleFromView(activeView);
   const activeModuleLoadFailures = activeModule ? (moduleLoadErrors[activeModule] ?? []) : [];
-  const isActiveModulePending = Boolean(
-    activeModule &&
-      activeModule !== 'settings' &&
-      (!loadedModules.has(activeModule) || isModuleLoading(activeModule)),
-  );
   const reportsSettingsFailed =
     activeView === 'reports/ai-reporting' &&
     !hasLoadedGeneralSettings &&
     activeModuleLoadFailures.includes('general settings');
+  // Until generalSettings is loaded we don't yet know whether enableAiReporting
+  // is true; keep the route in the generic pending state so ai-reporting chrome
+  // doesn't flash before the 404 redirect fires.
+  const isActiveModulePending =
+    Boolean(
+      activeModule &&
+        activeModule !== 'settings' &&
+        (!loadedModules.has(activeModule) || isModuleLoading(activeModule)),
+    ) ||
+    (activeView === 'reports/ai-reporting' && !hasLoadedGeneralSettings && !reportsSettingsFailed);
 
   if (isLoading) {
     return (
@@ -2822,24 +2827,15 @@ const AppContent: React.FC = () => {
               />
             )}
             {activeView === 'reports/ai-reporting' &&
-              (!hasLoadedGeneralSettings ? (
-                reportsSettingsFailed ? (
-                  <div className="flex h-[calc(100vh-180px)] min-h-[560px] items-center justify-center">
-                    <div className="text-center">
-                      <i className="fa-solid fa-triangle-exclamation text-3xl text-amber-500 mb-3" />
-                      <p className="text-zinc-700 font-medium">
-                        {tApp('reports:aiReporting.settingsFailedToLoad')}
-                      </p>
-                    </div>
+              (reportsSettingsFailed ? (
+                <div className="flex h-[calc(100vh-180px)] min-h-[560px] items-center justify-center">
+                  <div className="text-center">
+                    <i className="fa-solid fa-triangle-exclamation text-3xl text-amber-500 mb-3" />
+                    <p className="text-zinc-700 font-medium">
+                      {tApp('reports:aiReporting.settingsFailedToLoad')}
+                    </p>
                   </div>
-                ) : (
-                  <div className="flex h-[calc(100vh-180px)] min-h-[560px] items-center justify-center">
-                    <div className="text-center">
-                      <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor mb-3" />
-                      <p className="text-zinc-600 font-medium">{tApp('common:states.loading')}</p>
-                    </div>
-                  </div>
-                )
+                </div>
               ) : (
                 <AiReportingView
                   currentUserId={currentUser.id}
