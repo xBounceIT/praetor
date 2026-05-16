@@ -6,7 +6,7 @@ import * as supplierOrdersRepo from '../repositories/supplierOrdersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { type DatabaseError, getUniqueViolation } from '../utils/db-errors.ts';
-import { formatSequenceSuffix, generateItemId } from '../utils/order-ids.ts';
+import { formatSequenceSuffix, generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
@@ -188,7 +188,7 @@ const normalizeItems = (
       return null;
     }
     normalizedItems.push({
-      id: generateItemId('sinv-item-'),
+      id: generatePrefixedId(ITEM_ID_PREFIXES.supplierInvoiceItem),
       productId: item.productId || null,
       description: descriptionResult.value,
       quantity: quantityResult.value,
