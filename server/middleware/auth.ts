@@ -106,8 +106,12 @@ const hasSessionAuthContext = (
   auth: FastifyRequest['auth'],
 ): auth is NonNullable<FastifyRequest['auth']> & {
   source: 'session';
+  sessionStart: number;
   sessionVersion: number;
-} => auth?.source === 'session' && typeof auth.sessionVersion === 'number';
+} =>
+  auth?.source === 'session' &&
+  typeof auth.sessionStart === 'number' &&
+  typeof auth.sessionVersion === 'number';
 
 const buildSessionAuthRequiredError = () => {
   const error = new Error('Session authentication required') as Error & { statusCode: number };
@@ -184,7 +188,16 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
     const decoded = jwt.verify(token, getJwtSecret(), {
       algorithms: [JWT_ALGORITHM],
     }) as SessionJwtPayload;
-    const sessionStart = decoded.sessionStart ?? Date.now();
+
+    // Fail closed: tokens without sessionStart would compare `now - now ≈ 0` and trivially
+    // pass the max-duration check below. Reject them so the 8h cap cannot be bypassed.
+    if (typeof decoded.sessionStart !== 'number') {
+      return reply.code(401).send({
+        error: 'Session token outdated, please log in again',
+        errorCode: 'session_outdated',
+      });
+    }
+    const sessionStart = decoded.sessionStart;
 
     // Check for max session duration (configurable via SESSION_MAX_DURATION_MS env var,
     // default 8 hours). Resolved once per process — see getSessionMaxDurationMs above.
@@ -360,7 +373,7 @@ export const getSessionAuth = (request: FastifyRequest): SessionAuthContext => {
   }
   return {
     userId: request.auth.userId,
-    sessionStart: request.auth.sessionStart ?? Date.now(),
+    sessionStart: request.auth.sessionStart,
     sessionVersion: request.auth.sessionVersion,
   };
 };
