@@ -237,7 +237,7 @@ const canViewTargetUserAssignments = async (request: FastifyRequest, targetUserI
   return usersRepo.canManageUser(targetUserId, request.user?.id ?? '');
 };
 
-const mergeById = <T extends { id: string }>(items: T[], extraItems: T[]) => {
+const mergeById = <T extends { id: string }>(items: T[], extraItems: Iterable<T>) => {
   const seen = new Set(items.map((item) => item.id));
   const merged = [...items];
   for (const item of extraItems) {
@@ -1187,7 +1187,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         assignedProjectIds,
       );
       const taskParentProjects = await projectsRepo.listByIds(taskParentProjectIds);
-      const projects = mergeById(assignedProjects, taskParentProjects);
+      const projects = mergeById(assignedProjects, taskParentProjects.values());
 
       const assignedClientIds = new Set(assignedClients.map((client) => client.id));
       const parentClientIds = uniqueMissingIds(
@@ -1195,7 +1195,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         assignedClientIds,
       );
       const parentClients = await clientsRepo.listByIds(parentClientIds);
-      const clients = mergeById(assignedClients, parentClients);
+      const clients = mergeById(assignedClients, parentClients.values());
 
       return {
         clients: clients.map((client) => ({

@@ -106,19 +106,32 @@ describe('listForUser', () => {
 });
 
 describe('listByIds', () => {
-  test('returns mapped projects and binds ids as one array parameter', async () => {
+  test('returns a Map keyed by id and binds ids as one array parameter', async () => {
     exec.enqueue({ rows: [rawProjectRow] });
 
     const result = await projectsRepo.listByIds(['p-1', 'p-2'], testDb);
 
     expect(exec.calls[0].sql).toContain('WHERE p.id = ANY($1::text[])');
     expect(exec.calls[0].params).toEqual([['p-1', 'p-2']]);
-    expect(result[0]).toEqual(mappedRow);
+    expect(result.get('p-1')).toEqual(mappedRow);
   });
 
-  test('returns empty array without querying for empty ids', async () => {
-    expect(await projectsRepo.listByIds([], testDb)).toEqual([]);
+  test('returns an empty Map without querying for empty ids', async () => {
+    const result = await projectsRepo.listByIds([], testDb);
+    expect(result).toBeInstanceOf(Map);
+    expect(result.size).toBe(0);
     expect(exec.calls).toHaveLength(0);
+  });
+
+  // Regression test for issue #535: callers must be able to detect missing ids.
+  test('omits ids with no matching row from the returned Map', async () => {
+    exec.enqueue({ rows: [rawProjectRow] });
+
+    const result = await projectsRepo.listByIds(['p-1', 'p-missing'], testDb);
+
+    expect(result.size).toBe(1);
+    expect(result.has('p-1')).toBe(true);
+    expect(result.has('p-missing')).toBe(false);
   });
 });
 

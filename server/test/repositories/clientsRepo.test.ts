@@ -225,20 +225,33 @@ describe('list', () => {
 });
 
 describe('listByIds', () => {
-  test('returns mapped clients for the provided ids without aggregate totals', async () => {
+  test('returns a Map keyed by id for the provided ids without aggregate totals', async () => {
     exec.enqueue({ rows: [{ ...baseRow, total_sent_quotes: null, total_accepted_orders: null }] });
 
     const result = await clientsRepo.listByIds(['c-1'], testDb);
 
     expect(exec.calls[0].sql).toContain('WHERE c.id = ANY');
     expect(exec.calls[0].params).toContain('c-1');
-    expect(result[0].id).toBe('c-1');
-    expect(result[0].totalSentQuotes).toBeUndefined();
+    expect(result.get('c-1')?.id).toBe('c-1');
+    expect(result.get('c-1')?.totalSentQuotes).toBeUndefined();
   });
 
-  test('returns empty array without querying for empty ids', async () => {
-    expect(await clientsRepo.listByIds([], testDb)).toEqual([]);
+  test('returns an empty Map without querying for empty ids', async () => {
+    const result = await clientsRepo.listByIds([], testDb);
+    expect(result).toBeInstanceOf(Map);
+    expect(result.size).toBe(0);
     expect(exec.calls).toHaveLength(0);
+  });
+
+  // Regression test for issue #568: callers must be able to detect missing ids.
+  test('omits ids with no matching row from the returned Map', async () => {
+    exec.enqueue({ rows: [{ ...baseRow, total_sent_quotes: null, total_accepted_orders: null }] });
+
+    const result = await clientsRepo.listByIds(['c-1', 'c-missing'], testDb);
+
+    expect(result.size).toBe(1);
+    expect(result.has('c-1')).toBe(true);
+    expect(result.has('c-missing')).toBe(false);
   });
 });
 
