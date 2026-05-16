@@ -208,6 +208,8 @@
     "encryptionLabel": "Encryption",
     "username": "Username",
     "password": "Password",
+    "passwordStored": "Password stored",
+    "passwordStoredHelp": "Leave as-is to keep the stored password, or click Replace to overwrite it.",
     "rejectUnauthorized": "Reject unauthorized certificates",
     "rejectUnauthorizedHint": "Disable for self-signed certificates",
     "sender": "Sender Settings",

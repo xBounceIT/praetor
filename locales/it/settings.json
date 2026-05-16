@@ -208,6 +208,8 @@
     "encryptionLabel": "Crittografia",
     "username": "Nome Utente",
     "password": "Password",
+    "passwordStored": "Password memorizzata",
+    "passwordStoredHelp": "Lascia invariato per mantenere la password memorizzata, oppure clicca Sostituisci per sovrascriverla.",
     "rejectUnauthorized": "Rifiuta certificati non autorizzati",
     "rejectUnauthorizedHint": "Disabilita per certificati autofirmati",
     "sender": "Impostazioni Mittente",
