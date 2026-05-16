@@ -1371,6 +1371,29 @@ describe('authenticateAndProvision', () => {
     });
   });
 
+  test('race recovery applies roles via the with-default helper (#641), matching the winner path', async () => {
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice', cn: 'Alice' } },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 }, // loser sees no groups
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValueOnce(null).mockResolvedValueOnce(LDAP_LOGIN_USER);
+    const uniqueErr = Object.assign(new Error('duplicate key'), { code: '23505' });
+    createUserMock.mockRejectedValueOnce(uniqueErr);
+
+    await ldapService.authenticateAndProvision('alice', 'pw');
+
+    expect(applyExternalRolesForUserMock).toHaveBeenCalledWith(LDAP_LOGIN_USER.id, [], []);
+    expect(applyExternalRolesForUserIfMatchedMock).not.toHaveBeenCalled();
+  });
+
   test('uses displayName when cn is absent', async () => {
     nextFixture = {
       bindResponses: [null, null],
