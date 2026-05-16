@@ -29,6 +29,11 @@ import {
 // service calls from MCP tool handlers).
 export const MAX_NOTES_LENGTH = 2000;
 
+// A single tracker entry covers one calendar day, so 24h is the largest
+// plausible duration. Anything above is either a typo or hostile input
+// that would cascade into cost/billing aggregates.
+export const MAX_DURATION_HOURS = 24;
+
 export type AuthenticatedActor = {
   id: string;
   permissions: string[];
@@ -77,6 +82,12 @@ const badRequest = (message: string): never => fail(400, message);
 const requireValid = <T>(result: { ok: true; value: T } | { ok: false; message: string }): T => {
   if (result.ok) return result.value;
   return badRequest(result.message);
+};
+
+const enforceDurationMax = (value: number): void => {
+  if (value > MAX_DURATION_HOURS) {
+    badRequest(`duration must be ${MAX_DURATION_HOURS} hours or fewer`);
+  }
 };
 
 const parseOptionalNotes = (value: unknown): string | null => {
@@ -196,6 +207,7 @@ export const createTimeEntry = async (
   const projectName = requireValid(requireNonEmptyString(input.projectName, 'projectName'));
   const task = requireValid(requireNonEmptyString(input.task, 'task'));
   const duration = requireValid(optionalLocalizedNonNegativeNumber(input.duration, 'duration'));
+  if (duration !== null) enforceDurationMax(duration);
 
   let targetUserId = actor.id;
   if (input.userId) {
@@ -284,6 +296,7 @@ export const updateTimeEntry = async (
   let parsedDuration: number | undefined;
   if (input.duration !== undefined) {
     parsedDuration = requireValid(parseLocalizedNonNegativeNumber(input.duration, 'duration'));
+    enforceDurationMax(parsedDuration);
   }
 
   let validatedNotes: string | null | undefined;

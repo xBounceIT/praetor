@@ -615,6 +615,43 @@ describe('POST /api/entries', () => {
     expect(entriesCreateMock).toHaveBeenCalledWith(expect.objectContaining({ notes }), TX_SENTINEL);
   });
 
+  test('400 duration above 24 hours does not create entry', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: { ...validBody, duration: 25 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    // AJV's `maximum` rejects this before the service-level guard runs.
+    expect(JSON.parse(res.body).error).toBe('Bad Request');
+    expect(entriesCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('201 duration exactly 24 hours is accepted', async () => {
+    findCostPerHourMock.mockResolvedValue(50);
+    findIdByProjectAndNameMock.mockResolvedValue(null);
+    entriesCreateMock.mockImplementation(async (entry: Record<string, unknown>) => ({
+      ...entry,
+      createdAt: 1_700_000_000_000,
+      version: 1,
+    }));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: { ...validBody, duration: 24 },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(entriesCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ duration: 24 }),
+      TX_SENTINEL,
+    );
+  });
+
   test('400 whitespace-only clientId', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -833,6 +870,38 @@ describe('PUT /api/entries/:id', () => {
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/duration must be zero or positive/);
+  });
+
+  test('400 duration above 24 hours does not update entry', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: versionedPatch({ duration: 25 }),
+    });
+
+    expect(res.statusCode).toBe(400);
+    // AJV's `maximum` rejects this before the service-level guard runs.
+    expect(JSON.parse(res.body).error).toBe('Bad Request');
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 duration exactly 24 hours is accepted', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+    entriesUpdateMock.mockResolvedValue({ ...SAMPLE_ENTRY, duration: 24 });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: versionedPatch({ duration: 24 }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(entriesUpdateMock).toHaveBeenCalledWith(
+      'te-1',
+      expect.objectContaining({ duration: 24 }),
+    );
   });
 
   test('400 invalid isPlaceholder value does not update entry', async () => {

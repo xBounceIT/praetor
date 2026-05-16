@@ -487,6 +487,38 @@ describe('POST /api/tasks', () => {
     expect(JSON.parse(res.body).error).toMatch(/monthlyEffort must be zero or positive/);
   });
 
+  test('400: recurrenceDuration above 24 hours does not create task', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers: authHeader(),
+      payload: { name: 'X', projectId: 'p-1', recurrenceDuration: 25 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    // AJV's `maximum` rejects this before the service-level guard runs.
+    expect(JSON.parse(res.body).error).toBe('Bad Request');
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  test('201: recurrenceDuration exactly 24 hours is accepted', async () => {
+    createMock.mockResolvedValue({ ...SAMPLE_TASK, recurrenceDuration: 24 });
+    findClientIdMock.mockResolvedValue('c-1');
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers: authHeader(),
+      payload: { name: 'X', projectId: 'p-1', recurrenceDuration: 24 },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ recurrenceDuration: 24 }),
+      TX_SENTINEL,
+    );
+  });
+
   test('400: ForeignKeyError mapped to 400', async () => {
     createMock.mockImplementation(async () => {
       throw new ForeignKeyError('Project');
@@ -815,6 +847,37 @@ describe('PUT /api/tasks/:id', () => {
     });
 
     expect(res.statusCode).toBe(400);
+  });
+
+  test('400: recurrenceDuration above 24 hours does not update task', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/tasks/t-1',
+      headers: authHeader(),
+      payload: { recurrenceDuration: 25 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    // AJV's `maximum` rejects this before the service-level guard runs.
+    expect(JSON.parse(res.body).error).toBe('Bad Request');
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('200: recurrenceDuration exactly 24 hours is accepted', async () => {
+    updateMock.mockResolvedValue({ ...SAMPLE_TASK, recurrenceDuration: 24 });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/tasks/t-1',
+      headers: authHeader(),
+      payload: { recurrenceDuration: 24 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      't-1',
+      expect.objectContaining({ recurrenceDuration: 24 }),
+    );
   });
 
   test('400: invalid isRecurring value does not update task', async () => {
