@@ -933,6 +933,34 @@ describe('syncUsers', () => {
     expect(result).toEqual({ synced: 0, created: 0 });
   });
 
+  test('skips entries with an empty objectName instead of running username-only group search', async () => {
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: '', object: { uid: 'ghost', cn: 'Ghost Entry' } },
+            { objectName: 'uid=ok,dc=x', object: { uid: 'ok', cn: 'Ok' } },
+          ],
+          status: 0,
+        },
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+    const result = await ldapService.syncUsers();
+    expect(result).toEqual({ synced: 0, created: 1 });
+    expect(createUserMock).toHaveBeenCalledTimes(1);
+    const created = createUserMock.mock.calls[0]?.[0] as { username: string };
+    expect(created.username).toBe('ok');
+    // The empty-objectName entry must NOT trigger a follow-up group search keyed on username only.
+    const groupSearchCalls = lastClientStats?.searchCalls.filter(
+      (call) => call.base === ENABLED_LDAP_CONFIG.groupBaseDn,
+    );
+    expect(groupSearchCalls?.some((call) => String(call.options.filter).includes('ghost'))).toBe(
+      false,
+    );
+  });
+
   test('skips entries without a username (no uid and no sAMAccountName)', async () => {
     nextFixture = {
       bindResponses: [null],

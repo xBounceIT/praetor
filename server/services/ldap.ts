@@ -679,6 +679,11 @@ class LDAPService {
           continue;
         }
 
+        if (!entry.objectName) {
+          logger.warn({ username }, 'Skipping LDAP entry with empty objectName');
+          continue;
+        }
+
         const nameValue: string | string[] | undefined = entry.cn || entry.displayName;
         let name: string;
         if (nameValue) {
