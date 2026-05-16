@@ -344,6 +344,13 @@
       "when": 1778948038261,
       "tag": "0048_add_projects_order_id_on_update_cascade",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1778952079520,
+      "tag": "0049_cap_existing_durations_at_24h",
+      "breakpoints": true
     }
   ]
 }
