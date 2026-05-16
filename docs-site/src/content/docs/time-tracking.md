@@ -13,6 +13,8 @@ Prima di salvare, verifica che le date siano corrette e che l'attività apparten
 
 Praetor non consente di creare una seconda registrazione per lo stesso utente, data, progetto e attività: `POST /api/entries` risponde con `409` se la combinazione esiste già. Aggiorna la registrazione esistente invece di crearne una duplicata.
 
+La durata di una singola registrazione è limitata a 24 ore: sia `POST /api/entries` sia `PUT /api/entries/:id` rifiutano qualsiasi `duration` superiore a `24`. Suddividi il lavoro su più date invece di registrare durate impossibili.
+
 Quando una registrazione viene modificata, Praetor usa il campo `version` restituito dall'API per impedire sovrascritture concorrenti. Se la stessa registrazione è stata salvata altrove nel frattempo, `PUT /api/entries/:id` risponde con `409` e occorre ricaricare la registrazione prima di riprovare.
 
 ## Vista settimanale
@@ -34,7 +36,7 @@ Ogni template ricorrente è definito sull'attività di progetto e include:
 - `recurrencePattern`: `daily`, `weekly`, `monthly`, oppure i pattern personalizzati `monthly:first:<dow>`, `monthly:second:<dow>`, `monthly:third:<dow>`, `monthly:fourth:<dow>`, `monthly:last:<dow>` (con `<dow>` = 0 domenica … 6 sabato).
 - `recurrenceStart`: data da cui partono le occorrenze.
 - `recurrenceEnd` (opzionale): se valorizzata, blocca la generazione oltre tale data.
-- `recurrenceDuration`: ore di default per ciascuna registrazione generata.
+- `recurrenceDuration`: ore di default per ciascuna registrazione generata. Limitato a 24 ore, in linea con il tetto applicato alle singole registrazioni.
 
 Per le ricorrenze `monthly`, se il giorno della data di inizio non esiste in un mese più corto, l'occorrenza viene generata nell'ultimo giorno di quel mese.
 

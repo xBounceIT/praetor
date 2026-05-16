@@ -13,6 +13,8 @@ Before saving, verify that dates are correct and that the task belongs to the se
 
 Praetor does not allow a second entry for the same user, date, project, and task: `POST /api/entries` returns `409` when that combination already exists. Update the existing entry instead of creating a duplicate.
 
+Single-entry duration is capped at 24 hours: both `POST /api/entries` and `PUT /api/entries/:id` reject any `duration` greater than `24`. Split work across separate dates instead of recording impossibly long durations.
+
 When an entry is edited, Praetor uses the API-returned `version` field to prevent concurrent overwrites. If the same entry was saved elsewhere meanwhile, `PUT /api/entries/:id` returns `409` and the entry must be reloaded before retrying.
 
 ## Weekly view
@@ -34,7 +36,7 @@ Each recurring template is defined on a project task and includes:
 - `recurrencePattern`: `daily`, `weekly`, `monthly`, or the custom patterns `monthly:first:<dow>`, `monthly:second:<dow>`, `monthly:third:<dow>`, `monthly:fourth:<dow>`, `monthly:last:<dow>` (with `<dow>` = 0 Sunday … 6 Saturday).
 - `recurrenceStart`: the date occurrences begin from.
 - `recurrenceEnd` (optional): when set, generation stops on this date.
-- `recurrenceDuration`: the default duration (in hours) of each generated entry.
+- `recurrenceDuration`: the default duration (in hours) of each generated entry. Capped at 24 hours to match the per-entry limit.
 
 For `monthly` recurrences, if the start-date day does not exist in a shorter month, the occurrence is generated on that month's final day.
 

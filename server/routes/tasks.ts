@@ -13,6 +13,7 @@ import {
   standardErrorResponses,
   standardRateLimitedErrorResponses,
 } from '../schemas/common.ts';
+import { MAX_DURATION_HOURS } from '../services/timeEntries.ts';
 import { deriveToggleAction, getAuditChangedFields, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import {
@@ -81,7 +82,7 @@ const taskCreateBodySchema = {
     isRecurring: { type: 'boolean' },
     recurrencePattern: { type: 'string' },
     recurrenceStart: { type: 'string' },
-    recurrenceDuration: { type: 'number' },
+    recurrenceDuration: { type: 'number', maximum: MAX_DURATION_HOURS },
     expectedEffort: { type: 'number' },
     monthlyEffort: { type: 'number' },
     revenue: { type: 'number' },
@@ -101,7 +102,7 @@ const taskUpdateBodySchema = {
     recurrencePattern: { type: 'string' },
     recurrenceStart: { type: 'string' },
     recurrenceEnd: { type: 'string' },
-    recurrenceDuration: { type: 'number' },
+    recurrenceDuration: { type: 'number', maximum: MAX_DURATION_HOURS },
     expectedEffort: { type: 'number' },
     monthlyEffort: { type: 'number' },
     revenue: { type: 'number' },
@@ -234,6 +235,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         'recurrenceDuration',
       );
       if (!durationResult.ok) return badRequest(reply, durationResult.message);
+      if (durationResult.value !== null && durationResult.value > MAX_DURATION_HOURS) {
+        return badRequest(reply, `recurrenceDuration must be ${MAX_DURATION_HOURS} hours or fewer`);
+      }
       const expectedEffortResult = optionalLocalizedNonNegativeNumber(
         expectedEffort,
         'expectedEffort',
@@ -540,6 +544,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         'recurrenceDuration',
       );
       if (!durationResult.ok) return badRequest(reply, durationResult.message);
+      if (durationResult.value !== null && durationResult.value > MAX_DURATION_HOURS) {
+        return badRequest(reply, `recurrenceDuration must be ${MAX_DURATION_HOURS} hours or fewer`);
+      }
       const expectedEffortResult = optionalLocalizedNonNegativeNumber(
         expectedEffort,
         'expectedEffort',
