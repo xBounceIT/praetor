@@ -12,7 +12,7 @@ import { logAudit } from '../utils/audit.ts';
 import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
 import {
   generateClientOrderId,
-  generateItemId,
+  generatePrefixedId,
   generateSupplierOrderId,
 } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -238,7 +238,7 @@ const buildItemsForInsert = (
   items: NormalizedOrderItem[],
 ): clientsOrdersRepo.NewClientOrderItem[] =>
   items.map((item) => ({
-    id: generateItemId('si-'),
+    id: generatePrefixedId('si'),
     productId: item.productId,
     productName: item.productName,
     quantity: item.quantity,
@@ -702,7 +702,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
             const insertedSupplierItemIds: { quoteItemId: string; saleItemId: string }[] = [];
             const supplierItemRecords = supplierItems.map((item) => {
-              const saleItemId = generateItemId('ssi-');
+              const saleItemId = generatePrefixedId('ssi');
               insertedSupplierItemIds.push({ quoteItemId: item.id, saleItemId });
               return {
                 id: saleItemId,
@@ -1401,7 +1401,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         snapshotItems.push({
           ...rest,
-          id: generateItemId('si-'),
+          id: generatePrefixedId('si'),
           productId: rest.productId,
         });
       }

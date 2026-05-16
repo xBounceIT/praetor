@@ -51,6 +51,3 @@ const generateSequentialId = async (
 
 export const generateClientOrderId = (exec?: DbExecutor) => generateSequentialId('ORD', exec);
 export const generateSupplierOrderId = (exec?: DbExecutor) => generateSequentialId('SORD', exec);
-
-export const generateItemId = (prefix: string): string =>
-  `${prefix}${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;

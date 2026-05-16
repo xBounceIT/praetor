@@ -6,10 +6,12 @@ import {
   generateSupplierOrderId,
 } from '../../utils/order-ids.ts';
 
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
+
 describe('generatePrefixedId', () => {
   test('formats id as prefix-uuid', () => {
     const id = generatePrefixedId('audit');
-    expect(id).toMatch(/^audit-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(id).toMatch(new RegExp(`^audit-${UUID_RE.source}$`));
   });
 
   test('produces a fresh id per call', () => {
