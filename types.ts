@@ -317,6 +317,23 @@ export interface SsoProvider {
 
 export type PublicSsoProvider = Pick<SsoProvider, 'protocol' | 'slug' | 'name'>;
 
+// Stable codes carried by `?sso_error=<code>` after a failed SSO callback. The frontend uses this
+// list to allow-list the URL param and look up a translation key.
+// Must stay aligned with `SSO_LOGIN_ERROR_CODES` in `server/services/sso.ts` — the server
+// tsconfig's rootDir prevents importing across the boundary, so the two definitions live
+// side-by-side. An unknown code from the server falls back to the `generic` translation.
+export const SSO_LOGIN_ERROR_CODES = [
+  'invalid_state',
+  'invalid_response',
+  'provider_disabled',
+  'provider_misconfigured',
+  'account_disabled',
+  'identity_conflict',
+  'generic',
+] as const;
+
+export type SsoLoginErrorCode = (typeof SSO_LOGIN_ERROR_CODES)[number];
+
 export type SmtpEncryption = 'insecure' | 'ssl' | 'tls';
 
 export interface EmailConfig {

@@ -2,7 +2,7 @@ import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api, { ApiError } from '../services/api';
-import type { PublicSsoProvider, User } from '../types';
+import { type PublicSsoProvider, SSO_LOGIN_ERROR_CODES, type User } from '../types';
 
 export interface LoginProps {
   onLogin: (user: User, token?: string) => void;
@@ -11,6 +11,10 @@ export interface LoginProps {
   serverUnreachable?: boolean;
   onDismissServerUnreachable?: () => void;
 }
+
+// Validates the URL-borne `sso_error` value against the canonical code list from `types.ts` so
+// anything outside the set (e.g. a hand-crafted URL) safely falls back to the generic message.
+const KNOWN_SSO_ERROR_CODES = new Set<string>(SSO_LOGIN_ERROR_CODES);
 
 const Login: React.FC<LoginProps> = ({
   onLogin,
@@ -45,7 +49,10 @@ const Login: React.FC<LoginProps> = ({
     const ssoError = url.searchParams.get('sso_error');
     const ssoTicket = url.searchParams.get('sso_ticket');
 
-    if (ssoError) setError(ssoError);
+    if (ssoError) {
+      const code = KNOWN_SSO_ERROR_CODES.has(ssoError) ? ssoError : 'generic';
+      setError(t(`auth:admin.sso.loginErrors.${code}`));
+    }
 
     if (ssoError || ssoTicket) {
       url.searchParams.delete('sso_error');
