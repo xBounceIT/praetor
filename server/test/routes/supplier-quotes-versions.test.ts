@@ -39,6 +39,7 @@ const sqFindFullForSnapshotMock = mock();
 const sqFindItemsForQuoteMock = mock();
 const sqFindIdConflictMock = mock();
 const sqUpdateMock = mock();
+const sqRenameMock = mock();
 const sqRestoreSnapshotQuoteMock = mock();
 const sqReplaceItemsMock = mock();
 
@@ -83,6 +84,7 @@ beforeAll(async () => {
     findItemsForQuote: sqFindItemsForQuoteMock,
     findIdConflict: sqFindIdConflictMock,
     update: sqUpdateMock,
+    rename: sqRenameMock,
     restoreSnapshotQuote: sqRestoreSnapshotQuoteMock,
     replaceItems: sqReplaceItemsMock,
   }));
@@ -193,6 +195,7 @@ const allMocks = [
   sqFindItemsForQuoteMock,
   sqFindIdConflictMock,
   sqUpdateMock,
+  sqRenameMock,
   sqRestoreSnapshotQuoteMock,
   sqReplaceItemsMock,
   suppliersFindByIdMock,
@@ -473,7 +476,7 @@ describe('PUT /api/sales/supplier-quotes/:id snapshots pre-update state', () => 
   });
 
   test('PUT with id-only rename does NOT snapshot (no content change)', async () => {
-    sqUpdateMock.mockResolvedValue({ ...SAMPLE_QUOTE, id: 'sq-1-renamed' });
+    sqRenameMock.mockResolvedValue({ ...SAMPLE_QUOTE, id: 'sq-1-renamed' });
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -485,6 +488,9 @@ describe('PUT /api/sales/supplier-quotes/:id snapshots pre-update state', () => 
     expect(res.statusCode).toBe(200);
     expect(sqvInsertMock).not.toHaveBeenCalled();
     expect(sqFindFullForSnapshotMock).not.toHaveBeenCalled();
+    // PK rename goes through the dedicated repo call (issue #621), not the generic update().
+    expect(sqRenameMock).toHaveBeenCalledWith('sq-1', 'sq-1-renamed', TX_SENTINEL);
+    expect(sqUpdateMock).not.toHaveBeenCalled();
   });
 
   test('PUT with empty body does NOT snapshot (no content change, repo treats as no-op)', async () => {

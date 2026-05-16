@@ -224,7 +224,6 @@ export const create = async (
 };
 
 export type SupplierInvoiceUpdate = {
-  id?: string;
   supplierId?: string;
   supplierName?: string;
   issueDate?: string;
@@ -250,7 +249,6 @@ export const update = async (
   const [row] = await exec
     .update(supplierInvoices)
     .set({
-      id: sql`COALESCE(${patch.id ?? null}, ${supplierInvoices.id})`,
       supplierId: sql`COALESCE(${patch.supplierId ?? null}, ${supplierInvoices.supplierId})`,
       supplierName: sql`COALESCE(${patch.supplierName ?? null}, ${supplierInvoices.supplierName})`,
       issueDate: sql`COALESCE(${patch.issueDate ?? null}::date, ${supplierInvoices.issueDate})`,
@@ -263,6 +261,21 @@ export const update = async (
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })
     .where(eq(supplierInvoices.id, id))
+    .returning();
+  return row ? mapInvoice(row) : null;
+};
+
+// Separate from update() so generic patches can't mutate the PK (issue #621). Relies on
+// ON UPDATE CASCADE on every incoming FK; see server/test/db/renamablePkFkCascade.test.ts.
+export const rename = async (
+  currentId: string,
+  newId: string,
+  exec: DbExecutor = db,
+): Promise<SupplierInvoice | null> => {
+  const [row] = await exec
+    .update(supplierInvoices)
+    .set({ id: newId, updatedAt: sql`CURRENT_TIMESTAMP` })
+    .where(eq(supplierInvoices.id, currentId))
     .returning();
   return row ? mapInvoice(row) : null;
 };

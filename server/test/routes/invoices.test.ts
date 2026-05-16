@@ -40,6 +40,7 @@ const findAmountPaidMock = mock();
 const findStatusMock = mock();
 const findStatusAndClientNameMock = mock();
 const findIdConflictMock = mock();
+const renameDraftMock = mock();
 const deleteByIdMock = mock();
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
@@ -77,6 +78,7 @@ beforeAll(async () => {
     findStatus: findStatusMock,
     findStatusAndClientName: findStatusAndClientNameMock,
     findIdConflict: findIdConflictMock,
+    renameDraft: renameDraftMock,
     deleteById: deleteByIdMock,
     deleteDraftById: deleteByIdMock,
   }));
@@ -165,6 +167,7 @@ const allMocks = [
   findStatusMock,
   findStatusAndClientNameMock,
   findIdConflictMock,
+  renameDraftMock,
   deleteByIdMock,
   logAuditMock,
   withDbTransactionMock,

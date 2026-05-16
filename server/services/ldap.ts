@@ -210,6 +210,13 @@ class LDAPService {
       rejectUnauthorized: process.env.LDAP_REJECT_UNAUTHORIZED !== 'false',
     };
 
+    if (!tlsOptions.rejectUnauthorized) {
+      // Audit signal so an env var leaked from a dev machine into staging/prod is not silent.
+      createChildLogger({ module: 'ldap' }).warn(
+        'LDAP_REJECT_UNAUTHORIZED=false: TLS certificate validation disabled — credentials are vulnerable to MITM',
+      );
+    }
+
     // CA precedence: DB-stored PEM wins; otherwise fall back to LDAP_TLS_CA_FILE.
     // Node's TLS layer accepts a single Buffer with one or more concatenated
     // PEM blocks, so chain certs in the textarea work without extra parsing.
@@ -305,8 +312,11 @@ class LDAPService {
 
       // Search groups under both the canonical and typed identifiers so configs whose
       // groupFilter expects e.g. `memberUid={0}` work even when the user typed an alias
-      // (email/UPN) that userFilter accepted.
-      const groups = await this.findUserGroups(ldapClient, userDn, [canonicalUsername, username]);
+      // (email/UPN) that userFilter accepted. throwOnError: a transient subtree error
+      // returning [] would silently demote new admins/managers to the default role (#637).
+      const groups = await this.findUserGroups(ldapClient, userDn, [canonicalUsername, username], {
+        throwOnError: true,
+      });
 
       return {
         authenticated: true,
@@ -721,10 +731,24 @@ class LDAPService {
           }
           syncedCount++;
         } else if (config.autoProvisionAll) {
-          const groups = await this.findUserGroups(ldapClient, entry.objectName, [
-            username,
-            candidate,
-          ]);
+          // throwOnError so a transient group-search failure skips this user instead of
+          // creating them with mapExternalGroupsToRoleIds([]) → [DEFAULT_ROLE_ID], which
+          // would silently demote a new admin/manager. Sibling of #637.
+          let groups: string[];
+          try {
+            groups = await this.findUserGroups(
+              ldapClient,
+              entry.objectName,
+              [username, candidate],
+              { throwOnError: true },
+            );
+          } catch (err) {
+            logger.warn(
+              { err: serializeError(err), username },
+              'LDAP sync skipped auto-provision for user: group search failed',
+            );
+            continue;
+          }
           const roleIds = mapExternalGroupsToRoleIds(groups, roleMappings);
           const id = generatePrefixedId('u');
           await usersRepo.createUser({

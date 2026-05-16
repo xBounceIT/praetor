@@ -237,7 +237,6 @@ export const create = async (input: NewInvoice, exec: DbExecutor = db): Promise<
 };
 
 export type InvoiceUpdate = {
-  id?: string;
   clientId?: string;
   clientName?: string;
   issueDate?: string;
@@ -252,7 +251,6 @@ export type InvoiceUpdate = {
 
 const invoiceUpdateValues = (patch: InvoiceUpdate) => {
   const set: Record<string, unknown> = {};
-  if (patch.id !== undefined) set.id = patch.id;
   if (patch.clientId !== undefined) set.clientId = patch.clientId;
   if (patch.clientName !== undefined) set.clientName = patch.clientName;
   if (patch.issueDate !== undefined) set.issueDate = patch.issueDate;
@@ -289,6 +287,22 @@ export const updateDraft = async (
     .update(invoices)
     .set(invoiceUpdateValues(patch))
     .where(and(eq(invoices.id, id), eq(invoices.status, 'draft')))
+    .returning();
+  return rows[0] ? mapInvoice(rows[0]) : null;
+};
+
+// Separate from updateDraft() so generic patches can't mutate the PK (issue #621). The
+// draft-only predicate keeps non-draft invoices immutable. Relies on ON UPDATE CASCADE on
+// every incoming FK; see server/test/db/renamablePkFkCascade.test.ts.
+export const renameDraft = async (
+  currentId: string,
+  newId: string,
+  exec: DbExecutor = db,
+): Promise<Invoice | null> => {
+  const rows = await exec
+    .update(invoices)
+    .set({ id: newId, updatedAt: sql`CURRENT_TIMESTAMP` })
+    .where(and(eq(invoices.id, currentId), eq(invoices.status, 'draft')))
     .returning();
   return rows[0] ? mapInvoice(rows[0]) : null;
 };

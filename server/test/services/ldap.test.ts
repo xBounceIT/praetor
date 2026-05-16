@@ -104,9 +104,11 @@ const createClientMock = mock((opts: unknown) => {
 });
 
 const noop = () => {};
+// `warn` is a mock so we can assert on the LDAP_REJECT_UNAUTHORIZED=false audit signal.
+const loggerWarnMock = mock();
 const silentLogger = {
   info: noop,
-  warn: noop,
+  warn: loggerWarnMock,
   error: noop,
   debug: noop,
   fatal: noop,
@@ -216,6 +218,7 @@ beforeEach(() => {
   applyExternalRolesForUserMock.mockReset();
   applyExternalRolesForUserIfMatchedMock.mockReset();
   filterExistingRoleIdsMock.mockReset();
+  loggerWarnMock.mockReset();
   filterExistingRoleIdsMock.mockImplementation(async (ids: string[]) =>
     ids.length > 0 ? ids : ['user'],
   );
@@ -270,6 +273,28 @@ describe('getClient', () => {
       tlsOptions: { rejectUnauthorized: boolean };
     };
     expect(opts.tlsOptions.rejectUnauthorized).toBe(false);
+  });
+
+  test('LDAP_REJECT_UNAUTHORIZED="false" emits an audit warning about MITM exposure', async () => {
+    process.env.LDAP_REJECT_UNAUTHORIZED = 'false';
+    await ldapService.getClient();
+    expect(loggerWarnMock).toHaveBeenCalledWith(
+      expect.stringMatching(/LDAP_REJECT_UNAUTHORIZED=false.*MITM/),
+    );
+  });
+
+  test('default rejectUnauthorized=true does NOT emit the MITM warning', async () => {
+    await ldapService.getClient();
+    expect(loggerWarnMock).not.toHaveBeenCalled();
+  });
+
+  test('warning re-fires on every getClient() call (no stale-cache squelching)', async () => {
+    // Audit signal must be loud — every connection attempt logs, so operators see it in
+    // periodic sync runs and not only on first boot.
+    process.env.LDAP_REJECT_UNAUTHORIZED = 'false';
+    await ldapService.getClient();
+    await ldapService.getClient();
+    expect(loggerWarnMock).toHaveBeenCalledTimes(2);
   });
 
   test('passes config.serverUrl to ldapjs.createClient', async () => {
@@ -480,7 +505,10 @@ describe('authenticate', () => {
     expect(String(search?.options.filter)).toBe('(uid=alice)');
   });
 
-  test('invalid stored group filter does not block a valid LDAP bind', async () => {
+  test('rejects when stored group filter is invalid (no silent default-role demote)', async () => {
+    // Strict-mode findUserGroups (post-#637) surfaces the build-filter error so the
+    // /login route returns 503. The alternative — auth-with-empty-groups — would
+    // silently create new admins as 'user' until the operator notices the bad config.
     ldapRepoGetMock.mockResolvedValue({
       ...ENABLED_LDAP_CONFIG,
       groupFilter: '(member=uid=alice,dc=test,dc=com)',
@@ -495,11 +523,7 @@ describe('authenticate', () => {
       ],
     };
 
-    const result = await ldapService.authenticateWithProfile('alice', 'pw');
-
-    expect(result.authenticated).toBe(true);
-    expect(result.groups).toEqual([]);
-    expect(result.matchedRoleIds).toEqual([]);
+    await expect(ldapService.authenticateWithProfile('alice', 'pw')).rejects.toThrow(/groupFilter/);
   });
 
   test('maps AD groups from the configured group search base and filter', async () => {
@@ -558,41 +582,9 @@ describe('authenticate', () => {
     ]);
   });
 
-  test('keeps groups found before a later non-strict fallback search fails', async () => {
-    const syncSecAdmins = 'CN=SyncSecAdmins,OU=Internal Groups,OU=Accounts,DC=syncsec,DC=coll';
-    ldapRepoGetMock.mockResolvedValue({
-      ...ENABLED_LDAP_CONFIG,
-      groupFilter: '(member={0})',
-      roleMappings: [{ ldapGroup: syncSecAdmins, role: 'admin' }],
-    });
-    nextFixture = {
-      bindResponses: [null, null, null],
-      searchResponses: [
-        {
-          entries: [
-            {
-              objectName: "CN=Daniel D'Angeli,OU=Internal Accounts,OU=Accounts,DC=syncsec,DC=coll",
-              object: { sAMAccountName: 'daniel.dangeli' },
-            },
-          ],
-          status: 0,
-        },
-        {
-          entries: [{ objectName: syncSecAdmins, object: { distinguishedName: syncSecAdmins } }],
-          status: 0,
-        },
-        { err: new Error('fallback group search failed') },
-      ],
-    };
-
-    const result = await ldapService.authenticateWithProfile('daniel.dangeli', 'pw');
-
-    expect(result.authenticated).toBe(true);
-    expect(result.groups).toContain(syncSecAdmins);
-    expect(result.matchedRoleIds).toEqual(['admin']);
-  });
-
-  test('returns empty groups when every parallel group search fails (non-strict auth path)', async () => {
+  test('rejects when any parallel group search fails (strict auth path, #637)', async () => {
+    // Auth uses strict findUserGroups so a transient subtree failure surfaces as a 503
+    // instead of returning [] and demoting new admins to the default role.
     ldapRepoGetMock.mockResolvedValue({
       ...ENABLED_LDAP_CONFIG,
       groupFilter: '(member={0})',
@@ -614,12 +606,9 @@ describe('authenticate', () => {
       ],
     };
 
-    const result = await ldapService.authenticateWithProfile('daniel.dangeli', 'pw');
-
-    // Auth still succeeds — the credential check passed — but no groups can be mapped.
-    expect(result.authenticated).toBe(true);
-    expect(result.groups).toEqual([]);
-    expect(result.matchedRoleIds).toEqual([]);
+    await expect(ldapService.authenticateWithProfile('daniel.dangeli', 'pw')).rejects.toThrow(
+      /group search failed/,
+    );
   });
 
   test('rejects when the user-search stream emits an error (LDAP outage during search)', async () => {
@@ -1073,6 +1062,42 @@ describe('syncUsers', () => {
     await expect(ldapService.syncUsers()).rejects.toThrow('LDAP search failed status: 1');
     expect(lastClientStats?.unbindCalls).toBe(1);
   });
+
+  test('auto-provision skips users whose group search throws — sibling of #637', async () => {
+    // Without the throw guard, alice would be created with mapExternalGroupsToRoleIds([])
+    // → [DEFAULT_ROLE_ID], silently demoting a new admin. The sync continues with bob so
+    // a single transient error doesn't abort the whole run. findUserGroups issues the
+    // two identifier searches in parallel, so each user consumes two responses even when
+    // Promise.all rejects fast.
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=alice,dc=x', object: { uid: 'alice', cn: 'Alice' } },
+            { objectName: 'uid=bob,dc=x', object: { uid: 'bob', cn: 'Bob' } },
+          ],
+          status: 0,
+        },
+        { err: new Error('group subtree timeout') }, // alice userDn → throws
+        { entries: [], status: 0 }, // alice username (parallel; result discarded)
+        { entries: [], status: 0 }, // bob userDn
+        { entries: [], status: 0 }, // bob username
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+
+    const result = await ldapService.syncUsers();
+
+    expect(result).toEqual({ synced: 0, created: 1 });
+    expect(createUserMock).toHaveBeenCalledTimes(1);
+    const created = createUserMock.mock.calls[0]?.[0] as { username: string };
+    expect(created.username).toBe('bob');
+    const createdUsernames = createUserMock.mock.calls.map(
+      (call) => (call[0] as { username: string }).username,
+    );
+    expect(createdUsernames).not.toContain('alice');
+  });
 });
 
 describe('lookupUserGroups', () => {
@@ -1194,7 +1219,11 @@ describe('lookupUserGroups', () => {
     expect(lastClientStats?.unbindCalls).toBe(1);
   });
 
-  test('returns null on fallback group-search errors in strict lookup mode', async () => {
+  test('returns null when any parallel group-search errors (strict lookup)', async () => {
+    // Strict-mode Promise.all rejects on any failure, so a fallback-identifier error
+    // — even after another identifier search returned groups — surfaces as null.
+    // The caller (admin auth-method toggle) then preserves the user's existing role
+    // rather than overwriting it from partial data.
     const syncSecAdmins = 'CN=SyncSecAdmins,OU=Internal Groups,OU=Accounts,DC=syncsec,DC=coll';
     ldapRepoGetMock.mockResolvedValue({
       ...ENABLED_LDAP_CONFIG,
@@ -1278,6 +1307,31 @@ describe('authenticateAndProvision', () => {
     nextFixture = { bindResponses: [new Error('bad creds')] };
     await expect(ldapService.authenticateAndProvision('alice', 'pw')).rejects.toThrow('bad creds');
     expect(createUserMock).not.toHaveBeenCalled();
+  });
+
+  test('rejects when group search throws — no silent demote on first login (#637)', async () => {
+    // Without the throw, an empty group list would map to [DEFAULT_ROLE_ID], silently
+    // demoting an admin/manager. The /login route turns this throw into a 503.
+    nextFixture = {
+      bindResponses: [null, null, null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice', cn: 'Alice' } },
+          ],
+          status: 0,
+        },
+        // First group search (by userDn) fails before any groups are collected → throw.
+        { err: new Error('group subtree timeout') },
+      ],
+    };
+    findLoginUserByUsernameMock.mockResolvedValue(null);
+
+    await expect(ldapService.authenticateAndProvision('alice', 'pw')).rejects.toThrow(
+      'group subtree timeout',
+    );
+    expect(createUserMock).not.toHaveBeenCalled();
+    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
   });
 
   test('creates a new app_user using the canonical uid (not the typed alias)', async () => {
