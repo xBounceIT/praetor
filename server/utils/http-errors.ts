@@ -1,4 +1,5 @@
 export class NotFoundError extends Error {
+  readonly statusCode = 404;
   constructor(entity: string) {
     super(`${entity} not found`);
     this.name = 'NotFoundError';
@@ -6,6 +7,7 @@ export class NotFoundError extends Error {
 }
 
 export class ForeignKeyError extends Error {
+  readonly statusCode = 400;
   constructor(public readonly target: string) {
     super(`${target} not found`);
     this.name = 'ForeignKeyError';

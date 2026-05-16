@@ -17,6 +17,10 @@ describe('NotFoundError', () => {
     expect(new NotFoundError('Anything').name).toBe('NotFoundError');
   });
 
+  test('exposes statusCode 404', () => {
+    expect(new NotFoundError('User').statusCode).toBe(404);
+  });
+
   test('stack trace is captured', () => {
     const err = new NotFoundError('User');
     expect(typeof err.stack).toBe('string');
@@ -42,6 +46,10 @@ describe('ForeignKeyError', () => {
 
   test('name is "ForeignKeyError"', () => {
     expect(new ForeignKeyError('any').name).toBe('ForeignKeyError');
+  });
+
+  test('exposes statusCode 400 to match how routes handle FK violations', () => {
+    expect(new ForeignKeyError('Project').statusCode).toBe(400);
   });
 
   test('is distinguishable from NotFoundError despite identical message format', () => {
