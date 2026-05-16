@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, tes
 import * as realDns from 'node:dns/promises';
 import * as realNodeSaml from '@node-saml/node-saml';
 import * as realOidcClient from 'openid-client';
+import * as realSsoLoginTicketsRepo from '../../repositories/ssoLoginTicketsRepo.ts';
 import * as realSsoProvidersRepo from '../../repositories/ssoProvidersRepo.ts';
 import * as realSsoStatesRepo from '../../repositories/ssoStatesRepo.ts';
 import * as realSsoUserSessionsRepo from '../../repositories/ssoUserSessionsRepo.ts';
@@ -14,6 +15,7 @@ const externalAuthSnap = { ...realExternalAuth };
 const ssoProvidersRepoSnap = { ...realSsoProvidersRepo };
 const ssoStatesRepoSnap = { ...realSsoStatesRepo };
 const ssoUserSessionsRepoSnap = { ...realSsoUserSessionsRepo };
+const ssoLoginTicketsRepoSnap = { ...realSsoLoginTicketsRepo };
 
 const dnsLookupMock = mock();
 const findBySlugMock = mock();
@@ -30,6 +32,9 @@ const userSessionsUpsertMock = mock();
 const userSessionsDeleteByUserIdMock = mock();
 const oidcDiscoveryMock = mock();
 const oidcBuildEndSessionUrlMock = mock();
+const oidcAuthorizationCodeGrantMock = mock();
+const oidcFetchUserInfoMock = mock();
+const loginTicketsInsertMock = mock();
 
 class StubSaml {
   validatePostResponseAsync(formBody: Record<string, string>) {
@@ -72,13 +77,16 @@ beforeAll(async () => {
     upsert: userSessionsUpsertMock,
     deleteByUserId: userSessionsDeleteByUserIdMock,
   }));
-  // openid-client mocks are scoped to endOidcSession tests; the OIDC login paths in this
-  // test file all reject before reaching `discovery`, so the default mock.module wiring
-  // here doesn't break anything.
+  mock.module('../../repositories/ssoLoginTicketsRepo.ts', () => ({
+    ...ssoLoginTicketsRepoSnap,
+    insert: loginTicketsInsertMock,
+  }));
   mock.module('openid-client', () => ({
     ...oidcSnap,
     discovery: oidcDiscoveryMock,
     buildEndSessionUrl: oidcBuildEndSessionUrlMock,
+    authorizationCodeGrant: oidcAuthorizationCodeGrantMock,
+    fetchUserInfo: oidcFetchUserInfoMock,
   }));
 
   sso = await import('../../services/sso.ts');
@@ -91,6 +99,7 @@ afterAll(() => {
   mock.module('../../repositories/ssoProvidersRepo.ts', () => ssoProvidersRepoSnap);
   mock.module('../../repositories/ssoStatesRepo.ts', () => ssoStatesRepoSnap);
   mock.module('../../repositories/ssoUserSessionsRepo.ts', () => ssoUserSessionsRepoSnap);
+  mock.module('../../repositories/ssoLoginTicketsRepo.ts', () => ssoLoginTicketsRepoSnap);
   mock.module('openid-client', () => oidcSnap);
 });
 
@@ -111,6 +120,9 @@ beforeEach(() => {
     userSessionsDeleteByUserIdMock,
     oidcDiscoveryMock,
     oidcBuildEndSessionUrlMock,
+    oidcAuthorizationCodeGrantMock,
+    oidcFetchUserInfoMock,
+    loginTicketsInsertMock,
   ])
     m.mockReset();
 });
@@ -850,5 +862,140 @@ describe('endOidcSession', () => {
 
     await expect(sso.endOidcSession('u1')).rejects.toThrow(/connect ETIMEDOUT/);
     expect(userSessionsDeleteByUserIdMock).not.toHaveBeenCalled();
+  });
+});
+
+// Persistence side effects of completeOidcLogin and completeSamlLogin on sso_user_sessions.
+// These guard the trade-off documented at completeExternalLogin: SAML / OIDC-without-id_token
+// MUST clear any existing row (so a stale OIDC id_token can't drive a later end-session
+// redirect for the wrong session), while OIDC-with-id_token writes the encrypted token.
+describe('SSO login persists id_token only when one is present', () => {
+  const originalSsoBase = process.env.SSO_CALLBACK_BASE_URL;
+  const originalFrontend = process.env.FRONTEND_URL;
+  const originalEncryptionKey = process.env.ENCRYPTION_KEY;
+
+  const OIDC_PROVIDER: realSsoProvidersRepo.SsoProvider = {
+    id: 'sso-oidc-1',
+    protocol: 'oidc',
+    slug: 'okta',
+    name: 'Okta',
+    enabled: true,
+    issuerUrl: 'https://idp.example.com',
+    clientId: 'praetor-client',
+    clientSecret: '',
+    scopes: 'openid profile email',
+    metadataUrl: '',
+    metadataXml: '',
+    entryPoint: '',
+    idpIssuer: '',
+    idpCert: '',
+    spIssuer: '',
+    privateKey: '',
+    publicCert: '',
+    usernameAttribute: 'preferred_username',
+    nameAttribute: 'name',
+    emailAttribute: 'email',
+    groupsAttribute: 'groups',
+    roleMappings: [],
+    endSessionEnabled: false,
+  };
+
+  beforeAll(() => {
+    process.env.ENCRYPTION_KEY = 'test-encryption-key-32-bytes-long!!';
+  });
+
+  beforeEach(() => {
+    process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
+    process.env.FRONTEND_URL = 'https://app.example.com';
+    dnsLookupMock.mockResolvedValue([{ address: '203.0.113.10', family: 4 }]);
+    loginTicketsInsertMock.mockResolvedValue(undefined);
+    resolveExternalIdentityMock.mockResolvedValue({ id: 'u1', role: 'user' });
+  });
+
+  afterAll(() => {
+    if (originalSsoBase === undefined) delete process.env.SSO_CALLBACK_BASE_URL;
+    else process.env.SSO_CALLBACK_BASE_URL = originalSsoBase;
+    if (originalFrontend === undefined) delete process.env.FRONTEND_URL;
+    else process.env.FRONTEND_URL = originalFrontend;
+    if (originalEncryptionKey === undefined) delete process.env.ENCRYPTION_KEY;
+    else process.env.ENCRYPTION_KEY = originalEncryptionKey;
+  });
+
+  const setupOidcCallback = () => {
+    statesConsumeMock.mockResolvedValue({
+      state: 's',
+      providerId: 'sso-oidc-1',
+      protocol: 'oidc',
+      codeVerifier: 'v',
+      relayState: '',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    findByIdMock.mockResolvedValue(OIDC_PROVIDER);
+    oidcDiscoveryMock.mockResolvedValue({ serverMetadata: () => ({}) });
+  };
+
+  test('OIDC login with id_token upserts the encrypted token, parallel with ticket creation', async () => {
+    setupOidcCallback();
+    oidcAuthorizationCodeGrantMock.mockResolvedValue({
+      id_token: 'eyJ.fresh.idtoken',
+      access_token: undefined,
+      claims: () => ({ sub: 'subj-1', iss: 'https://idp.example.com' }),
+    });
+
+    await sso.completeOidcLogin(
+      'okta',
+      new URL('http://internal.invalid/api/auth/sso/oidc/okta/callback?state=s&code=abc'),
+    );
+
+    expect(userSessionsUpsertMock).toHaveBeenCalledTimes(1);
+    expect(userSessionsDeleteByUserIdMock).not.toHaveBeenCalled();
+    expect(loginTicketsInsertMock).toHaveBeenCalledTimes(1);
+
+    const upsertArg = userSessionsUpsertMock.mock.calls[0][0];
+    expect(upsertArg.userId).toBe('u1');
+    expect(upsertArg.providerId).toBe('sso-oidc-1');
+    // Stored ciphertext, not the plaintext — the regression guard.
+    expect(upsertArg.idToken).not.toBe('eyJ.fresh.idtoken');
+    const { decrypt } = await import('../../utils/crypto.ts');
+    expect(decrypt(upsertArg.idToken)).toBe('eyJ.fresh.idtoken');
+  });
+
+  test('OIDC login WITHOUT id_token in the token response clears any prior row', async () => {
+    // Some IdPs omit id_token on re-auth. We have no fresh hint, so we drop the stored one
+    // rather than redirect later with a stale token that doesn't match the current session.
+    setupOidcCallback();
+    oidcAuthorizationCodeGrantMock.mockResolvedValue({
+      id_token: undefined,
+      access_token: undefined,
+      claims: () => ({ sub: 'subj-1', iss: 'https://idp.example.com' }),
+    });
+
+    await sso.completeOidcLogin(
+      'okta',
+      new URL('http://internal.invalid/api/auth/sso/oidc/okta/callback?state=s&code=abc'),
+    );
+
+    expect(userSessionsUpsertMock).not.toHaveBeenCalled();
+    expect(userSessionsDeleteByUserIdMock).toHaveBeenCalledWith('u1');
+  });
+
+  test('SAML login clears any stale OIDC row for the same user', async () => {
+    const samlProvider = {
+      ...OIDC_PROVIDER,
+      protocol: 'saml' as const,
+      idpIssuer: 'https://saml.example.com',
+      entryPoint: 'https://saml.example.com/sso',
+      idpCert: 'CERT',
+    };
+    findBySlugMock.mockResolvedValue(samlProvider);
+    samlValidatePostMock.mockResolvedValue({
+      profile: { nameID: 'subj-1', issuer: 'https://saml.example.com' },
+      loggedOut: false,
+    });
+
+    await sso.completeSamlLogin('okta', { SAMLResponse: 'x' });
+
+    expect(userSessionsDeleteByUserIdMock).toHaveBeenCalledWith('u1');
+    expect(userSessionsUpsertMock).not.toHaveBeenCalled();
   });
 });

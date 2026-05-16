@@ -621,7 +621,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   onChange={(scopes) => updateProviderDraft(protocol, { scopes })}
                 />
               </div>
-              <div className="flex items-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+              <div className="flex items-start gap-3 rounded-lg border border-border bg-muted p-4">
                 <Toggle
                   checked={!!draft.endSessionEnabled}
                   onChange={(endSessionEnabled) =>
@@ -629,7 +629,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   }
                 />
                 <div className="flex-1">
-                  <div className="text-sm font-medium text-zinc-700">
+                  <div className="text-sm font-medium text-foreground">
                     {t('admin.sso.endSessionEnabled', 'Call IdP end-session endpoint on logout')}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">

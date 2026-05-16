@@ -577,8 +577,12 @@ const completeExternalLogin = async (
   } catch (err) {
     throw mapResolveExternalError(err);
   }
-  // Replace any previously-tracked SSO session: OIDC records the new id_token; non-OIDC
-  // clears so a stale OIDC row can't trigger an end-session redirect on the next logout.
+  // Replace any previously-tracked SSO session: OIDC records the new id_token; everything
+  // else clears the row so a stale OIDC id_token can't drive an end-session redirect on
+  // the next logout. The "OIDC without id_token" case (rare — some IdPs omit it on
+  // re-auth) lands in the clear branch, dropping a still-valid prior token. Accepted
+  // trade-off: we'd rather lose the hint than redirect with a hint that doesn't match
+  // the current login.
   const recordSession =
     provider.protocol === 'oidc' && identity.idToken
       ? ssoUserSessionsRepo.upsert({
@@ -918,6 +922,10 @@ export const endOidcSession = async (userId: string): Promise<string | null> => 
         client_id: row.provider.clientId,
       })
     : null;
+  // One-shot: the row is consumed even if the browser later fails to follow the redirect
+  // (popup blocker, CSP, network drop). `session_version` is bumped right after, so the
+  // Praetor JWT is dead regardless — the worst case is a leftover IdP cookie until its
+  // natural expiry, which is the pre-existing behaviour we're already escaping.
   await ssoUserSessionsRepo.deleteByUserId(userId);
   return url ? url.href : null;
 };
