@@ -592,6 +592,36 @@ describe('authenticate', () => {
     expect(result.matchedRoleIds).toEqual(['admin']);
   });
 
+  test('returns empty groups when every parallel group search fails (non-strict auth path)', async () => {
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      groupFilter: '(member={0})',
+    });
+    nextFixture = {
+      bindResponses: [null, null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: "CN=Daniel D'Angeli,OU=Internal Accounts,OU=Accounts,DC=syncsec,DC=coll",
+              object: { sAMAccountName: 'daniel.dangeli' },
+            },
+          ],
+          status: 0,
+        },
+        { err: new Error('first group search failed') },
+        { err: new Error('second group search failed') },
+      ],
+    };
+
+    const result = await ldapService.authenticateWithProfile('daniel.dangeli', 'pw');
+
+    // Auth still succeeds — the credential check passed — but no groups can be mapped.
+    expect(result.authenticated).toBe(true);
+    expect(result.groups).toEqual([]);
+    expect(result.matchedRoleIds).toEqual([]);
+  });
+
   test('rejects when the user-search stream emits an error (LDAP outage during search)', async () => {
     nextFixture = {
       bindResponses: [null],
