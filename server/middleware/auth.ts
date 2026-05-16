@@ -106,8 +106,12 @@ const hasSessionAuthContext = (
   auth: FastifyRequest['auth'],
 ): auth is NonNullable<FastifyRequest['auth']> & {
   source: 'session';
+  sessionStart: number;
   sessionVersion: number;
-} => auth?.source === 'session' && typeof auth.sessionVersion === 'number';
+} =>
+  auth?.source === 'session' &&
+  typeof auth.sessionStart === 'number' &&
+  typeof auth.sessionVersion === 'number';
 
 const buildSessionAuthRequiredError = () => {
   const error = new Error('Session authentication required') as Error & { statusCode: number };
@@ -115,13 +119,19 @@ const buildSessionAuthRequiredError = () => {
   return error;
 };
 
+type LoadAuthContextOptions = {
+  activeRole?: string;
+  expectedSessionVersion?: number;
+  expectedTokenVersion?: number;
+};
+
 const loadAuthenticatedUserContext = async (
   request: FastifyRequest,
   reply: FastifyReply,
   userId: string,
-  activeRole?: string,
-  expectedSessionVersion?: number,
+  options: LoadAuthContextOptions = {},
 ) => {
+  const { activeRole, expectedSessionVersion, expectedTokenVersion } = options;
   const user = await usersRepo.findAuthUserById(userId);
 
   if (!user) {
@@ -141,17 +151,31 @@ const loadAuthenticatedUserContext = async (
     return null;
   }
 
+  // PATs and MCP tokens are gated by users.token_version. A bump (currently fired
+  // by password rotation) invalidates every long-lived credential the user holds
+  // without needing to touch the token rows themselves.
+  if (expectedTokenVersion !== undefined && user.tokenVersion !== expectedTokenVersion) {
+    await reply.code(403).send({ error: 'Token revoked', errorCode: 'token_revoked' });
+    return null;
+  }
+
   const effectiveRole = activeRole ?? user.role;
 
   const permissions = await getRolePermissions(effectiveRole);
-  // Final authorization check: re-read enabled/session state in the same statement that
-  // verifies role membership, so revocation between the initial user read and permission
-  // loading cannot bind a stale authenticated context.
+  // Final authorization check: re-read enabled/session/token state in the same statement
+  // that verifies role membership, so revocation between the initial user read and
+  // permission loading cannot bind a stale authenticated context.
   const hasRole = await rolesRepo.userHasRole(user.id, effectiveRole, {
     requireEnabledUser: true,
     expectedSessionVersion,
+    expectedTokenVersion,
   });
   if (!hasRole) {
+    // Generic 403 here covers role/enabled/version failure indistinguishably:
+    // the fast-fail branches above emit specific errorCodes (`session_revoked`,
+    // `token_revoked`) for the common case. A client that sees this generic
+    // response after a fast-fail pass has hit the rare race where revocation
+    // committed between the initial user read and this re-assert.
     await reply.code(403).send({ error: 'Invalid or expired token' });
     return null;
   }
@@ -184,7 +208,16 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
     const decoded = jwt.verify(token, getJwtSecret(), {
       algorithms: [JWT_ALGORITHM],
     }) as SessionJwtPayload;
-    const sessionStart = decoded.sessionStart ?? Date.now();
+
+    // Fail closed: tokens without sessionStart would compare `now - now ≈ 0` and trivially
+    // pass the max-duration check below. Reject them so the 8h cap cannot be bypassed.
+    if (typeof decoded.sessionStart !== 'number') {
+      return reply.code(401).send({
+        error: 'Session token outdated, please log in again',
+        errorCode: 'session_outdated',
+      });
+    }
+    const sessionStart = decoded.sessionStart;
 
     // Check for max session duration (configurable via SESSION_MAX_DURATION_MS env var,
     // default 8 hours). Resolved once per process — see getSessionMaxDurationMs above.
@@ -210,13 +243,10 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
       source: 'session',
     };
 
-    const userContext = await loadAuthenticatedUserContext(
-      request,
-      reply,
-      decoded.userId,
-      decoded.activeRole,
-      decoded.sessionVersion,
-    );
+    const userContext = await loadAuthenticatedUserContext(request, reply, decoded.userId, {
+      activeRole: decoded.activeRole,
+      expectedSessionVersion: decoded.sessionVersion,
+    });
     if (!userContext) return;
 
     // Sliding window: reset the 30m idle timer while preserving sessionStart (8h cap)
@@ -256,7 +286,9 @@ const authenticatePersonalAccessToken = async (
 
     request.auth = { userId: tokenRecord.userId, source: 'personalAccessToken' };
 
-    const userContext = await loadAuthenticatedUserContext(request, reply, tokenRecord.userId);
+    const userContext = await loadAuthenticatedUserContext(request, reply, tokenRecord.userId, {
+      expectedTokenVersion: tokenRecord.tokenVersionAtIssue,
+    });
     if (!userContext) return;
 
     try {
@@ -360,7 +392,7 @@ export const getSessionAuth = (request: FastifyRequest): SessionAuthContext => {
   }
   return {
     userId: request.auth.userId,
-    sessionStart: request.auth.sessionStart ?? Date.now(),
+    sessionStart: request.auth.sessionStart,
     sessionVersion: request.auth.sessionVersion,
   };
 };

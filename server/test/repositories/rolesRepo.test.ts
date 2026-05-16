@@ -74,6 +74,23 @@ describe('userHasRole', () => {
     expect(exec.calls[0].params).toContain('manager');
     expect(exec.calls[0].params).toContain(7);
   });
+
+  // Atomic close on the PAT/MCP revocation race: the final role-membership
+  // query asserts users.token_version in the same statement, so a password
+  // rotation that commits between the initial findAuthUserById and this query
+  // still revokes the request.
+  test('asserts expectedTokenVersion in the role check query when provided', async () => {
+    exec.enqueue({ rows: [[1]] });
+    const result = await rolesRepo.userHasRole('user-1', 'manager', {
+      exec: testDb,
+      requireEnabledUser: true,
+      expectedTokenVersion: 4,
+    });
+
+    expect(result).toBe(true);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('"users"."token_version"');
+    expect(exec.calls[0].params).toContain(4);
+  });
 });
 
 describe('listAvailableRolesForUser', () => {

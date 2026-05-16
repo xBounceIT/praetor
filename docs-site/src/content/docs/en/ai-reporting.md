@@ -96,6 +96,7 @@ Security notes:
 
 - MCP tokens inherit your current role permissions at call time, filtered by the token's scope (full or read-only).
 - Tokens expire automatically after 30 days of inactivity. Operators can override the window with the `MCP_IDLE_TIMEOUT_MS` environment variable (milliseconds).
+- Changing your account password also invalidates every MCP token you previously issued. Re-issue and re-key your agents after a password rotation.
 - The MCP endpoint is rate-limited at the standard authenticated-route limit (600 requests/minute per client IP); excess requests get a 429 response.
 - Store MCP tokens like passwords or API keys.
 - Revoke tokens when an agent is retired, a device is lost, or access is no longer needed.

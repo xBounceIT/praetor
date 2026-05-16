@@ -96,6 +96,7 @@ Note di sicurezza:
 
 - I token MCP ereditano i permessi del tuo ruolo corrente al momento della chiamata, filtrati dall'ambito del token (completo o sola lettura).
 - I token scadono automaticamente dopo 30 giorni di inattività. Gli operatori possono modificare la finestra tramite la variabile d'ambiente `MCP_IDLE_TIMEOUT_MS` (millisecondi).
+- Il cambio password del tuo account invalida anche tutti i token MCP precedentemente emessi. Dopo una rotazione della password devi ricreare i token e reimpostare gli agenti.
 - L'endpoint MCP è limitato alla soglia standard delle route autenticate (600 richieste/minuto per IP client); le richieste in eccesso ricevono una risposta 429.
 - Conserva i token MCP come password o chiavi API.
 - Revoca i token quando un agente viene dismesso, un dispositivo viene perso o l'accesso non serve più.

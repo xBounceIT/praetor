@@ -250,6 +250,39 @@ describe('useModuleLoader', () => {
     expect(result.current.moduleLoadErrors.crm).toEqual(['clients', 'suppliers']);
   });
 
+  test('appendFailure adds a dataset to an existing failure list without clobbering', () => {
+    const { result } = renderHook(() => useModuleLoader());
+
+    act(() => {
+      result.current.recordFailures('timesheets', ['clients']);
+    });
+    expect(result.current.moduleLoadErrors.timesheets).toEqual(['clients']);
+
+    act(() => {
+      result.current.appendFailure('timesheets', 'additional entries');
+    });
+    expect(result.current.moduleLoadErrors.timesheets).toEqual(['clients', 'additional entries']);
+  });
+
+  test('appendFailure creates the module entry if none exists', () => {
+    const { result } = renderHook(() => useModuleLoader());
+
+    act(() => {
+      result.current.appendFailure('timesheets', 'additional entries');
+    });
+    expect(result.current.moduleLoadErrors.timesheets).toEqual(['additional entries']);
+  });
+
+  test('appendFailure is idempotent for the same dataset', () => {
+    const { result } = renderHook(() => useModuleLoader());
+
+    act(() => {
+      result.current.appendFailure('timesheets', 'additional entries');
+      result.current.appendFailure('timesheets', 'additional entries');
+    });
+    expect(result.current.moduleLoadErrors.timesheets).toEqual(['additional entries']);
+  });
+
   test('recordFailures with empty array clears the module entry', () => {
     const { result } = renderHook(() => useModuleLoader());
 

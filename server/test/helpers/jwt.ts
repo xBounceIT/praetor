@@ -6,7 +6,8 @@ const SESSION_MAX_DURATION_MS = 8 * 60 * 60 * 1000;
 
 export type SignTokenInput = {
   userId: string;
-  sessionStart?: number;
+  // Pass null to omit the claim entirely (simulates pre-feature / forged tokens).
+  sessionStart?: number | null;
   activeRole?: string;
   // Pass null to omit the claim entirely (simulates pre-feature tokens).
   sessionVersion?: number | null;
@@ -22,7 +23,8 @@ export const signToken = ({
   expiresIn = '30m',
   secret = TEST_JWT_SECRET,
 }: SignTokenInput): string => {
-  const payload: Record<string, unknown> = { userId, sessionStart, activeRole };
+  const payload: Record<string, unknown> = { userId, activeRole };
+  if (sessionStart !== null) payload.sessionStart = sessionStart;
   if (sessionVersion !== null) payload.sessionVersion = sessionVersion;
   return jwt.sign(payload, secret, { expiresIn });
 };

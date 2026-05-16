@@ -14,6 +14,7 @@ export type UserHasRoleOptions = {
   exec?: DbExecutor;
   requireEnabledUser?: boolean;
   expectedSessionVersion?: number;
+  expectedTokenVersion?: number;
 };
 
 const ROLE_PROJECTION = {
@@ -55,7 +56,9 @@ export const userHasRole = async (
       : optionsOrExec;
   const exec = options.exec ?? db;
   const needsUserStateCheck =
-    options.requireEnabledUser === true || options.expectedSessionVersion !== undefined;
+    options.requireEnabledUser === true ||
+    options.expectedSessionVersion !== undefined ||
+    options.expectedTokenVersion !== undefined;
 
   if (needsUserStateCheck) {
     const conditions: SQL[] = [eq(userRoles.userId, userId), eq(userRoles.roleId, roleId)];
@@ -64,6 +67,9 @@ export const userHasRole = async (
     }
     if (options.expectedSessionVersion !== undefined) {
       conditions.push(eq(users.sessionVersion, options.expectedSessionVersion));
+    }
+    if (options.expectedTokenVersion !== undefined) {
+      conditions.push(eq(users.tokenVersion, options.expectedTokenVersion));
     }
 
     const rows = await exec

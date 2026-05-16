@@ -1,19 +1,16 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { act, renderHook } from '@testing-library/react';
-import { StrictMode, useCallback, useRef, useState } from 'react';
+import { StrictMode, useCallback, useState } from 'react';
 import type { Notification } from '../types';
 import { ApiErrorStub } from './helpers/apiErrorStub';
 import { clearSpyStateAfterAll } from './helpers/mockCleanup.ts';
 
 /**
- * App.tsx's `handleDeleteNotification` is too tangled to mount the full tree
- * for this assertion, so we mirror its useCallback shape here. The point of
- * this test is to lock the dependency array: the previous implementation
- * captured `notifications` in its deps, so the callback identity churned on
- * every 60-second poll. Each render of the parent that subscribed to it
- * (NotificationBell, Layout) would re-render unnecessarily, and any consumer
- * memoizing on the callback would invalidate its cache. The fix uses an empty
- * dep array with a functional updater.
+ * App.tsx is too tangled to mount the full tree, so we mirror
+ * `handleDeleteNotification` here. The tests pin: stable callback identity
+ * across updates (empty deps), and that the single-state updater inspects
+ * and mutates items + unreadCount atomically — a previous ref-based read
+ * lagged polling-queued state and drifted the counter downward (#513).
  */
 
 const apiDelete = mock((_id: string): Promise<void> => Promise.resolve());
@@ -34,37 +31,45 @@ mock.module('../services/api', () => ({
 
 clearSpyStateAfterAll();
 
+type NotificationsState = { items: Notification[]; unreadCount: number };
+
 type NotificationsHookResult = {
   handleDelete: (id: string) => Promise<void>;
   notifications: Notification[];
   unread: number;
-  setNotifications: (next: Notification[]) => void;
+  setState: (next: NotificationsState) => void;
 };
 
 /** Mirrors the App.tsx implementation of `handleDeleteNotification` 1:1. */
 const useNotificationsCallback = (initial: Notification[]): NotificationsHookResult => {
-  const [notifications, setNotifications] = useState<Notification[]>(initial);
-  const [unread, setUnreadNotificationCount] = useState<number>(
-    initial.filter((n) => !n.isRead).length,
-  );
-  const notificationsRef = useRef<Notification[]>(notifications);
-  notificationsRef.current = notifications;
+  const [state, setState] = useState<NotificationsState>({
+    items: initial,
+    unreadCount: initial.filter((n) => !n.isRead).length,
+  });
 
   const handleDelete = useCallback(async (id: string) => {
     try {
       const { default: api } = await import('../services/api');
       await api.notifications.delete(id);
-      const target = notificationsRef.current.find((n) => n.id === id);
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
-      if (target && !target.isRead) {
-        setUnreadNotificationCount((c) => Math.max(0, c - 1));
-      }
+      setState((prev) => {
+        const target = prev.items.find((n) => n.id === id);
+        const wasUnread = !!target && !target.isRead;
+        return {
+          items: prev.items.filter((n) => n.id !== id),
+          unreadCount: wasUnread ? Math.max(0, prev.unreadCount - 1) : prev.unreadCount,
+        };
+      });
     } catch (err) {
       console.error('Failed to delete notification:', err);
     }
   }, []);
 
-  return { handleDelete, notifications, unread, setNotifications };
+  return {
+    handleDelete,
+    notifications: state.items,
+    unread: state.unreadCount,
+    setState,
+  };
 };
 
 const makeNotification = (id: string, isRead = false): Notification => ({
@@ -89,11 +94,10 @@ describe('App handleDeleteNotification', () => {
     // entirely. The handler returned to consumers must remain the same
     // function reference.
     act(() => {
-      result.current.setNotifications([
-        makeNotification('n1'),
-        makeNotification('n2'),
-        makeNotification('n3'),
-      ]);
+      result.current.setState({
+        items: [makeNotification('n1'), makeNotification('n2'), makeNotification('n3')],
+        unreadCount: 3,
+      });
     });
     expect(result.current.handleDelete).toBe(firstIdentity);
 
@@ -130,7 +134,7 @@ describe('App handleDeleteNotification', () => {
     expect(apiDelete).toHaveBeenCalledTimes(2);
   });
 
-  test('handler reads the latest notifications via the ref (no stale closure)', async () => {
+  test('handler reads the latest notifications (no stale closure)', async () => {
     apiDelete.mockClear();
     const { result } = renderHook(() =>
       useNotificationsCallback([makeNotification('initial', false)]),
@@ -139,10 +143,13 @@ describe('App handleDeleteNotification', () => {
     const initialHandler = result.current.handleDelete;
 
     // Replace the array AFTER the handler closure was captured. The handler
-    // must observe the new array (because notificationsRef is synced in
-    // render) and correctly find/remove the new id.
+    // must observe the new array via the functional updater's `prev` and
+    // correctly find/remove the new id.
     act(() => {
-      result.current.setNotifications([makeNotification('new-id', false)]);
+      result.current.setState({
+        items: [makeNotification('new-id', false)],
+        unreadCount: 1,
+      });
     });
 
     await act(async () => {
@@ -153,12 +160,64 @@ describe('App handleDeleteNotification', () => {
     expect(result.current.unread).toBe(0);
   });
 
+  // Regression for issue #513: the previous implementation read the deleted
+  // notification's `isRead` from a render-synced ref, then called two separate
+  // setters (`setNotifications` + `setUnreadNotificationCount`). When the 60s
+  // polling refresh applied a state update that already accounted for the
+  // notification being read (e.g. from another tab), the ref could lag — the
+  // delete handler would see the notification as unread, decrement again on
+  // top of polling's already-applied decrement, and drift the counter
+  // downward. The fix collapses both values into a single state object so
+  // the delete updater inspects polling's latest applied state inside `prev`
+  // and updates atomically.
+  test('handler does not double-decrement when polling already marked as read', async () => {
+    apiDelete.mockClear();
+
+    const { result } = renderHook(() =>
+      useNotificationsCallback([makeNotification('n1', false), makeNotification('n2', false)]),
+    );
+
+    expect(result.current.unread).toBe(2);
+
+    // Polling refresh applies: n1 is now read server-side, unreadCount=1.
+    act(() => {
+      result.current.setState({
+        items: [makeNotification('n1', true), makeNotification('n2', false)],
+        unreadCount: 1,
+      });
+    });
+    expect(result.current.unread).toBe(1);
+
+    await act(async () => {
+      await result.current.handleDelete('n1');
+    });
+
+    expect(result.current.notifications.map((n) => n.id)).toEqual(['n2']);
+    expect(result.current.unread).toBe(1);
+  });
+
+  // Guards against the regression fix over-correcting and skipping valid decrements.
+  test('handler decrements when no polling race has occurred', async () => {
+    apiDelete.mockClear();
+    const { result } = renderHook(() =>
+      useNotificationsCallback([makeNotification('n1', false), makeNotification('n2', false)]),
+    );
+
+    expect(result.current.unread).toBe(2);
+
+    await act(async () => {
+      await result.current.handleDelete('n1');
+    });
+
+    expect(result.current.notifications.map((n) => n.id)).toEqual(['n2']);
+    expect(result.current.unread).toBe(1);
+  });
+
   // Regression: StrictMode invokes state updaters twice in development to
-  // surface side effects. The previous implementation nested
-  // `setUnreadNotificationCount` inside the `setNotifications` updater, which
-  // queued the decrement twice and made the unread count drop by 2 for a
-  // single delete. The fix moves the decrement out of the updater; this test
-  // pins that behavior.
+  // surface side effects. A correct implementation must remain idempotent
+  // under that double invocation — items and unreadCount are derived purely
+  // from `prev` in the single setState call, so both invocations return the
+  // same new state and the decrement applies exactly once.
   test('deleting one unread notification decrements unread by exactly 1 under StrictMode', async () => {
     apiDelete.mockClear();
     const { result } = renderHook(
