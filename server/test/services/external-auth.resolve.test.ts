@@ -170,6 +170,34 @@ describe('resolveExternalIdentity auth method enforcement', () => {
     expect(insertIdentityMock).toHaveBeenCalledTimes(1);
   });
 
+  // Regression for #640 (codex P1): the LOWER(username) functional index in migration
+  // 0054 fires under its own constraint name, not users_username_unique. The retry
+  // detector must recognize it or concurrent first-time SSO logins surface as 500s.
+  test('retries after a concurrent insert violating the LOWER(username) unique index', async () => {
+    findByIdentityMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'eid-1',
+        providerId: 'sso-1',
+        protocol: 'oidc',
+        issuer: input.issuer,
+        subject: input.subject,
+        userId: 'u1',
+      });
+    findLoginUserByNormalizedUsernameMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(matchingSsoUser);
+    insertUserMock.mockRejectedValueOnce(makeDbError('23505', 'idx_users_username_lower_unique'));
+
+    const result = await resolveExternalIdentity(input);
+
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(2);
+    expect(result.id).toBe('u1');
+    expect(insertUserMock).toHaveBeenCalledTimes(1);
+    expect(insertIdentityMock).toHaveBeenCalledTimes(1);
+  });
+
   test('does not retry unrelated unique violations', async () => {
     findByIdentityMock.mockResolvedValueOnce(null);
     findLoginUserByNormalizedUsernameMock.mockResolvedValueOnce(null);

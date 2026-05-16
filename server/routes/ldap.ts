@@ -449,12 +449,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // during first-login provisioning; existing LDAP-bound users keep their current role
       // when no group maps to a Praetor role.
       //
-      // Lookup order mirrors real login: auth.ts first checks the typed input
-      // (`findLoginUserByUsername(usernameResult.value)`), then `authenticateAndProvision`
-      // falls back to `result.canonicalUsername ?? username` so users typing aliases
-      // (UPN / email vs sAMAccountName) still resolve to their existing LDAP-bound row.
-      // Without the canonical fallback the tester would wrongly report `default` for
-      // every alias input.
+      // Lookup order mirrors real login: auth.ts first checks the typed input via
+      // `findLoginUserByNormalizedUsername`, then `authenticateAndProvision` falls back to
+      // `result.canonicalUsername ?? username` so users typing aliases (UPN / email vs
+      // sAMAccountName) still resolve to their existing LDAP-bound row. Without the
+      // canonical fallback the tester would wrongly report `default` for every alias input.
       let roleResolution: LdapRoleResolution = 'none';
       let roleIds: string[] = [];
       if (authenticated) {
@@ -462,13 +461,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           roleResolution = 'matched';
           roleIds = result.matchedRoleIds;
         } else {
-          let existingUser = await usersRepo.findLoginUserByUsername(usernameResult.value);
+          let existingUser = await usersRepo.findLoginUserByNormalizedUsername(
+            usernameResult.value,
+          );
           if (
             !existingUser &&
             result.canonicalUsername &&
             result.canonicalUsername !== usernameResult.value
           ) {
-            existingUser = await usersRepo.findLoginUserByUsername(result.canonicalUsername);
+            existingUser = await usersRepo.findLoginUserByNormalizedUsername(
+              result.canonicalUsername,
+            );
           }
           if (
             existingUser &&

@@ -28,7 +28,7 @@ const loggerSnapshot = { ...realLogger };
 const orderIdsSnapshot = { ...realOrderIds };
 
 const ldapRepoGetMock = mock();
-const findLoginUserByUsernameMock = mock();
+const findLoginUserByNormalizedUsernameMock = mock();
 const updateNameByUsernameMock = mock();
 const createUserMock = mock();
 const applyExternalRolesForUserMock = mock();
@@ -139,7 +139,7 @@ beforeAll(() => {
   }));
   mock.module('../../repositories/usersRepo.ts', () => ({
     ...usersRepoSnapshot,
-    findLoginUserByUsername: findLoginUserByUsernameMock,
+    findLoginUserByNormalizedUsername: findLoginUserByNormalizedUsernameMock,
     updateNameByUsername: updateNameByUsernameMock,
     createUser: createUserMock,
   }));
@@ -220,7 +220,7 @@ beforeEach(() => {
   }
 
   ldapRepoGetMock.mockReset();
-  findLoginUserByUsernameMock.mockReset();
+  findLoginUserByNormalizedUsernameMock.mockReset();
   updateNameByUsernameMock.mockReset();
   createUserMock.mockReset();
   applyExternalRolesForUserMock.mockReset();
@@ -780,7 +780,7 @@ describe('syncUsers', () => {
         },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
     const result = await ldapService.syncUsers();
     expect(createUserMock).toHaveBeenCalledWith({
       id: 'u_test_id',
@@ -809,10 +809,42 @@ describe('syncUsers', () => {
         },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
     await ldapService.syncUsers();
     const names = createUserMock.mock.calls.map((call) => (call[0] as { name: string }).name);
     expect(names).toEqual(['CN Name', 'DN Name', 'c']);
+  });
+
+  test('matches an existing lowercase row when the directory returns mixed-case uid (#640)', async () => {
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=JDoe,dc=x', object: { uid: 'JDoe', cn: 'John Doe Updated' } },
+          ],
+          status: 0,
+        },
+      ],
+    };
+    findLoginUserByNormalizedUsernameMock.mockImplementation(async (username: string) =>
+      username === 'jdoe' ? { ...LDAP_LOGIN_USER, id: 'u-jdoe', username: 'jdoe' } : null,
+    );
+    const result = await ldapService.syncUsers();
+    expect(findLoginUserByNormalizedUsernameMock).toHaveBeenCalledWith('jdoe');
+    // Updates the existing row (matched by lower-cased lookup) rather than creating a new one.
+    expect(updateNameByUsernameMock).toHaveBeenCalledWith('jdoe', 'John Doe Updated');
+    expect(createUserMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ synced: 1, created: 0 });
+
+    // OpenLDAP's caseExactIA5Match memberUid attribute requires the directory-spelling
+    // value, so we pass both the lowercased canonical and the raw uid to the group filter.
+    const groupSearches = (lastClientStats?.searchCalls ?? []).filter(
+      (c) => c.base === 'ou=groups,dc=test,dc=com',
+    );
+    const groupFilterTexts = groupSearches.map((c) => String(c.options.filter));
+    expect(groupFilterTexts.some((f) => f.includes('member=jdoe'))).toBe(true);
+    expect(groupFilterTexts.some((f) => f.includes('member=JDoe'))).toBe(true);
   });
 
   test('flattens single-element arrays for uid and name attributes', async () => {
@@ -825,7 +857,7 @@ describe('syncUsers', () => {
         },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
     await ldapService.syncUsers();
     const created = createUserMock.mock.calls[0]?.[0] as {
       username: string;
@@ -845,7 +877,7 @@ describe('syncUsers', () => {
         },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue(LDAP_LOGIN_USER);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(LDAP_LOGIN_USER);
     const result = await ldapService.syncUsers();
     expect(updateNameByUsernameMock).toHaveBeenCalledWith('alice', 'Alice New');
     expect(createUserMock).not.toHaveBeenCalled();
@@ -886,7 +918,7 @@ describe('syncUsers', () => {
         { entries: [], status: 0 },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue({
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
       ...LDAP_LOGIN_USER,
       username: 'daniel.dangeli',
     });
@@ -916,7 +948,7 @@ describe('syncUsers', () => {
         },
       ],
     };
-    findLoginUserByUsernameMock.mockImplementation(async (username: string) =>
+    findLoginUserByNormalizedUsernameMock.mockImplementation(async (username: string) =>
       username === 'alice' ? LDAP_LOGIN_USER : null,
     );
     const result = await ldapService.syncUsers();
@@ -935,7 +967,7 @@ describe('syncUsers', () => {
         },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue({
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
       ...LDAP_LOGIN_USER,
       authMethod: 'local',
       passwordHash: '$2a$local',
@@ -959,7 +991,7 @@ describe('syncUsers', () => {
         },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue({
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
       ...LDAP_LOGIN_USER,
       employeeType: 'internal',
     });
@@ -985,7 +1017,7 @@ describe('syncUsers', () => {
         },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
     const result = await ldapService.syncUsers();
     expect(result).toEqual({ synced: 0, created: 1 });
     expect(createUserMock).toHaveBeenCalledTimes(1);
@@ -1013,7 +1045,7 @@ describe('syncUsers', () => {
         },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
     const result = await ldapService.syncUsers();
     expect(result).toEqual({ synced: 0, created: 1 });
     expect(createUserMock).toHaveBeenCalledTimes(1);
@@ -1073,7 +1105,7 @@ describe('syncUsers', () => {
         { entries: [], status: 0 }, // bob username
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
 
     const result = await ldapService.syncUsers();
 
@@ -1313,7 +1345,7 @@ describe('authenticateAndProvision', () => {
         { err: new Error('group subtree timeout') },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
 
     await expect(ldapService.authenticateAndProvision('alice', 'pw')).rejects.toThrow(
       'group subtree timeout',
@@ -1339,7 +1371,7 @@ describe('authenticateAndProvision', () => {
         { entries: [], status: 0 },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
 
     const result = await ldapService.authenticateAndProvision('ALICE@example.com', 'pw');
 
@@ -1378,13 +1410,38 @@ describe('authenticateAndProvision', () => {
         { entries: [], status: 0 },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
 
     const result = await ldapService.authenticateAndProvision('CAROL', 'pw');
     expect(result.canonicalUsername).toBe('carol');
     expect(createUserMock).toHaveBeenCalledWith(
       expect.objectContaining({ username: 'carol', name: 'Carol' }),
     );
+  });
+
+  test('lowercases the canonical username before lookup and create (#640)', async () => {
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: 'cn=JDoe,dc=test,dc=com',
+              object: { sAMAccountName: 'JDoe', cn: 'John Doe' },
+            },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
+
+    const result = await ldapService.authenticateAndProvision('JDOE@corp.example', 'pw');
+
+    expect(result.canonicalUsername).toBe('jdoe');
+    expect(findLoginUserByNormalizedUsernameMock).toHaveBeenCalledWith('jdoe');
+    expect(createUserMock).toHaveBeenCalledWith(expect.objectContaining({ username: 'jdoe' }));
   });
 
   test('reuses an existing LDAP-bound user under the canonical username (no creation)', async () => {
@@ -1400,7 +1457,7 @@ describe('authenticateAndProvision', () => {
         { entries: [], status: 0 },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue(LDAP_LOGIN_USER);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(LDAP_LOGIN_USER);
 
     const result = await ldapService.authenticateAndProvision('alice@example.com', 'pw');
 
@@ -1436,7 +1493,10 @@ describe('authenticateAndProvision', () => {
     };
     // Default mock returns { applied: false } — simulating "no LDAP group matched a mapping".
     // Admin has assigned 'manager' to this LDAP user.
-    findLoginUserByUsernameMock.mockResolvedValue({ ...LDAP_LOGIN_USER, role: 'manager' });
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
+      ...LDAP_LOGIN_USER,
+      role: 'manager',
+    });
 
     const result = await ldapService.authenticateAndProvision('alice', 'pw');
 
@@ -1466,7 +1526,7 @@ describe('authenticateAndProvision', () => {
         { entries: [], status: 0 },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue({
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
       ...LDAP_LOGIN_USER,
       authMethod: 'local' as const,
     });
@@ -1491,7 +1551,7 @@ describe('authenticateAndProvision', () => {
         { entries: [], status: 0 },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
 
     const result = await ldapService.authenticateAndProvision('newbie', 'pw');
 
@@ -1514,7 +1574,7 @@ describe('authenticateAndProvision', () => {
         { entries: [], status: 0 },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue(LDAP_LOGIN_USER);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(LDAP_LOGIN_USER);
 
     const result = await ldapService.authenticateAndProvision('alice', 'pw');
 
@@ -1545,7 +1605,7 @@ describe('authenticateAndProvision', () => {
     // Simulate a concurrent /api/ldap/config save landing between authenticateWithProfile
     // (which loaded the cache) and the gate: invalidateConfig() nulls this.config. The gate
     // must reload from DB instead of falling back to default-true and bypassing policy.
-    findLoginUserByUsernameMock.mockImplementation(async () => {
+    findLoginUserByNormalizedUsernameMock.mockImplementation(async () => {
       ldapService.invalidateConfig();
       return null;
     });
@@ -1571,7 +1631,9 @@ describe('authenticateAndProvision', () => {
       ],
     };
     // First lookup: nothing (we'll try to create); second lookup (after race): the raced row
-    findLoginUserByUsernameMock.mockResolvedValueOnce(null).mockResolvedValueOnce(LDAP_LOGIN_USER);
+    findLoginUserByNormalizedUsernameMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(LDAP_LOGIN_USER);
     const uniqueErr = Object.assign(new Error('duplicate key'), { code: '23505' });
     createUserMock.mockRejectedValueOnce(uniqueErr);
 
@@ -1598,7 +1660,9 @@ describe('authenticateAndProvision', () => {
         { entries: [], status: 0 }, // loser sees no groups
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValueOnce(null).mockResolvedValueOnce(LDAP_LOGIN_USER);
+    findLoginUserByNormalizedUsernameMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(LDAP_LOGIN_USER);
     const uniqueErr = Object.assign(new Error('duplicate key'), { code: '23505' });
     createUserMock.mockRejectedValueOnce(uniqueErr);
 
@@ -1624,7 +1688,7 @@ describe('authenticateAndProvision', () => {
         { entries: [], status: 0 },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
     await ldapService.authenticateAndProvision('dave', 'pw');
     expect(createUserMock).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Dave Display', username: 'dave' }),
@@ -1646,7 +1710,7 @@ describe('authenticateAndProvision', () => {
         { entries: [], status: 0 }, // group search by typed alias
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
 
     await ldapService.authenticateAndProvision('ALICE@example.com', 'pw');
 
@@ -1685,7 +1749,7 @@ describe('authenticateAndProvision', () => {
         },
       ],
     };
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
     // Simulate the deleted role being filtered out; only 'role-deleted-12345' would map.
     filterExistingRoleIdsMock.mockResolvedValueOnce(['user']);
 

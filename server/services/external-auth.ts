@@ -71,7 +71,12 @@ const isUsernameUniqueViolation = (err: unknown): boolean => {
   return (
     dup?.constraint === 'users_username_unique' ||
     dup?.constraint === 'users_username_key' ||
-    !!dup?.detail?.includes('(username)')
+    // Functional unique index from migration 0054; Postgres reports this constraint
+    // name on case-insensitive username collisions and the `(username)` detail
+    // substring isn't reliable for the `(lower(username))` expression form.
+    dup?.constraint === 'idx_users_username_lower_unique' ||
+    !!dup?.detail?.includes('(username)') ||
+    !!dup?.detail?.includes('(lower(username))')
   );
 };
 

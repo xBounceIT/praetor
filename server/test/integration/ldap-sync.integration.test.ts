@@ -18,7 +18,7 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
   const usersRepoSnap = { ...realUsersRepo };
 
   const ldapRepoGetMock = mock();
-  const findLoginUserByUsernameMock = mock();
+  const findLoginUserByNormalizedUsernameMock = mock();
   const updateNameByUsernameMock = mock();
   const createUserMock = mock();
 
@@ -31,7 +31,7 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
     }));
     mock.module('../../repositories/usersRepo.ts', () => ({
       ...usersRepoSnap,
-      findLoginUserByUsername: findLoginUserByUsernameMock,
+      findLoginUserByNormalizedUsername: findLoginUserByNormalizedUsernameMock,
       updateNameByUsername: updateNameByUsernameMock,
       createUser: createUserMock,
     }));
@@ -45,12 +45,12 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
 
   beforeEach(() => {
     ldapRepoGetMock.mockReset();
-    findLoginUserByUsernameMock.mockReset();
+    findLoginUserByNormalizedUsernameMock.mockReset();
     updateNameByUsernameMock.mockReset();
     createUserMock.mockReset();
 
     ldapRepoGetMock.mockResolvedValue(buildTestConfig({ autoProvisionAll: true }));
-    findLoginUserByUsernameMock.mockResolvedValue(null);
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
     ldapService.invalidateConfig();
   });
 
@@ -80,7 +80,7 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
   });
 
   test('existing user: calls updateNameByUsername instead of createUser', async () => {
-    findLoginUserByUsernameMock.mockImplementation(async (username: string) =>
+    findLoginUserByNormalizedUsernameMock.mockImplementation(async (username: string) =>
       username === 'alice' ? { id: 'u1', username, name: 'Old Name' } : null,
     );
 
@@ -113,7 +113,7 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
 
   test('autoProvisionAll=false: existing users are updated but new entries are NOT created', async () => {
     ldapRepoGetMock.mockResolvedValue(buildTestConfig({ autoProvisionAll: false }));
-    findLoginUserByUsernameMock.mockImplementation(async (username: string) =>
+    findLoginUserByNormalizedUsernameMock.mockImplementation(async (username: string) =>
       username === 'alice' ? { id: 'u1', username, name: 'Old Name' } : null,
     );
     ldapService.invalidateConfig();
@@ -138,7 +138,7 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
   });
 
   test('returned counts match mock invocations exactly', async () => {
-    findLoginUserByUsernameMock.mockResolvedValueOnce({
+    findLoginUserByNormalizedUsernameMock.mockResolvedValueOnce({
       id: 'u1',
       username: 'alice',
       name: 'Alice Example',

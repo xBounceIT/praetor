@@ -60,7 +60,7 @@ describe('findAuthUserById', () => {
   });
 });
 
-describe('findLoginUserByUsername', () => {
+describe('findLoginUserByNormalizedUsername', () => {
   test('returns the mapped login user when the row exists', async () => {
     // Projection: id, name, username, role, passwordHash, avatarInitials, isDisabled,
     // employeeType, authMethod, authProviderId, sessionVersion, tokenVersion
@@ -82,7 +82,7 @@ describe('findLoginUserByUsername', () => {
         ],
       ],
     });
-    const result = await usersRepo.findLoginUserByUsername('alice', testDb);
+    const result = await usersRepo.findLoginUserByNormalizedUsername('alice', testDb);
     expect(result).toEqual({
       id: 'user-1',
       name: 'Alice',
@@ -102,7 +102,19 @@ describe('findLoginUserByUsername', () => {
 
   test('returns null when no row exists', async () => {
     exec.enqueue({ rows: [] });
-    expect(await usersRepo.findLoginUserByUsername('alice', testDb)).toBeNull();
+    expect(await usersRepo.findLoginUserByNormalizedUsername('alice', testDb)).toBeNull();
+  });
+
+  test('normalizes the input to lowercase and trims whitespace before querying', async () => {
+    exec.enqueue({ rows: [] });
+    await usersRepo.findLoginUserByNormalizedUsername('  JDoe  ', testDb);
+    expect(exec.calls[0].params).toContain('jdoe');
+    expect(exec.calls[0].sql).toContain('LOWER(');
+  });
+
+  test('returns null without issuing a query when the input is blank', async () => {
+    expect(await usersRepo.findLoginUserByNormalizedUsername('   ', testDb)).toBeNull();
+    expect(exec.calls.length).toBe(0);
   });
 });
 
