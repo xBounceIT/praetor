@@ -92,7 +92,7 @@ import type {
 import { formatDateOnlyForLocale, getLocalDateString } from './utils/date';
 import { getTechnicalDocsViewFromPathname } from './utils/docsRoutes';
 import { getErrorMessage } from './utils/errors';
-import { canonicalizeLegacyHash } from './utils/hashCanonicalization';
+import { canonicalizeLegacyHash, resolveHashChange } from './utils/hashCanonicalization';
 import {
   clearStaleModuleScopedState,
   getStaleModulesAfterNavigation,
@@ -1140,27 +1140,21 @@ const AppContent: React.FC = () => {
       }
       programmaticHashRef.current = null;
       const rawHash = window.location.hash.replace('#/', '').replace('#', '');
-      if (rawHash === 'login') {
-        if (currentUser) {
-          setActiveView('timesheets/tracker');
-        }
-        return;
+      const outcome = resolveHashChange({
+        rawHash,
+        activeView,
+        validViews: VALID_VIEWS,
+        hasUser: !!currentUser,
+      });
+      if (outcome.kind === 'noop') return;
+      if (outcome.kind === 'rewrite-hash') {
+        // Apply the resolved view in this same call: the follow-up hashchange
+        // fired by the rewrite below will be short-circuited by the guard
+        // above, so we cannot rely on it to set the view.
+        programmaticHashRef.current = outcome.newHash;
+        window.location.hash = outcome.newHash.slice(1);
       }
-      const canonicalHash = canonicalizeLegacyHash(rawHash);
-      if (canonicalHash !== rawHash) {
-        programmaticHashRef.current = `#/${canonicalHash}`;
-        window.location.hash = `/${canonicalHash}`;
-        return;
-      }
-      const hash = canonicalHash as View;
-      const nextView = VALID_VIEWS.includes(hash)
-        ? hash
-        : canonicalHash === ''
-          ? 'timesheets/tracker'
-          : '404';
-      if (nextView !== activeView) {
-        setActiveView(nextView);
-      }
+      setActiveView(outcome.view);
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
