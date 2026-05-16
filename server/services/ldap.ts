@@ -403,18 +403,12 @@ class LDAPService {
       if (isUniqueViolationError(err)) {
         const racedUser = await usersRepo.findLoginUserByUsername(canonicalUsername);
         if (racedUser && racedUser.employeeType === 'app_user' && racedUser.authMethod === 'ldap') {
-          const applied = await applyExternalRolesForUserIfMatched(
-            racedUser.id,
-            result.groups,
-            roleMappings,
-          );
-          if (!applied.applied) {
-            warnRoleMappingNoMatch(
-              'LDAP login (race recovery)',
-              { id: racedUser.id, username: canonicalUsername, role: racedUser.role },
-              result.groups,
-            );
-          }
+          // Race recovery is functionally a fresh first-login for the loser: use the same
+          // with-default helper as the winner's create path below (#641), so the loser's
+          // group view always materializes into user_roles even if it diverges from the
+          // winner's view. Using the IfMatched variant here would silently drop the loser's
+          // groups when their bind returned no matched mapping.
+          await applyExternalRolesForUser(racedUser.id, result.groups, roleMappings);
           return {
             authenticated: true,
             userId: racedUser.id,
