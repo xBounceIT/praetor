@@ -608,8 +608,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           details: { secondaryLabel: 'duplicate_id' },
         });
       }
-      if (nextIdValue !== null) patch.id = nextIdValue;
-
       const hasLockedFieldUpdates =
         supplierId !== undefined ||
         supplierName !== undefined ||
@@ -685,7 +683,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let resultItems: supplierInvoicesRepo.SupplierInvoiceItem[];
       try {
         const txResult = await withDbTransaction(async (tx) => {
-          const invoice = await supplierInvoicesRepo.update(idResult.value, patch, tx);
+          let renamedInvoice: supplierInvoicesRepo.SupplierInvoice | null = null;
+          if (nextIdValue && nextIdValue !== idResult.value) {
+            renamedInvoice = await supplierInvoicesRepo.rename(idResult.value, nextIdValue, tx);
+            if (!renamedInvoice) {
+              return { invoice: null, items: [] as supplierInvoicesRepo.SupplierInvoiceItem[] };
+            }
+          }
+          // id-only renames have nothing left to write — reuse the row returned by rename().
+          const invoice =
+            Object.keys(patch).length === 0 && renamedInvoice
+              ? renamedInvoice
+              : await supplierInvoicesRepo.update(renamedInvoice?.id ?? idResult.value, patch, tx);
           if (!invoice)
             return { invoice: null, items: [] as supplierInvoicesRepo.SupplierInvoiceItem[] };
           const finalItems = normalizedItems

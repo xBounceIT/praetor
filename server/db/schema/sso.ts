@@ -70,3 +70,19 @@ export const ssoLoginTickets = pgTable(
     index('idx_sso_login_tickets_expires_at').on(table.expiresAt),
   ],
 );
+
+// Most recent OIDC id_token per user, encrypted at rest, used as `id_token_hint` on
+// RP-Initiated Logout. A single row per user matches the existing session model: logout
+// bumps users.session_version which revokes every JWT for that user at once, so there's
+// nothing useful to track per-tab.
+export const ssoUserSessions = pgTable('sso_user_sessions', {
+  userId: varchar('user_id', { length: 50 })
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  providerId: varchar('provider_id', { length: 50 })
+    .notNull()
+    .references(() => ssoProviders.id, { onDelete: 'cascade' }),
+  idToken: text('id_token').notNull(),
+  createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
+});

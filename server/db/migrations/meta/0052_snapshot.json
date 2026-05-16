@@ -1,6 +1,6 @@
 {
-  "id": "03eb6045-238c-40f5-b25c-018661e31859",
-  "prevId": "8eb197bf-e14c-48f5-8868-7ba5547b6d06",
+  "id": "6220d45d-ac17-423e-9e31-d1fa54f03aa6",
+  "prevId": "e822563c-0b77-47ef-9e51-659304aa58fb",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -4356,6 +4356,13 @@
           "notNull": false,
           "default": "'[]'::jsonb"
         },
+        "end_session_enabled": {
+          "name": "end_session_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -4450,6 +4457,13 @@
           "notNull": false,
           "default": "''"
         },
+        "nonce": {
+          "name": "nonce",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
         "relay_state": {
           "name": "relay_state",
           "type": "text",
@@ -4508,6 +4522,70 @@
           "value": "\"sso_states\".\"protocol\" IN ('oidc', 'saml')"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.sso_user_sessions": {
+      "name": "sso_user_sessions",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "varchar(50)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id_token": {
+          "name": "id_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "sso_user_sessions_user_id_users_id_fk": {
+          "name": "sso_user_sessions_user_id_users_id_fk",
+          "tableFrom": "sso_user_sessions",
+          "tableTo": "users",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "sso_user_sessions_provider_id_sso_providers_id_fk": {
+          "name": "sso_user_sessions_provider_id_sso_providers_id_fk",
+          "tableFrom": "sso_user_sessions",
+          "tableTo": "sso_providers",
+          "columnsFrom": ["provider_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.supplier_invoice_items": {

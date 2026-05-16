@@ -890,21 +890,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (!isIdOnlyUpdate) {
             await snapshotPreState(idResult.value, 'update', request, tx);
           }
-          const quote = await clientQuotesRepo.update(
-            idResult.value,
-            {
-              id: nextIdValue ?? null,
-              clientId: (clientIdValue as string | null | undefined) ?? null,
-              clientName: (clientNameValue as string | null | undefined) ?? null,
-              paymentTerms: (paymentTerms as string | null | undefined) ?? null,
-              discount: (discountValue as number | null | undefined) ?? null,
-              discountType: discountTypeValue ?? null,
-              status: (status as string | null | undefined) ?? null,
-              expirationDate: (expirationDateValue as string | null | undefined) ?? null,
-              notes: (notes as string | null | undefined) ?? null,
-            },
-            tx,
-          );
+          let renamedQuote: clientQuotesRepo.ClientQuote | null = null;
+          if (nextIdValue && nextIdValue !== idResult.value) {
+            renamedQuote = await clientQuotesRepo.rename(idResult.value, nextIdValue, tx);
+            if (!renamedQuote) return { quote: null, items: [] };
+          }
+          // id-only renames have nothing left to write — reuse the row returned by rename().
+          const quote =
+            isIdOnlyUpdate && renamedQuote
+              ? renamedQuote
+              : await clientQuotesRepo.update(
+                  renamedQuote?.id ?? idResult.value,
+                  {
+                    clientId: (clientIdValue as string | null | undefined) ?? null,
+                    clientName: (clientNameValue as string | null | undefined) ?? null,
+                    paymentTerms: (paymentTerms as string | null | undefined) ?? null,
+                    discount: (discountValue as number | null | undefined) ?? null,
+                    discountType: discountTypeValue ?? null,
+                    status: (status as string | null | undefined) ?? null,
+                    expirationDate: (expirationDateValue as string | null | undefined) ?? null,
+                    notes: (notes as string | null | undefined) ?? null,
+                  },
+                  tx,
+                );
           if (!quote) return { quote: null, items: [] };
           const items = normalizedItems
             ? await clientQuotesRepo.replaceItems(

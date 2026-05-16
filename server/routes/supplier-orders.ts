@@ -549,8 +549,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           details: { secondaryLabel: 'duplicate_id' },
         });
       }
-      if (nextIdValue !== null) patch.id = nextIdValue;
-
       const hasLockedFieldUpdates =
         supplierId !== undefined ||
         supplierName !== undefined ||
@@ -643,7 +641,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (shouldSnapshot) {
             await snapshotPreState(idResult.value, 'update', request, tx);
           }
-          const order = await supplierOrdersRepo.update(idResult.value, patch, tx);
+          let renamedOrder: supplierOrdersRepo.SupplierOrder | null = null;
+          if (nextIdValue && nextIdValue !== idResult.value) {
+            renamedOrder = await supplierOrdersRepo.rename(idResult.value, nextIdValue, tx);
+            if (!renamedOrder) {
+              return { order: null, items: [] as supplierOrdersRepo.SupplierOrderItem[] };
+            }
+          }
+          // id-only renames have nothing left to write — reuse the row returned by rename().
+          const order =
+            Object.keys(patch).length === 0 && renamedOrder
+              ? renamedOrder
+              : await supplierOrdersRepo.update(renamedOrder?.id ?? idResult.value, patch, tx);
           if (!order) return { order: null, items: [] as supplierOrdersRepo.SupplierOrderItem[] };
           const finalItems = normalizedItems
             ? await supplierOrdersRepo.replaceItems(order.id, normalizedItems, tx)

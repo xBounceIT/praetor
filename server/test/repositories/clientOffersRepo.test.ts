@@ -217,17 +217,19 @@ describe('create', () => {
 });
 
 describe('update', () => {
-  test('binds 10 patch values via COALESCE, WHERE id last', async () => {
+  test('binds 9 patch values via COALESCE, WHERE id last - no id in SET', async () => {
     exec.enqueue({ rows: [offerRow()] });
     await clientOffersRepo.update('co-1', { status: 'accepted' }, testDb);
     const sql = exec.calls[0].sql;
     expect(sql).toContain('update "customer_offers"');
     expect(sql).toContain('COALESCE');
     expect(sql).toContain('CURRENT_TIMESTAMP');
-    expect(sql).toContain('"id" = $11');
-    expect(exec.calls[0].params).toHaveLength(11);
-    expect(exec.calls[0].params[6]).toBe('accepted'); // status
-    expect(exec.calls[0].params[10]).toBe('co-1'); // where id
+    // The SET clause must NOT touch the primary key column (issue #621).
+    expect(sql).not.toMatch(/set[^"]*"id"\s*=/i);
+    expect(sql).toContain('"id" = $10');
+    expect(exec.calls[0].params).toHaveLength(10);
+    expect(exec.calls[0].params[5]).toBe('accepted'); // status
+    expect(exec.calls[0].params[9]).toBe('co-1'); // where id
   });
 
   test('returns null when no row updated', async () => {
@@ -238,8 +240,28 @@ describe('update', () => {
   test('numericForDb stringifies discount before COALESCE', async () => {
     exec.enqueue({ rows: [offerRow()] });
     await clientOffersRepo.update('co-1', { discount: 12.5 }, testDb);
-    // Discount is the 5th COALESCE argument (id, clientId, clientName, paymentTerms, discount, ...).
-    expect(exec.calls[0].params[4]).toBe('12.5');
+    // Discount is the 4th COALESCE argument (clientId, clientName, paymentTerms, discount, ...).
+    expect(exec.calls[0].params[3]).toBe('12.5');
+  });
+});
+
+describe('rename', () => {
+  test('issues a dedicated UPDATE that sets the id column and returns the mapped offer', async () => {
+    exec.enqueue({ rows: [offerRow({ 0: 'co-2' })] });
+    const result = await clientOffersRepo.rename('co-1', 'co-2', testDb);
+    const sql = exec.calls[0].sql;
+    expect(sql).toContain('update "customer_offers"');
+    expect(sql).toMatch(/set[^"]*"id"\s*=/i);
+    expect(sql).toContain('CURRENT_TIMESTAMP');
+    expect(sql).toContain('"id" = $');
+    expect(exec.calls[0].params).toContain('co-2'); // new id
+    expect(exec.calls[0].params).toContain('co-1'); // where current id
+    expect(result?.id).toBe('co-2');
+  });
+
+  test('returns null when no row matched currentId', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await clientOffersRepo.rename('co-x', 'co-y', testDb)).toBeNull();
   });
 });
 

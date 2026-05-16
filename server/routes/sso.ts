@@ -41,8 +41,9 @@ const providerSchema = {
     emailAttribute: { type: 'string' },
     groupsAttribute: { type: 'string' },
     roleMappings: { type: 'array', items: roleMappingSchema },
+    endSessionEnabled: { type: 'boolean' },
   },
-  required: ['id', 'protocol', 'slug', 'name', 'enabled', 'roleMappings'],
+  required: ['id', 'protocol', 'slug', 'name', 'enabled', 'roleMappings', 'endSessionEnabled'],
 } as const;
 
 const providerBodySchema = {
@@ -122,16 +123,18 @@ const validateProviderBody = async (
     validated.name = name.value;
   }
 
-  const enabledResult = parseBooleanField(source, 'enabled');
-  if (!enabledResult.ok) {
-    badRequest(reply, enabledResult.message);
-    return null;
-  }
-  if (enabledResult.value !== undefined) {
-    validated.enabled = enabledResult.value;
-  } else if (options.isCreate) {
-    validated.enabled = false;
-  }
+  const applyBoolean = (field: 'enabled' | 'endSessionEnabled'): boolean => {
+    const result = parseBooleanField(source, field);
+    if (!result.ok) {
+      badRequest(reply, result.message);
+      return false;
+    }
+    if (result.value !== undefined) validated[field] = result.value;
+    else if (options.isCreate) validated[field] = false;
+    return true;
+  };
+  if (!applyBoolean('enabled')) return null;
+  if (!applyBoolean('endSessionEnabled')) return null;
 
   if (options.isCreate && validated.enabled && validated.protocol === 'oidc') {
     for (const field of ['issuerUrl', 'clientId', 'usernameAttribute'] as const) {

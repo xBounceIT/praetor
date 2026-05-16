@@ -43,6 +43,7 @@ const coFindFullForSnapshotMock = mock();
 const coFindItemsForOfferMock = mock();
 const coFindIdConflictMock = mock();
 const coUpdateMock = mock();
+const coRenameMock = mock();
 const coRestoreSnapshotOfferMock = mock();
 const coReplaceItemsMock = mock();
 
@@ -88,6 +89,7 @@ beforeAll(async () => {
     findItemsForOffer: coFindItemsForOfferMock,
     findIdConflict: coFindIdConflictMock,
     update: coUpdateMock,
+    rename: coRenameMock,
     restoreSnapshotOffer: coRestoreSnapshotOfferMock,
     replaceItems: coReplaceItemsMock,
   }));
@@ -210,6 +212,7 @@ const allMocks = [
   coFindItemsForOfferMock,
   coFindIdConflictMock,
   coUpdateMock,
+  coRenameMock,
   coRestoreSnapshotOfferMock,
   coReplaceItemsMock,
   clientsExistsByIdMock,
@@ -688,7 +691,7 @@ describe('PUT /api/sales/client-offers/:id snapshots pre-update state', () => {
       clientName: 'Client',
       status: 'draft',
     });
-    coUpdateMock.mockResolvedValue({ ...SAMPLE_OFFER, id: 'off-1-renamed' });
+    coRenameMock.mockResolvedValue({ ...SAMPLE_OFFER, id: 'off-1-renamed' });
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -700,6 +703,9 @@ describe('PUT /api/sales/client-offers/:id snapshots pre-update state', () => {
     expect(res.statusCode).toBe(200);
     expect(ovInsertMock).not.toHaveBeenCalled();
     expect(coFindFullForSnapshotMock).not.toHaveBeenCalled();
+    // PK rename goes through the dedicated repo call (issue #621), not the generic update().
+    expect(coRenameMock).toHaveBeenCalledWith('off-1', 'off-1-renamed', TX_SENTINEL);
+    expect(coUpdateMock).not.toHaveBeenCalled();
   });
 
   test('PUT terminal-to-draft rejects ordinary manager before generic update', async () => {

@@ -25,6 +25,8 @@ Prima di abilitare un provider SAML, configura una sorgente metadata valida (URL
 
 Se il salvataggio di un provider OIDC o SAML non riesce, la scheda del provider mostra un messaggio di errore con il dettaglio restituito dal server. Correggi i campi indicati o riprova quando il servizio torna disponibile prima di considerare la configurazione aggiornata.
 
+Per i provider OIDC puoi abilitare **Chiama l'endpoint end-session dell'IdP al logout**: quando attivo, il logout di Praetor reindirizza il browser dell'utente all'`end_session_endpoint` annunciato dal discovery document dell'IdP (OIDC RP-Initiated Logout). Senza questa opzione il logout invalida solo la sessione Praetor — il cookie dell'IdP resta attivo e una nuova autenticazione SSO entrerebbe silenziosamente con l'utente precedente, problema rilevante sulle postazioni condivise. Per usarla, l'IdP deve esporre `end_session_endpoint` nel discovery e la `FRONTEND_URL` di Praetor deve essere registrata come URI di redirect post-logout autorizzato. Lascia disattivata l'opzione per gli IdP la cui UI di end-session è scomoda (pagine di conferma forzate, redirect post-logout poco affidabili).
+
 Nella lista utenti puoi usare il menu azioni e scegliere **Cambia metodo di autenticazione** per vincolare un utente applicativo a credenziali locali, LDAP, OIDC o SAML. Per OIDC e SAML seleziona anche il provider specifico: l'utente potrà accedere solo tramite quel provider. Dipendenti interni o esterni non sono account applicativi e non possono essere vincolati a LDAP/SSO.
 
 Quando vincoli un utente a LDAP, Praetor consulta la directory e applica subito i ruoli configurati nel mapping dei gruppi LDAP, sovrascrivendo il ruolo locale. Se la directory non è raggiungibile o l'utente non vi è presente, il ruolo esistente viene mantenuto e il prossimo accesso o sincronizzazione riapplicherà il mapping.
@@ -33,7 +35,7 @@ La sincronizzazione LDAP aggiorna solo utenti applicativi già impostati su LDAP
 
 La sincronizzazione LDAP manuale richiede una configurazione LDAP abilitata. Se LDAP è disabilitato o non configurato, la richiesta viene respinta e non viene registrata come sincronizzazione riuscita; se la directory non è raggiungibile, Praetor segnala l'errore invece di riportare un successo.
 
-Il tester di connessione LDAP usa la configurazione salvata e può essere eseguito anche quando LDAP è ancora disabilitato. Salva prima le modifiche alla configurazione, verifica credenziali e gruppi con il tester, poi abilita LDAP quando la validazione è riuscita.
+Il tester di connessione LDAP usa la configurazione salvata e può essere eseguito anche quando LDAP è ancora disabilitato. Salva prima le modifiche alla configurazione, verifica credenziali e gruppi con il tester, poi abilita LDAP quando la validazione è riuscita. Quando LDAP autentica ma nessun gruppo corrisponde a una mappatura, il tester riporta il ruolo che il **login reale** assegnerebbe: preserva il ruolo attuale per un utente esistente già vincolato a LDAP, e ricade sul ruolo `Utente` predefinito solo al primo accesso.
 
 La ricerca dei gruppi LDAP usa la **Base ricerca gruppi** e il **Filtro membri gruppo** configurati. In Active Directory, quando vuoi cercare i gruppi sotto una OU di gruppi usando il DN dell'utente, usa in genere `(member={0})`: `{0}` viene sostituito con il DN dell'utente e la ricerca viene eseguita nella base gruppi configurata.
 

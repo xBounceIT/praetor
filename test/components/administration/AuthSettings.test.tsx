@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
-import type { LdapConfig, Role, SsoProtocol, SsoProvider } from '../../../types';
+import type { LdapConfig, LdapTestResponse, Role, SsoProtocol, SsoProvider } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
 import { render } from '../../helpers/render';
@@ -9,14 +9,17 @@ import { render } from '../../helpers/render';
 installI18nMock();
 
 const ldapApiMock = {
-  testAuthentication: mock(async (_username: string, _password: string) => ({
-    success: true,
-    authenticated: true,
-    username: 'alice',
-    message: 'LDAP authentication succeeded',
-    groups: [],
-    roleIds: ['user'],
-  })),
+  testAuthentication: mock(
+    async (_username: string, _password: string): Promise<LdapTestResponse> => ({
+      success: true,
+      authenticated: true,
+      username: 'alice',
+      message: 'LDAP authentication succeeded',
+      groups: [],
+      roleIds: ['user'],
+      roleResolution: 'matched',
+    }),
+  ),
 };
 
 const ssoApiMock = {
@@ -88,6 +91,7 @@ const buildProvider = (protocol: SsoProtocol, patch: Partial<SsoProvider> = {}):
   emailAttribute: 'email',
   groupsAttribute: 'groups',
   roleMappings: [],
+  endSessionEnabled: false,
   ...patch,
 });
 
@@ -143,6 +147,15 @@ describe('<AuthSettings />', () => {
   });
 
   test('allows testing the saved LDAP configuration before LDAP is enabled', async () => {
+    ldapApiMock.testAuthentication.mockResolvedValueOnce({
+      success: true,
+      authenticated: true,
+      username: 'alice',
+      message: 'LDAP authentication succeeded',
+      groups: [],
+      roleIds: ['user'],
+      roleResolution: 'matched',
+    });
     renderAuthSettings();
 
     const testButton = screen.getByRole('button', { name: 'admin.ldap.testAuthentication' });
@@ -165,16 +178,13 @@ describe('<AuthSettings />', () => {
     const autoAllSwitch = document.getElementById('ldap-auto-provision-all') as HTMLInputElement;
     expect(onLoginSwitch).toBeTruthy();
     expect(autoAllSwitch).toBeTruthy();
-    // Defaults from the fixture: provisionOnLogin=true, autoProvisionAll=false.
     expect(onLoginSwitch.getAttribute('aria-checked')).toBe('true');
     expect(autoAllSwitch.getAttribute('aria-checked')).toBe('false');
 
-    // Flip provisionOnLogin off; autoProvisionAll must NOT follow (independent toggles).
     fireEvent.click(onLoginSwitch);
     expect(onLoginSwitch.getAttribute('aria-checked')).toBe('false');
     expect(autoAllSwitch.getAttribute('aria-checked')).toBe('false');
 
-    // Turn autoProvisionAll on independently.
     fireEvent.click(autoAllSwitch);
     expect(autoAllSwitch.getAttribute('aria-checked')).toBe('true');
     expect(onLoginSwitch.getAttribute('aria-checked')).toBe('false');
@@ -185,6 +195,76 @@ describe('<AuthSettings />', () => {
     const submitted = onSave.mock.calls[0]?.[0] as LdapConfig;
     expect(submitted.provisionOnLogin).toBe(false);
     expect(submitted.autoProvisionAll).toBe(true);
+  });
+
+  // #638: the tester previously lied about every existing user — claiming they would be
+  // demoted to DEFAULT_ROLE_ID when LDAP authenticated but no group matched, even though
+  // real login preserves the admin-assigned role. The render branches below assert that
+  // each roleResolution state surfaces with its own label and help text.
+  describe('LDAP test role resolution (issue #638)', () => {
+    const runTest = async (overrides: Partial<LdapTestResponse>) => {
+      ldapApiMock.testAuthentication.mockResolvedValueOnce({
+        success: true,
+        authenticated: true,
+        username: 'alice',
+        message: 'LDAP authentication succeeded',
+        userDn: 'uid=alice,ou=people,dc=example,dc=com',
+        groups: ['cn=engineers,ou=groups,dc=example,dc=com'],
+        roleIds: ['user'],
+        roleResolution: 'matched',
+        ...overrides,
+      });
+      renderAuthSettings();
+      fireEvent.change(inputForLabel('admin.ldap.testUsername'), { target: { value: 'alice' } });
+      fireEvent.change(inputForLabel('admin.ldap.testPassword'), { target: { value: 'secret' } });
+      fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.testAuthentication' }));
+      await waitFor(() => {
+        expect(ldapApiMock.testAuthentication).toHaveBeenCalled();
+      });
+    };
+
+    test('renders the Mapped Roles label without a fallback hint when groups match', async () => {
+      await runTest({ roleResolution: 'matched', roleIds: ['admin'] });
+      await waitFor(() => {
+        expect(screen.getByText('admin.ldap.test.roleIds')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('ldap-test-role-resolution-help')).toBeNull();
+      expect(screen.queryByText('admin.ldap.test.preservedRoleLabel')).toBeNull();
+      expect(screen.queryByText('admin.ldap.test.defaultRoleLabel')).toBeNull();
+    });
+
+    test('renders the Current Role label and preserved-role hint for existing LDAP users with no match', async () => {
+      await runTest({ roleResolution: 'preserved', roleIds: ['manager'] });
+      await waitFor(() => {
+        expect(screen.getByText('admin.ldap.test.preservedRoleLabel')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('ldap-test-role-resolution-help')).toHaveTextContent(
+        'admin.ldap.test.preservedRoleHelp',
+      );
+      // The misleading "Mapped Roles" label must not appear for the preserved state.
+      expect(screen.queryByText('admin.ldap.test.roleIds')).toBeNull();
+    });
+
+    test('renders the Default Role label and default hint for first-time users with no match', async () => {
+      await runTest({ roleResolution: 'default', roleIds: ['user'] });
+      await waitFor(() => {
+        expect(screen.getByText('admin.ldap.test.defaultRoleLabel')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('ldap-test-role-resolution-help')).toHaveTextContent(
+        'admin.ldap.test.defaultRoleHelp',
+      );
+    });
+
+    // Surface the production-rejection case so the admin does not mistake it for `preserved`.
+    test('renders the Login Rejected label and rejected hint for disabled or non-app_user rows', async () => {
+      await runTest({ roleResolution: 'rejected', roleIds: [] });
+      await waitFor(() => {
+        expect(screen.getByText('admin.ldap.test.rejectedRoleLabel')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('ldap-test-role-resolution-help')).toHaveTextContent(
+        'admin.ldap.test.rejectedRoleHelp',
+      );
+    });
   });
 
   test('shows the server error instead of the saved notification when LDAP save fails', async () => {

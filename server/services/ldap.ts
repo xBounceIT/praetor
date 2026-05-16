@@ -209,6 +209,13 @@ class LDAPService {
       rejectUnauthorized: process.env.LDAP_REJECT_UNAUTHORIZED !== 'false',
     };
 
+    if (!tlsOptions.rejectUnauthorized) {
+      // Audit signal so an env var leaked from a dev machine into staging/prod is not silent.
+      createChildLogger({ module: 'ldap' }).warn(
+        'LDAP_REJECT_UNAUTHORIZED=false: TLS certificate validation disabled — credentials are vulnerable to MITM',
+      );
+    }
+
     // CA precedence: DB-stored PEM wins; otherwise fall back to LDAP_TLS_CA_FILE.
     // Node's TLS layer accepts a single Buffer with one or more concatenated
     // PEM blocks, so chain certs in the textarea work without extra parsing.
@@ -415,18 +422,12 @@ class LDAPService {
       if (isUniqueViolationError(err)) {
         const racedUser = await usersRepo.findLoginUserByUsername(canonicalUsername);
         if (racedUser && racedUser.employeeType === 'app_user' && racedUser.authMethod === 'ldap') {
-          const applied = await applyExternalRolesForUserIfMatched(
-            racedUser.id,
-            result.groups,
-            roleMappings,
-          );
-          if (!applied.applied) {
-            warnRoleMappingNoMatch(
-              'LDAP login (race recovery)',
-              { id: racedUser.id, username: canonicalUsername, role: racedUser.role },
-              result.groups,
-            );
-          }
+          // Race recovery is functionally a fresh first-login for the loser: use the same
+          // with-default helper as the winner's create path below (#641), so the loser's
+          // group view always materializes into user_roles even if it diverges from the
+          // winner's view. Using the IfMatched variant here would silently drop the loser's
+          // groups when their bind returned no matched mapping.
+          await applyExternalRolesForUser(racedUser.id, result.groups, roleMappings);
           return {
             authenticated: true,
             userId: racedUser.id,
@@ -500,11 +501,6 @@ class LDAPService {
     }
   }
 
-  async findUserDn(client: LdapClient, username: string): Promise<string | null> {
-    const entry = await this.findUserEntry(client, username);
-    return entry?.dn ?? null;
-  }
-
   async findUserEntry(client: LdapClient, username: string): Promise<LdapUserEntry | null> {
     const config = this.config;
     if (!config) {
@@ -562,55 +558,52 @@ class LDAPService {
     const groups = new Set<string>();
     const username = usernameList[0] ?? userDn;
 
-    for (const searchValue of searchValues) {
-      let searchOptions: {
-        scope: 'sub';
-        filter: ReturnType<typeof buildGroupLookupFilter>;
-        attributes: string[];
-      };
-
-      try {
-        searchOptions = {
-          scope: 'sub',
-          filter: buildGroupLookupFilter(config.groupFilter, searchValue),
-          attributes: ['cn', 'dn', 'distinguishedName'],
+    const searchFor = (searchValue: string) =>
+      new Promise<void>((resolve, reject) => {
+        let searchOptions: {
+          scope: 'sub';
+          filter: ReturnType<typeof buildGroupLookupFilter>;
+          attributes: string[];
         };
-      } catch (err) {
-        if (options.throwOnError) throw err;
-        if (groups.size > 0) return [...groups];
-        logger.warn(
-          { err: serializeError(err), username },
-          'LDAP group filter is invalid; skipping group role mapping',
-        );
-        return [];
-      }
-
-      try {
-        await new Promise<void>((resolve, reject) => {
-          client.search(config.groupBaseDn, searchOptions, (err, res) => {
-            if (err) return reject(err);
-
-            res.on('searchEntry', (entry: LdapSearchEntry) => {
-              const objectName = entry.objectName?.toString();
-              const attributes = flattenSearchEntryAttributes(entry);
-              addGroupEntryAliases(groups, attributes, objectName);
-            });
-
-            res.on('error', (err: Error) => reject(err));
-            res.on('end', () => resolve());
+        try {
+          searchOptions = {
+            scope: 'sub',
+            filter: buildGroupLookupFilter(config.groupFilter, searchValue),
+            attributes: ['cn', 'dn', 'distinguishedName'],
+          };
+        } catch (err) {
+          return reject(err);
+        }
+        client.search(config.groupBaseDn, searchOptions, (err, res) => {
+          if (err) return reject(err);
+          res.on('searchEntry', (entry: LdapSearchEntry) => {
+            const objectName = entry.objectName?.toString();
+            const attributes = flattenSearchEntryAttributes(entry);
+            addGroupEntryAliases(groups, attributes, objectName);
           });
+          res.on('error', (err: Error) => reject(err));
+          res.on('end', () => resolve());
         });
-      } catch (err) {
-        if (options.throwOnError) throw err;
-        if (groups.size > 0) return [...groups];
+      });
+
+    // Issue identifier searches in parallel. Mixed configs like
+    // `(|(member={0})(memberUid={0}))` need results unioned across DN and uid
+    // forms — a short-circuit would silently drop the groups that only the
+    // second form matches.
+    if (options.throwOnError) {
+      await Promise.all(searchValues.map(searchFor));
+      return [...groups];
+    }
+    const results = await Promise.allSettled(searchValues.map(searchFor));
+    if (groups.size === 0) {
+      const failure = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+      if (failure) {
         logger.warn(
-          { err: serializeError(err), username },
+          { err: serializeError(failure.reason), username },
           'LDAP group lookup failed; skipping group role mapping',
         );
-        return [];
       }
     }
-
     return [...groups];
   }
 
@@ -693,6 +686,11 @@ class LDAPService {
 
         if (!username) {
           logger.warn('Skipping LDAP entry without username');
+          continue;
+        }
+
+        if (!entry.objectName) {
+          logger.warn({ username }, 'Skipping LDAP entry with empty objectName');
           continue;
         }
 

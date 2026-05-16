@@ -185,6 +185,7 @@ const oidcProvider: SsoProvider = {
   emailAttribute: DEFAULT_OIDC_FIELDS.emailAttribute,
   groupsAttribute: DEFAULT_OIDC_FIELDS.groupsAttribute,
   roleMappings,
+  endSessionEnabled: false,
 };
 
 const samlProvider: SsoProvider = {
@@ -210,6 +211,7 @@ const samlProvider: SsoProvider = {
   emailAttribute: DEFAULT_SAML_FIELDS.emailAttribute,
   groupsAttribute: DEFAULT_SAML_FIELDS.groupsAttribute,
   roleMappings,
+  endSessionEnabled: false,
 };
 
 const users = new Map<string, StoredUser>();

@@ -25,6 +25,8 @@ Before enabling a SAML provider, configure either a valid metadata source (URL o
 
 If saving an OIDC or SAML provider fails, the provider tab shows an error message with the detail returned by the server. Correct the reported fields or retry when the service is available before treating the configuration as updated.
 
+For OIDC providers you can enable **Call IdP end-session endpoint on logout**: when active, Praetor logout redirects the user's browser to the `end_session_endpoint` advertised by the IdP's discovery document (OIDC RP-Initiated Logout). Without it, logout only revokes the Praetor session — the IdP cookie remains active and a fresh SSO attempt would silently log in as the previous user, which matters most on shared workstations. To use this option, the IdP must expose `end_session_endpoint` in discovery and Praetor's `FRONTEND_URL` must be registered as an allowed post-logout redirect URI. Leave the toggle off for IdPs whose end-session UX is poor (forced confirmation pages, unreliable post-logout redirects).
+
 In the user list, open the row actions menu and choose **Change authentication method** to restrict an application user to local credentials, LDAP, OIDC, or SAML. For OIDC and SAML, also select the specific provider: the user will be able to sign in only through that provider. Internal and external employees are not application accounts and cannot be bound to LDAP/SSO.
 
 When you bind a user to LDAP, Praetor looks them up in the directory and immediately applies the roles configured in the LDAP group role mapping, overriding the local role. If the directory is unreachable or the user is not in it yet, the existing role is kept and the next login or sync will re-apply the mapping.
@@ -33,7 +35,7 @@ LDAP synchronization updates only application users that are already set to LDAP
 
 Manual LDAP synchronization requires an enabled LDAP configuration. If LDAP is disabled or not configured, the request is rejected and is not recorded as a successful sync; if the directory is unreachable, Praetor reports the error instead of reporting success.
 
-The LDAP connection tester uses the saved configuration and can run while LDAP is still disabled. Save configuration edits first, validate credentials and groups with the tester, then enable LDAP after the validation succeeds.
+The LDAP connection tester uses the saved configuration and can run while LDAP is still disabled. Save configuration edits first, validate credentials and groups with the tester, then enable LDAP after the validation succeeds. When LDAP authenticates but no group matches a mapping, the tester reports the role the **real login** would assign: it preserves the current role for an existing LDAP-bound user, and falls back to the default `User` role only for first-time logins.
 
 LDAP group lookup uses the configured **Group Search Base** and **Group Member Filter**. In Active Directory, when you want to search group entries under a group OU by the user's DN, the usual filter is `(member={0})`: `{0}` is replaced with the user DN and the search runs under the configured group base.
 

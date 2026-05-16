@@ -31,6 +31,7 @@ export type SsoProvider = {
   emailAttribute: string;
   groupsAttribute: string;
   roleMappings: SsoRoleMapping[];
+  endSessionEnabled: boolean;
 };
 
 export type NewSsoProvider = SsoProvider;
@@ -76,6 +77,7 @@ const PROVIDER_PROJECTION = {
   emailAttribute: ssoProviders.emailAttribute,
   groupsAttribute: ssoProviders.groupsAttribute,
   roleMappings: ssoProviders.roleMappings,
+  endSessionEnabled: ssoProviders.endSessionEnabled,
 } as const;
 
 type ProviderRow = {
@@ -101,6 +103,7 @@ type ProviderRow = {
   emailAttribute: string | null;
   groupsAttribute: string | null;
   roleMappings: SsoRoleMapping[] | null;
+  endSessionEnabled: boolean | null;
 };
 
 const mapRow = (row: ProviderRow): SsoProvider => {
@@ -128,6 +131,7 @@ const mapRow = (row: ProviderRow): SsoProvider => {
     emailAttribute: row.emailAttribute ?? defaults.emailAttribute,
     groupsAttribute: row.groupsAttribute ?? defaults.groupsAttribute,
     roleMappings: row.roleMappings ?? [],
+    endSessionEnabled: row.endSessionEnabled ?? false,
   };
 };
 

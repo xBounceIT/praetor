@@ -33,6 +33,7 @@ const sqFindIdConflictMock = mock();
 const sqFindFullForSnapshotMock = mock();
 const sqFindItemsForQuoteMock = mock();
 const sqUpdateMock = mock();
+const sqRenameMock = mock();
 const sqReplaceItemsMock = mock();
 
 const sqvInsertMock = mock();
@@ -66,6 +67,7 @@ beforeAll(async () => {
     findFullForSnapshot: sqFindFullForSnapshotMock,
     findItemsForQuote: sqFindItemsForQuoteMock,
     update: sqUpdateMock,
+    rename: sqRenameMock,
     replaceItems: sqReplaceItemsMock,
   }));
   mock.module('../../repositories/supplierQuoteVersionsRepo.ts', () => ({
@@ -150,6 +152,7 @@ const allMocks = [
   sqFindFullForSnapshotMock,
   sqFindItemsForQuoteMock,
   sqUpdateMock,
+  sqRenameMock,
   sqReplaceItemsMock,
   sqvInsertMock,
   sqvBuildSnapshotMock,

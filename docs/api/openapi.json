@@ -763,8 +763,26 @@
           "auth"
         ],
         "responses": {
-          "204": {
-            "description": "Default Response"
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "endSessionUrl": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "endSessionUrl"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Default Response",
@@ -12491,6 +12509,9 @@
                             "role"
                           ]
                         }
+                      },
+                      "endSessionEnabled": {
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -12499,7 +12520,8 @@
                       "slug",
                       "name",
                       "enabled",
-                      "roleMappings"
+                      "roleMappings",
+                      "endSessionEnabled"
                     ]
                   }
                 }
@@ -12751,6 +12773,9 @@
                         "role"
                       ]
                     }
+                  },
+                  "endSessionEnabled": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -12849,6 +12874,9 @@
                           "role"
                         ]
                       }
+                    },
+                    "endSessionEnabled": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -12857,7 +12885,8 @@
                     "slug",
                     "name",
                     "enabled",
-                    "roleMappings"
+                    "roleMappings",
+                    "endSessionEnabled"
                   ]
                 }
               }
@@ -13285,6 +13314,9 @@
                         "role"
                       ]
                     }
+                  },
+                  "endSessionEnabled": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -13393,6 +13425,9 @@
                           "role"
                         ]
                       }
+                    },
+                    "endSessionEnabled": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -13401,7 +13436,8 @@
                     "slug",
                     "name",
                     "enabled",
-                    "roleMappings"
+                    "roleMappings",
+                    "endSessionEnabled"
                   ]
                 }
               }
@@ -13786,6 +13822,9 @@
                     },
                     "autoProvisionAll": {
                       "type": "boolean"
+                    },
+                    "provisionOnLogin": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -13799,7 +13838,8 @@
                     "groupFilter",
                     "roleMappings",
                     "tlsCaCertificate",
-                    "autoProvisionAll"
+                    "autoProvisionAll",
+                    "provisionOnLogin"
                   ]
                 }
               }
@@ -14017,6 +14057,9 @@
                   },
                   "autoProvisionAll": {
                     "type": "boolean"
+                  },
+                  "provisionOnLogin": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -14078,6 +14121,9 @@
                     },
                     "autoProvisionAll": {
                       "type": "boolean"
+                    },
+                    "provisionOnLogin": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -14091,7 +14137,8 @@
                     "groupFilter",
                     "roleMappings",
                     "tlsCaCertificate",
-                    "autoProvisionAll"
+                    "autoProvisionAll",
+                    "provisionOnLogin"
                   ]
                 }
               }
@@ -14310,6 +14357,16 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "roleResolution": {
+                      "type": "string",
+                      "enum": [
+                        "matched",
+                        "preserved",
+                        "default",
+                        "rejected",
+                        "none"
+                      ]
                     }
                   },
                   "required": [
@@ -14318,7 +14375,8 @@
                     "username",
                     "message",
                     "groups",
-                    "roleIds"
+                    "roleIds",
+                    "roleResolution"
                   ]
                 }
               }
