@@ -54,7 +54,20 @@ const loginResponseSchema = {
   required: ['token', 'user'],
 } as const;
 
-const buildFrontendErrorUrl = (message: string): string => buildFrontendUrl('sso_error', message);
+// The `sso_error` query param carries a stable code (e.g. `invalid_response`, `provider_disabled`)
+// — never the raw `err.message`. The frontend maps the code to a translated message; raw library
+// wording would leak implementation details and bypass i18n. See issue #604.
+const handleSsoCallbackError = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  err: unknown,
+  context: { protocol: 'oidc' | 'saml'; slug: string },
+) => {
+  const message = err instanceof Error ? err.message : 'SSO login failed';
+  const code = err instanceof ssoService.SsoLoginError ? err.code : 'generic';
+  request.log.warn({ message, code, ...context }, 'SSO callback failed');
+  return reply.redirect(buildFrontendUrl('sso_error', code), 302);
+};
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addContentTypeParser(
@@ -110,9 +123,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const redirectUrl = await ssoService.completeOidcLogin(slug, currentUrl);
         return reply.redirect(redirectUrl, 302);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'SSO login failed';
-        request.log.warn({ message, slug }, 'OIDC callback failed');
-        return reply.redirect(buildFrontendErrorUrl(message), 302);
+        return handleSsoCallbackError(request, reply, err, { protocol: 'oidc', slug });
       }
     },
   );
@@ -154,9 +165,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
         return reply.redirect(redirectUrl, 302);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'SSO login failed';
-        request.log.warn({ message, slug }, 'SAML callback failed');
-        return reply.redirect(buildFrontendErrorUrl(message), 302);
+        return handleSsoCallbackError(request, reply, err, { protocol: 'saml', slug });
       }
     },
   );

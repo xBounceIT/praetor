@@ -11,6 +11,24 @@ import { generatePrefixedId } from '../utils/order-ids.ts';
 
 export const DEFAULT_ROLE_ID = 'user';
 
+// Discriminant for failure modes from `resolveExternalIdentity`. Lets callers map domain-level
+// failures (missing claims, conflict, disabled) to transport-level codes (HTTP redirect / status)
+// without depending on the human-readable English message text.
+export type ExternalAuthErrorCode =
+  | 'missing_username'
+  | 'missing_subject'
+  | 'user_disabled'
+  | 'identity_conflict';
+
+export class ExternalAuthError extends Error {
+  readonly code: ExternalAuthErrorCode;
+  constructor(message: string, code: ExternalAuthErrorCode) {
+    super(message);
+    this.name = 'ExternalAuthError';
+    this.code = code;
+  }
+}
+
 export type ExternalRoleMapping = {
   externalGroup: string;
   role: string;
@@ -42,7 +60,10 @@ const assertUserAllowsExternalProvider = (
     user.authMethod !== input.protocol ||
     user.authProviderId !== input.providerId
   ) {
-    throw new Error('External identity is not allowed for this Praetor user');
+    throw new ExternalAuthError(
+      'External identity is not allowed for this Praetor user',
+      'identity_conflict',
+    );
   }
 };
 
@@ -161,10 +182,10 @@ export const resolveExternalIdentity = async (
   const username = input.username.trim();
   const normalizedUsername = normalizeExternalUsername(username);
   if (!normalizedUsername) {
-    throw new Error('External identity did not include a username');
+    throw new ExternalAuthError('External identity did not include a username', 'missing_username');
   }
   if (!input.subject.trim()) {
-    throw new Error('External identity did not include a subject');
+    throw new ExternalAuthError('External identity did not include a subject', 'missing_subject');
   }
 
   const mappedRoleIds = await filterExistingRoleIds(
@@ -190,7 +211,9 @@ export const resolveExternalIdentity = async (
 
       if (existingIdentity) {
         user = await usersRepo.findLoginUserById(existingIdentity.userId, tx);
-        if (!user) throw new Error('Bound Praetor user no longer exists');
+        if (!user) {
+          throw new ExternalAuthError('Bound Praetor user no longer exists', 'identity_conflict');
+        }
         assertUserAllowsExternalProvider(user, input);
       } else {
         user = await usersRepo.findLoginUserByNormalizedUsername(normalizedUsername, tx);
@@ -259,13 +282,16 @@ export const resolveExternalIdentity = async (
           tx,
         );
         if (!persistedIdentity || persistedIdentity.userId !== user.id) {
-          throw new Error('External identity is already bound to another user');
+          throw new ExternalAuthError(
+            'External identity is already bound to another user',
+            'identity_conflict',
+          );
         }
         wasBound = true;
       }
 
       if (user.isDisabled) {
-        throw new Error('User is disabled');
+        throw new ExternalAuthError('User is disabled', 'user_disabled');
       }
 
       await usersRepo.replaceUserRoles(user.id, mappedRoleIds, tx);
