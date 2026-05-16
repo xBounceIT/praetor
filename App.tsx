@@ -89,6 +89,7 @@ import type {
   View,
   WorkUnit,
 } from './types';
+import { clearAuthScopedState } from './utils/authScopedState';
 import { formatDateOnlyForLocale, getLocalDateString } from './utils/date';
 import { getTechnicalDocsViewFromPathname } from './utils/docsRoutes';
 import { getErrorMessage } from './utils/errors';
@@ -876,40 +877,47 @@ const AppContent: React.FC = () => {
   notificationsRef.current = notifications;
 
   const clearAuthScopedAppState = useCallback(() => {
+    // Bump cancellation tokens before any setter call so in-flight async
+    // commits (module loads, entries pagination) gate out before their
+    // continuations can fire — the setters are queued, but these ref
+    // writes take effect synchronously.
     moduleLoadTokenRef.current++;
-    resetModuleLoader();
-    setHasLoadedGeneralSettings(false);
-    setGeneralSettings(INITIAL_GENERAL_SETTINGS);
-    setHasLoadedLdapConfig(false);
-    setLdapConfig(INITIAL_LDAP_CONFIG);
-    setHasLoadedEmailConfig(false);
-    setEmailConfig(INITIAL_EMAIL_CONFIG);
-    setHasLoadedSsoProviders(false);
-    setSsoProviders([]);
-    setHasLoadedRoles(false);
-    setRoles([]);
-    setUsers([]);
-    setClients([]);
-    setProjects([]);
-    setProjectTasks([]);
-    setProducts([]);
-    setQuotes([]);
-    setClientOffers([]);
-    setClientsOrders([]);
-    setInvoices([]);
-    setSuppliers([]);
-    setSupplierQuotes([]);
-    setSupplierOrders([]);
-    setSupplierInvoices([]);
-    setEntries([]);
     entriesStreamTokenRef.current++;
-    setEntriesLoaded(false);
-    setWorkUnits([]);
-    setViewingUserAssignmentState({
-      userId: '',
-      assignments: null,
-      catalogs: null,
-      isLoading: false,
+    resetModuleLoader();
+    clearAuthScopedState({
+      hasLoadedGeneralSettings: () => setHasLoadedGeneralSettings(false),
+      generalSettings: () => setGeneralSettings(INITIAL_GENERAL_SETTINGS),
+      hasLoadedLdapConfig: () => setHasLoadedLdapConfig(false),
+      ldapConfig: () => setLdapConfig(INITIAL_LDAP_CONFIG),
+      hasLoadedEmailConfig: () => setHasLoadedEmailConfig(false),
+      emailConfig: () => setEmailConfig(INITIAL_EMAIL_CONFIG),
+      hasLoadedSsoProviders: () => setHasLoadedSsoProviders(false),
+      ssoProviders: () => setSsoProviders([]),
+      hasLoadedRoles: () => setHasLoadedRoles(false),
+      roles: () => setRoles([]),
+      users: () => setUsers([]),
+      clients: () => setClients([]),
+      projects: () => setProjects([]),
+      projectTasks: () => setProjectTasks([]),
+      products: () => setProducts([]),
+      quotes: () => setQuotes([]),
+      clientOffers: () => setClientOffers([]),
+      clientsOrders: () => setClientsOrders([]),
+      invoices: () => setInvoices([]),
+      suppliers: () => setSuppliers([]),
+      supplierQuotes: () => setSupplierQuotes([]),
+      supplierOrders: () => setSupplierOrders([]),
+      supplierInvoices: () => setSupplierInvoices([]),
+      entries: () => setEntries([]),
+      entriesLoaded: () => setEntriesLoaded(false),
+      workUnits: () => setWorkUnits([]),
+      viewingUserAssignmentState: () =>
+        setViewingUserAssignmentState({
+          userId: '',
+          assignments: null,
+          catalogs: null,
+          isLoading: false,
+        }),
     });
   }, [resetModuleLoader]);
 
