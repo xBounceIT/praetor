@@ -273,6 +273,17 @@ describe('listScopedForManager', () => {
     expect(exec.calls[0].sql).toContain('NOT EXISTS');
     expect(exec.calls[0].params).toContain('top_manager');
   });
+
+  test('still includes top managers reachable via the viewer’s managed work units', async () => {
+    exec.enqueue({ rows: [] });
+    await usersRepo.listScopedForManager(
+      'viewer-1',
+      { canViewManagedUsers: true, canViewInternal: false, canViewExternal: false },
+      testDb,
+    );
+    const sql = exec.calls[0].sql.replace(/\s+/g, ' ');
+    expect(sql).toMatch(/NOT EXISTS[\s\S]+OR wum\.user_id =/);
+  });
 });
 
 describe('findById', () => {

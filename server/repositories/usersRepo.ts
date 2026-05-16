@@ -435,9 +435,12 @@ export const listScopedForManager = async (
        LEFT JOIN user_work_units uw ON u.id = uw.user_id
        LEFT JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
        WHERE (${whereClause})
-         AND NOT EXISTS (
-           SELECT 1 FROM user_roles ur_tm
-           WHERE ur_tm.user_id = u.id AND ur_tm.role_id = ${TOP_MANAGER_ROLE_ID}
+         AND (
+           NOT EXISTS (
+             SELECT 1 FROM user_roles ur_tm
+             WHERE ur_tm.user_id = u.id AND ur_tm.role_id = ${TOP_MANAGER_ROLE_ID}
+           )
+           OR wum.user_id = ${viewerId}
          )
        ORDER BY u.name`,
   );
