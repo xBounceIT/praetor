@@ -1,4 +1,4 @@
-import { withDbTransaction } from '../db/drizzle.ts';
+import { type DbExecutor, withDbTransaction } from '../db/drizzle.ts';
 import type { SsoProtocol } from '../db/schema/sso.ts';
 import * as externalIdentitiesRepo from '../repositories/externalIdentitiesRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
@@ -111,13 +111,19 @@ export const filterExistingRoleIds = async (roleIds: string[]): Promise<string[]
   return filtered.length > 0 ? filtered : [DEFAULT_ROLE_ID];
 };
 
-const writeExternalRoleIds = async (userId: string, roleIds: string[]): Promise<void> => {
-  await withDbTransaction(async (tx) => {
-    await usersRepo.replaceUserRoles(userId, roleIds, tx);
-    await usersRepo.setPrimaryRole(userId, roleIds[0], tx);
-    await userAssignmentsRepo.syncTopManagerAssignmentsForUser(userId, tx);
-  });
+const writeExternalRoleIdsTx = async (
+  userId: string,
+  roleIds: string[],
+  tx: DbExecutor,
+  primaryRoleId: string = roleIds[0],
+): Promise<void> => {
+  await usersRepo.replaceUserRoles(userId, roleIds, tx);
+  await usersRepo.setPrimaryRole(userId, primaryRoleId, tx);
+  await userAssignmentsRepo.syncTopManagerAssignmentsForUser(userId, tx);
 };
+
+const writeExternalRoleIds = (userId: string, roleIds: string[]): Promise<void> =>
+  withDbTransaction((tx) => writeExternalRoleIdsTx(userId, roleIds, tx));
 
 const applyExternalRoleIdsForUser = async (
   userId: string,
@@ -167,10 +173,12 @@ export const resolveExternalIdentity = async (
     throw new Error('External identity did not include a subject');
   }
 
-  const mappedRoleIds = await filterExistingRoleIds(
-    mapExternalGroupsToRoleIds(input.groups, input.roleMappings),
+  // Match-only role IDs: empty when no SSO group mapped to an existing Praetor role.
+  // Preserve admin-assigned roles for existing users in that case (#596); new users
+  // still fall back to DEFAULT_ROLE_ID at provisioning so they get a baseline assignment.
+  const matchedRoleIds = await filterToExistingRoleIds(
+    mapExternalGroupsToMatchedRoleIds(input.groups, input.roleMappings),
   );
-  const defaultPrimaryRole = mappedRoleIds[0];
 
   const resolveInTransaction = () =>
     withDbTransaction(async (tx) => {
@@ -198,13 +206,14 @@ export const resolveExternalIdentity = async (
           const name = input.name?.trim() || username;
           const avatarInitials = computeAvatarInitials(name);
           const id = generatePrefixedId('u');
+          const initialRole = matchedRoleIds[0] ?? DEFAULT_ROLE_ID;
           await usersRepo.insertUser(
             {
               id,
               name,
               username,
               passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
-              role: defaultPrimaryRole,
+              role: initialRole,
               avatarInitials,
               costPerHour: 0,
               isDisabled: false,
@@ -223,7 +232,7 @@ export const resolveExternalIdentity = async (
             id,
             name,
             username,
-            role: defaultPrimaryRole,
+            role: initialRole,
             avatarInitials,
             isDisabled: false,
             sessionVersion: 1,
@@ -268,22 +277,26 @@ export const resolveExternalIdentity = async (
         throw new Error('User is disabled');
       }
 
-      // Preserve the user's existing primary role when the current mapping still
-      // grants it, so admin-assigned or user-chosen primaries survive SSO refresh.
-      const primaryRole =
-        !wasCreated && mappedRoleIds.includes(user.role) ? user.role : defaultPrimaryRole;
-
-      await usersRepo.replaceUserRoles(user.id, mappedRoleIds, tx);
-      if (primaryRole !== user.role) {
-        await usersRepo.setPrimaryRole(user.id, primaryRole, tx);
+      // Write roles when SSO mapped to one, or when provisioning a brand-new user (whose
+      // user_roles row would otherwise be missing). Skip writes for an existing user with
+      // no match so admin-assigned roles are preserved (#596).
+      let effectivePrimaryRole = user.role;
+      const rolesToWrite =
+        matchedRoleIds.length > 0 ? matchedRoleIds : wasCreated ? [DEFAULT_ROLE_ID] : null;
+      if (rolesToWrite) {
+        // Keep the existing primary when the current mapping still grants it, so
+        // admin-assigned or user-chosen primaries survive SSO refresh (#603).
+        const primaryRoleId =
+          !wasCreated && rolesToWrite.includes(user.role) ? user.role : rolesToWrite[0];
+        await writeExternalRoleIdsTx(user.id, rolesToWrite, tx, primaryRoleId);
+        effectivePrimaryRole = primaryRoleId;
       }
-      await userAssignmentsRepo.syncTopManagerAssignmentsForUser(user.id, tx);
 
       return {
         id: user.id,
         name: user.name,
         username: user.username,
-        role: primaryRole,
+        role: effectivePrimaryRole,
         avatarInitials: user.avatarInitials,
         isDisabled: user.isDisabled,
         sessionVersion: user.sessionVersion,

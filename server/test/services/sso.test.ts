@@ -11,6 +11,8 @@ const dnsLookupMock = mock();
 const findBySlugMock = mock();
 const findByIdMock = mock();
 const statesConsumeMock = mock();
+const statesGetForProviderMock = mock();
+const statesInsertMock = mock();
 
 let sso: typeof import('../../services/sso.ts');
 
@@ -28,6 +30,8 @@ beforeAll(async () => {
   mock.module('../../repositories/ssoStatesRepo.ts', () => ({
     ...ssoStatesRepoSnap,
     consume: statesConsumeMock,
+    getForProvider: statesGetForProviderMock,
+    insert: statesInsertMock,
   }));
 
   sso = await import('../../services/sso.ts');
@@ -40,7 +44,15 @@ afterAll(() => {
 });
 
 beforeEach(() => {
-  for (const m of [dnsLookupMock, findBySlugMock, findByIdMock, statesConsumeMock]) m.mockReset();
+  for (const m of [
+    dnsLookupMock,
+    findBySlugMock,
+    findByIdMock,
+    statesConsumeMock,
+    statesGetForProviderMock,
+    statesInsertMock,
+  ])
+    m.mockReset();
 });
 
 describe('isPrivateIp', () => {
@@ -376,5 +388,60 @@ describe('completeOidcLogin state-before-provider ordering', () => {
       'Invalid or expired SSO state',
     );
     expect(statesConsumeMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('DbSamlCacheProvider provider scoping', () => {
+  const fakeRow = {
+    state: 'in-response-to-1',
+    providerId: 'sso-A',
+    protocol: 'saml' as const,
+    codeVerifier: '',
+    relayState: 'relay-A',
+    expiresAt: new Date(Date.now() + 60_000),
+  };
+
+  beforeEach(() => {
+    statesGetForProviderMock.mockImplementation(async (state: string, providerId: string) =>
+      state === fakeRow.state && providerId === fakeRow.providerId ? fakeRow : null,
+    );
+  });
+
+  test("returns the value when queried by the same provider's cache", async () => {
+    const cache = new sso.DbSamlCacheProvider('sso-A');
+    expect(await cache.getAsync('in-response-to-1')).toBe('relay-A');
+    expect(statesGetForProviderMock).toHaveBeenCalledWith('in-response-to-1', 'sso-A');
+  });
+
+  test("returns null when a different provider's cache instance queries the same key", async () => {
+    const cache = new sso.DbSamlCacheProvider('sso-B');
+    expect(await cache.getAsync('in-response-to-1')).toBeNull();
+    expect(statesGetForProviderMock).toHaveBeenCalledWith('in-response-to-1', 'sso-B');
+  });
+
+  test('saveAsync records the cache provider providerId', async () => {
+    statesInsertMock.mockResolvedValue(undefined);
+    const cache = new sso.DbSamlCacheProvider('sso-A');
+    await cache.saveAsync('k', 'v');
+    const inserted = statesInsertMock.mock.calls[0][0];
+    expect(inserted.state).toBe('k');
+    expect(inserted.providerId).toBe('sso-A');
+    expect(inserted.protocol).toBe('saml');
+    expect(inserted.relayState).toBe('v');
+  });
+});
+
+describe('updateProvider config validation', () => {
+  test('rejects enabling a SAML provider with empty usernameAttribute', async () => {
+    findByIdMock.mockResolvedValue({
+      ...SAML_PROVIDER,
+      metadataUrl: 'https://idp.example.com/metadata',
+    });
+    await expect(
+      sso.updateProvider('sso-1', { enabled: true, usernameAttribute: '' }),
+    ).rejects.toThrow(sso.SsoProviderValidationError);
+    await expect(
+      sso.updateProvider('sso-1', { enabled: true, usernameAttribute: '' }),
+    ).rejects.toThrow(/usernameAttribute/);
   });
 });

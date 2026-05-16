@@ -88,6 +88,9 @@ const assertEnabledProviderConfig = (provider: ssoProvidersRepo.SsoProvider): vo
       'SAML requires metadata URL/XML or manual entryPoint and idpCert',
     );
   }
+  if (!hasConfigValue(provider.usernameAttribute)) {
+    throw new SsoProviderValidationError('usernameAttribute is required');
+  }
 };
 
 const applyDefinedProviderPatch = (
@@ -220,7 +223,7 @@ const prepareProviderValues = (
   return patch;
 };
 
-class DbSamlCacheProvider implements CacheProvider {
+export class DbSamlCacheProvider implements CacheProvider {
   constructor(private readonly providerId: string) {}
 
   async saveAsync(key: string, value: string): Promise<CacheItem | null> {
@@ -236,7 +239,7 @@ class DbSamlCacheProvider implements CacheProvider {
   }
 
   async getAsync(key: string): Promise<string | null> {
-    const state = await ssoStatesRepo.get(key);
+    const state = await ssoStatesRepo.getForProvider(key, this.providerId);
     if (!state || state.protocol !== 'saml' || state.expiresAt <= new Date()) return null;
     return state.relayState;
   }
