@@ -33,7 +33,10 @@ describe('getOrCreateForUser', () => {
     );
     expect(result).toEqual({ fullName: 'Bob', email: 'b@x', language: 'auto' });
     expect(exec.calls).toHaveLength(2);
-    expect(exec.calls[1].sql.toLowerCase()).toContain('insert into "settings"');
+    const insertSql = exec.calls[1].sql.toLowerCase();
+    expect(insertSql).toContain('insert into "settings"');
+    expect(insertSql).toContain('on conflict');
+    expect(insertSql).toContain('do nothing');
     expect(exec.calls[1].params).toContain('user-2');
     expect(exec.calls[1].params).toContain('Bob');
     expect(exec.calls[1].params).toContain('b@x');
@@ -47,6 +50,33 @@ describe('getOrCreateForUser', () => {
       testDb,
     );
     expect(result.language).toBe(settingsRepo.DEFAULT_LANGUAGE);
+  });
+
+  test('falls back to the winning row when a concurrent insert wins the race', async () => {
+    exec.enqueue({ rows: [] }); // initial SELECT: no row yet
+    exec.enqueue({ rows: [] }); // INSERT ... ON CONFLICT DO NOTHING returns no row
+    exec.enqueue({ rows: [['Winner', 'w@x', 'en']] }); // re-SELECT returns the winner
+
+    const result = await settingsRepo.getOrCreateForUser(
+      'user-9',
+      { fullName: 'Loser', email: 'l@x' },
+      testDb,
+    );
+
+    expect(result).toEqual({ fullName: 'Winner', email: 'w@x', language: 'en' });
+    expect(exec.calls).toHaveLength(3);
+    expect(exec.calls[1].sql.toLowerCase()).toContain('on conflict');
+    expect(exec.calls[2].sql.toLowerCase()).toContain('select');
+  });
+
+  test('throws if the re-SELECT after a lost race returns no row', async () => {
+    exec.enqueue({ rows: [] }); // initial SELECT: no row yet
+    exec.enqueue({ rows: [] }); // INSERT no-op via ON CONFLICT
+    exec.enqueue({ rows: [] }); // re-SELECT also returns nothing
+
+    await expect(
+      settingsRepo.getOrCreateForUser('user-10', { fullName: null, email: null }, testDb),
+    ).rejects.toThrow(/row missing after insert/);
   });
 });
 
