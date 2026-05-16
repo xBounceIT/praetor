@@ -23,6 +23,8 @@ When editing an already saved LDAP configuration, the bind password remains mask
 
 Before enabling a SAML provider, configure either a valid metadata source (URL or XML) or manual settings with **Entry Point** and **IdP Certificate**. Praetor rejects enabled SAML providers that are missing this minimum configuration. Praetor also requires the **IdP Issuer** field unless the IdP entity ID can be extracted from an inline **Metadata XML** — otherwise the `<Issuer>` element of incoming SAML responses cannot be verified.
 
+When editing an existing provider, sensitive fields (**Client Secret**, **Metadata XML**, **IdP Certificate**, **Signing Private Key**) are shown as a locked **Secret stored — value hidden** preview rather than being prefilled with their value. Use the **Replace** control to type a new value, or **Keep stored value** to back out. Saving without entering Replace mode keeps the stored value untouched.
+
 If saving an OIDC or SAML provider fails, the provider tab shows an error message with the detail returned by the server. Correct the reported fields or retry when the service is available before treating the configuration as updated.
 
 In the user list, open the row actions menu and choose **Change authentication method** to restrict an application user to local credentials, LDAP, OIDC, or SAML. For OIDC and SAML, also select the specific provider: the user will be able to sign in only through that provider. Internal and external employees are not application accounts and cannot be bound to LDAP/SSO.

@@ -5,13 +5,14 @@ import { useTranslation } from 'react-i18next';
 import { siOpenid } from 'simple-icons';
 import { ldapApi } from '../../services/api/ldap';
 import { ssoApi } from '../../services/api/sso';
-import type {
-  LdapConfig,
-  LdapTestResponse,
-  Role,
-  SsoProtocol,
-  SsoProvider,
-  SsoRoleMapping,
+import {
+  type LdapConfig,
+  type LdapTestResponse,
+  type Role,
+  SSO_MASKED_SECRET,
+  type SsoProtocol,
+  type SsoProvider,
+  type SsoRoleMapping,
 } from '../../types';
 import SelectControl from '../shared/SelectControl';
 import Toggle from '../shared/Toggle';
@@ -21,6 +22,25 @@ import { Switch } from '../ui/switch';
 
 const PEM_BEGIN_MARKER = '-----BEGIN CERTIFICATE-----';
 const PEM_END_MARKER = '-----END CERTIFICATE-----';
+
+// Fields the backend masks with `SSO_MASKED_SECRET` when returning a provider. The admin form
+// must never let an admin type into a `'********'`-prefilled input — a single accidental
+// keystroke would otherwise overwrite the stored secret with garbage (issue #601).
+const MASKED_PROVIDER_FIELDS = ['clientSecret', 'privateKey', 'metadataXml', 'idpCert'] as const;
+type MaskedProviderField = (typeof MASKED_PROVIDER_FIELDS)[number];
+
+const buildEmptyMaskedFieldSet = (): Record<SsoProtocol, Set<MaskedProviderField>> => ({
+  oidc: new Set(),
+  saml: new Set(),
+});
+
+const collectMaskedFields = (provider: Partial<SsoProvider>): Set<MaskedProviderField> => {
+  const stored = new Set<MaskedProviderField>();
+  for (const field of MASKED_PROVIDER_FIELDS) {
+    if (provider[field] === SSO_MASKED_SECRET) stored.add(field);
+  }
+  return stored;
+};
 
 export interface AuthSettingsProps {
   config: LdapConfig;
@@ -117,6 +137,16 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   const [providerSaveErrors, setProviderSaveErrors] = useState<
     Partial<Record<SsoProtocol, string>>
   >({});
+  // Per-protocol set of secret/cert fields the server reported as "stored" (value === mask).
+  // Used both to render the locked "Secret stored" affordance and to substitute the mask back
+  // in on save when the user entered Replace mode but did not actually type a new value.
+  const [storedMaskedFields, setStoredMaskedFields] =
+    useState<Record<SsoProtocol, Set<MaskedProviderField>>>(buildEmptyMaskedFieldSet);
+  // Per-protocol set of stored secret fields the user has opted to overwrite. The field's input
+  // is only editable while it's in this set; otherwise we render a "stored" preview so a stray
+  // keystroke can't corrupt the stored value.
+  const [replaceSecretFields, setReplaceSecretFields] =
+    useState<Record<SsoProtocol, Set<MaskedProviderField>>>(buildEmptyMaskedFieldSet);
   type AcsUrlState =
     | { status: 'loading' }
     | { status: 'ready'; template: string }
@@ -352,6 +382,42 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     }));
   };
 
+  // Loading a different provider (or the "Clear" empty draft) resets which secret fields are
+  // server-stored and exits any in-flight Replace mode. Without this, switching between
+  // providers would carry stale "stored" badges into the wrong form.
+  const loadProviderIntoDraft = (protocol: SsoProtocol, provider: Partial<SsoProvider>) => {
+    clearProviderSaveError(protocol);
+    setProviderDrafts((current) => ({
+      ...current,
+      [protocol]: { ...current[protocol], ...provider, protocol },
+    }));
+    setStoredMaskedFields((current) => ({ ...current, [protocol]: collectMaskedFields(provider) }));
+    setReplaceSecretFields((current) => ({ ...current, [protocol]: new Set() }));
+  };
+
+  const beginReplaceSecret = (protocol: SsoProtocol, field: MaskedProviderField) => {
+    setReplaceSecretFields((current) => {
+      const next = new Set(current[protocol]);
+      next.add(field);
+      return { ...current, [protocol]: next };
+    });
+    // Clear the input so the user types into an empty box. The mask is restored from
+    // `storedMaskedFields` on save if they leave the field blank.
+    updateProviderDraft(protocol, { [field]: '' } as Partial<SsoProvider>);
+  };
+
+  const cancelReplaceSecret = (protocol: SsoProtocol, field: MaskedProviderField) => {
+    setReplaceSecretFields((current) => {
+      const next = new Set(current[protocol]);
+      next.delete(field);
+      return { ...current, [protocol]: next };
+    });
+    updateProviderDraft(protocol, { [field]: SSO_MASKED_SECRET } as Partial<SsoProvider>);
+  };
+
+  const isSecretFieldStoredAndLocked = (protocol: SsoProtocol, field: MaskedProviderField) =>
+    storedMaskedFields[protocol].has(field) && !replaceSecretFields[protocol].has(field);
+
   const updateProviderMapping = (
     protocol: SsoProtocol,
     index: number,
@@ -429,16 +495,31 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     event.preventDefault();
     clearProviderSaveError(protocol);
     const draft = providerDrafts[protocol];
-    if (!validateProvider(draft)) return;
+    // If a stored secret/cert was put into Replace mode but the admin saved without typing
+    // anything, substitute the mask back so the server keeps the existing value (rather than
+    // clearing the secret). The server treats `SSO_MASKED_SECRET` as "preserve current value".
+    // Validation runs against the substituted payload so a stored-cert SAML provider doesn't
+    // trip the "manual IdP fields required" check just because the user clicked Replace.
+    const stored = storedMaskedFields[protocol];
+    const replacing = replaceSecretFields[protocol];
+    const payload: Partial<SsoProvider> = {
+      ...draft,
+      protocol,
+      slug: draft.slug?.trim().toLowerCase(),
+      name: draft.name?.trim(),
+    };
+    for (const field of MASKED_PROVIDER_FIELDS) {
+      if (stored.has(field) && replacing.has(field) && !payload[field]) {
+        (payload as Record<string, unknown>)[field] = SSO_MASKED_SECRET;
+      }
+    }
+    if (!validateProvider(payload)) return;
     setSavingProvider(protocol);
     try {
-      const saved = await onSaveSsoProvider({
-        ...draft,
-        protocol,
-        slug: draft.slug?.trim().toLowerCase(),
-        name: draft.name?.trim(),
-      });
+      const saved = await onSaveSsoProvider(payload);
       setProviderDrafts((current) => ({ ...current, [protocol]: saved }));
+      setStoredMaskedFields((current) => ({ ...current, [protocol]: collectMaskedFields(saved) }));
+      setReplaceSecretFields((current) => ({ ...current, [protocol]: new Set() }));
       showSaved();
     } catch (err) {
       setProviderSaveErrors((current) => ({
@@ -510,7 +591,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => updateProviderDraft(protocol, provider)}
+                  onClick={() => loadProviderIntoDraft(protocol, provider)}
                   className="text-muted-foreground hover:text-primary"
                   title={t('admin.sso.editProvider', 'Edit provider')}
                 >
@@ -605,13 +686,30 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 monospace
                 onChange={(clientId) => updateProviderDraft(protocol, { clientId })}
               />
-              <Field
-                label={t('admin.sso.clientSecret', 'Client Secret')}
-                type="password"
-                value={draft.clientSecret || ''}
-                monospace
-                onChange={(clientSecret) => updateProviderDraft(protocol, { clientSecret })}
-              />
+              {isSecretFieldStoredAndLocked(protocol, 'clientSecret') ? (
+                <StoredSecretPreview
+                  label={t('admin.sso.clientSecret', 'Client Secret')}
+                  storedLabel={t('admin.sso.secretStored', 'Secret stored — value hidden')}
+                  replaceLabel={t('admin.sso.replaceSecret', 'Replace')}
+                  onReplace={() => beginReplaceSecret(protocol, 'clientSecret')}
+                />
+              ) : (
+                <Field
+                  label={t('admin.sso.clientSecret', 'Client Secret')}
+                  type="password"
+                  value={draft.clientSecret || ''}
+                  monospace
+                  onChange={(clientSecret) => updateProviderDraft(protocol, { clientSecret })}
+                  trailing={
+                    storedMaskedFields[protocol].has('clientSecret') ? (
+                      <KeepStoredSecretButton
+                        label={t('admin.sso.keepStoredSecret', 'Keep stored value')}
+                        onClick={() => cancelReplaceSecret(protocol, 'clientSecret')}
+                      />
+                    ) : null
+                  }
+                />
+              )}
               <Field
                 label={t('admin.sso.scopes', 'Scopes')}
                 value={draft.scopes || 'openid profile email'}
@@ -646,21 +744,72 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 monospace
                 onChange={(spIssuer) => updateProviderDraft(protocol, { spIssuer })}
               />
-              <TextArea
-                label={t('admin.sso.metadataXml', 'Metadata XML')}
-                value={draft.metadataXml || ''}
-                onChange={(metadataXml) => updateProviderDraft(protocol, { metadataXml })}
-              />
-              <TextArea
-                label={t('admin.sso.idpCert', 'IdP Certificate')}
-                value={draft.idpCert || ''}
-                onChange={(idpCert) => updateProviderDraft(protocol, { idpCert })}
-              />
-              <TextArea
-                label={t('admin.sso.privateKey', 'Signing Private Key')}
-                value={draft.privateKey || ''}
-                onChange={(privateKey) => updateProviderDraft(protocol, { privateKey })}
-              />
+              {isSecretFieldStoredAndLocked(protocol, 'metadataXml') ? (
+                <StoredSecretPreview
+                  label={t('admin.sso.metadataXml', 'Metadata XML')}
+                  storedLabel={t('admin.sso.secretStored', 'Secret stored — value hidden')}
+                  replaceLabel={t('admin.sso.replaceSecret', 'Replace')}
+                  onReplace={() => beginReplaceSecret(protocol, 'metadataXml')}
+                />
+              ) : (
+                <TextArea
+                  label={t('admin.sso.metadataXml', 'Metadata XML')}
+                  value={draft.metadataXml || ''}
+                  onChange={(metadataXml) => updateProviderDraft(protocol, { metadataXml })}
+                  trailing={
+                    storedMaskedFields[protocol].has('metadataXml') ? (
+                      <KeepStoredSecretButton
+                        label={t('admin.sso.keepStoredSecret', 'Keep stored value')}
+                        onClick={() => cancelReplaceSecret(protocol, 'metadataXml')}
+                      />
+                    ) : null
+                  }
+                />
+              )}
+              {isSecretFieldStoredAndLocked(protocol, 'idpCert') ? (
+                <StoredSecretPreview
+                  label={t('admin.sso.idpCert', 'IdP Certificate')}
+                  storedLabel={t('admin.sso.secretStored', 'Secret stored — value hidden')}
+                  replaceLabel={t('admin.sso.replaceSecret', 'Replace')}
+                  onReplace={() => beginReplaceSecret(protocol, 'idpCert')}
+                />
+              ) : (
+                <TextArea
+                  label={t('admin.sso.idpCert', 'IdP Certificate')}
+                  value={draft.idpCert || ''}
+                  onChange={(idpCert) => updateProviderDraft(protocol, { idpCert })}
+                  trailing={
+                    storedMaskedFields[protocol].has('idpCert') ? (
+                      <KeepStoredSecretButton
+                        label={t('admin.sso.keepStoredSecret', 'Keep stored value')}
+                        onClick={() => cancelReplaceSecret(protocol, 'idpCert')}
+                      />
+                    ) : null
+                  }
+                />
+              )}
+              {isSecretFieldStoredAndLocked(protocol, 'privateKey') ? (
+                <StoredSecretPreview
+                  label={t('admin.sso.privateKey', 'Signing Private Key')}
+                  storedLabel={t('admin.sso.secretStored', 'Secret stored — value hidden')}
+                  replaceLabel={t('admin.sso.replaceSecret', 'Replace')}
+                  onReplace={() => beginReplaceSecret(protocol, 'privateKey')}
+                />
+              ) : (
+                <TextArea
+                  label={t('admin.sso.privateKey', 'Signing Private Key')}
+                  value={draft.privateKey || ''}
+                  onChange={(privateKey) => updateProviderDraft(protocol, { privateKey })}
+                  trailing={
+                    storedMaskedFields[protocol].has('privateKey') ? (
+                      <KeepStoredSecretButton
+                        label={t('admin.sso.keepStoredSecret', 'Keep stored value')}
+                        onClick={() => cancelReplaceSecret(protocol, 'privateKey')}
+                      />
+                    ) : null
+                  }
+                />
+              )}
               <TextArea
                 label={t('admin.sso.publicCert', 'Signing Public Certificate')}
                 value={draft.publicCert || ''}
@@ -765,7 +914,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => updateProviderDraft(protocol, buildDefaultProvider(protocol))}
+            onClick={() => loadProviderIntoDraft(protocol, buildDefaultProvider(protocol))}
             className="font-bold text-muted-foreground hover:text-foreground"
           >
             {t('admin.sso.clearForm', 'Clear')}
@@ -1185,6 +1334,7 @@ type FieldProps = {
   error?: string;
   type?: string;
   monospace?: boolean;
+  trailing?: React.ReactNode;
 };
 
 const Field: React.FC<FieldProps> = ({
@@ -1194,11 +1344,21 @@ const Field: React.FC<FieldProps> = ({
   error,
   type = 'text',
   monospace,
+  trailing,
 }) => (
   <div>
-    <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-      {label}
-    </label>
+    {trailing ? (
+      <div className="flex items-center justify-between mb-2">
+        <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">
+          {label}
+        </label>
+        {trailing}
+      </div>
+    ) : (
+      <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
+        {label}
+      </label>
+    )}
     <input
       type={type}
       value={value}
@@ -1213,13 +1373,23 @@ type TextAreaProps = {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  trailing?: React.ReactNode;
 };
 
-const TextArea: React.FC<TextAreaProps> = ({ label, value, onChange }) => (
+const TextArea: React.FC<TextAreaProps> = ({ label, value, onChange, trailing }) => (
   <div>
-    <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-      {label}
-    </label>
+    {trailing ? (
+      <div className="flex items-center justify-between mb-2">
+        <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">
+          {label}
+        </label>
+        {trailing}
+      </div>
+    ) : (
+      <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
+        {label}
+      </label>
+    )}
     <textarea
       value={value}
       onChange={(event) => onChange(event.target.value)}
@@ -1227,6 +1397,56 @@ const TextArea: React.FC<TextAreaProps> = ({ label, value, onChange }) => (
       className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-mono"
     />
   </div>
+);
+
+type StoredSecretPreviewProps = {
+  label: string;
+  storedLabel: string;
+  replaceLabel: string;
+  onReplace: () => void;
+};
+
+// Renders in place of a secret input when the backend returned the masked sentinel for the
+// field. We deliberately do NOT render the underlying input — a single keystroke into a
+// `'********'`-prefilled field used to silently corrupt the stored value (issue #601). The
+// admin must click "Replace" first, which swaps to an empty editable input.
+const StoredSecretPreview: React.FC<StoredSecretPreviewProps> = ({
+  label,
+  storedLabel,
+  replaceLabel,
+  onReplace,
+}) => (
+  <div>
+    <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
+      {label}
+    </label>
+    <div className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg flex items-center justify-between gap-3 text-sm">
+      <span className="flex items-center gap-2 text-zinc-500 font-semibold">
+        <i className="fa-solid fa-lock text-zinc-400"></i>
+        {storedLabel}
+      </span>
+      <Button type="button" variant="outline" size="sm" onClick={onReplace} className="font-bold">
+        {replaceLabel}
+      </Button>
+    </div>
+  </div>
+);
+
+type KeepStoredSecretButtonProps = {
+  label: string;
+  onClick: () => void;
+};
+
+const KeepStoredSecretButton: React.FC<KeepStoredSecretButtonProps> = ({ label, onClick }) => (
+  <Button
+    type="button"
+    variant="ghost"
+    size="sm"
+    onClick={onClick}
+    className="h-auto py-0.5 px-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+  >
+    {label}
+  </Button>
 );
 
 type ReadOnlyFieldProps = {

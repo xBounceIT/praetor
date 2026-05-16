@@ -23,6 +23,8 @@ Quando modifichi una configurazione LDAP già salvata, la password di bind resta
 
 Prima di abilitare un provider SAML, configura una sorgente metadata valida (URL o XML) oppure la configurazione manuale con **Entry Point** e **Certificato IdP**. Praetor rifiuta il salvataggio di provider SAML abilitati senza questi dati minimi. È inoltre richiesto il campo **IdP Issuer** a meno che l'entity ID dell'IdP non sia ricavabile da un **Metadata XML** inline — altrimenti l'elemento `<Issuer>` delle risposte SAML in arrivo non può essere verificato.
 
+Quando modifichi un provider esistente, i campi sensibili (**Client Secret**, **Metadata XML**, **Certificato IdP**, **Chiave privata firma**) sono mostrati come anteprima bloccata **Segreto memorizzato — valore nascosto** invece di essere precompilati con il valore. Usa il controllo **Sostituisci** per digitare un nuovo valore, oppure **Mantieni valore salvato** per annullare. Salvare senza entrare in modalità Sostituisci lascia il valore memorizzato intatto.
+
 Se il salvataggio di un provider OIDC o SAML non riesce, la scheda del provider mostra un messaggio di errore con il dettaglio restituito dal server. Correggi i campi indicati o riprova quando il servizio torna disponibile prima di considerare la configurazione aggiornata.
 
 Nella lista utenti puoi usare il menu azioni e scegliere **Cambia metodo di autenticazione** per vincolare un utente applicativo a credenziali locali, LDAP, OIDC o SAML. Per OIDC e SAML seleziona anche il provider specifico: l'utente potrà accedere solo tramite quel provider. Dipendenti interni o esterni non sono account applicativi e non possono essere vincolati a LDAP/SSO.

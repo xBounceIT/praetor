@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
-import type { LdapConfig, Role, SsoProtocol, SsoProvider } from '../../../types';
+import {
+  type LdapConfig,
+  type Role,
+  SSO_MASKED_SECRET,
+  type SsoProtocol,
+  type SsoProvider,
+} from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
 import { render } from '../../helpers/render';
@@ -362,5 +368,140 @@ describe('<AuthSettings />', () => {
       expect(within(form).getByText('admin.sso.errors.idpIssuerRequired')).toBeInTheDocument();
     });
     expect(onSaveSsoProvider).not.toHaveBeenCalled();
+  });
+
+  test('locks stored masked secrets behind a Replace control on edit (issue #601)', async () => {
+    // The backend returns SSO_MASKED_SECRET for clientSecret/privateKey/metadataXml/idpCert
+    // when reading a provider with stored values. Previously the form populated the textarea
+    // directly with `'********'`; a single accidental keystroke then overwrote the stored
+    // secret with garbage like `'********x'`. The form must instead render a locked preview
+    // until the admin explicitly opts into Replace mode.
+    const onSaveSsoProvider = mock(async (provider: Partial<SsoProvider>) =>
+      buildProvider(provider.protocol ?? 'saml', provider),
+    );
+    renderAuthSettings({
+      onSaveSsoProvider,
+      ssoProviders: [
+        buildProvider('saml', {
+          enabled: true,
+          idpIssuer: 'https://idp.example.com/issuer',
+          entryPoint: 'https://idp.example.com/sso',
+          idpCert: SSO_MASKED_SECRET,
+          metadataXml: SSO_MASKED_SECRET,
+          privateKey: SSO_MASKED_SECRET,
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+    fireEvent.click(screen.getByRole('button', { name: 'admin.sso.editProvider' }));
+    const heading = screen.getByText('admin.sso.editProvider', { selector: 'h3' });
+    const form = heading.closest('form') as HTMLFormElement | null;
+    if (!form) throw new Error('SAML provider form not found');
+
+    // The three masked SAML fields must not render their textarea — the locked preview
+    // replaces them so accidental keystrokes can't reach the stored value.
+    for (const labelText of [
+      'admin.sso.idpCert',
+      'admin.sso.metadataXml',
+      'admin.sso.privateKey',
+    ]) {
+      const label = [...form.querySelectorAll('label')].find((el) => el.textContent === labelText);
+      expect(label?.parentElement?.querySelector('textarea')).toBeNull();
+    }
+    // Three "Replace" buttons should be present (one per masked field).
+    expect(within(form).getAllByRole('button', { name: 'admin.sso.replaceSecret' })).toHaveLength(
+      3,
+    );
+
+    // Saving without touching anything must round-trip the mask so the server preserves the
+    // stored values — never strip them, never send a partial edit.
+    fireEvent.submit(form);
+    await waitFor(() => expect(onSaveSsoProvider).toHaveBeenCalledTimes(1));
+    const sentPayload = onSaveSsoProvider.mock.calls[0]?.[0] as Partial<SsoProvider>;
+    expect(sentPayload.idpCert).toBe(SSO_MASKED_SECRET);
+    expect(sentPayload.metadataXml).toBe(SSO_MASKED_SECRET);
+    expect(sentPayload.privateKey).toBe(SSO_MASKED_SECRET);
+  });
+
+  test('Replace control swaps in an editable empty input and sends the new secret (issue #601)', async () => {
+    const onSaveSsoProvider = mock(async (provider: Partial<SsoProvider>) =>
+      buildProvider(provider.protocol ?? 'saml', provider),
+    );
+    renderAuthSettings({
+      onSaveSsoProvider,
+      ssoProviders: [
+        buildProvider('saml', {
+          enabled: true,
+          idpIssuer: 'https://idp.example.com/issuer',
+          entryPoint: 'https://idp.example.com/sso',
+          idpCert: SSO_MASKED_SECRET,
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+    fireEvent.click(screen.getByRole('button', { name: 'admin.sso.editProvider' }));
+    const heading = screen.getByText('admin.sso.editProvider', { selector: 'h3' });
+    const form = heading.closest('form') as HTMLFormElement | null;
+    if (!form) throw new Error('SAML provider form not found');
+
+    // Only idpCert is stored — exactly one Replace button.
+    const replaceButtons = within(form).getAllByRole('button', { name: 'admin.sso.replaceSecret' });
+    expect(replaceButtons).toHaveLength(1);
+    fireEvent.click(replaceButtons[0]);
+
+    // After Replace, the TextArea renders with a trailing "Keep stored value" button, which
+    // wraps the label one level deeper. Walk up until we find the wrapper that owns the
+    // textarea so the selector works in either layout.
+    const idpCertLabel = [...form.querySelectorAll('label')].find(
+      (el) => el.textContent === 'admin.sso.idpCert',
+    );
+    let wrapper: HTMLElement | null | undefined = idpCertLabel?.parentElement;
+    while (wrapper && !wrapper.querySelector('textarea')) wrapper = wrapper.parentElement;
+    const textarea = wrapper?.querySelector('textarea') as HTMLTextAreaElement | null;
+    if (!textarea) throw new Error('idpCert textarea did not appear after Replace');
+    // The input starts empty — no '********' for stray keystrokes to corrupt.
+    expect(textarea.value).toBe('');
+
+    fireEvent.change(textarea, { target: { value: 'MIIBnewCertValue' } });
+    fireEvent.submit(form);
+
+    await waitFor(() => expect(onSaveSsoProvider).toHaveBeenCalledTimes(1));
+    const sentPayload = onSaveSsoProvider.mock.calls[0]?.[0] as Partial<SsoProvider>;
+    expect(sentPayload.idpCert).toBe('MIIBnewCertValue');
+  });
+
+  test('Replace mode left empty falls back to the mask so the server preserves the stored secret (issue #601)', async () => {
+    // Clicking Replace and then saving without typing anything would otherwise send `''`,
+    // which the backend interprets as "clear the stored value". Substitute the mask back so
+    // the server's "preserve" branch wins for an accidental Replace click.
+    const onSaveSsoProvider = mock(async (provider: Partial<SsoProvider>) =>
+      buildProvider(provider.protocol ?? 'saml', provider),
+    );
+    renderAuthSettings({
+      onSaveSsoProvider,
+      ssoProviders: [
+        buildProvider('saml', {
+          enabled: true,
+          idpIssuer: 'https://idp.example.com/issuer',
+          entryPoint: 'https://idp.example.com/sso',
+          idpCert: SSO_MASKED_SECRET,
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+    fireEvent.click(screen.getByRole('button', { name: 'admin.sso.editProvider' }));
+    const heading = screen.getByText('admin.sso.editProvider', { selector: 'h3' });
+    const form = heading.closest('form') as HTMLFormElement | null;
+    if (!form) throw new Error('SAML provider form not found');
+
+    fireEvent.click(within(form).getByRole('button', { name: 'admin.sso.replaceSecret' }));
+    fireEvent.submit(form);
+
+    await waitFor(() => expect(onSaveSsoProvider).toHaveBeenCalledTimes(1));
+    const sentPayload = onSaveSsoProvider.mock.calls[0]?.[0] as Partial<SsoProvider>;
+    expect(sentPayload.idpCert).toBe(SSO_MASKED_SECRET);
   });
 });

@@ -317,6 +317,13 @@ export interface SsoProvider {
 
 export type PublicSsoProvider = Pick<SsoProvider, 'protocol' | 'slug' | 'name'>;
 
+// Sentinel value the backend returns in place of stored secrets/certs. Must stay aligned with
+// `MASKED_SECRET` in `server/utils/crypto.ts` — the server tsconfig's rootDir prevents importing
+// across the boundary. The admin UI treats fields equal to this value as "stored, hidden" and
+// must avoid round-tripping a partially-edited copy: any keystroke into a `'********'`-prefilled
+// input would silently overwrite the stored secret with garbage like `'********x'`. See #601.
+export const SSO_MASKED_SECRET = '********';
+
 // Stable codes carried by `?sso_error=<code>` after a failed SSO callback. The frontend uses this
 // list to allow-list the URL param and look up a translation key.
 // Must stay aligned with `SSO_LOGIN_ERROR_CODES` in `server/services/sso.ts` — the server
