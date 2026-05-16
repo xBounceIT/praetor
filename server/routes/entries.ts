@@ -13,6 +13,7 @@ import {
   deleteTimeEntry,
   generateRecurringEntries,
   listTimeEntries,
+  MAX_NOTES_LENGTH,
   TimeEntryServiceError,
   updateTimeEntry,
 } from '../services/timeEntries.ts';
@@ -77,7 +78,7 @@ const entryCreateBodySchema = {
     projectId: { type: 'string' },
     projectName: { type: 'string' },
     task: { type: 'string' },
-    notes: { type: 'string' },
+    notes: { type: 'string', maxLength: MAX_NOTES_LENGTH },
     duration: { type: 'number' },
     isPlaceholder: { type: 'boolean' },
     userId: { type: 'string' },
@@ -96,7 +97,7 @@ const entryUpdateBodySchema = {
     projectId: { type: 'string' },
     task: { type: 'string' },
     duration: { type: 'number' },
-    notes: { type: ['string', 'null'] },
+    notes: { type: ['string', 'null'], maxLength: MAX_NOTES_LENGTH },
     isPlaceholder: { type: 'boolean' },
     location: { type: 'string' },
     version: { type: 'integer', minimum: 1 },
@@ -237,7 +238,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/',
     {
-      onRequest: [authenticateToken, requireScopedPermission('timesheets.tracker', 'create')],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        authenticateToken,
+        requireScopedPermission('timesheets.tracker', 'create'),
+      ],
       schema: {
         tags: ['entries'],
         summary: 'Create time entry',
@@ -247,7 +252,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         body: entryCreateBodySchema,
         response: {
           201: entrySchema,
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },

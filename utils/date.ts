@@ -9,8 +9,10 @@ export const getLocalDateString = (date: Date = new Date()): string => {
   return `${year}-${month}-${day}`;
 };
 
+const DATE_TIME_SEPARATOR = /[T ]/;
+
 export const normalizeDateOnlyString = (value: string): string => {
-  const separatorIndex = value.indexOf('T');
+  const separatorIndex = value.search(DATE_TIME_SEPARATOR);
   return separatorIndex >= 0 ? value.slice(0, separatorIndex) : value;
 };
 

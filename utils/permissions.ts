@@ -104,8 +104,11 @@ export const CONFIGURATION_PERMISSIONS: Permission[] = PERMISSION_DEFINITIONS.fi
   def.id.startsWith('administration.'),
 ).flatMap((def) => buildPermissions(def.id, def.actions));
 
-export const isTopManagerOnlyPermission = (permission: string) =>
-  permission.startsWith('hr.work_units.') || permission.startsWith('hr.work_units_all.');
+export const isTopManagerOnlyPermission = (permission: string) => {
+  const matchesResource = (resource: string) =>
+    permission === resource || permission.startsWith(`${resource}.`);
+  return matchesResource('hr.work_units') || matchesResource('hr.work_units_all');
+};
 
 export const formatPermissionLabel = (resource: string) => {
   const parts = resource.split('.');

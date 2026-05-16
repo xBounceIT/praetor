@@ -115,9 +115,19 @@ describe('isTopManagerOnlyPermission', () => {
     expect(isTopManagerOnlyPermission('hr.work_units_all.delete')).toBe(true);
   });
 
+  test('matches bare resource ids without an action suffix', () => {
+    expect(isTopManagerOnlyPermission('hr.work_units')).toBe(true);
+    expect(isTopManagerOnlyPermission('hr.work_units_all')).toBe(true);
+  });
+
   test('does not match unrelated hr permissions', () => {
     expect(isTopManagerOnlyPermission('hr.internal.view')).toBe(false);
     expect(isTopManagerOnlyPermission('hr.costs.update')).toBe(false);
+  });
+
+  test('does not match look-alike resource names', () => {
+    expect(isTopManagerOnlyPermission('hr.work_units_foo')).toBe(false);
+    expect(isTopManagerOnlyPermission('hr.work_units_foo.view')).toBe(false);
   });
 
   test('does not match permissions in other modules', () => {

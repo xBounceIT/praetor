@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import api, { ApiError, getAuthToken, type Settings, setAuthToken } from '../services/api';
 import type { User } from '../types';
 import { applyLanguagePreference } from '../utils/language';
-import { isTransientError, RETRY_DELAYS_MS, sleep } from '../utils/retry';
+import { isTransientError, RETRY_DELAYS_MS } from '../utils/retry';
 
 const DEFAULT_SETTINGS: Settings = {
   fullName: '',
@@ -55,7 +55,15 @@ export function useAuth(opts: UseAuthOptions = {}) {
 
   useEffect(() => {
     let cancelled = false;
+    let pendingRetryTimer: ReturnType<typeof setTimeout> | null = null;
     const delays = retryDelaysRef.current;
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => {
+        pendingRetryTimer = setTimeout(() => {
+          pendingRetryTimer = null;
+          resolve();
+        }, ms);
+      });
     const checkAuth = async () => {
       const token = getAuthToken();
       if (!token) {
@@ -96,6 +104,10 @@ export function useAuth(opts: UseAuthOptions = {}) {
     checkAuth();
     return () => {
       cancelled = true;
+      if (pendingRetryTimer !== null) {
+        clearTimeout(pendingRetryTimer);
+        pendingRetryTimer = null;
+      }
     };
   }, [loadUserSettings]);
 

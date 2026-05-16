@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
-import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
 import * as realClientsRepo from '../../repositories/clientsRepo.ts';
 import * as realEntriesRepo from '../../repositories/entriesRepo.ts';
@@ -11,6 +11,7 @@ import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realWorkUnitsRepo from '../../repositories/workUnitsRepo.ts';
 import * as realPermissions from '../../utils/permissions.ts';
+import { STANDARD_ROUTE_RATE_LIMIT } from '../../utils/rate-limit.ts';
 import {
   installAuthMiddlewareMock,
   restoreAuthMiddlewareMock,
@@ -579,6 +580,41 @@ describe('POST /api/entries', () => {
     expect(JSON.parse(res.body).error).toBe('Bad Request');
   });
 
+  test('400 notes longer than 2000 chars does not create entry', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: { ...validBody, notes: 'x'.repeat(2001) },
+    });
+
+    expect(res.statusCode).toBe(400);
+    // AJV's `maxLength` rejects this before the service-level guard runs.
+    expect(JSON.parse(res.body).error).toBe('Bad Request');
+    expect(entriesCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('201 notes exactly 2000 chars is accepted', async () => {
+    findCostPerHourMock.mockResolvedValue(50);
+    findIdByProjectAndNameMock.mockResolvedValue(null);
+    entriesCreateMock.mockImplementation(async (entry: Record<string, unknown>) => ({
+      ...entry,
+      createdAt: 1_700_000_000_000,
+      version: 1,
+    }));
+
+    const notes = 'x'.repeat(2000);
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: { ...validBody, notes },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(entriesCreateMock).toHaveBeenCalledWith(expect.objectContaining({ notes }), TX_SENTINEL);
+  });
+
   test('400 whitespace-only clientId', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -809,6 +845,35 @@ describe('PUT /api/entries/:id', () => {
 
     expect(res.statusCode).toBe(400);
     expect(entriesUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 notes longer than 2000 chars does not update entry', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: versionedPatch({ notes: 'x'.repeat(2001) }),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('Bad Request');
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 notes exactly 2000 chars is accepted', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+    entriesUpdateMock.mockResolvedValue(SAMPLE_ENTRY);
+
+    const notes = 'x'.repeat(2000);
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: versionedPatch({ notes }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(entriesUpdateMock).toHaveBeenCalledWith('te-1', expect.objectContaining({ notes }));
   });
 
   test('200 empty-string location does not pass through to repo (would violate CHECK)', async () => {
@@ -1787,5 +1852,22 @@ describe('DELETE /api/entries (bulk)', () => {
         placeholderOnly: true,
       }),
     );
+  });
+});
+
+describe('rate-limit configuration on entries routes', () => {
+  test('every route opts in to fastify.rateLimit with STANDARD_ROUTE_RATE_LIMIT', async () => {
+    const rateLimitMock = mock((_options: unknown) => async () => {});
+    const app = Fastify({ logger: false });
+    app.decorate('rateLimit', rateLimitMock);
+    await app.register(entriesRoutePlugin, { prefix: '/api/entries' });
+    await app.ready();
+
+    expect(rateLimitMock).toHaveBeenCalledTimes(4);
+    for (const call of rateLimitMock.mock.calls) {
+      expect(call[0]).toBe(STANDARD_ROUTE_RATE_LIMIT);
+    }
+
+    await app.close();
   });
 });

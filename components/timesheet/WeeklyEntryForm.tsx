@@ -147,6 +147,8 @@ const WeeklyEntryForm: React.FC<WeeklyEntryFormProps> = ({
               onChange={(e) => onWeekNoteChange(e.target.value)}
               placeholder={t('weekly.weekNotePlaceholder')}
               className="h-10 rounded-lg"
+              // Kept in sync with server MAX_NOTES_LENGTH (server/services/timeEntries.ts).
+              maxLength={2000}
             />
           </Field>
 
