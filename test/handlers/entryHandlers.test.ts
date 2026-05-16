@@ -14,6 +14,14 @@ const apiMocks = {
   entriesDelete: mock((_id: string): Promise<void> => Promise.resolve()),
 };
 
+const toastErrorMock = mock((_message: string) => {});
+
+mock.module('../../utils/toast', () => ({
+  toastError: (message: string) => toastErrorMock(message),
+  toastSuccess: () => {},
+  toast: { error: () => {}, success: () => {}, info: () => {} },
+}));
+
 mock.module('../../services/api', () => ({
   default: {
     entries: {
@@ -52,12 +60,10 @@ const makeStubSetter = <T>(initial: T[]) => {
 
 const silenceConsole = () => {
   const originalError = console.error;
-  const originalAlert = globalThis.alert;
   console.error = mock(() => {}) as unknown as typeof console.error;
-  globalThis.alert = mock(() => {}) as unknown as typeof globalThis.alert;
+  toastErrorMock.mockClear();
   return () => {
     console.error = originalError;
-    globalThis.alert = originalAlert;
   };
 };
 
@@ -120,7 +126,7 @@ describe('makeEntryHandlers', () => {
     expect(callArg).not.toHaveProperty('hourlyCost');
   });
 
-  test('add swallows errors and alerts user', async () => {
+  test('add swallows errors and surfaces via toast', async () => {
     apiMocks.entriesCreate.mockImplementation(() => Promise.reject(new Error('boom')));
     const entries = makeStubSetter<EntryLike>([{ id: 'e1', createdAt: 1 }]);
     const handlers = makeEntryHandlers({
@@ -133,6 +139,10 @@ describe('makeEntryHandlers', () => {
     try {
       await handlers.add({ task: 'fail' } as never);
       expect(entries.get()).toEqual([{ id: 'e1', createdAt: 1 }]);
+      expect(toastErrorMock).toHaveBeenCalledTimes(1);
+      expect((toastErrorMock.mock.calls[0]?.[0] as string) ?? '').toContain(
+        'Failed to add time entry',
+      );
     } finally {
       restore();
     }

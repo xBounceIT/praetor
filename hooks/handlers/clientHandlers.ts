@@ -7,6 +7,7 @@ import type {
   Project,
   ProjectTask,
 } from '../../types';
+import { toastError } from '../../utils/toast';
 
 /**
  * Client handlers read `projects` AFTER an awaited delete to compute which
@@ -61,7 +62,7 @@ export const makeClientHandlers = (deps: ClientHandlersDeps) => {
       setProjectTasks((prev) => prev.filter((t) => !projectIdsForClient.includes(t.projectId)));
     } catch (err) {
       console.error('Failed to delete client:', err);
-      alert('Failed to delete client');
+      toastError('Failed to delete client');
     }
   };
 

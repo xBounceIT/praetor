@@ -973,7 +973,7 @@ const AppContent: React.FC = () => {
         await switchRole(roleId);
       } catch (err) {
         console.error('Failed to switch role:', err);
-        alert('Failed to switch role: ' + (err as Error).message);
+        toastError(`Failed to switch role: ${getErrorMessage(err)}`);
       }
     },
     [switchRole],
@@ -2267,7 +2267,7 @@ const AppContent: React.FC = () => {
       });
     } catch (err) {
       console.error('Failed to update general settings:', err);
-      alert('Failed to update settings');
+      toastError('Failed to update settings');
     }
   };
 
@@ -2277,7 +2277,7 @@ const AppContent: React.FC = () => {
       setUserSettings((prev) => ({ ...prev, ...updated }));
     } catch (err) {
       console.error('Failed to update user settings:', err);
-      alert('Failed to update settings');
+      toastError('Failed to update settings');
       throw err;
     }
   };
@@ -2811,7 +2811,7 @@ const AppContent: React.FC = () => {
                       setProjectTasks((prev) => prev.filter((t) => t.id !== id));
                     } catch (err) {
                       console.error('Failed to delete task:', err);
-                      alert('Failed to delete task');
+                      toastError('Failed to delete task');
                     }
                   }}
                   onViewOrder={(orderId) => {
