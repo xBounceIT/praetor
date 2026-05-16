@@ -3,9 +3,9 @@ import { type DbExecutor, db } from '../db/drizzle.ts';
 import { notifications } from '../db/schema/notifications.ts';
 
 // Matches the predicate of the partial index `idx_notifications_user_unread`
-// (`WHERE is_read = false`) so unread count / list / markAll can use it
-// instead of a sequential scan. `is_read` is NOT NULL since migration 0050,
-// so `= false` cannot miss legacy NULL rows.
+// (`WHERE is_read = false`) so countUnreadForUser / markAllReadForUser can
+// use it instead of a sequential scan. `is_read` is NOT NULL since migration
+// 0050, so `= false` cannot miss legacy NULL rows.
 const isUnread = eq(notifications.isRead, false);
 
 export type Notification = {
