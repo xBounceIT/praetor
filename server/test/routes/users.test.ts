@@ -343,9 +343,9 @@ beforeEach(async () => {
   filterAssignedProjectIdsMock.mockResolvedValue(new Set(['p1']));
   filterAssignedTaskIdsMock.mockResolvedValue(new Set(['t1']));
   listClientsMock.mockResolvedValue([]);
-  listClientsByIdsMock.mockResolvedValue([]);
+  listClientsByIdsMock.mockResolvedValue(new Map());
   listProjectsForUserMock.mockResolvedValue([]);
-  listProjectsByIdsMock.mockResolvedValue([]);
+  listProjectsByIdsMock.mockResolvedValue(new Map());
   listTasksForUserMock.mockResolvedValue([]);
 
   // Default: LDAP unreachable / disabled — route falls back to existing role.
@@ -1611,24 +1611,34 @@ describe('GET /api/users/:id/tracker-catalogs', () => {
         isDisabled: false,
       },
     ]);
-    listProjectsByIdsMock.mockResolvedValue([
-      {
-        id: 'p-parent',
-        name: 'Website Redesign',
-        clientId: 'c-parent',
-        color: '#123456',
-        isDisabled: false,
-        billingType: 'time_and_materials',
-        billingFrequency: 'monthly',
-      },
-    ]);
-    listClientsByIdsMock.mockResolvedValue([
-      {
-        id: 'c-parent',
-        name: 'Acme Corp',
-        isDisabled: false,
-      },
-    ]);
+    listProjectsByIdsMock.mockResolvedValue(
+      new Map([
+        [
+          'p-parent',
+          {
+            id: 'p-parent',
+            name: 'Website Redesign',
+            clientId: 'c-parent',
+            color: '#123456',
+            isDisabled: false,
+            billingType: 'time_and_materials',
+            billingFrequency: 'monthly',
+          },
+        ],
+      ]),
+    );
+    listClientsByIdsMock.mockResolvedValue(
+      new Map([
+        [
+          'c-parent',
+          {
+            id: 'c-parent',
+            name: 'Acme Corp',
+            isDisabled: false,
+          },
+        ],
+      ]),
+    );
 
     const res = await testApp.inject({
       method: 'GET',

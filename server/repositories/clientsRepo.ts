@@ -256,8 +256,11 @@ export const list = async (options: ListOptions, exec: DbExecutor = db): Promise
   return rows.map(mapClientRow);
 };
 
-export const listByIds = async (ids: string[], exec: DbExecutor = db): Promise<Client[]> => {
-  if (ids.length === 0) return [];
+export const listByIds = async (
+  ids: string[],
+  exec: DbExecutor = db,
+): Promise<Map<string, Client>> => {
+  if (ids.length === 0) return new Map();
 
   const rows = await executeRows<Record<string, unknown>>(
     exec,
@@ -268,7 +271,12 @@ export const listByIds = async (ids: string[], exec: DbExecutor = db): Promise<C
       WHERE c.id = ANY(${ids})
       ORDER BY c.name`,
   );
-  return rows.map(mapClientRow);
+  return new Map(
+    rows.map((row) => {
+      const client = mapClientRow(row);
+      return [client.id, client];
+    }),
+  );
 };
 
 export const findContactsForUpdate = async (
