@@ -1600,6 +1600,12 @@ const AppContent: React.FC = () => {
               ],
               { shouldApply: isCurrentModuleLoad },
             );
+            // The recurring-entry generator gates on entriesLoaded but
+            // fetches from the server independently of the local entries
+            // array, so unblock it even when the initial entries fetch fails.
+            if (failedDatasets.includes('entries')) {
+              setEntriesLoaded(true);
+            }
             await loadOptionalDataset(
               module,
               'general settings',
