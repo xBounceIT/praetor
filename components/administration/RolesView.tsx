@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   Bell,
   BookOpen,
   Calculator,
@@ -7,7 +8,7 @@ import {
   FolderTree,
   Handshake,
   type LucideIcon,
-  Package,
+  PackageOpen,
   Pen,
   Settings,
   Sliders,
@@ -90,11 +91,11 @@ const MODULE_ICONS: Record<string, LucideIcon> = {
   timesheets: Clock,
   crm: Handshake,
   sales: FileText,
-  catalog: Package,
+  catalog: PackageOpen,
   projects: FolderTree,
   accounting: Calculator,
   hr: Users,
-  reports: FileText,
+  reports: BarChart3,
   administration: Settings,
   suppliers: Truck,
   settings: Sliders,
@@ -400,10 +401,10 @@ const RolesView: React.FC<RolesViewProps> = ({
           if (currentDefinitions.length === 0) return null;
           return (
             <TabsContent key={module} value={module} className="mt-0">
-              <Table>
+              <Table className="w-auto">
                 <TableHeader className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <TableHead className="min-w-[200px] px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       {t('common:labels.name')}
                     </TableHead>
                     {currentActions.map((action) => (
