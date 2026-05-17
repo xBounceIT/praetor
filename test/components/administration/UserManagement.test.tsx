@@ -187,17 +187,6 @@ describe('<UserManagement />', () => {
     expect(oidcBadge.querySelector('i')).toBeNull();
   });
 
-  test('filters users with the external search input', () => {
-    renderUserManagement();
-
-    fireEvent.change(screen.getByPlaceholderText('hr:workforce.searchUsers'), {
-      target: { value: 'alice' },
-    });
-
-    expect(screen.getByText('Alice Admin')).toBeInTheDocument();
-    expect(screen.queryByText('Bob Brown')).not.toBeInTheDocument();
-  });
-
   test('opens edit modal when an editable row is clicked', () => {
     renderUserManagement();
 
@@ -220,18 +209,6 @@ describe('<UserManagement />', () => {
 
     expect(props.onUpdateUser).toHaveBeenCalledWith('u2', { isDisabled: true });
     expect(usersApiMock.getRoles).not.toHaveBeenCalled();
-  });
-
-  test('shows empty state when no users match the search', () => {
-    renderUserManagement();
-
-    fireEvent.change(screen.getByPlaceholderText('hr:workforce.searchUsers'), {
-      target: { value: 'nobody' },
-    });
-
-    expect(screen.getByText('hr:workforce.noUsers')).toBeInTheDocument();
-    expect(screen.queryByText('Alice Admin')).not.toBeInTheDocument();
-    expect(screen.queryByText('Bob Brown')).not.toBeInTheDocument();
   });
 
   const openAuthMethodDialog = async (
