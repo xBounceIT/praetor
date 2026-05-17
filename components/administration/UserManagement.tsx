@@ -746,8 +746,10 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const { visibleClients, visibleProjects, visibleTasks } = getFilteredData();
 
-  const sortedUsers = [...users].sort((a, b) =>
-    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+  const sortedUsers = React.useMemo(
+    () =>
+      [...users].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
+    [users],
   );
 
   const emptyEmailLabel = t('common:common.none');
