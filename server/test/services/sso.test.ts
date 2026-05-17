@@ -27,6 +27,7 @@ const samlValidatePostMock = mock();
 const resolveExternalIdentityMock = mock();
 const statesGetForProviderMock = mock();
 const statesInsertMock = mock();
+const statesRemoveForProviderMock = mock();
 const userSessionsFindActiveOidcByUserIdMock = mock();
 const userSessionsUpsertMock = mock();
 const userSessionsDeleteByUserIdMock = mock();
@@ -37,7 +38,17 @@ const oidcFetchUserInfoMock = mock();
 const oidcBuildAuthorizationUrlMock = mock();
 const loginTicketsInsertMock = mock();
 
+let lastSamlOptions: Record<string, unknown> | null = null;
+
 class StubSaml {
+  constructor(options: Record<string, unknown>) {
+    lastSamlOptions = options;
+  }
+
+  getAuthorizeUrlAsync() {
+    return Promise.resolve(String(lastSamlOptions?.entryPoint ?? 'https://idp.example.com/sso'));
+  }
+
   validatePostResponseAsync(formBody: Record<string, string>) {
     return samlValidatePostMock(formBody);
   }
@@ -71,6 +82,7 @@ beforeAll(async () => {
     consume: statesConsumeMock,
     getForProvider: statesGetForProviderMock,
     insert: statesInsertMock,
+    removeForProvider: statesRemoveForProviderMock,
   }));
   mock.module('../../repositories/ssoUserSessionsRepo.ts', () => ({
     ...ssoUserSessionsRepoSnap,
@@ -117,6 +129,7 @@ beforeEach(() => {
     resolveExternalIdentityMock,
     statesGetForProviderMock,
     statesInsertMock,
+    statesRemoveForProviderMock,
     userSessionsFindActiveOidcByUserIdMock,
     userSessionsUpsertMock,
     userSessionsDeleteByUserIdMock,
@@ -128,6 +141,7 @@ beforeEach(() => {
     loginTicketsInsertMock,
   ])
     m.mockReset();
+  lastSamlOptions = null;
 });
 
 describe('isPrivateIp', () => {
@@ -690,9 +704,9 @@ describe('OIDC remote endpoint hardening', () => {
 });
 
 describe('SAML provider validation requires idpIssuer', () => {
-  // node-saml silently skips <Issuer> validation when idpIssuer is empty (issue #597). The
-  // service must refuse to save/enable a SAML provider that could end up calling the library
-  // without an issuer to enforce, and the runtime SAML client must refuse to be built in that
+  // node-saml does not enforce authn assertion issuer via idpIssuer (issue #597). The service
+  // must refuse to save/enable a SAML provider without an expected issuer for Praetor's own
+  // post-signature issuer check, and the runtime SAML client must refuse to be built in that
   // shape even when validation was bypassed via a stale DB row.
   const baseSamlInput = {
     protocol: 'saml' as const,
@@ -744,6 +758,7 @@ describe('SAML provider validation requires idpIssuer', () => {
 <EntityDescriptor>
   <IDPSSODescriptor>
     <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso"/>
+    <KeyDescriptor><KeyInfo><X509Data><X509Certificate>MIIBcert</X509Certificate></X509Data></KeyInfo></KeyDescriptor>
   </IDPSSODescriptor>
 </EntityDescriptor>`;
     await expect(
@@ -756,6 +771,42 @@ describe('SAML provider validation requires idpIssuer', () => {
       }),
     ).rejects.toThrow(/idpIssuer/);
     expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  test('createProvider rejects metadataXml with only an issuer when endpoint and cert cannot be resolved', async () => {
+    const metadataXml = `<?xml version="1.0"?>
+<EntityDescriptor entityID="https://idp.example.com/">
+  <IDPSSODescriptor />
+</EntityDescriptor>`;
+    await expect(
+      sso.createProvider({
+        protocol: 'saml',
+        slug: 'okta-incomplete-metadata',
+        name: 'Okta',
+        enabled: true,
+        metadataXml,
+      }),
+    ).rejects.toThrow(/metadata URL\/XML or manual entryPoint and idpCert/);
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  test('createProvider accepts inline metadata issuer with manual endpoint and cert fallback', async () => {
+    insertMock.mockImplementation(async (provider: realSsoProvidersRepo.SsoProvider) => provider);
+    const metadataXml = `<?xml version="1.0"?>
+<EntityDescriptor entityID="https://idp.example.com/">
+  <IDPSSODescriptor />
+</EntityDescriptor>`;
+    const created = await sso.createProvider({
+      protocol: 'saml',
+      slug: 'okta-metadata-manual',
+      name: 'Okta',
+      enabled: true,
+      metadataXml,
+      entryPoint: 'https://idp.example.com/sso',
+      idpCert: 'MIIBdummyCert',
+    });
+    expect(created.idpIssuer).toBe('');
+    expect(insertMock).toHaveBeenCalledTimes(1);
   });
 
   test('startSamlLogin refuses to build SAML client when resolved idpIssuer is empty', async () => {
@@ -781,7 +832,146 @@ describe('SAML provider validation requires idpIssuer', () => {
   });
 });
 
-describe('completeSamlLogin issuer resolution', () => {
+describe('SAML metadata parsing', () => {
+  const originalSsoBase = process.env.SSO_CALLBACK_BASE_URL;
+
+  beforeEach(() => {
+    process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
+  });
+
+  afterAll(() => {
+    if (originalSsoBase === undefined) delete process.env.SSO_CALLBACK_BASE_URL;
+    else process.env.SSO_CALLBACK_BASE_URL = originalSsoBase;
+  });
+
+  test('scopes issuer, SSO URL, and signing certificate to the same IdP descriptor', async () => {
+    const metadataXml = `<?xml version="1.0"?>
+<EntitiesDescriptor>
+  <EntityDescriptor entityID="https://sp.example.com/">
+    <SPSSODescriptor>
+      <KeyDescriptor use="signing">
+        <KeyInfo><X509Data><X509Certificate>SPCERT</X509Certificate></X509Data></KeyInfo>
+      </KeyDescriptor>
+    </SPSSODescriptor>
+  </EntityDescriptor>
+  <EntityDescriptor entityID="https://idp.example.com/">
+    <IDPSSODescriptor>
+      <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/post"/>
+      <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso"/>
+      <KeyDescriptor use="encryption">
+        <KeyInfo><X509Data><X509Certificate>ENCRYPTIONCERT</X509Certificate></X509Data></KeyInfo>
+      </KeyDescriptor>
+      <KeyDescriptor use="signing">
+        <KeyInfo><X509Data><X509Certificate>IDPCERT</X509Certificate></X509Data></KeyInfo>
+      </KeyDescriptor>
+    </IDPSSODescriptor>
+  </EntityDescriptor>
+</EntitiesDescriptor>`;
+
+    findBySlugMock.mockResolvedValue({
+      ...SAML_PROVIDER,
+      metadataUrl: '',
+      metadataXml,
+    });
+
+    await expect(sso.startSamlLogin('okta')).resolves.toBe('https://idp.example.com/sso');
+    expect(lastSamlOptions).toMatchObject({
+      entryPoint: 'https://idp.example.com/sso',
+      idpIssuer: 'https://idp.example.com/',
+      wantAssertionsSigned: true,
+      wantAuthnResponseSigned: true,
+    });
+    expect(String(lastSamlOptions?.idpCert)).toContain('IDPCERT');
+    expect(String(lastSamlOptions?.idpCert)).not.toContain('SPCERT');
+    expect(String(lastSamlOptions?.idpCert)).not.toContain('ENCRYPTIONCERT');
+  });
+
+  test('prefers a complete IdP descriptor over an earlier incomplete descriptor', async () => {
+    const metadataXml = `<?xml version="1.0"?>
+<EntitiesDescriptor>
+  <EntityDescriptor entityID="https://incomplete-idp.example.com/">
+    <IDPSSODescriptor>
+      <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://incomplete-idp.example.com/sso"/>
+    </IDPSSODescriptor>
+  </EntityDescriptor>
+  <EntityDescriptor entityID="https://complete-idp.example.com/">
+    <IDPSSODescriptor>
+      <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://complete-idp.example.com/sso"/>
+      <KeyDescriptor use="signing">
+        <KeyInfo><X509Data><X509Certificate>COMPLETECERT</X509Certificate></X509Data></KeyInfo>
+      </KeyDescriptor>
+    </IDPSSODescriptor>
+  </EntityDescriptor>
+</EntitiesDescriptor>`;
+
+    findBySlugMock.mockResolvedValue({
+      ...SAML_PROVIDER,
+      metadataUrl: '',
+      metadataXml,
+    });
+
+    await expect(sso.startSamlLogin('okta')).resolves.toBe('https://complete-idp.example.com/sso');
+    expect(lastSamlOptions).toMatchObject({
+      entryPoint: 'https://complete-idp.example.com/sso',
+      idpIssuer: 'https://complete-idp.example.com/',
+    });
+    expect(String(lastSamlOptions?.idpCert)).toContain('COMPLETECERT');
+  });
+
+  test('prefers an explicit configured issuer over metadata entityID', async () => {
+    const metadataXml = `<?xml version="1.0"?>
+<EntityDescriptor entityID="https://metadata-idp.example.com/">
+  <IDPSSODescriptor>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso"/>
+    <KeyDescriptor use="signing">
+      <KeyInfo><X509Data><X509Certificate>IDPCERT</X509Certificate></X509Data></KeyInfo>
+    </KeyDescriptor>
+  </IDPSSODescriptor>
+</EntityDescriptor>`;
+
+    findBySlugMock.mockResolvedValue({
+      ...SAML_PROVIDER,
+      metadataUrl: '',
+      metadataXml,
+      idpIssuer: 'https://configured-idp.example.com/',
+    });
+
+    await expect(sso.startSamlLogin('okta')).resolves.toBe('https://idp.example.com/sso');
+    expect(lastSamlOptions).toMatchObject({
+      idpIssuer: 'https://configured-idp.example.com/',
+    });
+  });
+
+  test('falls back to metadata values when stored manual SAML fields are whitespace', async () => {
+    const metadataXml = `<?xml version="1.0"?>
+<EntityDescriptor entityID="https://metadata-idp.example.com/">
+  <IDPSSODescriptor>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso"/>
+    <KeyDescriptor use="signing">
+      <KeyInfo><X509Data><X509Certificate>IDPCERT</X509Certificate></X509Data></KeyInfo>
+    </KeyDescriptor>
+  </IDPSSODescriptor>
+</EntityDescriptor>`;
+
+    findBySlugMock.mockResolvedValue({
+      ...SAML_PROVIDER,
+      metadataUrl: '',
+      metadataXml,
+      entryPoint: '   ',
+      idpCert: '   ',
+      idpIssuer: '   ',
+    });
+
+    await expect(sso.startSamlLogin('okta')).resolves.toBe('https://idp.example.com/sso');
+    expect(lastSamlOptions).toMatchObject({
+      entryPoint: 'https://idp.example.com/sso',
+      idpIssuer: 'https://metadata-idp.example.com/',
+    });
+    expect(String(lastSamlOptions?.idpCert)).toContain('IDPCERT');
+  });
+});
+
+describe('completeSamlLogin issuer enforcement', () => {
   const originalSsoBase = process.env.SSO_CALLBACK_BASE_URL;
 
   const manualSamlProvider: realSsoProvidersRepo.SsoProvider = {
@@ -803,7 +993,7 @@ describe('completeSamlLogin issuer resolution', () => {
 
   test('fails before validatePostResponseAsync when provider.idpIssuer is empty (does NOT fall back to spIssuer)', async () => {
     // Under PR #597, createSamlClient now refuses to construct the SAML instance when
-    // idpIssuer is empty — node-saml would otherwise silently skip <Issuer> validation. The
+    // idpIssuer is empty — Praetor's issuer comparison would otherwise have no target. The
     // older "SAML response did not include an issuer" path is therefore unreachable for
     // manual mode with empty idpIssuer; the spIssuer-not-a-fallback guarantee still holds.
     findBySlugMock.mockResolvedValue(manualSamlProvider);
@@ -814,7 +1004,7 @@ describe('completeSamlLogin issuer resolution', () => {
     expect(resolveExternalIdentityMock).not.toHaveBeenCalled();
   });
 
-  test('falls back to provider.idpIssuer when profile.issuer is missing', async () => {
+  test('rejects a signed assertion when the issuer is missing', async () => {
     findBySlugMock.mockResolvedValue({
       ...manualSamlProvider,
       idpIssuer: 'https://idp.example.com/realm',
@@ -823,15 +1013,13 @@ describe('completeSamlLogin issuer resolution', () => {
       profile: { nameID: 'user@example.com', issuer: '' },
       loggedOut: false,
     });
-    resolveExternalIdentityMock.mockRejectedValue(new Error('stop here'));
-    await expect(sso.completeSamlLogin('okta', { SAMLResponse: 'x' })).rejects.toThrow('stop here');
-    expect(resolveExternalIdentityMock).toHaveBeenCalledTimes(1);
-    expect(resolveExternalIdentityMock.mock.calls[0][0]).toMatchObject({
-      issuer: 'https://idp.example.com/realm',
-    });
+    await expect(sso.completeSamlLogin('okta', { SAMLResponse: 'x' })).rejects.toThrow(
+      /did not include an issuer/,
+    );
+    expect(resolveExternalIdentityMock).not.toHaveBeenCalled();
   });
 
-  test('profile.issuer wins over provider.idpIssuer when both are set', async () => {
+  test('rejects a signed assertion whose issuer does not match the configured IdP issuer', async () => {
     findBySlugMock.mockResolvedValue({
       ...manualSamlProvider,
       idpIssuer: 'https://idp.example.com/configured',
@@ -840,10 +1028,26 @@ describe('completeSamlLogin issuer resolution', () => {
       profile: { nameID: 'user@example.com', issuer: 'https://idp.example.com/from-response' },
       loggedOut: false,
     });
+    await expect(sso.completeSamlLogin('okta', { SAMLResponse: 'x' })).rejects.toThrow(
+      /issuer did not match/,
+    );
+    expect(resolveExternalIdentityMock).not.toHaveBeenCalled();
+  });
+
+  test('passes the assertion issuer to identity resolution after an exact issuer match', async () => {
+    findBySlugMock.mockResolvedValue({
+      ...manualSamlProvider,
+      idpIssuer: 'https://idp.example.com/configured',
+    });
+    samlValidatePostMock.mockResolvedValue({
+      profile: { nameID: 'user@example.com', issuer: 'https://idp.example.com/configured' },
+      loggedOut: false,
+    });
     resolveExternalIdentityMock.mockRejectedValue(new Error('stop here'));
+
     await expect(sso.completeSamlLogin('okta', { SAMLResponse: 'x' })).rejects.toThrow('stop here');
     expect(resolveExternalIdentityMock.mock.calls[0][0]).toMatchObject({
-      issuer: 'https://idp.example.com/from-response',
+      issuer: 'https://idp.example.com/configured',
     });
   });
 });
@@ -966,6 +1170,13 @@ describe('DbSamlCacheProvider provider scoping', () => {
     expect(inserted.providerId).toBe('sso-A');
     expect(inserted.protocol).toBe('saml');
     expect(inserted.relayState).toBe('v');
+  });
+
+  test("removeAsync deletes only this provider's request id", async () => {
+    statesRemoveForProviderMock.mockResolvedValue('created-at');
+    const cache = new sso.DbSamlCacheProvider('sso-A');
+    await expect(cache.removeAsync('in-response-to-1')).resolves.toBe('created-at');
+    expect(statesRemoveForProviderMock).toHaveBeenCalledWith('in-response-to-1', 'sso-A', 'saml');
   });
 });
 

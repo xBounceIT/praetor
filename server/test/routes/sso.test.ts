@@ -280,9 +280,10 @@ describe('PUT /api/sso/providers/:id — masked sentinel preserves existing secr
   test('metadataXml === MASKED_SECRET is dropped from patch', async () => {
     const existing = samlProvider({
       enabled: true,
-      // entityID makes assertEnabledProviderConfig happy without forcing idpIssuer; the test
-      // is about MASKED_SECRET handling, not issuer validation.
-      metadataXml: '<EntityDescriptor entityID="https://idp.example.com/" />',
+      // Valid inline IdP metadata makes assertEnabledProviderConfig happy without forcing
+      // idpIssuer; the test is about MASKED_SECRET handling, not issuer validation.
+      metadataXml:
+        '<EntityDescriptor entityID="https://idp.example.com/"><IDPSSODescriptor><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso"/><KeyDescriptor use="signing"><KeyInfo><X509Data><X509Certificate>MIIDmetadataCert</X509Certificate></X509Data></KeyInfo></KeyDescriptor></IDPSSODescriptor></EntityDescriptor>',
       idpCert: 'MIIDstoredcert',
     });
     findByIdMock.mockResolvedValue(existing);

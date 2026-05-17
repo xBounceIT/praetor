@@ -81,3 +81,22 @@ export const remove = async (state: string, exec: DbExecutor = db): Promise<stri
     .returning({ relayState: ssoStates.relayState });
   return rows[0]?.relayState ?? null;
 };
+
+export const removeForProvider = async (
+  state: string,
+  providerId: string,
+  protocol: SsoProtocol,
+  exec: DbExecutor = db,
+): Promise<string | null> => {
+  const rows = await exec
+    .delete(ssoStates)
+    .where(
+      and(
+        eq(ssoStates.state, state),
+        eq(ssoStates.providerId, providerId),
+        eq(ssoStates.protocol, protocol),
+      ),
+    )
+    .returning({ relayState: ssoStates.relayState });
+  return rows[0]?.relayState ?? null;
+};
