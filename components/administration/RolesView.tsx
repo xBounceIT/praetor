@@ -1,6 +1,55 @@
+import {
+  BarChart3,
+  Bell,
+  BookOpen,
+  Calculator,
+  Clock,
+  FileText,
+  FolderTree,
+  Handshake,
+  type LucideIcon,
+  PackageOpen,
+  Pen,
+  Settings,
+  Sliders,
+  Trash2,
+  Truck,
+  UserCog,
+  Users,
+} from 'lucide-react';
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardAction,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Role } from '../../types';
 import {
@@ -13,11 +62,21 @@ import {
   type PermissionAction,
   ROLE_EDITOR_EXCLUDED_MODULES,
   TOP_MANAGER_ROLE_ID,
+  toTitleCase,
 } from '../../utils/permissions';
-import Checkbox from '../shared/Checkbox';
+import { toastError } from '../../utils/toast';
+import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
-import Toggle from '../shared/Toggle';
+import {
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalDescription,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from '../shared/ModalLayout';
 
 export interface RolesViewProps {
   roles: Role[];
@@ -28,26 +87,20 @@ export interface RolesViewProps {
   onDeleteRole: (id: string) => Promise<void>;
 }
 
-const toTitleCase = (value: string) =>
-  value
-    .split('_')
-    .map((word) => (word ? word[0].toUpperCase() + word.slice(1) : ''))
-    .join(' ');
-
-const MODULE_ICONS: Record<string, string> = {
-  timesheets: 'fa-clock',
-  crm: 'fa-handshake',
-  sales: 'fa-file-invoice-dollar',
-  catalog: 'fa-box-open',
-  projects: 'fa-folder-tree',
-  accounting: 'fa-calculator',
-  hr: 'fa-users-gear',
-  reports: 'fa-chart-simple',
-  administration: 'fa-gears',
-  suppliers: 'fa-truck',
-  settings: 'fa-sliders',
-  docs: 'fa-book',
-  notifications: 'fa-bell',
+const MODULE_ICONS: Record<string, LucideIcon> = {
+  timesheets: Clock,
+  crm: Handshake,
+  sales: FileText,
+  catalog: PackageOpen,
+  projects: FolderTree,
+  accounting: Calculator,
+  hr: Users,
+  reports: BarChart3,
+  administration: Settings,
+  suppliers: Truck,
+  settings: Sliders,
+  docs: BookOpen,
+  notifications: Bell,
 };
 
 const ALWAYS_GRANTED_PERMISSIONS = PERMISSION_DEFINITIONS.filter((def) =>
@@ -60,6 +113,39 @@ const isPermissionEditableForRole = (permission: string, roleId: string | null =
   (!isTopManagerOnlyPermission(permission) || roleId === TOP_MANAGER_ROLE_ID);
 const sanitizeEditableRolePermissions = (rolePermissions: string[], roleId: string | null = null) =>
   rolePermissions.filter((permission) => isPermissionEditableForRole(permission, roleId));
+
+interface RoleCardActionProps {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  destructive?: boolean;
+}
+
+const RoleCardAction: React.FC<RoleCardActionProps> = ({
+  icon,
+  label,
+  onClick,
+  destructive = false,
+}) => (
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        onClick={onClick}
+        aria-label={label}
+        className={
+          destructive
+            ? 'text-destructive hover:bg-destructive/10 hover:text-destructive'
+            : undefined
+        }
+      >
+        {icon}
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent>{label}</TooltipContent>
+  </Tooltip>
+);
 
 const RolesView: React.FC<RolesViewProps> = ({
   roles,
@@ -74,11 +160,14 @@ const RolesView: React.FC<RolesViewProps> = ({
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isPermissionsOpen, setIsPermissionsOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [activeRole, setActiveRole] = useState<Role | null>(null);
   const [roleName, setRoleName] = useState('');
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [activeModuleTab, setActiveModuleTab] = useState<string>('');
+
+  const selectedPermissionSet = useMemo(() => new Set(selectedPermissions), [selectedPermissions]);
 
   const editableDefinitions = useMemo(() => {
     return PERMISSION_DEFINITIONS.filter((definition) => {
@@ -191,35 +280,16 @@ const RolesView: React.FC<RolesViewProps> = ({
     return canonicalOrder.filter((action) => actionsSet.has(action));
   };
 
-  const isAllSelectedForDefinition = (definition: (typeof PERMISSION_DEFINITIONS)[0]) => {
-    return definition.actions.every((action) =>
-      selectedPermissions.includes(buildPermission(definition.id, action)),
-    );
-  };
-
   const toggleAllForDefinition = (definition: (typeof PERMISSION_DEFINITIONS)[0]) => {
-    const allSelected = isAllSelectedForDefinition(definition);
+    const allPermissions = definition.actions.map((action) =>
+      buildPermission(definition.id, action),
+    );
+    const allSelected = allPermissions.every((p) => selectedPermissionSet.has(p));
     if (allSelected) {
-      // Deselect all
-      setSelectedPermissions((prev) =>
-        prev.filter(
-          (p) => !definition.actions.some((a) => buildPermission(definition.id, a) === p),
-        ),
-      );
+      const removeSet = new Set(allPermissions);
+      setSelectedPermissions((prev) => prev.filter((p) => !removeSet.has(p)));
     } else {
-      // Select all
-      const permissionsToAdd = definition.actions.map((action) =>
-        buildPermission(definition.id, action),
-      );
-      setSelectedPermissions((prev) => {
-        const newPermissions = [...prev];
-        permissionsToAdd.forEach((perm) => {
-          if (!newPermissions.includes(perm)) {
-            newPermissions.push(perm);
-          }
-        });
-        return newPermissions;
-      });
+      setSelectedPermissions((prev) => Array.from(new Set([...prev, ...allPermissions])));
     }
   };
 
@@ -282,139 +352,152 @@ const RolesView: React.FC<RolesViewProps> = ({
   };
 
   const handleDelete = async () => {
-    setFormErrors({});
-    if (!activeRole) return;
+    if (!activeRole || isDeleting) return;
+    setIsDeleting(true);
     try {
       await onDeleteRole(activeRole.id);
       setIsDeleteConfirmOpen(false);
       setActiveRole(null);
     } catch (err) {
       console.error('Failed to delete role', err);
-      setFormErrors({ general: t('common:messages.errorOccurred') });
+      toastError(t('common:messages.errorOccurred'));
+    } finally {
+      setIsDeleting(false);
     }
   };
 
-  const renderPermissionTabs = () => {
-    const currentDefinitions = activeModuleTab ? groupedPermissions[activeModuleTab] || [] : [];
-    const currentActions = activeModuleTab ? getModuleActions(activeModuleTab) : [];
-
-    return (
-      <div className="flex h-[60vh] border border-zinc-200 rounded-2xl overflow-hidden bg-zinc-50/30">
-        {/* Sidebar */}
-        <div className="w-56 shrink-0 bg-zinc-50 border-r border-zinc-200 overflow-y-auto">
-          {moduleOrder.map((module) => (
-            <button
+  const renderPermissionTabs = () => (
+    <Tabs
+      value={activeModuleTab}
+      onValueChange={setActiveModuleTab}
+      orientation="vertical"
+      className="flex max-h-[60vh] flex-row gap-0 overflow-hidden rounded-xl border border-border bg-card"
+    >
+      <TabsList
+        variant="line"
+        className="h-full w-56 shrink-0 flex-col items-stretch justify-start gap-1 overflow-y-auto rounded-none border-r border-border bg-muted/40 p-2"
+      >
+        {moduleOrder.map((module) => {
+          const Icon = MODULE_ICONS[module];
+          return (
+            <TabsTrigger
               key={module}
-              type="button"
-              onClick={() => setActiveModuleTab(module)}
-              className={`w-full flex items-center gap-3 px-5 py-4 text-sm font-bold transition-all text-left ${
-                activeModuleTab === module
-                  ? 'bg-white text-praetor border-l-4 border-l-praetor shadow-sm'
-                  : 'text-zinc-500 hover:bg-zinc-100 border-l-4 border-l-transparent'
-              }`}
+              value={module}
+              className="justify-start gap-3 px-3 py-2 text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
             >
-              <i
-                className={`fa-solid ${MODULE_ICONS[module] || 'fa-circle'} w-5 text-center text-base`}
-              ></i>
-              {t(`layout:modules.${module}`, { defaultValue: toTitleCase(module) })}
-            </button>
-          ))}
-        </div>
+              {Icon ? <Icon className="size-4" /> : null}
+              <span className="truncate text-left">
+                {t(`layout:modules.${module}`, { defaultValue: toTitleCase(module) })}
+              </span>
+            </TabsTrigger>
+          );
+        })}
+      </TabsList>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto bg-white">
-          {activeModuleTab && currentDefinitions.length > 0 && (
-            <table className="w-full border-separate border-spacing-0">
-              <thead className="sticky top-0 bg-zinc-50/95 backdrop-blur-sm z-10">
-                <tr className="border-b border-zinc-200">
-                  <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-wider text-zinc-500 border-b border-zinc-200">
-                    {t('common:labels.name')}
-                  </th>
-                  {currentActions.map((action) => (
-                    <th
-                      key={action}
-                      className="px-2 py-4 text-center text-xs font-black uppercase tracking-wider text-zinc-500 w-20 border-b border-zinc-200"
-                    >
-                      {actionLabel(action)}
-                    </th>
-                  ))}
-                  <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-wider text-zinc-500 w-28 border-b border-zinc-200">
-                    {t('common:table.selectAll')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100">
-                {currentDefinitions.map((definition) => {
-                  const isAllSelected = isAllSelectedForDefinition(definition);
-                  const selectedCount = definition.actions.filter((action) =>
-                    selectedPermissions.includes(buildPermission(definition.id, action)),
-                  ).length;
-                  const hasPartial = selectedCount > 0 && !isAllSelected;
+      <div className="flex-1 overflow-y-auto bg-background">
+        {moduleOrder.map((module) => {
+          const currentDefinitions = groupedPermissions[module] || [];
+          const currentActions = getModuleActions(module);
+          if (currentDefinitions.length === 0) return null;
+          return (
+            <TabsContent key={module} value={module} className="mt-0">
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="min-w-[200px] px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {t('common:labels.name')}
+                    </TableHead>
+                    {currentActions.map((action) => (
+                      <TableHead
+                        key={action}
+                        className="w-20 px-2 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                      >
+                        {actionLabel(action)}
+                      </TableHead>
+                    ))}
+                    <TableHead className="w-28 px-4 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {t('common:table.selectAll')}
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {currentDefinitions.map((definition) => {
+                    const definitionLabel = t(`administration:permissions.${definition.id}`, {
+                      defaultValue: formatPermissionLabel(definition.id),
+                    });
+                    const isAllSelected = definition.actions.every((action) =>
+                      selectedPermissionSet.has(buildPermission(definition.id, action)),
+                    );
 
-                  return (
-                    <tr key={definition.id} className="hover:bg-zinc-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-zinc-700">
-                            {t(`administration:permissions.${definition.id}`, {
-                              defaultValue: formatPermissionLabel(definition.id),
-                            })}
-                          </span>
-                          {definition.isScope && (
-                            <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-700 rounded-md">
-                              {t('administration:roles.scope')}
+                    return (
+                      <TableRow key={definition.id}>
+                        <TableCell className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-foreground">
+                              {definitionLabel}
                             </span>
-                          )}
-                        </div>
-                      </td>
-                      {currentActions.map((action) => {
-                        const permission = buildPermission(definition.id, action);
-                        const isAvailable = definition.actions.includes(action);
-                        const isChecked = selectedPermissions.includes(permission);
-
-                        return (
-                          <td key={action} className="px-2 py-4 text-center">
-                            {isAvailable ? (
-                              <div className="flex items-center justify-center">
-                                <Checkbox
-                                  checked={isChecked}
-                                  onChange={() => togglePermission(permission)}
-                                />
-                              </div>
-                            ) : (
-                              <span className="text-zinc-200">-</span>
+                            {definition.isScope && (
+                              <Badge
+                                variant="secondary"
+                                className="px-1.5 py-0 text-[10px] uppercase tracking-wider"
+                              >
+                                {t('administration:roles.scope')}
+                              </Badge>
                             )}
-                          </td>
-                        );
-                      })}
-                      <td className="px-6 py-4 text-center">
-                        <div className="flex items-center justify-center">
-                          <Toggle
+                          </div>
+                        </TableCell>
+                        {currentActions.map((action) => {
+                          const permission = buildPermission(definition.id, action);
+                          const isAvailable = definition.actions.includes(action);
+
+                          if (!isAvailable) {
+                            return (
+                              <TableCell
+                                key={action}
+                                className="px-2 py-3 text-center text-muted-foreground/40"
+                              >
+                                —
+                              </TableCell>
+                            );
+                          }
+
+                          return (
+                            <TableCell key={action} className="px-2 py-3 text-center">
+                              <Checkbox
+                                checked={selectedPermissionSet.has(permission)}
+                                onCheckedChange={() => togglePermission(permission)}
+                                aria-label={`${definitionLabel} – ${actionLabel(action)}`}
+                              />
+                            </TableCell>
+                          );
+                        })}
+                        <TableCell className="px-4 py-3 text-center">
+                          <Switch
                             checked={isAllSelected}
-                            onChange={() => toggleAllForDefinition(definition)}
-                            partial={hasPartial && !isAllSelected}
+                            onCheckedChange={() => toggleAllForDefinition(definition)}
+                            aria-label={`${definitionLabel} – ${t('common:table.selectAll')}`}
                           />
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TabsContent>
+          );
+        })}
       </div>
-    );
-  };
+    </Tabs>
+  );
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-zinc-800 tracking-tight">
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground">
             {t('administration:roles.title')}
           </h2>
-          <p className="text-zinc-500 font-medium">{t('administration:roles.subtitle')}</p>
+          <p className="text-sm text-muted-foreground">{t('administration:roles.subtitle')}</p>
         </div>
         {canCreateRoles && (
           <HeaderAddButton actionSize="wide" onClick={openCreateModal}>
@@ -424,293 +507,215 @@ const RolesView: React.FC<RolesViewProps> = ({
       </div>
 
       {sortedRoles.length === 0 ? (
-        <div className="bg-white border border-zinc-200 rounded-2xl p-10 text-center text-zinc-400">
-          {t('common:emptyStates.noItems')}
-        </div>
+        <Empty className="border border-dashed border-border bg-card">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <UserCog />
+            </EmptyMedia>
+            <EmptyTitle>{t('common:emptyStates.noItems')}</EmptyTitle>
+            <EmptyDescription>{t('administration:roles.subtitle')}</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {sortedRoles.map((role) => {
             const canRenameRole = canUpdateRoles && !role.isAdmin && !role.isSystem;
             const canEditPermissions = canUpdateRoles && !role.isAdmin;
             const canRemoveRole = canDeleteRoles && !role.isAdmin && !role.isSystem;
+            const hasAnyAction = canRenameRole || canEditPermissions || canRemoveRole;
+
+            const hasBadges = role.isSystem || role.isAdmin;
+
             return (
-              <div
-                key={role.id}
-                className="bg-white rounded-2xl p-6 border border-zinc-200 shadow-sm hover:shadow-md transition-shadow group"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <div className="size-12 rounded-xl bg-zinc-100 text-praetor flex items-center justify-center text-xl">
-                    <i className="fa-solid fa-user-shield"></i>
-                  </div>
-                  {(canRenameRole || canEditPermissions || canRemoveRole) && (
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Card key={role.id} className="transition-shadow hover:shadow-md">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-3 text-base">
+                    <UserCog aria-hidden="true" className="size-5 text-muted-foreground" />
+                    {role.name}
+                  </CardTitle>
+                  {hasBadges && (
+                    <CardDescription className="flex flex-wrap gap-1.5">
+                      {role.isSystem && (
+                        <Badge variant="secondary">{t('administration:roles.badges.system')}</Badge>
+                      )}
+                      {role.isAdmin && (
+                        <Badge variant="default">{t('administration:roles.badges.admin')}</Badge>
+                      )}
+                    </CardDescription>
+                  )}
+                  {hasAnyAction && (
+                    <CardAction className="flex gap-1">
                       {canRenameRole && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex">
-                              <button
-                                onClick={() => openRenameModal(role)}
-                                className="size-8 rounded-lg bg-zinc-50 text-zinc-400 hover:text-praetor hover:bg-zinc-100 flex items-center justify-center transition-colors"
-                              >
-                                <i className="fa-solid fa-pen"></i>
-                              </button>
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
-                        </Tooltip>
+                        <RoleCardAction
+                          icon={<Pen />}
+                          label={t('common:buttons.edit')}
+                          onClick={() => openRenameModal(role)}
+                        />
                       )}
                       {canEditPermissions && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex">
-                              <button
-                                onClick={() => openPermissionsModal(role)}
-                                className="size-8 rounded-lg bg-zinc-50 text-zinc-400 hover:text-praetor hover:bg-zinc-100 flex items-center justify-center transition-colors"
-                              >
-                                <i className="fa-solid fa-shield"></i>
-                              </button>
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>{t('administration:roles.permissions')}</TooltipContent>
-                        </Tooltip>
+                        <RoleCardAction
+                          icon={<Pen />}
+                          label={t('administration:roles.editPermissions')}
+                          onClick={() => openPermissionsModal(role)}
+                        />
                       )}
                       {canRemoveRole && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex">
-                              <button
-                                onClick={() => openDeleteModal(role)}
-                                className="size-8 rounded-lg bg-zinc-50 text-red-600 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
-                              >
-                                <i className="fa-solid fa-trash-can"></i>
-                              </button>
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
-                        </Tooltip>
+                        <RoleCardAction
+                          icon={<Trash2 />}
+                          label={t('common:buttons.delete')}
+                          onClick={() => openDeleteModal(role)}
+                          destructive
+                        />
                       )}
-                    </div>
+                    </CardAction>
                   )}
-                </div>
+                </CardHeader>
 
-                <h3 className="text-lg font-semibold text-zinc-800 mb-2">{role.name}</h3>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {role.isSystem && (
-                    <span className="px-2 py-1 rounded-full text-xs font-bold bg-zinc-100 text-zinc-500">
-                      {t('administration:roles.badges.system')}
-                    </span>
-                  )}
-                  {role.isAdmin && (
-                    <span className="px-2 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700">
-                      {t('administration:roles.badges.admin')}
-                    </span>
-                  )}
-                </div>
-                <div className="text-sm text-zinc-500">
+                <CardFooter className="border-t text-sm text-muted-foreground">
                   {t('administration:roles.permissionCount', {
                     count: role.permissions?.length || 0,
                   })}
-                </div>
-              </div>
+                </CardFooter>
+              </Card>
             );
           })}
         </div>
       )}
 
-      <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden animate-in zoom-in duration-200 flex flex-col">
-          <form onSubmit={handleCreate} className="flex flex-col flex-1 overflow-hidden">
-            <div className="px-8 py-6 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center shrink-0">
-              <div>
-                <h3 className="text-lg font-semibold text-zinc-800">
-                  {t('administration:roles.createRole')}
-                </h3>
-                <p className="text-sm text-zinc-500">
-                  {t('administration:roles.createRoleSubtitle')}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsCreateOpen(false)}
-                className="text-zinc-400 hover:text-zinc-600 transition-colors"
-              >
-                <i className="fa-solid fa-xmark text-xl"></i>
-              </button>
-            </div>
+      <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} ariaLabel={null}>
+        {() => (
+          <ModalContent size="2xl" className="max-w-5xl">
+            <form onSubmit={handleCreate} className="flex flex-1 flex-col overflow-hidden">
+              <ModalHeader>
+                <div>
+                  <ModalTitle>{t('administration:roles.createRole')}</ModalTitle>
+                  <ModalDescription>
+                    {t('administration:roles.createRoleSubtitle')}
+                  </ModalDescription>
+                </div>
+                <ModalCloseButton onClick={() => setIsCreateOpen(false)} />
+              </ModalHeader>
+              <ModalBody className="flex-1 space-y-6">
+                <Field>
+                  <FieldLabel htmlFor="role-create-name">{t('common:labels.name')}</FieldLabel>
+                  <Input
+                    id="role-create-name"
+                    value={roleName}
+                    onChange={(event) => setRoleName(event.target.value)}
+                    placeholder={t('common:form.placeholderName')}
+                  />
+                  {formErrors.name && <FieldError>{formErrors.name}</FieldError>}
+                </Field>
 
-            <div className="p-8 space-y-6 overflow-y-auto flex-1">
-              <div>
-                <label className="block text-sm font-bold text-zinc-700 mb-2">
-                  {t('common:labels.name')}
-                </label>
-                <input
-                  type="text"
-                  value={roleName}
-                  onChange={(event) => setRoleName(event.target.value)}
-                  placeholder={t('common:form.placeholderName')}
-                  className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                />
-                {formErrors.name && <p className="text-sm text-red-500 mt-1">{formErrors.name}</p>}
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="text-sm font-semibold text-zinc-700">
-                  {t('administration:roles.permissions')}
-                </h4>
-                {renderPermissionTabs()}
-              </div>
-              {formErrors.general && <p className="text-sm text-red-500">{formErrors.general}</p>}
-            </div>
-
-            <div className="px-8 py-6 border-t border-zinc-100 bg-zinc-50/50 flex justify-end gap-3 shrink-0">
-              <button
-                type="button"
-                onClick={() => setIsCreateOpen(false)}
-                className="px-6 py-2.5 text-sm font-bold text-zinc-500 hover:bg-zinc-200 rounded-xl transition-colors"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              <button
-                type="submit"
-                className="px-8 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95"
-              >
-                {t('common:buttons.create')}
-              </button>
-            </div>
-          </form>
-        </div>
-      </Modal>
-
-      <Modal isOpen={isRenameOpen && !!activeRole} onClose={() => setIsRenameOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
-          <form onSubmit={handleRename}>
-            <div className="px-8 py-6 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center">
-              <div>
-                <h3 className="text-lg font-semibold text-zinc-800">
-                  {t('administration:roles.renameRole')}
-                </h3>
-                <p className="text-sm text-zinc-500">
-                  {t('administration:roles.renameRoleSubtitle')}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsRenameOpen(false)}
-                className="text-zinc-400 hover:text-zinc-600 transition-colors"
-              >
-                <i className="fa-solid fa-xmark text-xl"></i>
-              </button>
-            </div>
-            <div className="p-8 space-y-4">
-              <div>
-                <label className="block text-sm font-bold text-zinc-700 mb-2">
-                  {t('common:labels.name')}
-                </label>
-                <input
-                  type="text"
-                  value={roleName}
-                  onChange={(event) => setRoleName(event.target.value)}
-                  placeholder={t('common:form.placeholderName')}
-                  className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
-                />
-                {formErrors.name && <p className="text-sm text-red-500 mt-1">{formErrors.name}</p>}
-              </div>
-              {formErrors.general && <p className="text-sm text-red-500">{formErrors.general}</p>}
-            </div>
-            <div className="px-8 py-6 border-t border-zinc-100 bg-zinc-50/50 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setIsRenameOpen(false)}
-                className="px-6 py-2.5 text-sm font-bold text-zinc-500 hover:bg-zinc-200 rounded-xl transition-colors"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              <button
-                type="submit"
-                className="px-8 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95"
-              >
-                {t('common:buttons.update')}
-              </button>
-            </div>
-          </form>
-        </div>
-      </Modal>
-
-      <Modal isOpen={isPermissionsOpen} onClose={() => setIsPermissionsOpen(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden animate-in zoom-in duration-200 flex flex-col">
-          <div className="px-8 py-6 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center shrink-0">
-            <div>
-              <h3 className="text-lg font-semibold text-zinc-800">
-                {t('administration:roles.editPermissions')}
-              </h3>
-              <p className="text-sm text-zinc-500 font-bold text-praetor">{activeRole?.name}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsPermissionsOpen(false)}
-              className="text-zinc-400 hover:text-zinc-600 transition-colors"
-            >
-              <i className="fa-solid fa-xmark text-xl"></i>
-            </button>
-          </div>
-          <div className="p-8 space-y-6 overflow-y-auto flex-1">
-            {renderPermissionTabs()}
-            {formErrors.general && <p className="text-sm text-red-500">{formErrors.general}</p>}
-          </div>
-          <div className="px-8 py-6 border-t border-zinc-100 bg-zinc-50/50 flex justify-end gap-3 shrink-0">
-            <button
-              type="button"
-              onClick={() => setIsPermissionsOpen(false)}
-              className="px-6 py-2.5 text-sm font-bold text-zinc-500 hover:bg-zinc-200 rounded-xl transition-colors"
-            >
-              {t('common:buttons.cancel')}
-            </button>
-            <button
-              type="button"
-              onClick={handleUpdatePermissions}
-              className="px-8 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95"
-            >
-              {t('common:buttons.save')}
-            </button>
-          </div>
-        </div>
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-foreground">
+                    {t('administration:roles.permissions')}
+                  </h4>
+                  {renderPermissionTabs()}
+                </div>
+                {formErrors.general && (
+                  <p className="text-sm font-medium text-destructive">{formErrors.general}</p>
+                )}
+              </ModalBody>
+              <ModalFooter>
+                <Button type="button" variant="ghost" onClick={() => setIsCreateOpen(false)}>
+                  {t('common:buttons.cancel')}
+                </Button>
+                <Button type="submit">{t('common:buttons.create')}</Button>
+              </ModalFooter>
+            </form>
+          </ModalContent>
+        )}
       </Modal>
 
       <Modal
-        isOpen={isDeleteConfirmOpen && !!activeRole}
-        onClose={() => setIsDeleteConfirmOpen(false)}
+        isOpen={isRenameOpen && !!activeRole}
+        onClose={() => setIsRenameOpen(false)}
+        ariaLabel={null}
       >
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-8 text-center space-y-4">
-            <div className="size-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
-              <i className="fa-solid fa-triangle-exclamation text-red-600 text-xl"></i>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-zinc-800">
-                {t('administration:roles.deleteRole')}
-              </h3>
-              <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
-                {t('common:messages.deleteConfirmNamed', { name: activeRole?.name })}
-              </p>
-            </div>
-            {formErrors.general && <p className="text-sm text-red-500">{formErrors.general}</p>}
-            <div className="flex gap-3 pt-4">
-              <button
-                onClick={() => setIsDeleteConfirmOpen(false)}
-                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              <button
-                onClick={handleDelete}
-                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-              >
-                {t('common:buttons.delete')}
-              </button>
-            </div>
-          </div>
-        </div>
+        {() => (
+          <ModalContent size="lg">
+            <form onSubmit={handleRename}>
+              <ModalHeader>
+                <div>
+                  <ModalTitle>{t('administration:roles.renameRole')}</ModalTitle>
+                  <ModalDescription>
+                    {t('administration:roles.renameRoleSubtitle')}
+                  </ModalDescription>
+                </div>
+                <ModalCloseButton onClick={() => setIsRenameOpen(false)} />
+              </ModalHeader>
+              <ModalBody className="space-y-4">
+                <Field>
+                  <FieldLabel htmlFor="role-rename-name">{t('common:labels.name')}</FieldLabel>
+                  <Input
+                    id="role-rename-name"
+                    value={roleName}
+                    onChange={(event) => setRoleName(event.target.value)}
+                    placeholder={t('common:form.placeholderName')}
+                  />
+                  {formErrors.name && <FieldError>{formErrors.name}</FieldError>}
+                </Field>
+                {formErrors.general && (
+                  <p className="text-sm font-medium text-destructive">{formErrors.general}</p>
+                )}
+              </ModalBody>
+              <ModalFooter>
+                <Button type="button" variant="ghost" onClick={() => setIsRenameOpen(false)}>
+                  {t('common:buttons.cancel')}
+                </Button>
+                <Button type="submit">{t('common:buttons.update')}</Button>
+              </ModalFooter>
+            </form>
+          </ModalContent>
+        )}
       </Modal>
+
+      <Modal
+        isOpen={isPermissionsOpen}
+        onClose={() => setIsPermissionsOpen(false)}
+        ariaLabel={null}
+      >
+        {() => (
+          <ModalContent size="2xl" className="max-w-5xl">
+            <ModalHeader>
+              <div>
+                <ModalTitle>{t('administration:roles.editPermissions')}</ModalTitle>
+                <ModalDescription className="font-medium text-primary">
+                  {activeRole?.name}
+                </ModalDescription>
+              </div>
+              <ModalCloseButton onClick={() => setIsPermissionsOpen(false)} />
+            </ModalHeader>
+            <ModalBody className="flex-1 space-y-6">
+              {renderPermissionTabs()}
+              {formErrors.general && (
+                <p className="text-sm font-medium text-destructive">{formErrors.general}</p>
+              )}
+            </ModalBody>
+            <ModalFooter>
+              <Button type="button" variant="ghost" onClick={() => setIsPermissionsOpen(false)}>
+                {t('common:buttons.cancel')}
+              </Button>
+              <Button type="button" onClick={handleUpdatePermissions}>
+                {t('common:buttons.save')}
+              </Button>
+            </ModalFooter>
+          </ModalContent>
+        )}
+      </Modal>
+
+      <DeleteConfirmModal
+        isOpen={isDeleteConfirmOpen && !!activeRole}
+        onClose={() => {
+          if (isDeleting) return;
+          setIsDeleteConfirmOpen(false);
+        }}
+        onConfirm={handleDelete}
+        isDeleting={isDeleting}
+        title={t('administration:roles.deleteRole')}
+        description={t('common:messages.deleteConfirmNamed', { name: activeRole?.name })}
+      />
     </div>
   );
 };
