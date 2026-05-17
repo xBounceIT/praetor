@@ -48,6 +48,8 @@
     "phone": "Phone",
     "username": "Username",
     "password": "Password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
     "client": "Client",
     "project": "Project",
     "task": "Task",

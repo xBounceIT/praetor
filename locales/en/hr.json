@@ -31,6 +31,7 @@
     "deleteConfirm": "Are you sure you want to delete this user? All associated data will be affected.",
     "deleteUser": "Delete User",
     "createNewUser": "Create New User",
+    "createNewUserDescription": "Add a new user to your workspace.",
     "manageAccess": "Manage Access: {{name}}",
     "disabled": "Disabled",
     "name": "Name",

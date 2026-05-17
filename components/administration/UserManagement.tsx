@@ -1,3 +1,4 @@
+import { Eye, EyeOff, UserPlus } from 'lucide-react';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -152,6 +155,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
   const [newRole, setNewRole] = useState<string>(roleOptions[0]?.id || '');
   const usernameManuallyEdited = React.useRef(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   const [managingUserId, setManagingUserId] = useState<string | null>(null);
   const [assignments, setAssignments] = useState<{
@@ -261,26 +265,25 @@ const UserManagement: React.FC<UserManagementProps> = ({
       return;
     }
 
+    resetCreateUserForm();
+    setIsCreateModalOpen(false);
+  };
+
+  const resetCreateUserForm = () => {
     setNewFirstName('');
     setNewSurname('');
     setNewEmail('');
     setNewUsername('');
     setNewPassword('');
+    setShowNewPassword(false);
     setNewRole(roleOptions[0]?.id || '');
     usernameManuallyEdited.current = false;
-    setIsCreateModalOpen(false);
+    setFormErrors({});
   };
 
   const closeCreateModal = () => {
     setIsCreateModalOpen(false);
-    setNewFirstName('');
-    setNewSurname('');
-    setNewEmail('');
-    setNewUsername('');
-    setNewPassword('');
-    setNewRole(roleOptions[0]?.id || '');
-    usernameManuallyEdited.current = false;
-    setFormErrors({});
+    resetCreateUserForm();
   };
 
   React.useEffect(() => {
@@ -1361,31 +1364,28 @@ const UserManagement: React.FC<UserManagementProps> = ({
           </div>
         </div>
       </Modal>
-      {/* Create User Modal */}
+      {/* Create User Dialog */}
       {canCreateUsers && (
-        <Modal isOpen={isCreateModalOpen} onClose={closeCreateModal}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
-            <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
-              <h3 className="text-xl font-semibold text-zinc-800 flex items-center gap-3">
-                <div className="size-10 bg-zinc-100 rounded-xl flex items-center justify-center text-praetor">
-                  <i className="fa-solid fa-user-plus"></i>
-                </div>
+        <Dialog
+          open={isCreateModalOpen}
+          onOpenChange={(open) => {
+            if (!open) closeCreateModal();
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <UserPlus className="size-5" aria-hidden="true" />
                 {t('hr:workforce.createNewUser')}
-              </h3>
-              <button
-                onClick={closeCreateModal}
-                className="size-10 flex items-center justify-center rounded-xl hover:bg-zinc-100 text-zinc-400 transition-colors"
-              >
-                <i className="fa-solid fa-xmark text-lg"></i>
-              </button>
-            </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4" noValidate>
+              </DialogTitle>
+              <DialogDescription>{t('hr:workforce.createNewUserDescription')}</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-zinc-500 ml-1 mb-1">
-                    {t('hr:workforce.name')}
-                  </label>
-                  <input
+                <div className="space-y-2">
+                  <Label htmlFor="create-user-first-name">{t('hr:workforce.name')}</Label>
+                  <Input
+                    id="create-user-first-name"
                     type="text"
                     value={newFirstName}
                     onChange={(e) => {
@@ -1401,17 +1401,16 @@ const UserManagement: React.FC<UserManagementProps> = ({
                       }
                     }}
                     placeholder="e.g. Alice"
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-zinc-50/50 outline-none text-sm font-semibold ${formErrors.firstName ? 'border-red-400 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor/20'}`}
+                    aria-invalid={!!formErrors.firstName}
                   />
                   {formErrors.firstName && (
-                    <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.firstName}</p>
+                    <p className="text-xs text-destructive">{formErrors.firstName}</p>
                   )}
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-zinc-500 ml-1 mb-1">
-                    {t('hr:workforce.surname')}
-                  </label>
-                  <input
+                <div className="space-y-2">
+                  <Label htmlFor="create-user-surname">{t('hr:workforce.surname')}</Label>
+                  <Input
+                    id="create-user-surname"
                     type="text"
                     value={newSurname}
                     onChange={(e) => {
@@ -1427,18 +1426,17 @@ const UserManagement: React.FC<UserManagementProps> = ({
                       }
                     }}
                     placeholder="e.g. Smith"
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-zinc-50/50 outline-none text-sm font-semibold ${formErrors.surname ? 'border-red-400 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor/20'}`}
+                    aria-invalid={!!formErrors.surname}
                   />
                   {formErrors.surname && (
-                    <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.surname}</p>
+                    <p className="text-xs text-destructive">{formErrors.surname}</p>
                   )}
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-zinc-500 ml-1 mb-1">
-                  {t('common:labels.email')}
-                </label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="create-user-email">{t('common:labels.email')}</Label>
+                <Input
+                  id="create-user-email"
                   type="email"
                   value={newEmail}
                   onChange={(e) => {
@@ -1448,17 +1446,14 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     }
                   }}
                   placeholder="e.g. alice.smith@example.com"
-                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-zinc-50/50 outline-none text-sm font-semibold ${formErrors.email ? 'border-red-400 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor/20'}`}
+                  aria-invalid={!!formErrors.email}
                 />
-                {formErrors.email && (
-                  <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.email}</p>
-                )}
+                {formErrors.email && <p className="text-xs text-destructive">{formErrors.email}</p>}
               </div>
-              <div>
-                <label className="block text-xs font-bold text-zinc-500 ml-1 mb-1">
-                  {t('hr:workforce.username')}
-                </label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="create-user-username">{t('hr:workforce.username')}</Label>
+                <Input
+                  id="create-user-username"
                   type="text"
                   value={newUsername}
                   onChange={(e) => {
@@ -1469,62 +1464,71 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     }
                   }}
                   placeholder="e.g. alice.smith"
-                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-zinc-50/50 outline-none text-sm font-semibold ${formErrors.username ? 'border-red-400 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor/20'}`}
+                  aria-invalid={!!formErrors.username}
                 />
                 {formErrors.username && (
-                  <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.username}</p>
+                  <p className="text-xs text-destructive">{formErrors.username}</p>
                 )}
               </div>
-              <div>
-                <label className="block text-xs font-bold text-zinc-500 ml-1 mb-1">
-                  {t('hr:workforce.password')}
-                </label>
-                <input
-                  type="text"
-                  value={newPassword}
-                  onChange={(e) => {
-                    setNewPassword(e.target.value);
-                    if (formErrors.password || formErrors.general) {
-                      setFormErrors((prev) => ({ ...prev, password: '', general: '' }));
+              <div className="space-y-2">
+                <Label htmlFor="create-user-password">{t('hr:workforce.password')}</Label>
+                <div className="relative">
+                  <Input
+                    id="create-user-password"
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => {
+                      setNewPassword(e.target.value);
+                      if (formErrors.password || formErrors.general) {
+                        setFormErrors((prev) => ({ ...prev, password: '', general: '' }));
+                      }
+                    }}
+                    placeholder={t('hr:workforce.password')}
+                    aria-invalid={!!formErrors.password}
+                    className="pr-9"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((prev) => !prev)}
+                    aria-label={
+                      showNewPassword
+                        ? t('common:labels.hidePassword')
+                        : t('common:labels.showPassword')
                     }
-                  }}
-                  placeholder="Password"
-                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-praetor transition-all bg-zinc-50/50 outline-none text-sm font-semibold ${formErrors.password ? 'border-red-400 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor/20'}`}
-                />
+                    aria-pressed={showNewPassword}
+                    className="absolute inset-y-0 right-0 flex items-center justify-center px-2 text-muted-foreground hover:text-foreground rounded-md focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  >
+                    {showNewPassword ? (
+                      <EyeOff className="size-4" aria-hidden="true" />
+                    ) : (
+                      <Eye className="size-4" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
                 {formErrors.password && (
-                  <p className="text-xs text-red-500 mt-1 ml-1">{formErrors.password}</p>
+                  <p className="text-xs text-destructive">{formErrors.password}</p>
                 )}
               </div>
-              <div>
-                <SelectControl
-                  label={t('hr:workforce.role')}
-                  options={roleOptions}
-                  value={newRole}
-                  onChange={(val) => setNewRole(val as string)}
-                  buttonClassName="py-3 text-sm"
-                />
-              </div>
+              <SelectControl
+                id="create-user-role"
+                label={t('hr:workforce.role')}
+                options={roleOptions}
+                value={newRole}
+                onChange={(val) => setNewRole(val as string)}
+              />
+
               {formErrors.general && (
-                <p className="text-xs font-bold text-red-500">{formErrors.general}</p>
+                <p className="text-sm font-medium text-destructive">{formErrors.general}</p>
               )}
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={closeCreateModal}
-                  className="flex-1 px-4 py-3 border border-zinc-200 rounded-xl text-zinc-600 font-bold hover:bg-zinc-50 transition-colors"
-                >
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={closeCreateModal}>
                   {t('common:buttons.cancel')}
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-3 bg-praetor text-white rounded-xl font-bold hover:bg-zinc-800 transition-colors active:scale-95"
-                >
-                  {t('common:buttons.add')}
-                </button>
-              </div>
+                </Button>
+                <Button type="submit">{t('common:buttons.add')}</Button>
+              </DialogFooter>
             </form>
-          </div>
-        </Modal>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Page header: search + add button */}
