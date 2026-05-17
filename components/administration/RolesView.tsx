@@ -371,7 +371,7 @@ const RolesView: React.FC<RolesViewProps> = ({
       value={activeModuleTab}
       onValueChange={setActiveModuleTab}
       orientation="vertical"
-      className="flex w-fit max-h-[60vh] flex-row gap-0 overflow-hidden rounded-xl border border-border bg-card"
+      className="flex max-h-[60vh] min-h-96 flex-row gap-0 overflow-hidden rounded-xl border border-border bg-card"
     >
       <TabsList
         variant="line"
@@ -394,14 +394,14 @@ const RolesView: React.FC<RolesViewProps> = ({
         })}
       </TabsList>
 
-      <div className="overflow-y-auto bg-background">
+      <div className="flex-1 overflow-y-auto bg-background">
         {moduleOrder.map((module) => {
           const currentDefinitions = groupedPermissions[module] || [];
           const currentActions = getModuleActions(module);
           if (currentDefinitions.length === 0) return null;
           return (
             <TabsContent key={module} value={module} className="mt-0">
-              <Table className="w-auto">
+              <Table>
                 <TableHeader className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="min-w-[200px] px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -584,7 +584,7 @@ const RolesView: React.FC<RolesViewProps> = ({
 
       <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} ariaLabel={null}>
         {() => (
-          <ModalContent size="2xl" className="w-fit max-w-5xl">
+          <ModalContent size="2xl" className="max-w-5xl">
             <form onSubmit={handleCreate} className="flex flex-1 flex-col overflow-hidden">
               <ModalHeader>
                 <div>
@@ -677,7 +677,7 @@ const RolesView: React.FC<RolesViewProps> = ({
         ariaLabel={null}
       >
         {() => (
-          <ModalContent size="2xl" className="w-fit max-w-5xl">
+          <ModalContent size="2xl" className="max-w-5xl">
             <ModalHeader>
               <div>
                 <ModalTitle>{t('administration:roles.editPermissions')}</ModalTitle>
