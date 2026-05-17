@@ -10,7 +10,6 @@ import {
   Package,
   Pen,
   Settings,
-  Shield,
   Sliders,
   Trash2,
   Truck,
@@ -22,7 +21,14 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import {
+  Card,
+  CardAction,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Empty,
@@ -523,14 +529,27 @@ const RolesView: React.FC<RolesViewProps> = ({
             const canRemoveRole = canDeleteRoles && !role.isAdmin && !role.isSystem;
             const hasAnyAction = canRenameRole || canEditPermissions || canRemoveRole;
 
+            const hasBadges = role.isSystem || role.isAdmin;
+
             return (
-              <Card key={role.id} className="group gap-4 transition-shadow hover:shadow-md">
-                <CardHeader className="flex flex-row items-start justify-between gap-2 [.border-b]:pb-0">
-                  <div className="flex size-12 items-center justify-center rounded-xl bg-muted text-foreground">
-                    <UserCog className="size-5" />
-                  </div>
+              <Card key={role.id} className="transition-shadow hover:shadow-md">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-3 text-base">
+                    <UserCog aria-hidden="true" className="size-5 text-muted-foreground" />
+                    {role.name}
+                  </CardTitle>
+                  {hasBadges && (
+                    <CardDescription className="flex flex-wrap gap-1.5">
+                      {role.isSystem && (
+                        <Badge variant="secondary">{t('administration:roles.badges.system')}</Badge>
+                      )}
+                      {role.isAdmin && (
+                        <Badge variant="default">{t('administration:roles.badges.admin')}</Badge>
+                      )}
+                    </CardDescription>
+                  )}
                   {hasAnyAction && (
-                    <div className="flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                    <CardAction className="flex gap-1">
                       {canRenameRole && (
                         <RoleCardAction
                           icon={<Pen />}
@@ -540,7 +559,7 @@ const RolesView: React.FC<RolesViewProps> = ({
                       )}
                       {canEditPermissions && (
                         <RoleCardAction
-                          icon={<Shield />}
+                          icon={<Pen />}
                           label={t('administration:roles.permissions')}
                           onClick={() => openPermissionsModal(role)}
                         />
@@ -553,23 +572,11 @@ const RolesView: React.FC<RolesViewProps> = ({
                           destructive
                         />
                       )}
-                    </div>
+                    </CardAction>
                   )}
                 </CardHeader>
 
-                <CardContent className="space-y-2">
-                  <h3 className="text-lg font-semibold text-foreground">{role.name}</h3>
-                  <div className="flex flex-wrap gap-1.5">
-                    {role.isSystem && (
-                      <Badge variant="secondary">{t('administration:roles.badges.system')}</Badge>
-                    )}
-                    {role.isAdmin && (
-                      <Badge variant="default">{t('administration:roles.badges.admin')}</Badge>
-                    )}
-                  </div>
-                </CardContent>
-
-                <CardFooter className="border-t pt-4 text-sm text-muted-foreground">
+                <CardFooter className="border-t text-sm text-muted-foreground">
                   {t('administration:roles.permissionCount', {
                     count: role.permissions?.length || 0,
                   })}
