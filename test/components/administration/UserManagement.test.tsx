@@ -354,4 +354,19 @@ describe('<UserManagement />', () => {
 
     expect(usernameInput.value).toBe('annamaria');
   });
+
+  test('password field is masked by default and the eye toggle reveals it', async () => {
+    const { user } = await openCreateUserModal();
+    const passwordInput = document.getElementById('create-user-password') as HTMLInputElement;
+    expect(passwordInput).not.toBeNull();
+    expect(passwordInput.type).toBe('password');
+
+    const toggle = screen.getByRole('button', { name: 'common:labels.showPassword' });
+    await user.click(toggle);
+    expect(passwordInput.type).toBe('text');
+    expect(screen.getByRole('button', { name: 'common:labels.hidePassword' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'common:labels.hidePassword' }));
+    expect(passwordInput.type).toBe('password');
+  });
 });

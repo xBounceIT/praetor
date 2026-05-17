@@ -31,6 +31,7 @@
     "deleteConfirm": "Sei sicuro di voler eliminare questo utente? Tutti i dati associati saranno interessati.",
     "deleteUser": "Elimina Utente",
     "createNewUser": "Crea Nuovo Utente",
+    "createNewUserDescription": "Aggiungi un nuovo utente alla tua area di lavoro.",
     "manageAccess": "Gestisci Accesso: {{name}}",
     "disabled": "Disabilitato",
     "name": "Nome",
