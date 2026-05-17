@@ -377,6 +377,59 @@ describe('getClient', () => {
       "import realLdap from 'ldapjs'",
     );
   });
+
+  test('rejects LDAP_TLS_CERT_FILE without LDAP_TLS_KEY_FILE', async () => {
+    process.env.LDAP_TLS_CERT_FILE = import.meta.path;
+
+    await expect(ldapService.getClient()).rejects.toThrow(
+      'LDAP_TLS_CERT_FILE and LDAP_TLS_KEY_FILE must be set together',
+    );
+    expect(createClientMock).not.toHaveBeenCalled();
+  });
+
+  test('rejects LDAP_TLS_KEY_FILE without LDAP_TLS_CERT_FILE', async () => {
+    process.env.LDAP_TLS_KEY_FILE = import.meta.path;
+
+    await expect(ldapService.getClient()).rejects.toThrow(
+      'LDAP_TLS_CERT_FILE and LDAP_TLS_KEY_FILE must be set together',
+    );
+    expect(createClientMock).not.toHaveBeenCalled();
+  });
+
+  test('rejects missing LDAP_TLS_CERT_FILE when mTLS env vars are paired', async () => {
+    process.env.LDAP_TLS_CERT_FILE = '/path/that/does/not/exist/cert.pem';
+    process.env.LDAP_TLS_KEY_FILE = import.meta.path;
+
+    await expect(ldapService.getClient()).rejects.toThrow(
+      'LDAP_TLS_CERT_FILE points to a file that does not exist',
+    );
+    expect(createClientMock).not.toHaveBeenCalled();
+  });
+
+  test('rejects missing LDAP_TLS_KEY_FILE when mTLS env vars are paired', async () => {
+    process.env.LDAP_TLS_CERT_FILE = import.meta.path;
+    process.env.LDAP_TLS_KEY_FILE = '/path/that/does/not/exist/key.pem';
+
+    await expect(ldapService.getClient()).rejects.toThrow(
+      'LDAP_TLS_KEY_FILE points to a file that does not exist',
+    );
+    expect(createClientMock).not.toHaveBeenCalled();
+  });
+
+  test('attaches cert and key buffers when LDAP mTLS env files are paired and readable', async () => {
+    process.env.LDAP_TLS_CERT_FILE = import.meta.path;
+    process.env.LDAP_TLS_KEY_FILE = import.meta.path;
+
+    await ldapService.getClient();
+
+    const opts = createClientMock.mock.calls[0]?.[0] as {
+      tlsOptions: { cert?: Buffer; key?: Buffer };
+    };
+    expect(opts.tlsOptions.cert).toBeInstanceOf(Buffer);
+    expect(opts.tlsOptions.key).toBeInstanceOf(Buffer);
+    expect((opts.tlsOptions.cert as Buffer).length).toBeGreaterThan(0);
+    expect((opts.tlsOptions.key as Buffer).length).toBeGreaterThan(0);
+  });
 });
 
 describe('invalidateConfig', () => {
