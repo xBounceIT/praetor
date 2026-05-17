@@ -50,7 +50,7 @@ describe('<RolesView />', () => {
     expect(within(row).getAllByRole('checkbox')).toHaveLength(4);
   });
 
-  test('select-all toggle promotes a partial selection to all-selected', () => {
+  test('select-all switch stays off when only some actions are checked', () => {
     renderRolesView();
     openCreateAndSwitchToCrm();
 
@@ -59,11 +59,19 @@ describe('<RolesView />', () => {
     fireEvent.click(firstCheckbox);
     expect(firstCheckbox.getAttribute('data-state')).toBe('checked');
 
-    const selectAllToggle = within(row).getByRole('switch');
-    expect(selectAllToggle.getAttribute('data-state')).toBe('checked');
+    const selectAllSwitch = within(row).getByRole('switch');
+    expect(selectAllSwitch.getAttribute('data-state')).toBe('unchecked');
+  });
 
-    fireEvent.click(selectAllToggle);
+  test('flipping the select-all switch on checks every action in the row', () => {
+    renderRolesView();
+    openCreateAndSwitchToCrm();
 
+    const row = findClientsAllRow();
+    const selectAllSwitch = within(row).getByRole('switch');
+    fireEvent.click(selectAllSwitch);
+
+    expect(selectAllSwitch.getAttribute('data-state')).toBe('checked');
     for (const checkbox of within(row).getAllByRole('checkbox')) {
       expect(checkbox.getAttribute('data-state')).toBe('checked');
     }

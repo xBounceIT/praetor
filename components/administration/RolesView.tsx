@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/empty';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import {
   Table,
   TableBody,
@@ -76,7 +77,6 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
-import Toggle from '../shared/Toggle';
 
 export interface RolesViewProps {
   roles: Role[];
@@ -425,15 +425,9 @@ const RolesView: React.FC<RolesViewProps> = ({
                     const definitionLabel = t(`administration:permissions.${definition.id}`, {
                       defaultValue: formatPermissionLabel(definition.id),
                     });
-                    const selectedCount = definition.actions.reduce(
-                      (count, action) =>
-                        selectedPermissionSet.has(buildPermission(definition.id, action))
-                          ? count + 1
-                          : count,
-                      0,
+                    const isAllSelected = definition.actions.every((action) =>
+                      selectedPermissionSet.has(buildPermission(definition.id, action)),
                     );
-                    const isAllSelected = selectedCount === definition.actions.length;
-                    const hasPartial = selectedCount > 0 && !isAllSelected;
 
                     return (
                       <TableRow key={definition.id}>
@@ -478,10 +472,10 @@ const RolesView: React.FC<RolesViewProps> = ({
                           );
                         })}
                         <TableCell className="px-4 py-3 text-center">
-                          <Toggle
+                          <Switch
                             checked={isAllSelected}
-                            onChange={() => toggleAllForDefinition(definition)}
-                            partial={hasPartial}
+                            onCheckedChange={() => toggleAllForDefinition(definition)}
+                            aria-label={`${definitionLabel} – ${t('common:table.selectAll')}`}
                           />
                         </TableCell>
                       </TableRow>
