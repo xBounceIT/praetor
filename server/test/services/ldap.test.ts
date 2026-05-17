@@ -461,6 +461,28 @@ describe('authenticate', () => {
     ]);
   });
 
+  test('rejects ambiguous user lookup before binding as a matched user', async () => {
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=alice,ou=people,dc=test,dc=com', object: { uid: 'alice' } },
+            { objectName: 'uid=alice,ou=admins,dc=test,dc=com', object: { uid: 'alice' } },
+          ],
+          status: 0,
+        },
+      ],
+    };
+
+    await expect(ldapService.authenticateWithProfile('alice', 'pw')).rejects.toThrow(/ambiguous/);
+    expect(lastClientStats?.bindCalls).toEqual([
+      { dn: 'cn=admin,dc=test,dc=com', password: 'admin-pw' },
+    ]);
+    expect(lastClientStats?.searchCalls).toHaveLength(1);
+    expect(lastClientStats?.unbindCalls).toBe(1);
+  });
+
   test('rejects when service-account rebind before group lookup fails', async () => {
     nextFixture = {
       bindResponses: [null, null, new Error('service rebind failed')],
@@ -677,9 +699,10 @@ describe('findUserEntry (direct, with config preloaded)', () => {
     await ldapService.findUserEntry(client as never, 'alice');
     const search = lastClientStats?.searchCalls[0];
     expect(search?.options.attributes).toEqual(['uid', 'sAMAccountName', 'cn', 'displayName']);
+    expect(search?.options.sizeLimit).toBe(1);
   });
 
-  test('resolves to the last searchEntry.objectName when multiple entries fire (foundDn reassignment)', async () => {
+  test('rejects when multiple user search entries fire', async () => {
     const client = buildClient({
       entries: [
         { objectName: 'uid=alice,dc=test,dc=com' },
@@ -687,8 +710,26 @@ describe('findUserEntry (direct, with config preloaded)', () => {
       ],
       status: 0,
     });
-    const entry = await ldapService.findUserEntry(client as never, 'alice');
-    expect(entry?.dn).toBe('uid=bob,dc=test,dc=com');
+    await expect(ldapService.findUserEntry(client as never, 'alice')).rejects.toThrow(/ambiguous/);
+  });
+
+  test('rejects LDAP size-limit status as an ambiguous user lookup', async () => {
+    const client = buildClient({
+      entries: [{ objectName: 'uid=alice,dc=test,dc=com' }],
+      status: 4,
+    });
+    await expect(ldapService.findUserEntry(client as never, 'alice')).rejects.toThrow(/ambiguous/);
+  });
+
+  test('rejects LDAP size-limit error event as an ambiguous user lookup', async () => {
+    const client = buildClient({
+      entries: [{ objectName: 'uid=alice,dc=test,dc=com' }],
+      errorEvent: Object.assign(new Error('size limit exceeded'), {
+        name: 'SizeLimitExceededError',
+      }),
+      status: 0,
+    });
+    await expect(ldapService.findUserEntry(client as never, 'alice')).rejects.toThrow(/ambiguous/);
   });
 
   test('resolves to entry.objectName when a single searchEntry fires', async () => {
