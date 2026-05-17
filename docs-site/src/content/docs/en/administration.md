@@ -64,4 +64,4 @@ After changing SMTP, sender, or security options, always run a send test before 
 
 Logs help reconstruct access and relevant operations. Use them for audit, troubleshooting, and checks after administrative changes.
 
-Filter by period and user to reduce noise and focus on the event you need to analyze.
+Filter by period to reduce noise and focus on the event you need to analyze.
