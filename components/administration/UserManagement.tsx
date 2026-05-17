@@ -1485,6 +1485,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     }}
                     placeholder={t('hr:workforce.password')}
                     aria-invalid={!!formErrors.password}
+                    autoComplete="new-password"
                     className="pr-9"
                   />
                   <button
@@ -1496,7 +1497,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         : t('common:labels.showPassword')
                     }
                     aria-pressed={showNewPassword}
-                    className="absolute inset-y-0 right-0 flex items-center justify-center px-2 text-muted-foreground hover:text-foreground rounded-md focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    className="absolute inset-y-0 right-0 flex items-center justify-center px-2 text-muted-foreground hover:text-foreground rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                   >
                     {showNewPassword ? (
                       <EyeOff className="size-4" aria-hidden="true" />
