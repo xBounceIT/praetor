@@ -36,7 +36,7 @@ interface LdapClient {
   unbind: (callback: (err?: Error) => void) => void;
   search: (
     base: string,
-    options: { scope: string; filter: unknown; attributes?: string[] },
+    options: { scope: string; filter: unknown; attributes?: string[]; sizeLimit?: number },
     callback: (err: Error | null, res: LdapSearchResult) => void,
   ) => void;
 }
@@ -69,6 +69,19 @@ const flattenSearchEntryAttributes = (entry: LdapSearchEntry): Record<string, un
     flat[attr.type] = attr.values;
   }
   return flat;
+};
+
+const LDAP_SIZE_LIMIT_EXCEEDED_STATUS = 4;
+const AMBIGUOUS_LDAP_USER_ERROR =
+  'LDAP user lookup was ambiguous: the configured user filter matched more than one entry';
+
+const isLdapSizeLimitExceededError = (err: Error): boolean => {
+  const maybeLdapError = err as Error & { code?: unknown; status?: unknown };
+  return (
+    err.name === 'SizeLimitExceededError' ||
+    maybeLdapError.code === LDAP_SIZE_LIMIT_EXCEEDED_STATUS ||
+    maybeLdapError.status === LDAP_SIZE_LIMIT_EXCEEDED_STATUS
+  );
 };
 
 export type LdapAuthResult = {
@@ -517,6 +530,7 @@ class LDAPService {
       scope: 'sub',
       filter: buildUserLookupFilter(config.userFilter, username),
       attributes: ['uid', 'sAMAccountName', 'cn', 'displayName'],
+      sizeLimit: 1,
     };
 
     return new Promise((resolve, reject) => {
@@ -524,20 +538,28 @@ class LDAPService {
         if (err) return reject(err);
 
         let found: LdapUserEntry | null = null;
+        let foundCount = 0;
 
         res.on('searchEntry', (entry: LdapSearchEntry) => {
           // v3 emits a DN object; bind serializes via writeString which throws on non-strings.
           const dn = entry.objectName?.toString() ?? null;
           if (!dn) return;
-          found = { dn, attributes: flattenSearchEntryAttributes(entry) };
+          foundCount += 1;
+          found ??= { dn, attributes: flattenSearchEntryAttributes(entry) };
         });
 
         res.on('error', (err: Error) => {
-          reject(err);
+          if (isLdapSizeLimitExceededError(err)) {
+            reject(new Error(AMBIGUOUS_LDAP_USER_ERROR));
+          } else {
+            reject(err);
+          }
         });
 
         res.on('end', (result: { status: number }) => {
-          if (result.status !== 0) {
+          if (foundCount > 1 || result.status === LDAP_SIZE_LIMIT_EXCEEDED_STATUS) {
+            reject(new Error(AMBIGUOUS_LDAP_USER_ERROR));
+          } else if (result.status !== 0) {
             reject(new Error('LDAP search failed status: ' + result.status));
           } else {
             resolve(found);
