@@ -1383,7 +1383,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
             <form onSubmit={handleSubmit} className="space-y-4" noValidate>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label htmlFor="create-user-first-name">{t('hr:workforce.name')}</Label>
+                  <Label htmlFor="create-user-first-name">
+                    {t('hr:workforce.name')}
+                    <span className="text-destructive" aria-hidden="true">
+                      *
+                    </span>
+                  </Label>
                   <Input
                     id="create-user-first-name"
                     type="text"
@@ -1402,13 +1407,19 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     }}
                     placeholder="e.g. Alice"
                     aria-invalid={!!formErrors.firstName}
+                    required
                   />
                   {formErrors.firstName && (
                     <p className="text-xs text-destructive">{formErrors.firstName}</p>
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="create-user-surname">{t('hr:workforce.surname')}</Label>
+                  <Label htmlFor="create-user-surname">
+                    {t('hr:workforce.surname')}
+                    <span className="text-destructive" aria-hidden="true">
+                      *
+                    </span>
+                  </Label>
                   <Input
                     id="create-user-surname"
                     type="text"
@@ -1427,6 +1438,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     }}
                     placeholder="e.g. Smith"
                     aria-invalid={!!formErrors.surname}
+                    required
                   />
                   {formErrors.surname && (
                     <p className="text-xs text-destructive">{formErrors.surname}</p>
@@ -1451,7 +1463,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 {formErrors.email && <p className="text-xs text-destructive">{formErrors.email}</p>}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="create-user-username">{t('hr:workforce.username')}</Label>
+                <Label htmlFor="create-user-username">
+                  {t('hr:workforce.username')}
+                  <span className="text-destructive" aria-hidden="true">
+                    *
+                  </span>
+                </Label>
                 <Input
                   id="create-user-username"
                   type="text"
@@ -1465,13 +1482,19 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   }}
                   placeholder="e.g. alice.smith"
                   aria-invalid={!!formErrors.username}
+                  required
                 />
                 {formErrors.username && (
                   <p className="text-xs text-destructive">{formErrors.username}</p>
                 )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="create-user-password">{t('hr:workforce.password')}</Label>
+                <Label htmlFor="create-user-password">
+                  {t('hr:workforce.password')}
+                  <span className="text-destructive" aria-hidden="true">
+                    *
+                  </span>
+                </Label>
                 <div className="relative">
                   <Input
                     id="create-user-password"
@@ -1486,6 +1509,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     placeholder={t('hr:workforce.password')}
                     aria-invalid={!!formErrors.password}
                     autoComplete="new-password"
+                    required
                     className="pr-9"
                   />
                   <button
