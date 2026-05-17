@@ -200,7 +200,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
   const [editFormErrors, setEditFormErrors] = useState<Record<string, string>>({});
   const [editCostPerHour, setEditCostPerHour] = useState<string>('0');
   const [editIsDisabled, setEditIsDisabled] = useState(false);
-  const [userSearch, setUserSearch] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [authMethodUser, setAuthMethodUser] = useState<User | null>(null);
   const [authMethodDraft, setAuthMethodDraft] = useState<UserAuthMethod>('local');
@@ -747,18 +746,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const { visibleClients, visibleProjects, visibleTasks } = getFilteredData();
 
-  const userSearchValue = userSearch.trim().toLowerCase();
-  const matchesUserSearch = (user: User, term: string) => {
-    if (!term) return true;
-    return (
-      user.name.toLowerCase().includes(term) ||
-      user.username.toLowerCase().includes(term) ||
-      (user.email?.toLowerCase() || '').includes(term)
-    );
-  };
-  const usersFiltered = [...users]
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-    .filter((user) => matchesUserSearch(user, userSearchValue));
+  const sortedUsers = React.useMemo(
+    () =>
+      [...users].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
+    [users],
+  );
 
   const emptyEmailLabel = t('common:common.none');
   const noUsersFoundLabel = t('hr:workforce.noUsers');
@@ -1556,28 +1548,17 @@ const UserManagement: React.FC<UserManagementProps> = ({
         </Dialog>
       )}
 
-      {/* Page header: search + add button */}
-      <div className="flex justify-between items-center gap-4">
-        <div className="relative flex-1">
-          <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-zinc-300 text-xs"></i>
-          <input
-            type="text"
-            placeholder={t('hr:workforce.searchUsers')}
-            value={userSearch}
-            onChange={(e) => setUserSearch(e.target.value)}
-            className="w-full pl-8 pr-3 py-2 bg-white border border-zinc-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-praetor outline-none shadow-sm"
-          />
-        </div>
-        {canCreateUsers && (
+      {canCreateUsers && (
+        <div className="flex justify-end">
           <HeaderAddButton onClick={() => setIsCreateModalOpen(true)}>
             {t('hr:workforce.addUser')}
           </HeaderAddButton>
-        )}
-      </div>
+        </div>
+      )}
 
       <StandardTable<User>
         title={t('hr:workforce.title')}
-        data={usersFiltered}
+        data={sortedUsers}
         columns={userColumns}
         defaultRowsPerPage={5}
         emptyState={noUsersFoundLabel}
