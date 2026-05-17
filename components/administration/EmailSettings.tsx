@@ -1,6 +1,6 @@
 import { Check, FlaskConical, Loader2, Save, Send, Server } from 'lucide-react';
 import type React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
@@ -73,12 +73,17 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
     (smtpPassword) => setFormData((prev) => ({ ...prev, smtpPassword })),
     config,
   );
+  // Lock the From Email auto-fill once the admin has supplied a value (either by
+  // typing into the field or by loading a saved config that already has one).
+  // Mirrors the username/firstName-surname pattern in UserManagement.
+  const fromEmailManuallyEdited = useRef<boolean>(Boolean(config?.fromEmail));
 
   // Sync formData when config prop changes (e.g., after API fetch)
   useEffect(() => {
     if (config) {
       setFormData(config);
       setOriginalConfig(config);
+      fromEmailManuallyEdited.current = Boolean(config.fromEmail);
     }
   }, [config]);
 
@@ -305,7 +310,17 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
                   id="email-smtp-user"
                   type="text"
                   value={formData.smtpUser}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, smtpUser: e.target.value }))}
+                  onChange={(e) => {
+                    const smtpUser = e.target.value;
+                    setFormData((prev) => ({
+                      ...prev,
+                      smtpUser,
+                      ...(fromEmailManuallyEdited.current ? {} : { fromEmail: smtpUser }),
+                    }));
+                    if (!fromEmailManuallyEdited.current && errors.fromEmail) {
+                      setErrors((prev) => ({ ...prev, fromEmail: '' }));
+                    }
+                  }}
                   placeholder="user@example.com"
                 />
               </Field>
@@ -353,6 +368,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
                   type="email"
                   value={formData.fromEmail}
                   onChange={(e) => {
+                    fromEmailManuallyEdited.current = true;
                     setFormData((prev) => ({ ...prev, fromEmail: e.target.value }));
                     if (errors.fromEmail) setErrors((prev) => ({ ...prev, fromEmail: '' }));
                   }}
