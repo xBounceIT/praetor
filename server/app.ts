@@ -3,7 +3,7 @@ import multipart from '@fastify/multipart';
 import swagger from '@fastify/swagger';
 import dotenv from 'dotenv';
 import Fastify, { type FastifyInstance } from 'fastify';
-import rateLimit from 'fastify-rate-limit';
+import rateLimit, { type errorResponseBuilderContext } from 'fastify-rate-limit';
 import aiRoutes from './routes/ai.ts';
 import authRoutes from './routes/auth.ts';
 import clientOffersRoutes from './routes/client-offers.ts';
@@ -76,6 +76,15 @@ export const buildErrorResponseMessage = (
   return { statusCode, message };
 };
 
+export const buildRateLimitErrorResponse = (
+  _request: unknown,
+  context: errorResponseBuilderContext,
+): Error & { statusCode: number } => {
+  const error = new Error('Too many requests') as Error & { statusCode: number };
+  error.statusCode = context.statusCode;
+  return error;
+};
+
 // Exported so tests can register the exact production error handler against a minimal
 // Fastify instance, rather than re-implementing setErrorHandler in test setup.
 export const registerErrorHandler = (fastify: FastifyInstance) => {
@@ -118,9 +127,7 @@ export const buildApp = async () => {
     ...GLOBAL_RATE_LIMIT,
     global: true,
     hook: 'onRequest',
-    errorResponseBuilder: () => ({
-      error: 'Too many requests',
-    }),
+    errorResponseBuilder: buildRateLimitErrorResponse,
   });
 
   await fastify.register(multipart, {
