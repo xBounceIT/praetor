@@ -64,4 +64,4 @@ Dopo aver modificato SMTP, mittente o sicurezza, esegui sempre un test di invio 
 
 I log aiutano a ricostruire accessi e operazioni rilevanti. Usali per audit, troubleshooting e verifiche dopo modifiche amministrative.
 
-Filtra per periodo e utente per ridurre il rumore e concentrarti sull'evento da analizzare.
+Filtra per periodo per ridurre il rumore e concentrarti sull'evento da analizzare.
