@@ -12,7 +12,7 @@ import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -114,8 +114,22 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     state: 'idle',
   });
   const [activeTab, setActiveTab] = useState<TabId>('localization');
+  const [tabDirection, setTabDirection] = useState<'left' | 'right'>('right');
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+
+  const handleTabChange = (id: TabId) => {
+    if (id === activeTab) return;
+    const nextIndex = TABS.findIndex((tab) => tab.id === id);
+    const currentIndex = TABS.findIndex((tab) => tab.id === activeTab);
+    setTabDirection(nextIndex > currentIndex ? 'right' : 'left');
+    setActiveTab(id);
+  };
+
+  const sectionAnimationClass =
+    tabDirection === 'right'
+      ? 'animate-in fade-in slide-in-from-right-4 duration-300'
+      : 'animate-in fade-in slide-in-from-left-4 duration-300';
 
   useEffect(() => {
     setCurrency(settings.currency);
@@ -247,7 +261,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
             <button
               key={id}
               type="button"
-              onClick={() => setActiveTab(id)}
+              onClick={() => handleTabChange(id)}
               className={cn(
                 'pb-4 text-sm font-bold transition-all relative inline-flex items-center gap-2',
                 isActive ? 'text-praetor' : 'text-muted-foreground hover:text-foreground',
@@ -265,12 +279,18 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
 
       <form onSubmit={handleSave} className="space-y-8">
         {activeTab === 'localization' && (
-          <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0 animate-in fade-in slide-in-from-left-4 duration-300">
+          <Card
+            className={cn(
+              'gap-0 overflow-hidden rounded-lg border-border bg-background py-0',
+              sectionAnimationClass,
+            )}
+          >
             <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
               <CardTitle className="flex items-center gap-3 text-base">
                 <Globe aria-hidden="true" className="size-4 text-praetor" />
                 {t('general.localizationDisplay')}
               </CardTitle>
+              <CardDescription>{t('general.localizationDescription')}</CardDescription>
             </CardHeader>
             <CardContent className="p-6">
               <Field className="max-w-xs">
@@ -290,12 +310,18 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
         )}
 
         {activeTab === 'tracking' && (
-          <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <Card
+            className={cn(
+              'gap-0 overflow-hidden rounded-lg border-border bg-background py-0',
+              sectionAnimationClass,
+            )}
+          >
             <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
               <CardTitle className="flex items-center gap-3 text-base">
                 <Clock aria-hidden="true" className="size-4 text-praetor" />
                 {t('general.globalTrackingPreferences')}
               </CardTitle>
+              <CardDescription>{t('general.globalTrackingPreferencesDescription')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-8 p-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -368,12 +394,18 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
         )}
 
         {activeTab === 'ai' && (
-          <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0 animate-in fade-in slide-in-from-right-4 duration-300">
+          <Card
+            className={cn(
+              'gap-0 overflow-hidden rounded-lg border-border bg-background py-0',
+              sectionAnimationClass,
+            )}
+          >
             <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
               <CardTitle className="flex items-center gap-3 text-base">
                 <WandSparkles aria-hidden="true" className="size-4 text-praetor" />
                 {t('general.aiCapabilities')}
               </CardTitle>
+              <CardDescription>{t('general.aiCapabilitiesDescription')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6 p-6">
               <ToggleSettingRow
