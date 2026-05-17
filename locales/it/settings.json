@@ -213,8 +213,6 @@
     "passwordStoredHelp": "Lascia invariato per mantenere la password memorizzata, oppure clicca Sostituisci per sovrascriverla.",
     "rejectUnauthorized": "Rifiuta certificati non autorizzati",
     "rejectUnauthorizedHint": "Disabilita per certificati autofirmati",
-    "sender": "Impostazioni Mittente",
-    "senderDescription": "Identità usata nell'intestazione From delle email di notifica in uscita.",
     "fromEmail": "Email Mittente",
     "fromName": "Nome Mittente",
     "testEmail": "Email di Test",

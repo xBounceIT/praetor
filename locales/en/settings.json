@@ -213,8 +213,6 @@
     "passwordStoredHelp": "Leave as-is to keep the stored password, or click Replace to overwrite it.",
     "rejectUnauthorized": "Reject unauthorized certificates",
     "rejectUnauthorizedHint": "Disable for self-signed certificates",
-    "sender": "Sender Settings",
-    "senderDescription": "Identity used in the From header of outgoing notification emails.",
     "fromEmail": "From Email",
     "fromName": "From Name",
     "testEmail": "Test Email",

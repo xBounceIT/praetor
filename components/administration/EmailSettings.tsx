@@ -1,4 +1,4 @@
-import { Check, FlaskConical, Loader2, Mail, Save, Send, Server } from 'lucide-react';
+import { Check, FlaskConical, Loader2, Save, Send, Server } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -227,24 +227,24 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
               !formData.enabled && 'pointer-events-none opacity-60',
             )}
           >
-            <Field>
-              <FieldLabel htmlFor="email-smtp-host">{t('email.host', 'SMTP Host')}</FieldLabel>
-              <Input
-                id="email-smtp-host"
-                type="text"
-                value={formData.smtpHost}
-                onChange={(e) => {
-                  setFormData((prev) => ({ ...prev, smtpHost: e.target.value }));
-                  if (errors.smtpHost) setErrors((prev) => ({ ...prev, smtpHost: '' }));
-                }}
-                placeholder="smtp.example.com"
-                aria-invalid={!!errors.smtpHost}
-                className="font-mono"
-              />
-              {errors.smtpHost && <FieldError errors={[{ message: errors.smtpHost }]} />}
-            </Field>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+              <Field className="md:col-span-2">
+                <FieldLabel htmlFor="email-smtp-host">{t('email.host', 'SMTP Host')}</FieldLabel>
+                <Input
+                  id="email-smtp-host"
+                  type="text"
+                  value={formData.smtpHost}
+                  onChange={(e) => {
+                    setFormData((prev) => ({ ...prev, smtpHost: e.target.value }));
+                    if (errors.smtpHost) setErrors((prev) => ({ ...prev, smtpHost: '' }));
+                  }}
+                  placeholder="smtp.example.com"
+                  aria-invalid={!!errors.smtpHost}
+                  className="font-mono"
+                />
+                {errors.smtpHost && <FieldError errors={[{ message: errors.smtpHost }]} />}
+              </Field>
 
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="email-smtp-port">{t('email.port', 'Port')}</FieldLabel>
                 <Input
@@ -296,7 +296,9 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
                     t('email.encryptionHint.insecure', 'No encryption (for local proxy)')}
                 </FieldDescription>
               </Field>
+            </div>
 
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="email-smtp-user">{t('email.username', 'Username')}</FieldLabel>
                 <Input
@@ -340,28 +342,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
                 </FieldDescription>
               </div>
             </Field>
-          </CardContent>
-        </Card>
 
-        <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
-          <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-            <CardTitle className="flex items-center gap-3 text-base">
-              <Mail aria-hidden="true" className="size-4 text-praetor" />
-              {t('email.sender', 'Sender Settings')}
-            </CardTitle>
-            <CardDescription>
-              {t(
-                'email.senderDescription',
-                'Identity used in the From header of outgoing notification emails.',
-              )}
-            </CardDescription>
-          </CardHeader>
-          <CardContent
-            className={cn(
-              'p-6 transition-opacity',
-              !formData.enabled && 'pointer-events-none opacity-60',
-            )}
-          >
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="email-from-email">
