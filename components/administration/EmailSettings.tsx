@@ -281,7 +281,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
                     setFormData((prev) => ({ ...prev, smtpEncryption: val as SmtpEncryption }))
                   }
                 >
-                  <SelectTrigger id="email-smtp-encryption">
+                  <SelectTrigger id="email-smtp-encryption" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
