@@ -169,6 +169,13 @@ describe('isPrivateIp', () => {
     expect(sso.isPrivateIp('::ffff:10.0.0.1')).toBe(true);
   });
 
+  test('detects hex-form IPv4-mapped IPv6 private ranges', () => {
+    expect(sso.isPrivateIp('::ffff:7f00:1')).toBe(true);
+    expect(sso.isPrivateIp('::ffff:0a00:1')).toBe(true);
+    expect(sso.isPrivateIp('0:0:0:0:0:ffff:a9fe:a9fe')).toBe(true);
+    expect(sso.isPrivateIp('::ffff:0808:0808')).toBe(false);
+  });
+
   test('detects 100.64.0.0/10 (carrier-grade NAT)', () => {
     expect(sso.isPrivateIp('100.64.0.1')).toBe(true);
     expect(sso.isPrivateIp('100.127.255.254')).toBe(true);
@@ -523,6 +530,162 @@ describe('completeOidcLogin state-before-provider ordering', () => {
       'Invalid or expired SSO state',
     );
     expect(statesConsumeMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('OIDC remote endpoint hardening', () => {
+  const realFetch = globalThis.fetch;
+  const originalSsoBase = process.env.SSO_CALLBACK_BASE_URL;
+  const fetchMock = mock();
+
+  const OIDC_PROVIDER_ENDPOINTS: realSsoProvidersRepo.SsoProvider = {
+    ...SAML_PROVIDER,
+    id: 'sso-oidc-endpoints',
+    protocol: 'oidc',
+    slug: 'google',
+    name: 'Google',
+    issuerUrl: 'https://accounts.google.com',
+    clientId: 'cid',
+    clientSecret: '',
+    scopes: 'openid email profile',
+    metadataUrl: '',
+    metadataXml: '',
+  };
+
+  beforeEach(() => {
+    process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
+    fetchMock.mockReset();
+    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+    findBySlugMock.mockResolvedValue(OIDC_PROVIDER_ENDPOINTS);
+    oidcBuildAuthorizationUrlMock.mockReturnValue(new URL('https://accounts.google.com/auth'));
+  });
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  afterAll(() => {
+    if (originalSsoBase === undefined) delete process.env.SSO_CALLBACK_BASE_URL;
+    else process.env.SSO_CALLBACK_BASE_URL = originalSsoBase;
+  });
+
+  test('wires openid-client through the same safe custom fetch and timeout used by discovery', async () => {
+    dnsLookupMock.mockResolvedValue([{ address: '142.251.32.46', family: 4 }]);
+    oidcDiscoveryMock.mockResolvedValue({ serverMetadata: () => ({}) });
+
+    await sso.startOidcLogin('google');
+
+    const options = oidcDiscoveryMock.mock.calls[0][4];
+    expect(options.timeout).toBe(5);
+    expect(typeof options[realOidc.customFetch]).toBe('function');
+
+    dnsLookupMock.mockReset();
+    dnsLookupMock.mockResolvedValue([{ address: '10.0.0.5', family: 4 }]);
+    await expect(
+      options[realOidc.customFetch]('https://internal.example.com/token', {
+        body: undefined,
+        headers: {},
+        method: 'POST',
+        redirect: 'manual',
+      }),
+    ).rejects.toThrow(/private\/loopback/);
+  });
+
+  test('rejects discovered OIDC endpoints that resolve to private addresses before redirecting', async () => {
+    dnsLookupMock
+      .mockResolvedValueOnce([{ address: '142.251.32.46', family: 4 }])
+      .mockResolvedValueOnce([{ address: '10.0.0.5', family: 4 }]);
+    oidcDiscoveryMock.mockResolvedValue({
+      serverMetadata: () => ({
+        token_endpoint: 'https://internal.example.com/token',
+      }),
+    });
+
+    await expect(sso.startOidcLogin('google')).rejects.toThrow(/private\/loopback/);
+    expect(oidcBuildAuthorizationUrlMock).not.toHaveBeenCalled();
+  });
+
+  test('rejects OIDC responses whose Content-Length exceeds the remote response cap', async () => {
+    dnsLookupMock.mockResolvedValue([{ address: '142.251.32.46', family: 4 }]);
+    oidcDiscoveryMock.mockResolvedValue({ serverMetadata: () => ({}) });
+    await sso.startOidcLogin('google');
+    const options = oidcDiscoveryMock.mock.calls[0][4];
+
+    dnsLookupMock.mockReset();
+    dnsLookupMock.mockResolvedValue([{ address: '203.0.113.10', family: 4 }]);
+    fetchMock.mockResolvedValueOnce(
+      new Response(null, {
+        status: 200,
+        headers: { 'content-length': String(2 * 1024 * 1024) },
+      }),
+    );
+
+    await expect(
+      options[realOidc.customFetch]('https://idp.example.com/token', {
+        body: undefined,
+        headers: {},
+        method: 'POST',
+        redirect: 'manual',
+      }),
+    ).rejects.toThrow(/too large/);
+  });
+
+  test('rejects streamed OIDC responses that exceed the remote response cap', async () => {
+    dnsLookupMock.mockResolvedValue([{ address: '142.251.32.46', family: 4 }]);
+    oidcDiscoveryMock.mockResolvedValue({ serverMetadata: () => ({}) });
+    await sso.startOidcLogin('google');
+    const options = oidcDiscoveryMock.mock.calls[0][4];
+
+    dnsLookupMock.mockReset();
+    dnsLookupMock.mockResolvedValue([{ address: '203.0.113.10', family: 4 }]);
+    const oneMb = new Uint8Array(1024 * 1024).fill(65);
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(oneMb);
+        controller.enqueue(oneMb);
+        controller.close();
+      },
+    });
+    fetchMock.mockResolvedValueOnce(new Response(stream, { status: 200 }));
+
+    const response = await options[realOidc.customFetch]('https://idp.example.com/userinfo', {
+      body: undefined,
+      headers: {},
+      method: 'GET',
+      redirect: 'manual',
+    });
+    await expect(response.text()).rejects.toThrow(/exceeded/);
+  });
+
+  test('does not validate end_session_endpoint during login when OIDC logout is disabled', async () => {
+    dnsLookupMock
+      .mockResolvedValueOnce([{ address: '142.251.32.46', family: 4 }])
+      .mockResolvedValueOnce([{ address: '10.0.0.5', family: 4 }]);
+    oidcDiscoveryMock.mockResolvedValue({
+      serverMetadata: () => ({
+        end_session_endpoint: 'https://internal.example.com/logout',
+      }),
+    });
+
+    await sso.startOidcLogin('google');
+
+    expect(dnsLookupMock).toHaveBeenCalledTimes(1);
+    expect(oidcBuildAuthorizationUrlMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('rejects unsafe end_session_endpoint during login when OIDC logout is enabled', async () => {
+    findBySlugMock.mockResolvedValue({ ...OIDC_PROVIDER_ENDPOINTS, endSessionEnabled: true });
+    dnsLookupMock
+      .mockResolvedValueOnce([{ address: '142.251.32.46', family: 4 }])
+      .mockResolvedValueOnce([{ address: '10.0.0.5', family: 4 }]);
+    oidcDiscoveryMock.mockResolvedValue({
+      serverMetadata: () => ({
+        end_session_endpoint: 'https://internal.example.com/logout',
+      }),
+    });
+
+    await expect(sso.startOidcLogin('google')).rejects.toThrow(/private\/loopback/);
+    expect(oidcBuildAuthorizationUrlMock).not.toHaveBeenCalled();
   });
 });
 
@@ -1065,6 +1228,67 @@ describe('SSO login persists id_token only when one is present', () => {
     expect(userSessionsDeleteByUserIdMock).toHaveBeenCalledWith('u1');
   });
 
+  test('OIDC login skips UserInfo when discovery does not advertise a userinfo endpoint', async () => {
+    setupOidcCallback();
+    oidcFetchUserInfoMock.mockRejectedValue(new Error('userinfo should not be called'));
+    oidcAuthorizationCodeGrantMock.mockResolvedValue({
+      id_token: 'eyJ.fresh.idtoken',
+      access_token: 'access-token',
+      claims: () => ({
+        sub: 'subj-1',
+        iss: 'https://idp.example.com',
+        preferred_username: 'alice',
+        name: 'Alice Example',
+        email: 'alice@example.com',
+        groups: ['praetor-users'],
+      }),
+    });
+
+    await sso.completeOidcLogin(
+      'okta',
+      new URL('http://internal.invalid/api/auth/sso/oidc/okta/callback?state=s&code=abc'),
+    );
+
+    expect(oidcFetchUserInfoMock).not.toHaveBeenCalled();
+    expect(resolveExternalIdentityMock.mock.calls[0][0]).toMatchObject({
+      issuer: 'https://idp.example.com',
+      username: 'alice',
+      groups: ['praetor-users'],
+    });
+  });
+
+  test('OIDC identity issuer comes from the ID token, not an overlapping UserInfo claim', async () => {
+    setupOidcCallback();
+    oidcDiscoveryMock.mockResolvedValue({
+      serverMetadata: () => ({ userinfo_endpoint: 'https://idp.example.com/userinfo' }),
+    });
+    oidcAuthorizationCodeGrantMock.mockResolvedValue({
+      id_token: 'eyJ.fresh.idtoken',
+      access_token: 'access-token',
+      claims: () => ({
+        sub: 'subj-1',
+        iss: 'https://idp.example.com',
+        preferred_username: 'alice-from-id-token',
+      }),
+    });
+    oidcFetchUserInfoMock.mockResolvedValue({
+      sub: 'subj-1',
+      iss: 'https://conflicting.example.com',
+      preferred_username: 'alice-from-userinfo',
+    });
+
+    await sso.completeOidcLogin(
+      'okta',
+      new URL('http://internal.invalid/api/auth/sso/oidc/okta/callback?state=s&code=abc'),
+    );
+
+    expect(oidcFetchUserInfoMock).toHaveBeenCalledTimes(1);
+    expect(resolveExternalIdentityMock.mock.calls[0][0]).toMatchObject({
+      issuer: 'https://idp.example.com',
+      username: 'alice-from-userinfo',
+    });
+  });
+
   test('SAML login clears any stale OIDC row for the same user', async () => {
     const samlProvider = {
       ...OIDC_PROVIDER_PERSIST,
@@ -1107,7 +1331,7 @@ describe('OIDC nonce wiring', () => {
 
   beforeEach(() => {
     process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
-    oidcDiscoveryMock.mockResolvedValue({ __fakeConfig: true });
+    oidcDiscoveryMock.mockResolvedValue({ serverMetadata: () => ({}) });
     // createOidcConfig SSRF-checks issuerUrl via dns.lookup({ all: true }).
     dnsLookupMock.mockResolvedValue([{ address: '142.251.32.46', family: 4 }]);
   });

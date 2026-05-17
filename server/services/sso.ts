@@ -29,6 +29,7 @@ const OIDC_STATE_TTL_MS = 10 * 60 * 1000;
 const SAML_REQUEST_TTL_MS = 10 * 60 * 1000;
 const LOGIN_TICKET_TTL_MS = 2 * 60 * 1000;
 const REMOTE_FETCH_TIMEOUT_MS = 5_000;
+const OIDC_REMOTE_FETCH_TIMEOUT_SECONDS = REMOTE_FETCH_TIMEOUT_MS / 1000;
 const REMOTE_FETCH_REDIRECT_LIMIT = 3;
 // SAML metadata documents are typically a few KB. 1 MiB is well above any legitimate payload
 // and keeps a hostile IdP from sending multi-GB junk that would OOM the backend.
@@ -452,6 +453,17 @@ const parseSamlMetadata = (xml: string) => {
  *   - fc00::/7 (IPv6 unique-local)
  *   - fe80::/10 (IPv6 link-local)
  */
+const ipv4FromMappedIpv6 = (ip: string): string | null => {
+  const dotted = ip.match(/^(?:::ffff:|0:0:0:0:0:ffff:)(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (dotted) return dotted[1];
+
+  const hex = ip.match(/^(?:::ffff:|0:0:0:0:0:ffff:)([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (!hex) return null;
+  const high = Number.parseInt(hex[1], 16);
+  const low = Number.parseInt(hex[2], 16);
+  return `${(high >> 8) & 0xff}.${high & 0xff}.${(low >> 8) & 0xff}.${low & 0xff}`;
+};
+
 export const isPrivateIp = (ip: string): boolean => {
   const v4 = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
   if (v4) {
@@ -473,8 +485,8 @@ export const isPrivateIp = (ip: string): boolean => {
   if (v6.startsWith('fe8') || v6.startsWith('fe9') || v6.startsWith('fea') || v6.startsWith('feb'))
     return true; // fe80::/10
   // IPv4-mapped IPv6 — recursively check the embedded v4.
-  const mapped = v6.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
-  if (mapped) return isPrivateIp(mapped[1]);
+  const mapped = ipv4FromMappedIpv6(v6);
+  if (mapped) return isPrivateIp(mapped);
   return false;
 };
 
@@ -492,6 +504,41 @@ const assertSafeRemoteUrl = async (url: URL): Promise<void> => {
   }
   if (addresses.some((a) => isPrivateIp(a.address))) {
     throw new Error(`Refusing to fetch URL with private/loopback host: ${url.hostname}`);
+  }
+};
+
+const safeOidcFetch: oidc.CustomFetch = async (url, options) => {
+  const parsed = new URL(url);
+  await assertSafeRemoteUrl(parsed);
+  const response = await fetch(parsed, options);
+  return responseWithBoundedBody(response, options.method);
+};
+
+const OIDC_REMOTE_ENDPOINT_FIELDS = [
+  'authorization_endpoint',
+  'token_endpoint',
+  'userinfo_endpoint',
+  'jwks_uri',
+] as const;
+
+const assertSafeOidcServerMetadata = async (
+  config: Awaited<ReturnType<typeof oidc.discovery>>,
+  options: { includeEndSessionEndpoint: boolean },
+): Promise<void> => {
+  const metadata = config.serverMetadata() as Record<string, unknown>;
+  const fields = options.includeEndSessionEndpoint
+    ? [...OIDC_REMOTE_ENDPOINT_FIELDS, 'end_session_endpoint']
+    : OIDC_REMOTE_ENDPOINT_FIELDS;
+  for (const field of fields) {
+    const value = metadata[field];
+    if (typeof value !== 'string' || !value.trim()) continue;
+    let endpoint: URL;
+    try {
+      endpoint = new URL(value);
+    } catch {
+      throw new Error(`OIDC discovery ${field} is not a valid URL`);
+    }
+    await assertSafeRemoteUrl(endpoint);
   }
 };
 
@@ -521,8 +568,39 @@ const readBoundedText = async (response: Response): Promise<string> => {
   return Buffer.concat(chunks, total).toString('utf-8');
 };
 
+const responseWithBoundedBody = (response: Response, method: string): Response => {
+  const init = {
+    headers: response.headers,
+    status: response.status,
+    statusText: response.statusText,
+  };
+  if (method.toUpperCase() === 'HEAD' || [204, 205, 304].includes(response.status)) {
+    return new Response(null, init);
+  }
+
+  const declared = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > REMOTE_FETCH_MAX_BYTES) {
+    throw new Error(`Remote response too large (${declared} bytes)`);
+  }
+  if (!response.body) return new Response(null, init);
+
+  let total = 0;
+  const boundedBody = response.body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        total += chunk.byteLength;
+        if (total > REMOTE_FETCH_MAX_BYTES) {
+          throw new Error(`Remote response exceeded ${REMOTE_FETCH_MAX_BYTES} bytes`);
+        }
+        controller.enqueue(chunk);
+      },
+    }),
+  );
+  return new Response(boundedBody, init);
+};
+
 /**
- * SSRF-hardened fetch for IdP-supplied URLs (SAML metadata, OIDC discovery).
+ * SSRF-hardened fetch for IdP-supplied SAML metadata URLs.
  *
  * Guarantees:
  *   - HTTPS only (no http:, file:, gopher:, etc).
@@ -675,19 +753,38 @@ const getEnabledProviderById = async (
 };
 
 const createOidcConfig = async (provider: ssoProvidersRepo.SsoProvider) => {
-  const { clientSecret } = getProviderSecrets(provider);
-  if (!provider.issuerUrl || !provider.clientId) {
-    throw new SsoLoginError(
-      'OIDC provider is missing issuer URL or client ID',
-      'provider_misconfigured',
+  try {
+    const { clientSecret } = getProviderSecrets(provider);
+    if (!provider.issuerUrl || !provider.clientId) {
+      throw new SsoLoginError(
+        'OIDC provider is missing issuer URL or client ID',
+        'provider_misconfigured',
+      );
+    }
+    // Keep every openid-client HTTP request on the same SSRF/timeout policy as the SAML
+    // metadata fetch. The issuer pre-flight catches obvious bad input before discovery;
+    // customFetch then covers discovery, JWKS, token, UserInfo, and future OIDC calls.
+    const issuerUrl = new URL(provider.issuerUrl);
+    await assertSafeRemoteUrl(issuerUrl);
+    const config = await oidc.discovery(
+      issuerUrl,
+      provider.clientId,
+      clientSecret || undefined,
+      undefined,
+      {
+        [oidc.customFetch]: safeOidcFetch,
+        timeout: OIDC_REMOTE_FETCH_TIMEOUT_SECONDS,
+      },
     );
+    await assertSafeOidcServerMetadata(config, {
+      includeEndSessionEndpoint: provider.endSessionEnabled,
+    });
+    return config;
+  } catch (err) {
+    if (err instanceof SsoLoginError) throw err;
+    const message = err instanceof Error ? err.message : 'OIDC provider discovery failed';
+    throw new SsoLoginError(message || 'OIDC provider discovery failed', 'provider_misconfigured');
   }
-  // Reuse the same SSRF pre-flight as the SAML metadata fetch. openid-client.discovery does its
-  // own HTTPS fetch internally, but our pre-flight catches the obvious cases (http://, private
-  // IP) before we hand control to the library.
-  const issuerUrl = new URL(provider.issuerUrl);
-  await assertSafeRemoteUrl(issuerUrl);
-  return oidc.discovery(issuerUrl, provider.clientId, clientSecret || undefined);
 };
 
 const createSamlClient = async (
@@ -874,15 +971,20 @@ export const completeOidcLogin = async (slug: string, callbackUrl: URL): Promise
     throw new SsoLoginError('OIDC response did not include a subject', 'invalid_response');
   }
   let userInfo: Record<string, unknown> = {};
-  if (tokens.access_token) {
+  const serverMetadata = config.serverMetadata() as Record<string, unknown>;
+  const hasUserInfoEndpoint =
+    typeof serverMetadata.userinfo_endpoint === 'string' &&
+    serverMetadata.userinfo_endpoint.trim().length > 0;
+  if (tokens.access_token && hasUserInfoEndpoint) {
     userInfo = (await oidc.fetchUserInfo(config, tokens.access_token, claims.sub)) as Record<
       string,
       unknown
     >;
   }
-  const mergedClaims = { ...(claims as Record<string, unknown>), ...userInfo };
+  const idTokenClaims = claims as Record<string, unknown>;
+  const mergedClaims = { ...idTokenClaims, ...userInfo };
   return completeExternalLogin(provider, {
-    issuer: coerceString(mergedClaims.iss) || provider.issuerUrl,
+    issuer: coerceString(idTokenClaims.iss) || provider.issuerUrl,
     subject: claims.sub,
     username: readClaim(mergedClaims, provider.usernameAttribute),
     name: readClaim(mergedClaims, provider.nameAttribute),
