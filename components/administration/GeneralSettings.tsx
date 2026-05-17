@@ -1,13 +1,4 @@
-import {
-  Check,
-  Clock,
-  Globe,
-  Loader2,
-  Save,
-  Sparkles,
-  TriangleAlert,
-  WandSparkles,
-} from 'lucide-react';
+import { Check, Clock, Globe, Loader2, Save, Sparkles, TriangleAlert } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -57,7 +48,7 @@ type AiProvider = 'gemini' | 'openrouter';
 const TABS = [
   { id: 'localization', Icon: Globe, labelKey: 'general.tabs.localization' },
   { id: 'tracking', Icon: Clock, labelKey: 'general.tabs.tracking' },
-  { id: 'ai', Icon: WandSparkles, labelKey: 'general.tabs.ai' },
+  { id: 'ai', Icon: Sparkles, labelKey: 'general.tabs.ai' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -402,7 +393,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
           >
             <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
               <CardTitle className="flex items-center gap-3 text-base">
-                <WandSparkles aria-hidden="true" className="size-4 text-praetor" />
+                <Sparkles aria-hidden="true" className="size-4 text-praetor" />
                 {t('general.aiCapabilities')}
               </CardTitle>
               <CardDescription>{t('general.aiCapabilitiesDescription')}</CardDescription>
