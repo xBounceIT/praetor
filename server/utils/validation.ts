@@ -32,6 +32,20 @@ export function requireNonEmptyString(
 }
 
 /**
+ * Validate a required non-empty string but preserve the original value.
+ * Use for external credentials where leading/trailing whitespace can be meaningful.
+ */
+export function requireNonEmptyStringRaw(
+  value: unknown,
+  fieldName: string,
+): { ok: true; value: string } | { ok: false; message: string } {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return { ok: false, message: `${fieldName} is required` };
+  }
+  return { ok: true, value };
+}
+
+/**
  * Validate optional non-empty string (if provided, must be valid)
  */
 export function optionalNonEmptyString(

@@ -261,6 +261,20 @@ describe('POST /api/auth/login', () => {
     );
   });
 
+  test('200: local password comparison keeps existing trim normalization', async () => {
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(LOGIN_USER);
+    bcryptCompareMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'alice', password: ' secret ' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(bcryptCompareMock).toHaveBeenCalledWith('secret', LOGIN_USER.passwordHash);
+  });
+
   test('200: LDAP success skips bcrypt', async () => {
     findLoginUserByNormalizedUsernameMock.mockResolvedValue({ ...LOGIN_USER, authMethod: 'ldap' });
     ldapAuthenticateWithProfileMock.mockResolvedValue({
@@ -281,6 +295,27 @@ describe('POST /api/auth/login', () => {
     expect(bcryptCompareMock).not.toHaveBeenCalled();
     const body = JSON.parse(res.body);
     expect(body.user.role).toBe('admin');
+  });
+
+  test('200: LDAP login sends the untrimmed password to the directory bind (#697)', async () => {
+    const rawPassword = '   spaces   ';
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({ ...LOGIN_USER, authMethod: 'ldap' });
+    ldapAuthenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      groups: [],
+      matchedRoleIds: [],
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: ' alice ', password: rawPassword },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(findLoginUserByNormalizedUsernameMock).toHaveBeenCalledWith('alice');
+    expect(ldapAuthenticateWithProfileMock).toHaveBeenCalledWith('alice', rawPassword);
+    expect(bcryptCompareMock).not.toHaveBeenCalled();
   });
 
   test('200: LDAP login with no matching role mapping preserves admin-assigned role (regression #318)', async () => {
@@ -398,19 +433,20 @@ describe('POST /api/auth/login', () => {
     ]);
   });
 
-  test('401 user not found (LDAP auto-provision also fails)', async () => {
+  test('401 user not found (LDAP auto-provision also fails with untrimmed password)', async () => {
+    const rawPassword = '   spaces   ';
     findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
     ldapAuthenticateAndProvisionMock.mockResolvedValue({ authenticated: false });
 
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/auth/login',
-      payload: { username: 'ghost', password: 'whatever' },
+      payload: { username: 'ghost', password: rawPassword },
     });
 
     expect(res.statusCode).toBe(401);
     expect(JSON.parse(res.body)).toEqual({ error: 'Invalid username or password' });
-    expect(ldapAuthenticateAndProvisionMock).toHaveBeenCalledWith('ghost', 'whatever');
+    expect(ldapAuthenticateAndProvisionMock).toHaveBeenCalledWith('ghost', rawPassword);
     expect(logAuditMock).not.toHaveBeenCalled();
   });
 

@@ -33,6 +33,7 @@ import {
   parseQueryBoolean,
   requireNonEmptyArrayOfStrings,
   requireNonEmptyString,
+  requireNonEmptyStringRaw,
   validateClientIdentifier,
   validateEmail,
   validateEnum,
@@ -84,6 +85,21 @@ describe('requireNonEmptyString', () => {
     const result = requireNonEmptyString('   ', 'title');
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toBe('title is required');
+  });
+});
+
+describe('requireNonEmptyStringRaw', () => {
+  test('accepts a valid non-empty string and preserves surrounding whitespace', () => {
+    expect(requireNonEmptyStringRaw('  abc  ', 'password')).toEqual({
+      ok: true,
+      value: '  abc  ',
+    });
+  });
+
+  test('returns required-message for whitespace-only string', () => {
+    const result = requireNonEmptyStringRaw('   ', 'password');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toBe('password is required');
   });
 });
 

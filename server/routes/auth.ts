@@ -15,7 +15,11 @@ import { logAudit } from '../utils/audit.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
 import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
-import { badRequest, requireNonEmptyString } from '../utils/validation.ts';
+import {
+  badRequest,
+  requireNonEmptyString,
+  requireNonEmptyStringRaw,
+} from '../utils/validation.ts';
 
 const authUserSchema = {
   type: 'object',
@@ -99,7 +103,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, usernameResult.message);
       }
 
-      const passwordResult = requireNonEmptyString(password, 'password');
+      const passwordResult = requireNonEmptyStringRaw(password, 'password');
       if (!passwordResult.ok) {
         return badRequest(reply, passwordResult.message);
       }
@@ -162,7 +166,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (ldapAuthSuccess) {
         validPassword = true;
       } else if (authMethod === 'local' && user.passwordHash) {
-        validPassword = await bcrypt.compare(passwordResult.value, user.passwordHash);
+        validPassword = await bcrypt.compare(passwordResult.value.trim(), user.passwordHash);
       }
 
       if (!validPassword) {
