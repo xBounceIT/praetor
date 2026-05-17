@@ -560,7 +560,7 @@ const RolesView: React.FC<RolesViewProps> = ({
                       {canEditPermissions && (
                         <RoleCardAction
                           icon={<Pen />}
-                          label={t('administration:roles.permissions')}
+                          label={t('administration:roles.editPermissions')}
                           onClick={() => openPermissionsModal(role)}
                         />
                       )}
