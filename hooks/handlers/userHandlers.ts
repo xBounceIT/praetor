@@ -15,7 +15,7 @@ export type UserHandlersDeps = {
 };
 
 export const makeUserHandlers = (deps: UserHandlersDeps) => {
-  const { currentUser, viewingUserId, setUsers, setRoles, setWorkUnits, setViewingUserId } = deps;
+  const { currentUser, setUsers, setRoles, setWorkUnits, setViewingUserId } = deps;
 
   const addUser = async (
     name: string,

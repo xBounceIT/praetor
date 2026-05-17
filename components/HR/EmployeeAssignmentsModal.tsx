@@ -79,7 +79,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
     return () => {
       isCancelled = true;
     };
-  }, [isOpen, user]);
+  }, [isOpen, user, t]);
 
   useEffect(() => {
     if (isOpen) return;
