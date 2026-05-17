@@ -29,17 +29,43 @@ const renderRolesView = () =>
     />,
   );
 
+const openCreateAndSwitchToCrm = () => {
+  fireEvent.click(screen.getByRole('button', { name: 'common:buttons.create' }));
+  fireEvent.mouseDown(screen.getByRole('tab', { name: /layout:modules.crm/ }));
+};
+
+const findClientsAllRow = () => {
+  const label = screen.getByText('administration:permissions.crm.clients_all');
+  const row = label.closest('tr');
+  if (!row) throw new Error('clients_all row not found');
+  return row as HTMLElement;
+};
+
 describe('<RolesView />', () => {
   test('renders create/update/delete checkboxes for all-scope permission rows', () => {
     renderRolesView();
+    openCreateAndSwitchToCrm();
 
-    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.create' }));
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /layout:modules.crm/ }));
+    const row = findClientsAllRow();
+    expect(within(row).getAllByRole('checkbox')).toHaveLength(4);
+  });
 
-    const clientsAllLabel = screen.getByText('administration:permissions.crm.clients_all');
-    const row = clientsAllLabel.closest('tr');
+  test('select-all toggle promotes a partial selection to all-selected', () => {
+    renderRolesView();
+    openCreateAndSwitchToCrm();
 
-    expect(row).not.toBeNull();
-    expect(within(row as HTMLElement).getAllByRole('checkbox')).toHaveLength(4);
+    const row = findClientsAllRow();
+    const [firstCheckbox] = within(row).getAllByRole('checkbox');
+    fireEvent.click(firstCheckbox);
+    expect(firstCheckbox.getAttribute('data-state')).toBe('checked');
+
+    const selectAllToggle = within(row).getByRole('switch');
+    expect(selectAllToggle.getAttribute('data-state')).toBe('checked');
+
+    fireEvent.click(selectAllToggle);
+
+    for (const checkbox of within(row).getAllByRole('checkbox')) {
+      expect(checkbox.getAttribute('data-state')).toBe('checked');
+    }
   });
 });

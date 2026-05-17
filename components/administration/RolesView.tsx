@@ -56,6 +56,7 @@ import {
   TOP_MANAGER_ROLE_ID,
   toTitleCase,
 } from '../../utils/permissions';
+import { toastError } from '../../utils/toast';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
@@ -152,6 +153,7 @@ const RolesView: React.FC<RolesViewProps> = ({
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isPermissionsOpen, setIsPermissionsOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [activeRole, setActiveRole] = useState<Role | null>(null);
   const [roleName, setRoleName] = useState('');
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
@@ -343,15 +345,17 @@ const RolesView: React.FC<RolesViewProps> = ({
   };
 
   const handleDelete = async () => {
-    setFormErrors({});
-    if (!activeRole) return;
+    if (!activeRole || isDeleting) return;
+    setIsDeleting(true);
     try {
       await onDeleteRole(activeRole.id);
       setIsDeleteConfirmOpen(false);
       setActiveRole(null);
     } catch (err) {
       console.error('Failed to delete role', err);
-      setFormErrors({ general: t('common:messages.errorOccurred') });
+      toastError(t('common:messages.errorOccurred'));
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -701,8 +705,12 @@ const RolesView: React.FC<RolesViewProps> = ({
 
       <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen && !!activeRole}
-        onClose={() => setIsDeleteConfirmOpen(false)}
+        onClose={() => {
+          if (isDeleting) return;
+          setIsDeleteConfirmOpen(false);
+        }}
         onConfirm={handleDelete}
+        isDeleting={isDeleting}
         title={t('administration:roles.deleteRole')}
         description={t('common:messages.deleteConfirmNamed', { name: activeRole?.name })}
       />
