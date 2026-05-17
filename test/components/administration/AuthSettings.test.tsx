@@ -659,7 +659,7 @@ describe('<AuthSettings />', () => {
   });
 
   test('blocks save and surfaces idpIssuer error for enabled manual SAML missing the issuer', async () => {
-    // Issue #597: node-saml silently skips <Issuer> validation when idpIssuer is empty.
+    // Issue #597: Praetor needs an expected issuer for its post-signature SAML issuer check.
     // The form must refuse to send a save request for an enabled manual SAML config that
     // has not specified an IdP issuer.
     const onSaveSsoProvider = mock(async (provider: Partial<SsoProvider>) =>

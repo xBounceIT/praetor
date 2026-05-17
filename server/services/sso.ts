@@ -112,9 +112,13 @@ const assertEnabledProviderConfig = (provider: ssoProvidersRepo.SsoProvider): vo
   }
 
   const hasMetadataXml = hasConfigValue(provider.metadataXml);
-  const hasMetadata = hasConfigValue(provider.metadataUrl) || hasMetadataXml;
-  const hasManual = hasConfigValue(provider.entryPoint) && hasConfigValue(provider.idpCert);
-  if (!hasMetadata && !hasManual) {
+  const parsedMetadata = hasMetadataXml ? parseSamlMetadata(provider.metadataXml) : null;
+  const hasMetadataUrl = hasConfigValue(provider.metadataUrl);
+  const hasResolvedEntryPoint =
+    hasConfigValue(parsedMetadata?.entryPoint) || hasConfigValue(provider.entryPoint);
+  const hasResolvedIdpCert =
+    hasConfigValue(parsedMetadata?.idpCert) || hasConfigValue(provider.idpCert);
+  if (!hasMetadataUrl && !(hasResolvedEntryPoint && hasResolvedIdpCert)) {
     throw new SsoProviderValidationError(
       'SAML requires metadata URL/XML or manual entryPoint and idpCert',
     );
@@ -123,14 +127,11 @@ const assertEnabledProviderConfig = (provider: ssoProvidersRepo.SsoProvider): vo
     throw new SsoProviderValidationError('usernameAttribute is required');
   }
 
-  // node-saml silently skips <Issuer> validation when idpIssuer is empty, so the SP would accept
-  // an assertion from any IdP whose signing cert chains correctly. Require provider.idpIssuer
-  // unless we can derive it from inline metadata at save time. metadataUrl mode is caught by
-  // the runtime guard in createSamlClient instead.
-  if (
-    !hasConfigValue(provider.idpIssuer) &&
-    !(hasMetadataXml && parseSamlMetadata(provider.metadataXml).idpIssuer)
-  ) {
+  // node-saml does not enforce the authn assertion <Issuer> via idpIssuer, so Praetor performs
+  // that check after signature validation. Require the expected issuer unless we can derive it
+  // from inline metadata at save time; createSamlClient keeps the same guard for stale rows and
+  // remote metadata that fails to resolve an issuer.
+  if (!hasConfigValue(provider.idpIssuer) && !hasConfigValue(parsedMetadata?.idpIssuer)) {
     throw new SsoProviderValidationError(
       'SAML requires idpIssuer when it cannot be derived from inline metadata',
     );
@@ -340,7 +341,7 @@ export class DbSamlCacheProvider implements CacheProvider {
 
   async removeAsync(key: string | null): Promise<string | null> {
     if (!key) return null;
-    return ssoStatesRepo.remove(key);
+    return ssoStatesRepo.removeForProvider(key, this.providerId, 'saml');
   }
 }
 
@@ -413,7 +414,36 @@ const collectDescendantsByName = (
   return result;
 };
 
-const parseSamlMetadata = (xml: string) => {
+const selectIdpSsoService = (idpDescriptor: unknown): unknown | null => {
+  const services = collectDescendantsByName(idpDescriptor, [
+    'SingleSignOnService',
+  ]).SingleSignOnService;
+  return (
+    services.find((node) => /HTTP-Redirect/i.test(xmlAttr(node, 'Binding'))) ?? services[0] ?? null
+  );
+};
+
+const extractIdpSigningCertificate = (idpDescriptor: unknown): string => {
+  const keyDescriptors = collectDescendantsByName(idpDescriptor, ['KeyDescriptor']).KeyDescriptor;
+  for (const keyDescriptor of keyDescriptors) {
+    const use = xmlAttr(keyDescriptor, 'use').trim().toLowerCase();
+    if (use && use !== 'signing') continue;
+
+    const certNode = collectDescendantsByName(keyDescriptor, ['X509Certificate'])
+      .X509Certificate[0];
+    const rawCert = certNode ? xmlText(certNode) : '';
+    if (rawCert) return normalizeCertificate(rawCert);
+  }
+  return '';
+};
+
+type SamlMetadataConfig = {
+  idpIssuer: string;
+  entryPoint: string;
+  idpCert: string;
+};
+
+const parseSamlMetadata = (xml: string): SamlMetadataConfig => {
   let parsed: unknown;
   try {
     parsed = xmlParser.parse(xml);
@@ -421,23 +451,27 @@ const parseSamlMetadata = (xml: string) => {
     return { idpIssuer: '', entryPoint: '', idpCert: '' };
   }
 
-  const found = collectDescendantsByName(parsed, [
-    'EntityDescriptor',
-    'SingleSignOnService',
-    'X509Certificate',
-  ]);
+  const candidates: SamlMetadataConfig[] = [];
+  const entities = collectDescendantsByName(parsed, ['EntityDescriptor']).EntityDescriptor;
+  for (const entity of entities) {
+    const idpDescriptors = collectDescendantsByName(entity, ['IDPSSODescriptor']).IDPSSODescriptor;
+    for (const idpDescriptor of idpDescriptors) {
+      const redirectService = selectIdpSsoService(idpDescriptor);
+      candidates.push({
+        idpIssuer: xmlAttr(entity, 'entityID'),
+        entryPoint: redirectService ? xmlAttr(redirectService, 'Location') : '',
+        idpCert: extractIdpSigningCertificate(idpDescriptor),
+      });
+    }
+  }
 
-  const idpIssuer = xmlAttr(found.EntityDescriptor[0], 'entityID');
-
-  const redirectService =
-    found.SingleSignOnService.find((node) => /HTTP-Redirect/i.test(xmlAttr(node, 'Binding'))) ??
-    found.SingleSignOnService[0];
-  const entryPoint = redirectService ? xmlAttr(redirectService, 'Location') : '';
-
-  const rawCert = found.X509Certificate.length > 0 ? xmlText(found.X509Certificate[0]) : '';
-  const idpCert = rawCert ? normalizeCertificate(rawCert) : '';
-
-  return { idpIssuer, entryPoint, idpCert };
+  return (
+    candidates.find((candidate) =>
+      [candidate.idpIssuer, candidate.entryPoint, candidate.idpCert].every(hasConfigValue),
+    ) ??
+    candidates.find((candidate) => hasConfigValue(candidate.idpIssuer)) ??
+    candidates[0] ?? { idpIssuer: '', entryPoint: '', idpCert: '' }
+  );
 };
 
 /**
@@ -690,17 +724,30 @@ const createOidcConfig = async (provider: ssoProvidersRepo.SsoProvider) => {
   return oidc.discovery(issuerUrl, provider.clientId, clientSecret || undefined);
 };
 
+type SamlClientContext = {
+  saml: SAML;
+  idpIssuer: string;
+};
+
+const firstNonEmptyConfigValue = (...values: string[]): string => {
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+  return '';
+};
+
 const createSamlClient = async (
   provider: ssoProvidersRepo.SsoProvider,
   baseUrl: string,
-): Promise<SAML> => {
+): Promise<SamlClientContext> => {
   const idp = await resolveSamlIdpConfig(provider);
   const { privateKey } = getProviderSecrets(provider);
   const callbackUrl = buildCallbackUrl('saml', provider.slug, baseUrl);
   const issuer = provider.spIssuer || buildSamlMetadataUrl(provider.slug, baseUrl);
-  const entryPoint = idp.entryPoint || provider.entryPoint;
-  const idpCert = normalizeCertificate(idp.idpCert || provider.idpCert);
-  const idpIssuer = idp.idpIssuer || provider.idpIssuer;
+  const entryPoint = firstNonEmptyConfigValue(idp.entryPoint, provider.entryPoint);
+  const idpCert = normalizeCertificate(firstNonEmptyConfigValue(idp.idpCert, provider.idpCert));
+  const idpIssuer = firstNonEmptyConfigValue(provider.idpIssuer, idp.idpIssuer);
   const missing = [
     !entryPoint && 'entry point',
     !idpCert && 'IdP certificate',
@@ -712,21 +759,26 @@ const createSamlClient = async (
       'provider_misconfigured',
     );
   }
-  return new SAML({
-    callbackUrl,
-    issuer,
-    audience: issuer,
-    entryPoint,
-    idpCert,
+  return {
+    saml: new SAML({
+      callbackUrl,
+      issuer,
+      audience: issuer,
+      entryPoint,
+      idpCert,
+      idpIssuer,
+      privateKey: privateKey || undefined,
+      publicCert: provider.publicCert || undefined,
+      signatureAlgorithm: 'sha256',
+      digestAlgorithm: 'sha256',
+      wantAssertionsSigned: true,
+      wantAuthnResponseSigned: true,
+      validateInResponseTo: ValidateInResponseTo.always,
+      requestIdExpirationPeriodMs: SAML_REQUEST_TTL_MS,
+      cacheProvider: new DbSamlCacheProvider(provider.id),
+    }),
     idpIssuer,
-    privateKey: privateKey || undefined,
-    publicCert: provider.publicCert || undefined,
-    signatureAlgorithm: 'sha256',
-    digestAlgorithm: 'sha256',
-    validateInResponseTo: ValidateInResponseTo.always,
-    requestIdExpirationPeriodMs: SAML_REQUEST_TTL_MS,
-    cacheProvider: new DbSamlCacheProvider(provider.id),
-  });
+  };
 };
 
 // Routed through buildCallbackUrl so the admin preview can't drift from the URL the SAML
@@ -900,7 +952,7 @@ export const completeOidcLogin = async (slug: string, callbackUrl: URL): Promise
 export const startSamlLogin = async (slug: string): Promise<string> => {
   const baseUrl = resolvePublicBaseUrl();
   const provider = await getEnabledProviderBySlug('saml', slug);
-  const saml = await createSamlClient(provider, baseUrl);
+  const { saml } = await createSamlClient(provider, baseUrl);
   return saml.getAuthorizeUrlAsync('', undefined, {});
 };
 
@@ -910,7 +962,7 @@ export const completeSamlLogin = async (
 ): Promise<string> => {
   const baseUrl = resolvePublicBaseUrl();
   const provider = await getEnabledProviderBySlug('saml', slug);
-  const saml = await createSamlClient(provider, baseUrl);
+  const { saml, idpIssuer } = await createSamlClient(provider, baseUrl);
   const result = await saml.validatePostResponseAsync(formBody);
   if (!result.profile || result.loggedOut) {
     throw new SsoLoginError('SAML response did not include a login', 'invalid_response');
@@ -921,9 +973,15 @@ export const completeSamlLogin = async (
   if (!subject) {
     throw new SsoLoginError('SAML response did not include a subject', 'invalid_response');
   }
-  const issuer = coerceString(profile.issuer) || provider.idpIssuer;
+  const issuer = coerceString(profile.issuer);
   if (!issuer) {
     throw new SsoLoginError('SAML response did not include an issuer', 'invalid_response');
+  }
+  if (issuer !== idpIssuer) {
+    throw new SsoLoginError(
+      'SAML response issuer did not match the configured IdP issuer',
+      'invalid_response',
+    );
   }
   return completeExternalLogin(provider, {
     issuer,
