@@ -101,22 +101,6 @@ const warnRoleMappingNoMatch = (
   );
 };
 
-const pickFirstString = (value: unknown): string | undefined => {
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      if (typeof item === 'string') {
-        const trimmed = item.trim();
-        if (trimmed.length > 0) return trimmed;
-      }
-    }
-  }
-  return undefined;
-};
-
 const getAttributeValues = (attributes: Record<string, unknown>, name: string): string[] => {
   const normalizedName = name.toLowerCase();
   const values: string[] = [];
@@ -145,6 +129,17 @@ const getAttributeValues = (attributes: Record<string, unknown>, name: string): 
   return values;
 };
 
+const getFirstAttributeValue = (
+  attributes: Record<string, unknown>,
+  ...names: string[]
+): string | undefined => {
+  for (const name of names) {
+    const [value] = getAttributeValues(attributes, name);
+    if (value) return value;
+  }
+  return undefined;
+};
+
 const addGroupEntryAliases = (
   groups: Set<string>,
   attributes: Record<string, unknown>,
@@ -165,11 +160,10 @@ const addGroupEntryAliases = (
 const deriveCanonicalUsername = (
   attributes: Record<string, unknown>,
   typedUsername: string,
-): string =>
-  pickFirstString(attributes.uid) ?? pickFirstString(attributes.sAMAccountName) ?? typedUsername;
+): string => getFirstAttributeValue(attributes, 'uid', 'sAMAccountName') ?? typedUsername;
 
 const deriveDisplayName = (attributes: Record<string, unknown>, fallback: string): string =>
-  pickFirstString(attributes.cn) ?? pickFirstString(attributes.displayName) ?? fallback;
+  getFirstAttributeValue(attributes, 'cn', 'displayName') ?? fallback;
 
 const isUniqueViolationError = (err: unknown): boolean => {
   if (!err || typeof err !== 'object') return false;
@@ -682,14 +676,8 @@ class LDAPService {
       const roleMappings = this.getRoleMappings();
 
       for (const entry of entries) {
-        let candidate = entry.uid;
-        if (Array.isArray(candidate)) candidate = candidate[0];
-
         // Fallback for AD, where the username attribute is sAMAccountName rather than uid.
-        if (!candidate && entry.sAMAccountName) {
-          candidate = entry.sAMAccountName;
-          if (Array.isArray(candidate)) candidate = candidate[0];
-        }
+        const candidate = getFirstAttributeValue(entry, 'uid', 'sAMAccountName');
 
         if (!candidate) {
           logger.warn('Skipping LDAP entry without username');
@@ -702,14 +690,7 @@ class LDAPService {
         }
 
         const username = normalizeExternalUsername(candidate);
-
-        const nameValue: string | string[] | undefined = entry.cn || entry.displayName;
-        let name: string;
-        if (nameValue) {
-          name = Array.isArray(nameValue) ? nameValue[0] : nameValue;
-        } else {
-          name = username;
-        }
+        const name = getFirstAttributeValue(entry, 'cn', 'displayName') ?? username;
 
         const existing = await usersRepo.findLoginUserByNormalizedUsername(username);
 

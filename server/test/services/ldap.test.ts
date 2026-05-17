@@ -38,7 +38,11 @@ const filterExistingRoleIdsMock = mock();
 // ─── ldapjs harness ───────────────────────────────────────────────────────────
 type SearchResponse = {
   err?: Error;
-  entries?: { objectName: string; object?: Record<string, unknown> }[];
+  entries?: {
+    objectName: string;
+    object?: Record<string, unknown>;
+    attributes?: Array<{ type: string; values: string[] }>;
+  }[];
   errorEvent?: Error;
   status?: number;
 };
@@ -795,6 +799,54 @@ describe('syncUsers', () => {
     expect(result).toEqual({ synced: 0, created: 1 });
   });
 
+  test('reads lowercase LDAP attribute names during sync (#694)', async () => {
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: 'cn=carol,dc=test,dc=com',
+              object: { samaccountname: 'carol', displayname: 'Carol Display' },
+            },
+          ],
+          status: 0,
+        },
+      ],
+    };
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
+    const result = await ldapService.syncUsers();
+    expect(createUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({ username: 'carol', name: 'Carol Display' }),
+    );
+    expect(result).toEqual({ synced: 0, created: 1 });
+  });
+
+  test('reads LDAP attribute-option suffixes during sync (#694)', async () => {
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: 'uid=dave,dc=test,dc=com',
+              attributes: [
+                { type: 'uid;lang-en', values: ['dave'] },
+                { type: 'displayName;lang-en', values: ['Dave Display'] },
+              ],
+            },
+          ],
+          status: 0,
+        },
+      ],
+    };
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
+    await ldapService.syncUsers();
+    expect(createUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({ username: 'dave', name: 'Dave Display' }),
+    );
+  });
+
   test('uses cn for name; falls back through displayName then username', async () => {
     nextFixture = {
       bindResponses: [null],
@@ -1416,6 +1468,32 @@ describe('authenticateAndProvision', () => {
     expect(result.canonicalUsername).toBe('carol');
     expect(createUserMock).toHaveBeenCalledWith(
       expect.objectContaining({ username: 'carol', name: 'Carol' }),
+    );
+  });
+
+  test('derives canonical username and display name from lowercase LDAP attributes (#694)', async () => {
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: 'cn=jdoe,dc=test,dc=com',
+              object: { samaccountname: 'jdoe', displayname: 'John Doe' },
+            },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
+
+    const result = await ldapService.authenticateAndProvision('john.doe@example.com', 'pw');
+
+    expect(result.canonicalUsername).toBe('jdoe');
+    expect(createUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({ username: 'jdoe', name: 'John Doe' }),
     );
   });
 
