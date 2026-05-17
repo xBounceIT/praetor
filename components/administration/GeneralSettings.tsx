@@ -67,6 +67,7 @@ interface ToggleSettingRowProps {
   description: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  contentClassName?: string;
 }
 
 const ToggleSettingRow: React.FC<ToggleSettingRowProps> = ({
@@ -74,9 +75,10 @@ const ToggleSettingRow: React.FC<ToggleSettingRowProps> = ({
   description,
   checked,
   onChange,
+  contentClassName,
 }) => (
   <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-muted/40 p-4">
-    <div>
+    <div className={contentClassName}>
       <p className="text-sm font-semibold text-foreground">{label}</p>
       <p className="text-xs text-muted-foreground mt-1">{description}</p>
     </div>
@@ -379,6 +381,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                 description={t('general.enableAiReportingDescription')}
                 checked={enableAiReporting}
                 onChange={setEnableAiReporting}
+                contentClassName="max-w-md"
               />
 
               {isAnyAiEnabled && (
