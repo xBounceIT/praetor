@@ -120,7 +120,7 @@ export const formatPermissionLabel = (resource: string) => {
   return toTitleCase(resourceName).replace(/\bApi\b/, 'API');
 };
 
-const toTitleCase = (value: string) =>
+export const toTitleCase = (value: string) =>
   value
     .split('_')
     .map((word) => (word.length ? word[0].toUpperCase() + word.slice(1) : word))

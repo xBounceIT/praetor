@@ -34,7 +34,7 @@ describe('<RolesView />', () => {
     renderRolesView();
 
     fireEvent.click(screen.getByRole('button', { name: 'common:buttons.create' }));
-    fireEvent.click(screen.getByRole('button', { name: 'layout:modules.crm' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /layout:modules.crm/ }));
 
     const clientsAllLabel = screen.getByText('administration:permissions.crm.clients_all');
     const row = clientsAllLabel.closest('tr');
