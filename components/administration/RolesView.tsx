@@ -371,7 +371,7 @@ const RolesView: React.FC<RolesViewProps> = ({
       value={activeModuleTab}
       onValueChange={setActiveModuleTab}
       orientation="vertical"
-      className="flex max-h-[60vh] min-h-96 flex-row gap-0 overflow-hidden rounded-xl border border-border bg-card"
+      className="flex max-h-[60vh] flex-row gap-0 overflow-hidden rounded-xl border border-border bg-card"
     >
       <TabsList
         variant="line"
