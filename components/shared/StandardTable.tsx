@@ -1706,13 +1706,12 @@ const StandardTable = <T extends object>({
                       shouldAnchorTrailingActionColumn &&
                       !isActionColumn &&
                       colIdx === headerGroup.headers.length - 2;
+                    const isBeforeTrailingSpacer =
+                      hasTrailingSpacer && colIdx === headerGroup.headers.length - 1;
                     const shouldStickRightColumn = isStickyRightColumn;
-                    // Force alignment: first column left, last column right, otherwise use col.align
-                    const effectiveAlign = isFirstColumn
-                      ? 'left'
-                      : isLastColumn
-                        ? 'right'
-                        : col.align;
+                    // Prefer explicit col.align; fall back to first-left / last-right defaults.
+                    const effectiveAlign =
+                      col.align ?? (isFirstColumn ? 'left' : isLastColumn ? 'right' : undefined);
                     const minColumnWidth = getColumnMinWidth(col);
                     const colWidth = Math.max(header.getSize(), minColumnWidth);
                     const sorted = header.column.getIsSorted();
@@ -1810,7 +1809,7 @@ const StandardTable = <T extends object>({
                               <span
                                 data-column-resize-line={colId}
                                 className={`h-5 w-px rounded-full transition-colors ${
-                                  isBeforeActionSpacer
+                                  isBeforeActionSpacer || isBeforeTrailingSpacer
                                     ? 'bg-transparent'
                                     : isResizing
                                       ? 'bg-primary'
@@ -1885,12 +1884,10 @@ const StandardTable = <T extends object>({
                           const isFirstColumn = colIdx === 0;
                           const isLastColumn = colIdx === visibleCells.length - 1;
                           const shouldStickRightColumn = isStickyRightColumn;
-                          // Force alignment: first column left, last column right, otherwise use col.align
-                          const effectiveAlign = isFirstColumn
-                            ? 'left'
-                            : isLastColumn
-                              ? 'right'
-                              : col.align;
+                          // Prefer explicit col.align; fall back to first-left / last-right defaults.
+                          const effectiveAlign =
+                            col.align ??
+                            (isFirstColumn ? 'left' : isLastColumn ? 'right' : undefined);
                           const minColumnWidth = getColumnMinWidth(col);
                           const colWidth = Math.max(cell.column.getSize(), minColumnWidth);
                           const stickyBorderClass =

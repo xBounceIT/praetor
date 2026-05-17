@@ -4,13 +4,12 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { logsApi } from '../../services/api/logs';
-import { AUDIT_ENTITY_TYPES, type AuditLogEntry } from '../../types';
+import type { AuditLogEntry } from '../../types';
 import DatePickerButton from '../shared/DatePickerButton';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
 
 const humanizeToken = (value: string) =>
   value
@@ -204,20 +203,6 @@ const LogsView: React.FC<LogsViewProps> = ({
   const [selectedPreset, setSelectedPreset] = useState<TimeRange | null>('last7Days');
   const [startDate, setStartDate] = useState<Date>(() => getPresetRange('last7Days').start);
   const [endDate, setEndDate] = useState<Date>(() => getPresetRange('last7Days').end);
-  const [usernameFilter, setUsernameFilter] = useState('');
-  const [actionFilter, setActionFilter] = useState<string>('');
-  const [entityTypeFilter, setEntityTypeFilter] = useState<string>('');
-  // Debounce both free-text filter inputs so we don't refetch on every keystroke.
-  const [debouncedUsername, setDebouncedUsername] = useState('');
-  const [debouncedAction, setDebouncedAction] = useState('');
-  useEffect(() => {
-    const handle = setTimeout(() => setDebouncedUsername(usernameFilter.trim()), 300);
-    return () => clearTimeout(handle);
-  }, [usernameFilter]);
-  useEffect(() => {
-    const handle = setTimeout(() => setDebouncedAction(actionFilter.trim()), 300);
-    return () => clearTimeout(handle);
-  }, [actionFilter]);
 
   const timeRangeOptions = useMemo(
     () => [
@@ -272,13 +257,7 @@ const LogsView: React.FC<LogsViewProps> = ({
     async (requestId: number) => {
       setError('');
       try {
-        const data = await logsApi.listAudit({
-          startDate,
-          endDate,
-          username: debouncedUsername || undefined,
-          action: debouncedAction || undefined,
-          entityType: entityTypeFilter || undefined,
-        });
+        const data = await logsApi.listAudit({ startDate, endDate });
         if (latestAuditRequestIdRef.current !== requestId) return false;
         setRows(data);
         return true;
@@ -289,7 +268,7 @@ const LogsView: React.FC<LogsViewProps> = ({
         return true;
       }
     },
-    [t, startDate, endDate, debouncedUsername, debouncedAction, entityTypeFilter],
+    [t, startDate, endDate],
   );
 
   useEffect(() => {
@@ -359,6 +338,7 @@ const LogsView: React.FC<LogsViewProps> = ({
         id: 'operation',
         accessorFn: (row) => formatOperationPrimary(row, t),
         className: 'min-w-[18rem]',
+        align: 'left',
       },
     ],
     [dateTimeFormatter, t],
@@ -368,101 +348,49 @@ const LogsView: React.FC<LogsViewProps> = ({
 
   const dropdownValue = selectedPreset ?? detectedRange ?? '';
 
-  const entityTypeOptions = useMemo(
-    () => [
-      { id: '', name: t('logs.filters.entityTypeAll') },
-      ...AUDIT_ENTITY_TYPES.map((id) => ({
-        id,
-        // Each entity type has an i18n key under `logs.entities.<id>`; missing keys fall back
-        // to a humanized form so newly-added types show up readably even before translation.
-        name: t(`logs.entities.${id}`, { defaultValue: humanizeToken(id) }),
-      })),
-    ],
-    [t],
-  );
-
-  const handleEntityTypeChange = useCallback((value: string | string[]) => {
-    setEntityTypeFilter(Array.isArray(value) ? value[0] : value);
-  }, []);
-
   const refreshButton = (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <Input
-          type="search"
-          value={usernameFilter}
-          onChange={(event) => setUsernameFilter(event.target.value)}
-          placeholder={t('logs.filters.usernamePlaceholder', {
-            defaultValue: 'Filter by username',
-          })}
-          className="h-7 w-44 text-xs"
-          aria-label={t('logs.filters.username', { defaultValue: 'Username' })}
-        />
-        <Input
-          type="search"
-          value={actionFilter}
-          onChange={(event) => setActionFilter(event.target.value)}
-          placeholder={t('logs.filters.actionPlaceholder', {
-            defaultValue: 'Filter by action prefix',
-          })}
-          className="h-7 w-56 text-xs"
-          aria-label={t('logs.filters.action', { defaultValue: 'Action' })}
-        />
-        <SelectControl
-          options={entityTypeOptions}
-          value={entityTypeFilter}
-          onChange={handleEntityTypeChange}
-          displayValue={
-            entityTypeFilter
-              ? undefined
-              : t('logs.filters.entityTypeAll', { defaultValue: 'All entity types' })
-          }
-          buttonClassName={TABLE_CONTROL_BUTTON_CLASSNAME}
-        />
-      </div>
-      <div className="flex items-center gap-3">
-        <DatePickerButton
-          label={t('logs.filters.startDate')}
-          value={startDate}
-          onChange={handleStartDateChange}
-          onClear={handleStartDateClear}
-          buttonClassName={TABLE_CONTROL_BUTTON_CLASSNAME}
-          startOfWeek={startOfWeek}
-          treatSaturdayAsHoliday={treatSaturdayAsHoliday}
-        />
-        <ArrowRight className="size-3.5 text-muted-foreground" aria-hidden="true" />
-        <DatePickerButton
-          label={t('logs.filters.endDate')}
-          value={endDate}
-          onChange={handleEndDateChange}
-          onClear={handleEndDateClear}
-          buttonClassName={TABLE_CONTROL_BUTTON_CLASSNAME}
-          startOfWeek={startOfWeek}
-          treatSaturdayAsHoliday={treatSaturdayAsHoliday}
-        />
-        <SelectControl
-          options={timeRangeOptions}
-          value={dropdownValue}
-          onChange={handleTimeRangeChange}
-          displayValue={dropdownValue ? undefined : t('logs.timeRanges.custom')}
-          buttonClassName={TABLE_CONTROL_BUTTON_CLASSNAME}
-        />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleRefreshLogs}
-          disabled={loading || isRefreshing}
-          className={TABLE_CONTROL_BUTTON_CLASSNAME}
-        >
-          {isRefreshing ? (
-            <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-          ) : (
-            <RefreshCw className="size-3.5" aria-hidden="true" />
-          )}
-          {t('common:buttons.refresh')}
-        </Button>
-      </div>
+    <div className="flex items-center gap-3">
+      <DatePickerButton
+        label={t('logs.filters.startDate')}
+        value={startDate}
+        onChange={handleStartDateChange}
+        onClear={handleStartDateClear}
+        buttonClassName={TABLE_CONTROL_BUTTON_CLASSNAME}
+        startOfWeek={startOfWeek}
+        treatSaturdayAsHoliday={treatSaturdayAsHoliday}
+      />
+      <ArrowRight className="size-3.5 text-muted-foreground" aria-hidden="true" />
+      <DatePickerButton
+        label={t('logs.filters.endDate')}
+        value={endDate}
+        onChange={handleEndDateChange}
+        onClear={handleEndDateClear}
+        buttonClassName={TABLE_CONTROL_BUTTON_CLASSNAME}
+        startOfWeek={startOfWeek}
+        treatSaturdayAsHoliday={treatSaturdayAsHoliday}
+      />
+      <SelectControl
+        options={timeRangeOptions}
+        value={dropdownValue}
+        onChange={handleTimeRangeChange}
+        displayValue={dropdownValue ? undefined : t('logs.timeRanges.custom')}
+        buttonClassName={TABLE_CONTROL_BUTTON_CLASSNAME}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={handleRefreshLogs}
+        disabled={loading || isRefreshing}
+        className={TABLE_CONTROL_BUTTON_CLASSNAME}
+      >
+        {isRefreshing ? (
+          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+        ) : (
+          <RefreshCw className="size-3.5" aria-hidden="true" />
+        )}
+        {t('common:buttons.refresh')}
+      </Button>
     </div>
   );
 
