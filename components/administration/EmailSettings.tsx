@@ -461,9 +461,9 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
                   <FieldError errors={[{ message: testErrors.testEmail }]} />
                 )}
                 {testErrors.enabled && (
-                  <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                  <FieldDescription className="text-amber-600 dark:text-amber-400">
                     {testErrors.enabled}
-                  </p>
+                  </FieldDescription>
                 )}
               </Field>
               <Button
