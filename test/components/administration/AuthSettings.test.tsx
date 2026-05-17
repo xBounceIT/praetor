@@ -274,6 +274,10 @@ describe('<AuthSettings />', () => {
 
     renderAuthSettings({ onSave });
 
+    // Dirty the form so the save button is enabled — the production button is gated on edits.
+    fireEvent.change(inputForLabel('admin.ldap.bindDnLabel'), {
+      target: { value: 'cn=admin2,dc=example,dc=com' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.saveConfiguration' }));
 
     await waitFor(() => {
@@ -281,6 +285,19 @@ describe('<AuthSettings />', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('Role mapping references a missing role');
     });
     expect(screen.queryByText('admin.ldap.changesSaved')).not.toBeInTheDocument();
+  });
+
+  test('disables the LDAP save button until the admin edits the form', () => {
+    renderAuthSettings();
+
+    const saveButton = screen.getByRole('button', { name: 'admin.ldap.saveConfiguration' });
+    expect(saveButton).toBeDisabled();
+
+    fireEvent.change(inputForLabel('admin.ldap.bindDnLabel'), {
+      target: { value: 'cn=admin2,dc=example,dc=com' },
+    });
+
+    expect(saveButton).toBeEnabled();
   });
 
   test('renders the SAML ACS URL using the backend-authoritative template (issue #602)', async () => {

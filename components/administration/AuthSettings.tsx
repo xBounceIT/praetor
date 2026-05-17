@@ -1,4 +1,4 @@
-import { CircleAlert } from 'lucide-react';
+import { CircleAlert, Save } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -1190,7 +1190,8 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
             )}
 
             <div className="flex justify-end">
-              <Button type="submit" size="lg" disabled={isSavingLdap}>
+              <Button type="submit" size="lg" disabled={isSavingLdap || !isLdapDirty}>
+                <Save aria-hidden="true" />
                 {t('admin.ldap.saveConfiguration', 'Save Configuration')}
               </Button>
             </div>
