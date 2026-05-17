@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import Fastify from 'fastify';
-import { buildErrorResponseMessage, registerErrorHandler } from '../app.ts';
+import rateLimit from 'fastify-rate-limit';
+import {
+  buildErrorResponseMessage,
+  buildRateLimitErrorResponse,
+  registerErrorHandler,
+} from '../app.ts';
 
 // Lightweight harness that registers the same `registerErrorHandler` used by buildApp(),
 // so the production error-handling path is exercised end-to-end without spinning up DB,
@@ -99,6 +104,24 @@ describe('buildErrorResponseMessage', () => {
   });
 });
 
+describe('buildRateLimitErrorResponse', () => {
+  test('returns an Error that preserves the rate-limit status code through the app handler', () => {
+    const err = buildRateLimitErrorResponse({} as never, {
+      statusCode: 429,
+      ban: false,
+      after: '1 minute',
+      max: 30,
+      ttl: 60_000,
+    });
+
+    const result = buildErrorResponseMessage(err, {
+      NODE_ENV: 'production',
+    } as NodeJS.ProcessEnv);
+
+    expect(result).toEqual({ statusCode: 429, message: 'Too many requests' });
+  });
+});
+
 describe('Fastify error handler integration', () => {
   test('production: a 500 returns the generic message but the real error reaches the log', async () => {
     process.env.NODE_ENV = 'production';
@@ -148,6 +171,28 @@ describe('Fastify error handler integration', () => {
 
     expect(response.statusCode).toBe(500);
     expect(JSON.parse(response.body)).toEqual({ error: 'Database password is hunter2' });
+
+    await fastify.close();
+  });
+
+  test('rate-limit errors preserve 429 through the production error handler', async () => {
+    const fastify = Fastify({ logger: false });
+    await fastify.register(rateLimit, {
+      global: true,
+      max: 1,
+      timeWindow: '1 minute',
+      hook: 'onRequest',
+      errorResponseBuilder: buildRateLimitErrorResponse,
+    });
+    registerErrorHandler(fastify);
+    fastify.get('/limited', async () => ({ ok: true }));
+
+    const first = await fastify.inject({ method: 'GET', url: '/limited' });
+    const second = await fastify.inject({ method: 'GET', url: '/limited' });
+
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(429);
+    expect(JSON.parse(second.body)).toEqual({ error: 'Too many requests' });
 
     await fastify.close();
   });

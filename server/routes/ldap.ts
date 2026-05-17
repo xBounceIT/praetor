@@ -9,6 +9,7 @@ import { DEFAULT_ROLE_ID } from '../services/external-auth.ts';
 import { getAuditCounts, logAudit } from '../utils/audit.ts';
 import { MASKED_SECRET } from '../utils/crypto.ts';
 import { validateGroupFilterTemplate, validateUserFilterTemplate } from '../utils/ldap-filter.ts';
+import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { badRequest, parseBooleanField, requireNonEmptyString } from '../utils/validation.ts';
 
@@ -397,7 +398,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/test',
     {
-      onRequest: [authenticateToken, requirePermission('administration.authentication.update')],
+      onRequest: [
+        fastify.rateLimit(LOGIN_RATE_LIMIT),
+        authenticateToken,
+        requirePermission('administration.authentication.update'),
+      ],
       schema: {
         tags: ['ldap'],
         summary: 'Test LDAP authentication',
