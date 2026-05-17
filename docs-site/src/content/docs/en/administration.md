@@ -19,6 +19,8 @@ Praetor supports local authentication and company integrations such as LDAP or S
 
 When saving LDAP configuration, Praetor confirms the save only after the settings are persisted successfully. If the server rejects the settings, the page shows the error message and keeps the values visible for correction.
 
+For LDAP mTLS configured through environment variables, `LDAP_TLS_CERT_FILE` and `LDAP_TLS_KEY_FILE` must be set together and point to readable files. If either value is missing or a path does not exist, Praetor reports the error before creating the LDAP client instead of continuing with a partial TLS configuration.
+
 When editing an already saved LDAP configuration, the bind password is hidden behind a **Secret stored — Replace** badge. Update the Bind DN or any other field and save without touching the password — the stored secret is preserved. Click **Replace** only when you want to enter a new password; use **Keep stored value** to undo before saving, or leave the field empty after Replace to remove the bind credentials. The same Stored / Replace pattern protects the SMTP password (Email Settings) and SSO secrets (OIDC client secret, SAML IdP certificate, signing private key, and metadata XML), so typing into these fields by mistake can no longer overwrite the stored value.
 
 Before enabling a SAML provider, configure either a valid metadata source (URL or XML) or manual settings with **Entry Point** and **IdP Certificate**. Praetor rejects enabled SAML providers that are missing this minimum configuration. Praetor also requires the **IdP Issuer** field unless the IdP entity ID can be extracted from an inline **Metadata XML** — otherwise the `<Issuer>` element of incoming SAML responses cannot be verified.

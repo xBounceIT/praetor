@@ -177,6 +177,13 @@ const isUniqueViolationError = (err: unknown): boolean => {
   return code === '23505';
 };
 
+const readRequiredEnvFile = (envName: string, filePath: string): Buffer => {
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`${envName} points to a file that does not exist: ${filePath}`);
+  }
+  return fs.readFileSync(filePath);
+};
+
 class LDAPService {
   config: ldapRepo.LdapConfig | null;
 
@@ -226,12 +233,14 @@ class LDAPService {
       tlsOptions.ca = fs.readFileSync(process.env.LDAP_TLS_CA_FILE);
     }
 
-    if (process.env.LDAP_TLS_CERT_FILE && fs.existsSync(process.env.LDAP_TLS_CERT_FILE)) {
-      tlsOptions.cert = fs.readFileSync(process.env.LDAP_TLS_CERT_FILE);
+    const certPath = process.env.LDAP_TLS_CERT_FILE;
+    const keyPath = process.env.LDAP_TLS_KEY_FILE;
+    if (Boolean(certPath) !== Boolean(keyPath)) {
+      throw new Error('LDAP_TLS_CERT_FILE and LDAP_TLS_KEY_FILE must be set together');
     }
-
-    if (process.env.LDAP_TLS_KEY_FILE && fs.existsSync(process.env.LDAP_TLS_KEY_FILE)) {
-      tlsOptions.key = fs.readFileSync(process.env.LDAP_TLS_KEY_FILE);
+    if (certPath && keyPath) {
+      tlsOptions.cert = readRequiredEnvFile('LDAP_TLS_CERT_FILE', certPath);
+      tlsOptions.key = readRequiredEnvFile('LDAP_TLS_KEY_FILE', keyPath);
     }
 
     return ldap.createClient({
