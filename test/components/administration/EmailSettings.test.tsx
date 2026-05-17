@@ -81,3 +81,53 @@ describe('<EmailSettings /> masked smtpPassword guard (issue #601 follow-up)', (
     expect(submitted.smtpPassword).toBe('new-secret');
   });
 });
+
+describe('<EmailSettings /> From Email auto-fill from SMTP username', () => {
+  const emptyConfig: EmailConfig = {
+    enabled: true,
+    smtpHost: '',
+    smtpPort: 587,
+    smtpEncryption: 'tls',
+    smtpRejectUnauthorized: true,
+    smtpUser: '',
+    smtpPassword: '',
+    fromEmail: '',
+    fromName: 'Praetor',
+  };
+
+  const inputForLabel = (labelText: string) => {
+    const input = screen.getByText(labelText).parentElement?.querySelector('input');
+    if (!input) throw new Error(`Input for label "${labelText}" not found`);
+    return input as HTMLInputElement;
+  };
+
+  test('typing into the SMTP username auto-fills From Email when it is blank', () => {
+    renderEmailSettings({ config: emptyConfig });
+
+    const smtpUser = inputForLabel('email.username');
+    fireEvent.change(smtpUser, { target: { value: 'noreply@example.com' } });
+
+    expect(inputForLabel('email.fromEmail').value).toBe('noreply@example.com');
+  });
+
+  test('a manually-edited From Email is locked and not overwritten by later SMTP username edits', () => {
+    renderEmailSettings({ config: emptyConfig });
+
+    const fromEmail = inputForLabel('email.fromEmail');
+    fireEvent.change(fromEmail, { target: { value: 'custom@example.com' } });
+
+    const smtpUser = inputForLabel('email.username');
+    fireEvent.change(smtpUser, { target: { value: 'auth@example.com' } });
+
+    expect(inputForLabel('email.fromEmail').value).toBe('custom@example.com');
+  });
+
+  test('a saved From Email from the persisted config is treated as manually-edited on mount', () => {
+    renderEmailSettings(); // baseConfig has a non-empty fromEmail
+
+    const smtpUser = inputForLabel('email.username');
+    fireEvent.change(smtpUser, { target: { value: 'newauth@example.com' } });
+
+    expect(inputForLabel('email.fromEmail').value).toBe('noreply@example.com');
+  });
+});
