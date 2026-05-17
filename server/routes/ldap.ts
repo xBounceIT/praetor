@@ -11,7 +11,12 @@ import { MASKED_SECRET } from '../utils/crypto.ts';
 import { validateGroupFilterTemplate, validateUserFilterTemplate } from '../utils/ldap-filter.ts';
 import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
-import { badRequest, parseBooleanField, requireNonEmptyString } from '../utils/validation.ts';
+import {
+  badRequest,
+  parseBooleanField,
+  requireNonEmptyString,
+  requireNonEmptyStringRaw,
+} from '../utils/validation.ts';
 
 // 64 KB matches the UI's file-import size cap (AuthSettings.tsx); keeping these in
 // sync prevents a save flow where a 32-64 KB chain passes the picker but fails the API.
@@ -421,7 +426,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const usernameResult = requireNonEmptyString(username, 'username');
       if (!usernameResult.ok) return badRequest(reply, usernameResult.message);
 
-      const passwordResult = requireNonEmptyString(password, 'password');
+      const passwordResult = requireNonEmptyStringRaw(password, 'password');
       if (!passwordResult.ok) return badRequest(reply, passwordResult.message);
 
       const ldapService = (await import('../services/ldap.ts')).default;

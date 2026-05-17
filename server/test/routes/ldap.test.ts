@@ -622,6 +622,23 @@ describe('POST /api/ldap/test', () => {
     });
   });
 
+  test('sends the untrimmed password to LDAP authentication (#697)', async () => {
+    const rawPassword = '   spaces   ';
+    authenticateWithProfileMock.mockResolvedValue({
+      authenticated: false,
+      groups: [],
+      matchedRoleIds: [],
+    });
+
+    const response = await testLdapAuth({ username: ' alice ', password: rawPassword });
+
+    expect(response.statusCode).toBe(200);
+    expect(authenticateWithProfileMock).toHaveBeenCalledWith('alice', rawPassword, {
+      allowDisabledConfig: true,
+      reloadConfig: true,
+    });
+  });
+
   test('returns an unsuccessful server response without groups or roles for failed auth', async () => {
     authenticateWithProfileMock.mockResolvedValue({
       authenticated: false,
