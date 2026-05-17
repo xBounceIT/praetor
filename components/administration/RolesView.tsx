@@ -371,7 +371,7 @@ const RolesView: React.FC<RolesViewProps> = ({
       value={activeModuleTab}
       onValueChange={setActiveModuleTab}
       orientation="vertical"
-      className="flex h-[60vh] flex-row gap-0 overflow-hidden rounded-xl border border-border bg-card"
+      className="flex max-h-[60vh] min-h-96 flex-row gap-0 overflow-hidden rounded-xl border border-border bg-card"
     >
       <TabsList
         variant="line"
@@ -590,7 +590,7 @@ const RolesView: React.FC<RolesViewProps> = ({
 
       <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} ariaLabel={null}>
         {() => (
-          <ModalContent size="6xl">
+          <ModalContent size="2xl" className="max-w-5xl">
             <form onSubmit={handleCreate} className="flex flex-1 flex-col overflow-hidden">
               <ModalHeader>
                 <div>
@@ -683,7 +683,7 @@ const RolesView: React.FC<RolesViewProps> = ({
         ariaLabel={null}
       >
         {() => (
-          <ModalContent size="6xl">
+          <ModalContent size="2xl" className="max-w-5xl">
             <ModalHeader>
               <div>
                 <ModalTitle>{t('administration:roles.editPermissions')}</ModalTitle>
