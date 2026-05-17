@@ -290,7 +290,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                 <Globe aria-hidden="true" className="size-4 text-praetor" />
                 {t('general.localizationDisplay')}
               </CardTitle>
-              <CardDescription>{t('general.localizationDescription')}</CardDescription>
+              <CardDescription>{t('general.localizationDisplayDescription')}</CardDescription>
             </CardHeader>
             <CardContent className="p-6">
               <Field className="max-w-xs">

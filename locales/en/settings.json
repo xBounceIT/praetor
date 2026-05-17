@@ -132,7 +132,7 @@
     "geminiApiKey": "Gemini API Key",
     "openrouterApiKey": "OpenRouter API Key",
     "localizationDisplay": "Localization & Display",
-    "localizationDescription": "Locale and currency defaults applied across reports and the user interface.",
+    "localizationDisplayDescription": "Locale and currency defaults applied across reports and the user interface.",
     "trackingPreferences": "Tracking Preferences",
     "aiCapabilities": "AI Capabilities",
     "aiCapabilitiesDescription": "Connect an AI provider so users can generate insights from data they can access.",
