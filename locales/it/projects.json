@@ -120,6 +120,18 @@
       "budgetUsed": "Budget usato",
       "budgetUsedSubtitle": "su {{budget}} {{currency}}"
     },
+    "timeline": {
+      "title": "Cronologia progetto",
+      "description": "Giorni trascorsi rispetto alla durata totale del progetto.",
+      "daysElapsed": "giorni trascorsi",
+      "daysRemaining": "giorni rimanenti",
+      "noDates": "Imposta le date di inizio e fine sopra per vedere la cronologia.",
+      "phase": {
+        "pending": "Non iniziato",
+        "inProgress": "In corso",
+        "completed": "Completato"
+      }
+    },
     "charts": {
       "hoursLabel": "Ore",
       "costLabel": "Costo",

@@ -687,6 +687,28 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     cost: { label: t('projects:detail.charts.costLabel'), color: 'var(--chart-3)' },
   };
 
+  // Days elapsed vs total project duration, derived from project.startDate /
+  // project.endDate. Null when either date is missing — we render an explicit
+  // "set dates" empty state instead of a misleading 0% bar.
+  const projectTimeline = useMemo(() => {
+    if (!project.startDate || !project.endDate) return null;
+    const start = new Date(`${project.startDate}T00:00:00`);
+    const end = new Date(`${project.endDate}T00:00:00`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const MS_PER_DAY = 86400000;
+    // +1 so a project that spans day N → day N counts as 1 day, not 0.
+    const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / MS_PER_DAY) + 1);
+    const rawElapsed = Math.round((today.getTime() - start.getTime()) / MS_PER_DAY) + 1;
+    const elapsedDays = Math.max(0, Math.min(totalDays, rawElapsed));
+    const remainingDays = Math.max(0, totalDays - elapsedDays);
+    const pct = (elapsedDays / totalDays) * 100;
+    const phase: 'pending' | 'inProgress' | 'completed' =
+      today < start ? 'pending' : today > end ? 'completed' : 'inProgress';
+    return { totalDays, elapsedDays, remainingDays, pct, phase, start, end };
+  }, [project.startDate, project.endDate]);
+
   const assignedUsers = users.filter((u) => assignedUserIds.includes(u.id));
   // Use the filtered list so the count and the avatar row always agree; an assigned-but-
   // missing-from-`users` id is invisible in the UI, so it shouldn't inflate the KPI.
@@ -1294,6 +1316,75 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           />
         )}
       </div>
+
+      {/* Project timeline — days elapsed vs total project duration */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <CardTitle>{t('projects:detail.timeline.title')}</CardTitle>
+              <CardDescription>{t('projects:detail.timeline.description')}</CardDescription>
+            </div>
+            {projectTimeline && (
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                  projectTimeline.phase === 'completed'
+                    ? 'bg-muted text-muted-foreground'
+                    : projectTimeline.phase === 'pending'
+                      ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                      : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                }`}
+              >
+                <span
+                  className={`size-1.5 rounded-full ${
+                    projectTimeline.phase === 'completed'
+                      ? 'bg-muted-foreground'
+                      : projectTimeline.phase === 'pending'
+                        ? 'bg-blue-500'
+                        : 'bg-emerald-500'
+                  }`}
+                  aria-hidden="true"
+                />
+                {t(`projects:detail.timeline.phase.${projectTimeline.phase}`)}
+              </span>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {!projectTimeline ? (
+            <p className="text-sm text-muted-foreground">{t('projects:detail.timeline.noDates')}</p>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
+                <span>{formatInsertDate(projectTimeline.start.getTime(), i18n.language)}</span>
+                <span>{formatInsertDate(projectTimeline.end.getTime(), i18n.language)}</span>
+              </div>
+              <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className={`h-full transition-all ${
+                    projectTimeline.phase === 'completed' ? 'bg-muted-foreground' : 'bg-emerald-500'
+                  }`}
+                  style={{ width: `${projectTimeline.pct}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">
+                  <span className="font-semibold text-foreground tabular-nums">
+                    {projectTimeline.elapsedDays}
+                  </span>{' '}
+                  / {projectTimeline.totalDays} {t('projects:detail.timeline.daysElapsed')}
+                </span>
+                <span className="text-muted-foreground">
+                  <span className="font-semibold text-foreground tabular-nums">
+                    {projectTimeline.remainingDays}
+                  </span>{' '}
+                  {t('projects:detail.timeline.daysRemaining')}
+                </span>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Charts row */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

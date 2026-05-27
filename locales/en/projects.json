@@ -120,6 +120,18 @@
       "budgetUsed": "Budget used",
       "budgetUsedSubtitle": "of {{budget}} {{currency}}"
     },
+    "timeline": {
+      "title": "Project timeline",
+      "description": "Days elapsed against the total project duration.",
+      "daysElapsed": "days elapsed",
+      "daysRemaining": "days remaining",
+      "noDates": "Set the project start and end dates above to see the timeline.",
+      "phase": {
+        "pending": "Not started",
+        "inProgress": "In progress",
+        "completed": "Completed"
+      }
+    },
     "charts": {
       "hoursLabel": "Hours",
       "costLabel": "Cost",
