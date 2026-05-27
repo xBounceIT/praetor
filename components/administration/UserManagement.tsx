@@ -1701,7 +1701,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                       </div>
                       <input
                         type="text"
-                        placeholder="Search projects..."
+                        placeholder={t('hr:workforce.searchProjects')}
                         aria-label={t('hr:workforce.searchProjects')}
                         value={projectSearch}
                         onChange={(e) => setProjectSearch(e.target.value)}
@@ -1766,7 +1766,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         </div>
                         <input
                           type="text"
-                          placeholder="Search tasks..."
+                          placeholder={t('hr:workforce.searchTasks')}
                           aria-label={t('hr:workforce.searchTasks')}
                           value={taskSearch}
                           onChange={(e) => setTaskSearch(e.target.value)}
