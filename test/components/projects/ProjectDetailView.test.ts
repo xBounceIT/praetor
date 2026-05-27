@@ -51,11 +51,11 @@ describe('ProjectDetailView wiring', () => {
     expect(source).toContain('ChartTooltipContent');
   });
 
-  test('renders four analytics charts: by user, by task, over time, by location', async () => {
+  test('renders four analytics charts: by user, by task, cost vs revenue, by location', async () => {
     const source = await readSource();
     expect(source).toContain("t('projects:detail.charts.hoursByUser')");
     expect(source).toContain("t('projects:detail.charts.hoursByTask')");
-    expect(source).toContain("t('projects:detail.charts.hoursOverTime')");
+    expect(source).toContain("t('projects:detail.charts.costVsRevenue')");
     expect(source).toContain("t('projects:detail.charts.locationSplit')");
   });
 

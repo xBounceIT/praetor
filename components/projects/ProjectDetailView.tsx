@@ -11,6 +11,7 @@ import {
   LabelList,
   Pie,
   PieChart,
+  ReferenceLine,
   XAxis,
   YAxis,
 } from 'recharts';
@@ -391,23 +392,27 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       .slice(0, 10);
   }, [entries, tasks, t]);
 
-  const hoursOverTime = useMemo(() => {
-    const map = new Map<string, { hours: number; cost: number }>();
+  // Cumulative cost vs the project revenue ceiling, bucketed monthly. The
+  // running total makes burn-down readable at a glance against the revenue
+  // reference line, while the per-month bar gives a sense of recent activity.
+  const costOverTime = useMemo(() => {
+    const monthlyMap = new Map<string, number>();
     for (const e of entries) {
       const month = e.date.slice(0, 7);
-      const prev = map.get(month) ?? { hours: 0, cost: 0 };
-      prev.hours += e.duration ?? 0;
-      prev.cost += e.cost ?? 0;
-      map.set(month, prev);
+      monthlyMap.set(month, (monthlyMap.get(month) ?? 0) + (e.cost ?? 0));
     }
-    return Array.from(map.entries())
-      .map(([month, agg]) => ({
-        month,
-        label: formatMonthBucket(`${month}-01`, i18n.language),
-        hours: Math.round(agg.hours * 100) / 100,
-        cost: Math.round(agg.cost * 100) / 100,
-      }))
-      .sort((a, b) => a.month.localeCompare(b.month));
+    let cumulative = 0;
+    return Array.from(monthlyMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, monthlyCost]) => {
+        cumulative += monthlyCost;
+        return {
+          month,
+          label: formatMonthBucket(`${month}-01`, i18n.language),
+          monthlyCost: Math.round(monthlyCost * 100) / 100,
+          cumulativeCost: Math.round(cumulative * 100) / 100,
+        };
+      });
   }, [entries, i18n.language]);
 
   const locationSplit = useMemo(() => {
@@ -682,9 +687,15 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     hours: { label: t('projects:detail.charts.hoursLabel') },
   };
 
-  const timelineChartConfig: ChartConfig = {
-    hours: { label: t('projects:detail.charts.hoursLabel'), color: 'var(--chart-1)' },
-    cost: { label: t('projects:detail.charts.costLabel'), color: 'var(--chart-3)' },
+  const budgetChartConfig: ChartConfig = {
+    cumulativeCost: {
+      label: t('projects:detail.charts.cumulativeCostLabel'),
+      color: 'var(--chart-3)',
+    },
+    revenue: {
+      label: t('projects:detail.charts.revenueLabel'),
+      color: 'var(--chart-1)',
+    },
   };
 
   // Days elapsed vs total project duration, derived from project.startDate /
@@ -1524,53 +1535,89 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('projects:detail.charts.hoursOverTime')}</CardTitle>
-            <CardDescription>{t('projects:detail.charts.hoursOverTimeDesc')}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {entriesLoading ? (
-              <Skeleton className="h-[260px] w-full" />
-            ) : entriesError !== null ? (
-              <ChartEmpty variant={entriesError === 'forbidden' ? 'forbidden' : 'failed'} />
-            ) : hoursOverTime.length === 0 || hoursOverTime.every((r) => r.hours === 0) ? (
-              <ChartEmpty />
-            ) : (
-              <ChartContainer config={timelineChartConfig} className="max-h-[260px] w-full">
-                <AreaChart data={hoursOverTime} margin={{ left: 12, right: 12, top: 8, bottom: 8 }}>
-                  <CartesianGrid vertical={false} />
-                  <XAxis
-                    dataKey="label"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={8}
-                    minTickGap={32}
-                  />
-                  <YAxis tickLine={false} axisLine={false} width={36} />
-                  <ChartTooltip
-                    isAnimationActive={false}
-                    content={<ChartTooltipContent indicator="line" />}
-                    cursor={false}
-                  />
-                  <defs>
-                    <linearGradient id="fillHours" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--color-hours)" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="var(--color-hours)" stopOpacity={0.05} />
-                    </linearGradient>
-                  </defs>
-                  <Area
-                    type="monotone"
-                    dataKey="hours"
-                    stroke="var(--color-hours)"
-                    fill="url(#fillHours)"
-                    strokeWidth={2}
-                  />
-                </AreaChart>
-              </ChartContainer>
-            )}
-          </CardContent>
-        </Card>
+        {canViewCost && (
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('projects:detail.charts.costVsRevenue')}</CardTitle>
+              <CardDescription>{t('projects:detail.charts.costVsRevenueDesc')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {entriesLoading ? (
+                <Skeleton className="h-[260px] w-full" />
+              ) : entriesError !== null ? (
+                <ChartEmpty variant={entriesError === 'forbidden' ? 'forbidden' : 'failed'} />
+              ) : costOverTime.length === 0 || costOverTime.every((r) => r.cumulativeCost === 0) ? (
+                <ChartEmpty />
+              ) : (
+                <ChartContainer config={budgetChartConfig} className="max-h-[260px] w-full">
+                  <AreaChart
+                    data={costOverTime}
+                    margin={{ left: 12, right: 12, top: 16, bottom: 8 }}
+                  >
+                    <CartesianGrid vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={8}
+                      minTickGap={32}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      width={48}
+                      tickFormatter={(v: number) =>
+                        v.toLocaleString(i18n.language, { maximumFractionDigits: 0 })
+                      }
+                    />
+                    <ChartTooltip
+                      isAnimationActive={false}
+                      content={<ChartTooltipContent indicator="line" />}
+                      cursor={false}
+                      position={{ y: 0 }}
+                    />
+                    <defs>
+                      <linearGradient id="fillCumulativeCost" x1="0" y1="0" x2="0" y2="1">
+                        <stop
+                          offset="5%"
+                          stopColor="var(--color-cumulativeCost)"
+                          stopOpacity={0.4}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="var(--color-cumulativeCost)"
+                          stopOpacity={0.05}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <Area
+                      type="monotone"
+                      dataKey="cumulativeCost"
+                      stroke="var(--color-cumulativeCost)"
+                      fill="url(#fillCumulativeCost)"
+                      strokeWidth={2}
+                    />
+                    {displayedRevenue > 0 && (
+                      <ReferenceLine
+                        y={displayedRevenue}
+                        stroke="var(--color-revenue)"
+                        strokeDasharray="4 4"
+                        strokeWidth={1.5}
+                        label={{
+                          value: `${t('projects:detail.charts.revenueLabel')} · ${displayedRevenue.toLocaleString(i18n.language, { maximumFractionDigits: 0 })} ${currency}`,
+                          position: 'insideTopRight',
+                          fill: 'var(--color-revenue)',
+                          fontSize: 11,
+                          fontWeight: 500,
+                        }}
+                      />
+                    )}
+                  </AreaChart>
+                </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>

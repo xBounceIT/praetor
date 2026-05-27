@@ -135,12 +135,14 @@
     "charts": {
       "hoursLabel": "Hours",
       "costLabel": "Cost",
+      "cumulativeCostLabel": "Cumulative cost",
+      "revenueLabel": "Revenue",
       "hoursByUser": "Hours by user",
       "hoursByUserDesc": "Effort distribution across the team.",
       "hoursByTask": "Hours by task",
       "hoursByTaskDesc": "Top tasks by logged effort.",
-      "hoursOverTime": "Hours over time",
-      "hoursOverTimeDesc": "Monthly hours logged against this project.",
+      "costVsRevenue": "Cost vs revenue",
+      "costVsRevenueDesc": "Cumulative entry cost over time against the project revenue ceiling.",
       "locationSplit": "Hours by location",
       "locationSplitDesc": "Where the work happened."
     },

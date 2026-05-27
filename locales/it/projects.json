@@ -135,12 +135,14 @@
     "charts": {
       "hoursLabel": "Ore",
       "costLabel": "Costo",
+      "cumulativeCostLabel": "Costo cumulato",
+      "revenueLabel": "Ricavo",
       "hoursByUser": "Ore per utente",
       "hoursByUserDesc": "Distribuzione dell'effort nel team.",
       "hoursByTask": "Ore per attività",
       "hoursByTaskDesc": "Attività con più ore registrate.",
-      "hoursOverTime": "Ore nel tempo",
-      "hoursOverTimeDesc": "Ore registrate mese per mese.",
+      "costVsRevenue": "Costo vs ricavo",
+      "costVsRevenueDesc": "Costo cumulato delle voci nel tempo rispetto al ricavo del progetto.",
       "locationSplit": "Ore per luogo",
       "locationSplitDesc": "Dove è stato svolto il lavoro."
     },
