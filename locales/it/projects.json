@@ -144,7 +144,12 @@
       "costVsRevenue": "Costo vs ricavo",
       "costVsRevenueDesc": "Costo cumulato delle voci nel tempo rispetto al ricavo del progetto.",
       "locationSplit": "Ore per luogo",
-      "locationSplitDesc": "Dove è stato svolto il lavoro."
+      "locationSplitDesc": "Dove è stato svolto il lavoro.",
+      "legendHeaders": {
+        "user": "Utente",
+        "location": "Luogo",
+        "hours": "Ore"
+      }
     },
     "empty": {
       "noEntriesTitle": "Ancora nessuna ora registrata",

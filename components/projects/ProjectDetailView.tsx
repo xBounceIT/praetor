@@ -1484,6 +1484,11 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       v.toLocaleString(i18n.language, { maximumFractionDigits: 1 })
                     }
                     onRowHover={setHoveredUserKey}
+                    headers={{
+                      label: t('projects:detail.charts.legendHeaders.user'),
+                      value: t('projects:detail.charts.legendHeaders.hours'),
+                      share: '%',
+                    }}
                   />
                 </div>
               </div>
@@ -1678,6 +1683,11 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       v.toLocaleString(i18n.language, { maximumFractionDigits: 1 })
                     }
                     onRowHover={setHoveredLocationKey}
+                    headers={{
+                      label: t('projects:detail.charts.legendHeaders.location'),
+                      value: t('projects:detail.charts.legendHeaders.hours'),
+                      share: '%',
+                    }}
                   />
                 </div>
               </div>
@@ -1803,36 +1813,60 @@ const PieLegend: React.FC<{
   // Fired with the hovered row's key on mouseenter and with null on mouseleave.
   // The parent uses this to dim non-hovered slices in the corresponding chart.
   onRowHover?: (key: string | null) => void;
-}> = ({ rows, total, valueFormatter, compact, onRowHover }) => (
-  <ul
-    className={`flex-1 min-w-0 ${compact ? 'space-y-0.5 text-[10px]' : 'space-y-1 text-xs'}`}
-    onMouseLeave={onRowHover ? () => onRowHover(null) : undefined}
-  >
-    {rows.map((row) => {
-      const pct = total > 0 ? (row.value / total) * 100 : 0;
-      return (
-        <li
-          key={row.key}
-          className={`flex items-center rounded-sm transition-colors ${compact ? 'gap-1.5 px-1 py-0.5' : 'gap-2 px-1 py-0.5'} ${onRowHover ? 'cursor-default hover:bg-muted/60' : ''}`}
-          onMouseEnter={onRowHover ? () => onRowHover(row.key) : undefined}
+  // Optional column headers. Color swatch column never gets a header.
+  headers?: { label: string; value: string; share?: string };
+}> = ({ rows, total, valueFormatter, compact, onRowHover, headers }) => {
+  // Width tokens shared between the header row and each body row so the columns
+  // actually line up. Keep them as constants instead of inlining so changing one
+  // tier (e.g. value column width) only needs editing in one place.
+  const swatch = compact ? 'size-2' : 'size-2.5';
+  const valueCol = 'min-w-[2.5rem] text-right';
+  const shareCol = compact ? 'w-8 text-right' : 'w-10 text-right';
+  const rowGap = compact ? 'gap-1.5' : 'gap-2';
+  return (
+    <div
+      className={`flex-1 min-w-0 ${compact ? 'text-[10px]' : 'text-xs'}`}
+      onMouseLeave={onRowHover ? () => onRowHover(null) : undefined}
+    >
+      {headers && (
+        <div
+          className={`flex items-center px-1 pb-1 text-[9px] font-medium uppercase tracking-wide text-muted-foreground/70 ${rowGap}`}
         >
-          <span
-            className={`shrink-0 rounded-[2px] ${compact ? 'size-2' : 'size-2.5'}`}
-            style={{ backgroundColor: `var(--color-${row.key})` }}
-            aria-hidden="true"
-          />
-          <span className="flex-1 truncate text-foreground">{row.label}</span>
-          <span className="tabular-nums text-muted-foreground">{valueFormatter(row.value)}</span>
-          <span
-            className={`text-right font-medium tabular-nums text-foreground ${compact ? 'w-8' : 'w-10'}`}
-          >
-            {pct.toFixed(pct >= 10 ? 0 : 1)}%
-          </span>
-        </li>
-      );
-    })}
-  </ul>
-);
+          {/* Spacer to align with the color swatch column on each row */}
+          <span className={`shrink-0 ${swatch}`} aria-hidden="true" />
+          <span className="flex-1 truncate">{headers.label}</span>
+          <span className={`tabular-nums ${valueCol}`}>{headers.value}</span>
+          {headers.share && <span className={`tabular-nums ${shareCol}`}>{headers.share}</span>}
+        </div>
+      )}
+      <ul className={compact ? 'space-y-0.5' : 'space-y-1'}>
+        {rows.map((row) => {
+          const pct = total > 0 ? (row.value / total) * 100 : 0;
+          return (
+            <li
+              key={row.key}
+              className={`flex items-center rounded-sm transition-colors px-1 py-0.5 ${rowGap} ${onRowHover ? 'cursor-default hover:bg-muted/60' : ''}`}
+              onMouseEnter={onRowHover ? () => onRowHover(row.key) : undefined}
+            >
+              <span
+                className={`shrink-0 rounded-[2px] ${swatch}`}
+                style={{ backgroundColor: `var(--color-${row.key})` }}
+                aria-hidden="true"
+              />
+              <span className="flex-1 truncate text-foreground">{row.label}</span>
+              <span className={`tabular-nums text-muted-foreground ${valueCol}`}>
+                {valueFormatter(row.value)}
+              </span>
+              <span className={`font-medium tabular-nums text-foreground ${shareCol}`}>
+                {pct.toFixed(pct >= 10 ? 0 : 1)}%
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+};
 
 const ChartEmpty: React.FC<{ variant?: 'no-data' | 'forbidden' | 'failed' }> = ({
   variant = 'no-data',

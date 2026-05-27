@@ -144,7 +144,12 @@
       "costVsRevenue": "Cost vs revenue",
       "costVsRevenueDesc": "Cumulative entry cost over time against the project revenue ceiling.",
       "locationSplit": "Hours by location",
-      "locationSplitDesc": "Where the work happened."
+      "locationSplitDesc": "Where the work happened.",
+      "legendHeaders": {
+        "user": "User",
+        "location": "Location",
+        "hours": "Hours"
+      }
     },
     "empty": {
       "noEntriesTitle": "No time logged yet",
