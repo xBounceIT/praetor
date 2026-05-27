@@ -17,7 +17,10 @@ import {
   standardErrorResponses,
   standardRateLimitedErrorResponses,
 } from '../schemas/common.ts';
-import { applyExternalRolesForUser } from '../services/external-auth.ts';
+import {
+  applyExternalRolesForUserIfMatched,
+  externalGroupsYieldNoKnownRole,
+} from '../services/external-auth.ts';
 import { getAuditChangedFields, getAuditCounts, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
@@ -968,17 +971,40 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
+      // Role mapping at bind time only writes when LDAP groups actually map to an
+      // existing role. If no group matches (or the LDAP lookup is unavailable), the
+      // user's admin-assigned roles are preserved — the bind action does not silently
+      // demote them to DEFAULT_ROLE_ID.
       let mappedRoleIds: string[] | null = null;
       if (methodResult.value === 'ldap') {
         const ldapService = (await import('../services/ldap.ts')).default;
         const lookup = await ldapService.lookupUserGroups(updated.username);
         if (lookup) {
-          mappedRoleIds = await applyExternalRolesForUser(
+          const applied = await applyExternalRolesForUserIfMatched(
             updated.id,
             lookup.groups,
             lookup.roleMappings,
           );
-          updated.role = mappedRoleIds[0];
+          if (applied.applied) {
+            mappedRoleIds = applied.roleIds;
+            updated.role = applied.roleIds[0];
+          } else if (await externalGroupsYieldNoKnownRole(lookup.groups, lookup.roleMappings)) {
+            // Symmetric with the LDAP login and sync diagnostics: log when the bind
+            // lookup ran successfully but yielded no known role mapping, so an admin
+            // debugging "why did my LDAP group not assign the role at bind" has a
+            // breadcrumb. The helper short-circuits when no role mappings are configured
+            // at all, so an admin who deliberately doesn't use mappings doesn't get
+            // spurious warnings on every bind.
+            fastify.log.warn(
+              {
+                userId: updated.id,
+                username: updated.username,
+                groups: lookup.groups,
+                currentRole: updated.role,
+              },
+              'LDAP bind: LDAP groups did not resolve to any known role mapping — preserving existing role',
+            );
+          }
         } else {
           fastify.log.warn(
             { userId: updated.id, username: updated.username },

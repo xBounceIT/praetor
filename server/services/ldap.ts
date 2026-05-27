@@ -14,6 +14,7 @@ import {
   applyExternalRolesForUser,
   applyExternalRolesForUserIfMatched,
   type ExternalRoleMapping,
+  externalGroupsYieldNoKnownRole,
   filterExistingRoleIds,
   mapExternalGroupsToMatchedRoleIds,
   mapExternalGroupsToRoleIds,
@@ -89,6 +90,11 @@ export type LdapAuthResult = {
   userDn?: string;
   groups: string[];
   matchedRoleIds: string[];
+  // Snapshot of the LDAP config's role mappings at auth time. Surfaced so the route
+  // handler can share the externalGroupsYieldNoKnownRole diagnostic short-circuit with
+  // the LDAP service and the bind path — without it, the route can't distinguish
+  // "admin configured zero mappings" from "mappings exist but no group matched".
+  roleMappings: ExternalRoleMapping[];
   canonicalUsername?: string;
   displayName?: string;
 };
@@ -110,7 +116,7 @@ const warnRoleMappingNoMatch = (
 ): void => {
   logger.warn(
     { userId: user.id, username: user.username, groups, currentRole: user.role },
-    `${phase}: no LDAP group matched a role mapping — preserving existing role`,
+    `${phase}: LDAP groups did not resolve to any known role mapping — preserving existing role`,
   );
 };
 
@@ -272,12 +278,12 @@ class LDAPService {
     try {
       client = await this.getClient(options);
       if (!client) {
-        return { authenticated: false, groups: [], matchedRoleIds: [] };
+        return { authenticated: false, groups: [], matchedRoleIds: [], roleMappings: [] };
       }
       const ldapClient = client;
       const config = this.config;
       if (!config) {
-        return { authenticated: false, groups: [], matchedRoleIds: [] };
+        return { authenticated: false, groups: [], matchedRoleIds: [], roleMappings: [] };
       }
 
       // Bind with service account first to find the user's DN. A failure here is a system
@@ -292,7 +298,7 @@ class LDAPService {
       // Find user entry (DN + attributes for canonical username/display name)
       const userEntry = await this.findUserEntry(ldapClient, username);
       if (!userEntry) {
-        return { authenticated: false, groups: [], matchedRoleIds: [] };
+        return { authenticated: false, groups: [], matchedRoleIds: [], roleMappings: [] };
       }
       const userDn = userEntry.dn;
       const canonicalUsername = deriveCanonicalUsername(userEntry.attributes, username);
@@ -314,7 +320,7 @@ class LDAPService {
           { err: serializeError(err), username },
           'LDAP user bind failed (treated as invalid credentials)',
         );
-        return { authenticated: false, groups: [], matchedRoleIds: [] };
+        return { authenticated: false, groups: [], matchedRoleIds: [], roleMappings: [] };
       }
 
       // The user bind above is only a credential check. Directory reads should use the
@@ -334,11 +340,13 @@ class LDAPService {
         throwOnError: true,
       });
 
+      const roleMappings = this.getRoleMappings();
       return {
         authenticated: true,
         userDn,
         groups,
-        matchedRoleIds: mapExternalGroupsToMatchedRoleIds(groups, this.getRoleMappings()),
+        matchedRoleIds: mapExternalGroupsToMatchedRoleIds(groups, roleMappings),
+        roleMappings,
         canonicalUsername,
         displayName: deriveDisplayName(userEntry.attributes, canonicalUsername),
       };
@@ -382,12 +390,12 @@ class LDAPService {
         );
         return { authenticated: false };
       }
-      const applied = await applyExternalRolesForUserIfMatched(
-        existingByCanonical.id,
-        result.groups,
-        roleMappings,
-      );
-      if (!applied.applied) {
+      // Role mapping is bootstrap-only: it seeds roles at first provisioning and never
+      // overwrites them on subsequent logins. Admin-assigned app roles win, so we skip
+      // writing user_roles here. Still emit a diagnostic when this user's LDAP groups
+      // stop yielding any known role (no match OR matched role was deleted), so admins
+      // can debug stale config.
+      if (await externalGroupsYieldNoKnownRole(result.groups, roleMappings)) {
         warnRoleMappingNoMatch(
           'LDAP login',
           {
@@ -407,10 +415,11 @@ class LDAPService {
     }
 
     // Gate placement is load-bearing: it sits after the existing-user branch so already
-    // provisioned LDAP users still authenticate and refresh roles when the flag is off.
-    // Read the freshly committed config (reloading if invalidateConfig() raced after auth)
-    // so an admin save that flips provisionOnLogin off is enforced for the in-flight
-    // login instead of the default-true fallback letting it slip through.
+    // provisioned LDAP users can still authenticate when the flag is off (role mapping is
+    // bootstrap-only and no longer runs for them either way). Read the freshly committed
+    // config (reloading if invalidateConfig() raced after auth) so an admin save that
+    // flips provisionOnLogin off is enforced for the in-flight login instead of the
+    // default-true fallback letting it slip through.
     const gateConfig = this.config ?? (await ldapRepo.get());
     if (!(gateConfig?.provisionOnLogin ?? ldapRepo.DEFAULT_CONFIG.provisionOnLogin)) {
       logger.warn(
@@ -445,12 +454,16 @@ class LDAPService {
       if (isUniqueViolationError(err)) {
         const racedUser = await usersRepo.findLoginUserByNormalizedUsername(canonicalUsername);
         if (racedUser && racedUser.employeeType === 'app_user' && racedUser.authMethod === 'ldap') {
-          // Race recovery is functionally a fresh first-login for the loser: use the same
-          // with-default helper as the winner's create path below (#641), so the loser's
-          // group view always materializes into user_roles even if it diverges from the
-          // winner's view. Using the IfMatched variant here would silently drop the loser's
-          // groups when their bind returned no matched mapping.
-          await applyExternalRolesForUser(racedUser.id, result.groups, roleMappings);
+          // The winner of the create race already wrote user_roles and the primary role
+          // column from their group view. Use the IfMatched helper so the loser only
+          // rewrites when its own group view actually maps to a role; a loser whose
+          // bind transiently returned no groups (or whose mapping points at a deleted
+          // role) leaves the winner's bootstrap intact. Both binds belong to the same
+          // first-provisioning window, so a loser that DOES see a matching mapping is
+          // still permitted to update — last-writer-wins among concurrent first logins
+          // is acceptable; the bootstrap-only invariant only forbids re-applying mapping
+          // for users that already existed BEFORE this provisioning request started.
+          await applyExternalRolesForUserIfMatched(racedUser.id, result.groups, roleMappings);
           return {
             authenticated: true,
             userId: racedUser.id,
@@ -504,8 +517,12 @@ class LDAPService {
       }
 
       // Use throwOnError so a transient group-search failure surfaces here as null
-      // (keep existing role) instead of falling through to applyExternalRolesForUser with
-      // an empty group list, which would demote the user to the default 'user' role.
+      // (keep existing role) instead of returning groups=[] to the caller. The caller
+      // (users.ts admin-bind path) would otherwise pass that empty list to
+      // applyExternalRolesForUserIfMatched + externalGroupsYieldNoKnownRole; the IfMatched
+      // helper preserves the existing role either way, but externalGroupsYieldNoKnownRole
+      // would emit a misleading "groups did not resolve to any known role mapping" warn
+      // for what is really a directory outage. Returning null skips both.
       const groups = await this.findUserGroups(ldapClient, userEntry.dn, username, {
         throwOnError: true,
       });
@@ -735,20 +752,38 @@ class LDAPService {
           }
           // Pass both the normalized and the raw directory value so a groupFilter that
           // does case-sensitive substitution (e.g. OpenLDAP's caseExactIA5Match on memberUid)
-          // still matches; findUserGroups dedups identical values.
-          const groups = await this.findUserGroups(ldapClient, entry.objectName, [
-            username,
-            candidate,
-          ]);
+          // still matches; findUserGroups dedups identical values. throwOnError so a
+          // transient group-search failure skips the diagnostic for this user — without it
+          // a partial directory outage would resolve to groups=[] and fire a misleading
+          // "did not resolve to any known role mapping" warning for every existing user,
+          // drowning out real stale-config signals. Mirrors the autoProvisionAll branch
+          // below and the bind-time lookupUserGroups path.
+          let groups: string[];
+          try {
+            groups = await this.findUserGroups(
+              ldapClient,
+              entry.objectName,
+              [username, candidate],
+              { throwOnError: true },
+            );
+          } catch (err) {
+            logger.warn(
+              { err: serializeError(err), username },
+              'LDAP sync skipped role-mapping diagnostic for user: group search failed',
+            );
+            // Still refresh the display name — that bit doesn't depend on group state.
+            await usersRepo.updateNameByUsername(existing.username, name);
+            syncedCount++;
+            continue;
+          }
           // Update by the row's stored username so a pre-migration mixed-case row still
           // matches via LOWER() instead of a raw-bytes WHERE that wouldn't.
           await usersRepo.updateNameByUsername(existing.username, name);
-          const applied = await applyExternalRolesForUserIfMatched(
-            existing.id,
-            groups,
-            roleMappings,
-          );
-          if (!applied.applied) {
+          // Role mapping is bootstrap-only: sync refreshes display data but never rewrites
+          // an existing user's roles from LDAP groups. Still warn when the user's groups
+          // stop yielding any known role (no match or matched role was deleted), so admins
+          // can spot stale config.
+          if (await externalGroupsYieldNoKnownRole(groups, roleMappings)) {
             warnRoleMappingNoMatch(
               'LDAP sync',
               { id: existing.id, username, role: existing.role },

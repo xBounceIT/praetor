@@ -659,6 +659,26 @@ describe('POST /api/ldap/test', () => {
     });
   });
 
+  // Role mapping is bootstrap-only: existing LDAP users keep their stored role on every
+  // login, EVEN when their LDAP groups still match a configured mapping. The tester must
+  // report 'preserved' (not 'matched') for an existing LDAP user with a matching group.
+  test('reports roleResolution=preserved when groups match a mapping but the user already exists as LDAP-bound', async () => {
+    authenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      userDn: 'uid=alice,ou=people,dc=example,dc=com',
+      groups: ['cn=admins,ou=groups,dc=example,dc=com'],
+      matchedRoleIds: ['admin'],
+    });
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(LDAP_USER);
+
+    const response = await testLdapAuth({ username: 'alice', password: 'secret' });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.roleResolution).toBe('preserved');
+    expect(body.roleIds).toEqual(['manager']);
+  });
+
   // #638: existing LDAP-bound users would keep their admin-assigned role on real login
   // when no group maps to a role. Previously the tester wrongly reported DEFAULT_ROLE_ID.
   test('reports roleResolution=preserved with the user current role when no group matched but the user exists and is LDAP-bound', async () => {

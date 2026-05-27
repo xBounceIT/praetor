@@ -9,7 +9,10 @@ import {
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import { applyExternalRoleIdsForUserIfMatched } from '../services/external-auth.ts';
+import {
+  type ExternalRoleMapping,
+  externalGroupsYieldNoKnownRole,
+} from '../services/external-auth.ts';
 import * as ssoService from '../services/sso.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
@@ -144,8 +147,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // LDAP Authentication
       let ldapAuthSuccess = ldapAutoProvisionSuccess;
-      let ldapMatchedRoleIds: string[] = [];
       let ldapGroups: string[] = [];
+      let ldapRoleMappings: ExternalRoleMapping[] = [];
       if (!ldapAuthSuccess && authMethod === 'ldap') {
         try {
           const ldapService = (await import('../services/ldap.ts')).default;
@@ -154,8 +157,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             passwordResult.value,
           );
           ldapAuthSuccess = ldapAuthResult.authenticated;
-          ldapMatchedRoleIds = ldapAuthResult.matchedRoleIds;
           ldapGroups = ldapAuthResult.groups;
+          ldapRoleMappings = ldapAuthResult.roleMappings;
         } catch (err) {
           fastify.log.error({ err, username: usernameResult.value }, 'LDAP auth attempt failed');
           return reply.code(503).send(LDAP_UNAVAILABLE_BODY);
@@ -173,21 +176,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(401).send({ error: 'Invalid username or password' });
       }
 
-      if (ldapAuthSuccess && !ldapAutoProvisionSuccess) {
-        const applied = await applyExternalRoleIdsForUserIfMatched(user.id, ldapMatchedRoleIds);
-        if (applied.applied) {
-          user = { ...user, role: applied.roleIds[0] };
-        } else {
-          fastify.log.warn(
-            {
-              userId: user.id,
-              username: user.username,
-              groups: ldapGroups,
-              currentRole: user.role,
-            },
-            'LDAP login: no LDAP group matched a role mapping — preserving existing role',
-          );
-        }
+      if (
+        ldapAuthSuccess &&
+        !ldapAutoProvisionSuccess &&
+        (await externalGroupsYieldNoKnownRole(ldapGroups, ldapRoleMappings))
+      ) {
+        // Role mapping is bootstrap-only: existing users keep their app-assigned roles
+        // on every login. Log a diagnostic when LDAP groups yield no known role (either
+        // no group matched, or every matched mapping points at a role that has since
+        // been deleted) so admins can spot stale config; the helper short-circuits when
+        // no role mappings are configured at all, so we never overwrite user_roles or
+        // user.role and never warn for an admin who deliberately doesn't use mappings.
+        fastify.log.warn(
+          {
+            userId: user.id,
+            username: user.username,
+            groups: ldapGroups,
+            currentRole: user.role,
+          },
+          'LDAP login: LDAP groups did not resolve to any known role mapping — preserving existing role',
+        );
       }
 
       if (ldapAutoProvisioned) {

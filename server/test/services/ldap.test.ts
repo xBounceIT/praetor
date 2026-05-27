@@ -33,6 +33,7 @@ const updateNameByUsernameMock = mock();
 const createUserMock = mock();
 const applyExternalRolesForUserMock = mock();
 const applyExternalRolesForUserIfMatchedMock = mock();
+const externalGroupsYieldNoKnownRoleMock = mock();
 const filterExistingRoleIdsMock = mock();
 
 // ─── ldapjs harness ───────────────────────────────────────────────────────────
@@ -151,6 +152,7 @@ beforeAll(() => {
     ...externalAuthSnapshot,
     applyExternalRolesForUser: applyExternalRolesForUserMock,
     applyExternalRolesForUserIfMatched: applyExternalRolesForUserIfMatchedMock,
+    externalGroupsYieldNoKnownRole: externalGroupsYieldNoKnownRoleMock,
     filterExistingRoleIds: filterExistingRoleIdsMock,
   }));
   mock.module('../../utils/initials.ts', () => ({
@@ -229,7 +231,11 @@ beforeEach(() => {
   createUserMock.mockReset();
   applyExternalRolesForUserMock.mockReset();
   applyExternalRolesForUserIfMatchedMock.mockReset();
+  externalGroupsYieldNoKnownRoleMock.mockReset();
   filterExistingRoleIdsMock.mockReset();
+  // Default: groups yield a known role (no warn fires). Tests exercising the
+  // "no matching mapping" or "deleted role" diagnostic override with mockResolvedValue(true).
+  externalGroupsYieldNoKnownRoleMock.mockResolvedValue(false);
   filterExistingRoleIdsMock.mockImplementation(async (ids: string[]) =>
     ids.length > 0 ? ids : ['user'],
   );
@@ -1030,7 +1036,7 @@ describe('syncUsers', () => {
     expect(result).toEqual({ synced: 1, created: 0 });
   });
 
-  test('sync applies role mappings from the configured group search', async () => {
+  test('sync does NOT re-apply role mappings to existing users (bootstrap-only)', async () => {
     const syncSecAdmins = 'CN=SyncSecAdmins,OU=Internal Groups,OU=Accounts,DC=syncsec,DC=coll';
     ldapRepoGetMock.mockResolvedValue({
       ...ENABLED_LDAP_CONFIG,
@@ -1068,16 +1074,14 @@ describe('syncUsers', () => {
       ...LDAP_LOGIN_USER,
       username: 'daniel.dangeli',
     });
-    applyExternalRolesForUserIfMatchedMock.mockResolvedValue({ applied: true, roleIds: ['admin'] });
 
     const result = await ldapService.syncUsers();
 
     expect(result).toEqual({ synced: 1, created: 0 });
-    expect(applyExternalRolesForUserIfMatchedMock).toHaveBeenCalledWith(
-      LDAP_LOGIN_USER.id,
-      expect.arrayContaining([syncSecAdmins]),
-      [{ externalGroup: syncSecAdmins, role: 'admin' }],
-    );
+    // Display name still refreshed from the directory, but roles are NEVER rewritten
+    // for an existing user — they're owned by the app post-provisioning.
+    expect(updateNameByUsernameMock).toHaveBeenCalledWith('daniel.dangeli', "Daniel D'Angeli");
+    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
   });
 
   test('autoProvisionAll=false: existing users update, new entries are NOT created', async () => {
@@ -1640,9 +1644,7 @@ describe('authenticateAndProvision', () => {
       canonicalUsername: 'alice',
     });
     expect(createUserMock).not.toHaveBeenCalled();
-    expect(applyExternalRolesForUserIfMatchedMock).toHaveBeenCalledWith(LDAP_LOGIN_USER.id, [], []);
-    // applyExternalRolesForUser is reserved for new-user-creation paths; existing users use the
-    // IfMatched variant to preserve admin-assigned roles when LDAP groups don't map.
+    // Existing-user login NEVER writes user_roles — role mapping is bootstrap-only.
     expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
   });
 
@@ -1663,8 +1665,8 @@ describe('authenticateAndProvision', () => {
         },
       ],
     };
-    // Default mock returns { applied: false } — simulating "no LDAP group matched a mapping".
-    // Admin has assigned 'manager' to this LDAP user.
+    // Admin has assigned 'manager' to this LDAP user. The user's LDAP groups don't match
+    // any configured role mapping; nothing should be written to user_roles regardless.
     findLoginUserByNormalizedUsernameMock.mockResolvedValue({
       ...LDAP_LOGIN_USER,
       role: 'manager',
@@ -1678,11 +1680,48 @@ describe('authenticateAndProvision', () => {
       created: false,
       canonicalUsername: 'alice',
     });
-    expect(applyExternalRolesForUserIfMatchedMock).toHaveBeenCalledWith(
-      LDAP_LOGIN_USER.id,
-      ['cn=randoms,ou=groups,dc=test,dc=com'],
-      [],
-    );
+    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('existing-user login with matching group does NOT overwrite admin-assigned roles', async () => {
+    // The bug: an admin adds `manager` to an LDAP user who was originally provisioned as
+    // `admin` via group mapping. Pre-fix, the next LDAP login would wipe `manager` because
+    // the group still maps to `[admin]`. Post-fix, role mapping is bootstrap-only and
+    // never re-applies, so the admin-assigned role survives.
+    const adminGroupDn = 'cn=admins,ou=groups,dc=test,dc=com';
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      roleMappings: [{ ldapGroup: adminGroupDn, role: 'admin' }],
+    });
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            { objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice', cn: 'Alice' } },
+          ],
+          status: 0,
+        },
+        {
+          entries: [{ objectName: adminGroupDn, object: { cn: 'admins' } }],
+          status: 0,
+        },
+      ],
+    };
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
+      ...LDAP_LOGIN_USER,
+      role: 'manager',
+    });
+
+    const result = await ldapService.authenticateAndProvision('alice', 'pw');
+
+    expect(result).toEqual({
+      authenticated: true,
+      userId: LDAP_LOGIN_USER.id,
+      created: false,
+      canonicalUsername: 'alice',
+    });
+    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
   });
 
   test('refuses to bind LDAP login to an existing non-LDAP local user', async () => {
@@ -1732,7 +1771,7 @@ describe('authenticateAndProvision', () => {
     expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
   });
 
-  test('provisionOnLogin=false: existing LDAP-bound user still logs in and roles refresh', async () => {
+  test('provisionOnLogin=false: existing LDAP-bound user still logs in (roles preserved)', async () => {
     ldapRepoGetMock.mockResolvedValue({ ...ENABLED_LDAP_CONFIG, provisionOnLogin: false });
     nextFixture = {
       bindResponses: [null, null],
@@ -1757,7 +1796,7 @@ describe('authenticateAndProvision', () => {
       canonicalUsername: 'alice',
     });
     expect(createUserMock).not.toHaveBeenCalled();
-    expect(applyExternalRolesForUserIfMatchedMock).toHaveBeenCalledWith(LDAP_LOGIN_USER.id, [], []);
+    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
   });
 
   test('provisionOnLogin=false: enforced even if config cache is invalidated mid-flight (race)', async () => {
@@ -1819,7 +1858,7 @@ describe('authenticateAndProvision', () => {
     });
   });
 
-  test('race recovery applies roles via the with-default helper (#641), matching the winner path', async () => {
+  test('race recovery applies roles via the IfMatched helper so the loser does not clobber the winner', async () => {
     nextFixture = {
       bindResponses: [null, null],
       searchResponses: [
@@ -1840,8 +1879,12 @@ describe('authenticateAndProvision', () => {
 
     await ldapService.authenticateAndProvision('alice', 'pw');
 
-    expect(applyExternalRolesForUserMock).toHaveBeenCalledWith(LDAP_LOGIN_USER.id, [], []);
-    expect(applyExternalRolesForUserIfMatchedMock).not.toHaveBeenCalled();
+    // Race recovery uses the IfMatched helper so the loser does NOT overwrite the
+    // winner's roles when the loser's bind returned no matched mapping. The winner
+    // has already bootstrapped the user; the loser only writes when its own groups
+    // genuinely map to a role.
+    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
+    expect(applyExternalRolesForUserIfMatchedMock).toHaveBeenCalledWith(LDAP_LOGIN_USER.id, [], []);
   });
 
   test('uses displayName when cn is absent', async () => {

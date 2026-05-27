@@ -384,7 +384,10 @@ describe('resolveExternalIdentity role mapping — regression #596', () => {
     expect(setPrimaryRoleMock).not.toHaveBeenCalled();
   });
 
-  test('updates primary role when SAML group matches a mapping', async () => {
+  test('preserves stored role for an existing SSO user even when a SAML group matches', async () => {
+    // Bootstrap-only role mapping: even though the user's groups still resolve to
+    // [admin], we must NOT overwrite the user's stored role (here: 'user') because the
+    // user already exists and may have been re-assigned by an admin in Praetor.
     findByIdentityMock.mockResolvedValue({
       id: 'eid-1',
       providerId: 'sso-1',
@@ -402,10 +405,10 @@ describe('resolveExternalIdentity role mapping — regression #596', () => {
       roleMappings: [{ externalGroup: 'admins', role: 'admin' }],
     });
 
-    expect(result.role).toBe('admin');
-    expect(replaceUserRolesMock).toHaveBeenCalledWith('u1', ['admin'], expect.anything());
-    expect(setPrimaryRoleMock).toHaveBeenCalledWith('u1', 'admin', expect.anything());
-    expect(syncTopManagerAssignmentsForUserMock).toHaveBeenCalledWith('u1', expect.anything());
+    expect(result.role).toBe('user');
+    expect(replaceUserRolesMock).not.toHaveBeenCalled();
+    expect(setPrimaryRoleMock).not.toHaveBeenCalled();
+    expect(syncTopManagerAssignmentsForUserMock).not.toHaveBeenCalled();
   });
 
   test('new SSO user with no matching group still gets DEFAULT_ROLE_ID assignment', async () => {
@@ -443,7 +446,7 @@ describe('resolveExternalIdentity role mapping — regression #596', () => {
   });
 });
 
-describe('resolveExternalIdentity primary role preservation — regression #603', () => {
+describe('resolveExternalIdentity bootstrap-only role mapping (existing users untouched)', () => {
   const multiRoleInput = {
     ...input,
     groups: ['Managers', 'Admins'],
@@ -462,7 +465,9 @@ describe('resolveExternalIdentity primary role preservation — regression #603'
     userId: 'u1',
   };
 
-  test('keeps existing primary role when still permitted by the current mapping', async () => {
+  test('existing-user login never rewrites user_roles or primary role even when groups match', async () => {
+    // Pre-fix: this path called replaceUserRoles + setPrimaryRole every login, wiping
+    // any roles an admin had added in Praetor. Post-fix: role mapping is bootstrap-only.
     findExistingIdsMock.mockResolvedValue(new Set(['manager', 'admin']));
     findByIdentityMock.mockResolvedValue(existingIdentity);
     findLoginUserByIdMock.mockResolvedValue({ ...matchingSsoUser, role: 'admin' });
@@ -470,15 +475,12 @@ describe('resolveExternalIdentity primary role preservation — regression #603'
     const result = await resolveExternalIdentity(multiRoleInput);
 
     expect(result.role).toBe('admin');
-    expect(setPrimaryRoleMock).toHaveBeenCalledWith('u1', 'admin', expect.anything());
-    expect(replaceUserRolesMock).toHaveBeenCalledWith(
-      'u1',
-      ['manager', 'admin'],
-      expect.anything(),
-    );
+    expect(setPrimaryRoleMock).not.toHaveBeenCalled();
+    expect(replaceUserRolesMock).not.toHaveBeenCalled();
+    expect(syncTopManagerAssignmentsForUserMock).not.toHaveBeenCalled();
   });
 
-  test('falls back to first mapped role when existing primary is no longer permitted', async () => {
+  test('existing-user login preserves the stored primary even when the current mapping would assign a different one', async () => {
     findExistingIdsMock.mockResolvedValue(new Set(['manager']));
     findByIdentityMock.mockResolvedValue(existingIdentity);
     findLoginUserByIdMock.mockResolvedValue({ ...matchingSsoUser, role: 'admin' });
@@ -488,11 +490,12 @@ describe('resolveExternalIdentity primary role preservation — regression #603'
       groups: ['Managers'],
     });
 
-    expect(result.role).toBe('manager');
-    expect(setPrimaryRoleMock).toHaveBeenCalledWith('u1', 'manager', expect.anything());
+    expect(result.role).toBe('admin');
+    expect(setPrimaryRoleMock).not.toHaveBeenCalled();
+    expect(replaceUserRolesMock).not.toHaveBeenCalled();
   });
 
-  test('new users get the first mapped role as their primary', async () => {
+  test('new users get the first mapped role as their primary (first provisioning still applies mapping)', async () => {
     findExistingIdsMock.mockResolvedValue(new Set(['manager', 'admin']));
     let createdUserId: string | undefined;
     insertUserMock.mockImplementation(async (row: { id: string }) => {
@@ -512,5 +515,33 @@ describe('resolveExternalIdentity primary role preservation — regression #603'
       expect.anything(),
     );
     expect(setPrimaryRoleMock).toHaveBeenCalledWith(createdUserId, 'manager', expect.anything());
+    expect(replaceUserRolesMock).toHaveBeenCalledWith(
+      createdUserId,
+      ['manager', 'admin'],
+      expect.anything(),
+    );
+  });
+
+  test('SSO bind path (existing local user binding a new identity) does NOT rewrite roles', async () => {
+    // wasBound=true but wasCreated=false: the Praetor user already existed — first
+    // provisioning of the user happened earlier (via local creation or another login),
+    // so role mapping should not write here.
+    findByIdentityMock.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      ...existingIdentity,
+      userId: 'u1',
+    });
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
+      ...matchingSsoUser,
+      role: 'admin',
+    });
+    findExistingIdsMock.mockResolvedValue(new Set(['manager', 'admin']));
+
+    const result = await resolveExternalIdentity(multiRoleInput);
+
+    expect(result.wasCreated).toBe(false);
+    expect(result.wasBound).toBe(true);
+    expect(result.role).toBe('admin');
+    expect(replaceUserRolesMock).not.toHaveBeenCalled();
+    expect(setPrimaryRoleMock).not.toHaveBeenCalled();
   });
 });

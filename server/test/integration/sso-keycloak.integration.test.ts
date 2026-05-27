@@ -377,7 +377,10 @@ describe.skipIf(SHOULD_SKIP_SSO)('SSO integration: Keycloak OIDC and SAML', () =
     resetStores();
   });
 
-  test('OIDC authorization code flow binds an existing local user and maps Keycloak groups', async () => {
+  test('OIDC authorization code flow binds an existing local user without overriding stored roles', async () => {
+    // Role mapping is bootstrap-only. The pre-existing local Alice gets bound to OIDC
+    // (wasBound=true, wasCreated=false), so her Praetor role stays 'user' even though
+    // Keycloak's group claim would otherwise map to admin.
     const authorizationUrl = await ssoService.startOidcLogin(OIDC_PROVIDER_SLUG);
     const loginResult = await loginThroughKeycloak(
       authorizationUrl,
@@ -392,8 +395,8 @@ describe.skipIf(SHOULD_SKIP_SSO)('SSO integration: Keycloak OIDC and SAML', () =
 
     expect(ticket).toBeTruthy();
     expect(tickets.get(ticket as string)?.userId).toBe('u-alice');
-    expect(users.get('u-alice')?.role).toBe('admin');
-    expect(users.get('u-alice')?.roles).toEqual(['admin', 'user']);
+    expect(users.get('u-alice')?.role).toBe('user');
+    expect(users.get('u-alice')?.roles).toEqual(['user']);
     expect([...identities.values()]).toContainEqual(
       expect.objectContaining({
         providerId: oidcProvider.id,

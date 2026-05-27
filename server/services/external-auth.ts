@@ -166,25 +166,47 @@ export const applyExternalRolesForUser = (
 ): Promise<string[]> =>
   applyExternalRoleIdsForUser(userId, mapExternalGroupsToRoleIds(groups, mappings));
 
-// Preserve admin-assigned roles: only overwrite when LDAP groups actually map to at least one
-// existing role. Returns { applied: false } when no group matched (or the matched roles have
-// since been deleted), so callers can keep the user's current role intact.
-export const applyExternalRoleIdsForUserIfMatched = async (
-  userId: string,
-  roleIds: string[],
-): Promise<{ applied: boolean; roleIds: string[] }> => {
-  const existing = await filterToExistingRoleIds(roleIds);
-  if (existing.length === 0) return { applied: false, roleIds: [] };
-  await writeExternalRoleIds(userId, existing);
-  return { applied: true, roleIds: existing };
+// True when the user's external groups produce zero usable roles AND the admin has at
+// least one role mapping configured — i.e., the admin's stated intent is "users should
+// get a role from their groups" and the current config no longer satisfies it (no group
+// matches, or every matched mapping points at a role that has since been deleted). When
+// no role mappings are configured at all, returns false: the admin is intentionally
+// relying on Praetor-side role assignment and doesn't need a per-login warning. Shared
+// across the LDAP login, sync, bind, and the auth-route diagnostic so all sites emit (or
+// suppress) the warning consistently for the same inputs.
+export const externalGroupsYieldNoKnownRole = async (
+  groups: string[],
+  mappings: ExternalRoleMapping[],
+): Promise<boolean> => {
+  if (mappings.length === 0) return false;
+  const matched = mapExternalGroupsToMatchedRoleIds(groups, mappings);
+  if (matched.length === 0) return true;
+  const existing = await filterToExistingRoleIds(matched);
+  return existing.length === 0;
 };
 
-export const applyExternalRolesForUserIfMatched = (
+// IfMatched helper: only writes user_roles when the supplied groups actually map to at
+// least one existing role. Returns { applied: false } when no group matched (or the
+// matched roles have since been deleted), so callers can keep the user's current roles
+// intact. Used at LDAP "first provisioning" bootstrap points where we want to seed roles
+// from external groups but not clobber admin-assigned roles when the groups don't yield
+// anything usable:
+//   - server/routes/users.ts: admin-driven "Change authentication method" to LDAP.
+//   - server/services/ldap.ts: LDAP create-race recovery for the losing concurrent login.
+// (SSO role writes live in resolveExternalIdentity below, gated on wasCreated, and do not
+// route through this helper.)
+export const applyExternalRolesForUserIfMatched = async (
   userId: string,
   groups: string[],
   mappings: ExternalRoleMapping[],
-): Promise<{ applied: boolean; roleIds: string[] }> =>
-  applyExternalRoleIdsForUserIfMatched(userId, mapExternalGroupsToMatchedRoleIds(groups, mappings));
+): Promise<{ applied: boolean; roleIds: string[] }> => {
+  const matched = await filterToExistingRoleIds(
+    mapExternalGroupsToMatchedRoleIds(groups, mappings),
+  );
+  if (matched.length === 0) return { applied: false, roleIds: [] };
+  await writeExternalRoleIds(userId, matched);
+  return { applied: true, roleIds: matched };
+};
 
 export const resolveExternalIdentity = async (
   input: ResolveExternalIdentityInput,
@@ -323,17 +345,15 @@ export const resolveExternalIdentity = async (
         throw new ExternalAuthError('User is disabled', 'user_disabled');
       }
 
-      // Write roles when SSO mapped to one, or when provisioning a brand-new user (whose
-      // user_roles row would otherwise be missing). Skip writes for an existing user with
-      // no match so admin-assigned roles are preserved (#596).
+      // Role mapping is bootstrap-only: it seeds user_roles when this request is the one
+      // that just created the Praetor user. On every subsequent SSO login (or when an
+      // existing local user gets a new identity row bound — wasBound but not wasCreated),
+      // the app's stored role assignments win. Admin-assigned roles survive (#596, #603)
+      // and adding/removing IdP groups never overrides them.
       let effectivePrimaryRole = user.role;
-      const rolesToWrite =
-        matchedRoleIds.length > 0 ? matchedRoleIds : wasCreated ? [DEFAULT_ROLE_ID] : null;
-      if (rolesToWrite) {
-        // Keep the existing primary when the current mapping still grants it, so
-        // admin-assigned or user-chosen primaries survive SSO refresh (#603).
-        const primaryRoleId =
-          !wasCreated && rolesToWrite.includes(user.role) ? user.role : rolesToWrite[0];
+      if (wasCreated) {
+        const rolesToWrite = matchedRoleIds.length > 0 ? matchedRoleIds : [DEFAULT_ROLE_ID];
+        const primaryRoleId = rolesToWrite[0];
         await writeExternalRoleIdsTx(user.id, rolesToWrite, tx, primaryRoleId);
         effectivePrimaryRole = primaryRoleId;
       }
