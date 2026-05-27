@@ -640,10 +640,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     {
       onRequest: [
         authenticateToken,
+        // hr.costs.update is included so a role granted *only* the
+        // personal-cost-edit permission can reach this route to update its
+        // own cost. The handler below enforces self-only + cost-only when
+        // that's the caller's only relevant grant.
         requireAnyPermission(
           'administration.user_management.update',
           'hr.internal.update',
           'hr.external.update',
+          'hr.costs.update',
         ),
       ],
       schema: {
@@ -670,6 +675,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const fields: usersRepo.UserUpdateFields = {};
+      const isSelf = idResult.value === request.user?.id;
 
       if (name !== undefined) {
         const nameResult = requireNonEmptyString(name, 'name');
@@ -678,7 +684,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       if (costPerHour !== undefined) {
-        const isSelf = idResult.value === request.user?.id;
         const canEditCost = isSelf
           ? hasScopedActionPermission(request.user?.permissions, 'hr.costs', 'update')
           : hasPermission(request, 'hr.costs_all.update');
@@ -712,7 +717,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const currentName = targetUser.name;
       const currentUsername = targetUser.username;
 
-      if (!hasPermission(request, UPDATE_PERM_BY_EMPLOYEE_TYPE[targetEmployeeType])) {
+      // Self-only personal cost edit: a role granted just `hr.costs.update`
+      // can update its own costPerHour even without the broader per-employee-type
+      // update grant — but only when costPerHour is the sole field being touched.
+      const isSelfCostOnlyEdit =
+        isSelf &&
+        costPerHour !== undefined &&
+        name === undefined &&
+        email === undefined &&
+        isDisabled === undefined &&
+        role === undefined &&
+        hasScopedActionPermission(request.user?.permissions, 'hr.costs', 'update');
+
+      if (
+        !isSelfCostOnlyEdit &&
+        !hasPermission(request, UPDATE_PERM_BY_EMPLOYEE_TYPE[targetEmployeeType])
+      ) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',

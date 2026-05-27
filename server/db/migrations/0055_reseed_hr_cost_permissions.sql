@@ -40,12 +40,19 @@ DELETE FROM role_permissions
 WHERE role_id = 'manager' AND permission = 'hr.costs_all.update';
 
 -- Seed the new defaults. Idempotent: ON CONFLICT DO NOTHING absorbs both
--- re-runs and any prior manual grants.
+-- re-runs and any prior manual grants. The INSERT...SELECT form also skips
+-- rows for roles that don't exist yet — the Drizzle-only fresh-DB path used
+-- by `bun run db:migrate` against an empty schema doesn't seed the system
+-- roles (those come from schema.sql or the app bootstrap), so a literal
+-- VALUES list would violate the role_id FK.
 INSERT INTO role_permissions (role_id, permission)
-VALUES
+SELECT r.id, p.permission
+FROM (VALUES
     ('manager', 'hr.costs_all.view'),
     ('manager', 'hr.costs.update'),
     ('top_manager', 'hr.costs_all.view'),
     ('top_manager', 'hr.costs_all.update'),
     ('top_manager', 'hr.costs.update')
+) AS p(role_id, permission)
+JOIN roles r ON r.id = p.role_id
 ON CONFLICT DO NOTHING;
