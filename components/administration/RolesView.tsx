@@ -373,26 +373,28 @@ const RolesView: React.FC<RolesViewProps> = ({
       orientation="vertical"
       className="flex max-h-[60vh] flex-row gap-0 overflow-hidden rounded-xl border border-border bg-card"
     >
-      <TabsList
-        variant="line"
-        className="h-full w-56 shrink-0 flex-col items-stretch justify-start gap-1 overflow-y-auto rounded-none border-r border-border bg-muted/40 p-2"
-      >
-        {moduleOrder.map((module) => {
-          const Icon = MODULE_ICONS[module];
-          return (
-            <TabsTrigger
-              key={module}
-              value={module}
-              className="justify-start gap-3 px-3 py-2 text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
-            >
-              {Icon ? <Icon className="size-4" /> : null}
-              <span className="truncate text-left">
-                {t(`layout:modules.${module}`, { defaultValue: toTitleCase(module) })}
-              </span>
-            </TabsTrigger>
-          );
-        })}
-      </TabsList>
+      <div className="flex w-56 shrink-0 flex-col border-r border-border bg-muted/40">
+        <TabsList
+          variant="line"
+          className="w-full min-h-0 flex-1 flex-col items-stretch justify-start gap-1 overflow-y-auto rounded-none bg-transparent p-2"
+        >
+          {moduleOrder.map((module) => {
+            const Icon = MODULE_ICONS[module];
+            return (
+              <TabsTrigger
+                key={module}
+                value={module}
+                className="justify-start gap-3 px-3 py-2 text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+              >
+                {Icon ? <Icon className="size-4" /> : null}
+                <span className="truncate text-left">
+                  {t(`layout:modules.${module}`, { defaultValue: toTitleCase(module) })}
+                </span>
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+      </div>
 
       <div className="flex-1 overflow-y-auto bg-background">
         {moduleOrder.map((module) => {
