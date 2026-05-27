@@ -112,9 +112,13 @@
     },
     "kpi": {
       "totalHours": "Total hours",
+      "totalHoursSubtitle": "Across {{count}} time entries",
       "totalCost": "Total cost",
+      "totalCostSubtitle": "Avg {{rate}} {{currency}}/h",
       "teamSize": "Team size",
-      "budgetUsed": "Budget used"
+      "teamSizeSubtitle": "Active project members",
+      "budgetUsed": "Budget used",
+      "budgetUsedSubtitle": "of {{budget}} {{currency}}"
     },
     "charts": {
       "hoursLabel": "Hours",

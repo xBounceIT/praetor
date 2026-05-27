@@ -69,7 +69,7 @@ describe('ProjectDetailView wiring', () => {
   test('cost KPI is gated on reports.cost.view permission', async () => {
     const source = await readSource();
     expect(source).toContain("const canViewCost = permissions.includes('reports.cost.view')");
-    expect(source).toMatch(/canViewCost &&[\s\S]{0,80}CardDescription[\s\S]{0,80}totalCost/);
+    expect(source).toMatch(/canViewCost &&[\s\S]{0,80}<KpiCard[\s\S]{0,200}totalCost/);
   });
 
   test('sticky save bar appears only when there are unsaved changes and update is permitted', async () => {
@@ -108,7 +108,7 @@ describe('ProjectDetailView wiring', () => {
     const source = await readSource();
     expect(source).toMatch(/if \(!canManageAssignments\)[\s\S]{0,200}setAssignedUserIds\(\[\]\)/);
     expect(source).toMatch(
-      /\{canManageAssignments && \(\s*<Card>[\s\S]{0,400}detail\.kpi\.teamSize/,
+      /\{canManageAssignments && \(\s*<KpiCard[\s\S]{0,400}detail\.kpi\.teamSize/,
     );
   });
 });

@@ -1165,80 +1165,107 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       )}
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Card>
-          <CardHeader>
-            <CardDescription>{t('projects:detail.kpi.totalHours')}</CardDescription>
-            <CardTitle className="text-3xl tabular-nums">
-              {entriesLoading ? (
-                <Skeleton className="h-8 w-20" />
-              ) : entriesError !== null ? (
-                <span className="text-base text-muted-foreground">{'—'}</span>
-              ) : (
-                totalHours.toLocaleString(i18n.language, { maximumFractionDigits: 1 })
-              )}
-            </CardTitle>
-          </CardHeader>
-        </Card>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard
+          title={t('projects:detail.kpi.totalHours')}
+          icon="fa-clock"
+          accent="blue"
+          loading={entriesLoading}
+          unavailable={entriesError !== null}
+          value={
+            <>
+              {totalHours.toLocaleString(i18n.language, { maximumFractionDigits: 1 })}
+              <span className="ml-1 text-base font-medium text-muted-foreground">h</span>
+            </>
+          }
+          subtitle={
+            entries.length > 0
+              ? t('projects:detail.kpi.totalHoursSubtitle', { count: entries.length })
+              : undefined
+          }
+        />
         {canViewCost && (
-          <Card>
-            <CardHeader>
-              <CardDescription>{`${t('projects:detail.kpi.totalCost')} (${currency})`}</CardDescription>
-              <CardTitle className="text-3xl tabular-nums">
-                {entriesLoading ? (
-                  <Skeleton className="h-8 w-24" />
-                ) : entriesError !== null ? (
-                  <span className="text-base text-muted-foreground">{'—'}</span>
-                ) : (
-                  totalCost.toLocaleString(i18n.language, {
-                    maximumFractionDigits: 2,
-                    minimumFractionDigits: 2,
+          <KpiCard
+            title={t('projects:detail.kpi.totalCost')}
+            icon="fa-coins"
+            accent="emerald"
+            loading={entriesLoading}
+            unavailable={entriesError !== null}
+            value={
+              <>
+                <span className="mr-1 text-base font-medium text-muted-foreground">{currency}</span>
+                {totalCost.toLocaleString(i18n.language, {
+                  maximumFractionDigits: 2,
+                  minimumFractionDigits: 2,
+                })}
+              </>
+            }
+            subtitle={
+              totalHours > 0
+                ? t('projects:detail.kpi.totalCostSubtitle', {
+                    rate: (totalCost / totalHours).toLocaleString(i18n.language, {
+                      maximumFractionDigits: 2,
+                    }),
+                    currency,
                   })
-                )}
-              </CardTitle>
-            </CardHeader>
-          </Card>
+                : undefined
+            }
+          />
         )}
         {canManageAssignments && (
-          <Card>
-            <CardHeader>
-              <CardDescription>{t('projects:detail.kpi.teamSize')}</CardDescription>
-              <CardTitle className="text-3xl tabular-nums">
-                {assignedLoading ? <Skeleton className="h-8 w-12" /> : teamSize}
-              </CardTitle>
-            </CardHeader>
-            {!assignedLoading && assignedUsers.length > 0 && (
-              <CardContent className="flex -space-x-2">
-                {assignedUsers.slice(0, 6).map((u) => (
-                  <Avatar key={u.id} className="size-7 border-2 border-card">
-                    <AvatarFallback className="text-[10px]">{getInitials(u.name)}</AvatarFallback>
-                  </Avatar>
-                ))}
-                {assignedUsers.length > 6 && (
-                  <div className="flex size-7 items-center justify-center rounded-full border-2 border-card bg-muted text-[10px] font-medium text-muted-foreground">
-                    +{assignedUsers.length - 6}
-                  </div>
-                )}
-              </CardContent>
-            )}
-          </Card>
+          <KpiCard
+            title={t('projects:detail.kpi.teamSize')}
+            icon="fa-users"
+            accent="violet"
+            loading={assignedLoading}
+            value={teamSize}
+            subtitle={teamSize > 0 ? t('projects:detail.kpi.teamSizeSubtitle') : undefined}
+            footer={
+              !assignedLoading && assignedUsers.length > 0 ? (
+                <div className="flex -space-x-2">
+                  {assignedUsers.slice(0, 6).map((u) => (
+                    <Avatar key={u.id} className="size-7 border-2 border-card">
+                      <AvatarFallback className="text-[10px]">{getInitials(u.name)}</AvatarFallback>
+                    </Avatar>
+                  ))}
+                  {assignedUsers.length > 6 && (
+                    <div className="flex size-7 items-center justify-center rounded-full border-2 border-card bg-muted text-[10px] font-medium text-muted-foreground">
+                      +{assignedUsers.length - 6}
+                    </div>
+                  )}
+                </div>
+              ) : undefined
+            }
+          />
         )}
         {canViewCost && (
-          <Card>
-            <CardHeader>
-              <CardDescription>{t('projects:detail.kpi.budgetUsed')}</CardDescription>
-              <CardTitle className="text-3xl tabular-nums">
-                {entriesLoading ? (
-                  <Skeleton className="h-8 w-16" />
-                ) : budgetUsedPct === null ? (
-                  <span className="text-base text-muted-foreground">{'—'}</span>
-                ) : (
-                  `${budgetUsedPct}%`
-                )}
-              </CardTitle>
-            </CardHeader>
-            {!entriesLoading && budgetUsedPct !== null && (
-              <CardContent>
+          <KpiCard
+            title={t('projects:detail.kpi.budgetUsed')}
+            icon="fa-chart-pie"
+            accent={
+              budgetUsedPct === null
+                ? 'amber'
+                : budgetUsedPct > 100
+                  ? 'destructive'
+                  : budgetUsedPct >= 80
+                    ? 'amber'
+                    : 'emerald'
+            }
+            loading={entriesLoading}
+            unavailable={budgetUsedPct === null}
+            value={budgetUsedPct !== null ? `${budgetUsedPct}%` : '—'}
+            subtitle={
+              displayedRevenue > 0
+                ? t('projects:detail.kpi.budgetUsedSubtitle', {
+                    budget: displayedRevenue.toLocaleString(i18n.language, {
+                      maximumFractionDigits: 0,
+                    }),
+                    currency,
+                  })
+                : undefined
+            }
+            footer={
+              !entriesLoading && budgetUsedPct !== null ? (
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                   <div
                     className={`h-full rounded-full transition-all ${
@@ -1251,9 +1278,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     style={{ width: `${Math.min(budgetUsedPct, 100)}%` }}
                   />
                 </div>
-              </CardContent>
-            )}
-          </Card>
+              ) : undefined
+            }
+          />
         )}
       </div>
 
@@ -1492,6 +1519,70 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     </div>
   );
 };
+
+// Accent tokens for the KPI icon badge. We use Tailwind utility classes (not theme
+// tokens) so each KPI gets a distinct hue while staying readable on both light and
+// dark backgrounds. The /15 alpha keeps the surrounding chrome subtle.
+const KPI_ACCENT_CLASSES: Record<KpiAccent, string> = {
+  blue: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
+  emerald: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+  violet: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
+  amber: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+  destructive: 'bg-destructive/15 text-destructive',
+};
+
+type KpiAccent = 'blue' | 'emerald' | 'violet' | 'amber' | 'destructive';
+
+interface KpiCardProps {
+  title: string;
+  icon: string;
+  accent: KpiAccent;
+  value: React.ReactNode;
+  subtitle?: string;
+  footer?: React.ReactNode;
+  loading?: boolean;
+  unavailable?: boolean;
+}
+
+const KpiCard: React.FC<KpiCardProps> = ({
+  title,
+  icon,
+  accent,
+  value,
+  subtitle,
+  footer,
+  loading,
+  unavailable,
+}) => (
+  <Card className="gap-3">
+    <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
+      <CardDescription className="text-xs font-medium uppercase tracking-wide">
+        {title}
+      </CardDescription>
+      <span
+        className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${KPI_ACCENT_CLASSES[accent]}`}
+        aria-hidden="true"
+      >
+        <i className={`fa-solid ${icon} text-sm`}></i>
+      </span>
+    </CardHeader>
+    <CardContent className="space-y-1.5">
+      <div className="text-3xl font-semibold tabular-nums leading-none">
+        {loading ? (
+          <Skeleton className="h-8 w-24" />
+        ) : unavailable ? (
+          <span className="text-base text-muted-foreground">—</span>
+        ) : (
+          value
+        )}
+      </div>
+      {!loading && !unavailable && subtitle && (
+        <p className="text-xs text-muted-foreground">{subtitle}</p>
+      )}
+      {!loading && footer && <div className="pt-1">{footer}</div>}
+    </CardContent>
+  </Card>
+);
 
 // Right-side legend for the donut charts. Built inline rather than via shadcn's
 // ChartLegendContent because that one is hard-coded to horizontal flex; we want a
