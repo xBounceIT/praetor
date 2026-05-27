@@ -1366,7 +1366,6 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     axisLine={false}
                     tickMargin={8}
                     interval={0}
-                    tickFormatter={(v: string) => (v.length > 12 ? `${v.slice(0, 11)}…` : v)}
                   />
                   <YAxis tickLine={false} axisLine={false} width={36} />
                   <ChartTooltip content={<ChartTooltipContent />} cursor={false} />
