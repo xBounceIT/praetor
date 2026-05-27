@@ -240,6 +240,10 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const [taskToDelete, setTaskToDelete] = useState<ProjectTask | null>(null);
   const [isTaskDeleteConfirmOpen, setIsTaskDeleteConfirmOpen] = useState(false);
   const [isAssignmentsOpen, setIsAssignmentsOpen] = useState(false);
+  // Hover-to-isolate state for the donut charts: when the user hovers a row in
+  // the legend, we dim the other slices via fillOpacity so the hovered one pops.
+  const [hoveredUserKey, setHoveredUserKey] = useState<string | null>(null);
+  const [hoveredLocationKey, setHoveredLocationKey] = useState<string | null>(null);
 
   useEffect(() => {
     // Short-circuit when the caller lacks the tracker view permission — the route
@@ -1309,13 +1313,17 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               <div className="relative">
                 <ChartContainer config={hoursByUserConfig} className="mx-auto size-[300px]">
                   <PieChart>
-                    <ChartTooltip content={<ChartTooltipContent nameKey="userId" />} />
+                    <ChartTooltip
+                      isAnimationActive={false}
+                      content={<ChartTooltipContent nameKey="userId" />}
+                    />
                     <Pie
                       data={hoursByUser}
                       dataKey="hours"
                       nameKey="userId"
                       innerRadius={70}
                       strokeWidth={2}
+                      isAnimationActive={false}
                     >
                       {hoursByUser.map((row, idx) => (
                         <Cell
@@ -1323,6 +1331,8 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                           fill={`var(--color-${row.userId})`}
                           name={row.userName}
                           data-idx={idx}
+                          fillOpacity={hoveredUserKey && hoveredUserKey !== row.userId ? 0.2 : 1}
+                          style={{ transition: 'fill-opacity 150ms ease-out' }}
                         />
                       ))}
                     </Pie>
@@ -1340,6 +1350,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     valueFormatter={(v) =>
                       v.toLocaleString(i18n.language, { maximumFractionDigits: 1 })
                     }
+                    onRowHover={setHoveredUserKey}
                   />
                 </div>
               </div>
@@ -1371,7 +1382,11 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     interval={0}
                   />
                   <YAxis tickLine={false} axisLine={false} width={36} />
-                  <ChartTooltip content={<ChartTooltipContent />} cursor={false} />
+                  <ChartTooltip
+                    isAnimationActive={false}
+                    content={<ChartTooltipContent />}
+                    cursor={false}
+                  />
                   <Bar dataKey="hours" radius={[4, 4, 0, 0]}>
                     {hoursByTask.map((row, idx) => (
                       <Cell key={row.key} fill={`var(--chart-${(idx % 5) + 1})`} name={row.task} />
@@ -1408,7 +1423,11 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     minTickGap={32}
                   />
                   <YAxis tickLine={false} axisLine={false} width={36} />
-                  <ChartTooltip content={<ChartTooltipContent indicator="line" />} cursor={false} />
+                  <ChartTooltip
+                    isAnimationActive={false}
+                    content={<ChartTooltipContent indicator="line" />}
+                    cursor={false}
+                  />
                   <defs>
                     <linearGradient id="fillHours" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="var(--color-hours)" stopOpacity={0.4} />
@@ -1444,19 +1463,27 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               <div className="relative">
                 <ChartContainer config={locationConfig} className="mx-auto size-[300px]">
                   <PieChart>
-                    <ChartTooltip content={<ChartTooltipContent nameKey="location" />} />
+                    <ChartTooltip
+                      isAnimationActive={false}
+                      content={<ChartTooltipContent nameKey="location" />}
+                    />
                     <Pie
                       data={locationSplit}
                       dataKey="hours"
                       nameKey="location"
                       innerRadius={70}
                       strokeWidth={2}
+                      isAnimationActive={false}
                     >
                       {locationSplit.map((row) => (
                         <Cell
                           key={row.location}
                           fill={`var(--color-${row.location})`}
                           name={String(locationConfig[row.location]?.label ?? row.location)}
+                          fillOpacity={
+                            hoveredLocationKey && hoveredLocationKey !== row.location ? 0.2 : 1
+                          }
+                          style={{ transition: 'fill-opacity 150ms ease-out' }}
                         />
                       ))}
                     </Pie>
@@ -1474,6 +1501,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     valueFormatter={(v) =>
                       v.toLocaleString(i18n.language, { maximumFractionDigits: 1 })
                     }
+                    onRowHover={setHoveredLocationKey}
                   />
                 </div>
               </div>
@@ -1596,12 +1624,22 @@ const PieLegend: React.FC<{
   // small annotation in the top-right corner of a chart rather than as a primary
   // sidebar column.
   compact?: boolean;
-}> = ({ rows, total, valueFormatter, compact }) => (
-  <ul className={`flex-1 min-w-0 ${compact ? 'space-y-1 text-[10px]' : 'space-y-1.5 text-xs'}`}>
+  // Fired with the hovered row's key on mouseenter and with null on mouseleave.
+  // The parent uses this to dim non-hovered slices in the corresponding chart.
+  onRowHover?: (key: string | null) => void;
+}> = ({ rows, total, valueFormatter, compact, onRowHover }) => (
+  <ul
+    className={`flex-1 min-w-0 ${compact ? 'space-y-0.5 text-[10px]' : 'space-y-1 text-xs'}`}
+    onMouseLeave={onRowHover ? () => onRowHover(null) : undefined}
+  >
     {rows.map((row) => {
       const pct = total > 0 ? (row.value / total) * 100 : 0;
       return (
-        <li key={row.key} className={`flex items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
+        <li
+          key={row.key}
+          className={`flex items-center rounded-sm transition-colors ${compact ? 'gap-1.5 px-1 py-0.5' : 'gap-2 px-1 py-0.5'} ${onRowHover ? 'cursor-default hover:bg-muted/60' : ''}`}
+          onMouseEnter={onRowHover ? () => onRowHover(row.key) : undefined}
+        >
           <span
             className={`shrink-0 rounded-[2px] ${compact ? 'size-2' : 'size-2.5'}`}
             style={{ backgroundColor: `var(--color-${row.key})` }}
