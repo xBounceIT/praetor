@@ -138,10 +138,7 @@ export interface ProjectDetailViewProps {
   currency: string;
   tasks: ProjectTask[];
   onBack: () => void;
-  onUpdateProject: (
-    id: string,
-    updates: Partial<Project>,
-  ) => void | Promise<void> | Promise<Project | null>;
+  onUpdateProject: (id: string, updates: Partial<Project>) => Promise<Project | null>;
   onDeleteProject: (id: string) => void;
   onAddTask: (
     name: string,
@@ -305,6 +302,14 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   }, [project.id, canViewEntries]);
 
   useEffect(() => {
+    // GET /projects/:id/users is server-gated on `projects.assignments.update`. Without
+    // that permission the fetch 403s, we'd swallow the error, and the KPI would render
+    // a misleading "0" team size for projects that actually have members.
+    if (!canManageAssignments) {
+      setAssignedUserIds([]);
+      setAssignedLoading(false);
+      return;
+    }
     const ac = new AbortController();
     setAssignedLoading(true);
     // Reset before the new fetch so the avatar row doesn't briefly show the
@@ -326,7 +331,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     return () => {
       ac.abort();
     };
-  }, [project.id]);
+  }, [project.id, canManageAssignments]);
 
   // Aggregations
   const totalHours = useMemo(
@@ -565,10 +570,16 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     if (!name.trim()) newErrors.name = t('common:validation.projectNameRequired');
     if (!clientId) newErrors.clientId = t('projects:projects.clientRequired');
     if (!offerId) newErrors.offerId = t('projects:projects.offerRequired');
-    // Match create-flow validation: both dates required. Without these the server
-    // would 400 and the user would get only a toast — easier to catch here.
-    if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');
-    if (!endDate) newErrors.endDate = t('projects:projects.endDateRequired');
+    // Only enforce required dates on projects that already carry them. Legacy projects
+    // predating the dates-required rule still allow null dates on the PATCH endpoint;
+    // forcing dates here would block unrelated edits (rename, color, disable) until the
+    // user invented a planning window.
+    if (project.startDate && !startDate) {
+      newErrors.startDate = t('projects:projects.startDateRequired');
+    }
+    if (project.endDate && !endDate) {
+      newErrors.endDate = t('projects:projects.endDateRequired');
+    }
     if (startDate && endDate && startDate > endDate) {
       newErrors.dateRange = t('projects:projects.dateRangeInvalid');
     }
@@ -855,7 +866,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               </Field>
               <Field data-invalid={Boolean(errors.startDate || errors.dateRange)}>
                 <FieldLabel htmlFor="detail-start-date">
-                  {t('projects:projects.startDate')} <RequiredMark />
+                  {t('projects:projects.startDate')} {project.startDate && <RequiredMark />}
                 </FieldLabel>
                 <Input
                   id="detail-start-date"
@@ -874,7 +885,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               </Field>
               <Field data-invalid={Boolean(errors.endDate || errors.dateRange)}>
                 <FieldLabel htmlFor="detail-end-date">
-                  {t('projects:projects.endDate')} <RequiredMark />
+                  {t('projects:projects.endDate')} {project.endDate && <RequiredMark />}
                 </FieldLabel>
                 <Input
                   id="detail-end-date"
@@ -1187,28 +1198,30 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             </CardHeader>
           </Card>
         )}
-        <Card>
-          <CardHeader>
-            <CardDescription>{t('projects:detail.kpi.teamSize')}</CardDescription>
-            <CardTitle className="text-3xl tabular-nums">
-              {assignedLoading ? <Skeleton className="h-8 w-12" /> : teamSize}
-            </CardTitle>
-          </CardHeader>
-          {!assignedLoading && assignedUsers.length > 0 && (
-            <CardContent className="flex -space-x-2">
-              {assignedUsers.slice(0, 6).map((u) => (
-                <Avatar key={u.id} className="size-7 border-2 border-card">
-                  <AvatarFallback className="text-[10px]">{getInitials(u.name)}</AvatarFallback>
-                </Avatar>
-              ))}
-              {assignedUsers.length > 6 && (
-                <div className="flex size-7 items-center justify-center rounded-full border-2 border-card bg-muted text-[10px] font-medium text-muted-foreground">
-                  +{assignedUsers.length - 6}
-                </div>
-              )}
-            </CardContent>
-          )}
-        </Card>
+        {canManageAssignments && (
+          <Card>
+            <CardHeader>
+              <CardDescription>{t('projects:detail.kpi.teamSize')}</CardDescription>
+              <CardTitle className="text-3xl tabular-nums">
+                {assignedLoading ? <Skeleton className="h-8 w-12" /> : teamSize}
+              </CardTitle>
+            </CardHeader>
+            {!assignedLoading && assignedUsers.length > 0 && (
+              <CardContent className="flex -space-x-2">
+                {assignedUsers.slice(0, 6).map((u) => (
+                  <Avatar key={u.id} className="size-7 border-2 border-card">
+                    <AvatarFallback className="text-[10px]">{getInitials(u.name)}</AvatarFallback>
+                  </Avatar>
+                ))}
+                {assignedUsers.length > 6 && (
+                  <div className="flex size-7 items-center justify-center rounded-full border-2 border-card bg-muted text-[10px] font-medium text-muted-foreground">
+                    +{assignedUsers.length - 6}
+                  </div>
+                )}
+              </CardContent>
+            )}
+          </Card>
+        )}
         {canViewCost && (
           <Card>
             <CardHeader>

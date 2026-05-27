@@ -89,6 +89,28 @@ describe('ProjectDetailView wiring', () => {
     expect(source).toContain('isOpen={isDeleteConfirmOpen}');
     expect(source).toMatch(/onDeleteProject\(project\.id\);[\s\S]{0,80}onBack\(\)/);
   });
+
+  test('date-required validation skips legacy projects without stored dates', async () => {
+    // Hard-requiring dates on save would block rename/recolor/disable for projects
+    // created before the dates-required rule. Validation only fires when the project
+    // already carries the corresponding date.
+    const source = await readSource();
+    expect(source).toContain('if (project.startDate && !startDate)');
+    expect(source).toContain('if (project.endDate && !endDate)');
+    // Required marker also tracks the stored value so the UI doesn't lie.
+    expect(source).toContain('{project.startDate && <RequiredMark />}');
+    expect(source).toContain('{project.endDate && <RequiredMark />}');
+  });
+
+  test('team-size KPI and assignment fetch are gated on canManageAssignments', async () => {
+    // GET /projects/:id/users is server-gated on `projects.assignments.update`. Without
+    // that permission the fetch 403s and the KPI would show a misleading "0".
+    const source = await readSource();
+    expect(source).toMatch(/if \(!canManageAssignments\)[\s\S]{0,200}setAssignedUserIds\(\[\]\)/);
+    expect(source).toMatch(
+      /\{canManageAssignments && \(\s*<Card>[\s\S]{0,400}detail\.kpi\.teamSize/,
+    );
+  });
 });
 
 describe('ProjectDetailView wired into App.tsx', () => {
