@@ -1197,214 +1197,220 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         </div>
       )}
 
-      {/* KPI cards + project timeline on the same row. The grid uses 6 large-screen
-          columns so the timeline can grow into whatever space the visible KPIs
-          leave (4→2 cols, 3→3 cols, 2→4 cols). On smaller screens everything
-          stacks and the timeline becomes full-width. */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
-        <KpiCard
-          title={t('projects:detail.kpi.totalHours')}
-          icon="fa-clock"
-          accent="blue"
-          loading={entriesLoading}
-          unavailable={entriesError !== null}
-          value={
-            <>
-              {totalHours.toLocaleString(i18n.language, { maximumFractionDigits: 1 })}
-              <span className="ml-1 text-base font-medium text-muted-foreground">h</span>
-            </>
-          }
-          subtitle={
-            entries.length > 0
-              ? t('projects:detail.kpi.totalHoursSubtitle', { count: entries.length })
-              : undefined
-          }
-        />
-        {canViewCost && (
-          <KpiCard
-            title={t('projects:detail.kpi.totalCost')}
-            icon="fa-coins"
-            accent="emerald"
-            loading={entriesLoading}
-            unavailable={entriesError !== null}
-            value={
-              <>
-                <span className="mr-1 text-base font-medium text-muted-foreground">{currency}</span>
-                {totalCost.toLocaleString(i18n.language, {
-                  maximumFractionDigits: 2,
-                  minimumFractionDigits: 2,
-                })}
-              </>
-            }
-            subtitle={
-              totalHours > 0
-                ? t('projects:detail.kpi.totalCostSubtitle', {
-                    rate: (totalCost / totalHours).toLocaleString(i18n.language, {
-                      maximumFractionDigits: 2,
-                    }),
-                    currency,
-                  })
-                : undefined
-            }
-          />
-        )}
-        {canManageAssignments && (
-          <KpiCard
-            title={t('projects:detail.kpi.teamSize')}
-            icon="fa-users"
-            accent="violet"
-            loading={assignedLoading}
-            value={teamSize}
-            subtitle={teamSize > 0 ? t('projects:detail.kpi.teamSizeSubtitle') : undefined}
-            footer={
-              !assignedLoading && assignedUsers.length > 0 ? (
-                <div className="flex -space-x-2">
-                  {assignedUsers.slice(0, 6).map((u) => (
-                    <Avatar key={u.id} className="size-7 border-2 border-card">
-                      <AvatarFallback className="text-[10px]">{getInitials(u.name)}</AvatarFallback>
-                    </Avatar>
-                  ))}
-                  {assignedUsers.length > 6 && (
-                    <div className="flex size-7 items-center justify-center rounded-full border-2 border-card bg-muted text-[10px] font-medium text-muted-foreground">
-                      +{assignedUsers.length - 6}
-                    </div>
-                  )}
-                </div>
-              ) : undefined
-            }
-          />
-        )}
-        {canViewCost && (
-          <KpiCard
-            title={t('projects:detail.kpi.budgetUsed')}
-            icon="fa-chart-pie"
-            accent={
-              budgetUsedPct === null
-                ? 'amber'
-                : budgetUsedPct > 100
-                  ? 'destructive'
-                  : budgetUsedPct >= 80
-                    ? 'amber'
-                    : 'emerald'
-            }
-            loading={entriesLoading}
-            unavailable={budgetUsedPct === null}
-            value={budgetUsedPct !== null ? `${budgetUsedPct}%` : '—'}
-            subtitle={
-              displayedRevenue > 0
-                ? t('projects:detail.kpi.budgetUsedSubtitle', {
-                    budget: displayedRevenue.toLocaleString(i18n.language, {
-                      maximumFractionDigits: 0,
-                    }),
-                    currency,
-                  })
-                : undefined
-            }
-            footer={
-              !entriesLoading && budgetUsedPct !== null ? (
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      budgetUsedPct > 100
-                        ? 'bg-destructive'
-                        : budgetUsedPct >= 80
-                          ? 'bg-amber-500'
-                          : 'bg-emerald-500'
-                    }`}
-                    style={{ width: `${Math.min(budgetUsedPct, 100)}%` }}
-                  />
-                </div>
-              ) : undefined
-            }
-          />
-        )}
+      {/* KPI cards + project timeline split the row 50/50 on large screens.
+          KPIs share the left half (auto-laid in their own inner grid), timeline
+          fills the right half regardless of how many KPIs are visible. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {(() => {
-          // Timeline matches the width of one chart card below (lg:grid-cols-2 →
-          // 50% of the row = 3 of 6 cols here). Caps at 3 so it doesn't grow
-          // wider than that, even when fewer KPIs are visible; shrinks to 2
-          // when all four KPIs are present so everything still fits on one row.
+          // Inner grid for the KPIs only. Picks the column count that lays them
+          // out cleanly in the left half: 4 → 2x2, 3 → 3 wide, 2 → 2 wide, 1 → 1.
           const visibleKpiCount =
             1 + (canViewCost ? 1 : 0) + (canManageAssignments ? 1 : 0) + (canViewCost ? 1 : 0);
-          const lgSpan = Math.min(3, Math.max(2, 6 - visibleKpiCount));
-          // Tailwind needs literal class names.
-          const lgSpanClass = lgSpan === 2 ? 'lg:col-span-2' : 'lg:col-span-3';
+          const innerColsClass =
+            visibleKpiCount >= 4
+              ? 'sm:grid-cols-2'
+              : visibleKpiCount === 3
+                ? 'sm:grid-cols-3'
+                : visibleKpiCount === 2
+                  ? 'sm:grid-cols-2'
+                  : 'sm:grid-cols-1';
           return (
-            <Card className={`sm:col-span-2 ${lgSpanClass}`}>
-              <CardHeader>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <CardDescription className="text-xs font-medium uppercase tracking-wide">
-                      {t('projects:detail.timeline.title')}
-                    </CardDescription>
-                  </div>
-                  {projectTimeline && (
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                        projectTimeline.phase === 'completed'
-                          ? 'bg-muted text-muted-foreground'
-                          : projectTimeline.phase === 'pending'
-                            ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
-                            : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                      }`}
-                    >
-                      <span
-                        className={`size-1.5 rounded-full ${
-                          projectTimeline.phase === 'completed'
-                            ? 'bg-muted-foreground'
-                            : projectTimeline.phase === 'pending'
-                              ? 'bg-blue-500'
-                              : 'bg-emerald-500'
-                        }`}
-                        aria-hidden="true"
-                      />
-                      {t(`projects:detail.timeline.phase.${projectTimeline.phase}`)}
-                    </span>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                {!projectTimeline ? (
-                  <p className="text-sm text-muted-foreground">
-                    {t('projects:detail.timeline.noDates')}
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
-                      <span>
-                        {formatInsertDate(projectTimeline.start.getTime(), i18n.language)}
+            <div className={`grid grid-cols-1 gap-4 ${innerColsClass}`}>
+              <KpiCard
+                title={t('projects:detail.kpi.totalHours')}
+                icon="fa-clock"
+                accent="blue"
+                loading={entriesLoading}
+                unavailable={entriesError !== null}
+                value={
+                  <>
+                    {totalHours.toLocaleString(i18n.language, { maximumFractionDigits: 1 })}
+                    <span className="ml-1 text-base font-medium text-muted-foreground">h</span>
+                  </>
+                }
+                subtitle={
+                  entries.length > 0
+                    ? t('projects:detail.kpi.totalHoursSubtitle', { count: entries.length })
+                    : undefined
+                }
+              />
+              {canViewCost && (
+                <KpiCard
+                  title={t('projects:detail.kpi.totalCost')}
+                  icon="fa-coins"
+                  accent="emerald"
+                  loading={entriesLoading}
+                  unavailable={entriesError !== null}
+                  value={
+                    <>
+                      <span className="mr-1 text-base font-medium text-muted-foreground">
+                        {currency}
                       </span>
-                      <span>{formatInsertDate(projectTimeline.end.getTime(), i18n.language)}</span>
-                    </div>
-                    <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
-                      <div
-                        className={`h-full transition-all ${
-                          projectTimeline.phase === 'completed'
-                            ? 'bg-muted-foreground'
-                            : 'bg-emerald-500'
-                        }`}
-                        style={{ width: `${projectTimeline.pct}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">
-                        <span className="font-semibold text-foreground tabular-nums">
-                          {projectTimeline.elapsedDays}
-                        </span>{' '}
-                        / {projectTimeline.totalDays} {t('projects:detail.timeline.daysElapsed')}
-                      </span>
-                      <span className="text-muted-foreground">
-                        <span className="font-semibold text-foreground tabular-nums">
-                          {projectTimeline.remainingDays}
-                        </span>{' '}
-                        {t('projects:detail.timeline.daysRemaining')}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                      {totalCost.toLocaleString(i18n.language, {
+                        maximumFractionDigits: 2,
+                        minimumFractionDigits: 2,
+                      })}
+                    </>
+                  }
+                  subtitle={
+                    totalHours > 0
+                      ? t('projects:detail.kpi.totalCostSubtitle', {
+                          rate: (totalCost / totalHours).toLocaleString(i18n.language, {
+                            maximumFractionDigits: 2,
+                          }),
+                          currency,
+                        })
+                      : undefined
+                  }
+                />
+              )}
+              {canManageAssignments && (
+                <KpiCard
+                  title={t('projects:detail.kpi.teamSize')}
+                  icon="fa-users"
+                  accent="violet"
+                  loading={assignedLoading}
+                  value={teamSize}
+                  subtitle={teamSize > 0 ? t('projects:detail.kpi.teamSizeSubtitle') : undefined}
+                  footer={
+                    !assignedLoading && assignedUsers.length > 0 ? (
+                      <div className="flex -space-x-2">
+                        {assignedUsers.slice(0, 6).map((u) => (
+                          <Avatar key={u.id} className="size-7 border-2 border-card">
+                            <AvatarFallback className="text-[10px]">
+                              {getInitials(u.name)}
+                            </AvatarFallback>
+                          </Avatar>
+                        ))}
+                        {assignedUsers.length > 6 && (
+                          <div className="flex size-7 items-center justify-center rounded-full border-2 border-card bg-muted text-[10px] font-medium text-muted-foreground">
+                            +{assignedUsers.length - 6}
+                          </div>
+                        )}
+                      </div>
+                    ) : undefined
+                  }
+                />
+              )}
+              {canViewCost && (
+                <KpiCard
+                  title={t('projects:detail.kpi.budgetUsed')}
+                  icon="fa-chart-pie"
+                  accent={
+                    budgetUsedPct === null
+                      ? 'amber'
+                      : budgetUsedPct > 100
+                        ? 'destructive'
+                        : budgetUsedPct >= 80
+                          ? 'amber'
+                          : 'emerald'
+                  }
+                  loading={entriesLoading}
+                  unavailable={budgetUsedPct === null}
+                  value={budgetUsedPct !== null ? `${budgetUsedPct}%` : '—'}
+                  subtitle={
+                    displayedRevenue > 0
+                      ? t('projects:detail.kpi.budgetUsedSubtitle', {
+                          budget: displayedRevenue.toLocaleString(i18n.language, {
+                            maximumFractionDigits: 0,
+                          }),
+                          currency,
+                        })
+                      : undefined
+                  }
+                  footer={
+                    !entriesLoading && budgetUsedPct !== null ? (
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            budgetUsedPct > 100
+                              ? 'bg-destructive'
+                              : budgetUsedPct >= 80
+                                ? 'bg-amber-500'
+                                : 'bg-emerald-500'
+                          }`}
+                          style={{ width: `${Math.min(budgetUsedPct, 100)}%` }}
+                        />
+                      </div>
+                    ) : undefined
+                  }
+                />
+              )}
+            </div>
           );
         })()}
+        <Card>
+          <CardHeader>
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <CardDescription className="text-xs font-medium uppercase tracking-wide">
+                  {t('projects:detail.timeline.title')}
+                </CardDescription>
+              </div>
+              {projectTimeline && (
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                    projectTimeline.phase === 'completed'
+                      ? 'bg-muted text-muted-foreground'
+                      : projectTimeline.phase === 'pending'
+                        ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                        : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                  }`}
+                >
+                  <span
+                    className={`size-1.5 rounded-full ${
+                      projectTimeline.phase === 'completed'
+                        ? 'bg-muted-foreground'
+                        : projectTimeline.phase === 'pending'
+                          ? 'bg-blue-500'
+                          : 'bg-emerald-500'
+                    }`}
+                    aria-hidden="true"
+                  />
+                  {t(`projects:detail.timeline.phase.${projectTimeline.phase}`)}
+                </span>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {!projectTimeline ? (
+              <p className="text-sm text-muted-foreground">
+                {t('projects:detail.timeline.noDates')}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
+                  <span>{formatInsertDate(projectTimeline.start.getTime(), i18n.language)}</span>
+                  <span>{formatInsertDate(projectTimeline.end.getTime(), i18n.language)}</span>
+                </div>
+                <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={`h-full transition-all ${
+                      projectTimeline.phase === 'completed'
+                        ? 'bg-muted-foreground'
+                        : 'bg-emerald-500'
+                    }`}
+                    style={{ width: `${projectTimeline.pct}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">
+                    <span className="font-semibold text-foreground tabular-nums">
+                      {projectTimeline.elapsedDays}
+                    </span>{' '}
+                    / {projectTimeline.totalDays} {t('projects:detail.timeline.daysElapsed')}
+                  </span>
+                  <span className="text-muted-foreground">
+                    <span className="font-semibold text-foreground tabular-nums">
+                      {projectTimeline.remainingDays}
+                    </span>{' '}
+                    {t('projects:detail.timeline.daysRemaining')}
+                  </span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Charts row */}
