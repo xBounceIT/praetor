@@ -1300,10 +1300,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               <ChartEmpty />
             ) : (
               <div className="flex items-center gap-4">
-                <ChartContainer
-                  config={hoursByUserConfig}
-                  className="aspect-square max-h-[220px] shrink-0"
-                >
+                <ChartContainer config={hoursByUserConfig} className="size-[220px] shrink-0">
                   <PieChart>
                     <ChartTooltip content={<ChartTooltipContent nameKey="userId" />} />
                     <Pie
@@ -1441,10 +1438,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               <ChartEmpty />
             ) : (
               <div className="flex items-center gap-4">
-                <ChartContainer
-                  config={locationConfig}
-                  className="aspect-square max-h-[220px] shrink-0"
-                >
+                <ChartContainer config={locationConfig} className="size-[220px] shrink-0">
                   <PieChart>
                     <ChartTooltip content={<ChartTooltipContent nameKey="location" />} />
                     <Pie
