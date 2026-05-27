@@ -574,6 +574,61 @@ describe('/api/mcp', () => {
     expect(workUnitsListAllMock).not.toHaveBeenCalled();
   });
 
+  test('hr.costs.view → caller sees own costPerHour, other rows masked', async () => {
+    // Regression for the personal-scope view permission: the praetor_get_users_hierarchy
+    // tool now masks costs per row. With only hr.costs.view (no hr.costs_all.view),
+    // the caller's own row stays unmasked while other rows still show 0.
+    currentPermissions = ['timesheets.tracker.view', 'hr.work_units.view', 'hr.costs.view'];
+    usersListScopedForManagerMock.mockResolvedValue([
+      {
+        id: 'u1',
+        name: 'Alice',
+        username: 'alice',
+        email: 'alice@example.com',
+        role: 'user',
+        avatarInitials: 'AL',
+        costPerHour: 42,
+        isDisabled: false,
+        employeeType: 'app_user',
+        hasTopManagerRole: false,
+        isAdminOnly: false,
+      },
+      {
+        id: 'u2',
+        name: 'Bob',
+        username: 'bob',
+        email: 'bob@example.com',
+        role: 'user',
+        avatarInitials: 'BO',
+        costPerHour: 99,
+        isDisabled: false,
+        employeeType: 'app_user',
+        hasTopManagerRole: false,
+        isAdminOnly: false,
+      },
+    ]);
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'tools/call',
+      params: { name: 'praetor_get_users_hierarchy', arguments: {} },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = parseMcpBody(res.body);
+    const users = body.result.structuredContent.users as Array<{
+      id: string;
+      costPerHour: number;
+    }>;
+    const own = users.find((u) => u.id === 'u1');
+    const other = users.find((u) => u.id === 'u2');
+    expect(own?.costPerHour).toBe(42);
+    expect(other?.costPerHour).toBe(0);
+    // `scope.includesCosts` reflects the broader all-scope grant only — false here.
+    expect(body.result.structuredContent.scope.includesCosts).toBe(false);
+  });
+
   test('returns all users and work units when hierarchy permissions allow it', async () => {
     currentPermissions = [
       'administration.user_management_all.view',

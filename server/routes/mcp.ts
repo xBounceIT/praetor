@@ -190,6 +190,16 @@ const canViewUserEmails = (user: McpAuthenticatedUser) =>
 const canViewAllWorkUnits = (user: McpAuthenticatedUser) =>
   hasPermission(user, 'hr.work_units_all.view');
 
+// Cost visibility per row:
+//   - hr.costs_all.view  → see every user's costPerHour
+//   - hr.costs.view      → see only your own costPerHour (read-only counterpart of hr.costs.update)
+//   - neither            → 0
+const canViewCostFor = (user: McpAuthenticatedUser, targetUserId: string | null | undefined) => {
+  if (hasPermission(user, 'hr.costs_all.view')) return true;
+  if (!targetUserId || targetUserId !== user.id) return false;
+  return hasPermission(user, 'hr.costs.view');
+};
+
 const maskUser = (
   user: usersRepo.UserListRow,
   options: { canViewCosts: boolean; canViewEmails: boolean },
@@ -505,6 +515,10 @@ const buildServer = () => {
       if (denied) return denied;
 
       const hasWorkUnitsView = hasPermission(user, 'hr.work_units.view');
+      // `hasCostsView` reflects the broader all-scope grant only — kept as the
+      // value for the `scope.includesCosts` metadata flag below. Per-row cost
+      // visibility (which also honors personal-scope `hr.costs.view` for the
+      // caller's own row) is computed via canViewCostFor inside the .map.
       const hasCostsView = hasPermission(user, 'hr.costs_all.view');
       const hasUserManagementView = hasPermission(user, 'administration.user_management.view');
       const hasAllUsersView = canViewAllUsers(user);
@@ -541,7 +555,7 @@ const buildServer = () => {
       return jsonResult({
         users: users.map((entry) =>
           maskUser(entry, {
-            canViewCosts: hasCostsView,
+            canViewCosts: canViewCostFor(user, entry.id),
             canViewEmails: hasEmailView,
           }),
         ),

@@ -282,6 +282,16 @@ const maskUserResponse = (
   costPerHour: canViewCosts ? user.costPerHour : 0,
 });
 
+// Cost visibility per row:
+//   - hr.costs_all.view  → see every user's costPerHour
+//   - hr.costs.view      → see only your own costPerHour (read-only counterpart of hr.costs.update)
+//   - neither            → 0
+const canViewCostFor = (request: FastifyRequest, targetUserId: string | null | undefined) => {
+  if (hasPermission(request, 'hr.costs_all.view')) return true;
+  if (!targetUserId || targetUserId !== request.user?.id) return false;
+  return hasPermission(request, 'hr.costs.view');
+};
+
 const ensureSubmittedAssignmentsInScope = async (
   request: FastifyRequest,
   {
@@ -363,7 +373,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const canViewInternal = hasPermission(request, 'hr.internal.view');
       const canViewExternal = hasPermission(request, 'hr.external.view');
 
-      const canViewCosts = hasPermission(request, 'hr.costs_all.view');
       const canRevealUserEmails = canViewUserEmails(request);
 
       const users = canViewAllUsers(request)
@@ -374,7 +383,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             canViewExternal,
           });
 
-      return users.map((u) => maskUserResponse(u, canViewCosts, canRevealUserEmails));
+      return users.map((u) =>
+        maskUserResponse(u, canViewCostFor(request, u.id), canRevealUserEmails),
+      );
     },
   );
 
@@ -536,6 +547,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           // Mirror maskUserResponse's view-based mask used by GET / and PUT:
           // a caller without hr.costs_all.view always sees 0 in the response,
           // matching what a subsequent GET would return for the same row.
+          // Personal-scope `hr.costs.view` is deliberately NOT consulted here:
+          // the newly-created user is, by construction, never the caller, so
+          // the self-only personal-scope view can never apply on this branch.
           costPerHour:
             hasPermission(request, 'hr.costs_all.view') && canApplyCost
               ? costPerHourResult.value || 0
@@ -895,11 +909,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           toValue: role !== undefined ? fullUser.role : undefined,
         },
       });
-      return maskUserResponse(
-        fullUser,
-        hasPermission(request, 'hr.costs_all.view'),
-        canRevealUserEmails,
-      );
+      return maskUserResponse(fullUser, canViewCostFor(request, fullUser.id), canRevealUserEmails);
     },
   );
 
@@ -1057,7 +1067,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       return maskUserResponse(
         updated,
-        hasPermission(request, 'hr.costs_all.view'),
+        canViewCostFor(request, updated.id),
         canViewUserEmails(request),
       );
     },

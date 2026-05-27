@@ -443,6 +443,31 @@ describe('GET /api/users', () => {
     expect(body[0].email).toBe('');
   });
 
+  test('200 with ONLY hr.costs.view → caller sees own cost, other rows masked to 0', async () => {
+    // Personal-scope hr.costs.view is the read-only counterpart of
+    // hr.costs.update: it grants visibility of the caller's *own* costPerHour
+    // without exposing other users' costs (those still require hr.costs_all.view).
+    findAuthUserByIdMock.mockResolvedValue(REGULAR_USER);
+    getRolePermissionsMock.mockResolvedValue(['timesheets.tracker.view', 'hr.costs.view']);
+    listScopedForManagerMock.mockResolvedValue([
+      { ...SAMPLE_USER_ROW, id: REGULAR_USER.id, costPerHour: 42 },
+      { ...SAMPLE_USER_ROW, id: 'u-other', costPerHour: 999 },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users',
+      headers: userAuth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as Array<{ id: string; costPerHour: number }>;
+    const ownRow = body.find((row) => row.id === REGULAR_USER.id);
+    const otherRow = body.find((row) => row.id === 'u-other');
+    expect(ownRow?.costPerHour).toBe(42);
+    expect(otherRow?.costPerHour).toBe(0);
+  });
+
   test('401 missing token', async () => {
     const res = await testApp.inject({ method: 'GET', url: '/api/users' });
     expect(res.statusCode).toBe(401);
@@ -1417,6 +1442,78 @@ describe('PUT /api/users/:id', () => {
       ([arg]) => arg.action === 'user.updated',
     );
     expect(auditCall?.[0].details.changedFields).toEqual(['name']);
+  });
+
+  test('200 self edit response with ONLY hr.costs.view → response includes own costPerHour unmasked', async () => {
+    // Regression for the personal-scope view permission: PUT /:id's response
+    // mask honors hr.costs.view for the caller's own row even when the broader
+    // hr.costs_all.view is absent. Combined with administration.user_management.update
+    // so the route guard + per-employee-type check both pass, allowing the
+    // (no-op) PUT to reach the response-masking branch.
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management_all.view',
+      'hr.costs.view',
+    ]);
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, id: MANAGER_USER.id });
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      id: MANAGER_USER.id,
+      name: 'Mary Manager Renamed',
+      avatarInitials: 'MM',
+      costPerHour: 88,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({
+      ...SAMPLE_USER_ROW,
+      id: MANAGER_USER.id,
+      name: 'Mary Manager Renamed',
+      costPerHour: 88,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: `/api/users/${MANAGER_USER.id}`,
+      headers: managerAuth(),
+      payload: { name: 'Mary Manager Renamed' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.costPerHour).toBe(88);
+  });
+
+  test('200 other-user edit response with ONLY hr.costs.view → response masks costPerHour to 0', async () => {
+    // Same caller permissions as above, but targeting another user. The
+    // response mask must drop the cost field because personal-scope hr.costs.view
+    // is self-only.
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management_all.view',
+      'hr.costs.view',
+    ]);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE); // u-target ≠ manager
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      name: 'Renamed',
+      avatarInitials: 'R',
+      costPerHour: 50,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, name: 'Renamed' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: managerAuth(),
+      payload: { name: 'Renamed' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.costPerHour).toBe(0);
   });
 });
 
