@@ -1306,15 +1306,15 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             ) : hoursByUser.length === 0 || hoursByUser.every((r) => r.hours === 0) ? (
               <ChartEmpty />
             ) : (
-              <div className="flex items-center gap-4">
-                <ChartContainer config={hoursByUserConfig} className="size-[220px] shrink-0">
+              <div className="relative">
+                <ChartContainer config={hoursByUserConfig} className="mx-auto size-[300px]">
                   <PieChart>
                     <ChartTooltip content={<ChartTooltipContent nameKey="userId" />} />
                     <Pie
                       data={hoursByUser}
                       dataKey="hours"
                       nameKey="userId"
-                      innerRadius={50}
+                      innerRadius={70}
                       strokeWidth={2}
                     >
                       {hoursByUser.map((row, idx) => (
@@ -1328,17 +1328,20 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     </Pie>
                   </PieChart>
                 </ChartContainer>
-                <PieLegend
-                  rows={hoursByUser.map((row) => ({
-                    key: row.userId,
-                    label: row.userName,
-                    value: row.hours,
-                  }))}
-                  total={totalHours}
-                  valueFormatter={(v) =>
-                    v.toLocaleString(i18n.language, { maximumFractionDigits: 1 })
-                  }
-                />
+                <div className="absolute right-0 top-0 w-[170px]">
+                  <PieLegend
+                    compact
+                    rows={hoursByUser.map((row) => ({
+                      key: row.userId,
+                      label: row.userName,
+                      value: row.hours,
+                    }))}
+                    total={totalHours}
+                    valueFormatter={(v) =>
+                      v.toLocaleString(i18n.language, { maximumFractionDigits: 1 })
+                    }
+                  />
+                </div>
               </div>
             )}
           </CardContent>
@@ -1438,15 +1441,15 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             ) : locationSplit.length === 0 || locationSplit.every((r) => r.hours === 0) ? (
               <ChartEmpty />
             ) : (
-              <div className="flex items-center gap-4">
-                <ChartContainer config={locationConfig} className="size-[220px] shrink-0">
+              <div className="relative">
+                <ChartContainer config={locationConfig} className="mx-auto size-[300px]">
                   <PieChart>
                     <ChartTooltip content={<ChartTooltipContent nameKey="location" />} />
                     <Pie
                       data={locationSplit}
                       dataKey="hours"
                       nameKey="location"
-                      innerRadius={50}
+                      innerRadius={70}
                       strokeWidth={2}
                     >
                       {locationSplit.map((row) => (
@@ -1459,17 +1462,20 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     </Pie>
                   </PieChart>
                 </ChartContainer>
-                <PieLegend
-                  rows={locationSplit.map((row) => ({
-                    key: row.location,
-                    label: String(locationConfig[row.location]?.label ?? row.location),
-                    value: row.hours,
-                  }))}
-                  total={locationSplit.reduce((s, r) => s + r.hours, 0)}
-                  valueFormatter={(v) =>
-                    v.toLocaleString(i18n.language, { maximumFractionDigits: 1 })
-                  }
-                />
+                <div className="absolute right-0 top-0 w-[170px]">
+                  <PieLegend
+                    compact
+                    rows={locationSplit.map((row) => ({
+                      key: row.location,
+                      label: String(locationConfig[row.location]?.label ?? row.location),
+                      value: row.hours,
+                    }))}
+                    total={locationSplit.reduce((s, r) => s + r.hours, 0)}
+                    valueFormatter={(v) =>
+                      v.toLocaleString(i18n.language, { maximumFractionDigits: 1 })
+                    }
+                  />
+                </div>
               </div>
             )}
           </CardContent>
@@ -1586,20 +1592,26 @@ const PieLegend: React.FC<{
   rows: ReadonlyArray<{ key: string; label: string; value: number }>;
   total: number;
   valueFormatter: (v: number) => string;
-}> = ({ rows, total, valueFormatter }) => (
-  <ul className="flex-1 min-w-0 space-y-1.5 text-xs">
+  // `compact` shrinks typography and tightens spacing so the legend can sit as a
+  // small annotation in the top-right corner of a chart rather than as a primary
+  // sidebar column.
+  compact?: boolean;
+}> = ({ rows, total, valueFormatter, compact }) => (
+  <ul className={`flex-1 min-w-0 ${compact ? 'space-y-1 text-[10px]' : 'space-y-1.5 text-xs'}`}>
     {rows.map((row) => {
       const pct = total > 0 ? (row.value / total) * 100 : 0;
       return (
-        <li key={row.key} className="flex items-center gap-2">
+        <li key={row.key} className={`flex items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
           <span
-            className="size-2.5 shrink-0 rounded-[2px]"
+            className={`shrink-0 rounded-[2px] ${compact ? 'size-2' : 'size-2.5'}`}
             style={{ backgroundColor: `var(--color-${row.key})` }}
             aria-hidden="true"
           />
           <span className="flex-1 truncate text-foreground">{row.label}</span>
           <span className="tabular-nums text-muted-foreground">{valueFormatter(row.value)}</span>
-          <span className="w-10 text-right font-medium tabular-nums text-foreground">
+          <span
+            className={`text-right font-medium tabular-nums text-foreground ${compact ? 'w-8' : 'w-10'}`}
+          >
             {pct.toFixed(pct >= 10 ? 0 : 1)}%
           </span>
         </li>
