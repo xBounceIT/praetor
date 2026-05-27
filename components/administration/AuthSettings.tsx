@@ -1053,7 +1053,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                     <FieldDescription>
                       {t(
                         'admin.ldap.provisioning.autoAllHelp',
-                        'When on, the periodic sync creates a local account for every LDAP entry that matches the user filter. When off, sync only refreshes display names and role mappings of users that already exist.',
+                        'When on, the periodic sync creates a local account for every LDAP entry that matches the user filter, applying group role mappings at creation. When off, sync only refreshes display names of users that already exist. Either way, role mappings are never re-applied to users that already exist in Praetor.',
                       )}
                     </FieldDescription>
                   </div>

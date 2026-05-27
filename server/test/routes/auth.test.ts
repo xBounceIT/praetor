@@ -52,7 +52,7 @@ const bcryptCompareMock = mock();
 const ldapAuthenticateMock = mock();
 const ldapAuthenticateWithProfileMock = mock();
 const ldapAuthenticateAndProvisionMock = mock();
-const applyExternalRoleIdsForUserIfMatchedMock = mock();
+const externalGroupsYieldNoKnownRoleMock = mock();
 const endOidcSessionMock = mock();
 
 let authRoutePlugin: FastifyPluginAsync;
@@ -90,7 +90,7 @@ beforeAll(async () => {
   }));
   mock.module('../../services/external-auth.ts', () => ({
     ...externalAuthSnap,
-    applyExternalRoleIdsForUserIfMatched: applyExternalRoleIdsForUserIfMatchedMock,
+    externalGroupsYieldNoKnownRole: externalGroupsYieldNoKnownRoleMock,
   }));
   mock.module('../../services/sso.ts', () => ({
     ...ssoServiceSnap,
@@ -160,7 +160,7 @@ const allMocks = [
   ldapAuthenticateMock,
   ldapAuthenticateWithProfileMock,
   ldapAuthenticateAndProvisionMock,
-  applyExternalRoleIdsForUserIfMatchedMock,
+  externalGroupsYieldNoKnownRoleMock,
   endOidcSessionMock,
 ];
 
@@ -194,16 +194,17 @@ beforeEach(async () => {
     authenticated: false,
     groups: [],
     matchedRoleIds: [],
+    roleMappings: [],
   });
   ldapAuthenticateAndProvisionMock.mockResolvedValue({ authenticated: false });
   // Default: no OIDC session row for the test user. Tests opting into the RP-Initiated
   // Logout path mock this explicitly.
   endOidcSessionMock.mockResolvedValue(null);
   findLoginUserByIdMock.mockResolvedValue(null);
-  applyExternalRoleIdsForUserIfMatchedMock.mockImplementation(
-    async (_userId: string, roleIds: string[]) =>
-      roleIds.length > 0 ? { applied: true, roleIds } : { applied: false, roleIds: [] },
-  );
+  // Default: groups yield a known role (no warn fires). Tests that exercise the
+  // "no group matched" or "matched role was deleted" diagnostic override with
+  // mockResolvedValue(true).
+  externalGroupsYieldNoKnownRoleMock.mockResolvedValue(false);
   bcryptCompareMock.mockResolvedValue(false);
 
   testApp = await buildRouteTestApp(authRoutePlugin, '/api/auth');
@@ -275,12 +276,15 @@ describe('POST /api/auth/login', () => {
     expect(bcryptCompareMock).toHaveBeenCalledWith('secret', LOGIN_USER.passwordHash);
   });
 
-  test('200: LDAP success skips bcrypt', async () => {
+  test('200: LDAP success skips bcrypt and preserves app-assigned role even when LDAP group still maps', async () => {
+    // Bug fix: role mapping is bootstrap-only. The stored `manager` role must survive even
+    // though the user's LDAP groups still resolve to `[admin]`.
     findLoginUserByNormalizedUsernameMock.mockResolvedValue({ ...LOGIN_USER, authMethod: 'ldap' });
     ldapAuthenticateWithProfileMock.mockResolvedValue({
       authenticated: true,
       groups: ['admins'],
       matchedRoleIds: ['admin'],
+      roleMappings: [{ externalGroup: 'admins', role: 'admin' }],
     });
 
     const res = await testApp.inject({
@@ -291,10 +295,9 @@ describe('POST /api/auth/login', () => {
 
     expect(res.statusCode).toBe(200);
     expect(ldapAuthenticateWithProfileMock).toHaveBeenCalledWith('alice', 'secret');
-    expect(applyExternalRoleIdsForUserIfMatchedMock).toHaveBeenCalledWith('u1', ['admin']);
     expect(bcryptCompareMock).not.toHaveBeenCalled();
     const body = JSON.parse(res.body);
-    expect(body.user.role).toBe('admin');
+    expect(body.user.role).toBe('manager');
   });
 
   test('200: LDAP login sends the untrimmed password to the directory bind (#697)', async () => {
@@ -304,6 +307,7 @@ describe('POST /api/auth/login', () => {
       authenticated: true,
       groups: [],
       matchedRoleIds: [],
+      roleMappings: [],
     });
 
     const res = await testApp.inject({
@@ -325,6 +329,7 @@ describe('POST /api/auth/login', () => {
       authenticated: true,
       groups: ['cn=other,dc=corp,dc=local'],
       matchedRoleIds: [],
+      roleMappings: [{ externalGroup: 'admins', role: 'admin' }],
     });
 
     const res = await testApp.inject({
@@ -334,7 +339,37 @@ describe('POST /api/auth/login', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(applyExternalRoleIdsForUserIfMatchedMock).toHaveBeenCalledWith('u1', []);
+    const body = JSON.parse(res.body);
+    expect(body.user.role).toBe('manager');
+  });
+
+  // Iteration 3 added a diagnostic warning for the stale-config case: groups DO match a
+  // configured mapping, but the target role has since been deleted from Praetor. The
+  // login still succeeds and the stored role is preserved (bootstrap-only); the diagnostic
+  // helps admins notice their mapping no longer points at an existing role.
+  test('200: LDAP login with mapping pointing at a deleted role still preserves admin-assigned role', async () => {
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({ ...LOGIN_USER, authMethod: 'ldap' });
+    ldapAuthenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      groups: ['cn=admins,dc=corp,dc=local'],
+      matchedRoleIds: ['ghost-admin'],
+      roleMappings: [{ externalGroup: 'admins', role: 'ghost-admin' }],
+    });
+    // Helper reports that the user's groups yield no known role (the mapping points
+    // at the deleted role 'ghost-admin') — simulating the diagnostic short-circuit.
+    externalGroupsYieldNoKnownRoleMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'alice', password: 'secret' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(externalGroupsYieldNoKnownRoleMock).toHaveBeenCalledWith(
+      ['cn=admins,dc=corp,dc=local'],
+      [{ externalGroup: 'admins', role: 'ghost-admin' }],
+    );
     const body = JSON.parse(res.body);
     expect(body.user.role).toBe('manager');
   });
@@ -485,8 +520,6 @@ describe('POST /api/auth/login', () => {
     expect(bcryptCompareMock).not.toHaveBeenCalled();
     // It should NOT re-run authenticateWithProfile (already authenticated by the helper)
     expect(ldapAuthenticateWithProfileMock).not.toHaveBeenCalled();
-    // It should NOT re-apply role mapping (the provision helper already did it)
-    expect(applyExternalRoleIdsForUserIfMatchedMock).not.toHaveBeenCalled();
     // Audit emits both user.created and user.login
     const actions = logAuditMock.mock.calls.map(
       (call) => (call as unknown as [{ action: string }])[0].action,

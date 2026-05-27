@@ -91,7 +91,8 @@ const filterAssignedTaskIdsMock = mock();
 
 // LDAP / external-auth
 const ldapLookupUserGroupsMock = mock();
-const applyExternalRolesForUserMock = mock();
+const applyExternalRolesForUserIfMatchedMock = mock();
+const externalGroupsYieldNoKnownRoleMock = mock();
 
 // externalIdentitiesRepo
 const deleteAllForUserMock = mock();
@@ -183,7 +184,8 @@ beforeAll(async () => {
   }));
   mock.module('../../services/external-auth.ts', () => ({
     ...externalAuthSnap,
-    applyExternalRolesForUser: applyExternalRolesForUserMock,
+    applyExternalRolesForUserIfMatched: applyExternalRolesForUserIfMatchedMock,
+    externalGroupsYieldNoKnownRole: externalGroupsYieldNoKnownRoleMock,
   }));
   mock.module('../../services/ldap.ts', () => ({
     default: {
@@ -333,7 +335,8 @@ const allMocks = [
   filterAssignedProjectIdsMock,
   filterAssignedTaskIdsMock,
   ldapLookupUserGroupsMock,
-  applyExternalRolesForUserMock,
+  applyExternalRolesForUserIfMatchedMock,
+  externalGroupsYieldNoKnownRoleMock,
   deleteAllForUserMock,
   logAuditMock,
   withDbTransactionMock,
@@ -361,7 +364,10 @@ beforeEach(async () => {
 
   // Default: LDAP unreachable / disabled — route falls back to existing role.
   ldapLookupUserGroupsMock.mockResolvedValue(null);
-  applyExternalRolesForUserMock.mockResolvedValue(['user']);
+  applyExternalRolesForUserIfMatchedMock.mockResolvedValue({ applied: false, roleIds: [] });
+  // Default: bind groups yield a known role (no warn). Tests exercising the no-match
+  // diagnostic override with mockResolvedValue(true).
+  externalGroupsYieldNoKnownRoleMock.mockResolvedValue(false);
   deleteAllForUserMock.mockResolvedValue(0);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/users');
@@ -1067,7 +1073,10 @@ describe('PUT /api/users/:id/auth-method', () => {
       groups: ['cn=managers,ou=groups,dc=test,dc=com'],
       roleMappings: [{ externalGroup: 'managers', role: 'manager' }],
     });
-    applyExternalRolesForUserMock.mockResolvedValue(['manager']);
+    applyExternalRolesForUserIfMatchedMock.mockResolvedValue({
+      applied: true,
+      roleIds: ['manager'],
+    });
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -1079,7 +1088,7 @@ describe('PUT /api/users/:id/auth-method', () => {
     expect(res.statusCode).toBe(200);
     expect(updateAuthMethodMock).toHaveBeenCalledWith('u-target', 'ldap', null, TX_SENTINEL);
     expect(ldapLookupUserGroupsMock).toHaveBeenCalledWith('target');
-    expect(applyExternalRolesForUserMock).toHaveBeenCalledWith(
+    expect(applyExternalRolesForUserIfMatchedMock).toHaveBeenCalledWith(
       'u-target',
       ['cn=managers,ou=groups,dc=test,dc=com'],
       [{ externalGroup: 'managers', role: 'manager' }],
@@ -1095,7 +1104,10 @@ describe('PUT /api/users/:id/auth-method', () => {
     );
   });
 
-  test('200 changes app user to LDAP with no matching mapping → role becomes "user"', async () => {
+  // App role mapping is prioritized: if no LDAP group matches, the admin-assigned role
+  // survives the bind. Pre-fix, applyExternalRolesForUser fell back to DEFAULT_ROLE_ID
+  // and silently demoted users with a non-default role.
+  test('200 changes app user to LDAP with no matching mapping preserves admin-assigned role', async () => {
     findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, role: 'manager' });
     updateAuthMethodMock.mockResolvedValue({
       ...SAMPLE_USER_ROW,
@@ -1106,7 +1118,9 @@ describe('PUT /api/users/:id/auth-method', () => {
       groups: ['cn=unrelated,ou=groups,dc=test,dc=com'],
       roleMappings: [{ externalGroup: 'managers', role: 'manager' }],
     });
-    applyExternalRolesForUserMock.mockResolvedValue(['user']);
+    applyExternalRolesForUserIfMatchedMock.mockResolvedValue({ applied: false, roleIds: [] });
+    // Groups exist but don't map to any configured role — diagnostic should fire.
+    externalGroupsYieldNoKnownRoleMock.mockResolvedValue(true);
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -1116,8 +1130,47 @@ describe('PUT /api/users/:id/auth-method', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(applyExternalRolesForUserMock).toHaveBeenCalled();
-    expect(JSON.parse(res.body).role).toBe('user');
+    expect(applyExternalRolesForUserIfMatchedMock).toHaveBeenCalled();
+    // The bind-path diagnostic helper was consulted with the same inputs the
+    // login/sync paths use, so admins debugging stale config get a consistent signal.
+    expect(externalGroupsYieldNoKnownRoleMock).toHaveBeenCalledWith(
+      ['cn=unrelated,ou=groups,dc=test,dc=com'],
+      [{ externalGroup: 'managers', role: 'manager' }],
+    );
+    expect(JSON.parse(res.body).role).toBe('manager');
+  });
+
+  // When the admin hasn't configured any role mappings, the diagnostic helper returns
+  // false (no warn) — binding a user to LDAP shouldn't log a misleading "did not resolve
+  // to any known role mapping" message in that case.
+  test('200 changes app user to LDAP with zero mappings configured does not consult the no-match diagnostic incorrectly', async () => {
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, role: 'manager' });
+    updateAuthMethodMock.mockResolvedValue({
+      ...SAMPLE_USER_ROW,
+      authMethod: 'ldap',
+      role: 'manager',
+    });
+    ldapLookupUserGroupsMock.mockResolvedValue({
+      groups: ['cn=anything,dc=test,dc=com'],
+      roleMappings: [],
+    });
+    applyExternalRolesForUserIfMatchedMock.mockResolvedValue({ applied: false, roleIds: [] });
+    // Helper returns false (no warn) — admin opted out of mapping by leaving it empty.
+    externalGroupsYieldNoKnownRoleMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/auth-method',
+      headers: adminAuth(),
+      payload: { authMethod: 'ldap' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(externalGroupsYieldNoKnownRoleMock).toHaveBeenCalledWith(
+      ['cn=anything,dc=test,dc=com'],
+      [],
+    );
+    expect(JSON.parse(res.body).role).toBe('manager');
   });
 
   test('200 changes app user to LDAP when LDAP is disabled → role unchanged, no failure', async () => {
@@ -1138,7 +1191,7 @@ describe('PUT /api/users/:id/auth-method', () => {
 
     expect(res.statusCode).toBe(200);
     expect(ldapLookupUserGroupsMock).toHaveBeenCalledWith('target');
-    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
+    expect(applyExternalRolesForUserIfMatchedMock).not.toHaveBeenCalled();
     expect(JSON.parse(res.body).role).toBe('manager');
   });
 
@@ -1155,7 +1208,7 @@ describe('PUT /api/users/:id/auth-method', () => {
 
     expect(res.statusCode).toBe(200);
     expect(ldapLookupUserGroupsMock).not.toHaveBeenCalled();
-    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
+    expect(applyExternalRolesForUserIfMatchedMock).not.toHaveBeenCalled();
   });
 
   test('200 changes app user to OIDC with enabled matching provider', async () => {

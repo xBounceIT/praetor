@@ -455,9 +455,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const authenticated = result.authenticated;
 
       // Replicate the real-login branching so the tester does not lie about which role the
-      // user would end up with (#638). The real login path only falls back to DEFAULT_ROLE_ID
-      // during first-login provisioning; existing LDAP-bound users keep their current role
-      // when no group maps to a Praetor role.
+      // user would end up with. Role mapping is bootstrap-only: it only applies the FIRST
+      // time a user is provisioned. Existing LDAP-bound users keep their stored role on
+      // every login, regardless of whether their groups still match a configured mapping.
       //
       // Lookup order mirrors real login: auth.ts first checks the typed input via
       // `findLoginUserByNormalizedUsername`, then `authenticateAndProvision` falls back to
@@ -467,37 +467,34 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let roleResolution: LdapRoleResolution = 'none';
       let roleIds: string[] = [];
       if (authenticated) {
-        if (result.matchedRoleIds.length > 0) {
+        let existingUser = await usersRepo.findLoginUserByNormalizedUsername(usernameResult.value);
+        if (
+          !existingUser &&
+          result.canonicalUsername &&
+          result.canonicalUsername !== usernameResult.value
+        ) {
+          existingUser = await usersRepo.findLoginUserByNormalizedUsername(
+            result.canonicalUsername,
+          );
+        }
+        if (existingUser && (existingUser.isDisabled || existingUser.employeeType !== 'app_user')) {
+          // Real login rejects this row at the eligibility guard (auth.ts:134) before any
+          // role assignment, so we cannot honestly report `preserved` or `default` here.
+          roleResolution = 'rejected';
+          roleIds = [];
+        } else if (existingUser && existingUser.authMethod === 'ldap') {
+          // Bootstrap-only mapping: even if `result.matchedRoleIds` is non-empty, real login
+          // no longer overwrites the stored role for an existing LDAP user. Report the
+          // current role so admins can see what login will actually grant.
+          roleResolution = 'preserved';
+          roleIds = [existingUser.role];
+        } else if (result.matchedRoleIds.length > 0) {
+          // No existing LDAP-bound row → first-time provisioning would apply the mapping.
           roleResolution = 'matched';
           roleIds = result.matchedRoleIds;
         } else {
-          let existingUser = await usersRepo.findLoginUserByNormalizedUsername(
-            usernameResult.value,
-          );
-          if (
-            !existingUser &&
-            result.canonicalUsername &&
-            result.canonicalUsername !== usernameResult.value
-          ) {
-            existingUser = await usersRepo.findLoginUserByNormalizedUsername(
-              result.canonicalUsername,
-            );
-          }
-          if (
-            existingUser &&
-            (existingUser.isDisabled || existingUser.employeeType !== 'app_user')
-          ) {
-            // Real login rejects this row at the eligibility guard (auth.ts:134) before any
-            // role assignment, so we cannot honestly report `preserved` or `default` here.
-            roleResolution = 'rejected';
-            roleIds = [];
-          } else if (existingUser && existingUser.authMethod === 'ldap') {
-            roleResolution = 'preserved';
-            roleIds = [existingUser.role];
-          } else {
-            roleResolution = 'default';
-            roleIds = [DEFAULT_ROLE_ID];
-          }
+          roleResolution = 'default';
+          roleIds = [DEFAULT_ROLE_ID];
         }
       }
 
