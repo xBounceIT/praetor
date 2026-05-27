@@ -1319,20 +1319,15 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           />
         )}
         {(() => {
-          // Timeline takes whatever lg columns the visible KPIs left empty in the
-          // 6-col grid. On sm it always spans the row; on mobile it stacks.
+          // Timeline matches the width of one chart card below (lg:grid-cols-2 →
+          // 50% of the row = 3 of 6 cols here). Caps at 3 so it doesn't grow
+          // wider than that, even when fewer KPIs are visible; shrinks to 2
+          // when all four KPIs are present so everything still fits on one row.
           const visibleKpiCount =
             1 + (canViewCost ? 1 : 0) + (canManageAssignments ? 1 : 0) + (canViewCost ? 1 : 0);
-          const lgSpan = Math.max(2, 6 - visibleKpiCount);
-          // Tailwind needs literal class names — map the few possible values.
-          const lgSpanClass =
-            lgSpan === 2
-              ? 'lg:col-span-2'
-              : lgSpan === 3
-                ? 'lg:col-span-3'
-                : lgSpan === 4
-                  ? 'lg:col-span-4'
-                  : 'lg:col-span-5';
+          const lgSpan = Math.min(3, Math.max(2, 6 - visibleKpiCount));
+          // Tailwind needs literal class names.
+          const lgSpanClass = lgSpan === 2 ? 'lg:col-span-2' : 'lg:col-span-3';
           return (
             <Card className={`sm:col-span-2 ${lgSpanClass}`}>
               <CardHeader>
