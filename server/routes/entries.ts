@@ -109,7 +109,12 @@ const entryUpdateBodySchema = {
 const entriesListQuerySchema = {
   type: 'object',
   properties: {
-    userId: { type: 'string' },
+    userId: { type: 'string', description: 'Restrict to entries logged by this user.' },
+    projectId: {
+      type: 'string',
+      description:
+        'Restrict to entries logged against this project. Combined with any user/manager scoping the actor is already subject to.',
+    },
     limit: { type: 'integer', minimum: 1, maximum: 500 },
     cursor: { type: 'string' },
   },
@@ -217,14 +222,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!assertAuthenticated(request, reply)) return;
 
-      const { userId, limit, cursor } = request.query as {
+      const { userId, projectId, limit, cursor } = request.query as {
         userId?: string;
+        projectId?: string;
         limit?: number;
         cursor?: string;
       };
       try {
         const result = await listTimeEntries(actorFromRequest(request), {
           userId,
+          projectId,
           limit,
           cursor,
         });

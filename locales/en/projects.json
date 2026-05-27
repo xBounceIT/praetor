@@ -100,6 +100,49 @@
       "actions": "Actions"
     }
   },
+  "detail": {
+    "detailsTitle": "Project details",
+    "detailsDescription": "Edit the core configuration for this project.",
+    "tasksDescription": "Inline-edit tasks, expected effort and revenue.",
+    "createdOn": "Created on {{date}}",
+    "unsavedChanges": "You have unsaved changes.",
+    "newTaskDefaultName": "New Task",
+    "actions": {
+      "back": "Back to projects"
+    },
+    "kpi": {
+      "totalHours": "Total hours",
+      "totalCost": "Total cost",
+      "teamSize": "Team size",
+      "budgetUsed": "Budget used"
+    },
+    "charts": {
+      "hoursLabel": "Hours",
+      "costLabel": "Cost",
+      "hoursByUser": "Hours by user",
+      "hoursByUserDesc": "Effort distribution across the team.",
+      "hoursByTask": "Hours by task",
+      "hoursByTaskDesc": "Top tasks by logged effort.",
+      "hoursOverTime": "Hours over time",
+      "hoursOverTimeDesc": "Monthly hours logged against this project.",
+      "locationSplit": "Hours by location",
+      "locationSplitDesc": "Where the work happened."
+    },
+    "empty": {
+      "noEntriesTitle": "No time logged yet",
+      "noEntriesDescription": "Charts populate as team members track time against this project.",
+      "unavailableTitle": "Data unavailable",
+      "unavailableDescription": "Time-entry data couldn't be loaded — see the notice above for details."
+    },
+    "notices": {
+      "truncated": "Showing the most recent {{count}} time entries — older data is not loaded.",
+      "partialScope": "You only see entries from users you can view; project-wide totals may be higher.",
+      "forbiddenTitle": "Time entries unavailable",
+      "forbiddenDescription": "You don't have permission to view time entries, so analytics can't be displayed.",
+      "loadFailedTitle": "Couldn't load time entries",
+      "loadFailedDescription": "Please refresh the page or try again later."
+    }
+  },
   "tasks": {
     "title": "Tasks",
     "subtitle": "Manage tasks and assignments",

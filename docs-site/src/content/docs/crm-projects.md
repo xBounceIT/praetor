@@ -29,13 +29,20 @@ Per ogni progetto e attività puoi indicare il tipo di consuntivazione: canone o
 
 Usa la stima di impegno mensile per pianificare il carico ricorrente e l'impegno totale per monitorare l'avanzamento rispetto alle ore complessive previste.
 
+L'azione **Aggiungi Progetto** apre una finestra dedicata alla sola creazione: cliente, nome, date, offerta, consuntivazione, ordine facoltativo, ricavo facoltativo e una tabella di attività iniziali. Al salvataggio sei portato direttamente alla pagina di dettaglio del nuovo progetto.
+
+Cliccando una riga nell'elenco progetti si apre la **pagina di dettaglio del progetto**, che sostituisce la vecchia finestra di modifica ed è organizzata in due sezioni:
+
+- La sezione superiore dispone i campi del progetto orizzontalmente (cliente, nome, descrizione, date, offerta, consuntivazione, ricavo, colore, switch di disabilitazione) accanto alla tabella attività modificabile inline.
+- Sotto, una sezione analitica mostra KPI (ore totali, costo totale, dimensione team, % budget usato) e quattro grafici: ore per utente, ore per attività, ore nel tempo e ore per luogo. I grafici si popolano man mano che vengono registrate ore; se non ci sono ancora voci, ogni grafico mostra uno stato vuoto. La pagina mostra anche un avviso quando (a) il progetto ha più di 5.000 voci (vengono caricate solo le più recenti), (b) il tuo ruolo limita gli utenti di cui puoi vedere le voci (i totali riflettono solo la tua visibilità), oppure (c) non hai i permessi per vedere le voci timesheet.
+
 Quando crei o modifichi un progetto puoi compilare anche:
 
-- **Data inizio progetto** e **Data fine progetto** — definiscono la finestra temporale prevista. Entrambe sono obbligatorie alla creazione e restano modificabili sui progetti esistenti per riflettere eventuali variazioni di pianificazione; la data di fine non può precedere la data di inizio.
+- **Data inizio progetto** e **Data fine progetto** — definiscono la finestra temporale prevista. Entrambe sono obbligatorie (alla creazione e a ogni salvataggio successivo dalla pagina di dettaglio) così che i progetti abbiano sempre una finestra di pianificazione; la data di fine non può precedere la data di inizio.
 - **Riferimento offerta** — collega il progetto a un'offerta accettata. Il campo è obbligatorio.
 - **Ricavo progetto** — segue questa precedenza: (1) se le attività hanno un valore di ricavo, il ricavo del progetto è la somma di quei valori in sola lettura; (2) altrimenti, se è collegato un ordine, il ricavo è ereditato in sola lettura dal totale dell'ordine; (3) altrimenti puoi inserirlo manualmente.
 
-Praetor assegna automaticamente un colore univoco quando crei un progetto. Puoi modificarlo in seguito dalla scheda del progetto; il sistema impedisce colori duplicati e genera nuovi colori quando la palette iniziale è esaurita.
+Praetor assegna automaticamente un colore univoco quando crei un progetto. Puoi modificarlo in seguito dalla pagina di dettaglio; il sistema impedisce colori duplicati e genera nuovi colori quando la palette iniziale è esaurita.
 
 Quando un progetto termina, verifica che le attività siano coerenti e che non rimangano registrazioni pendenti.
 

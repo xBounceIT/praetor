@@ -29,13 +29,20 @@ For each project and task, you can set the billing type: retainer or time and ma
 
 Use estimated monthly effort to plan recurring load and total effort to track progress against the overall expected hours.
 
-When creating or editing a project you can also fill in:
+The **Add Project** action opens a focused dialog with only what's needed to create a project: client, name, dates, offer, billing, optional order, optional revenue, and a draft tasks table. Submitting the dialog takes you straight to the new project's dedicated detail page.
 
-- **Project start date** and **Project end date** — define the planned window. Both are required at creation and remain editable on existing projects so you can adjust them when the schedule shifts; the end date must not precede the start date.
+Click any row in the projects list to open the **project detail page**. The detail page replaces the legacy edit dialog and is laid out in two areas:
+
+- The top section lays out the project fields horizontally (client, name, description, dates, offer, billing, revenue, color, disabled toggle) next to the inline-editable project tasks table.
+- Below, an analytics section shows KPIs (total hours, total cost, team size, budget used %) and four charts: hours by user, hours by task, hours over time, and hours by location. Charts populate as time is logged against the project; before any entries exist, each chart shows an empty state. The page also surfaces a notice when (a) the project has more than 5,000 entries (only the most recent are loaded), (b) your role limits which users' entries you can see (totals reflect just your scope), or (c) you don't have permission to view time entries at all.
+
+When creating or editing a project you can fill in:
+
+- **Project start date** and **Project end date** — define the planned window. Both are required (at creation and on every subsequent save from the detail page) so projects always carry a planning window; the end date must not precede the start date.
 - **Offer reference** — links the project to an accepted offer. This field is required.
 - **Project revenue** — resolved with this precedence: (1) if the activities have a per-row revenue, the project revenue is the sum of those values shown read-only; (2) otherwise, if an order is linked, the revenue is inherited read-only from the order total; (3) otherwise you can enter it manually.
 
-Praetor assigns a unique color automatically when you create a project. You can change it later from the project record; duplicate colors are blocked, and new colors are generated when the initial palette is exhausted.
+Praetor assigns a unique color automatically when you create a project. You can change it later from the detail page; duplicate colors are blocked, and new colors are generated when the initial palette is exhausted.
 
 When a project ends, check that tasks are consistent and that no pending entries remain.
 

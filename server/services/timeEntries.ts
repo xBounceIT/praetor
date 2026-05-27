@@ -141,11 +141,12 @@ const withSerializableWriteTransaction = async <T>(
 
 export const listTimeEntries = async (
   actor: AuthenticatedActor,
-  input: { userId?: unknown; limit?: unknown; cursor?: unknown },
+  input: { userId?: unknown; limit?: unknown; cursor?: unknown; projectId?: unknown },
 ): Promise<{ entries: TimeEntry[]; nextCursor: string | null }> => {
   if (!hasTrackerPermission(actor, 'view')) fail(403, 'Insufficient permissions');
 
   const userId = typeof input.userId === 'string' ? input.userId : undefined;
+  const projectId = typeof input.projectId === 'string' ? input.projectId : undefined;
   const limit =
     input.limit === undefined || typeof input.limit === 'number'
       ? input.limit
@@ -161,7 +162,7 @@ export const listTimeEntries = async (
   const decodedCursor = cursor ? entriesRepo.decodeCursor(cursor) : undefined;
   if (cursor && !decodedCursor) badRequest('cursor is invalid');
 
-  const options = { limit, cursor: decodedCursor ?? undefined };
+  const options = { limit, cursor: decodedCursor ?? undefined, projectId };
   const result = userId
     ? await entriesRepo.listForUser(userId, options)
     : canViewAll

@@ -100,6 +100,49 @@
       "actions": "Azioni"
     }
   },
+  "detail": {
+    "detailsTitle": "Dettagli progetto",
+    "detailsDescription": "Modifica la configurazione di base di questo progetto.",
+    "tasksDescription": "Modifica inline attività, impegno previsto e ricavo.",
+    "createdOn": "Creato il {{date}}",
+    "unsavedChanges": "Ci sono modifiche non salvate.",
+    "newTaskDefaultName": "Nuova Attività",
+    "actions": {
+      "back": "Torna ai progetti"
+    },
+    "kpi": {
+      "totalHours": "Ore totali",
+      "totalCost": "Costo totale",
+      "teamSize": "Dimensione team",
+      "budgetUsed": "Budget usato"
+    },
+    "charts": {
+      "hoursLabel": "Ore",
+      "costLabel": "Costo",
+      "hoursByUser": "Ore per utente",
+      "hoursByUserDesc": "Distribuzione dell'effort nel team.",
+      "hoursByTask": "Ore per attività",
+      "hoursByTaskDesc": "Attività con più ore registrate.",
+      "hoursOverTime": "Ore nel tempo",
+      "hoursOverTimeDesc": "Ore registrate mese per mese.",
+      "locationSplit": "Ore per luogo",
+      "locationSplitDesc": "Dove è stato svolto il lavoro."
+    },
+    "empty": {
+      "noEntriesTitle": "Ancora nessuna ora registrata",
+      "noEntriesDescription": "I grafici si popolano man mano che il team registra ore su questo progetto.",
+      "unavailableTitle": "Dati non disponibili",
+      "unavailableDescription": "Non è stato possibile caricare le voci timesheet — vedi l'avviso sopra per i dettagli."
+    },
+    "notices": {
+      "truncated": "Mostro le {{count}} voci più recenti — quelle più vecchie non sono caricate.",
+      "partialScope": "Vedi solo le voci degli utenti che puoi visualizzare; i totali di progetto potrebbero essere più alti.",
+      "forbiddenTitle": "Voci timesheet non disponibili",
+      "forbiddenDescription": "Non hai i permessi per vedere le voci timesheet, quindi le analisi non possono essere mostrate.",
+      "loadFailedTitle": "Impossibile caricare le voci timesheet",
+      "loadFailedDescription": "Ricarica la pagina o riprova più tardi."
+    }
+  },
   "tasks": {
     "title": "Attività",
     "subtitle": "Gestisci attività e assegnazioni",
