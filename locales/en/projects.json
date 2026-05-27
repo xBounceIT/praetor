@@ -141,6 +141,29 @@
       "forbiddenDescription": "You don't have permission to view time entries, so analytics can't be displayed.",
       "loadFailedTitle": "Couldn't load time entries",
       "loadFailedDescription": "Please refresh the page or try again later."
+    },
+    "rules": {
+      "title": "Project rules",
+      "description": "Automatic controls that watch this project and notify you when something needs attention.",
+      "comingSoonBadge": "Coming soon",
+      "items": {
+        "budgetThreshold": {
+          "name": "Alert when budget exceeds threshold",
+          "description": "Notify project managers when logged cost crosses 80% of the project revenue."
+        },
+        "deadlineApproaching": {
+          "name": "Warn before the end date",
+          "description": "Surface a warning 7 days before the project end date if open tasks remain."
+        },
+        "staleTask": {
+          "name": "Flag stale tasks",
+          "description": "Highlight tasks with no time logged in the last 14 days."
+        },
+        "unassignedTask": {
+          "name": "Catch unassigned tasks",
+          "description": "Notify when a task is created without an assignee or with no expected effort."
+        }
+      }
     }
   },
   "tasks": {

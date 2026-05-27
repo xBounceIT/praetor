@@ -141,6 +141,29 @@
       "forbiddenDescription": "Non hai i permessi per vedere le voci timesheet, quindi le analisi non possono essere mostrate.",
       "loadFailedTitle": "Impossibile caricare le voci timesheet",
       "loadFailedDescription": "Ricarica la pagina o riprova più tardi."
+    },
+    "rules": {
+      "title": "Regole del progetto",
+      "description": "Controlli automatici che monitorano questo progetto e ti avvisano quando qualcosa richiede attenzione.",
+      "comingSoonBadge": "In arrivo",
+      "items": {
+        "budgetThreshold": {
+          "name": "Avviso al superamento della soglia di budget",
+          "description": "Notifica i project manager quando il costo registrato supera l'80% del ricavo del progetto."
+        },
+        "deadlineApproaching": {
+          "name": "Avviso prima della data di fine",
+          "description": "Mostra un avviso 7 giorni prima della data di fine progetto se ci sono attività aperte."
+        },
+        "staleTask": {
+          "name": "Segnala attività inattive",
+          "description": "Evidenzia le attività senza ore registrate negli ultimi 14 giorni."
+        },
+        "unassignedTask": {
+          "name": "Intercetta attività non assegnate",
+          "description": "Notifica quando un'attività viene creata senza un assegnatario o senza un impegno previsto."
+        }
+      }
     }
   },
   "tasks": {
