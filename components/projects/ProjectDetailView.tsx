@@ -749,365 +749,365 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         </div>
       </div>
 
-      {/* Top section: details (left, 2-col) + tasks table (right) */}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
-          <CardHeader>
-            <CardTitle>{t('projects:detail.detailsTitle')}</CardTitle>
-            <CardDescription>{t('projects:detail.detailsDescription')}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {linkedOrder && (
-              <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
-                    <i className="fa-solid fa-link" aria-hidden="true"></i>
+      {/* Top section: details (left, ~40%) + tasks table (right, ~60%) */}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
+        <div className="xl:col-span-2 self-start space-y-6">
+          <div className="space-y-1.5">
+            <h2 className="text-base font-semibold leading-none">
+              {t('projects:detail.detailsTitle')}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {t('projects:detail.detailsDescription')}
+            </p>
+          </div>
+          {linkedOrder && (
+            <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
+              <div className="flex items-center gap-3">
+                <div className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
+                  <i className="fa-solid fa-link" aria-hidden="true"></i>
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-foreground">
+                    {t('projects:projects.linkedOrder')}
                   </div>
-                  <div>
-                    <div className="text-sm font-medium text-foreground">
-                      {t('projects:projects.linkedOrder')}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {formatOrderId(linkedOrder.id)} · {linkedOrder.clientName}
-                    </div>
+                  <div className="text-xs text-muted-foreground">
+                    {formatOrderId(linkedOrder.id)} · {linkedOrder.clientName}
                   </div>
                 </div>
-                {onViewOrder && (
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    onClick={() => onViewOrder(linkedOrder.id)}
-                    className="px-0"
-                  >
-                    {t('projects:projects.viewOrder')}
-                  </Button>
-                )}
               </div>
-            )}
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-1.5">
-                <SelectControl
-                  id="detail-client"
-                  options={clientOptions}
-                  value={clientId}
-                  onChange={(val) => {
-                    const nextClientId = val as string;
-                    setClientId(nextClientId);
-                    if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
-                    // Clear a stale offerId belonging to the previous client — server enforces
-                    // the same invariant and would reject the save otherwise.
-                    if (offerId) {
-                      const current = offers.find((o) => o.id === offerId);
-                      if (!current || current.clientId !== nextClientId) {
-                        setOfferId('');
-                        if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
-                      }
-                    }
-                  }}
-                  label={
-                    <>
-                      {t('projects:projects.client')} <RequiredMark />
-                    </>
-                  }
-                  placeholder={t('projects:projects.selectClient')}
-                  searchable
-                  buttonClassName="h-9"
-                  disabled={!canUpdateProjects || isClientLockedByOrder}
-                />
-                <FieldError className="text-xs">{errors.clientId}</FieldError>
-                {isClientLockedByOrder && linkedOrder && (
-                  <div className="mt-1.5 flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
-                    <i
-                      className="fa-solid fa-link text-xs text-muted-foreground"
-                      aria-hidden="true"
-                    ></i>
-                    <span className="text-xs text-muted-foreground">
-                      {t('projects:projects.inheritedClientLabel')}:
-                    </span>
-                    <span className="text-xs font-medium text-foreground">
-                      {linkedOrder.clientName}
-                    </span>
-                  </div>
-                )}
-              </div>
-              <Field data-invalid={Boolean(errors.name)}>
-                <FieldLabel htmlFor="detail-name">
-                  {t('projects:projects.name')} <RequiredMark />
-                </FieldLabel>
-                <Input
-                  id="detail-name"
-                  type="text"
-                  value={name}
-                  aria-invalid={Boolean(errors.name)}
-                  disabled={!canUpdateProjects}
-                  onChange={(e) => {
-                    setName(e.target.value);
-                    if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
-                  }}
-                  placeholder={t('projects:projects.projectNamePlaceholder')}
-                />
-                <FieldError className="text-xs">{errors.name}</FieldError>
-              </Field>
-              <Field className="md:col-span-2">
-                <FieldLabel htmlFor="detail-description">
-                  {t('projects:projects.description')}
-                </FieldLabel>
-                <Textarea
-                  id="detail-description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder={t('projects:projects.descriptionPlaceholder')}
-                  disabled={!canUpdateProjects}
-                  rows={2}
-                  className="min-h-16 resize-none"
-                />
-              </Field>
-              <Field data-invalid={Boolean(errors.startDate || errors.dateRange)}>
-                <FieldLabel htmlFor="detail-start-date">
-                  {t('projects:projects.startDate')} {project.startDate && <RequiredMark />}
-                </FieldLabel>
-                <Input
-                  id="detail-start-date"
-                  type="date"
-                  value={startDate}
-                  disabled={!canUpdateProjects}
-                  aria-invalid={Boolean(errors.startDate || errors.dateRange)}
-                  onChange={(e) => {
-                    setStartDate(e.target.value);
-                    if (errors.startDate || errors.dateRange) {
-                      setErrors((prev) => ({ ...prev, startDate: '', dateRange: '' }));
-                    }
-                  }}
-                />
-                <FieldError className="text-xs">{errors.startDate}</FieldError>
-              </Field>
-              <Field data-invalid={Boolean(errors.endDate || errors.dateRange)}>
-                <FieldLabel htmlFor="detail-end-date">
-                  {t('projects:projects.endDate')} {project.endDate && <RequiredMark />}
-                </FieldLabel>
-                <Input
-                  id="detail-end-date"
-                  type="date"
-                  value={endDate}
-                  disabled={!canUpdateProjects}
-                  aria-invalid={Boolean(errors.endDate || errors.dateRange)}
-                  onChange={(e) => {
-                    setEndDate(e.target.value);
-                    if (errors.endDate || errors.dateRange) {
-                      setErrors((prev) => ({ ...prev, endDate: '', dateRange: '' }));
-                    }
-                  }}
-                />
-                <FieldError className="text-xs">{errors.endDate}</FieldError>
-              </Field>
-              {errors.dateRange && (
-                <FieldError className="md:col-span-2 text-xs">{errors.dateRange}</FieldError>
+              {onViewOrder && (
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  onClick={() => onViewOrder(linkedOrder.id)}
+                  className="px-0"
+                >
+                  {t('projects:projects.viewOrder')}
+                </Button>
               )}
-              <div className="space-y-1.5">
-                <SelectControl
-                  id="detail-offer"
-                  options={offerOptions}
-                  value={offerId}
-                  onChange={(val) => {
-                    setOfferId(val as string);
-                    if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
-                  }}
-                  label={
-                    <>
-                      {t('projects:projects.offerReference')} <RequiredMark />
-                    </>
-                  }
-                  placeholder={t('projects:projects.selectOffer')}
-                  searchable
-                  buttonClassName="h-9"
-                  disabled={!canUpdateProjects}
-                />
-                <FieldError className="text-xs">{errors.offerId}</FieldError>
-              </div>
-              <Field>
-                <FieldLabel htmlFor="detail-revenue">
-                  {`${t('projects:projects.projectRevenue')} (${currency})`}
-                </FieldLabel>
-                <Input
-                  id="detail-revenue"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  disabled={!canUpdateProjects}
-                  value={revenueSource === 'manual' ? revenue : displayedRevenue.toFixed(2)}
-                  readOnly={revenueSource !== 'manual'}
-                  onChange={(e) => setRevenue(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {revenueHintBySource[revenueSource]}
-                </p>
-              </Field>
-              <SelectControl
-                id="detail-billing-type"
-                options={projectBillingTypeOptions}
-                value={derivedBillingType}
-                onChange={(val) => {
-                  const next = val as StoredBillingType;
-                  setProjectBillingChanged(true);
-                  setBillingType(next);
-                  if (next === 'time_and_materials') setBillingFrequency('monthly');
-                }}
-                label={t('projects:projects.billingType')}
-                disabled={!canUpdateProjects || derivedBillingType === 'mixed'}
-                searchable={false}
-                buttonClassName="h-9"
-              />
-              <SelectControl
-                id="detail-billing-frequency"
-                options={
-                  billingType === 'retainer'
-                    ? translatedBillingFrequencyOptions
-                    : translatedBillingFrequencyOptions.filter((o) => o.id === 'monthly')
-                }
-                value={
-                  derivedBillingType === 'mixed'
-                    ? 'monthly'
-                    : billingType === 'time_and_materials'
-                      ? 'monthly'
-                      : billingFrequency
-                }
-                onChange={(val) => {
-                  setProjectBillingChanged(true);
-                  setBillingFrequency(val as BillingFrequency);
-                }}
-                label={t('projects:projects.billingFrequency')}
-                disabled={
-                  !canUpdateProjects ||
-                  derivedBillingType === 'mixed' ||
-                  billingType === 'time_and_materials'
-                }
-                searchable={false}
-                buttonClassName="h-9"
-              />
             </div>
+          )}
 
-            <Separator />
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field>
-                <FieldLabel>{t('projects:projects.color')}</FieldLabel>
-                <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 p-3">
-                  {COLORS.map((c) => (
-                    <Tooltip key={c}>
-                      <TooltipTrigger asChild>
-                        <span className="inline-flex">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            disabled={!canUpdateProjects}
-                            onClick={() => {
-                              setColor(c);
-                              setHexInput(c);
-                            }}
-                            className={`rounded-full border-2 p-0 transition-transform active:scale-95 ${color === c ? 'border-background ring-2 ring-ring ring-offset-2 ring-offset-background' : 'border-transparent hover:scale-105'}`}
-                            style={{ backgroundColor: c }}
-                          />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>{c}</TooltipContent>
-                    </Tooltip>
-                  ))}
-                  <div className="ml-1 flex items-center gap-2 border-l border-border pl-3">
-                    <Input
-                      type="color"
-                      value={color}
-                      disabled={!canUpdateProjects}
-                      onFocus={() => {
-                        skipPickerRef.current = false;
-                      }}
-                      onChange={(e) => {
-                        if (skipPickerRef.current) return;
-                        setColor(e.target.value);
-                        setHexInput(e.target.value);
-                      }}
-                      className="size-8 cursor-pointer rounded-md bg-transparent p-1 [&::-moz-color-swatch]:rounded-sm [&::-moz-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-sm"
-                    />
-                    <Input
-                      type="text"
-                      value={hexInput}
-                      disabled={!canUpdateProjects}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setHexInput(val);
-                        if (isValidHex(val)) setColor(val);
-                      }}
-                      onBlur={commitHexInput}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          commitHexInput();
-                        }
-                      }}
-                      placeholder="#000000"
-                      className="h-8 w-[90px] font-mono text-xs tabular-nums"
-                    />
-                  </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <SelectControl
+                id="detail-client"
+                options={clientOptions}
+                value={clientId}
+                onChange={(val) => {
+                  const nextClientId = val as string;
+                  setClientId(nextClientId);
+                  if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+                  // Clear a stale offerId belonging to the previous client — server enforces
+                  // the same invariant and would reject the save otherwise.
+                  if (offerId) {
+                    const current = offers.find((o) => o.id === offerId);
+                    if (!current || current.clientId !== nextClientId) {
+                      setOfferId('');
+                      if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
+                    }
+                  }
+                }}
+                label={
+                  <>
+                    {t('projects:projects.client')} <RequiredMark />
+                  </>
+                }
+                placeholder={t('projects:projects.selectClient')}
+                searchable
+                buttonClassName="h-9"
+                disabled={!canUpdateProjects || isClientLockedByOrder}
+              />
+              <FieldError className="text-xs">{errors.clientId}</FieldError>
+              {isClientLockedByOrder && linkedOrder && (
+                <div className="mt-1.5 flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+                  <i
+                    className="fa-solid fa-link text-xs text-muted-foreground"
+                    aria-hidden="true"
+                  ></i>
+                  <span className="text-xs text-muted-foreground">
+                    {t('projects:projects.inheritedClientLabel')}:
+                  </span>
+                  <span className="text-xs font-medium text-foreground">
+                    {linkedOrder.clientName}
+                  </span>
                 </div>
-              </Field>
-              <Field>
-                <FieldLabel>{t('projects:projects.projectDisabled')}</FieldLabel>
-                <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
-                  <div>
-                    <p
-                      className={`text-sm font-medium ${isClientDisabled ? 'text-muted-foreground' : 'text-foreground'}`}
-                    >
-                      {t('projects:projects.projectDisabled')}
-                    </p>
-                    {isClientDisabled && (
-                      <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-600">
-                        <i className="fa-solid fa-circle-info" aria-hidden="true"></i>
-                        {t('projects:projects.inheritedFromDisabledClient', {
-                          clientName: client?.name,
-                        })}
-                      </p>
-                    )}
-                  </div>
-                  <Toggle
-                    checked={isCurrentlyDisabled}
-                    onChange={() => {
-                      if (!isClientDisabled && canUpdateProjects) {
-                        setTempIsDisabled(!tempIsDisabled);
+              )}
+            </div>
+            <Field data-invalid={Boolean(errors.name)}>
+              <FieldLabel htmlFor="detail-name">
+                {t('projects:projects.name')} <RequiredMark />
+              </FieldLabel>
+              <Input
+                id="detail-name"
+                type="text"
+                value={name}
+                aria-invalid={Boolean(errors.name)}
+                disabled={!canUpdateProjects}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
+                }}
+                placeholder={t('projects:projects.projectNamePlaceholder')}
+              />
+              <FieldError className="text-xs">{errors.name}</FieldError>
+            </Field>
+            <Field className="md:col-span-2">
+              <FieldLabel htmlFor="detail-description">
+                {t('projects:projects.description')}
+              </FieldLabel>
+              <Textarea
+                id="detail-description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder={t('projects:projects.descriptionPlaceholder')}
+                disabled={!canUpdateProjects}
+                rows={2}
+                className="min-h-16 resize-none"
+              />
+            </Field>
+            <Field data-invalid={Boolean(errors.startDate || errors.dateRange)}>
+              <FieldLabel htmlFor="detail-start-date">
+                {t('projects:projects.startDate')} {project.startDate && <RequiredMark />}
+              </FieldLabel>
+              <Input
+                id="detail-start-date"
+                type="date"
+                value={startDate}
+                disabled={!canUpdateProjects}
+                aria-invalid={Boolean(errors.startDate || errors.dateRange)}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  if (errors.startDate || errors.dateRange) {
+                    setErrors((prev) => ({ ...prev, startDate: '', dateRange: '' }));
+                  }
+                }}
+              />
+              <FieldError className="text-xs">{errors.startDate}</FieldError>
+            </Field>
+            <Field data-invalid={Boolean(errors.endDate || errors.dateRange)}>
+              <FieldLabel htmlFor="detail-end-date">
+                {t('projects:projects.endDate')} {project.endDate && <RequiredMark />}
+              </FieldLabel>
+              <Input
+                id="detail-end-date"
+                type="date"
+                value={endDate}
+                disabled={!canUpdateProjects}
+                aria-invalid={Boolean(errors.endDate || errors.dateRange)}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  if (errors.endDate || errors.dateRange) {
+                    setErrors((prev) => ({ ...prev, endDate: '', dateRange: '' }));
+                  }
+                }}
+              />
+              <FieldError className="text-xs">{errors.endDate}</FieldError>
+            </Field>
+            {errors.dateRange && (
+              <FieldError className="md:col-span-2 text-xs">{errors.dateRange}</FieldError>
+            )}
+            <div className="space-y-1.5">
+              <SelectControl
+                id="detail-offer"
+                options={offerOptions}
+                value={offerId}
+                onChange={(val) => {
+                  setOfferId(val as string);
+                  if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
+                }}
+                label={
+                  <>
+                    {t('projects:projects.offerReference')} <RequiredMark />
+                  </>
+                }
+                placeholder={t('projects:projects.selectOffer')}
+                searchable
+                buttonClassName="h-9"
+                disabled={!canUpdateProjects}
+              />
+              <FieldError className="text-xs">{errors.offerId}</FieldError>
+            </div>
+            <Field>
+              <FieldLabel htmlFor="detail-revenue">
+                {`${t('projects:projects.projectRevenue')} (${currency})`}
+              </FieldLabel>
+              <Input
+                id="detail-revenue"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                disabled={!canUpdateProjects}
+                value={revenueSource === 'manual' ? revenue : displayedRevenue.toFixed(2)}
+                readOnly={revenueSource !== 'manual'}
+                onChange={(e) => setRevenue(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">{revenueHintBySource[revenueSource]}</p>
+            </Field>
+            <SelectControl
+              id="detail-billing-type"
+              options={projectBillingTypeOptions}
+              value={derivedBillingType}
+              onChange={(val) => {
+                const next = val as StoredBillingType;
+                setProjectBillingChanged(true);
+                setBillingType(next);
+                if (next === 'time_and_materials') setBillingFrequency('monthly');
+              }}
+              label={t('projects:projects.billingType')}
+              disabled={!canUpdateProjects || derivedBillingType === 'mixed'}
+              searchable={false}
+              buttonClassName="h-9"
+            />
+            <SelectControl
+              id="detail-billing-frequency"
+              options={
+                billingType === 'retainer'
+                  ? translatedBillingFrequencyOptions
+                  : translatedBillingFrequencyOptions.filter((o) => o.id === 'monthly')
+              }
+              value={
+                derivedBillingType === 'mixed'
+                  ? 'monthly'
+                  : billingType === 'time_and_materials'
+                    ? 'monthly'
+                    : billingFrequency
+              }
+              onChange={(val) => {
+                setProjectBillingChanged(true);
+                setBillingFrequency(val as BillingFrequency);
+              }}
+              label={t('projects:projects.billingFrequency')}
+              disabled={
+                !canUpdateProjects ||
+                derivedBillingType === 'mixed' ||
+                billingType === 'time_and_materials'
+              }
+              searchable={false}
+              buttonClassName="h-9"
+            />
+          </div>
+
+          <Separator />
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field>
+              <FieldLabel>{t('projects:projects.color')}</FieldLabel>
+              <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 p-3">
+                {COLORS.map((c) => (
+                  <Tooltip key={c}>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          disabled={!canUpdateProjects}
+                          onClick={() => {
+                            setColor(c);
+                            setHexInput(c);
+                          }}
+                          className={`rounded-full border-2 p-0 transition-transform active:scale-95 ${color === c ? 'border-background ring-2 ring-ring ring-offset-2 ring-offset-background' : 'border-transparent hover:scale-105'}`}
+                          style={{ backgroundColor: c }}
+                        />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{c}</TooltipContent>
+                  </Tooltip>
+                ))}
+                <div className="ml-1 flex items-center gap-2 border-l border-border pl-3">
+                  <Input
+                    type="color"
+                    value={color}
+                    disabled={!canUpdateProjects}
+                    onFocus={() => {
+                      skipPickerRef.current = false;
+                    }}
+                    onChange={(e) => {
+                      if (skipPickerRef.current) return;
+                      setColor(e.target.value);
+                      setHexInput(e.target.value);
+                    }}
+                    className="size-8 cursor-pointer rounded-md bg-transparent p-1 [&::-moz-color-swatch]:rounded-sm [&::-moz-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-sm"
+                  />
+                  <Input
+                    type="text"
+                    value={hexInput}
+                    disabled={!canUpdateProjects}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setHexInput(val);
+                      if (isValidHex(val)) setColor(val);
+                    }}
+                    onBlur={commitHexInput}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        commitHexInput();
                       }
                     }}
-                    disabled={isClientDisabled || !canUpdateProjects}
+                    placeholder="#000000"
+                    className="h-8 w-[90px] font-mono text-xs tabular-nums"
                   />
                 </div>
-              </Field>
-            </div>
-          </CardContent>
-        </Card>
+              </div>
+            </Field>
+            <Field>
+              <FieldLabel>{t('projects:projects.projectDisabled')}</FieldLabel>
+              <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
+                <div>
+                  <p
+                    className={`text-sm font-medium ${isClientDisabled ? 'text-muted-foreground' : 'text-foreground'}`}
+                  >
+                    {t('projects:projects.projectDisabled')}
+                  </p>
+                  {isClientDisabled && (
+                    <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-600">
+                      <i className="fa-solid fa-circle-info" aria-hidden="true"></i>
+                      {t('projects:projects.inheritedFromDisabledClient', {
+                        clientName: client?.name,
+                      })}
+                    </p>
+                  )}
+                </div>
+                <Toggle
+                  checked={isCurrentlyDisabled}
+                  onChange={() => {
+                    if (!isClientDisabled && canUpdateProjects) {
+                      setTempIsDisabled(!tempIsDisabled);
+                    }
+                  }}
+                  disabled={isClientDisabled || !canUpdateProjects}
+                />
+              </div>
+            </Field>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('projects:projects.projectTasks')}</CardTitle>
-            <CardDescription>{t('projects:detail.tasksDescription')}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ProjectTasksTable
-              projectId={project.id}
-              tasks={projectTasks}
-              currency={currency}
-              canCreate={canCreateTasks}
-              canUpdate={canUpdateTasks}
-              canDelete={canDeleteTasks}
-              onAddTask={handleAddTask}
-              onUpdateTask={onUpdateTask}
-              onRequestDeleteTask={(task) => {
-                setTaskToDelete(task);
-                setIsTaskDeleteConfirmOpen(true);
-              }}
-            />
-          </CardContent>
-        </Card>
+        <div className="xl:col-span-3 space-y-3">
+          <div className="space-y-1.5">
+            <h2 className="text-base font-semibold leading-none">
+              {t('projects:projects.projectTasks')}
+            </h2>
+            <p className="text-sm text-muted-foreground">{t('projects:detail.tasksDescription')}</p>
+          </div>
+          <ProjectTasksTable
+            projectId={project.id}
+            tasks={projectTasks}
+            currency={currency}
+            canCreate={canCreateTasks}
+            canUpdate={canUpdateTasks}
+            canDelete={canDeleteTasks}
+            onAddTask={handleAddTask}
+            onUpdateTask={onUpdateTask}
+            onRequestDeleteTask={(task) => {
+              setTaskToDelete(task);
+              setIsTaskDeleteConfirmOpen(true);
+            }}
+          />
+        </div>
       </div>
 
       {/* Save bar — shows only when there are unsaved changes */}
