@@ -241,6 +241,20 @@ describe('logAudit', () => {
     });
   });
 
+  test('normalizes details: padded sensitive changedFields are stripped after trim', async () => {
+    const request = buildRequest();
+    await logAudit({
+      request,
+      action: 'user.update',
+      details: {
+        // Whitespace-padded "password" must not bypass SENSITIVE_AUDIT_FIELDS by
+        // sneaking through the pre-trim check and surfacing as 'password' after trim.
+        changedFields: ['name', '  password  ', '\tpassword\n', 'email'],
+      },
+    });
+    expect(createMock.mock.calls[0][0]?.details?.changedFields).toEqual(['email', 'name']);
+  });
+
   test('normalizes details: empty trimmed labels become undefined', async () => {
     const request = buildRequest();
     await logAudit({

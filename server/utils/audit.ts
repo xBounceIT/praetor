@@ -120,9 +120,10 @@ const normalizeAuditDetails = (details?: AuditLogDetails): AuditLogDetails | nul
   const changedFields =
     details.changedFields
       ?.flatMap((field) => {
-        if (!field || SENSITIVE_AUDIT_FIELDS.has(field)) return [];
+        if (!field) return [];
         const trimmed = field.trim();
-        return trimmed ? [trimmed] : [];
+        if (!trimmed || SENSITIVE_AUDIT_FIELDS.has(trimmed)) return [];
+        return [trimmed];
       })
       .toSorted((left, right) => left.localeCompare(right)) ?? [];
 
