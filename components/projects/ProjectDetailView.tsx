@@ -1540,89 +1540,128 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           </CardContent>
         </Card>
 
-        {canViewCost && (
-          <Card>
-            <CardHeader>
-              <CardTitle>{t('projects:detail.charts.costVsRevenue')}</CardTitle>
-              <CardDescription>{t('projects:detail.charts.costVsRevenueDesc')}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {entriesLoading ? (
-                <Skeleton className="h-[260px] w-full" />
-              ) : entriesError !== null ? (
-                <ChartEmpty variant={entriesError === 'forbidden' ? 'forbidden' : 'failed'} />
-              ) : costOverTime.length === 0 || costOverTime.every((r) => r.cumulativeCost === 0) ? (
-                <ChartEmpty />
-              ) : (
-                <ChartContainer config={budgetChartConfig} className="max-h-[260px] w-full">
-                  <AreaChart
-                    data={costOverTime}
-                    margin={{ left: 12, right: 12, top: 16, bottom: 8 }}
-                  >
-                    <CartesianGrid vertical={false} />
-                    <XAxis
-                      dataKey="label"
-                      tickLine={false}
-                      axisLine={false}
-                      tickMargin={8}
-                      minTickGap={32}
-                    />
-                    <YAxis
-                      tickLine={false}
-                      axisLine={false}
-                      width={48}
-                      tickFormatter={(v: number) =>
-                        v.toLocaleString(i18n.language, { maximumFractionDigits: 0 })
-                      }
-                    />
-                    <ChartTooltip
-                      isAnimationActive={false}
-                      content={<ChartTooltipContent indicator="line" />}
-                      cursor={false}
-                      position={{ y: 0 }}
-                    />
-                    <defs>
-                      <linearGradient id="fillCumulativeCost" x1="0" y1="0" x2="0" y2="1">
-                        <stop
-                          offset="5%"
-                          stopColor="var(--color-cumulativeCost)"
-                          stopOpacity={0.4}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="var(--color-cumulativeCost)"
-                          stopOpacity={0.05}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <Area
-                      type="monotone"
-                      dataKey="cumulativeCost"
-                      stroke="var(--color-cumulativeCost)"
-                      fill="url(#fillCumulativeCost)"
-                      strokeWidth={2}
-                    />
-                    {displayedRevenue > 0 && (
-                      <ReferenceLine
-                        y={displayedRevenue}
-                        stroke="var(--color-revenue)"
-                        strokeDasharray="4 4"
-                        strokeWidth={1.5}
-                        label={{
-                          value: `${t('projects:detail.charts.revenueLabel')} · ${displayedRevenue.toLocaleString(i18n.language, { maximumFractionDigits: 0 })} ${currency}`,
-                          position: 'insideTopRight',
-                          fill: 'var(--color-revenue)',
-                          fontSize: 11,
-                          fontWeight: 500,
-                        }}
+        {(() => {
+          // Always render the card for callers who can see the project at all —
+          // when they lack `reports.cost.view` we just hide the cost area
+          // (server strips cost, so rendering it would be a misleading
+          // flat-zero line) and still surface the revenue ceiling. Skip the
+          // whole card only when there's nothing meaningful to show.
+          const hasEntryTimeline =
+            costOverTime.length > 0 && costOverTime.some((r) => r.cumulativeCost > 0);
+          if (!hasEntryTimeline && !canViewCost && displayedRevenue === 0) return null;
+          if (canViewCost && !hasEntryTimeline && displayedRevenue === 0) return null;
+          // Synthesise two X-axis anchors from the project window when there's
+          // no entry-driven cost data, so the revenue reference line still has
+          // something to draw against.
+          const fallbackTimeline =
+            project.startDate && project.endDate
+              ? [
+                  {
+                    month: project.startDate.slice(0, 7),
+                    label: formatMonthBucket(project.startDate, i18n.language),
+                    monthlyCost: 0,
+                    cumulativeCost: 0,
+                  },
+                  {
+                    month: project.endDate.slice(0, 7),
+                    label: formatMonthBucket(project.endDate, i18n.language),
+                    monthlyCost: 0,
+                    cumulativeCost: 0,
+                  },
+                ]
+              : [];
+          const chartData = hasEntryTimeline ? costOverTime : fallbackTimeline;
+          return (
+            <Card>
+              <CardHeader>
+                <CardTitle>{t('projects:detail.charts.costVsRevenue')}</CardTitle>
+                <CardDescription>{t('projects:detail.charts.costVsRevenueDesc')}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {entriesLoading ? (
+                  <Skeleton className="h-[260px] w-full" />
+                ) : entriesError !== null ? (
+                  <ChartEmpty variant={entriesError === 'forbidden' ? 'forbidden' : 'failed'} />
+                ) : chartData.length === 0 ? (
+                  <ChartEmpty />
+                ) : (
+                  <ChartContainer config={budgetChartConfig} className="max-h-[260px] w-full">
+                    <AreaChart
+                      data={chartData}
+                      margin={{ left: 12, right: 12, top: 16, bottom: 8 }}
+                    >
+                      <CartesianGrid vertical={false} />
+                      <XAxis
+                        dataKey="label"
+                        tickLine={false}
+                        axisLine={false}
+                        tickMargin={8}
+                        minTickGap={32}
                       />
-                    )}
-                  </AreaChart>
-                </ChartContainer>
-              )}
-            </CardContent>
-          </Card>
-        )}
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        width={48}
+                        tickFormatter={(v: number) =>
+                          v.toLocaleString(i18n.language, { maximumFractionDigits: 0 })
+                        }
+                      />
+                      <ChartTooltip
+                        isAnimationActive={false}
+                        content={<ChartTooltipContent indicator="line" />}
+                        cursor={false}
+                        position={{ y: 0 }}
+                      />
+                      <defs>
+                        <linearGradient id="fillCumulativeCost" x1="0" y1="0" x2="0" y2="1">
+                          <stop
+                            offset="5%"
+                            stopColor="var(--color-cumulativeCost)"
+                            stopOpacity={0.4}
+                          />
+                          <stop
+                            offset="95%"
+                            stopColor="var(--color-cumulativeCost)"
+                            stopOpacity={0.05}
+                          />
+                        </linearGradient>
+                      </defs>
+                      {canViewCost && hasEntryTimeline && (
+                        <Area
+                          type="monotone"
+                          dataKey="cumulativeCost"
+                          stroke="var(--color-cumulativeCost)"
+                          fill="url(#fillCumulativeCost)"
+                          strokeWidth={2}
+                        />
+                      )}
+                      {displayedRevenue > 0 && (
+                        <ReferenceLine
+                          y={displayedRevenue}
+                          stroke="var(--color-revenue)"
+                          strokeDasharray="4 4"
+                          strokeWidth={1.5}
+                          label={{
+                            value: `${t('projects:detail.charts.revenueLabel')} · ${displayedRevenue.toLocaleString(i18n.language, { maximumFractionDigits: 0 })} ${currency}`,
+                            position: 'insideTopRight',
+                            fill: 'var(--color-revenue)',
+                            fontSize: 11,
+                            fontWeight: 500,
+                          }}
+                        />
+                      )}
+                    </AreaChart>
+                  </ChartContainer>
+                )}
+                {!canViewCost && !entriesLoading && entriesError === null && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {t('projects:detail.charts.costHiddenNote')}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         <Card>
           <CardHeader>

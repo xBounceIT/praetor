@@ -143,6 +143,7 @@
       "hoursByTaskDesc": "Attività con più ore registrate.",
       "costVsRevenue": "Costo vs ricavo",
       "costVsRevenueDesc": "Costo cumulato delle voci nel tempo rispetto al ricavo del progetto.",
+      "costHiddenNote": "Il costo cumulato è nascosto perché non hai i permessi per vedere i dati di costo.",
       "locationSplit": "Ore per luogo",
       "locationSplitDesc": "Dove è stato svolto il lavoro.",
       "legendHeaders": {
