@@ -119,7 +119,7 @@
     "costRequired": "Il costo è obbligatorio",
     "molPercentageRequired": "MOL (%) è obbligatorio",
     "molPercentageRange": "MOL (%) deve essere maggiore di 0 e minore di 100",
-    "unitNameRequired": "Il nome dell'unità è obbligatorio",
+    "unitNameRequired": "Il nome del Competence Center è obbligatorio",
     "managersRequired": "Almeno un manager è obbligatorio",
     "projectNameRequired": "Il nome del progetto è obbligatorio",
     "clientIdRequired": "Il cliente è obbligatorio",

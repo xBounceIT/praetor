@@ -58,8 +58,8 @@
       "external": "External",
       "costs": "Costs",
       "employee_assignments": "Employee Assignments",
-      "work_units": "Work Units",
-      "work_units_all": "Work Units (All)"
+      "work_units": "Competence Centers",
+      "work_units_all": "Competence Centers (All)"
     },
     "reports": {
       "ai_reporting": "AI Reporting",
@@ -70,8 +70,8 @@
       "general": "General",
       "user_management": "User Management",
       "user_management_all": "User Management (All)",
-      "work_units": "Work Units",
-      "work_units_all": "Work Units (All)",
+      "work_units": "Competence Centers",
+      "work_units_all": "Competence Centers (All)",
       "email": "Email",
       "roles": "Roles",
       "logs": "Logs"
@@ -158,7 +158,7 @@
         "supplier_quote": "supplier quote",
         "task": "task",
         "user": "user",
-        "work_unit": "work unit"
+        "work_unit": "competence center"
       },
       "details": {
         "changedFields": "Changed: {{fields}}",

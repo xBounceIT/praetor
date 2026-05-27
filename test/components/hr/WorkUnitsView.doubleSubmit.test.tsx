@@ -98,10 +98,12 @@ describe('<WorkUnitsView /> double-submit guards', () => {
     const user = userEvent.setup();
 
     // Open the create modal.
-    await user.click(screen.getByRole('button', { name: /hr:workUnits\.newWorkUnit/ }));
+    await user.click(
+      screen.getByRole('button', { name: /hr:competenceCenters\.newCompetenceCenter/ }),
+    );
 
     // Fill the unit name (the first required text input in the form).
-    const form = findFormByHeading('hr:workUnits.newWorkUnit');
+    const form = findFormByHeading('hr:competenceCenters.newCompetenceCenter');
     const nameInput = form.querySelector('input[type="text"]') as HTMLInputElement;
     if (!nameInput) throw new Error('unit name input not found');
     fireEvent.change(nameInput, { target: { value: 'New Unit' } });
@@ -109,7 +111,7 @@ describe('<WorkUnitsView /> double-submit guards', () => {
     // Select a manager.
     const managerButton = screen
       .getAllByRole('button')
-      .find((b) => b.textContent?.includes('hr:workUnits.selectManagers'));
+      .find((b) => b.textContent?.includes('hr:competenceCenters.selectManagers'));
     if (!managerButton) throw new Error('manager select trigger not found');
     await user.click(managerButton);
     const aliceOption = await screen.findByRole('option', { name: 'Alice' });
@@ -149,7 +151,7 @@ describe('<WorkUnitsView /> double-submit guards', () => {
     if (editButtons.length === 0) throw new Error('edit button not found');
     fireEvent.click(editButtons[0]);
 
-    const form = findFormByHeading('hr:workUnits.editWorkUnit');
+    const form = findFormByHeading('hr:competenceCenters.editCompetenceCenter');
 
     fireEvent.submit(form);
     fireEvent.submit(form);
@@ -184,7 +186,7 @@ describe('<WorkUnitsView /> double-submit guards', () => {
     fireEvent.click(deleteButtons[0]);
 
     // Confirm dialog: find the Yes-delete button.
-    const confirm = await screen.findByRole('button', { name: 'hr:workUnits.yesDelete' });
+    const confirm = await screen.findByRole('button', { name: 'hr:competenceCenters.yesDelete' });
 
     fireEvent.click(confirm);
     fireEvent.click(confirm);
@@ -212,9 +214,11 @@ describe('<WorkUnitsView /> double-submit guards', () => {
     renderWorkUnitsView({ onAdd, workUnits: [] });
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('button', { name: /hr:workUnits\.newWorkUnit/ }));
+    await user.click(
+      screen.getByRole('button', { name: /hr:competenceCenters\.newCompetenceCenter/ }),
+    );
 
-    const form = findFormByHeading('hr:workUnits.newWorkUnit');
+    const form = findFormByHeading('hr:competenceCenters.newCompetenceCenter');
     const nameInput = form.querySelector('input[type="text"]') as HTMLInputElement;
     if (!nameInput) throw new Error('unit name input not found');
     fireEvent.change(nameInput, { target: { value: 'New Unit' } });
@@ -222,7 +226,7 @@ describe('<WorkUnitsView /> double-submit guards', () => {
     // Select a manager.
     const managerButton = screen
       .getAllByRole('button')
-      .find((b) => b.textContent?.includes('hr:workUnits.selectManagers'));
+      .find((b) => b.textContent?.includes('hr:competenceCenters.selectManagers'));
     if (!managerButton) throw new Error('manager select trigger not found');
     await user.click(managerButton);
     await user.click(await screen.findByRole('option', { name: 'Alice' }));

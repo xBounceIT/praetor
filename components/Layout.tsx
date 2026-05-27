@@ -138,7 +138,7 @@ const Layout: React.FC<LayoutProps> = ({
             icon: User,
             title: t('titles.externalEmployees'),
           },
-          { view: 'hr/work-units', label: t('routes.workUnits'), icon: GitFork },
+          { view: 'hr/work-units', label: t('routes.competenceCenters'), icon: GitFork },
         ],
       },
       {

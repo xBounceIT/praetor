@@ -1637,7 +1637,7 @@ const AppContent: React.FC = () => {
               [
                 listRequest('users', canListUsers, () => api.users.list(), setUsers),
                 listRequest(
-                  'work units',
+                  'competence centers',
                   canListWorkUnits,
                   () => api.workUnits.list(),
                   setWorkUnits,
@@ -1851,7 +1851,7 @@ const AppContent: React.FC = () => {
                 listRequest('clients', canListClients, () => api.clients.list(), setClients),
                 listRequest('users', canListUsers, () => api.users.list(), setUsers),
                 listRequest(
-                  'work units',
+                  'competence centers',
                   canListWorkUnits,
                   () => api.workUnits.list(),
                   setWorkUnits,

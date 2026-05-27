@@ -326,7 +326,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
       onClose();
     } catch (err) {
       console.error('Failed to save assignments', err);
-      toastError((err as Error).message || t('hr:workUnits.failedToSaveAssignments'));
+      toastError((err as Error).message || t('hr:competenceCenters.failedToSaveAssignments'));
     }
   };
 
