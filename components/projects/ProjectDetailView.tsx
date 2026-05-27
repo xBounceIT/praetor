@@ -1197,8 +1197,11 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         </div>
       )}
 
-      {/* KPI cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* KPI cards + project timeline on the same row. The grid uses 6 large-screen
+          columns so the timeline can grow into whatever space the visible KPIs
+          leave (4→2 cols, 3→3 cols, 2→4 cols). On smaller screens everything
+          stacks and the timeline becomes full-width. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
         <KpiCard
           title={t('projects:detail.kpi.totalHours')}
           icon="fa-clock"
@@ -1315,76 +1318,99 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             }
           />
         )}
+        {(() => {
+          // Timeline takes whatever lg columns the visible KPIs left empty in the
+          // 6-col grid. On sm it always spans the row; on mobile it stacks.
+          const visibleKpiCount =
+            1 + (canViewCost ? 1 : 0) + (canManageAssignments ? 1 : 0) + (canViewCost ? 1 : 0);
+          const lgSpan = Math.max(2, 6 - visibleKpiCount);
+          // Tailwind needs literal class names — map the few possible values.
+          const lgSpanClass =
+            lgSpan === 2
+              ? 'lg:col-span-2'
+              : lgSpan === 3
+                ? 'lg:col-span-3'
+                : lgSpan === 4
+                  ? 'lg:col-span-4'
+                  : 'lg:col-span-5';
+          return (
+            <Card className={`sm:col-span-2 ${lgSpanClass}`}>
+              <CardHeader>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <CardDescription className="text-xs font-medium uppercase tracking-wide">
+                      {t('projects:detail.timeline.title')}
+                    </CardDescription>
+                  </div>
+                  {projectTimeline && (
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                        projectTimeline.phase === 'completed'
+                          ? 'bg-muted text-muted-foreground'
+                          : projectTimeline.phase === 'pending'
+                            ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                            : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                      }`}
+                    >
+                      <span
+                        className={`size-1.5 rounded-full ${
+                          projectTimeline.phase === 'completed'
+                            ? 'bg-muted-foreground'
+                            : projectTimeline.phase === 'pending'
+                              ? 'bg-blue-500'
+                              : 'bg-emerald-500'
+                        }`}
+                        aria-hidden="true"
+                      />
+                      {t(`projects:detail.timeline.phase.${projectTimeline.phase}`)}
+                    </span>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {!projectTimeline ? (
+                  <p className="text-sm text-muted-foreground">
+                    {t('projects:detail.timeline.noDates')}
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
+                      <span>
+                        {formatInsertDate(projectTimeline.start.getTime(), i18n.language)}
+                      </span>
+                      <span>{formatInsertDate(projectTimeline.end.getTime(), i18n.language)}</span>
+                    </div>
+                    <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={`h-full transition-all ${
+                          projectTimeline.phase === 'completed'
+                            ? 'bg-muted-foreground'
+                            : 'bg-emerald-500'
+                        }`}
+                        style={{ width: `${projectTimeline.pct}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">
+                        <span className="font-semibold text-foreground tabular-nums">
+                          {projectTimeline.elapsedDays}
+                        </span>{' '}
+                        / {projectTimeline.totalDays} {t('projects:detail.timeline.daysElapsed')}
+                      </span>
+                      <span className="text-muted-foreground">
+                        <span className="font-semibold text-foreground tabular-nums">
+                          {projectTimeline.remainingDays}
+                        </span>{' '}
+                        {t('projects:detail.timeline.daysRemaining')}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })()}
       </div>
-
-      {/* Project timeline — days elapsed vs total project duration */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <CardTitle>{t('projects:detail.timeline.title')}</CardTitle>
-              <CardDescription>{t('projects:detail.timeline.description')}</CardDescription>
-            </div>
-            {projectTimeline && (
-              <span
-                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  projectTimeline.phase === 'completed'
-                    ? 'bg-muted text-muted-foreground'
-                    : projectTimeline.phase === 'pending'
-                      ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
-                      : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                }`}
-              >
-                <span
-                  className={`size-1.5 rounded-full ${
-                    projectTimeline.phase === 'completed'
-                      ? 'bg-muted-foreground'
-                      : projectTimeline.phase === 'pending'
-                        ? 'bg-blue-500'
-                        : 'bg-emerald-500'
-                  }`}
-                  aria-hidden="true"
-                />
-                {t(`projects:detail.timeline.phase.${projectTimeline.phase}`)}
-              </span>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {!projectTimeline ? (
-            <p className="text-sm text-muted-foreground">{t('projects:detail.timeline.noDates')}</p>
-          ) : (
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
-                <span>{formatInsertDate(projectTimeline.start.getTime(), i18n.language)}</span>
-                <span>{formatInsertDate(projectTimeline.end.getTime(), i18n.language)}</span>
-              </div>
-              <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className={`h-full transition-all ${
-                    projectTimeline.phase === 'completed' ? 'bg-muted-foreground' : 'bg-emerald-500'
-                  }`}
-                  style={{ width: `${projectTimeline.pct}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">
-                  <span className="font-semibold text-foreground tabular-nums">
-                    {projectTimeline.elapsedDays}
-                  </span>{' '}
-                  / {projectTimeline.totalDays} {t('projects:detail.timeline.daysElapsed')}
-                </span>
-                <span className="text-muted-foreground">
-                  <span className="font-semibold text-foreground tabular-nums">
-                    {projectTimeline.remainingDays}
-                  </span>{' '}
-                  {t('projects:detail.timeline.daysRemaining')}
-                </span>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Charts row */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
