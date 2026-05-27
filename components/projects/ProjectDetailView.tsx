@@ -1324,6 +1324,10 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       innerRadius={70}
                       strokeWidth={2}
                       isAnimationActive={false}
+                      onMouseEnter={(entry) =>
+                        setHoveredUserKey((entry as { userId?: string })?.userId ?? null)
+                      }
+                      onMouseLeave={() => setHoveredUserKey(null)}
                     >
                       {hoursByUser.map((row, idx) => (
                         <Cell
@@ -1474,6 +1478,10 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       innerRadius={70}
                       strokeWidth={2}
                       isAnimationActive={false}
+                      onMouseEnter={(entry) =>
+                        setHoveredLocationKey((entry as { location?: string })?.location ?? null)
+                      }
+                      onMouseLeave={() => setHoveredLocationKey(null)}
                     >
                       {locationSplit.map((row) => (
                         <Cell
