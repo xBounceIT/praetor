@@ -1186,10 +1186,10 @@ describe('PUT /api/users/:id', () => {
     expect(updateUserDynamicMock).not.toHaveBeenCalled();
   });
 
-  test('403 other-user edit with ONLY hr.costs.update is rejected (no self-cost-only bypass)', async () => {
-    // Same minimal grant, but targeting another user. The route guard accepts
-    // hr.costs.update (so we reach the handler), but the per-employee-type
-    // check trips because the bypass only applies to self.
+  test('403 other-user edit with ONLY hr.costs.update is rejected (personal grant is self-only)', async () => {
+    // Personal hr.costs.update only authorizes self-edits. With another user as
+    // the target, the cost-only bypass requires hr.costs_all.update, which
+    // this caller doesn't have — so the per-employee-type check trips.
     findAuthUserByIdMock.mockResolvedValue(REGULAR_USER);
     getRolePermissionsMock.mockResolvedValue(['hr.costs.update']);
     findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE); // u-target ≠ u-user
@@ -1199,6 +1199,62 @@ describe('PUT /api/users/:id', () => {
       url: '/api/users/u-target',
       headers: { authorization: `Bearer ${signToken({ userId: REGULAR_USER.id })}` },
       payload: { costPerHour: 33 },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(updateUserDynamicMock).not.toHaveBeenCalled();
+  });
+
+  test('200 other-user edit with ONLY hr.costs_all.update applies costPerHour (app_user target)', async () => {
+    // Regression for the symmetric Codex finding on hr.costs_all.update: a role
+    // granted just the all-scope cost-edit permission must be able to reach
+    // this route and edit ANY user's costPerHour. The route guard accepts
+    // hr.costs_all.update, the per-employee-type check is bypassed for
+    // cost-only edits, and the canManageUser check is also bypassed (the
+    // all-scope grant is cross-user by design — gating it through
+    // canManageUser would only work for internal/external employees and would
+    // break for app_user targets, making the permission half-useful).
+    findAuthUserByIdMock.mockResolvedValue(REGULAR_USER);
+    getRolePermissionsMock.mockResolvedValue(['hr.costs_all.update']);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE); // u-target, employeeType=app_user
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      avatarInitials: 'T',
+      costPerHour: 77,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, costPerHour: 77 });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: { authorization: `Bearer ${signToken({ userId: REGULAR_USER.id })}` },
+      payload: { costPerHour: 77 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateUserDynamicMock).toHaveBeenCalledWith(
+      'u-target',
+      expect.objectContaining({ costPerHour: 77 }),
+      TX_SENTINEL,
+    );
+    // canManageUser must NOT have been consulted — the cost-only bypass skips it.
+    expect(canManageUserMock).not.toHaveBeenCalled();
+  });
+
+  test('403 other-user edit with ONLY hr.costs_all.update but body includes name (cost-only bypass does not apply)', async () => {
+    // As soon as a non-cost field appears in the body, the bypass is off and
+    // the request falls back to the standard UPDATE_PERM_BY_EMPLOYEE_TYPE
+    // check. With only hr.costs_all.update granted, that check rejects.
+    findAuthUserByIdMock.mockResolvedValue(REGULAR_USER);
+    getRolePermissionsMock.mockResolvedValue(['hr.costs_all.update']);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: { authorization: `Bearer ${signToken({ userId: REGULAR_USER.id })}` },
+      payload: { costPerHour: 77, name: 'Renamed' },
     });
 
     expect(res.statusCode).toBe(403);

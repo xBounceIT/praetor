@@ -640,15 +640,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     {
       onRequest: [
         authenticateToken,
-        // hr.costs.update is included so a role granted *only* the
-        // personal-cost-edit permission can reach this route to update its
-        // own cost. The handler below enforces self-only + cost-only when
-        // that's the caller's only relevant grant.
+        // The hr.costs.* grants are included so a role granted *only* a
+        // cost-edit permission (personal `hr.costs.update` for self-edit, or
+        // all-scope `hr.costs_all.update` for cross-user edit) can reach
+        // this route to update costPerHour. The handler below enforces
+        // self-vs-all + cost-only when those are the caller's only relevant
+        // grants.
         requireAnyPermission(
           'administration.user_management.update',
           'hr.internal.update',
           'hr.external.update',
           'hr.costs.update',
+          'hr.costs_all.update',
         ),
       ],
       schema: {
@@ -717,20 +720,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const currentName = targetUser.name;
       const currentUsername = targetUser.username;
 
-      // Self-only personal cost edit: a role granted just `hr.costs.update`
-      // can update its own costPerHour even without the broader per-employee-type
-      // update grant — but only when costPerHour is the sole field being touched.
-      const isSelfCostOnlyEdit =
-        isSelf &&
+      // Cost-only edit bypass: a role granted just a cost-edit permission
+      // (personal `hr.costs.update` for self-edit, or all-scope
+      // `hr.costs_all.update` for cross-user edit) can update costPerHour even
+      // without the broader per-employee-type update grant — but only when
+      // costPerHour is the sole field being touched. Other fields fall through
+      // to the standard permission check below.
+      const onlyEditingCost =
         costPerHour !== undefined &&
         name === undefined &&
         email === undefined &&
         isDisabled === undefined &&
-        role === undefined &&
-        hasScopedActionPermission(request.user?.permissions, 'hr.costs', 'update');
+        role === undefined;
+      const hasCostEditGrant = isSelf
+        ? hasScopedActionPermission(request.user?.permissions, 'hr.costs', 'update')
+        : hasPermission(request, 'hr.costs_all.update');
+      const isCostOnlyEdit = onlyEditingCost && hasCostEditGrant;
 
       if (
-        !isSelfCostOnlyEdit &&
+        !isCostOnlyEdit &&
         !hasPermission(request, UPDATE_PERM_BY_EMPLOYEE_TYPE[targetEmployeeType])
       ) {
         return replyError(request, reply, {
@@ -743,7 +751,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
+      // Cost-only edits also skip the manager-scoping check: the all-scope
+      // `hr.costs_all.update` grant is explicitly cross-user by design, so
+      // gating it through canManageUser would make the permission half-useful
+      // (works for internal/external employees, fails for app_users).
       if (
+        !isCostOnlyEdit &&
         targetEmployeeType === 'app_user' &&
         !hasPermission(request, 'administration.user_management_all.view') &&
         idResult.value !== request.user?.id &&
