@@ -56,7 +56,8 @@
     "hr": {
       "internal": "Interni",
       "external": "Esterni",
-      "costs": "Costi",
+      "costs": "Costo Personale",
+      "costs_all": "Costi (Tutti)",
       "employee_assignments": "Assegnazioni Dipendenti",
       "work_units": "Unità di Lavoro",
       "work_units_all": "Unità di Lavoro (Tutte)"

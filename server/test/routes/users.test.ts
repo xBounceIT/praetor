@@ -257,7 +257,8 @@ const ALL_USER_PERMS = [
   'hr.external.create',
   'hr.external.update',
   'hr.external.delete',
-  'hr.costs.view',
+  'hr.costs_all.view',
+  'hr.costs_all.update',
   'hr.costs.update',
   'hr.employee_assignments.update',
   'hr.work_units_all.view',
@@ -403,7 +404,7 @@ describe('GET /api/users', () => {
       'administration.user_management.view',
       'hr.internal.view',
       'hr.external.view',
-      'hr.costs.view',
+      'hr.costs_all.view',
     ]);
     listScopedForManagerMock.mockResolvedValue([SAMPLE_USER_ROW]);
 
@@ -631,6 +632,52 @@ describe('POST /api/users', () => {
       payload: { name: 'X' },
     });
     expect(res.statusCode).toBe(401);
+  });
+
+  test('400 rejects negative costPerHour even when caller lacks hr.costs_all.update', async () => {
+    // Validation must run before the permission gate so malformed input still
+    // surfaces 400, matching the pre-split contract. The permission gate
+    // controls whether the validated value is *applied*, not whether the input
+    // is *validated*.
+    getRolePermissionsMock.mockResolvedValue([
+      'hr.internal.create',
+      'administration.user_management.view',
+    ]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: adminAuth(),
+      payload: { name: 'X', employeeType: 'internal', costPerHour: -1 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(insertUserMock).not.toHaveBeenCalled();
+  });
+
+  test('201 ignores costPerHour from caller without hr.costs_all.update', async () => {
+    // Without the cost-update permission, the row is created with 0 even when
+    // the caller sent a positive number — silent-drop matches the PUT contract.
+    getRolePermissionsMock.mockResolvedValue([
+      'hr.internal.create',
+      'administration.user_management.view',
+    ]);
+    insertUserMock.mockResolvedValue(undefined);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: adminAuth(),
+      payload: { name: 'X', employeeType: 'internal', costPerHour: 99 },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const [insertedRow] = insertUserMock.mock.calls[0] as [Record<string, unknown>];
+    expect(insertedRow.costPerHour).toBe(0);
+    // Response must also report 0 so the client cache matches the DB row —
+    // returning the caller's input would silently advertise a value we didn't
+    // persist.
+    expect(JSON.parse(res.body).costPerHour).toBe(0);
   });
 });
 
@@ -1048,6 +1095,196 @@ describe('PUT /api/users/:id', () => {
       payload: { name: 'X' },
     });
     expect(res.statusCode).toBe(401);
+  });
+
+  test('200 self edit with only hr.costs.update applies costPerHour', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management_all.view',
+      'hr.costs.update',
+    ]);
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, id: MANAGER_USER.id });
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      id: MANAGER_USER.id,
+      avatarInitials: 'MM',
+      costPerHour: 99,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, id: MANAGER_USER.id, costPerHour: 99 });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: `/api/users/${MANAGER_USER.id}`,
+      headers: managerAuth(),
+      payload: { costPerHour: 99 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateUserDynamicMock).toHaveBeenCalledWith(
+      MANAGER_USER.id,
+      expect.objectContaining({ costPerHour: 99 }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('400 self edit without any cost permission silently drops costPerHour', async () => {
+    // Caller has no hr.costs.* grant. costPerHour is silently stripped from the
+    // payload, which leaves no remaining fields to update, so the route returns
+    // 400 "No fields to update". This locks in the silent-drop contract so a
+    // future refactor cannot accidentally write costPerHour=0 over the real value.
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management_all.view',
+    ]);
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, id: MANAGER_USER.id });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: `/api/users/${MANAGER_USER.id}`,
+      headers: managerAuth(),
+      payload: { costPerHour: 99 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('No fields to update');
+    expect(updateUserDynamicMock).not.toHaveBeenCalled();
+  });
+
+  test('other-user edit with only hr.costs.update does NOT apply costPerHour', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management_all.view',
+      'hr.costs.update',
+    ]);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE); // u-target ≠ manager
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      name: 'Renamed',
+      avatarInitials: 'R',
+      costPerHour: 50,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, name: 'Renamed' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: managerAuth(),
+      payload: { name: 'Renamed', costPerHour: 999 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // Name is applied, cost is silently dropped because manager lacks hr.costs_all.update.
+    const [, fields] = updateUserDynamicMock.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(fields.name).toBe('Renamed');
+    expect(fields).not.toHaveProperty('costPerHour');
+  });
+
+  test('other-user edit with hr.costs_all.update applies costPerHour', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management_all.view',
+      'hr.costs_all.update',
+    ]);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      avatarInitials: 'T',
+      costPerHour: 75,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, costPerHour: 75 });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: managerAuth(),
+      payload: { costPerHour: 75 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateUserDynamicMock).toHaveBeenCalledWith(
+      'u-target',
+      expect.objectContaining({ costPerHour: 75 }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('audit changedFields includes costPerHour when written via hr.costs_all.update only', async () => {
+    // Regression: the audit-log gate must mirror the write-side gate. A caller
+    // holding only the all-scope permission (no personal) successfully writes
+    // costPerHour and the audit row must reflect that — otherwise cross-user
+    // cost edits would be invisible in the audit trail.
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management_all.view',
+      'hr.costs_all.update',
+      // Note: no hr.costs.update — the personal grant is intentionally absent.
+    ]);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      avatarInitials: 'T',
+      costPerHour: 42,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, costPerHour: 42 });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: managerAuth(),
+      payload: { costPerHour: 42 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'user.updated',
+        details: expect.objectContaining({
+          changedFields: expect.arrayContaining(['costPerHour']),
+        }),
+      }),
+    );
+  });
+
+  test('audit changedFields omits costPerHour when caller has no cost permission', async () => {
+    // Regression: the audit row must not falsely advertise a cost change when
+    // the route silently dropped the field for lack of permission.
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management_all.view',
+    ]);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      name: 'Renamed',
+      avatarInitials: 'R',
+      costPerHour: 50,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, name: 'Renamed' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: managerAuth(),
+      payload: { name: 'Renamed', costPerHour: 999 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    type AuditArg = { action: string; details: { changedFields: string[] } };
+    const auditCall = (logAuditMock.mock.calls as unknown as Array<[AuditArg]>).find(
+      ([arg]) => arg.action === 'user.updated',
+    );
+    expect(auditCall?.[0].details.changedFields).toEqual(['name']);
   });
 });
 

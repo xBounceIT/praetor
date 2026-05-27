@@ -219,7 +219,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
     permissions,
     buildPermission('administration.user_management', 'delete'),
   );
-  const canViewCosts = hasPermission(permissions, buildPermission('hr.costs', 'view'));
+  const canViewCosts = hasPermission(permissions, buildPermission('hr.costs_all', 'view'));
+  const canUpdateAllCosts = hasPermission(permissions, buildPermission('hr.costs_all', 'update'));
+  const canUpdateOwnCost = hasPermission(permissions, buildPermission('hr.costs', 'update'));
+  const canEditCostFor = (targetUserId: string) =>
+    canUpdateAllCosts || (canUpdateOwnCost && targetUserId === currentUserId);
   const canManageAssignments = canUpdateUsers;
   React.useEffect(() => {
     if (!newRole && roleOptions[0]?.id) {
@@ -607,7 +611,10 @@ const UserManagement: React.FC<UserManagementProps> = ({
         }
       }
 
-      if (canViewCosts && canUpdateUsers) {
+      // Only include costPerHour when the input was actually rendered for the
+      // caller; otherwise the value comes from the masked GET response (0) and
+      // would silently overwrite the real DB cost on an unrelated edit.
+      if (canViewCosts && canEditCostFor(editingUser.id)) {
         updates.costPerHour = parseFloat(editCostPerHour) || 0;
       }
 
@@ -631,7 +638,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
       editEmail.trim() !== (editingUser.email || '') ||
       editIsDisabled !== !!editingUser.isDisabled ||
       (canViewCosts &&
-        canUpdateUsers &&
+        canEditCostFor(editingUser.id) &&
         parseFloat(editCostPerHour) !== (editingUser.costPerHour || 0)) ||
       (canEditRole && editRole !== editingUser.role) ||
       hasAssignedRoleChanges);
@@ -1309,7 +1316,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 </div>
               )}
 
-              {canViewCosts && canUpdateUsers && (
+              {canViewCosts && editingUser && canEditCostFor(editingUser.id) && (
                 <div>
                   <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
                     {t('hr:workforce.costPerHour')}

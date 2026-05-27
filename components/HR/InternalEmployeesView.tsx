@@ -70,8 +70,8 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
   const canCreateEmployees = hasPermission(permissions, buildPermission('hr.internal', 'create'));
   const canUpdateEmployees = hasPermission(permissions, buildPermission('hr.internal', 'update'));
   const canDeleteEmployees = hasPermission(permissions, buildPermission('hr.internal', 'delete'));
-  const canViewCosts = hasPermission(permissions, buildPermission('hr.costs', 'view'));
-  const canUpdateCosts = hasPermission(permissions, buildPermission('hr.costs', 'update'));
+  const canViewCosts = hasPermission(permissions, buildPermission('hr.costs_all', 'view'));
+  const canUpdateCosts = hasPermission(permissions, buildPermission('hr.costs_all', 'update'));
   const canManageEmployeeAssignments = hasPermission(
     permissions,
     buildPermission('hr.employee_assignments', 'update'),
@@ -151,7 +151,11 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
           name: formData.name.trim(),
         };
 
-        if (canUpdateCosts) {
+        // Only submit costPerHour when the input was actually rendered. Without
+        // canViewCosts the GET response masked the field to 0, so including it
+        // here on an unrelated edit (e.g. name) would silently clobber the real
+        // DB value.
+        if (canViewCosts && canUpdateCosts) {
           updates.costPerHour = formData.costPerHour ? parseFloat(formData.costPerHour) : 0;
         }
 

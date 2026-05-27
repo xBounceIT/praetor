@@ -56,7 +56,8 @@
     "hr": {
       "internal": "Internal",
       "external": "External",
-      "costs": "Costs",
+      "costs": "Personal Cost",
+      "costs_all": "Costs (All)",
       "employee_assignments": "Employee Assignments",
       "work_units": "Work Units",
       "work_units_all": "Work Units (All)"

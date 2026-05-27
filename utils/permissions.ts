@@ -60,7 +60,8 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   // HR
   { id: 'hr.internal', actions: CRUD, module: 'hr' },
   { id: 'hr.external', actions: CRUD, module: 'hr' },
-  { id: 'hr.costs', actions: VIEW_UPDATE, module: 'hr' },
+  { id: 'hr.costs', actions: ['update'], module: 'hr' },
+  { id: 'hr.costs_all', actions: VIEW_UPDATE, isScope: true, module: 'hr' },
   { id: 'hr.employee_assignments', actions: ['update'], module: 'hr' },
   { id: 'hr.work_units', actions: CRUD, module: 'hr' },
   { id: 'hr.work_units_all', actions: CRUD, isScope: true, module: 'hr' },

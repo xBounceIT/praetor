@@ -505,7 +505,7 @@ const buildServer = () => {
       if (denied) return denied;
 
       const hasWorkUnitsView = hasPermission(user, 'hr.work_units.view');
-      const hasCostsView = hasPermission(user, 'hr.costs.view');
+      const hasCostsView = hasPermission(user, 'hr.costs_all.view');
       const hasUserManagementView = hasPermission(user, 'administration.user_management.view');
       const hasAllUsersView = canViewAllUsers(user);
       const hasAllWorkUnitsView = canViewAllWorkUnits(user);

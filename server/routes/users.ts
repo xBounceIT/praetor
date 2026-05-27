@@ -26,6 +26,7 @@ import { generatePrefixedId } from '../utils/order-ids.ts';
 import {
   ADMIN_ROLE_ID,
   requestHasPermission as hasPermission,
+  hasScopedActionPermission,
   TOP_MANAGER_ROLE_ID,
 } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -362,7 +363,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const canViewInternal = hasPermission(request, 'hr.internal.view');
       const canViewExternal = hasPermission(request, 'hr.external.view');
 
-      const canViewCosts = hasPermission(request, 'hr.costs.view');
+      const canViewCosts = hasPermission(request, 'hr.costs_all.view');
       const canRevealUserEmails = canViewUserEmails(request);
 
       const users = canViewAllUsers(request)
@@ -435,8 +436,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const emailResult = optionalEmail(email, 'email');
       if (!emailResult.ok) return badRequest(reply, emailResult.message);
 
+      // Validate `costPerHour` regardless of permission so malformed input still
+      // returns 400 — matches the pre-split contract. The permission gate only
+      // decides whether the validated value is *applied* to the new row.
       const costPerHourResult = optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour');
       if (!costPerHourResult.ok) return badRequest(reply, costPerHourResult.message);
+      const canApplyCost = hasPermission(request, 'hr.costs_all.update');
 
       let usernameValue: string;
       let passwordHash: string;
@@ -486,7 +491,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               passwordHash,
               role: roleValue,
               avatarInitials,
-              costPerHour: costPerHourResult.value || 0,
+              costPerHour: canApplyCost ? costPerHourResult.value || 0 : 0,
               isDisabled: false,
               employeeType: effectiveEmployeeType,
             },
@@ -528,7 +533,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           email: canViewUserEmails(request) ? emailResult.value || '' : '',
           role: roleValue,
           avatarInitials,
-          costPerHour: costPerHourResult.value || 0,
+          // Mirror maskUserResponse's view-based mask used by GET / and PUT:
+          // a caller without hr.costs_all.view always sees 0 in the response,
+          // matching what a subsequent GET would return for the same row.
+          costPerHour:
+            hasPermission(request, 'hr.costs_all.view') && canApplyCost
+              ? costPerHourResult.value || 0
+              : 0,
           isDisabled: false,
           employeeType: effectiveEmployeeType,
           authMethod: 'local',
@@ -666,10 +677,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         fields.name = nameResult.value;
       }
 
-      if (costPerHour !== undefined && hasPermission(request, 'hr.costs.update')) {
-        const costPerHourResult = optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour');
-        if (!costPerHourResult.ok) return badRequest(reply, costPerHourResult.message);
-        fields.costPerHour = costPerHourResult.value;
+      if (costPerHour !== undefined) {
+        const isSelf = idResult.value === request.user?.id;
+        const canEditCost = isSelf
+          ? hasScopedActionPermission(request.user?.permissions, 'hr.costs', 'update')
+          : hasPermission(request, 'hr.costs_all.update');
+        if (canEditCost) {
+          const costPerHourResult = optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour');
+          if (!costPerHourResult.ok) return badRequest(reply, costPerHourResult.message);
+          fields.costPerHour = costPerHourResult.value;
+        }
       }
 
       let validatedEmail: string | null | undefined;
@@ -802,7 +819,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         name,
         email,
         isDisabled,
-        costPerHour: hasPermission(request, 'hr.costs.update') ? costPerHour : undefined,
+        // Mirror the write-side gate: `fields.costPerHour` is set only when the
+        // caller had permission to apply it (self + personal/all scope, or other
+        // user + all scope). Anything else was silently dropped above, so it must
+        // not appear in the audit diff either.
+        costPerHour: fields.costPerHour,
         role,
       });
 
@@ -843,7 +864,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
       return maskUserResponse(
         fullUser,
-        hasPermission(request, 'hr.costs.view'),
+        hasPermission(request, 'hr.costs_all.view'),
         canRevealUserEmails,
       );
     },
@@ -1003,7 +1024,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       return maskUserResponse(
         updated,
-        hasPermission(request, 'hr.costs.view'),
+        hasPermission(request, 'hr.costs_all.view'),
         canViewUserEmails(request),
       );
     },

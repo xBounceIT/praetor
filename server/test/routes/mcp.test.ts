@@ -579,7 +579,7 @@ describe('/api/mcp', () => {
       'administration.user_management_all.view',
       'hr.work_units.view',
       'hr.work_units_all.view',
-      'hr.costs.view',
+      'hr.costs_all.view',
     ];
     usersListAllForAdminMock.mockResolvedValue([
       {
