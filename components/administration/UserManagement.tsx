@@ -330,7 +330,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
       closeAssignments();
     } catch (err) {
       console.error('Failed to save assignments', err);
-      toastError(t('hr:workUnits.failedToSaveAssignments'));
+      toastError(t('hr:competenceCenters.failedToSaveAssignments'));
     }
   };
 

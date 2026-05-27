@@ -23,7 +23,7 @@ Le guide sono pensate per utenti operativi, manager e amministratori. Ogni sezio
 
 - **Primi passi**: accesso, navigazione e impostazioni personali.
 - **Time tracking**: tracker giornaliero, vista settimanale e attività ricorrenti.
-- **CRM e progetti**: anagrafiche, catalogo, attività e unità di lavoro.
+- **CRM e progetti**: anagrafiche, catalogo, attività e Competence Center.
 - **Vendite e contabilità**: preventivi, offerte, ordini e fatture.
 - **AI reporting**: consultazione dei report e uso responsabile dell'assistente.
 - **Amministrazione**: utenti, ruoli, autenticazione, email, impostazioni e log.

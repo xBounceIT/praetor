@@ -119,7 +119,7 @@
     "costRequired": "Cost is required",
     "molPercentageRequired": "MOL (%) is required",
     "molPercentageRange": "MOL (%) must be greater than 0 and less than 100",
-    "unitNameRequired": "Unit name is required",
+    "unitNameRequired": "Competence center name is required",
     "typeRequired": "Type is required",
     "unitOfMeasureRequired": "Unit of measure is required",
     "managersRequired": "At least one manager is required",

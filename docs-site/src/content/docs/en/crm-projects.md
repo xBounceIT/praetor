@@ -1,6 +1,6 @@
 ---
 title: CRM, catalog, and projects
-description: Managing customers, suppliers, products, projects, tasks, and work units.
+description: Managing customers, suppliers, products, projects, tasks, and competence centers.
 sidebar:
   order: 3
 ---
@@ -39,8 +39,8 @@ Praetor assigns a unique color automatically when you create a project. You can 
 
 When a project ends, check that tasks are consistent and that no pending entries remain.
 
-## Work units
+## Competence centers
 
-Work units connect people, costs, and assignments. They support HR analysis and economic project control.
+Competence centers connect people, costs, and assignments. They support HR analysis and economic project control.
 
 Only users with the right permissions should change costs, assignments, or historical data.

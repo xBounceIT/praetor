@@ -44,7 +44,7 @@ Sundays, Saturdays (when the _Treat Saturday as holiday_ setting is enabled), an
 
 ### Server-side generation
 
-Recurring entries are materialized on the server via `POST /api/entries/recurring/generate`. The body requires `fromDate` and `toDate` in `YYYY-MM-DD` format; an optional `userId` can be supplied (it requires the work-unit management link or the `timesheets.tracker_all.create` permission for the target user).
+Recurring entries are materialized on the server via `POST /api/entries/recurring/generate`. The body requires `fromDate` and `toDate` in `YYYY-MM-DD` format; an optional `userId` can be supplied (it requires the competence-center management link or the `timesheets.tracker_all.create` permission for the target user).
 
 ```json
 {

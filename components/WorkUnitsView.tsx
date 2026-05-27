@@ -160,7 +160,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
     } catch (err) {
       console.error('Failed to load unit users', err);
       setAssignmentsLoadFailed(true);
-      toastError(t('hr:workUnits.failedToLoadUnitUsers'));
+      toastError(t('hr:competenceCenters.failedToLoadUnitUsers'));
     } finally {
       setIsLoadingAssignments(false);
     }
@@ -177,7 +177,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
       setTargetUnit(null);
     } catch (err) {
       console.error('Failed to save assignments', err);
-      toastError((err as Error).message || t('hr:workUnits.failedToSaveAssignments'));
+      toastError((err as Error).message || t('hr:competenceCenters.failedToSaveAssignments'));
     } finally {
       setIsSavingAssignments(false);
     }
@@ -239,13 +239,13 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-semibold text-zinc-800 tracking-tight">
-            {t('hr:workUnits.title')}
+            {t('hr:competenceCenters.title')}
           </h2>
-          <p className="text-zinc-500 font-medium">{t('hr:workUnits.subtitle')}</p>
+          <p className="text-zinc-500 font-medium">{t('hr:competenceCenters.subtitle')}</p>
         </div>
         {canCreateWorkUnits && (
           <HeaderAddButton actionSize="wide" onClick={openCreateModal}>
-            {t('hr:workUnits.newWorkUnit')}
+            {t('hr:competenceCenters.newCompetenceCenter')}
           </HeaderAddButton>
         )}
       </div>
@@ -309,7 +309,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">
-                    {t('hr:workUnits.managers')}
+                    {t('hr:competenceCenters.managers')}
                   </p>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {unit.managers && unit.managers.length > 0 ? (
@@ -323,7 +323,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                       ))
                     ) : (
                       <span className="text-sm text-zinc-400 italic">
-                        {t('hr:workUnits.noManagersAssigned')}
+                        {t('hr:competenceCenters.noManagersAssigned')}
                       </span>
                     )}
                   </div>
@@ -337,10 +337,10 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                   </div>
                   <div>
                     <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">
-                      {t('hr:workUnits.members')}
+                      {t('hr:competenceCenters.members')}
                     </p>
                     <p className="text-sm font-bold text-zinc-700">
-                      {unit.userCount || 0} {t('hr:workUnits.users')}
+                      {unit.userCount || 0} {t('hr:competenceCenters.users')}
                     </p>
                   </div>
                 </div>
@@ -349,7 +349,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                     onClick={() => openAssignments(unit)}
                     className="text-xs font-bold text-praetor hover:text-zinc-700 bg-zinc-100 hover:bg-zinc-200 px-3 py-1.5 rounded-lg transition-colors"
                   >
-                    {t('hr:workUnits.manageMembers')}
+                    {t('hr:competenceCenters.manageMembers')}
                   </button>
                 )}
               </div>
@@ -365,19 +365,19 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
             {canCreateWorkUnits ? (
               <>
                 <h3 className="text-lg font-semibold text-zinc-800">
-                  {t('hr:workUnits.noWorkUnitsCreated')}
+                  {t('hr:competenceCenters.noCompetenceCentersCreated')}
                 </h3>
                 <p className="text-zinc-500 max-w-sm mt-1">
-                  {t('hr:workUnits.noWorkUnitsCreatedDescription')}
+                  {t('hr:competenceCenters.noCompetenceCentersCreatedDescription')}
                 </p>
               </>
             ) : (
               <>
                 <h3 className="text-lg font-semibold text-zinc-800">
-                  {t('hr:workUnits.noWorkUnitsAssigned')}
+                  {t('hr:competenceCenters.noCompetenceCentersAssigned')}
                 </h3>
                 <p className="text-zinc-500 max-w-md mt-1">
-                  {t('hr:workUnits.noWorkUnitsAssignedDescription')}
+                  {t('hr:competenceCenters.noCompetenceCentersAssignedDescription')}
                 </p>
               </>
             )}
@@ -389,7 +389,9 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
       <Modal isOpen={isCreateModalOpen} onClose={requestCloseCreateModal}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-zinc-800">{t('hr:workUnits.newWorkUnit')}</h3>
+            <h3 className="text-lg font-semibold text-zinc-800">
+              {t('hr:competenceCenters.newCompetenceCenter')}
+            </h3>
             <button
               type="button"
               onClick={requestCloseCreateModal}
@@ -402,7 +404,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
           <form onSubmit={handleCreate} className="p-6 space-y-4">
             <div>
               <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                {t('hr:workUnits.unitName')}
+                {t('hr:competenceCenters.unitName')}
               </label>
               <input
                 type="text"
@@ -420,7 +422,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
             </div>
             <div>
               <SelectControl
-                label={t('hr:workUnits.managers')}
+                label={t('hr:competenceCenters.managers')}
                 options={managerOptions}
                 value={selectedManagerIds}
                 onChange={(val) => {
@@ -429,7 +431,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                 }}
                 isMulti={true}
                 searchable={true}
-                placeholder={t('hr:workUnits.selectManagers')}
+                placeholder={t('hr:competenceCenters.selectManagers')}
                 className={errors.managers ? 'border-red-300' : ''}
               />
               {errors.managers && (
@@ -438,7 +440,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
             </div>
             <div>
               <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                {t('hr:workUnits.description')}
+                {t('hr:competenceCenters.description')}
               </label>
               <textarea
                 value={description}
@@ -460,7 +462,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                 disabled={selectedManagerIds.length === 0 || isSubmitting}
                 className="flex-1 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
               >
-                {isSubmitting ? t('common:buttons.saving') : t('hr:workUnits.createUnit')}
+                {isSubmitting ? t('common:buttons.saving') : t('hr:competenceCenters.createUnit')}
               </button>
             </div>
           </form>
@@ -472,7 +474,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center">
             <h3 className="text-lg font-semibold text-zinc-800">
-              {t('hr:workUnits.editWorkUnit')}
+              {t('hr:competenceCenters.editCompetenceCenter')}
             </h3>
             <button
               type="button"
@@ -486,7 +488,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
           <form onSubmit={handleUpdate} className="p-6 space-y-4">
             <div>
               <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                {t('hr:workUnits.unitName')}
+                {t('hr:competenceCenters.unitName')}
               </label>
               <input
                 type="text"
@@ -504,7 +506,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
             </div>
             <div>
               <SelectControl
-                label={t('hr:workUnits.managers')}
+                label={t('hr:competenceCenters.managers')}
                 options={managerOptions}
                 value={selectedManagerIds}
                 onChange={(val) => {
@@ -513,7 +515,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                 }}
                 isMulti={true}
                 searchable={true}
-                placeholder={t('hr:workUnits.selectManagers')}
+                placeholder={t('hr:competenceCenters.selectManagers')}
                 className={errors.managers ? 'border-red-300' : ''}
               />
               {errors.managers && (
@@ -522,7 +524,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
             </div>
             <div>
               <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                {t('hr:workUnits.description')}
+                {t('hr:competenceCenters.description')}
               </label>
               <textarea
                 value={description}
@@ -544,7 +546,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                 disabled={isSubmitting}
                 className="flex-1 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
               >
-                {isSubmitting ? t('common:buttons.saving') : t('hr:workUnits.saveChanges')}
+                {isSubmitting ? t('common:buttons.saving') : t('hr:competenceCenters.saveChanges')}
               </button>
             </div>
           </form>
@@ -557,10 +559,10 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
           <div className="p-6 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center shrink-0">
             <div>
               <h3 className="text-lg font-semibold text-zinc-800">
-                {t('hr:workUnits.manageMembers')}
+                {t('hr:competenceCenters.manageMembers')}
               </h3>
               <p className="text-sm text-zinc-500 font-medium">
-                {t('hr:workUnits.addRemoveUsers', { name: targetUnit?.name })}
+                {t('hr:competenceCenters.addRemoveUsers', { name: targetUnit?.name })}
               </p>
             </div>
             <button
@@ -576,7 +578,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
           <div className="p-4 border-b border-zinc-100 shrink-0">
             <input
               type="text"
-              placeholder={t('hr:workUnits.searchUsers')}
+              placeholder={t('hr:competenceCenters.searchUsers')}
               value={assignmentSearch}
               onChange={(e) => setAssignmentSearch(e.target.value)}
               className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"
@@ -592,7 +594,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               <div className="flex flex-col items-center justify-center py-12 text-center px-4">
                 <i className="fa-solid fa-triangle-exclamation text-3xl text-red-500 mb-3"></i>
                 <p className="text-sm text-zinc-600 max-w-sm">
-                  {t('hr:workUnits.failedToLoadUnitUsers')}
+                  {t('hr:competenceCenters.failedToLoadUnitUsers')}
                 </p>
               </div>
             ) : (
@@ -627,7 +629,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                 ))}
                 {filteredUsersForAssignment.length === 0 && (
                   <p className="col-span-full text-center text-zinc-400 py-8">
-                    {t('hr:workUnits.noUsersFound')}
+                    {t('hr:competenceCenters.noUsersFound')}
                   </p>
                 )}
               </div>
@@ -649,7 +651,9 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               disabled={isLoadingAssignments || isSavingAssignments || assignmentsLoadFailed}
               className="px-8 py-2.5 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSavingAssignments ? t('common:buttons.saving') : t('hr:workUnits.saveAssignments')}
+              {isSavingAssignments
+                ? t('common:buttons.saving')
+                : t('hr:competenceCenters.saveAssignments')}
             </button>
           </div>
         </div>
@@ -664,10 +668,10 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
             </div>
             <div>
               <h3 className="text-lg font-semibold text-zinc-800">
-                {t('hr:workUnits.deleteWorkUnit')}
+                {t('hr:competenceCenters.deleteCompetenceCenter')}
               </h3>
               <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
-                {t('hr:workUnits.deleteConfirmMessage', { name: targetUnit?.name })}
+                {t('hr:competenceCenters.deleteConfirmMessage', { name: targetUnit?.name })}
               </p>
             </div>
             <div className="flex gap-3 pt-2">
@@ -685,7 +689,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                 disabled={isDeleting}
                 className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95 disabled:opacity-50"
               >
-                {isDeleting ? t('common:buttons.saving') : t('hr:workUnits.yesDelete')}
+                {isDeleting ? t('common:buttons.saving') : t('hr:competenceCenters.yesDelete')}
               </button>
             </div>
           </div>

@@ -1,6 +1,6 @@
 ---
 title: CRM, catalogo e progetti
-description: Gestione di clienti, fornitori, prodotti, progetti, attività e unità di lavoro.
+description: Gestione di clienti, fornitori, prodotti, progetti, attività e Competence Center.
 sidebar:
   order: 3
 ---
@@ -39,8 +39,8 @@ Praetor assegna automaticamente un colore univoco quando crei un progetto. Puoi 
 
 Quando un progetto termina, verifica che le attività siano coerenti e che non rimangano registrazioni pendenti.
 
-## Unità di lavoro
+## Competence Center
 
-Le unità di lavoro collegano risorse, costi e assegnazioni. Sono utili per analisi HR e controllo economico dei progetti.
+I Competence Center collegano risorse, costi e assegnazioni. Sono utili per analisi HR e controllo economico dei progetti.
 
 Solo utenti con permessi adeguati dovrebbero modificare costi, assegnazioni o dati storici.

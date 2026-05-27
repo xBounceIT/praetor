@@ -58,8 +58,8 @@
       "external": "Esterni",
       "costs": "Costi",
       "employee_assignments": "Assegnazioni Dipendenti",
-      "work_units": "Unità di Lavoro",
-      "work_units_all": "Unità di Lavoro (Tutte)"
+      "work_units": "Competence Center",
+      "work_units_all": "Competence Center (Tutti)"
     },
     "reports": {
       "ai_reporting": "Reportistica IA",
@@ -70,8 +70,8 @@
       "general": "Generale",
       "user_management": "Gestione Utenti",
       "user_management_all": "Gestione Utenti (Tutti)",
-      "work_units": "Unità di Lavoro",
-      "work_units_all": "Unità di Lavoro (Tutte)",
+      "work_units": "Competence Center",
+      "work_units_all": "Competence Center (Tutti)",
       "email": "Email",
       "roles": "Ruoli",
       "logs": "Log"
@@ -158,7 +158,7 @@
         "supplier_quote": "preventivo fornitore",
         "task": "attività",
         "user": "utente",
-        "work_unit": "unità di lavoro"
+        "work_unit": "competence center"
       },
       "details": {
         "changedFields": "Modificati: {{fields}}",
