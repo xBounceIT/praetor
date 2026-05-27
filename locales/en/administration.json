@@ -56,7 +56,8 @@
     "hr": {
       "internal": "Internal",
       "external": "External",
-      "costs": "Costs",
+      "costs": "Personal Cost",
+      "costs_all": "Other Users' Costs",
       "employee_assignments": "Employee Assignments",
       "work_units": "Competence Centers",
       "work_units_all": "Competence Centers (All)"

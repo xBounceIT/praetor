@@ -284,6 +284,17 @@ const maskUserResponse = (
   costPerHour: canViewCosts ? user.costPerHour : 0,
 });
 
+// Cost visibility per row — the two scopes are strictly independent:
+//   - own row    → hr.costs.view       (personal-scope, read-only counterpart of hr.costs.update)
+//   - other row  → hr.costs_all.view   (others-scope, intentionally does NOT subsume own)
+// A role wanting to see every user's cost must hold BOTH grants; the default
+// manager/top_manager roles do (see migration 0055).
+const canViewCostFor = (request: FastifyRequest, targetUserId: string | null | undefined) => {
+  if (!targetUserId) return false;
+  if (targetUserId === request.user?.id) return hasPermission(request, 'hr.costs.view');
+  return hasPermission(request, 'hr.costs_all.view');
+};
+
 const ensureSubmittedAssignmentsInScope = async (
   request: FastifyRequest,
   {
@@ -365,7 +376,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const canViewInternal = hasPermission(request, 'hr.internal.view');
       const canViewExternal = hasPermission(request, 'hr.external.view');
 
-      const canViewCosts = hasPermission(request, 'hr.costs.view');
       const canRevealUserEmails = canViewUserEmails(request);
 
       const users = canViewAllUsers(request)
@@ -376,7 +386,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             canViewExternal,
           });
 
-      return users.map((u) => maskUserResponse(u, canViewCosts, canRevealUserEmails));
+      return users.map((u) =>
+        maskUserResponse(u, canViewCostFor(request, u.id), canRevealUserEmails),
+      );
     },
   );
 
@@ -438,8 +450,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const emailResult = optionalEmail(email, 'email');
       if (!emailResult.ok) return badRequest(reply, emailResult.message);
 
+      // Validate `costPerHour` regardless of permission so malformed input still
+      // returns 400 — matches the pre-split contract. The permission gate only
+      // decides whether the validated value is *applied* to the new row.
       const costPerHourResult = optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour');
       if (!costPerHourResult.ok) return badRequest(reply, costPerHourResult.message);
+      const canApplyCost = hasPermission(request, 'hr.costs_all.update');
 
       let usernameValue: string;
       let passwordHash: string;
@@ -489,7 +505,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               passwordHash,
               role: roleValue,
               avatarInitials,
-              costPerHour: costPerHourResult.value || 0,
+              costPerHour: canApplyCost ? costPerHourResult.value || 0 : 0,
               isDisabled: false,
               employeeType: effectiveEmployeeType,
             },
@@ -531,7 +547,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           email: canViewUserEmails(request) ? emailResult.value || '' : '',
           role: roleValue,
           avatarInitials,
-          costPerHour: costPerHourResult.value || 0,
+          // Mirror maskUserResponse's view-based mask used by GET / and PUT:
+          // a caller without hr.costs_all.view always sees 0 in the response,
+          // matching what a subsequent GET would return for the same row.
+          // Personal-scope `hr.costs.view` is deliberately NOT consulted here:
+          // the newly-created user is, by construction, never the caller, so
+          // the self-only personal-scope view can never apply on this branch.
+          costPerHour:
+            hasPermission(request, 'hr.costs_all.view') && canApplyCost
+              ? costPerHourResult.value || 0
+              : 0,
           isDisabled: false,
           employeeType: effectiveEmployeeType,
           authMethod: 'local',
@@ -632,10 +657,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     {
       onRequest: [
         authenticateToken,
+        // The hr.costs.* grants are included so a role granted *only* a
+        // cost-edit permission (personal `hr.costs.update` for self-edit, or
+        // all-scope `hr.costs_all.update` for cross-user edit) can reach
+        // this route to update costPerHour. The handler below enforces
+        // self-vs-all + cost-only when those are the caller's only relevant
+        // grants.
         requireAnyPermission(
           'administration.user_management.update',
           'hr.internal.update',
           'hr.external.update',
+          'hr.costs.update',
+          'hr.costs_all.update',
         ),
       ],
       schema: {
@@ -662,6 +695,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const fields: usersRepo.UserUpdateFields = {};
+      const isSelf = idResult.value === request.user?.id;
 
       if (name !== undefined) {
         const nameResult = requireNonEmptyString(name, 'name');
@@ -669,10 +703,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         fields.name = nameResult.value;
       }
 
-      if (costPerHour !== undefined && hasPermission(request, 'hr.costs.update')) {
-        const costPerHourResult = optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour');
-        if (!costPerHourResult.ok) return badRequest(reply, costPerHourResult.message);
-        fields.costPerHour = costPerHourResult.value;
+      if (costPerHour !== undefined) {
+        // Strict self/other split: self-edit needs hr.costs.update; cross-user
+        // edit needs hr.costs_all.update. The all-scope grant intentionally
+        // does NOT cover self anymore — see canViewCostFor for the symmetric
+        // view-side rule.
+        const canEditCost = isSelf
+          ? hasPermission(request, 'hr.costs.update')
+          : hasPermission(request, 'hr.costs_all.update');
+        if (canEditCost) {
+          const costPerHourResult = optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour');
+          if (!costPerHourResult.ok) return badRequest(reply, costPerHourResult.message);
+          fields.costPerHour = costPerHourResult.value;
+        }
       }
 
       let validatedEmail: string | null | undefined;
@@ -698,7 +741,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const currentName = targetUser.name;
       const currentUsername = targetUser.username;
 
-      if (!hasPermission(request, UPDATE_PERM_BY_EMPLOYEE_TYPE[targetEmployeeType])) {
+      // Cost-only edit bypass: a role granted just a cost-edit permission
+      // (personal `hr.costs.update` for self-edit, or all-scope
+      // `hr.costs_all.update` for cross-user edit) can update costPerHour even
+      // without the broader per-employee-type update grant — but only when
+      // costPerHour is the sole field being touched. Other fields fall through
+      // to the standard permission check below. Mirrors the strict self/other
+      // split in the costPerHour-applying branch above.
+      const onlyEditingCost =
+        costPerHour !== undefined &&
+        name === undefined &&
+        email === undefined &&
+        isDisabled === undefined &&
+        role === undefined;
+      const hasCostEditGrant = isSelf
+        ? hasPermission(request, 'hr.costs.update')
+        : hasPermission(request, 'hr.costs_all.update');
+      const isCostOnlyEdit = onlyEditingCost && hasCostEditGrant;
+
+      if (
+        !isCostOnlyEdit &&
+        !hasPermission(request, UPDATE_PERM_BY_EMPLOYEE_TYPE[targetEmployeeType])
+      ) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',
@@ -709,7 +773,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
+      // Cost-only edits also skip the manager-scoping check: the all-scope
+      // `hr.costs_all.update` grant is explicitly cross-user by design, so
+      // gating it through canManageUser would make the permission half-useful
+      // (works for internal/external employees, fails for app_users).
       if (
+        !isCostOnlyEdit &&
         targetEmployeeType === 'app_user' &&
         !hasPermission(request, 'administration.user_management_all.view') &&
         idResult.value !== request.user?.id &&
@@ -805,7 +874,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         name,
         email,
         isDisabled,
-        costPerHour: hasPermission(request, 'hr.costs.update') ? costPerHour : undefined,
+        // Mirror the write-side gate: `fields.costPerHour` is set only when the
+        // caller had permission to apply it (self + personal/all scope, or other
+        // user + all scope). Anything else was silently dropped above, so it must
+        // not appear in the audit diff either.
+        costPerHour: fields.costPerHour,
         role,
       });
 
@@ -844,11 +917,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           toValue: role !== undefined ? fullUser.role : undefined,
         },
       });
-      return maskUserResponse(
-        fullUser,
-        hasPermission(request, 'hr.costs.view'),
-        canRevealUserEmails,
-      );
+      return maskUserResponse(fullUser, canViewCostFor(request, fullUser.id), canRevealUserEmails);
     },
   );
 
@@ -1029,7 +1098,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       return maskUserResponse(
         updated,
-        hasPermission(request, 'hr.costs.view'),
+        canViewCostFor(request, updated.id),
         canViewUserEmails(request),
       );
     },

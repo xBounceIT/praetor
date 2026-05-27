@@ -386,6 +386,13 @@
       "when": 1778967639807,
       "tag": "0054_add_users_username_lower_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1779878737658,
+      "tag": "0055_reseed_hr_cost_permissions",
+      "breakpoints": true
     }
   ]
 }

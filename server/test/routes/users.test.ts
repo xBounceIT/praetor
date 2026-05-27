@@ -259,7 +259,8 @@ const ALL_USER_PERMS = [
   'hr.external.create',
   'hr.external.update',
   'hr.external.delete',
-  'hr.costs.view',
+  'hr.costs_all.view',
+  'hr.costs_all.update',
   'hr.costs.update',
   'hr.employee_assignments.update',
   'hr.work_units_all.view',
@@ -409,7 +410,7 @@ describe('GET /api/users', () => {
       'administration.user_management.view',
       'hr.internal.view',
       'hr.external.view',
-      'hr.costs.view',
+      'hr.costs_all.view',
     ]);
     listScopedForManagerMock.mockResolvedValue([SAMPLE_USER_ROW]);
 
@@ -446,6 +447,58 @@ describe('GET /api/users', () => {
     const body = JSON.parse(res.body);
     expect(body[0].costPerHour).toBe(0);
     expect(body[0].email).toBe('');
+  });
+
+  test('200 with ONLY hr.costs.view → caller sees own cost, other rows masked to 0', async () => {
+    // Personal-scope hr.costs.view is the read-only counterpart of
+    // hr.costs.update: it grants visibility of the caller's *own* costPerHour
+    // without exposing other users' costs (those still require hr.costs_all.view).
+    findAuthUserByIdMock.mockResolvedValue(REGULAR_USER);
+    getRolePermissionsMock.mockResolvedValue(['timesheets.tracker.view', 'hr.costs.view']);
+    listScopedForManagerMock.mockResolvedValue([
+      { ...SAMPLE_USER_ROW, id: REGULAR_USER.id, costPerHour: 42 },
+      { ...SAMPLE_USER_ROW, id: 'u-other', costPerHour: 999 },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users',
+      headers: userAuth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as Array<{ id: string; costPerHour: number }>;
+    const ownRow = body.find((row) => row.id === REGULAR_USER.id);
+    const otherRow = body.find((row) => row.id === 'u-other');
+    expect(ownRow?.costPerHour).toBe(42);
+    expect(otherRow?.costPerHour).toBe(0);
+  });
+
+  test('200 with ONLY hr.costs_all.view → caller sees OTHER rows, own row masked to 0', async () => {
+    // Symmetric regression for the explicit-split semantics: hr.costs_all.view
+    // is strictly cross-user and intentionally does NOT cover the caller's own
+    // cost. To see every cost (including own), a role must hold BOTH
+    // hr.costs.view + hr.costs_all.view (which is exactly what manager and
+    // top_manager defaults seed via migration 0055).
+    findAuthUserByIdMock.mockResolvedValue(REGULAR_USER);
+    getRolePermissionsMock.mockResolvedValue(['timesheets.tracker.view', 'hr.costs_all.view']);
+    listScopedForManagerMock.mockResolvedValue([
+      { ...SAMPLE_USER_ROW, id: REGULAR_USER.id, costPerHour: 42 },
+      { ...SAMPLE_USER_ROW, id: 'u-other', costPerHour: 999 },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users',
+      headers: userAuth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as Array<{ id: string; costPerHour: number }>;
+    const ownRow = body.find((row) => row.id === REGULAR_USER.id);
+    const otherRow = body.find((row) => row.id === 'u-other');
+    expect(ownRow?.costPerHour).toBe(0);
+    expect(otherRow?.costPerHour).toBe(999);
   });
 
   test('401 missing token', async () => {
@@ -637,6 +690,52 @@ describe('POST /api/users', () => {
       payload: { name: 'X' },
     });
     expect(res.statusCode).toBe(401);
+  });
+
+  test('400 rejects negative costPerHour even when caller lacks hr.costs_all.update', async () => {
+    // Validation must run before the permission gate so malformed input still
+    // surfaces 400, matching the pre-split contract. The permission gate
+    // controls whether the validated value is *applied*, not whether the input
+    // is *validated*.
+    getRolePermissionsMock.mockResolvedValue([
+      'hr.internal.create',
+      'administration.user_management.view',
+    ]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: adminAuth(),
+      payload: { name: 'X', employeeType: 'internal', costPerHour: -1 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(insertUserMock).not.toHaveBeenCalled();
+  });
+
+  test('201 ignores costPerHour from caller without hr.costs_all.update', async () => {
+    // Without the cost-update permission, the row is created with 0 even when
+    // the caller sent a positive number — silent-drop matches the PUT contract.
+    getRolePermissionsMock.mockResolvedValue([
+      'hr.internal.create',
+      'administration.user_management.view',
+    ]);
+    insertUserMock.mockResolvedValue(undefined);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: adminAuth(),
+      payload: { name: 'X', employeeType: 'internal', costPerHour: 99 },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const [insertedRow] = insertUserMock.mock.calls[0] as [Record<string, unknown>];
+    expect(insertedRow.costPerHour).toBe(0);
+    // Response must also report 0 so the client cache matches the DB row —
+    // returning the caller's input would silently advertise a value we didn't
+    // persist.
+    expect(JSON.parse(res.body).costPerHour).toBe(0);
   });
 });
 
@@ -1054,6 +1153,427 @@ describe('PUT /api/users/:id', () => {
       payload: { name: 'X' },
     });
     expect(res.statusCode).toBe(401);
+  });
+
+  test('200 self edit with only hr.costs.update applies costPerHour', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management_all.view',
+      'hr.costs.update',
+    ]);
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, id: MANAGER_USER.id });
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      id: MANAGER_USER.id,
+      avatarInitials: 'MM',
+      costPerHour: 99,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, id: MANAGER_USER.id, costPerHour: 99 });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: `/api/users/${MANAGER_USER.id}`,
+      headers: managerAuth(),
+      payload: { costPerHour: 99 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateUserDynamicMock).toHaveBeenCalledWith(
+      MANAGER_USER.id,
+      expect.objectContaining({ costPerHour: 99 }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('200 self edit with ONLY hr.costs.update (no user_management/hr update) applies costPerHour', async () => {
+    // Regression for the personal-cost permission being unreachable: a role
+    // granted just hr.costs.update must be able to self-edit costPerHour even
+    // without administration.user_management.update / hr.internal.update /
+    // hr.external.update. The route guard's requireAnyPermission accepts
+    // hr.costs.update, and the per-employee-type check inside the handler is
+    // bypassed for self-only-cost edits.
+    const userAuthForSelf = () => ({
+      authorization: `Bearer ${signToken({ userId: REGULAR_USER.id })}`,
+    });
+    findAuthUserByIdMock.mockResolvedValue(REGULAR_USER);
+    getRolePermissionsMock.mockResolvedValue(['hr.costs.update']);
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, id: REGULAR_USER.id });
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      id: REGULAR_USER.id,
+      avatarInitials: 'UU',
+      costPerHour: 33,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, id: REGULAR_USER.id, costPerHour: 33 });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: `/api/users/${REGULAR_USER.id}`,
+      headers: userAuthForSelf(),
+      payload: { costPerHour: 33 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateUserDynamicMock).toHaveBeenCalledWith(
+      REGULAR_USER.id,
+      expect.objectContaining({ costPerHour: 33 }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('403 self edit with ONLY hr.costs.update but body includes name (cost-only bypass does not apply)', async () => {
+    // The self-cost-only bypass is gated on costPerHour being the SOLE field
+    // being touched. As soon as the body adds another field (here: name) the
+    // bypass is off and the request falls back to the standard
+    // UPDATE_PERM_BY_EMPLOYEE_TYPE check — which rejects this caller.
+    findAuthUserByIdMock.mockResolvedValue(REGULAR_USER);
+    getRolePermissionsMock.mockResolvedValue(['hr.costs.update']);
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, id: REGULAR_USER.id });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: `/api/users/${REGULAR_USER.id}`,
+      headers: { authorization: `Bearer ${signToken({ userId: REGULAR_USER.id })}` },
+      payload: { costPerHour: 33, name: 'Renamed' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(updateUserDynamicMock).not.toHaveBeenCalled();
+  });
+
+  test('403 other-user edit with ONLY hr.costs.update is rejected (personal grant is self-only)', async () => {
+    // Personal hr.costs.update only authorizes self-edits. With another user as
+    // the target, the cost-only bypass requires hr.costs_all.update, which
+    // this caller doesn't have — so the per-employee-type check trips.
+    findAuthUserByIdMock.mockResolvedValue(REGULAR_USER);
+    getRolePermissionsMock.mockResolvedValue(['hr.costs.update']);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE); // u-target ≠ u-user
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: { authorization: `Bearer ${signToken({ userId: REGULAR_USER.id })}` },
+      payload: { costPerHour: 33 },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(updateUserDynamicMock).not.toHaveBeenCalled();
+  });
+
+  test('400 self edit with ONLY hr.costs_all.update silently drops costPerHour', async () => {
+    // Symmetric regression for the explicit-split semantics on the update side:
+    // hr.costs_all.update is strictly cross-user and intentionally does NOT
+    // cover the caller's own cost. With cost as the sole field and only the
+    // all-scope grant, the route silently strips costPerHour (matching the
+    // existing 'no cost permission' behavior) and returns 400 'No fields to
+    // update'. To self-edit, the caller would need hr.costs.update.
+    findAuthUserByIdMock.mockResolvedValue(REGULAR_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management_all.view',
+      'hr.costs_all.update',
+    ]);
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, id: REGULAR_USER.id });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: `/api/users/${REGULAR_USER.id}`,
+      headers: { authorization: `Bearer ${signToken({ userId: REGULAR_USER.id })}` },
+      payload: { costPerHour: 33 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('No fields to update');
+    expect(updateUserDynamicMock).not.toHaveBeenCalled();
+  });
+
+  test('200 other-user edit with ONLY hr.costs_all.update applies costPerHour (app_user target)', async () => {
+    // Regression for the symmetric Codex finding on hr.costs_all.update: a role
+    // granted just the all-scope cost-edit permission must be able to reach
+    // this route and edit ANY user's costPerHour. The route guard accepts
+    // hr.costs_all.update, the per-employee-type check is bypassed for
+    // cost-only edits, and the canManageUser check is also bypassed (the
+    // all-scope grant is cross-user by design — gating it through
+    // canManageUser would only work for internal/external employees and would
+    // break for app_user targets, making the permission half-useful).
+    findAuthUserByIdMock.mockResolvedValue(REGULAR_USER);
+    getRolePermissionsMock.mockResolvedValue(['hr.costs_all.update']);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE); // u-target, employeeType=app_user
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      avatarInitials: 'T',
+      costPerHour: 77,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, costPerHour: 77 });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: { authorization: `Bearer ${signToken({ userId: REGULAR_USER.id })}` },
+      payload: { costPerHour: 77 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateUserDynamicMock).toHaveBeenCalledWith(
+      'u-target',
+      expect.objectContaining({ costPerHour: 77 }),
+      TX_SENTINEL,
+    );
+    // canManageUser must NOT have been consulted — the cost-only bypass skips it.
+    expect(canManageUserMock).not.toHaveBeenCalled();
+  });
+
+  test('403 other-user edit with ONLY hr.costs_all.update but body includes name (cost-only bypass does not apply)', async () => {
+    // As soon as a non-cost field appears in the body, the bypass is off and
+    // the request falls back to the standard UPDATE_PERM_BY_EMPLOYEE_TYPE
+    // check. With only hr.costs_all.update granted, that check rejects.
+    findAuthUserByIdMock.mockResolvedValue(REGULAR_USER);
+    getRolePermissionsMock.mockResolvedValue(['hr.costs_all.update']);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: { authorization: `Bearer ${signToken({ userId: REGULAR_USER.id })}` },
+      payload: { costPerHour: 77, name: 'Renamed' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(updateUserDynamicMock).not.toHaveBeenCalled();
+  });
+
+  test('400 self edit without any cost permission silently drops costPerHour', async () => {
+    // Caller has no hr.costs.* grant. costPerHour is silently stripped from the
+    // payload, which leaves no remaining fields to update, so the route returns
+    // 400 "No fields to update". This locks in the silent-drop contract so a
+    // future refactor cannot accidentally write costPerHour=0 over the real value.
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management_all.view',
+    ]);
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, id: MANAGER_USER.id });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: `/api/users/${MANAGER_USER.id}`,
+      headers: managerAuth(),
+      payload: { costPerHour: 99 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('No fields to update');
+    expect(updateUserDynamicMock).not.toHaveBeenCalled();
+  });
+
+  test('other-user edit with only hr.costs.update does NOT apply costPerHour', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management_all.view',
+      'hr.costs.update',
+    ]);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE); // u-target ≠ manager
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      name: 'Renamed',
+      avatarInitials: 'R',
+      costPerHour: 50,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, name: 'Renamed' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: managerAuth(),
+      payload: { name: 'Renamed', costPerHour: 999 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // Name is applied, cost is silently dropped because manager lacks hr.costs_all.update.
+    const [, fields] = updateUserDynamicMock.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(fields.name).toBe('Renamed');
+    expect(fields).not.toHaveProperty('costPerHour');
+  });
+
+  test('other-user edit with hr.costs_all.update applies costPerHour', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management_all.view',
+      'hr.costs_all.update',
+    ]);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      avatarInitials: 'T',
+      costPerHour: 75,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, costPerHour: 75 });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: managerAuth(),
+      payload: { costPerHour: 75 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateUserDynamicMock).toHaveBeenCalledWith(
+      'u-target',
+      expect.objectContaining({ costPerHour: 75 }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('audit changedFields includes costPerHour when written via hr.costs_all.update only', async () => {
+    // Regression: the audit-log gate must mirror the write-side gate. A caller
+    // holding only the all-scope permission (no personal) successfully writes
+    // costPerHour and the audit row must reflect that — otherwise cross-user
+    // cost edits would be invisible in the audit trail.
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management_all.view',
+      'hr.costs_all.update',
+      // Note: no hr.costs.update — the personal grant is intentionally absent.
+    ]);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      avatarInitials: 'T',
+      costPerHour: 42,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, costPerHour: 42 });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: managerAuth(),
+      payload: { costPerHour: 42 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'user.updated',
+        details: expect.objectContaining({
+          changedFields: expect.arrayContaining(['costPerHour']),
+        }),
+      }),
+    );
+  });
+
+  test('audit changedFields omits costPerHour when caller has no cost permission', async () => {
+    // Regression: the audit row must not falsely advertise a cost change when
+    // the route silently dropped the field for lack of permission.
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management_all.view',
+    ]);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      name: 'Renamed',
+      avatarInitials: 'R',
+      costPerHour: 50,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, name: 'Renamed' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: managerAuth(),
+      payload: { name: 'Renamed', costPerHour: 999 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    type AuditArg = { action: string; details: { changedFields: string[] } };
+    const auditCall = (logAuditMock.mock.calls as unknown as Array<[AuditArg]>).find(
+      ([arg]) => arg.action === 'user.updated',
+    );
+    expect(auditCall?.[0].details.changedFields).toEqual(['name']);
+  });
+
+  test('200 self edit response with ONLY hr.costs.view → response includes own costPerHour unmasked', async () => {
+    // Regression for the personal-scope view permission: PUT /:id's response
+    // mask honors hr.costs.view for the caller's own row even when the broader
+    // hr.costs_all.view is absent. Combined with administration.user_management.update
+    // so the route guard + per-employee-type check both pass, allowing the
+    // (no-op) PUT to reach the response-masking branch.
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management_all.view',
+      'hr.costs.view',
+    ]);
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, id: MANAGER_USER.id });
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      id: MANAGER_USER.id,
+      name: 'Mary Manager Renamed',
+      avatarInitials: 'MM',
+      costPerHour: 88,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({
+      ...SAMPLE_USER_ROW,
+      id: MANAGER_USER.id,
+      name: 'Mary Manager Renamed',
+      costPerHour: 88,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: `/api/users/${MANAGER_USER.id}`,
+      headers: managerAuth(),
+      payload: { name: 'Mary Manager Renamed' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.costPerHour).toBe(88);
+  });
+
+  test('200 other-user edit response with ONLY hr.costs.view → response masks costPerHour to 0', async () => {
+    // Same caller permissions as above, but targeting another user. The
+    // response mask must drop the cost field because personal-scope hr.costs.view
+    // is self-only.
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management_all.view',
+      'hr.costs.view',
+    ]);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE); // u-target ≠ manager
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      name: 'Renamed',
+      avatarInitials: 'R',
+      costPerHour: 50,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, name: 'Renamed' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: managerAuth(),
+      payload: { name: 'Renamed' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.costPerHour).toBe(0);
   });
 });
 

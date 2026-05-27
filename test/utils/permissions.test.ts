@@ -50,6 +50,19 @@ describe('PERMISSION_DEFINITIONS / ALL_PERMISSIONS', () => {
     expect(ALL_PERMISSIONS).toContain('hr.work_units.delete');
     expect(ALL_PERMISSIONS).toContain('hr.work_units_all.delete');
     expect(ALL_PERMISSIONS).toContain('administration.roles.update');
+    expect(ALL_PERMISSIONS).toContain('hr.costs.view');
+    expect(ALL_PERMISSIONS).toContain('hr.costs.update');
+    expect(ALL_PERMISSIONS).toContain('hr.costs_all.view');
+    expect(ALL_PERMISSIONS).toContain('hr.costs_all.update');
+  });
+
+  test('hr.costs is view+update only — no create/delete on either scope', () => {
+    expect(ALL_PERMISSIONS).toContain('hr.costs.view');
+    expect(ALL_PERMISSIONS).toContain('hr.costs.update');
+    expect(ALL_PERMISSIONS).not.toContain('hr.costs.create');
+    expect(ALL_PERMISSIONS).not.toContain('hr.costs.delete');
+    expect(ALL_PERMISSIONS).not.toContain('hr.costs_all.create');
+    expect(ALL_PERMISSIONS).not.toContain('hr.costs_all.delete');
   });
 });
 

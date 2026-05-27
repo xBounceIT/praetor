@@ -190,6 +190,16 @@ const canViewUserEmails = (user: McpAuthenticatedUser) =>
 const canViewAllWorkUnits = (user: McpAuthenticatedUser) =>
   hasPermission(user, 'hr.work_units_all.view');
 
+// Cost visibility per row — the two scopes are strictly independent:
+//   - own row    → hr.costs.view       (personal-scope)
+//   - other row  → hr.costs_all.view   (others-scope, intentionally does NOT subsume own)
+// A role wanting to see every user's cost must hold BOTH grants.
+const canViewCostFor = (user: McpAuthenticatedUser, targetUserId: string | null | undefined) => {
+  if (!targetUserId) return false;
+  if (targetUserId === user.id) return hasPermission(user, 'hr.costs.view');
+  return hasPermission(user, 'hr.costs_all.view');
+};
+
 const maskUser = (
   user: usersRepo.UserListRow,
   options: { canViewCosts: boolean; canViewEmails: boolean },
@@ -505,7 +515,13 @@ const buildServer = () => {
       if (denied) return denied;
 
       const hasWorkUnitsView = hasPermission(user, 'hr.work_units.view');
-      const hasCostsView = hasPermission(user, 'hr.costs.view');
+      // `hasCostsView` reflects ONLY the cross-user grant — the truthful meaning
+      // of `scope.includesCosts` below is "can the client trust every row's
+      // costPerHour to be populated?". With the explicit-split semantics, a
+      // caller with only `hr.costs.view` sees their own cost but no others',
+      // so `includesCosts` is correctly `false` for them. Per-row masking is
+      // handled by canViewCostFor inside the .map.
+      const hasCostsView = hasPermission(user, 'hr.costs_all.view');
       const hasUserManagementView = hasPermission(user, 'administration.user_management.view');
       const hasAllUsersView = canViewAllUsers(user);
       const hasAllWorkUnitsView = canViewAllWorkUnits(user);
@@ -541,7 +557,7 @@ const buildServer = () => {
       return jsonResult({
         users: users.map((entry) =>
           maskUser(entry, {
-            canViewCosts: hasCostsView,
+            canViewCosts: canViewCostFor(user, entry.id),
             canViewEmails: hasEmailView,
           }),
         ),

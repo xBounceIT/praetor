@@ -33,6 +33,7 @@ export type KnownPermissionResource =
   | 'hr.internal'
   | 'hr.external'
   | 'hr.costs'
+  | 'hr.costs_all'
   | 'hr.employee_assignments'
   | 'hr.work_units'
   | 'hr.work_units_all'

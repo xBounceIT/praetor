@@ -346,4 +346,120 @@ describe('<UserManagement />', () => {
     await user.click(screen.getByRole('button', { name: 'common:labels.hidePassword' }));
     expect(passwordInput.type).toBe('password');
   });
+
+  describe('cost-per-hour permission gating in edit dialog', () => {
+    // The cost input only renders when the caller can both see costs (hr.costs_all.view)
+    // and edit the target user's cost (hr.costs_all.update for anyone, or hr.costs.update
+    // for self).
+    const usersForCostTests: User[] = [
+      {
+        id: 'u-self',
+        name: 'Mary Manager',
+        role: 'manager',
+        avatarInitials: 'MM',
+        username: 'mary.manager',
+        employeeType: 'app_user',
+        authMethod: 'local',
+      },
+      {
+        id: 'u-other',
+        name: 'Bob Brown',
+        role: 'user',
+        avatarInitials: 'BB',
+        username: 'bob.brown',
+        employeeType: 'app_user',
+        authMethod: 'local',
+      },
+    ];
+
+    const openEditDialog = async (
+      rowName: string,
+      overrides: Partial<ComponentProps<typeof UserManagement>>,
+    ) => {
+      renderUserManagement({
+        users: usersForCostTests,
+        currentUserId: 'u-self',
+        ...overrides,
+      });
+      fireEvent.click(screen.getByText(rowName));
+      // Wait for the modal to mount (header is rendered by the edit dialog only).
+      await screen.findByText('hr:workforce.editUser');
+    };
+
+    test('shows cost input when editing self with hr.costs.update only', async () => {
+      await openEditDialog('Mary Manager', {
+        permissions: [updatePermission, 'hr.costs_all.view', 'hr.costs.update'],
+      });
+
+      expect(screen.getByText('hr:workforce.costPerHour')).toBeInTheDocument();
+    });
+
+    test('hides cost input when editing another user with only hr.costs.update', async () => {
+      // Personal cost permission must not unlock the field for someone else's row.
+      await openEditDialog('Bob Brown', {
+        permissions: [updatePermission, 'hr.costs_all.view', 'hr.costs.update'],
+      });
+
+      expect(screen.queryByText('hr:workforce.costPerHour')).not.toBeInTheDocument();
+    });
+
+    test('shows cost input when editing another user with hr.costs_all.update', async () => {
+      await openEditDialog('Bob Brown', {
+        permissions: [updatePermission, 'hr.costs_all.view', 'hr.costs_all.update'],
+      });
+
+      expect(screen.getByText('hr:workforce.costPerHour')).toBeInTheDocument();
+    });
+
+    test('hides cost input entirely without hr.costs_all.view', async () => {
+      // View permission is the precondition for showing the input at all.
+      await openEditDialog('Mary Manager', {
+        permissions: [updatePermission, 'hr.costs.update'],
+      });
+
+      expect(screen.queryByText('hr:workforce.costPerHour')).not.toBeInTheDocument();
+    });
+
+    test('saving unrelated fields without view-all does NOT clobber costPerHour', async () => {
+      // Regression: when the cost input is hidden (no hr.costs_all.view), the
+      // GET response masked costPerHour to 0. If the save handler still includes
+      // costPerHour in the update payload, an unrelated edit (e.g. name) would
+      // silently overwrite the DB cost with 0.
+      const onUpdateUser = mock(() => {});
+      const props: ComponentProps<typeof UserManagement> = {
+        users: usersForCostTests,
+        currentUserId: 'u-self',
+        clients: [],
+        projects: [],
+        tasks: [],
+        onAddUser: mock(async () => ({ success: true })),
+        onDeleteUser: mock(() => {}),
+        onUpdateUser,
+        onUpdateUserRoles: mock(async () => {}),
+        onUpdateUserAuthMethod: mock(async () => {}),
+        permissions: [updatePermission, 'hr.costs.update'], // No view-all.
+        roles: [],
+        ssoProviders: [],
+        currency: '$',
+      };
+      render(<UserManagement {...props} />);
+      fireEvent.click(screen.getByText('Mary Manager'));
+      await screen.findByText('hr:workforce.editUser');
+
+      // Dirty the name field so the Save button enables, then submit.
+      const firstNameInput = screen.getByDisplayValue('Mary') as HTMLInputElement;
+      fireEvent.change(firstNameInput, { target: { value: 'Maria' } });
+
+      const saveButton = await screen.findByRole('button', {
+        name: 'hr:workforce.saveChanges',
+      });
+      fireEvent.click(saveButton);
+
+      expect(onUpdateUser).toHaveBeenCalled();
+      const [, updates] = (
+        onUpdateUser.mock.calls as unknown as Array<[string, Record<string, unknown>]>
+      )[0];
+      expect(updates).not.toHaveProperty('costPerHour');
+    });
+  });
 });

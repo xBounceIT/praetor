@@ -48,6 +48,22 @@ describe('PERMISSION_DEFINITIONS / ALL_PERMISSIONS', () => {
     expect(ALL_PERMISSIONS).toContain('timesheets.tracker_all.update');
     expect(ALL_PERMISSIONS).toContain('hr.work_units.delete');
     expect(ALL_PERMISSIONS).toContain('hr.work_units_all.delete');
+    expect(ALL_PERMISSIONS).toContain('hr.costs.view');
+    expect(ALL_PERMISSIONS).toContain('hr.costs.update');
+    expect(ALL_PERMISSIONS).toContain('hr.costs_all.view');
+    expect(ALL_PERMISSIONS).toContain('hr.costs_all.update');
+  });
+
+  test('hr.costs is view+update only — no create/delete on either scope', () => {
+    // The hr.costs resource is the personal-scope cost gate: view (read your own
+    // cost, read-only counterpart of update) and update (edit your own cost) apply,
+    // but create/delete must not exist on either the base or all-scope side.
+    expect(ALL_PERMISSIONS).toContain('hr.costs.view');
+    expect(ALL_PERMISSIONS).toContain('hr.costs.update');
+    expect(ALL_PERMISSIONS).not.toContain('hr.costs.create');
+    expect(ALL_PERMISSIONS).not.toContain('hr.costs.delete');
+    expect(ALL_PERMISSIONS).not.toContain('hr.costs_all.create');
+    expect(ALL_PERMISSIONS).not.toContain('hr.costs_all.delete');
     expect(ALL_PERMISSIONS).toContain('administration.roles.create');
     expect(ALL_PERMISSIONS).toContain('notifications.delete');
   });
