@@ -301,12 +301,16 @@ describe('useAuth', () => {
   // hook hands the browser to that URL after clearing local state — otherwise the IdP
   // session cookie stays alive and the next tab silently SSOs back in as the previous user.
   test('logout redirects to endSessionUrl when the server returns one', async () => {
+    // Stub Location#assign — preserves the real happy-dom Location instance so
+    // `window.location.href` keeps working for later tests in the same process.
+    // (Previously we Object.defineProperty'd window.location to a plain spread
+    //  object; the spread dropped happy-dom's `href` getter, and the matching
+    //  finally-block "restore" kept the broken spread, leaving every later test
+    //  in the bun process with a window.location that returned undefined for
+    //  href — which then blew up Login.tsx's `new URL(window.location.href)`.)
     const originalAssign = window.location.assign;
     const assignMock = mock((_url: string) => {});
-    Object.defineProperty(window, 'location', {
-      writable: true,
-      value: { ...window.location, assign: assignMock },
-    });
+    window.location.assign = assignMock;
     apiMocks.authLogout.mockImplementation(() =>
       Promise.resolve({ endSessionUrl: 'https://idp.example.com/logout?id_token_hint=tok' }),
     );
@@ -329,20 +333,14 @@ describe('useAuth', () => {
       expect(result.current.currentUser).toBeNull();
       expect(setAuthTokenMock).toHaveBeenLastCalledWith(null);
     } finally {
-      Object.defineProperty(window, 'location', {
-        writable: true,
-        value: { ...window.location, assign: originalAssign },
-      });
+      window.location.assign = originalAssign;
     }
   });
 
   test('logout does NOT redirect when endSessionUrl is null', async () => {
     const originalAssign = window.location.assign;
     const assignMock = mock((_url: string) => {});
-    Object.defineProperty(window, 'location', {
-      writable: true,
-      value: { ...window.location, assign: assignMock },
-    });
+    window.location.assign = assignMock;
     apiMocks.authLogout.mockImplementation(() => Promise.resolve({ endSessionUrl: null }));
 
     try {
@@ -356,10 +354,7 @@ describe('useAuth', () => {
 
       expect(assignMock).not.toHaveBeenCalled();
     } finally {
-      Object.defineProperty(window, 'location', {
-        writable: true,
-        value: { ...window.location, assign: originalAssign },
-      });
+      window.location.assign = originalAssign;
     }
   });
 
