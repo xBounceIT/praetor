@@ -64,6 +64,8 @@ const fallbackRouteTitleKey = (view: View) =>
     .pop()
     ?.replace(/-([a-z])/g, (match) => match[1].toUpperCase())}`;
 
+const EMPTY_NOTIFICATIONS: Notification[] = [];
+
 const getModuleFromRoute = (route: View): string => {
   if (route === 'docs' || route.startsWith('docs/')) return 'docs';
   if (route.startsWith('timesheets/')) return 'timesheets';
@@ -105,7 +107,7 @@ const Layout: React.FC<LayoutProps> = ({
   roles,
   isNotFound,
   isAiReportingEnabled = false,
-  notifications = [],
+  notifications = EMPTY_NOTIFICATIONS,
   unreadNotificationCount = 0,
   onMarkNotificationAsRead,
   onMarkAllNotificationsAsRead,

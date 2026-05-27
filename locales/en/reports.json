@@ -9,6 +9,7 @@
     "selectSession": "Select chat",
     "loadingSessions": "Loading...",
     "placeholder": "Ask a question about your business data...",
+    "editMessage": "Edit message",
     "thinking": "Thinking...",
     "noSessions": "No chats yet.",
     "emptyPlaceholderTitle": "What should we analyze next?",

@@ -252,7 +252,9 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
                     <button
+                      type="button"
                       onClick={() => setManagingEmployee(row)}
+                      aria-label={t('workforce.manageAssignments')}
                       className="p-2 text-zinc-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
                     >
                       <i className="fa-solid fa-link"></i>
@@ -267,7 +269,9 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
               <TooltipTrigger asChild>
                 <span className="inline-flex">
                   <button
+                    type="button"
                     onClick={() => openEditModal(row)}
+                    aria-label={t('internalEmployees.editEmployee')}
                     className="p-2 text-zinc-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
                   >
                     <i className="fa-solid fa-pen-to-square"></i>
@@ -283,7 +287,9 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={() => confirmDelete(row)}
+                        aria-label={t('common:buttons.delete')}
                         className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                       >
                         <i className="fa-solid fa-trash"></i>

@@ -372,12 +372,14 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(event) => {
                           event.stopPropagation();
                           const linkedQuoteId = row.linkedQuoteId;
                           if (!linkedQuoteId) return;
                           onViewQuote(linkedQuoteId);
                         }}
+                        aria-label={t('accounting:supplierOrders.viewQuote')}
                         className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
                       >
                         <i className="fa-solid fa-link"></i>
@@ -391,10 +393,16 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
                     <button
+                      type="button"
                       onClick={(event) => {
                         event.stopPropagation();
                         openEditModal(row);
                       }}
+                      aria-label={
+                        isDraft
+                          ? t('accounting:supplierOrders.editOrder')
+                          : t('accounting:supplierOrders.viewOrder')
+                      }
                       className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
                     >
                       <i className={`fa-solid ${isDraft ? 'fa-pen-to-square' : 'fa-eye'}`}></i>
@@ -413,10 +421,12 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(event) => {
                           event.stopPropagation();
                           void onUpdateOrder(row.id, { status: 'sent' });
                         }}
+                        aria-label={t('accounting:supplierOrders.markSent')}
                         className="rounded-lg p-2 text-blue-700 transition-all hover:bg-blue-50 hover:text-blue-600"
                       >
                         <i className="fa-solid fa-paper-plane"></i>
@@ -432,10 +442,12 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(event) => {
                           event.stopPropagation();
                           void onCreateInvoice(row);
                         }}
+                        aria-label={t('accounting:supplierOrders.createInvoice')}
                         className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
                       >
                         <i className="fa-solid fa-file-invoice-dollar"></i>
@@ -451,10 +463,12 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(event) => {
                           event.stopPropagation();
                           confirmDelete(row);
                         }}
+                        aria-label={t('common:buttons.delete')}
                         className="rounded-lg p-2 text-red-600 transition-all hover:bg-red-50 hover:text-red-600"
                       >
                         <i className="fa-solid fa-trash-can"></i>

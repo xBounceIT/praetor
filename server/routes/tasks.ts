@@ -407,10 +407,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idsResult = requireNonEmptyString(projectIds, 'projectIds');
       if (!idsResult.ok) return badRequest(reply, idsResult.message);
 
-      const idArray = idsResult.value
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
+      const idArray = idsResult.value.split(',').flatMap((s) => {
+        const trimmed = s.trim();
+        return trimmed ? [trimmed] : [];
+      });
       if (idArray.length === 0) return badRequest(reply, 'projectIds must contain at least one ID');
       if (idArray.length > 200) return badRequest(reply, 'projectIds cannot exceed 200 IDs');
 

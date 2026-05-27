@@ -144,6 +144,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
                       e.stopPropagation();
                       setEditingTask(task);
                     }}
+                    aria-label={t('common:buttons.edit')}
                     className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
                   >
                     <i className="fa-solid fa-pen text-xs"></i>
@@ -161,6 +162,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
                       e.stopPropagation();
                       setDeletingTask(task);
                     }}
+                    aria-label={t('common:buttons.delete')}
                     className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                   >
                     <i className="fa-solid fa-trash-can text-xs"></i>

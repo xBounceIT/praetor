@@ -321,12 +321,12 @@ export const getProjectsSection = async (
         cost: parseCost(r.cost),
       }))
     : [];
-  const topByHours = [...projectStats]
-    .sort((a, b) => b.hours - a.hours)
+  const topByHours = projectStats
+    .toSorted((a, b) => b.hours - a.hours)
     .slice(0, topLimit)
     .map(({ label, hours, cost }) => ({ label, value: hours, cost }));
-  const topByCost = [...projectStats]
-    .sort((a, b) => b.cost - a.cost)
+  const topByCost = projectStats
+    .toSorted((a, b) => b.cost - a.cost)
     .slice(0, topLimit)
     .map(({ label, hours, cost }) => ({ label, value: cost, hours }));
 

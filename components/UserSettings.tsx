@@ -130,15 +130,17 @@ const renderThemeSwatchContent = (option: (typeof THEME_OPTION_META)[Theme]) => 
   return Icon ? <Icon aria-hidden="true" className="size-4" strokeWidth={2.25} /> : null;
 };
 
+const mcpTokenDateFormatter = new Intl.DateTimeFormat(undefined, {
+  year: 'numeric',
+  month: 'short',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
 const formatMcpTokenDate = (value: number | null) => {
   if (!value) return 'Never';
-  return new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value));
+  return mcpTokenDateFormatter.format(new Date(value));
 };
 
 const getMcpEndpointUrl = () => {
@@ -212,7 +214,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const [fullName, setFullName] = useState(settings.fullName);
   const [email, setEmail] = useState(settings.email);
   const [language, setLanguage] = useState(settings.language || 'auto');
-  const [currentTheme, setCurrentTheme] = useState<Theme>(getTheme());
+  const [currentTheme, setCurrentTheme] = useState<Theme>(() => getTheme());
 
   const [activeTab, setActiveTab] = useState<
     'profile' | 'appearance' | 'language' | 'security' | 'mcp'
@@ -476,6 +478,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       {/* Tabs */}
       <div className="flex border-b border-zinc-200 gap-8">
         <button
+          type="button"
           onClick={() => setActiveTab('profile')}
           className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'profile' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >
@@ -486,6 +489,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
           )}
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('appearance')}
           className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'appearance' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >
@@ -496,6 +500,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
           )}
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('language')}
           className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'language' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >
@@ -506,6 +511,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
           )}
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('security')}
           className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'security' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >
@@ -516,6 +522,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
           )}
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('mcp')}
           className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'mcp' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >

@@ -46,7 +46,7 @@ function UserIdentityBlock({ user, roleLabel, context = 'sidebar' }: UserIdentit
 
   return (
     <>
-      <Avatar className="h-8 w-8 rounded-lg">
+      <Avatar className="size-8 rounded-lg">
         <AvatarFallback className="rounded-lg bg-sidebar-accent text-sm leading-[var(--text-sm--line-height)] font-semibold text-sidebar-foreground">
           {user.avatarInitials}
         </AvatarFallback>

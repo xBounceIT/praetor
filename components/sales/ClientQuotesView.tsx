@@ -77,6 +77,8 @@ export interface ClientQuotesViewProps {
   offers?: ClientOffer[];
 }
 
+const EMPTY_OFFERS: ClientOffer[] = [];
+
 const getDefaultFormData = (): Partial<Quote> => ({
   id: '',
   clientId: '',
@@ -120,7 +122,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   onViewOffers,
   currency,
   // biome-ignore lint/correctness/noUnusedFunctionParameters: part of public API
-  offers = [],
+  offers = EMPTY_OFFERS,
 }) => {
   const { t, i18n } = useTranslation(['sales', 'crm', 'common', 'form']);
 
@@ -202,7 +204,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     [isQuoteExpired, hasOfferForQuote],
   );
 
-  const [formData, setFormData] = useState<Partial<Quote>>(getDefaultFormData());
+  const [formData, setFormData] = useState<Partial<Quote>>(() => getDefaultFormData());
   const [previewVersion, setPreviewVersion] = useState<QuoteVersion | null>(null);
   const baseReadOnly = Boolean(
     editingQuote &&
@@ -774,6 +776,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           type="text"
           readOnly
           value={item.productName || ''}
+          aria-label={t('sales:clientQuotes.selectProduct', { defaultValue: 'Select product' })}
           className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-sm text-zinc-600"
         />
       );
@@ -1107,12 +1110,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               <TooltipTrigger asChild>
                 <span className="inline-flex">
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       if (history) return;
                       openEditModal(row);
                     }}
                     disabled={history}
+                    aria-label={t('sales:clientQuotes.editQuote')}
                     className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
                   >
                     <i className="fa-solid fa-pen-to-square"></i>
@@ -1132,11 +1137,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         // biome-ignore lint/style/noNonNullAssertion: narrowed by truthy guard
                         onViewOffer(row.linkedOfferId!);
                       }}
+                      aria-label={t('sales:clientQuotes.viewOffer', { defaultValue: 'View offer' })}
                       className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
                     >
                       <i className="fa-solid fa-link"></i>
@@ -1153,12 +1160,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         if (isCreateOfferDisabled) return;
                         onCreateOffer(row);
                       }}
                       disabled={isCreateOfferDisabled}
+                      aria-label={createOfferTitle}
                       className={`p-2 rounded-lg transition-all ${isCreateOfferDisabled ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
                     >
                       <i className="fa-solid fa-file-signature"></i>
@@ -1173,12 +1182,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         if (history) return;
                         handleStatusUpdate(row.id, { status: 'sent' });
                       }}
                       disabled={history}
+                      aria-label={t('sales:clientQuotes.markAsSent')}
                       className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-blue-700' : 'text-blue-700 hover:text-blue-600 hover:bg-blue-50'}`}
                     >
                       <i className="fa-solid fa-paper-plane"></i>
@@ -1200,12 +1211,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           if (history) return;
                           handleStatusUpdate(row.id, { status: 'accepted' });
                         }}
                         disabled={history}
+                        aria-label={t('sales:clientQuotes.markAsConfirmed')}
                         className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50'}`}
                       >
                         <i className="fa-solid fa-check"></i>
@@ -1224,12 +1237,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           if (history) return;
                           handleStatusUpdate(row.id, { status: 'denied' });
                         }}
                         disabled={history}
+                        aria-label={t('sales:clientQuotes.markAsDenied')}
                         className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
                       >
                         <i className="fa-solid fa-xmark"></i>
@@ -1251,12 +1266,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         if (isDeleteDisabled) return;
                         confirmDelete(row);
                       }}
                       disabled={isDeleteDisabled}
+                      aria-label={deleteTitle}
                       className={`p-2 text-red-600 rounded-lg transition-all ${isDeleteDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-red-600 hover:bg-red-50'}`}
                     >
                       <i className="fa-solid fa-trash-can"></i>
@@ -1272,12 +1289,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           if (!canRestore) return;
                           handleStatusUpdate(row.id, { status: 'draft', isExpired: false });
                         }}
                         disabled={!canRestore}
+                        aria-label={restoreTitle}
                         className={`p-2 rounded-lg transition-all ${canRestore ? 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50' : 'cursor-not-allowed opacity-50 text-emerald-700'}`}
                       >
                         <i className="fa-solid fa-rotate-left"></i>

@@ -148,6 +148,7 @@ const Login: React.FC<LoginProps> = ({
               <button
                 type="button"
                 onClick={onClearLogoutReason}
+                aria-label={t('common:buttons.close')}
                 className="text-amber-400 hover:text-amber-600 transition-colors"
               >
                 <i className="fa-solid fa-xmark"></i>
@@ -219,6 +220,7 @@ const Login: React.FC<LoginProps> = ({
               }}
               className={`w-full px-3 py-2 text-sm bg-zinc-50 border rounded-xl focus:ring-2 outline-none transition-all font-semibold text-zinc-700 ${fieldErrors.username ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
               placeholder={t('auth:login.username')}
+              aria-label={t('common:labels.username')}
               disabled={isLoading}
             />
             {fieldErrors.username && (
@@ -240,11 +242,15 @@ const Login: React.FC<LoginProps> = ({
                 }}
                 className={`w-full px-3 py-2 text-sm bg-zinc-50 border rounded-xl focus:ring-2 outline-none transition-all pr-9 font-semibold text-zinc-700 ${fieldErrors.password ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
                 placeholder={t('auth:login.password')}
+                aria-label={t('common:labels.password')}
                 disabled={isLoading}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
+                aria-label={t(
+                  showPassword ? 'common:labels.hidePassword' : 'common:labels.showPassword',
+                )}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors p-1"
               >
                 <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>

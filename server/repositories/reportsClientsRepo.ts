@@ -136,7 +136,7 @@ export const getClientsSection = async (
     isDisabled: Boolean(r.is_disabled),
   }));
 
-  const clientIds = items.map((i) => i.id).filter(Boolean);
+  const clientIds = items.flatMap((i) => (i.id ? [i.id] : []));
 
   const activityByClient = new Map<string, ClientActivity>();
   for (const clientId of clientIds) {

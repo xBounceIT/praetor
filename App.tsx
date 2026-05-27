@@ -229,7 +229,7 @@ const TrackerView: React.FC<{
   currency,
 }) => {
   const { t } = useTranslation('timesheets');
-  const [selectedDate, setSelectedDate] = useState<string>(getLocalDateString());
+  const [selectedDate, setSelectedDate] = useState<string>(() => getLocalDateString());
   const [trackerMode, setTrackerMode] = useState<'daily' | 'weekly'>(() => {
     const saved = localStorage.getItem('trackerMode');
     return saved === 'daily' || saved === 'weekly' ? saved : 'daily';
@@ -433,12 +433,14 @@ const TrackerView: React.FC<{
             }`}
           ></div>
           <button
+            type="button"
             onClick={() => setTrackerMode('daily')}
             className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'daily' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >
             {t('tracker.mode.daily')}
           </button>
           <button
+            type="button"
             onClick={() => setTrackerMode('weekly')}
             className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'weekly' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >
@@ -614,6 +616,7 @@ const TrackerView: React.FC<{
 
             <div className="p-4 space-y-3">
               <button
+                type="button"
                 onClick={() => handleRecurringDelete('stop')}
                 className="w-full text-left p-4 rounded-xl border border-zinc-200 hover:border-praetor/30 hover:bg-praetor/5 transition-all group"
               >
@@ -629,6 +632,7 @@ const TrackerView: React.FC<{
               </button>
 
               <button
+                type="button"
                 onClick={() => handleRecurringDelete('delete_future')}
                 className="w-full text-left p-4 rounded-xl border border-zinc-200 hover:border-red-300 hover:bg-red-50 transition-all group"
               >
@@ -644,6 +648,7 @@ const TrackerView: React.FC<{
               </button>
 
               <button
+                type="button"
                 onClick={() => handleRecurringDelete('delete_all')}
                 className="w-full text-left p-4 rounded-xl border border-red-100 bg-red-50/50 hover:bg-red-100 hover:border-red-300 transition-all group"
               >
@@ -659,6 +664,7 @@ const TrackerView: React.FC<{
 
             <div className="p-4 bg-zinc-50 border-t border-zinc-100 text-right">
               <button
+                type="button"
                 onClick={() => setPendingDeleteEntry(null)}
                 className="px-4 py-2 text-sm font-bold text-zinc-500 hover:text-zinc-800 transition-colors"
               >

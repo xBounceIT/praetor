@@ -1130,6 +1130,10 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                       setErrors((prev) => ({ ...prev, tlsCaCertificate: '' }));
                   }}
                   placeholder={`${PEM_BEGIN_MARKER}\nMIIDdzCCAl+gAwIBAgI...\n${PEM_END_MARKER}`}
+                  aria-label={t(
+                    'admin.ldap.tls.caCertificateLabel',
+                    'Custom CA Certificate (Optional)',
+                  )}
                   className={`w-full px-4 py-2.5 bg-zinc-50 border rounded-lg focus:ring-2 outline-none font-mono text-xs leading-relaxed ${errors.tlsCaCertificate ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
                   spellCheck={false}
                 />
@@ -1175,6 +1179,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   type="file"
                   accept=".pem,.crt,.cer,.cert"
                   onChange={handleTlsCaFileImport}
+                  aria-label={t('admin.ldap.tls.importPemFile', 'Import .pem file')}
                   className="hidden"
                 />
               </div>
@@ -1354,6 +1359,7 @@ const Field: React.FC<FieldProps> = ({
       type={type}
       value={value}
       onChange={(event) => onChange(event.target.value)}
+      aria-label={label}
       className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 outline-none text-sm ${monospace ? 'font-mono' : 'font-semibold text-zinc-700'} ${error ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
     />
     {error && <p className="text-red-500 text-[10px] font-bold mt-1">{error}</p>}
@@ -1375,6 +1381,7 @@ const TextArea: React.FC<TextAreaProps> = ({ label, value, onChange }) => (
       value={value}
       onChange={(event) => onChange(event.target.value)}
       rows={5}
+      aria-label={label}
       className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-mono"
     />
   </div>
@@ -1395,6 +1402,7 @@ const ReadOnlyField: React.FC<ReadOnlyFieldProps> = ({ label, value, monospace }
       type="text"
       readOnly
       value={value}
+      aria-label={label}
       className={`w-full px-4 py-2 bg-zinc-100 border border-zinc-200 rounded-lg text-sm text-zinc-500 ${monospace ? 'font-mono' : 'font-semibold'}`}
     />
   </div>
@@ -1455,6 +1463,7 @@ const RoleMappings: React.FC<RoleMappingsProps> = ({
                 value={mapping.externalGroup}
                 onChange={(event) => onChange(index, 'externalGroup', event.target.value)}
                 placeholder={externalPlaceholder}
+                aria-label={externalPlaceholder}
                 className={`w-full px-3 py-2 bg-zinc-50 border rounded-lg text-sm font-mono focus:ring-2 outline-none ${errors[`${errorPrefix}${index}`] ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'focus:ring-praetor border-zinc-200'}`}
               />
               {errors[`${errorPrefix}${index}`] && (

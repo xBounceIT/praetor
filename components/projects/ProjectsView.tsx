@@ -1751,10 +1751,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         <TooltipTrigger asChild>
                           <span className="inline-flex">
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 openAssignments(row.id);
                               }}
+                              aria-label={t('projects:projects.manageMembers')}
                               className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
                             >
                               <i className="fa-solid fa-users"></i>
@@ -1770,10 +1772,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                           <TooltipTrigger asChild>
                             <span className="inline-flex">
                               <button
+                                type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   openEditModal(row);
                                 }}
+                                aria-label={t('projects:projects.editProject')}
                                 className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
                               >
                                 <i className="fa-solid fa-pen-to-square"></i>
@@ -1787,10 +1791,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                             <TooltipTrigger asChild>
                               <span className="inline-flex">
                                 <button
+                                  type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     onUpdateProject(row.id, { isDisabled: false });
                                   }}
+                                  aria-label={t('projects:projects.enableProject')}
                                   className="p-2 text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
                                 >
                                   <i className="fa-solid fa-rotate-left"></i>
@@ -1804,10 +1810,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                             <TooltipTrigger asChild>
                               <span className="inline-flex">
                                 <button
+                                  type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     onUpdateProject(row.id, { isDisabled: true });
                                   }}
+                                  aria-label={t('projects:projects.disableProject')}
                                   className="p-2 text-amber-700 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
                                 >
                                   <i className="fa-solid fa-ban"></i>
@@ -1824,10 +1832,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         <TooltipTrigger asChild>
                           <span className="inline-flex">
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 promptDelete(row);
                               }}
+                              aria-label={t('common:buttons.delete')}
                               className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                             >
                               <i className="fa-solid fa-trash-can"></i>

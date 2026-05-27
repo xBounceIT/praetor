@@ -89,7 +89,7 @@ export const getSuppliersSection = async (
     isDisabled: Boolean(r.is_disabled),
   }));
 
-  const supplierIds = items.map((s) => s.id).filter(Boolean);
+  const supplierIds = items.flatMap((s) => (s.id ? [s.id] : []));
   const activityBySupplier = new Map<string, SupplierActivity>();
   for (const supplierId of supplierIds) {
     activityBySupplier.set(supplierId, {

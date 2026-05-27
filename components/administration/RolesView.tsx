@@ -456,7 +456,7 @@ const RolesView: React.FC<RolesViewProps> = ({
                                 key={action}
                                 className="px-2 py-3 text-center text-muted-foreground/40"
                               >
-                                —
+                                {t('common:table.empty')}
                               </TableCell>
                             );
                           }

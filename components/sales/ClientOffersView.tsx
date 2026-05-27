@@ -230,6 +230,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           type="text"
           readOnly
           value={item.productName || ''}
+          aria-label={t('sales:clientOffers.selectProduct', { defaultValue: 'Select product' })}
           className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-sm text-zinc-600"
         />
       );
@@ -276,7 +277,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isRevertConfirmOpen, setIsRevertConfirmOpen] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [formData, setFormData] = useState<Partial<ClientOffer>>(getDefaultFormData());
+  const [formData, setFormData] = useState<Partial<ClientOffer>>(() => getDefaultFormData());
   const [previewVersion, setPreviewVersion] = useState<OfferVersion | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -640,10 +641,12 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         onViewQuote(row.linkedQuoteId);
                       }}
+                      aria-label={t('sales:clientOffers.viewQuote', { defaultValue: 'View quote' })}
                       className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
                     >
                       <i className="fa-solid fa-link"></i>
@@ -659,10 +662,12 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
               <TooltipTrigger asChild>
                 <span className="inline-flex">
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       openEditModal(row);
                     }}
+                    aria-label={t('common:buttons.edit')}
                     className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
                   >
                     <i className="fa-solid fa-pen-to-square"></i>
@@ -676,10 +681,14 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleStatusUpdate(row.id, { status: 'sent' });
                       }}
+                      aria-label={t('sales:clientOffers.markSent', {
+                        defaultValue: 'Mark as sent',
+                      })}
                       className="p-2 rounded-lg transition-all text-blue-700 hover:text-blue-600 hover:bg-blue-50"
                     >
                       <i className="fa-solid fa-paper-plane"></i>
@@ -697,10 +706,14 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleStatusUpdate(row.id, { status: 'accepted' });
                         }}
+                        aria-label={t('sales:clientOffers.markAccepted', {
+                          defaultValue: 'Mark as accepted',
+                        })}
                         className="p-2 rounded-lg transition-all text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50"
                       >
                         <i className="fa-solid fa-check"></i>
@@ -717,10 +730,14 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleStatusUpdate(row.id, { status: 'denied' });
                         }}
+                        aria-label={t('sales:clientOffers.markDenied', {
+                          defaultValue: 'Mark as denied',
+                        })}
                         className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
                       >
                         <i className="fa-solid fa-xmark"></i>
@@ -738,10 +755,14 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         onCreateClientsOrder(row);
                       }}
+                      aria-label={t('sales:clientOffers.createOrder', {
+                        defaultValue: 'Create sale order',
+                      })}
                       className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
                     >
                       <i className="fa-solid fa-cart-plus"></i>
@@ -792,11 +813,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         setOfferToDelete(row);
                         setIsDeleteConfirmOpen(true);
                       }}
+                      aria-label={t('common:buttons.delete')}
                       className="p-2 text-red-600 rounded-lg transition-all hover:text-red-600 hover:bg-red-50"
                     >
                       <i className="fa-solid fa-trash-can"></i>

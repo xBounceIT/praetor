@@ -19,6 +19,8 @@ import {
 
 type LoadState = 'loading' | 'error' | 'ready';
 
+const EMPTY_ROLES: Role[] = [];
+
 export interface UserAssignmentModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -107,7 +109,7 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
   isOpen,
   onClose,
   users,
-  roles = [],
+  roles = EMPTY_ROLES,
   loadAssignedUserIds,
   saveAssignedUserIds,
   entityLabel,

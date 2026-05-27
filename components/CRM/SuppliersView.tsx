@@ -338,12 +338,16 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
               <TooltipTrigger asChild>
                 <span className="inline-flex">
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!canUpdateSuppliers) return;
                       void handleStatusUpdate(row.id, { isDisabled: !row.isDisabled });
                     }}
                     disabled={!canUpdateSuppliers}
+                    aria-label={
+                      row.isDisabled ? t('common:buttons.enable') : t('crm:suppliers.disable')
+                    }
                     className={`p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                       row.isDisabled
                         ? 'text-praetor hover:bg-zinc-100'
@@ -363,10 +367,12 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         confirmDelete(row);
                       }}
+                      aria-label={t('common:buttons.delete')}
                       className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                     >
                       <i className="fa-solid fa-trash-can"></i>
