@@ -21,6 +21,7 @@ const NotFound: React.FC<NotFoundProps> = ({ onReturn }) => {
       <p className="text-zinc-500 max-w-md mb-8 leading-relaxed">{t('notFound.message')}</p>
 
       <button
+        type="button"
         onClick={onReturn}
         className="px-8 py-3 bg-praetor text-white font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 hover:-translate-y-0.5 transition-all flex items-center gap-2 group"
       >

@@ -876,7 +876,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                             <TooltipTrigger asChild>
                               <span className="inline-flex">
                                 <button
+                                  type="button"
                                   onClick={() => handleEditType(type)}
+                                  aria-label={t('common:buttons.edit')}
                                   className="p-1.5 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
                                 >
                                   <i className="fa-solid fa-pen"></i>
@@ -889,8 +891,10 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                             <TooltipTrigger asChild>
                               <span className="inline-flex">
                                 <button
+                                  type="button"
                                   onClick={() => handleDeleteType(type)}
                                   disabled={isDeleteBlocked}
+                                  aria-label={t('common:buttons.delete')}
                                   className={`p-1.5 rounded-lg transition-colors ${
                                     isDeleteBlocked
                                       ? 'text-zinc-300 cursor-not-allowed'
@@ -1021,7 +1025,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                             <TooltipTrigger asChild>
                               <span className="inline-flex">
                                 <button
+                                  type="button"
                                   onClick={() => handleEditCategory(category)}
+                                  aria-label={t('common:buttons.edit')}
                                   className="p-1.5 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
                                 >
                                   <i className="fa-solid fa-pen"></i>
@@ -1034,8 +1040,10 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                             <TooltipTrigger asChild>
                               <span className="inline-flex">
                                 <button
+                                  type="button"
                                   onClick={() => handleDeleteCategory(category)}
                                   disabled={isDeleteBlocked}
+                                  aria-label={t('common:buttons.delete')}
                                   className={`p-1.5 rounded-lg transition-colors ${
                                     isDeleteBlocked
                                       ? 'text-zinc-300 cursor-not-allowed'
@@ -1171,7 +1179,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                             <TooltipTrigger asChild>
                               <span className="inline-flex">
                                 <button
+                                  type="button"
                                   onClick={() => handleEditSubcategory(subcategory)}
+                                  aria-label={t('common:buttons.edit')}
                                   className="p-1.5 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
                                 >
                                   <i className="fa-solid fa-pen"></i>
@@ -1184,8 +1194,10 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                             <TooltipTrigger asChild>
                               <span className="inline-flex">
                                 <button
+                                  type="button"
                                   onClick={() => handleDeleteSubcategory(subcategory)}
                                   disabled={isDeleteBlocked}
+                                  aria-label={t('common:buttons.delete')}
                                   className={`p-1.5 rounded-lg transition-colors ${
                                     isDeleteBlocked
                                       ? 'text-zinc-300 cursor-not-allowed'
@@ -1649,6 +1661,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           if (p.isDisabled) {
@@ -1657,6 +1670,11 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                             onUpdateProduct(p.id, { isDisabled: true });
                           }
                         }}
+                        aria-label={
+                          p.isDisabled
+                            ? t('crm:internalListing.enableProduct')
+                            : t('crm:internalListing.disableProduct')
+                        }
                         className={`p-2 rounded-lg transition-all ${
                           p.isDisabled
                             ? 'text-praetor hover:bg-emerald-50'
@@ -1677,10 +1695,12 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           confirmDelete(p);
                         }}
+                        aria-label={t('common:buttons.delete')}
                         className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                       >
                         <i className="fa-solid fa-trash-can"></i>

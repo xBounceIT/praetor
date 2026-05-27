@@ -287,7 +287,7 @@ const SearchableSelectControl = ({
               <CommandEmpty>{t('select.noOptions')}</CommandEmpty>
               <CommandGroup>
                 {isMulti && filteredOptions.length > 1 && (
-                  <div className="flex gap-1 border-b border-border px-1 py-1">
+                  <div className="flex gap-1 border-b border-border p-1">
                     <Button
                       type="button"
                       variant="secondary"

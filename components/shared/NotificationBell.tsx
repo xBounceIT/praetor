@@ -101,6 +101,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   return (
     <div className="relative" ref={dropdownRef}>
       <button
+        type="button"
         onClick={handleToggleDropdown}
         className="relative rounded-full p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none"
         aria-label={t('notifications.title', 'Notifications')}
@@ -122,6 +123,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
             </h3>
             {unreadCount > 0 && (
               <button
+                type="button"
                 onClick={() => {
                   onMarkAllAsRead();
                 }}
@@ -180,6 +182,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                           <TooltipTrigger asChild>
                             <span className="inline-flex">
                               <button
+                                type="button"
                                 onClick={(e) => handleDelete(e, notification.id)}
                                 className="flex size-6 flex-shrink-0 items-center justify-center rounded-full text-destructive opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
                                 aria-label={t('notifications.delete', 'Delete notification')}
@@ -211,7 +214,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                           >
                             <ul className="space-y-1 border-l-2 border-border pl-3 text-xs text-muted-foreground">
                               {notification.data.projectNames.map((name, idx) => (
-                                <li key={idx} className="truncate">
+                                <li key={`${name}-${idx}`} className="truncate">
                                   {name}
                                 </li>
                               ))}
@@ -223,6 +226,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                         notification.data?.projectNames &&
                         notification.data.projectNames.length > 0 && (
                           <button
+                            type="button"
                             className="mt-1 flex items-center gap-1 text-xs text-primary hover:text-primary/80"
                             onClick={(e) => {
                               e.stopPropagation();

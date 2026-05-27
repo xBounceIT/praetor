@@ -449,10 +449,12 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
               <TooltipTrigger asChild>
                 <span className="inline-flex">
                   <button
+                    type="button"
                     onClick={(event) => {
                       event.stopPropagation();
                       openEditModal(row);
                     }}
+                    aria-label={t('common:buttons.edit')}
                     className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
                   >
                     <i className="fa-solid fa-pen-to-square"></i>
@@ -465,10 +467,12 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
               <TooltipTrigger asChild>
                 <span className="inline-flex">
                   <button
+                    type="button"
                     onClick={(event) => {
                       event.stopPropagation();
                       confirmDelete(row);
                     }}
+                    aria-label={t('common:buttons.delete')}
                     className="rounded-lg p-2 text-red-600 transition-all hover:bg-red-50 hover:text-red-600"
                   >
                     <i className="fa-solid fa-trash-can"></i>

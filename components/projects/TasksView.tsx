@@ -399,10 +399,12 @@ const TasksView: React.FC<TasksViewProps> = ({
                     <TooltipTrigger asChild>
                       <span className="inline-flex">
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             openAssignments(row.id);
                           }}
+                          aria-label={t('tasks.manageMembers')}
                           className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
                         >
                           <i className="fa-solid fa-users"></i>
@@ -415,10 +417,12 @@ const TasksView: React.FC<TasksViewProps> = ({
                     <TooltipTrigger asChild>
                       <span className="inline-flex">
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             openEditModal(row);
                           }}
+                          aria-label={t('tasks.editTask')}
                           className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
                         >
                           <i className="fa-solid fa-pen-to-square"></i>
@@ -432,10 +436,14 @@ const TasksView: React.FC<TasksViewProps> = ({
                       <TooltipTrigger asChild>
                         <span className="inline-flex">
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               onUpdateTask(row.id, { isDisabled: !isTaskDisabled });
                             }}
+                            aria-label={
+                              isTaskDisabled ? t('tasks.enableTask') : t('tasks.disableTask')
+                            }
                             className={`p-2 rounded-lg transition-all ${
                               isTaskDisabled
                                 ? 'text-praetor hover:bg-zinc-100'
@@ -460,11 +468,13 @@ const TasksView: React.FC<TasksViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           setEditingTask(row);
                           confirmDelete();
                         }}
+                        aria-label={t('common:buttons.delete')}
                         className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                       >
                         <i className="fa-solid fa-trash-can"></i>

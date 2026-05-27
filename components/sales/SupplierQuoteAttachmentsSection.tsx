@@ -235,6 +235,9 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
             type="file"
             accept={ACCEPT_ATTR}
             disabled={isUploading}
+            aria-label={t('sales:supplierQuotes.attachments.dropHere', {
+              defaultValue: 'Drop a file here or click to upload',
+            })}
             className="hidden"
             onChange={handleFileInputChange}
           />

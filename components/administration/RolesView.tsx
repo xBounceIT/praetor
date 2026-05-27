@@ -189,7 +189,7 @@ const RolesView: React.FC<RolesViewProps> = ({
       }
       grouped[definition.module].push(definition);
     });
-    const sortedOrder = [...order].sort((a, b) =>
+    const sortedOrder = order.toSorted((a, b) =>
       t(`layout:modules.${a}`, { defaultValue: toTitleCase(a) }).localeCompare(
         t(`layout:modules.${b}`, { defaultValue: toTitleCase(b) }),
         i18n.language,
@@ -225,7 +225,7 @@ const RolesView: React.FC<RolesViewProps> = ({
   };
 
   const sortedRoles = useMemo(() => {
-    return [...roles].sort((a, b) => a.name.localeCompare(b.name));
+    return roles.toSorted((a, b) => a.name.localeCompare(b.name));
   }, [roles]);
 
   const openCreateModal = () => {
@@ -456,7 +456,7 @@ const RolesView: React.FC<RolesViewProps> = ({
                                 key={action}
                                 className="px-2 py-3 text-center text-muted-foreground/40"
                               >
-                                —
+                                –
                               </TableCell>
                             );
                           }

@@ -94,6 +94,7 @@ const SecretField: React.FC<SecretFieldProps> = ({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           rows={5}
+          aria-label={label}
           className={baseClass}
           data-testid={testId ? `${testId}-input` : undefined}
         />
@@ -102,6 +103,7 @@ const SecretField: React.FC<SecretFieldProps> = ({
           type="password"
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          aria-label={label}
           className={baseClass}
           data-testid={testId ? `${testId}-input` : undefined}
         />

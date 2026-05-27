@@ -6,6 +6,8 @@ export interface CheckboxProps {
   disabled?: boolean;
   indeterminate?: boolean;
   size?: 'sm' | 'md';
+  'aria-label'?: string;
+  'aria-labelledby'?: string;
 }
 
 const Checkbox: React.FC<CheckboxProps> = ({
@@ -14,6 +16,8 @@ const Checkbox: React.FC<CheckboxProps> = ({
   disabled = false,
   indeterminate = false,
   size = 'md',
+  'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledBy,
 }) => {
   const sizeClasses = size === 'sm' ? 'size-3.5' : 'size-5';
   const checkmarkSizeClasses = size === 'sm' ? 'size-2' : 'size-3';
@@ -28,6 +32,8 @@ const Checkbox: React.FC<CheckboxProps> = ({
         checked={checked}
         onChange={onChange}
         disabled={disabled}
+        aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledBy}
         className="peer sr-only"
       />
       <div

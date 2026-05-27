@@ -748,7 +748,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const sortedUsers = React.useMemo(
     () =>
-      [...users].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
+      users.toSorted((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
     [users],
   );
 
@@ -1026,12 +1026,14 @@ const UserManagement: React.FC<UserManagementProps> = ({
             </div>
             <div className="flex gap-3 pt-2">
               <button
+                type="button"
                 onClick={cancelDelete}
                 className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
+                type="button"
                 onClick={handleDelete}
                 className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
               >
@@ -1160,6 +1162,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         setEditFormErrors((prev) => ({ ...prev, firstName: '' }));
                       }
                     }}
+                    aria-label={t('hr:workforce.name')}
                     className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
                       editFormErrors.firstName ? 'border-red-400' : 'border-zinc-200'
                     }`}
@@ -1181,6 +1184,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         setEditFormErrors((prev) => ({ ...prev, surname: '' }));
                       }
                     }}
+                    aria-label={t('hr:workforce.surname')}
                     className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
                       editFormErrors.surname ? 'border-red-400' : 'border-zinc-200'
                     }`}
@@ -1205,6 +1209,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     }
                   }}
                   placeholder="e.g. alice.smith@example.com"
+                  aria-label={t('common:labels.email')}
                   className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
                     editFormErrors.email ? 'border-red-400' : 'border-zinc-200'
                   }`}
@@ -1270,10 +1275,10 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
                       <SelectControl
                         label={t('hr:workforce.primaryRole')}
-                        options={editAssignedRoleIds
-                          .map((id) => roles.find((r) => r.id === id))
-                          .filter(Boolean)
-                          .map((r) => ({ id: (r as Role).id, name: (r as Role).name }))}
+                        options={editAssignedRoleIds.flatMap((id) => {
+                          const role = roles.find((r) => r.id === id);
+                          return role ? [{ id: role.id, name: role.name }] : [];
+                        })}
                         value={editPrimaryRoleId}
                         onChange={(val) => setEditPrimaryRoleId(val as string)}
                         buttonClassName="py-2 text-sm"
@@ -1340,12 +1345,14 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
             <div className="flex gap-3 pt-2">
               <button
+                type="button"
                 onClick={closeEditModal}
                 className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
               >
                 {t('common:buttons.cancel')}
               </button>
               <button
+                type="button"
                 onClick={saveEdit}
                 disabled={!hasEditChanges}
                 className={`flex-1 py-3 text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 text-white ${!hasEditChanges ? 'bg-zinc-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-zinc-200 hover:bg-zinc-800'}`}
@@ -1583,7 +1590,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
               {t('hr:workforce.manageAccess', { name: managingUser?.name })}
             </h3>
             <button
+              type="button"
               onClick={closeAssignments}
+              aria-label={t('common:buttons.close')}
               className="text-zinc-400 hover:text-zinc-600 transition-colors"
             >
               <i className="fa-solid fa-xmark text-xl"></i>
@@ -1634,6 +1643,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                       <input
                         type="text"
                         placeholder={t('hr:workforce.searchClients')}
+                        aria-label={t('hr:workforce.searchClients')}
                         value={clientSearch}
                         onChange={(e) => setClientSearch(e.target.value)}
                         className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
@@ -1654,6 +1664,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                               type="checkbox"
                               checked={assignments.clientIds.includes(client.id)}
                               onChange={() => toggleAssignment('client', client.id)}
+                              aria-label={client.name}
                               className="sr-only peer"
                             />
                             <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
@@ -1691,6 +1702,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                       <input
                         type="text"
                         placeholder="Search projects..."
+                        aria-label="Search projects"
                         value={projectSearch}
                         onChange={(e) => setProjectSearch(e.target.value)}
                         className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
@@ -1711,6 +1723,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                               type="checkbox"
                               checked={assignments.projectIds.includes(project.id)}
                               onChange={() => toggleAssignment('project', project.id)}
+                              aria-label={project.name}
                               className="sr-only peer"
                             />
                             <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
@@ -1754,6 +1767,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         <input
                           type="text"
                           placeholder="Search tasks..."
+                          aria-label="Search tasks"
                           value={taskSearch}
                           onChange={(e) => setTaskSearch(e.target.value)}
                           className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
@@ -1776,6 +1790,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                   type="checkbox"
                                   checked={assignments.taskIds.includes(task.id)}
                                   onChange={() => toggleAssignment('task', task.id)}
+                                  aria-label={task.name}
                                   className="sr-only peer"
                                 />
                                 <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
@@ -1812,12 +1827,14 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
           <div className="p-6 border-t border-zinc-200 bg-zinc-50 flex justify-end gap-3">
             <button
+              type="button"
               onClick={closeAssignments}
               className="px-4 py-2 text-zinc-600 font-bold hover:bg-zinc-200 rounded-lg transition-colors text-sm"
             >
               {t('common:buttons.cancel')}
             </button>
             <button
+              type="button"
               onClick={saveAssignments}
               disabled={JSON.stringify(assignments) === JSON.stringify(initialAssignments)}
               className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${JSON.stringify(assignments) === JSON.stringify(initialAssignments) ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200' : 'bg-praetor text-white hover:bg-zinc-800'}`}

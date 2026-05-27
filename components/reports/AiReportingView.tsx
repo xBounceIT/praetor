@@ -53,8 +53,10 @@ const normalizeTableCellText = (value: string) =>
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
     .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
+    .flatMap((line) => {
+      const trimmed = line.trim();
+      return trimmed ? [trimmed] : [];
+    })
     .join(' <br> ')
     .replace(/\\/g, '\\\\')
     .replace(/\|/g, '\\|');
@@ -1379,6 +1381,9 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                   value={editingDraft}
                                   onChange={(e) => setEditingDraft(e.target.value)}
                                   rows={3}
+                                  aria-label={t('aiReporting.editMessage', {
+                                    defaultValue: 'Edit message',
+                                  })}
                                   className="w-full resize-none bg-transparent outline-none text-sm leading-relaxed text-zinc-800"
                                   onKeyDown={(e) => {
                                     if (e.key === 'Escape') {
@@ -1831,6 +1836,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                         value={draft}
                         onChange={(e) => setDraft(e.target.value)}
                         placeholder={t('aiReporting.placeholder')}
+                        aria-label={t('aiReporting.placeholder')}
                         disabled={!canSend || isSending}
                         rows={1}
                         onKeyDown={(e) => {

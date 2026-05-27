@@ -26,6 +26,8 @@ const MONTH_KEYS = [
 const DAY_KEYS_MONDAY_FIRST = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 const DAY_KEYS_SUNDAY_FIRST = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
+const EMPTY_ENTRIES: TimeEntry[] = [];
+
 export interface CalendarProps {
   // Original props
   selectedDate?: string;
@@ -52,7 +54,7 @@ export interface CalendarProps {
 const Calendar: React.FC<CalendarProps> = ({
   selectedDate,
   onDateSelect,
-  entries = [],
+  entries = EMPTY_ENTRIES,
   startOfWeek = 'Monday',
   treatSaturdayAsHoliday = false,
   dailyGoal = 0,

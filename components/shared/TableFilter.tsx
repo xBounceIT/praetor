@@ -65,7 +65,12 @@ const TableFilter: React.FC<TableFilterProps> = ({
         <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
           {title}
         </span>
-        <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 text-xs">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={t('buttons.close')}
+          className="text-zinc-400 hover:text-zinc-600 text-xs"
+        >
           <i className="fa-solid fa-xmark"></i>
         </button>
       </div>
@@ -73,6 +78,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
       {/* Sort Options - Excel Style */}
       <div className="border-b border-zinc-100">
         <button
+          type="button"
           onClick={() => onSortChange('asc')}
           className={`w-full px-3 py-2 text-left text-[11px] font-semibold transition-colors flex items-center gap-2 ${
             sortDirection === 'asc' ? 'bg-zinc-100 text-praetor' : 'text-zinc-700 hover:bg-zinc-50'
@@ -82,6 +88,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
           <span>{t('table.sortAsc')}</span>
         </button>
         <button
+          type="button"
           onClick={() => onSortChange('desc')}
           className={`w-full px-3 py-2 text-left text-[11px] font-semibold transition-colors flex items-center gap-2 border-t border-zinc-100 ${
             sortDirection === 'desc' ? 'bg-zinc-100 text-praetor' : 'text-zinc-700 hover:bg-zinc-50'
@@ -101,6 +108,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder={t('table.search')}
+            aria-label={t('table.search')}
             className="w-full pl-6 pr-2 py-1.5 bg-zinc-50 border border-zinc-200 focus:border-praetor rounded-lg text-[11px] outline-none transition-none"
           />
         </div>
@@ -149,6 +157,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
 
       <div className="p-2 border-t border-zinc-100">
         <button
+          type="button"
           onClick={() => {
             onFilterChange([]);
           }}

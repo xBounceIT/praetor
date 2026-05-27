@@ -377,7 +377,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
         setEditingContactIndex(null);
         setContactDraftError(null);
       } else if (editingContactIndex !== null && editingContactIndex > index) {
-        setEditingContactIndex(editingContactIndex - 1);
+        setEditingContactIndex((prev) => (prev === null ? null : prev - 1));
       }
     },
     [editingContactIndex, setContacts],
@@ -650,6 +650,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       e.stopPropagation();
                       editContact(row.contactIndex);
                     }}
+                    aria-label={t('common:buttons.edit')}
                     className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
                   >
                     <i className="fa-solid fa-pen"></i>
@@ -667,6 +668,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       e.stopPropagation();
                       removeContact(row.contactIndex);
                     }}
+                    aria-label={t('common:buttons.delete')}
                     className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                   >
                     <i className="fa-solid fa-trash"></i>
@@ -871,10 +873,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         openEditModal(row);
                       }}
+                      aria-label={t('common:buttons.edit')}
                       className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
                     >
                       <i className="fa-solid fa-pen"></i>
@@ -888,12 +892,16 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               <TooltipTrigger asChild>
                 <span className="inline-flex">
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!canUpdateClients) return;
                       onUpdateClient(row.id, { isDisabled: !row.isDisabled });
                     }}
                     disabled={!canUpdateClients}
+                    aria-label={
+                      row.isDisabled ? t('common:buttons.enable') : t('crm:clients.disableClient')
+                    }
                     className={`p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                       row.isDisabled
                         ? 'text-praetor hover:bg-zinc-100'
@@ -913,10 +921,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         confirmDelete(row);
                       }}
+                      aria-label={t('common:buttons.delete')}
                       className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                     >
                       <i className="fa-solid fa-trash-can"></i>
@@ -1059,7 +1069,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                             <TooltipTrigger asChild>
                               <span className="inline-flex">
                                 <button
+                                  type="button"
                                   onClick={() => handleEditProfileOption(option)}
+                                  aria-label={t('common:buttons.edit')}
                                   className="p-1.5 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
                                 >
                                   <i className="fa-solid fa-pen"></i>
@@ -1072,8 +1084,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                             <TooltipTrigger asChild>
                               <span className="inline-flex">
                                 <button
+                                  type="button"
                                   onClick={() => void handleDeleteProfileOption(option)}
                                   disabled={isDeleteBlocked}
+                                  aria-label={t('common:buttons.delete')}
                                   className={`p-1.5 rounded-lg transition-colors ${
                                     isDeleteBlocked
                                       ? 'text-zinc-300 cursor-not-allowed'

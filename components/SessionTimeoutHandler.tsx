@@ -107,6 +107,7 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
 
           <div className="flex flex-col gap-3">
             <button
+              type="button"
               onClick={handleStayLoggedIn}
               disabled={isRefreshing}
               className="w-full py-4 bg-praetor text-white rounded-2xl font-bold hover:shadow-lg hover:shadow-praetor/30 transition-all flex items-center justify-center gap-2 group"
@@ -120,6 +121,7 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
             </button>
 
             <button
+              type="button"
               onClick={onLogout}
               className="w-full py-4 bg-zinc-50 text-zinc-500 rounded-2xl font-bold hover:bg-zinc-100 transition-colors"
             >

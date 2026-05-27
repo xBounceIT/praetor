@@ -64,10 +64,7 @@ function FieldError({
   errors?: Array<{ message?: string } | undefined>;
 }) {
   const body = errors?.length
-    ? errors
-        .map((error) => error?.message)
-        .filter(Boolean)
-        .join(', ')
+    ? errors.flatMap((error) => (error?.message ? [error.message] : [])).join(', ')
     : children;
 
   if (!body) return null;

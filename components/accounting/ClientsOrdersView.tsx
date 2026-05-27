@@ -614,10 +614,12 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         onViewOffer(row.linkedOfferId as string);
                       }}
+                      aria-label={t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })}
                       className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
                     >
                       <i className="fa-solid fa-link"></i>
@@ -633,10 +635,16 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
               <TooltipTrigger asChild>
                 <span className="inline-flex">
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       openEditModal(row);
                     }}
+                    aria-label={
+                      row.status === 'draft'
+                        ? t('accounting:clientsOrders.editOrder')
+                        : t('accounting:clientsOrders.viewOrder')
+                    }
                     className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
                   >
                     <i
@@ -657,10 +665,12 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           void handleStatusUpdate(row.id, { status: 'confirmed' });
                         }}
+                        aria-label={t('accounting:clientsOrders.markAsConfirmed')}
                         className="p-2 text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
                       >
                         <i className="fa-solid fa-check"></i>
@@ -673,10 +683,12 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           void handleStatusUpdate(row.id, { status: 'denied' });
                         }}
+                        aria-label={t('accounting:clientsOrders.markAsDenied')}
                         className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                       >
                         <i className="fa-solid fa-xmark"></i>
@@ -689,10 +701,12 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           confirmDelete(row);
                         }}
+                        aria-label={t('accounting:clientsOrders.deleteOrder')}
                         className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                       >
                         <i className="fa-solid fa-trash-can"></i>

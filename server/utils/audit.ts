@@ -82,9 +82,8 @@ export const getAuditChangedFields = (
 ): string[] | undefined => {
   const excluded = new Set([...SENSITIVE_AUDIT_FIELDS, ...(options.exclude ?? [])]);
   const changedFields = Object.entries(input)
-    .filter(([key, value]) => value !== undefined && !excluded.has(key))
-    .map(([key]) => key)
-    .sort((left, right) => left.localeCompare(right));
+    .flatMap(([key, value]) => (value !== undefined && !excluded.has(key) ? [key] : []))
+    .toSorted((left, right) => left.localeCompare(right));
 
   return changedFields.length > 0 ? changedFields : undefined;
 };
@@ -120,10 +119,12 @@ const normalizeAuditDetails = (details?: AuditLogDetails): AuditLogDetails | nul
 
   const changedFields =
     details.changedFields
-      ?.filter((field) => field && !SENSITIVE_AUDIT_FIELDS.has(field))
-      .map((field) => field.trim())
-      .filter(Boolean)
-      .sort((left, right) => left.localeCompare(right)) ?? [];
+      ?.flatMap((field) => {
+        if (!field || SENSITIVE_AUDIT_FIELDS.has(field)) return [];
+        const trimmed = field.trim();
+        return trimmed ? [trimmed] : [];
+      })
+      .toSorted((left, right) => left.localeCompare(right)) ?? [];
 
   const counts = details.counts
     ? Object.fromEntries(

@@ -129,7 +129,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [formData, setFormData] = useState<Partial<SupplierQuote>>(getDefaultFormData());
+  const [formData, setFormData] = useState<Partial<SupplierQuote>>(() => getDefaultFormData());
   const [previewVersion, setPreviewVersion] = useState<SupplierQuoteVersion | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -459,10 +459,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(event) => {
                           event.stopPropagation();
                           onViewOrders(row.id);
                         }}
+                        aria-label={t('sales:supplierQuotes.viewOrder', {
+                          defaultValue: 'View order',
+                        })}
                         className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
                       >
                         <i className="fa-solid fa-link"></i>
@@ -478,12 +482,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
                     <button
+                      type="button"
                       onClick={(event) => {
                         event.stopPropagation();
                         if (isEditDisabled) return;
                         openEditModal(row);
                       }}
                       disabled={isEditDisabled}
+                      aria-label={editTitle}
                       className={`p-2 rounded-lg transition-all ${isEditDisabled ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
                     >
                       <i
@@ -499,10 +505,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(event) => {
                           event.stopPropagation();
                           handleStatusUpdate(row.id, { status: 'sent' });
                         }}
+                        aria-label={t('sales:supplierQuotes.markSent', {
+                          defaultValue: 'Mark as sent',
+                        })}
                         className="p-2 rounded-lg transition-all text-blue-700 hover:text-blue-600 hover:bg-blue-50"
                       >
                         <i className="fa-solid fa-paper-plane"></i>
@@ -520,10 +530,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     <TooltipTrigger asChild>
                       <span className="inline-flex">
                         <button
+                          type="button"
                           onClick={(event) => {
                             event.stopPropagation();
                             handleStatusUpdate(row.id, { status: 'accepted' });
                           }}
+                          aria-label={t('sales:supplierQuotes.markAccepted', {
+                            defaultValue: 'Mark as accepted',
+                          })}
                           className="p-2 rounded-lg transition-all text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50"
                         >
                           <i className="fa-solid fa-check"></i>
@@ -540,10 +554,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                     <TooltipTrigger asChild>
                       <span className="inline-flex">
                         <button
+                          type="button"
                           onClick={(event) => {
                             event.stopPropagation();
                             handleStatusUpdate(row.id, { status: 'denied' });
                           }}
+                          aria-label={t('sales:supplierQuotes.markDenied', {
+                            defaultValue: 'Mark as denied',
+                          })}
                           className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
                         >
                           <i className="fa-solid fa-xmark"></i>
@@ -563,12 +581,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(event) => {
                           event.stopPropagation();
                           if (isCreateOrderDisabled) return;
                           onCreateOrder(row);
                         }}
                         disabled={isCreateOrderDisabled}
+                        aria-label={createOrderTitle}
                         className={`p-2 rounded-lg transition-all ${isCreateOrderDisabled ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
                       >
                         <i className="fa-solid fa-cart-shopping"></i>
@@ -583,11 +603,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(event) => {
                           event.stopPropagation();
                           setQuoteToDelete(row);
                           setIsDeleteConfirmOpen(true);
                         }}
+                        aria-label={t('common:buttons.delete', { defaultValue: 'Delete' })}
                         className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
                       >
                         <i className="fa-solid fa-trash-can"></i>
@@ -604,12 +626,22 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
                       <button
+                        type="button"
                         onClick={(event) => {
                           event.stopPropagation();
                           if (hasOrder) return;
                           handleStatusUpdate(row.id, { status: 'draft' });
                         }}
                         disabled={hasOrder}
+                        aria-label={
+                          hasOrder
+                            ? t('sales:supplierQuotes.orderAlreadyExists', {
+                                defaultValue: 'An order for this quote already exists.',
+                              })
+                            : t('sales:supplierQuotes.restoreQuote', {
+                                defaultValue: 'Restore quote',
+                              })
+                        }
                         className={`p-2 rounded-lg transition-all ${hasOrder ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'}`}
                       >
                         <i className="fa-solid fa-rotate-left"></i>

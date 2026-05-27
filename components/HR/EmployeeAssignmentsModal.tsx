@@ -348,7 +348,12 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
           <h3 className="font-semibold text-lg text-zinc-800">
             {t('hr:workforce.manageAccess', { name: user.name })}
           </h3>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 transition-colors">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('common:buttons.close')}
+            className="text-zinc-400 hover:text-zinc-600 transition-colors"
+          >
             <i className="fa-solid fa-xmark text-xl"></i>
           </button>
         </div>
@@ -401,6 +406,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                     <input
                       type="text"
                       placeholder={t('hr:workforce.searchClients')}
+                      aria-label={t('hr:workforce.searchClients')}
                       value={clientSearch}
                       onChange={(event) => setClientSearch(event.target.value)}
                       className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
@@ -421,6 +427,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                             type="checkbox"
                             checked={assignments.clientIds.includes(client.id)}
                             onChange={() => toggleAssignment('client', client.id)}
+                            aria-label={client.name}
                             className="sr-only peer"
                           />
                           <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
@@ -465,6 +472,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                     <input
                       type="text"
                       placeholder={t('hr:workforce.searchProjects')}
+                      aria-label={t('hr:workforce.searchProjects')}
                       value={projectSearch}
                       onChange={(event) => setProjectSearch(event.target.value)}
                       className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
@@ -485,6 +493,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                             type="checkbox"
                             checked={assignments.projectIds.includes(project.id)}
                             onChange={() => toggleAssignment('project', project.id)}
+                            aria-label={project.name}
                             className="sr-only peer"
                           />
                           <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
@@ -535,6 +544,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                     <input
                       type="text"
                       placeholder={t('hr:workforce.searchTasks')}
+                      aria-label={t('hr:workforce.searchTasks')}
                       value={taskSearch}
                       onChange={(event) => setTaskSearch(event.target.value)}
                       className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
@@ -557,6 +567,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                               type="checkbox"
                               checked={assignments.taskIds.includes(task.id)}
                               onChange={() => toggleAssignment('task', task.id)}
+                              aria-label={task.name}
                               className="sr-only peer"
                             />
                             <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
@@ -600,12 +611,14 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
 
         <div className="p-6 border-t border-zinc-200 bg-zinc-50 flex justify-end gap-3">
           <button
+            type="button"
             onClick={onClose}
             className="px-4 py-2 text-zinc-600 font-bold hover:bg-zinc-200 rounded-lg transition-colors text-sm"
           >
             {t('common:buttons.cancel')}
           </button>
           <button
+            type="button"
             onClick={saveAssignments}
             disabled={!isDirty || loadFailed}
             className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${

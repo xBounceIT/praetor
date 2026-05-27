@@ -268,7 +268,9 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                       <TooltipTrigger asChild>
                         <span className="inline-flex">
                           <button
+                            type="button"
                             onClick={() => openEditModal(unit)}
+                            aria-label={t('common:buttons.edit')}
                             className="size-8 rounded-lg bg-zinc-50 text-zinc-400 hover:text-praetor hover:bg-zinc-100 flex items-center justify-center transition-colors"
                           >
                             <i className="fa-solid fa-pen"></i>
@@ -283,7 +285,9 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                       <TooltipTrigger asChild>
                         <span className="inline-flex">
                           <button
+                            type="button"
                             onClick={() => confirmDelete(unit)}
+                            aria-label={t('common:buttons.delete')}
                             className="size-8 rounded-lg bg-zinc-50 text-red-600 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
                           >
                             <i className="fa-solid fa-trash-can"></i>
@@ -346,6 +350,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                 </div>
                 {canManageMembers && (
                   <button
+                    type="button"
                     onClick={() => openAssignments(unit)}
                     className="text-xs font-bold text-praetor hover:text-zinc-700 bg-zinc-100 hover:bg-zinc-200 px-3 py-1.5 rounded-lg transition-colors"
                   >
@@ -396,6 +401,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               type="button"
               onClick={requestCloseCreateModal}
               disabled={isSubmitting}
+              aria-label={t('common:buttons.close')}
               className="text-zinc-400 hover:text-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <i className="fa-solid fa-xmark text-xl"></i>
@@ -413,6 +419,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                   setName(e.target.value);
                   if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
                 }}
+                aria-label={t('hr:competenceCenters.unitName')}
                 className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 outline-none font-semibold text-zinc-700 ${errors.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
                 required
               />
@@ -445,6 +452,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
+                aria-label={t('hr:competenceCenters.description')}
                 className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-medium text-zinc-600 min-h-25"
               />
             </div>
@@ -480,6 +488,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               type="button"
               onClick={requestCloseEditModal}
               disabled={isSubmitting}
+              aria-label={t('common:buttons.close')}
               className="text-zinc-400 hover:text-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <i className="fa-solid fa-xmark text-xl"></i>
@@ -497,6 +506,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                   setName(e.target.value);
                   if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
                 }}
+                aria-label={t('hr:competenceCenters.unitName')}
                 className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 outline-none font-semibold text-zinc-700 ${errors.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
                 required
               />
@@ -529,6 +539,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
+                aria-label={t('hr:competenceCenters.description')}
                 className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-medium text-zinc-600 min-h-25"
               />
             </div>
@@ -569,6 +580,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
               type="button"
               onClick={requestCloseAssignmentModal}
               disabled={isSavingAssignments}
+              aria-label={t('common:buttons.close')}
               className="text-zinc-400 hover:text-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <i className="fa-solid fa-xmark text-xl"></i>
@@ -579,6 +591,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
             <input
               type="text"
               placeholder={t('hr:competenceCenters.searchUsers')}
+              aria-label={t('hr:competenceCenters.searchUsers')}
               value={assignmentSearch}
               onChange={(e) => setAssignmentSearch(e.target.value)}
               className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none"

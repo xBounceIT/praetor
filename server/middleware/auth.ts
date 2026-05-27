@@ -320,7 +320,7 @@ const denyForbidden = async (
     details: {
       targetLabel: routeLabel,
       secondaryLabel: reason,
-      changedFields: [...required].sort(),
+      changedFields: required.toSorted(),
     },
   });
   return reply.code(403).send({ error: 'Insufficient permissions' });
