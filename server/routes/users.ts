@@ -26,7 +26,6 @@ import { generatePrefixedId } from '../utils/order-ids.ts';
 import {
   ADMIN_ROLE_ID,
   requestHasPermission as hasPermission,
-  hasScopedActionPermission,
   TOP_MANAGER_ROLE_ID,
 } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -282,14 +281,15 @@ const maskUserResponse = (
   costPerHour: canViewCosts ? user.costPerHour : 0,
 });
 
-// Cost visibility per row:
-//   - hr.costs_all.view  → see every user's costPerHour
-//   - hr.costs.view      → see only your own costPerHour (read-only counterpart of hr.costs.update)
-//   - neither            → 0
+// Cost visibility per row — the two scopes are strictly independent:
+//   - own row    → hr.costs.view       (personal-scope, read-only counterpart of hr.costs.update)
+//   - other row  → hr.costs_all.view   (others-scope, intentionally does NOT subsume own)
+// A role wanting to see every user's cost must hold BOTH grants; the default
+// manager/top_manager roles do (see migration 0055).
 const canViewCostFor = (request: FastifyRequest, targetUserId: string | null | undefined) => {
-  if (hasPermission(request, 'hr.costs_all.view')) return true;
-  if (!targetUserId || targetUserId !== request.user?.id) return false;
-  return hasPermission(request, 'hr.costs.view');
+  if (!targetUserId) return false;
+  if (targetUserId === request.user?.id) return hasPermission(request, 'hr.costs.view');
+  return hasPermission(request, 'hr.costs_all.view');
 };
 
 const ensureSubmittedAssignmentsInScope = async (
@@ -701,8 +701,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       if (costPerHour !== undefined) {
+        // Strict self/other split: self-edit needs hr.costs.update; cross-user
+        // edit needs hr.costs_all.update. The all-scope grant intentionally
+        // does NOT cover self anymore — see canViewCostFor for the symmetric
+        // view-side rule.
         const canEditCost = isSelf
-          ? hasScopedActionPermission(request.user?.permissions, 'hr.costs', 'update')
+          ? hasPermission(request, 'hr.costs.update')
           : hasPermission(request, 'hr.costs_all.update');
         if (canEditCost) {
           const costPerHourResult = optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour');
@@ -739,7 +743,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // `hr.costs_all.update` for cross-user edit) can update costPerHour even
       // without the broader per-employee-type update grant — but only when
       // costPerHour is the sole field being touched. Other fields fall through
-      // to the standard permission check below.
+      // to the standard permission check below. Mirrors the strict self/other
+      // split in the costPerHour-applying branch above.
       const onlyEditingCost =
         costPerHour !== undefined &&
         name === undefined &&
@@ -747,7 +752,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         isDisabled === undefined &&
         role === undefined;
       const hasCostEditGrant = isSelf
-        ? hasScopedActionPermission(request.user?.permissions, 'hr.costs', 'update')
+        ? hasPermission(request, 'hr.costs.update')
         : hasPermission(request, 'hr.costs_all.update');
       const isCostOnlyEdit = onlyEditingCost && hasCostEditGrant;
 

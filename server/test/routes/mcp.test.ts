@@ -629,6 +629,64 @@ describe('/api/mcp', () => {
     expect(body.result.structuredContent.scope.includesCosts).toBe(false);
   });
 
+  test('hr.costs_all.view (without hr.costs.view) → other rows visible, own row masked', async () => {
+    // Symmetric regression for the explicit-split semantics on the MCP tool:
+    // hr.costs_all.view alone is strictly cross-user and does NOT cover own
+    // cost. To see every cost (including own), a role must hold BOTH grants.
+    currentPermissions = ['timesheets.tracker.view', 'hr.work_units.view', 'hr.costs_all.view'];
+    usersListScopedForManagerMock.mockResolvedValue([
+      {
+        id: 'u1', // Alice (the authenticated MCP user)
+        name: 'Alice',
+        username: 'alice',
+        email: 'alice@example.com',
+        role: 'user',
+        avatarInitials: 'AL',
+        costPerHour: 42,
+        isDisabled: false,
+        employeeType: 'app_user',
+        hasTopManagerRole: false,
+        isAdminOnly: false,
+      },
+      {
+        id: 'u2',
+        name: 'Bob',
+        username: 'bob',
+        email: 'bob@example.com',
+        role: 'user',
+        avatarInitials: 'BO',
+        costPerHour: 99,
+        isDisabled: false,
+        employeeType: 'app_user',
+        hasTopManagerRole: false,
+        isAdminOnly: false,
+      },
+    ]);
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'tools/call',
+      params: { name: 'praetor_get_users_hierarchy', arguments: {} },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = parseMcpBody(res.body);
+    const users = body.result.structuredContent.users as Array<{
+      id: string;
+      costPerHour: number;
+    }>;
+    const own = users.find((u) => u.id === 'u1');
+    const other = users.find((u) => u.id === 'u2');
+    expect(own?.costPerHour).toBe(0);
+    expect(other?.costPerHour).toBe(99);
+    // `scope.includesCosts=true` is still correct here: the meaning is "every
+    // cost the response can include is included", and with hr.costs_all.view
+    // every cross-user cost is unmasked. The own-row mask is the strict
+    // application of "all-scope does not subsume self".
+    expect(body.result.structuredContent.scope.includesCosts).toBe(true);
+  });
+
   test('returns all users and work units when hierarchy permissions allow it', async () => {
     currentPermissions = [
       'administration.user_management_all.view',

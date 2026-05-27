@@ -219,7 +219,15 @@ const UserManagement: React.FC<UserManagementProps> = ({
     permissions,
     buildPermission('administration.user_management', 'delete'),
   );
-  const canViewCosts = hasPermission(permissions, buildPermission('hr.costs_all', 'view'));
+  // Column-visibility flag: show the costPerHour column if the caller has at
+  // least one of the cost-view grants. With the explicit self/other split, the
+  // API masks per row — a user with only `hr.costs.view` sees their own cost
+  // populated and others as 0; a user with only `hr.costs_all.view` sees the
+  // reverse. Hiding the column entirely is only correct when neither grant is
+  // held.
+  const canViewOwnCost = hasPermission(permissions, buildPermission('hr.costs', 'view'));
+  const canViewAllCosts = hasPermission(permissions, buildPermission('hr.costs_all', 'view'));
+  const canViewCosts = canViewOwnCost || canViewAllCosts;
   const canUpdateAllCosts = hasPermission(permissions, buildPermission('hr.costs_all', 'update'));
   const canUpdateOwnCost = hasPermission(permissions, buildPermission('hr.costs', 'update'));
   const canEditCostFor = (targetUserId: string) =>

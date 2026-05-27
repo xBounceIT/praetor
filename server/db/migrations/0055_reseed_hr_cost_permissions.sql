@@ -48,8 +48,10 @@ WHERE role_id = 'manager' AND permission = 'hr.costs_all.update';
 INSERT INTO role_permissions (role_id, permission)
 SELECT r.id, p.permission
 FROM (VALUES
+    ('manager', 'hr.costs.view'),
     ('manager', 'hr.costs_all.view'),
     ('manager', 'hr.costs.update'),
+    ('top_manager', 'hr.costs.view'),
     ('top_manager', 'hr.costs_all.view'),
     ('top_manager', 'hr.costs_all.update'),
     ('top_manager', 'hr.costs.update')
