@@ -20,8 +20,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import {
   type ChartConfig,
   ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
@@ -1274,34 +1272,43 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             ) : hoursByUser.length === 0 || hoursByUser.every((r) => r.hours === 0) ? (
               <ChartEmpty />
             ) : (
-              <ChartContainer
-                config={hoursByUserConfig}
-                className="mx-auto aspect-square max-h-[260px]"
-              >
-                <PieChart>
-                  <ChartTooltip content={<ChartTooltipContent nameKey="userId" />} />
-                  <Pie
-                    data={hoursByUser}
-                    dataKey="hours"
-                    nameKey="userId"
-                    innerRadius={50}
-                    strokeWidth={2}
-                  >
-                    {hoursByUser.map((row, idx) => (
-                      <Cell
-                        key={row.userId}
-                        fill={`var(--color-${row.userId})`}
-                        name={row.userName}
-                        data-idx={idx}
-                      />
-                    ))}
-                  </Pie>
-                  <ChartLegend
-                    content={<ChartLegendContent nameKey="userId" />}
-                    verticalAlign="bottom"
-                  />
-                </PieChart>
-              </ChartContainer>
+              <div className="flex items-center gap-4">
+                <ChartContainer
+                  config={hoursByUserConfig}
+                  className="aspect-square max-h-[220px] shrink-0"
+                >
+                  <PieChart>
+                    <ChartTooltip content={<ChartTooltipContent nameKey="userId" />} />
+                    <Pie
+                      data={hoursByUser}
+                      dataKey="hours"
+                      nameKey="userId"
+                      innerRadius={50}
+                      strokeWidth={2}
+                    >
+                      {hoursByUser.map((row, idx) => (
+                        <Cell
+                          key={row.userId}
+                          fill={`var(--color-${row.userId})`}
+                          name={row.userName}
+                          data-idx={idx}
+                        />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ChartContainer>
+                <PieLegend
+                  rows={hoursByUser.map((row) => ({
+                    key: row.userId,
+                    label: row.userName,
+                    value: row.hours,
+                  }))}
+                  total={totalHours}
+                  valueFormatter={(v) =>
+                    v.toLocaleString(i18n.language, { maximumFractionDigits: 1 })
+                  }
+                />
+              </div>
             )}
           </CardContent>
         </Card>
@@ -1406,33 +1413,42 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             ) : locationSplit.length === 0 || locationSplit.every((r) => r.hours === 0) ? (
               <ChartEmpty />
             ) : (
-              <ChartContainer
-                config={locationConfig}
-                className="mx-auto aspect-square max-h-[260px]"
-              >
-                <PieChart>
-                  <ChartTooltip content={<ChartTooltipContent nameKey="location" />} />
-                  <Pie
-                    data={locationSplit}
-                    dataKey="hours"
-                    nameKey="location"
-                    innerRadius={50}
-                    strokeWidth={2}
-                  >
-                    {locationSplit.map((row) => (
-                      <Cell
-                        key={row.location}
-                        fill={`var(--color-${row.location})`}
-                        name={String(locationConfig[row.location]?.label ?? row.location)}
-                      />
-                    ))}
-                  </Pie>
-                  <ChartLegend
-                    content={<ChartLegendContent nameKey="location" />}
-                    verticalAlign="bottom"
-                  />
-                </PieChart>
-              </ChartContainer>
+              <div className="flex items-center gap-4">
+                <ChartContainer
+                  config={locationConfig}
+                  className="aspect-square max-h-[220px] shrink-0"
+                >
+                  <PieChart>
+                    <ChartTooltip content={<ChartTooltipContent nameKey="location" />} />
+                    <Pie
+                      data={locationSplit}
+                      dataKey="hours"
+                      nameKey="location"
+                      innerRadius={50}
+                      strokeWidth={2}
+                    >
+                      {locationSplit.map((row) => (
+                        <Cell
+                          key={row.location}
+                          fill={`var(--color-${row.location})`}
+                          name={String(locationConfig[row.location]?.label ?? row.location)}
+                        />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ChartContainer>
+                <PieLegend
+                  rows={locationSplit.map((row) => ({
+                    key: row.location,
+                    label: String(locationConfig[row.location]?.label ?? row.location),
+                    value: row.hours,
+                  }))}
+                  total={locationSplit.reduce((s, r) => s + r.hours, 0)}
+                  valueFormatter={(v) =>
+                    v.toLocaleString(i18n.language, { maximumFractionDigits: 1 })
+                  }
+                />
+              </div>
             )}
           </CardContent>
         </Card>
@@ -1476,6 +1492,35 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     </div>
   );
 };
+
+// Right-side legend for the donut charts. Built inline rather than via shadcn's
+// ChartLegendContent because that one is hard-coded to horizontal flex; we want a
+// vertical layout that also surfaces hours and percent-of-total per row.
+const PieLegend: React.FC<{
+  rows: ReadonlyArray<{ key: string; label: string; value: number }>;
+  total: number;
+  valueFormatter: (v: number) => string;
+}> = ({ rows, total, valueFormatter }) => (
+  <ul className="flex-1 min-w-0 space-y-1.5 text-xs">
+    {rows.map((row) => {
+      const pct = total > 0 ? (row.value / total) * 100 : 0;
+      return (
+        <li key={row.key} className="flex items-center gap-2">
+          <span
+            className="size-2.5 shrink-0 rounded-[2px]"
+            style={{ backgroundColor: `var(--color-${row.key})` }}
+            aria-hidden="true"
+          />
+          <span className="flex-1 truncate text-foreground">{row.label}</span>
+          <span className="tabular-nums text-muted-foreground">{valueFormatter(row.value)}</span>
+          <span className="w-10 text-right font-medium tabular-nums text-foreground">
+            {pct.toFixed(pct >= 10 ? 0 : 1)}%
+          </span>
+        </li>
+      );
+    })}
+  </ul>
+);
 
 const ChartEmpty: React.FC<{ variant?: 'no-data' | 'forbidden' | 'failed' }> = ({
   variant = 'no-data',
