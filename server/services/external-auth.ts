@@ -220,13 +220,6 @@ export const resolveExternalIdentity = async (
     throw new ExternalAuthError('External identity did not include a subject', 'missing_subject');
   }
 
-  // Match-only role IDs: empty when no SSO group mapped to an existing Praetor role.
-  // Preserve admin-assigned roles for existing users in that case (#596); new users
-  // still fall back to DEFAULT_ROLE_ID at provisioning so they get a baseline assignment.
-  const matchedRoleIds = await filterToExistingRoleIds(
-    mapExternalGroupsToMatchedRoleIds(input.groups, input.roleMappings),
-  );
-
   const resolveInTransaction = () =>
     withDbTransaction(async (tx) => {
       const existingIdentity = await externalIdentitiesRepo.findByIdentity(
@@ -242,6 +235,11 @@ export const resolveExternalIdentity = async (
       let user: usersRepo.LoginUserWithAuth | null = null;
       let wasCreated = false;
       let wasBound = false;
+      // Role mapping is bootstrap-only — `matchedRoleIds` is only consulted when this
+      // request is the one that creates the Praetor user. Compute lazily inside the
+      // create branch so existing-user logins (the common case) skip the
+      // rolesRepo.findExistingIds DB roundtrip.
+      let matchedRoleIds: string[] = [];
 
       if (existingIdentity) {
         user = await usersRepo.findLoginUserById(existingIdentity.userId, tx);
@@ -252,6 +250,11 @@ export const resolveExternalIdentity = async (
       } else {
         user = await usersRepo.findLoginUserByNormalizedUsername(normalizedUsername, tx);
         if (!user) {
+          // Filter empty when no SSO group mapped to a known Praetor role; new users
+          // still fall back to DEFAULT_ROLE_ID below so they get a baseline assignment.
+          matchedRoleIds = await filterToExistingRoleIds(
+            mapExternalGroupsToMatchedRoleIds(input.groups, input.roleMappings),
+          );
           const name = input.name?.trim() || username;
           const avatarInitials = computeAvatarInitials(name);
           const id = generatePrefixedId('u');
