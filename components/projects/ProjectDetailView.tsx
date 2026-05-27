@@ -1508,6 +1508,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     isAnimationActive={false}
                     content={<ChartTooltipContent />}
                     cursor={false}
+                    // Pin Y so the tooltip doesn't drift up/down as the cursor
+                    // moves inside a tall bar — it just tracks X horizontally.
+                    position={{ y: 0 }}
                   />
                   <Bar dataKey="hours" radius={[4, 4, 0, 0]}>
                     {hoursByTask.map((row, idx) => (
