@@ -748,7 +748,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const sortedUsers = React.useMemo(
     () =>
-      users.toSorted((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
+      [...users].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
     [users],
   );
 
@@ -1702,7 +1702,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                       <input
                         type="text"
                         placeholder="Search projects..."
-                        aria-label="Search projects"
+                        aria-label={t('hr:workforce.searchProjects')}
                         value={projectSearch}
                         onChange={(e) => setProjectSearch(e.target.value)}
                         className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
@@ -1767,7 +1767,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         <input
                           type="text"
                           placeholder="Search tasks..."
-                          aria-label="Search tasks"
+                          aria-label={t('hr:workforce.searchTasks')}
                           value={taskSearch}
                           onChange={(e) => setTaskSearch(e.target.value)}
                           className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
