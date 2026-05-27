@@ -377,6 +377,8 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           ? (tasks.find((t) => t.id === sample.taskId)?.name ?? sample.task)
           : sample?.task;
         return {
+          // Stable key for the chart config / Cell fill — survives task renames.
+          key,
           task: currentName || unknownLabel,
           hours: Math.round(hours * 100) / 100,
         };
@@ -667,8 +669,13 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     return cfg;
   }, [locationSplit, t]);
 
+  // The bar Cells set their own per-row fill below (one var(--chart-N) per task,
+  // cycling), so the config only needs the shared 'hours' label for the tooltip.
+  // We avoid keying colors by hoursByTask.key because the legacy null-taskId
+  // fallback ("name:Foo bar") contains characters that aren't valid in CSS
+  // variable identifiers.
   const taskChartConfig: ChartConfig = {
-    hours: { label: t('projects:detail.charts.hoursLabel'), color: 'var(--chart-2)' },
+    hours: { label: t('projects:detail.charts.hoursLabel') },
   };
 
   const timelineChartConfig: ChartConfig = {
@@ -1350,29 +1357,24 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             ) : hoursByTask.length === 0 || hoursByTask.every((r) => r.hours === 0) ? (
               <ChartEmpty />
             ) : (
-              <ChartContainer config={taskChartConfig} className="max-h-[260px] w-full">
-                <BarChart
-                  data={hoursByTask}
-                  layout="vertical"
-                  margin={{ left: 12, right: 24, top: 8, bottom: 8 }}
-                >
-                  <CartesianGrid horizontal={false} />
-                  <XAxis type="number" hide />
-                  <YAxis
+              <ChartContainer config={taskChartConfig} className="h-[260px] w-full">
+                <BarChart data={hoursByTask} margin={{ left: 8, right: 8, top: 16, bottom: 8 }}>
+                  <CartesianGrid vertical={false} />
+                  <XAxis
                     dataKey="task"
-                    type="category"
                     tickLine={false}
                     axisLine={false}
-                    width={110}
-                    tickFormatter={(v: string) => (v.length > 18 ? `${v.slice(0, 17)}…` : v)}
+                    tickMargin={8}
+                    interval={0}
+                    tickFormatter={(v: string) => (v.length > 12 ? `${v.slice(0, 11)}…` : v)}
                   />
+                  <YAxis tickLine={false} axisLine={false} width={36} />
                   <ChartTooltip content={<ChartTooltipContent />} cursor={false} />
-                  <Bar dataKey="hours" fill="var(--color-hours)" radius={[4, 4, 4, 4]}>
-                    <LabelList
-                      dataKey="hours"
-                      position="right"
-                      className="fill-foreground text-xs"
-                    />
+                  <Bar dataKey="hours" radius={[4, 4, 0, 0]}>
+                    {hoursByTask.map((row, idx) => (
+                      <Cell key={row.key} fill={`var(--chart-${(idx % 5) + 1})`} name={row.task} />
+                    ))}
+                    <LabelList dataKey="hours" position="top" className="fill-foreground text-xs" />
                   </Bar>
                 </BarChart>
               </ChartContainer>
