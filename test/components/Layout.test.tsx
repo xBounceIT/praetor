@@ -253,6 +253,29 @@ describe('<Layout />', () => {
     expect(sidebar.getAttribute('data-collapsible')).toBe('icon');
   });
 
+  test('page title for projects/detail uses titles.projectDetail, not the CSS-capitalized URL slug', () => {
+    // Sub-pages with no sidebar route entry (`projects/detail` is opened from
+    // ProjectsView, not from the sidebar) would otherwise fall through to
+    // `fallbackRouteTitleKey` → `routes.detail` and ultimately render the bare
+    // "Detail" defaultValue capitalized via CSS — shipping an untranslated header.
+    renderLayout({
+      activeView: 'projects/detail',
+      currentUser: {
+        ...mockUser,
+        permissions: ['projects.manage.view'],
+      },
+    });
+
+    const header = document.querySelector('header h2');
+    expect(header).not.toBeNull();
+    expect(header?.textContent).toBe('titles.projectDetail');
+    // Guard against re-introducing the slug fallback: the old behaviour produced
+    // either 'routes.detail' (mocked i18n returns the key) or the bare 'detail'
+    // defaultValue. Neither should appear.
+    expect(header?.textContent).not.toBe('routes.detail');
+    expect(header?.textContent).not.toBe('detail');
+  });
+
   test('permission-filtered modules hide inaccessible routes', () => {
     renderLayout();
 
