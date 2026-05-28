@@ -1602,20 +1602,21 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         </Card>
 
         {(() => {
-          // Always render the card for callers who can see the project at all —
-          // when they lack `reports.cost.view` we just hide the cost area
-          // (server strips cost, so rendering it would be a misleading
-          // flat-zero line) and still surface the revenue ceiling. Skip the
-          // whole card only when there's nothing meaningful to show.
+          // Always render the card so users see the chart exists on the page
+          // — even if the project has no entries and no revenue yet. The
+          // empty-state below handles the "nothing to draw" case so the card
+          // doesn't silently vanish from the layout.
           const hasEntryTimeline =
             costOverTime.length > 0 && costOverTime.some((r) => r.cumulativeCost > 0);
-          if (!hasEntryTimeline && !canViewCost && displayedRevenue === 0) return null;
-          if (canViewCost && !hasEntryTimeline && displayedRevenue === 0) return null;
+          const canShowCostArea = canViewCost && hasEntryTimeline;
+          const canShowRevenueLine = displayedRevenue > 0;
           // Synthesise two X-axis anchors from the project window when there's
           // no entry-driven cost data, so the revenue reference line still has
-          // something to draw against.
+          // something to draw against. Only worth doing when we actually have
+          // a revenue line to render — otherwise the fallback is just empty
+          // axes.
           const fallbackTimeline =
-            project.startDate && project.endDate
+            canShowRevenueLine && project.startDate && project.endDate
               ? [
                   {
                     month: project.startDate.slice(0, 7),
@@ -1632,6 +1633,10 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 ]
               : [];
           const chartData = hasEntryTimeline ? costOverTime : fallbackTimeline;
+          // Chart is meaningless when there's nothing to render — no permitted
+          // cost area AND no revenue reference line (or no X-axis to anchor the
+          // line). In that case fall back to ChartEmpty.
+          const hasChartContent = canShowCostArea || (canShowRevenueLine && chartData.length > 0);
           return (
             <Card>
               <CardHeader>
@@ -1643,7 +1648,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   <Skeleton className="h-[260px] w-full xl:h-[320px]" />
                 ) : entriesError !== null ? (
                   <ChartLocked variant={entriesError} shape="rect" />
-                ) : chartData.length === 0 ? (
+                ) : !hasChartContent ? (
                   <ChartEmpty />
                 ) : (
                   <ChartContainer
@@ -1690,7 +1695,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                           />
                         </linearGradient>
                       </defs>
-                      {canViewCost && hasEntryTimeline && (
+                      {canShowCostArea && (
                         <Area
                           type="monotone"
                           dataKey="cumulativeCost"
@@ -1699,7 +1704,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                           strokeWidth={2}
                         />
                       )}
-                      {displayedRevenue > 0 && (
+                      {canShowRevenueLine && (
                         <ReferenceLine
                           y={displayedRevenue}
                           stroke="var(--color-revenue)"

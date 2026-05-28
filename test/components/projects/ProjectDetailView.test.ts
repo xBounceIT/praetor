@@ -242,6 +242,30 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     );
   });
 
+  test('cost-vs-revenue card is always rendered, even with no entries and no revenue', async () => {
+    // Two `return null` short-circuits at the top of the IIFE used to hide the
+    // whole card when the project had no cost data AND no displayed revenue —
+    // so a freshly-created project (no entries, no revenue) silently lost the
+    // chart. Users expect to see "Cost vs Revenue" listed regardless; ChartEmpty
+    // covers the "nothing to plot yet" state inside the card.
+    const source = await readSource();
+    expect(source).not.toMatch(
+      /if \(!hasEntryTimeline && !canViewCost && displayedRevenue === 0\) return null/,
+    );
+    expect(source).not.toMatch(
+      /if \(canViewCost && !hasEntryTimeline && displayedRevenue === 0\) return null/,
+    );
+    // The new flag drives the empty-state guard instead of the raw chartData length.
+    expect(source).toMatch(
+      /const hasChartContent = canShowCostArea \|\| \(canShowRevenueLine && chartData\.length > 0\)/,
+    );
+    expect(source).toMatch(/\)\s*:\s*!hasChartContent\s*\?\s*\(\s*<ChartEmpty/);
+    // The Area / ReferenceLine renderers use the precomputed flags so the
+    // visibility rules stay in one place.
+    expect(source).toMatch(/\{canShowCostArea && \(/);
+    expect(source).toMatch(/\{canShowRevenueLine && \(/);
+  });
+
   test('missing-rights / load-failed charts render a locked placeholder, not a generic empty state', async () => {
     // The user still wants to perceive that "a chart is here" even when their
     // role can't load the entries — replacing the chart with a generic
