@@ -1481,7 +1481,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             {entriesLoading ? (
               <Skeleton className="h-[260px] w-full xl:h-[320px]" />
             ) : entriesError !== null ? (
-              <ChartEmpty variant={entriesError === 'forbidden' ? 'forbidden' : 'failed'} />
+              <ChartLocked variant={entriesError} shape="donut" />
             ) : hoursByUser.length === 0 || hoursByUser.every((r) => r.hours === 0) ? (
               <ChartEmpty />
             ) : (
@@ -1563,7 +1563,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             {entriesLoading ? (
               <Skeleton className="h-[260px] w-full xl:h-[320px]" />
             ) : entriesError !== null ? (
-              <ChartEmpty variant={entriesError === 'forbidden' ? 'forbidden' : 'failed'} />
+              <ChartLocked variant={entriesError} shape="rect" />
             ) : hoursByTask.length === 0 ? (
               // Only empty when there are neither project tasks nor entries — tasks
               // with no hours yet are still meaningful (planned/not-yet-worked-on)
@@ -1642,7 +1642,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 {entriesLoading ? (
                   <Skeleton className="h-[260px] w-full xl:h-[320px]" />
                 ) : entriesError !== null ? (
-                  <ChartEmpty variant={entriesError === 'forbidden' ? 'forbidden' : 'failed'} />
+                  <ChartLocked variant={entriesError} shape="rect" />
                 ) : chartData.length === 0 ? (
                   <ChartEmpty />
                 ) : (
@@ -1736,7 +1736,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             {entriesLoading ? (
               <Skeleton className="h-[260px] w-full xl:h-[320px]" />
             ) : entriesError !== null ? (
-              <ChartEmpty variant={entriesError === 'forbidden' ? 'forbidden' : 'failed'} />
+              <ChartLocked variant={entriesError} shape="donut" />
             ) : locationSplit.length === 0 || locationSplit.every((r) => r.hours === 0) ? (
               <ChartEmpty />
             ) : (
@@ -1984,6 +1984,54 @@ const PieLegend: React.FC<{
           );
         })}
       </ul>
+    </div>
+  );
+};
+
+// Rendered in place of a chart whose data is gated (the caller lacks the
+// required permission) or failed to load. Unlike ChartEmpty — which replaces
+// the chart with a generic "no data" callout — this keeps a chart-shaped
+// dashed placeholder so the user still perceives "a chart is here", and
+// surfaces a warning chip centered on top to explain why it's locked.
+const ChartLocked: React.FC<{ variant: 'forbidden' | 'failed'; shape: 'donut' | 'rect' }> = ({
+  variant,
+  shape,
+}) => {
+  const { t } = useTranslation(['projects']);
+  const icon = variant === 'forbidden' ? 'fa-lock' : 'fa-triangle-exclamation';
+  const message =
+    variant === 'forbidden'
+      ? t('projects:detail.notices.forbiddenTitle')
+      : t('projects:detail.notices.loadFailedTitle');
+  // Color tone mirrors the analytics-section header chip: amber for permission
+  // gaps, destructive for load failures.
+  const tone =
+    variant === 'forbidden'
+      ? 'border-amber-300/50 bg-amber-50 text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200'
+      : 'border-destructive/40 bg-destructive/10 text-destructive';
+  const placeholder =
+    shape === 'donut' ? (
+      // Dashed ring approximating the donut's hole+stroke. Sized to mirror the
+      // ChartContainer's max-w-[360px] sm:max-w-[460px] xl:max-w-[560px] so the
+      // locked card matches the geometry of the live one.
+      <div className="mx-auto aspect-square w-full max-w-[360px] sm:max-w-[460px] xl:max-w-[560px]">
+        <div className="size-full rounded-full border-[26px] border-dashed border-muted/40" />
+      </div>
+    ) : (
+      // Dashed box matching the bar/area chart's height tokens.
+      <div className="h-[260px] w-full rounded-lg border-2 border-dashed border-muted/40 xl:h-[320px]" />
+    );
+  return (
+    <div className="relative">
+      {placeholder}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div
+          className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs ${tone}`}
+        >
+          <i className={`fa-solid ${icon}`} aria-hidden="true"></i>
+          <span className="font-medium">{message}</span>
+        </div>
+      </div>
     </div>
   );
 };

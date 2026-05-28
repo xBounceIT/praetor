@@ -242,6 +242,38 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     );
   });
 
+  test('missing-rights / load-failed charts render a locked placeholder, not a generic empty state', async () => {
+    // The user still wants to perceive that "a chart is here" even when their
+    // role can't load the entries — replacing the chart with a generic
+    // ChartEmpty hides the page structure and forces the user to read the
+    // copy to understand the chart even existed. New pattern: a chart-shaped
+    // dashed placeholder + a centered warning chip that mirrors the analytics
+    // section header chip style.
+    const source = await readSource();
+    // The new component is defined.
+    expect(source).toContain('const ChartLocked');
+    // ChartEmpty is no longer used for the error/permission variants — only
+    // the bare `<ChartEmpty />` (genuine "no entries" empty state) remains.
+    expect(source).not.toMatch(/<ChartEmpty variant=/);
+    // All four chart sections use ChartLocked when entriesError is set.
+    const lockedUses = source.match(/<ChartLocked variant=/g) ?? [];
+    expect(lockedUses.length).toBe(4);
+    // Both shapes are exercised (2 donuts, 2 rect for bar + area).
+    const donutUses = source.match(/<ChartLocked[^/]*shape="donut"/g) ?? [];
+    const rectUses = source.match(/<ChartLocked[^/]*shape="rect"/g) ?? [];
+    expect(donutUses.length).toBe(2);
+    expect(rectUses.length).toBe(2);
+    // The placeholder visually echoes the live chart geometry (donut → dashed
+    // ring sized to mx-auto; rect → dashed h-[260px] xl:h-[320px] box).
+    expect(source).toMatch(/rounded-full border-\[26px\] border-dashed/);
+    expect(source).toMatch(
+      /h-\[260px\] w-full rounded-lg border-2 border-dashed border-muted\/40 xl:h-\[320px\]/,
+    );
+    // Warning chip uses the same forbidden/failed copy as the section-header chip.
+    expect(source).toMatch(/detail\.notices\.forbiddenTitle/);
+    expect(source).toMatch(/detail\.notices\.loadFailedTitle/);
+  });
+
   test('donut chart is centered with a legend overlaid in the top-right corner', async () => {
     // The pair-with-justify-center layout still left visible empty bands on
     // both sides of the card on wide displays. New layout: the chart is the
@@ -254,11 +286,14 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     expect(source).not.toMatch(/w-full sm:w-72 xl:w-80/);
     expect(source).not.toMatch(/xl:max-w-\[480px\]/);
     // Both ChartContainers center themselves with mx-auto and grow to 560px.
+    // The ChartLocked donut placeholder shares the same geometry tokens so
+    // the locked state matches the live chart's footprint — that's the third
+    // match.
     const chartCtns =
       source.match(
         /mx-auto aspect-square[^"]*max-w-\[360px\][^"]*sm:max-w-\[460px\][^"]*xl:max-w-\[560px\]/g,
       ) ?? [];
-    expect(chartCtns.length).toBe(2);
+    expect(chartCtns.length).toBe(3);
     // Both legend wrappers overlay the top-right corner on sm+ and stack on
     // mobile (mt-4 fallback gap).
     const overlayWrappers =
