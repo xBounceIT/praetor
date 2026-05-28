@@ -367,6 +367,13 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     const unknownLabel = t('projects:projects.unknown');
     const hoursByKey = new Map<string, number>();
     const sampleEntryByKey = new Map<string, TimeEntry>();
+    // Seed with every task on this project so tasks without entries still surface
+    // as 0-hour bars (e.g. tasks planned but not yet worked on). Without this seed,
+    // the chart would silently omit them and read as "tasks X, Y, Z are the only
+    // ones on this project" instead of "X, Y, Z got the hours so far."
+    for (const pt of tasks) {
+      if (pt.projectId === project.id) hoursByKey.set(pt.id, 0);
+    }
     for (const e of entries) {
       const key = e.taskId ?? `name:${e.task || ''}`;
       hoursByKey.set(key, (hoursByKey.get(key) ?? 0) + (e.duration ?? 0));
@@ -375,22 +382,29 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       // fall back to a meaningful name when the current task isn't in `tasks`.
       if (!sample || (!sample.task && e.task)) sampleEntryByKey.set(key, e);
     }
-    return Array.from(hoursByKey.entries())
-      .map(([key, hours]) => {
-        const sample = sampleEntryByKey.get(key);
-        const currentName = sample?.taskId
-          ? (tasks.find((t) => t.id === sample.taskId)?.name ?? sample.task)
-          : sample?.task;
-        return {
-          // Stable key for the chart config / Cell fill — survives task renames.
-          key,
-          task: currentName || unknownLabel,
-          hours: Math.round(hours * 100) / 100,
-        };
-      })
-      .sort((a, b) => b.hours - a.hours)
-      .slice(0, 10);
-  }, [entries, tasks, t]);
+    return (
+      Array.from(hoursByKey.entries())
+        .map(([key, hours]) => {
+          // Resolve the label: current task name (handles renames AND seeded tasks
+          // with no entries), then entry snapshot, then 'unknown'.
+          const currentTask = tasks.find((t) => t.id === key);
+          const sample = sampleEntryByKey.get(key);
+          const sampleTask = sample?.taskId ? tasks.find((t) => t.id === sample.taskId) : undefined;
+          const name = currentTask?.name ?? sampleTask?.name ?? sample?.task;
+          return {
+            // Stable key for the chart config / Cell fill — survives task renames.
+            key,
+            task: name || unknownLabel,
+            hours: Math.round(hours * 100) / 100,
+          };
+        })
+        // Secondary sort by name keeps the 0-hour tail in a stable, scannable order
+        // — otherwise all the zeros tie on the primary sort and depend on Map
+        // insertion order, which shifts as new tasks get added.
+        .sort((a, b) => b.hours - a.hours || a.task.localeCompare(b.task))
+        .slice(0, 10)
+    );
+  }, [entries, tasks, project.id, t]);
 
   // Cumulative cost vs the project revenue ceiling, bucketed monthly. The
   // running total makes burn-down readable at a glance against the revenue
@@ -1173,40 +1187,59 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         </div>
       )}
 
-      {/* Analytics scope/error notices */}
-      {!entriesLoading && entriesError === 'forbidden' && (
-        <div className="flex items-start gap-3 rounded-lg border border-amber-300/50 bg-amber-50 px-4 py-3 text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200">
-          <i className="fa-solid fa-lock mt-0.5 text-sm" aria-hidden="true"></i>
-          <div className="text-sm">
-            <div className="font-medium">{t('projects:detail.notices.forbiddenTitle')}</div>
-            <div className="text-xs opacity-80">
-              {t('projects:detail.notices.forbiddenDescription')}
-            </div>
-          </div>
+      {/* Analytics section header — mirrors the "Project tasks" header pattern above.
+          Scope/error notices live on the right of the same row so the warning sits
+          next to the section it qualifies instead of as a full-width banner above
+          the KPIs. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1.5">
+          <h2 className="text-base font-semibold leading-none">
+            {t('projects:detail.analyticsTitle')}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {t('projects:detail.analyticsDescription')}
+          </p>
         </div>
-      )}
-      {!entriesLoading && entriesError === 'failed' && (
-        <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-destructive">
-          <i className="fa-solid fa-triangle-exclamation mt-0.5 text-sm" aria-hidden="true"></i>
-          <div className="text-sm">
-            <div className="font-medium">{t('projects:detail.notices.loadFailedTitle')}</div>
-            <div className="text-xs opacity-80">
-              {t('projects:detail.notices.loadFailedDescription')}
+        <div className="flex w-full flex-col gap-2 sm:max-w-md sm:shrink-0">
+          {!entriesLoading && entriesError === 'forbidden' && (
+            <div className="flex items-start gap-3 rounded-lg border border-amber-300/50 bg-amber-50 px-4 py-3 text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200">
+              <i className="fa-solid fa-lock mt-0.5 text-sm" aria-hidden="true"></i>
+              <div className="text-sm">
+                <div className="font-medium">{t('projects:detail.notices.forbiddenTitle')}</div>
+                <div className="text-xs opacity-80">
+                  {t('projects:detail.notices.forbiddenDescription')}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
-      {!entriesLoading && entriesError === null && (entriesTruncated || isPartialEntryScope) && (
-        <div className="flex flex-wrap items-start gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3 text-muted-foreground">
-          <i className="fa-solid fa-circle-info mt-0.5 text-sm" aria-hidden="true"></i>
-          <div className="space-y-1 text-xs">
-            {entriesTruncated && (
-              <div>{t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })}</div>
+          )}
+          {!entriesLoading && entriesError === 'failed' && (
+            <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-destructive">
+              <i className="fa-solid fa-triangle-exclamation mt-0.5 text-sm" aria-hidden="true"></i>
+              <div className="text-sm">
+                <div className="font-medium">{t('projects:detail.notices.loadFailedTitle')}</div>
+                <div className="text-xs opacity-80">
+                  {t('projects:detail.notices.loadFailedDescription')}
+                </div>
+              </div>
+            </div>
+          )}
+          {!entriesLoading &&
+            entriesError === null &&
+            (entriesTruncated || isPartialEntryScope) && (
+              <div className="flex flex-wrap items-start gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3 text-muted-foreground">
+                <i className="fa-solid fa-circle-info mt-0.5 text-sm" aria-hidden="true"></i>
+                <div className="space-y-1 text-xs">
+                  {entriesTruncated && (
+                    <div>
+                      {t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })}
+                    </div>
+                  )}
+                  {isPartialEntryScope && <div>{t('projects:detail.notices.partialScope')}</div>}
+                </div>
+              </div>
             )}
-            {isPartialEntryScope && <div>{t('projects:detail.notices.partialScope')}</div>}
-          </div>
         </div>
-      )}
+      </div>
 
       {/* KPI cards + project timeline split the row 50/50 on large screens.
           KPIs share the left half (auto-laid in their own inner grid), timeline
@@ -1514,7 +1547,10 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               <Skeleton className="h-[260px] w-full xl:h-[320px]" />
             ) : entriesError !== null ? (
               <ChartEmpty variant={entriesError === 'forbidden' ? 'forbidden' : 'failed'} />
-            ) : hoursByTask.length === 0 || hoursByTask.every((r) => r.hours === 0) ? (
+            ) : hoursByTask.length === 0 ? (
+              // Only empty when there are neither project tasks nor entries — tasks
+              // with no hours yet are still meaningful (planned/not-yet-worked-on)
+              // and render as 0-height bars below.
               <ChartEmpty />
             ) : (
               <ChartContainer config={taskChartConfig} className="h-[260px] w-full xl:h-[320px]">
@@ -1911,10 +1947,18 @@ const PieLegend: React.FC<{
                 aria-hidden="true"
               />
               <span className="flex-1 truncate text-foreground">{row.label}</span>
-              <span className={`tabular-nums text-muted-foreground ${valueCol}`}>
+              {/* Numeric columns use the slice color so each row's value/share
+                  is visually bound to its donut wedge, not just to the swatch. */}
+              <span
+                className={`tabular-nums ${valueCol}`}
+                style={{ color: `var(--color-${row.key})` }}
+              >
                 {valueFormatter(row.value)}
               </span>
-              <span className={`font-medium tabular-nums text-foreground ${shareCol}`}>
+              <span
+                className={`font-medium tabular-nums ${shareCol}`}
+                style={{ color: `var(--color-${row.key})` }}
+              >
                 {pct.toFixed(pct >= 10 ? 0 : 1)}%
               </span>
             </li>

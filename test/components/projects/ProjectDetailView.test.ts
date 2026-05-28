@@ -141,6 +141,60 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     }
   });
 
+  test('analytics section gets a header with the scope notice inlined beside it', async () => {
+    // Previously the partial-scope warning sat as a full-width banner above the
+    // KPIs with no header pointing at the section it qualified. The new layout
+    // adds a "Project analytics" header that mirrors the "Project tasks" pattern
+    // and places the scope notice on the right side of the same row.
+    const source = await readSource();
+    expect(source).toContain("t('projects:detail.analyticsTitle')");
+    expect(source).toContain("t('projects:detail.analyticsDescription')");
+    // The notice that holds `partialScope` should now render inside the header
+    // row's right column. We assert the partialScope notice comes AFTER the
+    // analytics title (not before, as it used to as a full-width banner).
+    const titleIdx = source.indexOf("t('projects:detail.analyticsTitle')");
+    const partialIdx = source.indexOf('detail.notices.partialScope');
+    expect(titleIdx).toBeGreaterThan(0);
+    expect(partialIdx).toBeGreaterThan(titleIdx);
+    // And the gap between them is small enough to belong to the same section
+    // (the whole header + notices stack), not a different region of the file.
+    expect(partialIdx - titleIdx).toBeLessThan(3000);
+  });
+
+  test('hours-by-task seeds aggregation with project tasks so 0-hour bars surface', async () => {
+    // Without seeding, the aggregation iterates only entries — so a task that
+    // has never been worked on never appears. Users expect "hours by task" to
+    // list every task on the project, with the unworked ones at 0.
+    const source = await readSource();
+    expect(source).toMatch(
+      /for \(const pt of tasks\)\s*\{\s*if \(pt\.projectId === project\.id\) hoursByKey\.set\(pt\.id, 0\)/,
+    );
+    // And the empty-state guard no longer fires when every row is 0 — that
+    // case is exactly the "tasks exist but no entries yet" case we want to
+    // surface, not hide behind ChartEmpty.
+    expect(source).not.toMatch(/hoursByTask\.every\(\(r\) => r\.hours === 0\)/);
+    // Secondary sort by name keeps the 0-hour tail stable instead of relying
+    // on Map insertion order.
+    expect(source).toMatch(/b\.hours - a\.hours \|\| a\.task\.localeCompare\(b\.task\)/);
+  });
+
+  test('donut legend value and share columns inherit the slice color', async () => {
+    // The swatch already keys off `var(--color-${row.key})`. Coloring the
+    // numeric columns the same way binds each row's value/share to its donut
+    // wedge visually, not just to the small swatch chip.
+    const source = await readSource();
+    // Old neutral colors should be gone from the numeric columns.
+    expect(source).not.toMatch(/tabular-nums text-muted-foreground \$\{valueCol\}/);
+    expect(source).not.toMatch(/font-medium tabular-nums text-foreground \$\{shareCol\}/);
+    // Both numeric columns now style their color from the row key.
+    expect(source).toMatch(
+      /className=\{`tabular-nums \$\{valueCol\}`\}\s*style=\{\{ color: `var\(--color-\$\{row\.key\}\)` \}\}/,
+    );
+    expect(source).toMatch(
+      /className=\{`font-medium tabular-nums \$\{shareCol\}`\}\s*style=\{\{ color: `var\(--color-\$\{row\.key\}\)` \}\}/,
+    );
+  });
+
   test('bar and area charts grow taller on xl screens', async () => {
     // 260px is fine on a laptop; on a 2K monitor the chart looks squat. Bump
     // height at xl while keeping the original height for smaller viewports.
