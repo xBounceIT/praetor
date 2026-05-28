@@ -209,20 +209,37 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     expect(source).toMatch(/b\.hours - a\.hours \|\| a\.task\.localeCompare\(b\.task\)/);
   });
 
+  test('donut legend rows carry an explicit color since they render outside ChartContainer', async () => {
+    // shadcn's ChartContainer sets `--color-<key>` CSS vars on its own root —
+    // those vars don't resolve outside it. The legend sits as a sibling div,
+    // so it needs the slice color passed in explicitly (here we use the same
+    // var(--chart-N) palette index the Pie Cells use).
+    const source = await readSource();
+    // Both callsites pass a color per row tied to the row's palette index.
+    const callsites = source.match(/color: `var\(--chart-\$\{\(idx % 5\) \+ 1\}\)`/g) ?? [];
+    expect(callsites.length).toBeGreaterThanOrEqual(2);
+    // The PieLegend row type requires `color` (not optional) so callers can't
+    // silently regress to the broken "no color in scope" state.
+    expect(source).toMatch(
+      /rows: ReadonlyArray<\{ key: string; label: string; value: number; color: string \}>/,
+    );
+  });
+
   test('donut legend value and share columns inherit the slice color', async () => {
-    // The swatch already keys off `var(--color-${row.key})`. Coloring the
+    // The swatch already styles its background from `row.color`. Coloring the
     // numeric columns the same way binds each row's value/share to its donut
     // wedge visually, not just to the small swatch chip.
     const source = await readSource();
     // Old neutral colors should be gone from the numeric columns.
     expect(source).not.toMatch(/tabular-nums text-muted-foreground \$\{valueCol\}/);
     expect(source).not.toMatch(/font-medium tabular-nums text-foreground \$\{shareCol\}/);
-    // Both numeric columns now style their color from the row key.
+    // Both numeric columns style their color from the row's passed-in color
+    // (not `var(--color-<key>)`, which only resolves inside ChartContainer).
     expect(source).toMatch(
-      /className=\{`tabular-nums \$\{valueCol\}`\}\s*style=\{\{ color: `var\(--color-\$\{row\.key\}\)` \}\}/,
+      /className=\{`tabular-nums \$\{valueCol\}`\}\s*style=\{\{ color: row\.color \}\}/,
     );
     expect(source).toMatch(
-      /className=\{`font-medium tabular-nums \$\{shareCol\}`\}\s*style=\{\{ color: `var\(--color-\$\{row\.key\}\)` \}\}/,
+      /className=\{`font-medium tabular-nums \$\{shareCol\}`\}\s*style=\{\{ color: row\.color \}\}/,
     );
   });
 

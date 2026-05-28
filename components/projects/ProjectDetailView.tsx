@@ -1528,10 +1528,13 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 </ChartContainer>
                 <div className="w-full sm:flex-1 sm:max-w-sm">
                   <PieLegend
-                    rows={hoursByUser.map((row) => ({
+                    rows={hoursByUser.map((row, idx) => ({
                       key: row.userId,
                       label: row.userName,
                       value: row.hours,
+                      // Mirrors the Pie Cell fill, which uses var(--color-<userId>)
+                      // sourced from hoursByUserConfig (var(--chart-N) cycling 1-5).
+                      color: `var(--chart-${(idx % 5) + 1})`,
                     }))}
                     total={totalHours}
                     valueFormatter={(v) =>
@@ -1776,10 +1779,12 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 </ChartContainer>
                 <div className="w-full sm:flex-1 sm:max-w-sm">
                   <PieLegend
-                    rows={locationSplit.map((row) => ({
+                    rows={locationSplit.map((row, idx) => ({
                       key: row.location,
                       label: String(locationConfig[row.location]?.label ?? row.location),
                       value: row.hours,
+                      // Same chart palette index as the Pie Cell fills.
+                      color: `var(--chart-${(idx % 5) + 1})`,
                     }))}
                     total={locationSplit.reduce((s, r) => s + r.hours, 0)}
                     valueFormatter={(v) =>
@@ -1906,7 +1911,11 @@ const KpiCard: React.FC<KpiCardProps> = ({
 // ChartLegendContent because that one is hard-coded to horizontal flex; we want a
 // vertical layout that also surfaces hours and percent-of-total per row.
 const PieLegend: React.FC<{
-  rows: ReadonlyArray<{ key: string; label: string; value: number }>;
+  // `color` is the slice color for this row. It must be passed in because the
+  // legend renders outside the ChartContainer, where `var(--color-<key>)` from
+  // shadcn's ChartStyle isn't in scope. Without it, both the swatch and the
+  // colored value/share would render with no color at all.
+  rows: ReadonlyArray<{ key: string; label: string; value: number; color: string }>;
   total: number;
   valueFormatter: (v: number) => string;
   // `compact` shrinks typography and tightens spacing so the legend can sit as a
@@ -1956,22 +1965,16 @@ const PieLegend: React.FC<{
             >
               <span
                 className={`shrink-0 rounded-[2px] ${swatch}`}
-                style={{ backgroundColor: `var(--color-${row.key})` }}
+                style={{ backgroundColor: row.color }}
                 aria-hidden="true"
               />
               <span className="flex-1 truncate text-foreground">{row.label}</span>
               {/* Numeric columns use the slice color so each row's value/share
                   is visually bound to its donut wedge, not just to the swatch. */}
-              <span
-                className={`tabular-nums ${valueCol}`}
-                style={{ color: `var(--color-${row.key})` }}
-              >
+              <span className={`tabular-nums ${valueCol}`} style={{ color: row.color }}>
                 {valueFormatter(row.value)}
               </span>
-              <span
-                className={`font-medium tabular-nums ${shareCol}`}
-                style={{ color: `var(--color-${row.key})` }}
-              >
+              <span className={`font-medium tabular-nums ${shareCol}`} style={{ color: row.color }}>
                 {pct.toFixed(pct >= 10 ? 0 : 1)}%
               </span>
             </li>
