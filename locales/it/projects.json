@@ -158,7 +158,8 @@
       "noEntriesTitle": "Ancora nessuna ora registrata",
       "noEntriesDescription": "I grafici si popolano man mano che il team registra ore su questo progetto.",
       "unavailableTitle": "Dati non disponibili",
-      "unavailableDescription": "Non è stato possibile caricare le voci timesheet — vedi l'avviso sopra per i dettagli."
+      "unavailableDescription": "Non è stato possibile caricare le voci timesheet — vedi l'avviso sopra per i dettagli.",
+      "costHiddenTitle": "Dati di costo nascosti"
     },
     "notices": {
       "truncated": "Mostro le {{count}} voci più recenti — quelle più vecchie non sono caricate.",

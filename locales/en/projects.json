@@ -158,7 +158,8 @@
       "noEntriesTitle": "No time logged yet",
       "noEntriesDescription": "Charts populate as team members track time against this project.",
       "unavailableTitle": "Data unavailable",
-      "unavailableDescription": "Time-entry data couldn't be loaded — see the notice above for details."
+      "unavailableDescription": "Time-entry data couldn't be loaded — see the notice above for details.",
+      "costHiddenTitle": "Cost data hidden"
     },
     "notices": {
       "truncated": "Showing the most recent {{count}} time entries — older data is not loaded.",

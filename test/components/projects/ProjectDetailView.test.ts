@@ -265,7 +265,9 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     expect(source).toMatch(
       /const hasChartContent = canShowCostArea \|\| \(canShowRevenueLine && chartData\.length > 0\)/,
     );
-    expect(source).toMatch(/\)\s*:\s*!hasChartContent\s*\?\s*\(\s*<ChartEmpty/);
+    // Empty branch now distinguishes the no-cost-permission case (cost-hidden
+    // placeholder) from the genuine no-data case (ChartEmpty).
+    expect(source).toMatch(/!hasChartContent\s*\?\s*\(\s*\/\/[\s\S]*?!canViewCost\s*\?\s*\(/);
     // The Area / ReferenceLine renderers use the precomputed flags so the
     // visibility rules stay in one place.
     expect(source).toMatch(/\{canShowCostArea && \(/);
@@ -286,13 +288,14 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     // the bare `<ChartEmpty />` (genuine "no entries" empty state) remains.
     expect(source).not.toMatch(/<ChartEmpty variant=/);
     // All four chart sections use ChartLocked when entriesError is set.
-    const lockedUses = source.match(/<ChartLocked variant=/g) ?? [];
+    const lockedUses = source.match(/<ChartLocked variant=\{entriesError\}/g) ?? [];
     expect(lockedUses.length).toBe(4);
-    // Both shapes are exercised (2 donuts, 2 rect for bar + area).
+    // Shapes: 2 donuts (by-user, by-location) + 3 rect (by-task, cost-vs-revenue
+    // error state, and the cost-vs-revenue cost-hidden empty state).
     const donutUses = source.match(/<ChartLocked[^/]*shape="donut"/g) ?? [];
     const rectUses = source.match(/<ChartLocked[^/]*shape="rect"/g) ?? [];
     expect(donutUses.length).toBe(2);
-    expect(rectUses.length).toBe(2);
+    expect(rectUses.length).toBe(3);
     // The placeholder visually echoes the live chart geometry (donut → dashed
     // ring sized to mx-auto; rect → dashed h-[260px] xl:h-[320px] box).
     expect(source).toMatch(/rounded-full border-\[26px\] border-dashed/);
@@ -302,6 +305,36 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     // Warning chip uses the same forbidden/failed copy as the section-header chip.
     expect(source).toMatch(/detail\.notices\.forbiddenTitle/);
     expect(source).toMatch(/detail\.notices\.loadFailedTitle/);
+  });
+
+  test('cost-vs-revenue shows a cost-hidden placeholder (not "no hours") when the user lacks cost permission', async () => {
+    // Repro: a user without reports.cost.view (e.g. a top manager whose role
+    // wasn't granted it) sees the server strip cost to 0 → hasEntryTimeline
+    // false → with no revenue, hasChartContent false → the card used to render
+    // ChartEmpty ("no hours logged yet") even though entries exist (the Total
+    // Hours KPI above shows them), AND the costHiddenNote rendered beside it.
+    // The two messages contradicted each other. Fix: a dedicated cost-hidden
+    // ChartLocked variant replaces the misleading empty state, and the
+    // standalone note only renders when the chart actually has content.
+    const source = await readSource();
+    // New ChartLocked variant + its cost-specific copy.
+    expect(source).toMatch(/variant: 'forbidden' \| 'failed' \| 'cost-hidden';/);
+    expect(source).toContain('detail.empty.costHiddenTitle');
+    expect(source).toMatch(/<ChartLocked variant="cost-hidden" shape="rect" \/>/);
+    // The empty branch chooses cost-hidden vs ChartEmpty on !canViewCost.
+    expect(source).toMatch(/!canViewCost \? \(\s*<ChartLocked variant="cost-hidden"/);
+    // The standalone note is now gated on hasChartContent so it never shows
+    // alongside the cost-hidden placeholder (no double / contradictory message).
+    expect(source).toMatch(
+      /!canViewCost &&\s*!entriesLoading &&\s*entriesError === null &&\s*hasChartContent &&/,
+    );
+  });
+
+  test('costHiddenTitle exists in both locales', async () => {
+    const en = await Bun.file(new URL('../../../locales/en/projects.json', import.meta.url)).json();
+    const it = await Bun.file(new URL('../../../locales/it/projects.json', import.meta.url)).json();
+    expect(en.detail.empty.costHiddenTitle).toBeTruthy();
+    expect(it.detail.empty.costHiddenTitle).toBeTruthy();
   });
 
   test('donut chart is centered with a legend overlaid in the top-right corner', async () => {

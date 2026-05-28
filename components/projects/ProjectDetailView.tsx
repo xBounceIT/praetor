@@ -1700,7 +1700,17 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 ) : entriesError !== null ? (
                   <ChartLocked variant={entriesError} shape="rect" />
                 ) : !hasChartContent ? (
-                  <ChartEmpty />
+                  // Without cost permission the server strips cost to 0, so the
+                  // cost area is always suppressed. When there's no revenue line
+                  // either, the chart is empty *for this user* even though
+                  // entries may exist — the Total Hours KPI above can show real
+                  // hours. Saying "no hours logged yet" here contradicts that, so
+                  // explain the cost-permission gap instead.
+                  !canViewCost ? (
+                    <ChartLocked variant="cost-hidden" shape="rect" />
+                  ) : (
+                    <ChartEmpty />
+                  )
                 ) : (
                   <ChartContainer
                     config={budgetChartConfig}
@@ -1773,7 +1783,12 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     </AreaChart>
                   </ChartContainer>
                 )}
-                {!canViewCost && !entriesLoading && entriesError === null && (
+                {/* Only show the note below the chart when the chart is actually
+                    rendering (revenue line present). When the chart is empty for
+                    a no-cost-permission user, the cost-hidden placeholder above
+                    already carries this message — showing it twice (and beside a
+                    misleading empty state) is what confused users. */}
+                {!canViewCost && !entriesLoading && entriesError === null && hasChartContent && (
                   <p className="mt-2 text-xs text-muted-foreground">
                     {t('projects:detail.charts.costHiddenNote')}
                   </p>
@@ -2049,30 +2064,42 @@ const PieLegend: React.FC<{
 // the chart with a generic "no data" callout — this keeps a chart-shaped
 // dashed placeholder so the user still perceives "a chart is here", and
 // surfaces a warning chip centered on top to explain why it's locked.
-const ChartLocked: React.FC<{ variant: 'forbidden' | 'failed'; shape: 'donut' | 'rect' }> = ({
-  variant,
-  shape,
-}) => {
+const ChartLocked: React.FC<{
+  variant: 'forbidden' | 'failed' | 'cost-hidden';
+  shape: 'donut' | 'rect';
+}> = ({ variant, shape }) => {
   const { t } = useTranslation(['projects']);
-  const icon = variant === 'forbidden' ? 'fa-lock' : 'fa-triangle-exclamation';
-  const title =
-    variant === 'forbidden'
-      ? t('projects:detail.notices.forbiddenTitle')
-      : t('projects:detail.notices.loadFailedTitle');
   // The description gives users the *why* — the old ChartEmpty variant
   // rendered it via EmptyDescription. Without it the locked card just
   // says "Time entries unavailable" with no context (especially bad for
   // screen-reader users who can't see the analytics-section chip's tooltip).
-  const description =
-    variant === 'forbidden'
-      ? t('projects:detail.notices.forbiddenDescription')
-      : t('projects:detail.notices.loadFailedDescription');
-  // Color tone mirrors the analytics-section header chip: amber for permission
-  // gaps, destructive for load failures.
-  const tone =
-    variant === 'forbidden'
-      ? 'border-amber-300/50 bg-amber-50 text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200'
-      : 'border-destructive/40 bg-destructive/10 text-destructive';
+  // Tone mirrors the analytics-section header chip: amber for permission gaps
+  // (forbidden / cost-hidden), destructive for load failures.
+  const AMBER_TONE =
+    'border-amber-300/50 bg-amber-50 text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200';
+  const { icon, title, description, tone } = {
+    forbidden: {
+      icon: 'fa-lock',
+      title: t('projects:detail.notices.forbiddenTitle'),
+      description: t('projects:detail.notices.forbiddenDescription'),
+      tone: AMBER_TONE,
+    },
+    failed: {
+      icon: 'fa-triangle-exclamation',
+      title: t('projects:detail.notices.loadFailedTitle'),
+      description: t('projects:detail.notices.loadFailedDescription'),
+      tone: 'border-destructive/40 bg-destructive/10 text-destructive',
+    },
+    // The caller can see entries (Total Hours KPI may show real hours) but not
+    // their cost — and this chart only plots cost + revenue. Say *that*, not
+    // the misleading "no hours logged yet" empty state.
+    'cost-hidden': {
+      icon: 'fa-lock',
+      title: t('projects:detail.empty.costHiddenTitle'),
+      description: t('projects:detail.charts.costHiddenNote'),
+      tone: AMBER_TONE,
+    },
+  }[variant];
   const placeholder =
     shape === 'donut' ? (
       // Dashed ring approximating the donut's hole+stroke. Sized to mirror the
