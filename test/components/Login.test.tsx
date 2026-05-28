@@ -64,21 +64,6 @@ describe('<Login />', () => {
     );
     apiSsoListPublicProviders.mockImplementation(pendingProviderLoad);
     setTestUrl('http://localhost/');
-    // TEMP DIAG (remove): capture CI window/location state that makes new URL() throw.
-    const wd = window as unknown as {
-      happyDOM?: { setURL?: unknown };
-      location: { href: unknown };
-    };
-    let urlOk = 'n/a';
-    try {
-      new URL(String(window.location.href));
-      urlOk = 'ok';
-    } catch (e) {
-      urlOk = `throws:${(e as Error).message}`;
-    }
-    console.error(
-      `[diag-login] href=${JSON.stringify(window.location.href)} typeofHref=${typeof wd.location.href} happyDOM=${typeof wd.happyDOM} setURL=${typeof wd.happyDOM?.setURL} sameWin=${(globalThis as { window?: unknown }).window === window} newURL=${urlOk}`,
-    );
   });
 
   afterEach(() => {
