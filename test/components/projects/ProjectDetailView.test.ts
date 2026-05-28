@@ -161,6 +161,37 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     expect(partialIdx - titleIdx).toBeLessThan(3000);
   });
 
+  test('scope notice renders as a one-line chip with a Tooltip for the full text', async () => {
+    // Previously the notice was a multi-line bordered card that pushed the right
+    // column tall (3 wrapped lines on 1440px). The redesign collapses it to a
+    // single-line truncating chip; the full message moves into a Tooltip so the
+    // header row keeps the same height as the header itself.
+    const source = await readSource();
+    // The header row is vertically centered (sm:items-center) so the chip
+    // aligns with the title beside the 2-line header.
+    expect(source).toMatch(
+      /sm:flex-row sm:items-center sm:justify-between[\s\S]{0,200}analyticsTitle/,
+    );
+    // Scope the rest of the assertions to the header region so we don't pick
+    // up unrelated `Tooltip` / `truncate` usage elsewhere in the file.
+    const headerStart = source.indexOf('Analytics section header');
+    const kpiStart = source.indexOf('KPI cards + project timeline');
+    expect(headerStart).toBeGreaterThan(0);
+    expect(kpiStart).toBeGreaterThan(headerStart);
+    const headerRegion = source.slice(headerStart, kpiStart);
+    // No more px-4 py-3 multi-line boxes — chips use px-2.5 py-1.5.
+    expect(headerRegion).not.toMatch(/px-4 py-3/);
+    // The chip text span truncates instead of wrapping.
+    expect(headerRegion).toMatch(/<span className="truncate/);
+    // Tooltip is the disclosure mechanism for the full description.
+    expect(headerRegion).toContain('<Tooltip>');
+    expect(headerRegion).toContain('<TooltipContent>');
+    // partialScope appears at least twice: once in the chip's text, once
+    // inside the tooltip content (so the full message stays accessible).
+    const partialMatches = headerRegion.match(/detail\.notices\.partialScope/g) ?? [];
+    expect(partialMatches.length).toBeGreaterThanOrEqual(2);
+  });
+
   test('hours-by-task seeds aggregation with project tasks so 0-hour bars surface', async () => {
     // Without seeding, the aggregation iterates only entries — so a task that
     // has never been worked on never appears. Users expect "hours by task" to

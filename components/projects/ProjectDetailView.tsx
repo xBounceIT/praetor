@@ -1187,11 +1187,11 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         </div>
       )}
 
-      {/* Analytics section header — mirrors the "Project tasks" header pattern above.
-          Scope/error notices live on the right of the same row so the warning sits
-          next to the section it qualifies instead of as a full-width banner above
-          the KPIs. */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      {/* Analytics section header — scope/error notices appear as a single-line
+          chip beside the header so the section stays compact; the full message
+          lives in a tooltip on hover. Vertical centering keeps the chip aligned
+          with the title even though the description wraps the header to 2 lines. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1.5">
           <h2 className="text-base font-semibold leading-none">
             {t('projects:detail.analyticsTitle')}
@@ -1200,45 +1200,58 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             {t('projects:detail.analyticsDescription')}
           </p>
         </div>
-        <div className="flex w-full flex-col gap-2 sm:max-w-md sm:shrink-0">
-          {!entriesLoading && entriesError === 'forbidden' && (
-            <div className="flex items-start gap-3 rounded-lg border border-amber-300/50 bg-amber-50 px-4 py-3 text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200">
-              <i className="fa-solid fa-lock mt-0.5 text-sm" aria-hidden="true"></i>
-              <div className="text-sm">
-                <div className="font-medium">{t('projects:detail.notices.forbiddenTitle')}</div>
-                <div className="text-xs opacity-80">
-                  {t('projects:detail.notices.forbiddenDescription')}
-                </div>
+        {!entriesLoading && entriesError === 'forbidden' && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-amber-300/50 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200 sm:max-w-xs">
+                <i className="fa-solid fa-lock shrink-0" aria-hidden="true"></i>
+                <span className="truncate font-medium">
+                  {t('projects:detail.notices.forbiddenTitle')}
+                </span>
               </div>
-            </div>
-          )}
-          {!entriesLoading && entriesError === 'failed' && (
-            <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-destructive">
-              <i className="fa-solid fa-triangle-exclamation mt-0.5 text-sm" aria-hidden="true"></i>
-              <div className="text-sm">
-                <div className="font-medium">{t('projects:detail.notices.loadFailedTitle')}</div>
-                <div className="text-xs opacity-80">
-                  {t('projects:detail.notices.loadFailedDescription')}
-                </div>
+            </TooltipTrigger>
+            <TooltipContent>{t('projects:detail.notices.forbiddenDescription')}</TooltipContent>
+          </Tooltip>
+        )}
+        {!entriesLoading && entriesError === 'failed' && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive sm:max-w-xs">
+                <i className="fa-solid fa-triangle-exclamation shrink-0" aria-hidden="true"></i>
+                <span className="truncate font-medium">
+                  {t('projects:detail.notices.loadFailedTitle')}
+                </span>
               </div>
-            </div>
-          )}
-          {!entriesLoading &&
-            entriesError === null &&
-            (entriesTruncated || isPartialEntryScope) && (
-              <div className="flex flex-wrap items-start gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3 text-muted-foreground">
-                <i className="fa-solid fa-circle-info mt-0.5 text-sm" aria-hidden="true"></i>
-                <div className="space-y-1 text-xs">
-                  {entriesTruncated && (
-                    <div>
-                      {t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })}
-                    </div>
-                  )}
-                  {isPartialEntryScope && <div>{t('projects:detail.notices.partialScope')}</div>}
-                </div>
+            </TooltipTrigger>
+            <TooltipContent>{t('projects:detail.notices.loadFailedDescription')}</TooltipContent>
+          </Tooltip>
+        )}
+        {!entriesLoading && entriesError === null && (entriesTruncated || isPartialEntryScope) && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* When both notices apply, prefer the truncated one in the chip
+                    (it signals missing data); the tooltip lists both. */}
+              <div className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground sm:max-w-md">
+                <i className="fa-solid fa-circle-info shrink-0" aria-hidden="true"></i>
+                <span className="truncate">
+                  {entriesTruncated
+                    ? t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })
+                    : t('projects:detail.notices.partialScope')}
+                </span>
               </div>
-            )}
-        </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <div className="space-y-1 text-xs">
+                {entriesTruncated && (
+                  <div>
+                    {t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })}
+                  </div>
+                )}
+                {isPartialEntryScope && <div>{t('projects:detail.notices.partialScope')}</div>}
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       {/* KPI cards + project timeline split the row 50/50 on large screens.
