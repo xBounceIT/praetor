@@ -121,23 +121,24 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     const source = await readSource();
     expect(source).not.toMatch(/size-\[300px\]/);
     expect(source).not.toMatch(/w-\[170px\]/);
-    expect(source).toMatch(/aspect-square[^"']*max-w-\[320px\][^"']*sm:max-w-\[400px\]/);
+    // Donut bumped to 360/460/560 so it dominates the card visually.
+    expect(source).toMatch(/aspect-square[^"']*max-w-\[360px\][^"']*sm:max-w-\[460px\]/);
     // Pie inner/outer radius switched to percentages so the hole scales with
     // the container. Hard-coded `innerRadius={70}` would not.
     expect(source).toContain('innerRadius="55%"');
     expect(source).toContain('outerRadius="85%"');
   });
 
-  test('donut legends drop the compact mode at this scale', async () => {
-    // Both donut callers were passing `compact` to shrink the legend to a
-    // top-right annotation. With the chart and legend now sharing the card
-    // width, neither caller should keep compact mode — text-xs (not text-[10px])
-    // is the readable default.
+  test('donut legends pass compact so the corner annotation reads as small', async () => {
+    // The legend now floats in the top-right corner of the chart area as a
+    // small annotation, so `compact` typography (text-[10px], tight gaps,
+    // smaller swatch) is correct again. Without it the floating annotation
+    // would render too loud relative to the centered donut.
     const source = await readSource();
     const legendCalls = source.match(/<PieLegend[\s\S]*?\/>/g) ?? [];
     expect(legendCalls).toHaveLength(2);
     for (const call of legendCalls) {
-      expect(call).not.toMatch(/\bcompact\b/);
+      expect(call).toMatch(/\bcompact\b/);
     }
   });
 
@@ -225,41 +226,44 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     );
   });
 
-  test('donut legend value and share columns inherit the slice color', async () => {
-    // The swatch already styles its background from `row.color`. Coloring the
-    // numeric columns the same way binds each row's value/share to its donut
-    // wedge visually, not just to the small swatch chip.
+  test('donut legend numeric columns use muted-foreground, not the slice color', async () => {
+    // The swatch chip carries the color signal per row; the numbers (hours
+    // and %) read as secondary muted text so the legend doesn't compete
+    // visually with the donut wedges. The earlier "values match slice color"
+    // approach made the legend feel loud at the floating-corner size.
     const source = await readSource();
-    // Old neutral colors should be gone from the numeric columns.
-    expect(source).not.toMatch(/tabular-nums text-muted-foreground \$\{valueCol\}/);
-    expect(source).not.toMatch(/font-medium tabular-nums text-foreground \$\{shareCol\}/);
-    // Both numeric columns style their color from the row's passed-in color
-    // (not `var(--color-<key>)`, which only resolves inside ChartContainer).
+    // No more inline `color: row.color` on numeric columns. (Swatch's
+    // `backgroundColor: row.color` is a different style key and unaffected.)
+    expect(source).not.toMatch(/style=\{\{ color: row\.color \}\}/);
+    // Both numeric columns use text-muted-foreground via className.
+    expect(source).toMatch(/className=\{`tabular-nums text-muted-foreground \$\{valueCol\}`\}/);
     expect(source).toMatch(
-      /className=\{`tabular-nums \$\{valueCol\}`\}\s*style=\{\{ color: row\.color \}\}/,
-    );
-    expect(source).toMatch(
-      /className=\{`font-medium tabular-nums \$\{shareCol\}`\}\s*style=\{\{ color: row\.color \}\}/,
+      /className=\{`font-medium tabular-nums text-muted-foreground \$\{shareCol\}`\}/,
     );
   });
 
-  test('donut + legend pair is centered with a tight legend column', async () => {
-    // The legend column previously used `sm:flex-1 sm:max-w-sm` which
-    // ballooned to 384px regardless of content, and the outer flex had no
-    // justify-, so the pair anchored left and dumped all spare space on the
-    // right of the card. Lock in:
-    //   - outer flex centers on sm+ (`sm:justify-center`)
-    //   - legend wrapper is a tight, content-sized column (no flex-grow)
-    //   - donut grows a bit on xl to better fill the card width
+  test('donut chart is centered with a legend overlaid in the top-right corner', async () => {
+    // The pair-with-justify-center layout still left visible empty bands on
+    // both sides of the card on wide displays. New layout: the chart is the
+    // dominant centered visual (mx-auto) inside a relative wrapper, and the
+    // legend pops out of flow to overlay the top-right corner on sm+. On
+    // mobile the legend stacks below the chart full-width.
     const source = await readSource();
-    expect(source).not.toMatch(/sm:flex-1 sm:max-w-sm/);
-    expect(source).toMatch(/sm:flex-row sm:items-center sm:justify-center/);
-    // Both legend wrappers use the same tight width tokens.
-    const legendWrappers = source.match(/w-full sm:w-72 xl:w-80/g) ?? [];
-    expect(legendWrappers.length).toBe(2);
-    // Donut bumped from xl:max-w-[440px] to xl:max-w-[480px].
-    expect(source).not.toMatch(/xl:max-w-\[440px\]/);
-    expect(source).toMatch(/xl:max-w-\[480px\]/);
+    // Old flex-row pair layout is gone.
+    expect(source).not.toMatch(/sm:flex-row sm:items-center sm:justify-center/);
+    expect(source).not.toMatch(/w-full sm:w-72 xl:w-80/);
+    expect(source).not.toMatch(/xl:max-w-\[480px\]/);
+    // Both ChartContainers center themselves with mx-auto and grow to 560px.
+    const chartCtns =
+      source.match(
+        /mx-auto aspect-square[^"]*max-w-\[360px\][^"]*sm:max-w-\[460px\][^"]*xl:max-w-\[560px\]/g,
+      ) ?? [];
+    expect(chartCtns.length).toBe(2);
+    // Both legend wrappers overlay the top-right corner on sm+ and stack on
+    // mobile (mt-4 fallback gap).
+    const overlayWrappers =
+      source.match(/mt-4 w-full sm:absolute sm:right-0 sm:top-0 sm:mt-0 sm:w-56 xl:w-64/g) ?? [];
+    expect(overlayWrappers.length).toBe(2);
   });
 
   test('bar and area charts grow taller on xl screens', async () => {

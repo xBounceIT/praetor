@@ -1485,15 +1485,15 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             ) : hoursByUser.length === 0 || hoursByUser.every((r) => r.hours === 0) ? (
               <ChartEmpty />
             ) : (
-              /* Donut + legend share the card width via a flex row. The pair is
-                 centered (justify-center) and the legend wrapper has a fixed,
-                 content-sized width (no flex-grow / max-w-sm cap) — otherwise
-                 the legend kept ballooning to 384px and the pair anchored left,
-                 leaving a sea of empty card to the right on wide cards. */
-              <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-center sm:gap-10">
+              /* Relative wrapper: the donut centers in the card (mx-auto) and
+                 the legend overlays the top-right corner on sm+. On mobile the
+                 legend falls back to stacking below the chart full-width. This
+                 lets the chart visually dominate without a sidebar column
+                 pulling the layout left-of-center. */
+              <div className="relative">
                 <ChartContainer
                   config={hoursByUserConfig}
-                  className="aspect-square w-full max-w-[320px] shrink-0 sm:max-w-[400px] xl:max-w-[480px]"
+                  className="mx-auto aspect-square w-full max-w-[360px] shrink-0 sm:max-w-[460px] xl:max-w-[560px]"
                 >
                   <PieChart>
                     <ChartTooltip
@@ -1526,8 +1526,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     </Pie>
                   </PieChart>
                 </ChartContainer>
-                <div className="w-full sm:w-72 xl:w-80">
+                <div className="mt-4 w-full sm:absolute sm:right-0 sm:top-0 sm:mt-0 sm:w-56 xl:w-64">
                   <PieLegend
+                    compact
                     rows={hoursByUser.map((row, idx) => ({
                       key: row.userId,
                       label: row.userName,
@@ -1739,11 +1740,12 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             ) : locationSplit.length === 0 || locationSplit.every((r) => r.hours === 0) ? (
               <ChartEmpty />
             ) : (
-              /* Same centered donut+legend layout as the hours-by-user chart. */
-              <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-center sm:gap-10">
+              /* Same centered-chart + corner-overlay legend layout as the
+                 hours-by-user chart. See that section for the rationale. */
+              <div className="relative">
                 <ChartContainer
                   config={locationConfig}
-                  className="aspect-square w-full max-w-[320px] shrink-0 sm:max-w-[400px] xl:max-w-[480px]"
+                  className="mx-auto aspect-square w-full max-w-[360px] shrink-0 sm:max-w-[460px] xl:max-w-[560px]"
                 >
                   <PieChart>
                     <ChartTooltip
@@ -1777,8 +1779,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     </Pie>
                   </PieChart>
                 </ChartContainer>
-                <div className="w-full sm:w-72 xl:w-80">
+                <div className="mt-4 w-full sm:absolute sm:right-0 sm:top-0 sm:mt-0 sm:w-56 xl:w-64">
                   <PieLegend
+                    compact
                     rows={locationSplit.map((row, idx) => ({
                       key: row.location,
                       label: String(locationConfig[row.location]?.label ?? row.location),
@@ -1969,12 +1972,12 @@ const PieLegend: React.FC<{
                 aria-hidden="true"
               />
               <span className="flex-1 truncate text-foreground">{row.label}</span>
-              {/* Numeric columns use the slice color so each row's value/share
-                  is visually bound to its donut wedge, not just to the swatch. */}
-              <span className={`tabular-nums ${valueCol}`} style={{ color: row.color }}>
+              {/* Numeric columns are demoted to muted text — the color signal
+                  lives in the swatch chip on the left, not in the numbers. */}
+              <span className={`tabular-nums text-muted-foreground ${valueCol}`}>
                 {valueFormatter(row.value)}
               </span>
-              <span className={`font-medium tabular-nums ${shareCol}`} style={{ color: row.color }}>
+              <span className={`font-medium tabular-nums text-muted-foreground ${shareCol}`}>
                 {pct.toFixed(pct >= 10 ? 0 : 1)}%
               </span>
             </li>
