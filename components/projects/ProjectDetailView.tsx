@@ -1485,15 +1485,15 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             ) : hoursByUser.length === 0 || hoursByUser.every((r) => r.hours === 0) ? (
               <ChartEmpty />
             ) : (
-              /* Donut + legend share the card width via a flex row so the chart
-                 grows on wide (2K+) screens instead of floating at a fixed 300px
-                 in a sea of empty card. Inner radius is a percentage so the hole
-                 scales with the container. Legend drops `compact` — there's room
-                 for the readable `text-xs` size at this scale. */
-              <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:gap-8">
+              /* Donut + legend share the card width via a flex row. The pair is
+                 centered (justify-center) and the legend wrapper has a fixed,
+                 content-sized width (no flex-grow / max-w-sm cap) — otherwise
+                 the legend kept ballooning to 384px and the pair anchored left,
+                 leaving a sea of empty card to the right on wide cards. */
+              <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-center sm:gap-10">
                 <ChartContainer
                   config={hoursByUserConfig}
-                  className="aspect-square w-full max-w-[320px] shrink-0 sm:max-w-[400px] xl:max-w-[440px]"
+                  className="aspect-square w-full max-w-[320px] shrink-0 sm:max-w-[400px] xl:max-w-[480px]"
                 >
                   <PieChart>
                     <ChartTooltip
@@ -1526,7 +1526,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     </Pie>
                   </PieChart>
                 </ChartContainer>
-                <div className="w-full sm:flex-1 sm:max-w-sm">
+                <div className="w-full sm:w-72 xl:w-80">
                   <PieLegend
                     rows={hoursByUser.map((row, idx) => ({
                       key: row.userId,
@@ -1739,11 +1739,11 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             ) : locationSplit.length === 0 || locationSplit.every((r) => r.hours === 0) ? (
               <ChartEmpty />
             ) : (
-              /* Same fluid donut+legend layout as the hours-by-user chart. */
-              <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:gap-8">
+              /* Same centered donut+legend layout as the hours-by-user chart. */
+              <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-center sm:gap-10">
                 <ChartContainer
                   config={locationConfig}
-                  className="aspect-square w-full max-w-[320px] shrink-0 sm:max-w-[400px] xl:max-w-[440px]"
+                  className="aspect-square w-full max-w-[320px] shrink-0 sm:max-w-[400px] xl:max-w-[480px]"
                 >
                   <PieChart>
                     <ChartTooltip
@@ -1777,7 +1777,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     </Pie>
                   </PieChart>
                 </ChartContainer>
-                <div className="w-full sm:flex-1 sm:max-w-sm">
+                <div className="w-full sm:w-72 xl:w-80">
                   <PieLegend
                     rows={locationSplit.map((row, idx) => ({
                       key: row.location,

@@ -243,6 +243,25 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     );
   });
 
+  test('donut + legend pair is centered with a tight legend column', async () => {
+    // The legend column previously used `sm:flex-1 sm:max-w-sm` which
+    // ballooned to 384px regardless of content, and the outer flex had no
+    // justify-, so the pair anchored left and dumped all spare space on the
+    // right of the card. Lock in:
+    //   - outer flex centers on sm+ (`sm:justify-center`)
+    //   - legend wrapper is a tight, content-sized column (no flex-grow)
+    //   - donut grows a bit on xl to better fill the card width
+    const source = await readSource();
+    expect(source).not.toMatch(/sm:flex-1 sm:max-w-sm/);
+    expect(source).toMatch(/sm:flex-row sm:items-center sm:justify-center/);
+    // Both legend wrappers use the same tight width tokens.
+    const legendWrappers = source.match(/w-full sm:w-72 xl:w-80/g) ?? [];
+    expect(legendWrappers.length).toBe(2);
+    // Donut bumped from xl:max-w-[440px] to xl:max-w-[480px].
+    expect(source).not.toMatch(/xl:max-w-\[440px\]/);
+    expect(source).toMatch(/xl:max-w-\[480px\]/);
+  });
+
   test('bar and area charts grow taller on xl screens', async () => {
     // 260px is fine on a laptop; on a 2K monitor the chart looks squat. Bump
     // height at xl while keeping the original height for smaller viewports.
