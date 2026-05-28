@@ -113,6 +113,43 @@ describe('ProjectDetailView wiring', () => {
   });
 });
 
+describe('ProjectDetailView chart scaling on wide displays', () => {
+  test('donut charts use a fluid square container, not a fixed 300px box', async () => {
+    // On 2K monitors the old `mx-auto size-[300px]` left the donut floating in
+    // empty card space and absolute-positioned the legend at `w-[170px]` in the
+    // top-right corner. The fluid layout grows both pieces with the card.
+    const source = await readSource();
+    expect(source).not.toMatch(/size-\[300px\]/);
+    expect(source).not.toMatch(/w-\[170px\]/);
+    expect(source).toMatch(/aspect-square[^"']*max-w-\[320px\][^"']*sm:max-w-\[400px\]/);
+    // Pie inner/outer radius switched to percentages so the hole scales with
+    // the container. Hard-coded `innerRadius={70}` would not.
+    expect(source).toContain('innerRadius="55%"');
+    expect(source).toContain('outerRadius="85%"');
+  });
+
+  test('donut legends drop the compact mode at this scale', async () => {
+    // Both donut callers were passing `compact` to shrink the legend to a
+    // top-right annotation. With the chart and legend now sharing the card
+    // width, neither caller should keep compact mode — text-xs (not text-[10px])
+    // is the readable default.
+    const source = await readSource();
+    const legendCalls = source.match(/<PieLegend[\s\S]*?\/>/g) ?? [];
+    expect(legendCalls).toHaveLength(2);
+    for (const call of legendCalls) {
+      expect(call).not.toMatch(/\bcompact\b/);
+    }
+  });
+
+  test('bar and area charts grow taller on xl screens', async () => {
+    // 260px is fine on a laptop; on a 2K monitor the chart looks squat. Bump
+    // height at xl while keeping the original height for smaller viewports.
+    const source = await readSource();
+    expect(source).toMatch(/h-\[260px\][^"']*xl:h-\[320px\]/);
+    expect(source).toMatch(/max-h-\[260px\][^"']*xl:max-h-\[320px\]/);
+  });
+});
+
 describe('ProjectDetailView wired into App.tsx', () => {
   test("'projects/detail' is a valid view in App.tsx routing", async () => {
     const source = await Bun.file(new URL('../../../App.tsx', import.meta.url)).text();

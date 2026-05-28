@@ -1433,14 +1433,22 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           </CardHeader>
           <CardContent>
             {entriesLoading ? (
-              <Skeleton className="h-[260px] w-full" />
+              <Skeleton className="h-[260px] w-full xl:h-[320px]" />
             ) : entriesError !== null ? (
               <ChartEmpty variant={entriesError === 'forbidden' ? 'forbidden' : 'failed'} />
             ) : hoursByUser.length === 0 || hoursByUser.every((r) => r.hours === 0) ? (
               <ChartEmpty />
             ) : (
-              <div className="relative">
-                <ChartContainer config={hoursByUserConfig} className="mx-auto size-[300px]">
+              /* Donut + legend share the card width via a flex row so the chart
+                 grows on wide (2K+) screens instead of floating at a fixed 300px
+                 in a sea of empty card. Inner radius is a percentage so the hole
+                 scales with the container. Legend drops `compact` — there's room
+                 for the readable `text-xs` size at this scale. */
+              <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:gap-8">
+                <ChartContainer
+                  config={hoursByUserConfig}
+                  className="aspect-square w-full max-w-[320px] shrink-0 sm:max-w-[400px] xl:max-w-[440px]"
+                >
                   <PieChart>
                     <ChartTooltip
                       isAnimationActive={false}
@@ -1450,7 +1458,8 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       data={hoursByUser}
                       dataKey="hours"
                       nameKey="userId"
-                      innerRadius={70}
+                      innerRadius="55%"
+                      outerRadius="85%"
                       strokeWidth={2}
                       isAnimationActive={false}
                       onMouseEnter={(entry) =>
@@ -1471,9 +1480,8 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     </Pie>
                   </PieChart>
                 </ChartContainer>
-                <div className="absolute right-0 top-0 w-[170px]">
+                <div className="w-full sm:flex-1 sm:max-w-sm">
                   <PieLegend
-                    compact
                     rows={hoursByUser.map((row) => ({
                       key: row.userId,
                       label: row.userName,
@@ -1503,13 +1511,13 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           </CardHeader>
           <CardContent>
             {entriesLoading ? (
-              <Skeleton className="h-[260px] w-full" />
+              <Skeleton className="h-[260px] w-full xl:h-[320px]" />
             ) : entriesError !== null ? (
               <ChartEmpty variant={entriesError === 'forbidden' ? 'forbidden' : 'failed'} />
             ) : hoursByTask.length === 0 || hoursByTask.every((r) => r.hours === 0) ? (
               <ChartEmpty />
             ) : (
-              <ChartContainer config={taskChartConfig} className="h-[260px] w-full">
+              <ChartContainer config={taskChartConfig} className="h-[260px] w-full xl:h-[320px]">
                 <BarChart data={hoursByTask} margin={{ left: 8, right: 8, top: 16, bottom: 8 }}>
                   <CartesianGrid vertical={false} />
                   <XAxis
@@ -1579,13 +1587,16 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               </CardHeader>
               <CardContent>
                 {entriesLoading ? (
-                  <Skeleton className="h-[260px] w-full" />
+                  <Skeleton className="h-[260px] w-full xl:h-[320px]" />
                 ) : entriesError !== null ? (
                   <ChartEmpty variant={entriesError === 'forbidden' ? 'forbidden' : 'failed'} />
                 ) : chartData.length === 0 ? (
                   <ChartEmpty />
                 ) : (
-                  <ChartContainer config={budgetChartConfig} className="max-h-[260px] w-full">
+                  <ChartContainer
+                    config={budgetChartConfig}
+                    className="max-h-[260px] w-full xl:max-h-[320px]"
+                  >
                     <AreaChart
                       data={chartData}
                       margin={{ left: 12, right: 12, top: 16, bottom: 8 }}
@@ -1670,14 +1681,18 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           </CardHeader>
           <CardContent>
             {entriesLoading ? (
-              <Skeleton className="h-[260px] w-full" />
+              <Skeleton className="h-[260px] w-full xl:h-[320px]" />
             ) : entriesError !== null ? (
               <ChartEmpty variant={entriesError === 'forbidden' ? 'forbidden' : 'failed'} />
             ) : locationSplit.length === 0 || locationSplit.every((r) => r.hours === 0) ? (
               <ChartEmpty />
             ) : (
-              <div className="relative">
-                <ChartContainer config={locationConfig} className="mx-auto size-[300px]">
+              /* Same fluid donut+legend layout as the hours-by-user chart. */
+              <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:gap-8">
+                <ChartContainer
+                  config={locationConfig}
+                  className="aspect-square w-full max-w-[320px] shrink-0 sm:max-w-[400px] xl:max-w-[440px]"
+                >
                   <PieChart>
                     <ChartTooltip
                       isAnimationActive={false}
@@ -1687,7 +1702,8 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       data={locationSplit}
                       dataKey="hours"
                       nameKey="location"
-                      innerRadius={70}
+                      innerRadius="55%"
+                      outerRadius="85%"
                       strokeWidth={2}
                       isAnimationActive={false}
                       onMouseEnter={(entry) =>
@@ -1709,9 +1725,8 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     </Pie>
                   </PieChart>
                 </ChartContainer>
-                <div className="absolute right-0 top-0 w-[170px]">
+                <div className="w-full sm:flex-1 sm:max-w-sm">
                   <PieLegend
-                    compact
                     rows={locationSplit.map((row) => ({
                       key: row.location,
                       label: String(locationConfig[row.location]?.label ?? row.location),
@@ -1858,18 +1873,21 @@ const PieLegend: React.FC<{
   // Width tokens shared between the header row and each body row so the columns
   // actually line up. Keep them as constants instead of inlining so changing one
   // tier (e.g. value column width) only needs editing in one place.
-  const swatch = compact ? 'size-2' : 'size-2.5';
+  // Non-compact bumps up at xl: on a 2K monitor the legend has enough horizontal
+  // room to deserve `text-sm` instead of squinting at `text-xs`. Compact stays
+  // tight for the in-chart annotation use case.
+  const swatch = compact ? 'size-2' : 'size-2.5 xl:size-3';
   const valueCol = 'min-w-[2.5rem] text-right';
-  const shareCol = compact ? 'w-8 text-right' : 'w-10 text-right';
-  const rowGap = compact ? 'gap-1.5' : 'gap-2';
+  const shareCol = compact ? 'w-8 text-right' : 'w-10 text-right xl:w-12';
+  const rowGap = compact ? 'gap-1.5' : 'gap-2 xl:gap-3';
   return (
     <div
-      className={`flex-1 min-w-0 ${compact ? 'text-[10px]' : 'text-xs'}`}
+      className={`flex-1 min-w-0 ${compact ? 'text-[10px]' : 'text-xs xl:text-sm'}`}
       onMouseLeave={onRowHover ? () => onRowHover(null) : undefined}
     >
       {headers && (
         <div
-          className={`flex items-center px-1 pb-1 text-[9px] font-medium uppercase tracking-wide text-muted-foreground/70 ${rowGap}`}
+          className={`flex items-center px-1 pb-1 font-medium uppercase tracking-wide text-muted-foreground/70 ${rowGap} ${compact ? 'text-[9px]' : 'text-[10px] xl:text-xs'}`}
         >
           {/* Spacer to align with the color swatch column on each row */}
           <span className={`shrink-0 ${swatch}`} aria-hidden="true" />
