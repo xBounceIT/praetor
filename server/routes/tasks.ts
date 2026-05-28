@@ -789,8 +789,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await withDbTransaction(async (tx) => {
-        await tasksRepo.clearUserAssignments(idResult.value, tx);
-        await tasksRepo.addUserAssignments(idResult.value, validUserIds, tx);
+        await tasksRepo.clearNonTopManagerAssignments(idResult.value, tx);
+        await tasksRepo.addManualAssignments(idResult.value, validUserIds, tx);
       });
 
       await logAudit({

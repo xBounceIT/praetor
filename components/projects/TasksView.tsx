@@ -544,6 +544,9 @@ const TasksView: React.FC<TasksViewProps> = ({
   };
 
   const managingTask = tasks.find((t) => t.id === managingTaskId);
+  const assignableUsers = users.filter(
+    (u) => !u.hasTopManagerRole && !u.isAdminOnly && !u.isDisabled,
+  );
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -567,7 +570,7 @@ const TasksView: React.FC<TasksViewProps> = ({
       <UserAssignmentModal
         isOpen={!!managingTaskId}
         onClose={closeAssignments}
-        users={users}
+        users={assignableUsers}
         roles={roles}
         loadAssignedUserIds={(signal) => tasksApi.getUsers(managingTaskId as string, signal)}
         saveAssignedUserIds={(ids) => tasksApi.updateUsers(managingTaskId as string, ids)}

@@ -14,6 +14,10 @@ import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { getForeignKeyViolation } from '../utils/db-errors.ts';
 import { ForeignKeyError } from '../utils/http-errors.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
+import {
+  MANUAL_ASSIGNMENT_SOURCE,
+  TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE,
+} from './userAssignmentsRepo.ts';
 
 export type Task = {
   id: string;
@@ -266,23 +270,32 @@ export const findNameAndProjectId = async (
   return rows[0] ?? null;
 };
 
-export const clearUserAssignments = async (
+// Deletes only manually-assigned rows; top-manager auto-assignments (assignment_source =
+// 'top_manager_auto') are preserved so a top manager can't be stripped of access by editing
+// the activity's member list. Mirrors projectsRepo.clearNonTopManagerAssignments.
+export const clearNonTopManagerAssignments = async (
   taskId: string,
   exec: DbExecutor = db,
 ): Promise<void> => {
-  await exec.delete(userTasks).where(eq(userTasks.taskId, taskId));
+  await executeRows(
+    exec,
+    sql`DELETE FROM user_tasks
+        WHERE task_id = ${taskId} AND assignment_source != ${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}`,
+  );
 };
 
-export const addUserAssignments = async (
+export const addManualAssignments = async (
   taskId: string,
   userIds: string[],
   exec: DbExecutor = db,
 ): Promise<void> => {
   if (userIds.length === 0) return;
-  await exec
-    .insert(userTasks)
-    .values(userIds.map((userId) => ({ taskId, userId })))
-    .onConflictDoNothing();
+  await executeRows(
+    exec,
+    sql`INSERT INTO user_tasks (user_id, task_id, assignment_source)
+        SELECT unnest(${sql.param(userIds)}::text[]), ${taskId}, ${MANUAL_ASSIGNMENT_SOURCE}
+        ON CONFLICT DO NOTHING`,
+  );
 };
 
 // Aliased table references shared by the time-entries → tasks join and its callers.
