@@ -301,11 +301,12 @@ describe('useAuth', () => {
   // hook hands the browser to that URL after clearing local state — otherwise the IdP
   // session cookie stays alive and the next tab silently SSOs back in as the previous user.
   test('logout redirects to endSessionUrl when the server returns one', async () => {
-    const originalAssign = window.location.assign;
+    const originalLocation = window.location;
     const assignMock = mock((_url: string) => {});
     Object.defineProperty(window, 'location', {
+      configurable: true,
       writable: true,
-      value: { ...window.location, assign: assignMock },
+      value: { ...originalLocation, assign: assignMock },
     });
     apiMocks.authLogout.mockImplementation(() =>
       Promise.resolve({ endSessionUrl: 'https://idp.example.com/logout?id_token_hint=tok' }),
@@ -330,18 +331,20 @@ describe('useAuth', () => {
       expect(setAuthTokenMock).toHaveBeenLastCalledWith(null);
     } finally {
       Object.defineProperty(window, 'location', {
+        configurable: true,
         writable: true,
-        value: { ...window.location, assign: originalAssign },
+        value: originalLocation,
       });
     }
   });
 
   test('logout does NOT redirect when endSessionUrl is null', async () => {
-    const originalAssign = window.location.assign;
+    const originalLocation = window.location;
     const assignMock = mock((_url: string) => {});
     Object.defineProperty(window, 'location', {
+      configurable: true,
       writable: true,
-      value: { ...window.location, assign: assignMock },
+      value: { ...originalLocation, assign: assignMock },
     });
     apiMocks.authLogout.mockImplementation(() => Promise.resolve({ endSessionUrl: null }));
 
@@ -357,8 +360,9 @@ describe('useAuth', () => {
       expect(assignMock).not.toHaveBeenCalled();
     } finally {
       Object.defineProperty(window, 'location', {
+        configurable: true,
         writable: true,
-        value: { ...window.location, assign: originalAssign },
+        value: originalLocation,
       });
     }
   });
