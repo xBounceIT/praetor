@@ -7,11 +7,11 @@ import { render } from '../../helpers/render';
 
 installI18nMock();
 
-mock.module('../../../services/api', () => ({
-  usersApi: {
-    getAssignments: mock(async () => ({ clientIds: [], projectIds: [], taskIds: [] })),
-    updateAssignments: mock(async () => {}),
-  },
+// The view only touches services/api transitively via the assignments modal,
+// which this test never opens. Stub it so the view has no API dependency, which
+// also avoids cross-file mock-leak fragility in the shared test runner.
+mock.module('../../../components/HR/EmployeeAssignmentsModal', () => ({
+  default: () => null,
 }));
 
 const InternalEmployeesView = (await import('../../../components/HR/InternalEmployeesView'))
