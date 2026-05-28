@@ -1,6 +1,13 @@
+import { zodResolver } from '@hookform/resolvers/zod';
 import type React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { z } from 'zod';
+import { Button } from '@/components/ui/button';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
 import api, { ApiError } from '../services/api';
 import { type PublicSsoProvider, SSO_LOGIN_ERROR_CODES, type User } from '../types';
 
@@ -12,9 +19,37 @@ export interface LoginProps {
   onDismissServerUnreachable?: () => void;
 }
 
+interface LoginFormValues {
+  username: string;
+  password: string;
+}
+
 // Validates the URL-borne `sso_error` value against the canonical code list from `types.ts` so
 // anything outside the set (e.g. a hand-crafted URL) safely falls back to the generic message.
 const KNOWN_SSO_ERROR_CODES = new Set<string>(SSO_LOGIN_ERROR_CODES);
+
+// Faint dotted-grid overlay from the shadcn login-02 block; driven by the theme's
+// `--card-foreground` token so it adapts to every theme.
+const gridOverlayStyle: React.CSSProperties = {
+  backgroundImage: `
+    linear-gradient(to right, color-mix(in srgb, var(--card-foreground) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--card-foreground) 8%, transparent) 1px, transparent 1px)
+  `,
+  backgroundSize: '20px 20px',
+  backgroundPosition: '0 0, 0 0',
+  maskImage: `
+    repeating-linear-gradient(to right, black 0px, black 3px, transparent 3px, transparent 8px),
+    repeating-linear-gradient(to bottom, black 0px, black 3px, transparent 3px, transparent 8px),
+    radial-gradient(ellipse 70% 50% at 50% 0%, #000 60%, transparent 100%)
+  `,
+  WebkitMaskImage: `
+    repeating-linear-gradient(to right, black 0px, black 3px, transparent 3px, transparent 8px),
+    repeating-linear-gradient(to bottom, black 0px, black 3px, transparent 3px, transparent 8px),
+    radial-gradient(ellipse 70% 50% at 50% 0%, #000 60%, transparent 100%)
+  `,
+  maskComposite: 'intersect',
+  WebkitMaskComposite: 'source-in',
+};
 
 const Login: React.FC<LoginProps> = ({
   onLogin,
@@ -24,13 +59,26 @@ const Login: React.FC<LoginProps> = ({
   onDismissServerUnreachable,
 }) => {
   const { t } = useTranslation(['auth', 'common', 'notifications']);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [ssoProviders, setSsoProviders] = useState<PublicSsoProvider[]>([]);
+
+  const formSchema = useMemo(
+    () =>
+      z.object({
+        username: z.string().trim().min(1, t('common:validation.usernameRequired')),
+        password: z.string().min(1, t('common:validation.passwordRequired')),
+      }),
+    [t],
+  );
+
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: { username: '', password: '' },
+  });
+
+  const busy = isLoading || form.formState.isSubmitting;
 
   // Stash callback in a ref so the SSO-providers fetch effect can run exactly
   // once on mount even when the parent recreates `onLogin` each render.
@@ -98,30 +146,20 @@ const Login: React.FC<LoginProps> = ({
     return (err as Error).message || t('auth:login.errors.invalidCredentials');
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFieldErrors({});
-    setError('');
-
-    const newErrors: Record<string, string> = {};
-    if (!username.trim()) newErrors.username = t('common:validation.usernameRequired');
-    if (!password.trim()) newErrors.password = t('common:validation.passwordRequired');
-
-    if (Object.keys(newErrors).length > 0) {
-      setFieldErrors(newErrors);
-      return;
-    }
-
-    setIsLoading(true);
-
+  const submitLogin = form.handleSubmit(async ({ username, password }) => {
     try {
       const response = await api.auth.login(username, password);
       onLogin(response.user, response.token);
     } catch (err) {
       setError(messageForLoginError(err));
-    } finally {
-      setIsLoading(false);
     }
+  });
+
+  // Clear any prior API/SSO error banner on every submit attempt — including when
+  // field validation fails — so a stale banner never lingers behind new field errors.
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    setError('');
+    void submitLogin(e);
   };
 
   const handleSsoLogin = (provider: PublicSsoProvider) => {
@@ -130,161 +168,166 @@ const Login: React.FC<LoginProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-praetor flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl border border-zinc-200 p-6 w-full max-w-md">
-        <div className="text-center mb-6">
-          <img src="/praetor-logo.png" alt="Praetor Logo" className="h-32 mx-auto object-contain" />
-          <p className="text-zinc-500 text-sm">{t('auth:login.title')}</p>
-        </div>
+    <div className="flex min-h-screen items-center justify-center bg-muted/70 p-4">
+      <div className="relative w-full max-w-md overflow-hidden rounded-xl border bg-card px-8 py-8 shadow-lg">
+        <div className="absolute inset-0 -top-px -left-px z-0" style={gridOverlayStyle} />
 
-        {logoutReason === 'inactivity' && (
-          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-            <i className="fa-solid fa-clock text-amber-500 mt-0.5"></i>
-            <div className="flex-1">
-              <p className="text-sm font-bold text-amber-800">{t('auth:session.expired')}</p>
-              <p className="text-xs text-amber-600">{t('auth:session.expiredMessage')}</p>
-            </div>
-            {onClearLogoutReason && (
-              <button
-                type="button"
-                onClick={onClearLogoutReason}
-                aria-label={t('common:buttons.close')}
-                className="text-amber-400 hover:text-amber-600 transition-colors"
-              >
-                <i className="fa-solid fa-xmark"></i>
-              </button>
-            )}
-          </div>
-        )}
+        <div className="relative isolate flex w-full flex-col items-center">
+          <img src="/praetor-logo.png" alt="Praetor Logo" className="h-24 object-contain" />
+          <p className="mt-2 text-sm text-muted-foreground">{t('auth:login.title')}</p>
 
-        {serverUnreachable && (
-          <div
-            role="alert"
-            className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2"
-          >
-            <i className="fa-solid fa-triangle-exclamation text-red-500 mt-0.5"></i>
-            <div className="flex-1">
-              <p className="text-sm font-bold text-red-800">
-                {t('auth:session.serverUnreachableTitle')}
-              </p>
-              <p className="text-xs text-red-600">{t('auth:session.serverUnreachableMessage')}</p>
-            </div>
-            {onDismissServerUnreachable && (
-              <button
-                type="button"
-                aria-label={t('common:buttons.close')}
-                onClick={onDismissServerUnreachable}
-                className="text-red-400 hover:text-red-600 transition-colors"
-              >
-                <i className="fa-solid fa-xmark"></i>
-              </button>
-            )}
-          </div>
-        )}
-
-        {ssoProviders.length > 0 && (
-          <div className="space-y-3 mb-5">
-            {ssoProviders.map((provider) => (
-              <button
-                key={`${provider.protocol}-${provider.slug}`}
-                type="button"
-                onClick={() => handleSsoLogin(provider)}
-                disabled={isLoading}
-                className="w-full py-2.5 text-sm bg-white text-zinc-700 font-bold rounded-xl border border-zinc-200 hover:border-praetor hover:text-praetor transition-all shadow-sm flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <i
-                  className={`fa-solid ${provider.protocol === 'saml' ? 'fa-building-shield' : 'fa-key'}`}
-                ></i>
-                {provider.name}
-              </button>
-            ))}
-            <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider text-zinc-300">
-              <div className="h-px flex-1 bg-zinc-100"></div>
-              <span>{t('auth:login.orPassword', 'or use password')}</span>
-              <div className="h-px flex-1 bg-zinc-100"></div>
-            </div>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
-              {t('common:labels.username')}
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => {
-                setUsername(e.target.value);
-                if (fieldErrors.username) setFieldErrors((prev) => ({ ...prev, username: '' }));
-              }}
-              className={`w-full px-3 py-2 text-sm bg-zinc-50 border rounded-xl focus:ring-2 outline-none transition-all font-semibold text-zinc-700 ${fieldErrors.username ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
-              placeholder={t('auth:login.username')}
-              aria-label={t('common:labels.username')}
-              disabled={isLoading}
-            />
-            {fieldErrors.username && (
-              <p className="text-red-500 text-[10px] font-bold mt-1">{fieldErrors.username}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
-              {t('common:labels.password')}
-            </label>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  if (fieldErrors.password) setFieldErrors((prev) => ({ ...prev, password: '' }));
-                }}
-                className={`w-full px-3 py-2 text-sm bg-zinc-50 border rounded-xl focus:ring-2 outline-none transition-all pr-9 font-semibold text-zinc-700 ${fieldErrors.password ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
-                placeholder={t('auth:login.password')}
-                aria-label={t('common:labels.password')}
-                disabled={isLoading}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                aria-label={t(
-                  showPassword ? 'common:labels.hidePassword' : 'common:labels.showPassword',
-                )}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors p-1"
-              >
-                <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
-              </button>
-            </div>
-            {fieldErrors.password && (
-              <p className="text-red-500 text-[10px] font-bold mt-1">{fieldErrors.password}</p>
-            )}
-          </div>
-
-          {error && (
-            <div className="text-red-500 text-xs font-bold bg-red-50 p-3 rounded-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
-              <i className="fa-solid fa-circle-exclamation"></i>
-              {error}
+          {logoutReason === 'inactivity' && (
+            <div className="mt-6 flex w-full items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 animate-in fade-in slide-in-from-top-2">
+              <i className="fa-solid fa-clock mt-0.5 text-amber-500"></i>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-amber-800">{t('auth:session.expired')}</p>
+                <p className="text-xs text-amber-600">{t('auth:session.expiredMessage')}</p>
+              </div>
+              {onClearLogoutReason && (
+                <button
+                  type="button"
+                  onClick={onClearLogoutReason}
+                  aria-label={t('common:buttons.close')}
+                  className="text-amber-400 transition-colors hover:text-amber-600"
+                >
+                  <i className="fa-solid fa-xmark"></i>
+                </button>
+              )}
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full py-2.5 text-sm bg-praetor text-white font-bold rounded-xl hover:bg-zinc-800 transition-all shadow-md shadow-zinc-200 flex items-center justify-center gap-2 active:scale-[0.98] mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          {serverUnreachable && (
+            <div
+              role="alert"
+              className="mt-6 flex w-full items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 animate-in fade-in slide-in-from-top-2"
+            >
+              <i className="fa-solid fa-triangle-exclamation mt-0.5 text-red-500"></i>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-red-800">
+                  {t('auth:session.serverUnreachableTitle')}
+                </p>
+                <p className="text-xs text-red-600">{t('auth:session.serverUnreachableMessage')}</p>
+              </div>
+              {onDismissServerUnreachable && (
+                <button
+                  type="button"
+                  aria-label={t('common:buttons.close')}
+                  onClick={onDismissServerUnreachable}
+                  className="text-red-400 transition-colors hover:text-red-600"
+                >
+                  <i className="fa-solid fa-xmark"></i>
+                </button>
+              )}
+            </div>
+          )}
+
+          {ssoProviders.length > 0 && (
+            <div className="mt-8 w-full space-y-3">
+              {ssoProviders.map((provider) => (
+                <Button
+                  key={`${provider.protocol}-${provider.slug}`}
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => handleSsoLogin(provider)}
+                  disabled={busy}
+                >
+                  <i
+                    className={`fa-solid ${provider.protocol === 'saml' ? 'fa-building-shield' : 'fa-key'}`}
+                  ></i>
+                  {provider.name}
+                </Button>
+              ))}
+              <div className="flex w-full items-center justify-center overflow-hidden">
+                <Separator />
+                <span className="px-2 text-sm whitespace-nowrap text-muted-foreground">
+                  {t('auth:login.orPassword', 'or use password')}
+                </span>
+                <Separator />
+              </div>
+            </div>
+          )}
+
+          <form
+            onSubmit={onSubmit}
+            className={`w-full space-y-5 ${ssoProviders.length > 0 ? 'mt-0' : 'mt-8'}`}
           >
-            {isLoading ? (
-              <>
-                <i className="fa-solid fa-circle-notch fa-spin"></i>
-                {t('auth:login.signingIn')}
-              </>
-            ) : (
-              <>
-                {t('auth:login.signIn')} <i className="fa-solid fa-arrow-right"></i>
-              </>
+            <Controller
+              control={form.control}
+              name="username"
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    {t('common:labels.username')}
+                  </FieldLabel>
+                  <Input
+                    {...field}
+                    type="text"
+                    aria-invalid={fieldState.invalid}
+                    placeholder={t('auth:login.username')}
+                    aria-label={t('common:labels.username')}
+                    disabled={busy}
+                  />
+                  <FieldError errors={[fieldState.error]} />
+                </Field>
+              )}
+            />
+
+            <Controller
+              control={form.control}
+              name="password"
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    {t('common:labels.password')}
+                  </FieldLabel>
+                  <div className="relative">
+                    <Input
+                      {...field}
+                      type={showPassword ? 'text' : 'password'}
+                      aria-invalid={fieldState.invalid}
+                      className="pr-9"
+                      placeholder={t('auth:login.password')}
+                      aria-label={t('common:labels.password')}
+                      disabled={busy}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-label={t(
+                        showPassword ? 'common:labels.hidePassword' : 'common:labels.showPassword',
+                      )}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                    </button>
+                  </div>
+                  <FieldError errors={[fieldState.error]} />
+                </Field>
+              )}
+            />
+
+            {error && (
+              <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-xs font-bold text-destructive animate-in fade-in slide-in-from-top-1">
+                <i className="fa-solid fa-circle-exclamation"></i>
+                {error}
+              </div>
             )}
-          </button>
-        </form>
+
+            <Button type="submit" className="w-full" disabled={busy}>
+              {busy ? (
+                <>
+                  <i className="fa-solid fa-circle-notch fa-spin"></i>
+                  {t('auth:login.signingIn')}
+                </>
+              ) : (
+                <>
+                  {t('auth:login.signIn')} <i className="fa-solid fa-arrow-right"></i>
+                </>
+              )}
+            </Button>
+          </form>
+        </div>
       </div>
     </div>
   );
