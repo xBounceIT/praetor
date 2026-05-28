@@ -400,11 +400,13 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         })
         // Secondary sort by name keeps the 0-hour tail in a stable, scannable order
         // — otherwise all the zeros tie on the primary sort and depend on Map
-        // insertion order, which shifts as new tasks get added.
-        .sort((a, b) => b.hours - a.hours || a.task.localeCompare(b.task))
+        // insertion order, which shifts as new tasks get added. Pass i18n.language
+        // so accented characters collate per the user's locale (every other
+        // formatter in this file is locale-aware).
+        .sort((a, b) => b.hours - a.hours || a.task.localeCompare(b.task, i18n.language))
         .slice(0, 10)
     );
-  }, [entries, tasks, project.id, t]);
+  }, [entries, tasks, project.id, t, i18n.language]);
 
   // Cumulative cost vs the project revenue ceiling, bucketed monthly. The
   // running total makes burn-down readable at a glance against the revenue
@@ -1203,12 +1205,21 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         {!entriesLoading && entriesError === 'forbidden' && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-amber-300/50 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200 sm:max-w-xs">
+              {/* <button> is keyboard-focusable by default — Radix Tooltip
+                  opens on focus, so keyboard / SR users get the full
+                  description (aria-label) and the tooltip content without
+                  needing mouse hover. Biome rejects tabIndex on a plain
+                  <div>, and a button is more semantically correct anyway. */}
+              <button
+                type="button"
+                aria-label={t('projects:detail.notices.forbiddenDescription')}
+                className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-amber-300/50 bg-amber-50 px-2.5 py-1.5 text-left text-xs text-amber-800 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200 sm:max-w-xs"
+              >
                 <i className="fa-solid fa-lock shrink-0" aria-hidden="true"></i>
                 <span className="truncate font-medium">
                   {t('projects:detail.notices.forbiddenTitle')}
                 </span>
-              </div>
+              </button>
             </TooltipTrigger>
             <TooltipContent>{t('projects:detail.notices.forbiddenDescription')}</TooltipContent>
           </Tooltip>
@@ -1216,12 +1227,16 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         {!entriesLoading && entriesError === 'failed' && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive sm:max-w-xs">
+              <button
+                type="button"
+                aria-label={t('projects:detail.notices.loadFailedDescription')}
+                className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-left text-xs text-destructive outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:max-w-xs"
+              >
                 <i className="fa-solid fa-triangle-exclamation shrink-0" aria-hidden="true"></i>
                 <span className="truncate font-medium">
                   {t('projects:detail.notices.loadFailedTitle')}
                 </span>
-              </div>
+              </button>
             </TooltipTrigger>
             <TooltipContent>{t('projects:detail.notices.loadFailedDescription')}</TooltipContent>
           </Tooltip>
@@ -1229,16 +1244,34 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         {!entriesLoading && entriesError === null && (entriesTruncated || isPartialEntryScope) && (
           <Tooltip>
             <TooltipTrigger asChild>
-              {/* When both notices apply, prefer the truncated one in the chip
-                    (it signals missing data); the tooltip lists both. */}
-              <div className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground sm:max-w-md">
+              {/* When both notices apply, show both messages joined in the
+                  visible chip text so users without hover affordance still see
+                  every active warning; the tooltip mirrors them for SR/keyboard
+                  parity. */}
+              <button
+                type="button"
+                aria-label={[
+                  entriesTruncated
+                    ? t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })
+                    : null,
+                  isPartialEntryScope ? t('projects:detail.notices.partialScope') : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+                className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-left text-xs text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:max-w-md"
+              >
                 <i className="fa-solid fa-circle-info shrink-0" aria-hidden="true"></i>
                 <span className="truncate">
-                  {entriesTruncated
-                    ? t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })
-                    : t('projects:detail.notices.partialScope')}
+                  {[
+                    entriesTruncated
+                      ? t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })
+                      : null,
+                    isPartialEntryScope ? t('projects:detail.notices.partialScope') : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </span>
-              </div>
+              </button>
             </TooltipTrigger>
             <TooltipContent>
               <div className="space-y-1 text-xs">
@@ -1493,7 +1526,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               <div className="relative">
                 <ChartContainer
                   config={hoursByUserConfig}
-                  className="mx-auto aspect-square w-full max-w-[360px] shrink-0 sm:max-w-[460px] xl:max-w-[560px]"
+                  className="mx-auto aspect-square w-full max-w-[360px] shrink-0 sm:max-w-[420px] xl:max-w-[480px]"
                 >
                   <PieChart>
                     <ChartTooltip
@@ -1593,7 +1626,25 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     {hoursByTask.map((row, idx) => (
                       <Cell key={row.key} fill={`var(--chart-${(idx % 5) + 1})`} name={row.task} />
                     ))}
-                    <LabelList dataKey="hours" position="top" className="fill-foreground text-xs" />
+                    {/* Suppress the '0' label for seeded 0-hour bars — otherwise
+                        a project with many planned-but-not-worked tasks shows
+                        a forest of '0' texts floating above an empty plot.
+                        LabelFormatter accepts string|number|undefined, so we
+                        narrow defensively even though dataKey="hours" is num. */}
+                    <LabelList
+                      dataKey="hours"
+                      position="top"
+                      className="fill-foreground text-xs"
+                      formatter={(value: unknown) => {
+                        // Recharts `LabelFormatter` accepts `RenderableText`
+                        // (`string | number | boolean | null | undefined`).
+                        // `unknown` is its supertype, so this signature is
+                        // assignable via contravariance — and we narrow
+                        // defensively inside.
+                        const n = typeof value === 'number' ? value : Number(value);
+                        return Number.isFinite(n) && n > 0 ? String(n) : '';
+                      }}
+                    />
                   </Bar>
                 </BarChart>
               </ChartContainer>
@@ -1750,7 +1801,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               <div className="relative">
                 <ChartContainer
                   config={locationConfig}
-                  className="mx-auto aspect-square w-full max-w-[360px] shrink-0 sm:max-w-[460px] xl:max-w-[560px]"
+                  className="mx-auto aspect-square w-full max-w-[360px] shrink-0 sm:max-w-[420px] xl:max-w-[480px]"
                 >
                   <PieChart>
                     <ChartTooltip
@@ -2004,10 +2055,18 @@ const ChartLocked: React.FC<{ variant: 'forbidden' | 'failed'; shape: 'donut' | 
 }) => {
   const { t } = useTranslation(['projects']);
   const icon = variant === 'forbidden' ? 'fa-lock' : 'fa-triangle-exclamation';
-  const message =
+  const title =
     variant === 'forbidden'
       ? t('projects:detail.notices.forbiddenTitle')
       : t('projects:detail.notices.loadFailedTitle');
+  // The description gives users the *why* — the old ChartEmpty variant
+  // rendered it via EmptyDescription. Without it the locked card just
+  // says "Time entries unavailable" with no context (especially bad for
+  // screen-reader users who can't see the analytics-section chip's tooltip).
+  const description =
+    variant === 'forbidden'
+      ? t('projects:detail.notices.forbiddenDescription')
+      : t('projects:detail.notices.loadFailedDescription');
   // Color tone mirrors the analytics-section header chip: amber for permission
   // gaps, destructive for load failures.
   const tone =
@@ -2017,9 +2076,9 @@ const ChartLocked: React.FC<{ variant: 'forbidden' | 'failed'; shape: 'donut' | 
   const placeholder =
     shape === 'donut' ? (
       // Dashed ring approximating the donut's hole+stroke. Sized to mirror the
-      // ChartContainer's max-w-[360px] sm:max-w-[460px] xl:max-w-[560px] so the
+      // ChartContainer's max-w-[360px] sm:max-w-[420px] xl:max-w-[480px] so the
       // locked card matches the geometry of the live one.
-      <div className="mx-auto aspect-square w-full max-w-[360px] sm:max-w-[460px] xl:max-w-[560px]">
+      <div className="mx-auto aspect-square w-full max-w-[360px] sm:max-w-[420px] xl:max-w-[480px]">
         <div className="size-full rounded-full border-[26px] border-dashed border-muted/40" />
       </div>
     ) : (
@@ -2027,14 +2086,17 @@ const ChartLocked: React.FC<{ variant: 'forbidden' | 'failed'; shape: 'donut' | 
       <div className="h-[260px] w-full rounded-lg border-2 border-dashed border-muted/40 xl:h-[320px]" />
     );
   return (
-    <div className="relative">
+    <div className="relative" role="status" aria-live="polite">
       {placeholder}
-      <div className="absolute inset-0 flex items-center justify-center">
+      <div className="absolute inset-0 flex items-center justify-center px-4">
         <div
-          className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs ${tone}`}
+          className={`inline-flex max-w-sm flex-col items-start gap-1 rounded-md border px-3 py-2 text-xs ${tone}`}
         >
-          <i className={`fa-solid ${icon}`} aria-hidden="true"></i>
-          <span className="font-medium">{message}</span>
+          <div className="flex items-center gap-2">
+            <i className={`fa-solid ${icon}`} aria-hidden="true"></i>
+            <span className="font-medium">{title}</span>
+          </div>
+          <span className="text-[11px] opacity-90">{description}</span>
         </div>
       </div>
     </div>

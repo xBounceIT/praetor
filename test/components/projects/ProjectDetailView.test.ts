@@ -121,8 +121,10 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     const source = await readSource();
     expect(source).not.toMatch(/size-\[300px\]/);
     expect(source).not.toMatch(/w-\[170px\]/);
-    // Donut bumped to 360/460/560 so it dominates the card visually.
-    expect(source).toMatch(/aspect-square[^"']*max-w-\[360px\][^"']*sm:max-w-\[460px\]/);
+    // Donut sized 360/420/480 — large enough to dominate, small enough to leave
+    // breathing room for the absolute-positioned legend at xl widths without
+    // having the legend overlap the donut's right wedges on sub-2K displays.
+    expect(source).toMatch(/aspect-square[^"']*max-w-\[360px\][^"']*sm:max-w-\[420px\]/);
     // Pie inner/outer radius switched to percentages so the hole scales with
     // the container. Hard-coded `innerRadius={70}` would not.
     expect(source).toContain('innerRadius="55%"');
@@ -159,7 +161,9 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     expect(partialIdx).toBeGreaterThan(titleIdx);
     // And the gap between them is small enough to belong to the same section
     // (the whole header + notices stack), not a different region of the file.
-    expect(partialIdx - titleIdx).toBeLessThan(3000);
+    // Three notice chips with tabIndex/role/aria-label + joined fallback text
+    // expanded the header region — 4500 chars covers it.
+    expect(partialIdx - titleIdx).toBeLessThan(4500);
   });
 
   test('scope notice renders as a one-line chip with a Tooltip for the full text', async () => {
@@ -207,7 +211,9 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     expect(source).not.toMatch(/hoursByTask\.every\(\(r\) => r\.hours === 0\)/);
     // Secondary sort by name keeps the 0-hour tail stable instead of relying
     // on Map insertion order.
-    expect(source).toMatch(/b\.hours - a\.hours \|\| a\.task\.localeCompare\(b\.task\)/);
+    expect(source).toMatch(
+      /b\.hours - a\.hours \|\| a\.task\.localeCompare\(b\.task, i18n\.language\)/,
+    );
   });
 
   test('donut legend rows carry an explicit color since they render outside ChartContainer', async () => {
@@ -308,14 +314,14 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     // Old flex-row pair layout is gone.
     expect(source).not.toMatch(/sm:flex-row sm:items-center sm:justify-center/);
     expect(source).not.toMatch(/w-full sm:w-72 xl:w-80/);
-    expect(source).not.toMatch(/xl:max-w-\[480px\]/);
-    // Both ChartContainers center themselves with mx-auto and grow to 560px.
-    // The ChartLocked donut placeholder shares the same geometry tokens so
-    // the locked state matches the live chart's footprint — that's the third
-    // match.
+    // Donut max-w cap: 480px on xl (was 560px) so the absolute legend at
+    // right-0 doesn't overlap the donut's right wedges on sub-2K cards.
+    expect(source).not.toMatch(/xl:max-w-\[560px\]/);
+    // Both ChartContainers + the ChartLocked donut placeholder share the same
+    // geometry tokens so the locked state matches the live chart's footprint.
     const chartCtns =
       source.match(
-        /mx-auto aspect-square[^"]*max-w-\[360px\][^"]*sm:max-w-\[460px\][^"]*xl:max-w-\[560px\]/g,
+        /mx-auto aspect-square[^"]*max-w-\[360px\][^"]*sm:max-w-\[420px\][^"]*xl:max-w-\[480px\]/g,
       ) ?? [];
     expect(chartCtns.length).toBe(3);
     // Both legend wrappers overlay the top-right corner on sm+ and stack on
@@ -323,6 +329,76 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     const overlayWrappers =
       source.match(/mt-4 w-full sm:absolute sm:right-0 sm:top-0 sm:mt-0 sm:w-56 xl:w-64/g) ?? [];
     expect(overlayWrappers.length).toBe(2);
+  });
+
+  test('scope-notice chips are keyboard-focusable and carry an aria-label fallback', async () => {
+    // <TooltipTrigger asChild> on a plain <div> isn't focusable — keyboard
+    // and SR users couldn't access the full notice description that the
+    // pre-chip banner exposed inline. Each of the three chip variants
+    // (forbidden, failed, partial-scope) is now a <button type="button">
+    // — naturally focusable, Radix Tooltip opens on focus, and Biome's
+    // a11y/noNoninteractiveTabindex rule is satisfied.
+    const source = await readSource();
+    const headerStart = source.indexOf('Analytics section header');
+    const kpiStart = source.indexOf('KPI cards + project timeline');
+    const headerRegion = source.slice(headerStart, kpiStart);
+    const buttonElements = headerRegion.match(/<button\s/g) ?? [];
+    expect(buttonElements.length).toBe(3);
+    const buttonTypes = headerRegion.match(/type="button"/g) ?? [];
+    expect(buttonTypes.length).toBe(3);
+    expect(headerRegion).toContain(
+      "aria-label={t('projects:detail.notices.forbiddenDescription')}",
+    );
+    expect(headerRegion).toContain(
+      "aria-label={t('projects:detail.notices.loadFailedDescription')}",
+    );
+  });
+
+  test('scope-notice chip joins truncated + partialScope when both are active', async () => {
+    // The old ternary `entriesTruncated ? truncated : partialScope` hid one
+    // message behind hover-only Tooltip when both flags were true. The new
+    // chip joins both with ' · ' so the visible text always reflects all
+    // active warnings.
+    const source = await readSource();
+    expect(source).not.toMatch(
+      /<span className="truncate">\s*\{entriesTruncated\s*\?\s*t\('projects:detail\.notices\.truncated'/,
+    );
+    // The chip text array contains both messages and joins on ' · '. Biome may
+    // reflow .filter(Boolean) and .join('·') onto separate lines, so allow
+    // whitespace between the two calls.
+    expect(source).toMatch(/\.filter\(Boolean\)\s*\.join\(' · '\)/);
+  });
+
+  test('ChartLocked renders the description copy inline, not just the title', async () => {
+    // Old ChartEmpty variant='forbidden|failed' rendered EmptyTitle AND
+    // EmptyDescription. ChartLocked initially only rendered the title chip
+    // — sighted and SR users lost the "why" context. The chip now shows
+    // title + description as a two-line callout, and the wrapper is
+    // role=status/aria-live=polite so SR users hear it when it appears.
+    const source = await readSource();
+    expect(source).toContain('detail.notices.forbiddenDescription');
+    expect(source).toContain('detail.notices.loadFailedDescription');
+    // ChartLocked block exposes both pieces of copy + the live-region role.
+    const lockedStart = source.indexOf('const ChartLocked');
+    const lockedEnd = source.indexOf('const ChartEmpty');
+    const lockedRegion = source.slice(lockedStart, lockedEnd);
+    expect(lockedRegion).toContain('detail.notices.forbiddenDescription');
+    expect(lockedRegion).toContain('detail.notices.loadFailedDescription');
+    expect(lockedRegion).toMatch(/role="status" aria-live="polite"/);
+  });
+
+  test('hours-by-task LabelList suppresses 0 labels on seeded zero-hour bars', async () => {
+    // Seeding zero-hour tasks made <LabelList dataKey="hours" position="top">
+    // render '0' above every empty bar — a project with many planned tasks
+    // and no entries showed a forest of '0' texts instead of bars. The new
+    // formatter returns '' for any zero/negative/non-finite value.
+    const source = await readSource();
+    // Signature widened to match Recharts LabelFormatter input type
+    // (string | number | undefined) for TypeScript correctness.
+    // Signature is `unknown` to satisfy Recharts' LabelFormatter via
+    // contravariance — RenderableText's full union is verbose to spell out.
+    expect(source).toMatch(/formatter=\{\(value: unknown\) => \{/);
+    expect(source).toMatch(/Number\.isFinite\(n\) && n > 0 \? String\(n\) : ''/);
   });
 
   test('bar and area charts grow taller on xl screens', async () => {
