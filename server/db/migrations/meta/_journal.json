@@ -393,6 +393,13 @@
       "when": 1779878737658,
       "tag": "0055_reseed_hr_cost_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1780084492330,
+      "tag": "0056_grant_reports_cost_to_managers",
+      "breakpoints": true
     }
   ]
 }
