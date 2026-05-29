@@ -443,18 +443,48 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     expect(lockedRegion).toMatch(/role="status" aria-live="polite"/);
   });
 
-  test('hours-by-task LabelList suppresses 0 labels on seeded zero-hour bars', async () => {
-    // Seeding zero-hour tasks made <LabelList dataKey="hours" position="top">
-    // render '0' above every empty bar — a project with many planned tasks
-    // and no entries showed a forest of '0' texts instead of bars. The new
-    // formatter returns '' for any zero/negative/non-finite value.
+  test('hours-by-task is a planned-vs-actual utilization stack (logged + remaining + over)', async () => {
+    // Each bar shows logged hours filling the available effort (expectedEffort),
+    // with overrun on top — so users see actual against the budget in one bar.
     const source = await readSource();
-    // Signature widened to match Recharts LabelFormatter input type
-    // (string | number | undefined) for TypeScript correctness.
-    // Signature is `unknown` to satisfy Recharts' LabelFormatter via
-    // contravariance — RenderableText's full union is verbose to spell out.
-    expect(source).toMatch(/formatter=\{\(value: unknown\) => \{/);
-    expect(source).toMatch(/Number\.isFinite\(n\) && n > 0 \? String\(n\) : ''/);
+    // Aggregation derives the three segments from actual hours vs expectedEffort.
+    expect(source).toMatch(/expectedEffort/);
+    expect(source).toMatch(/const logged = expected > 0 \? Math\.min\(actual, expected\) : actual/);
+    expect(source).toMatch(/const remaining = Math\.max\(0, round\(expected - actual\)\)/);
+    expect(source).toMatch(
+      /const over = expected > 0 \? Math\.max\(0, round\(actual - expected\)\) : 0/,
+    );
+    // Three Bars share one stackId so the segments form a single column.
+    // (Match dataKey + stackId independently — Biome may reflow a <Bar> across
+    // lines, so don't require them on the same physical line.)
+    expect((source.match(/stackId="effort"/g) ?? []).length).toBe(3);
+    for (const seg of ['logged', 'remaining', 'over']) {
+      expect(source).toContain(`dataKey="${seg}"`);
+    }
+    // Config exposes the three semantic series (not a per-task palette).
+    expect(source).toMatch(/logged: \{ label: t\('projects:detail\.charts\.loggedLabel'\)/);
+    expect(source).toMatch(/remainingEffortLabel/);
+    expect(source).toMatch(/overBudgetLabel/);
+    // A legend distinguishes the segments.
+    expect(source).toMatch(/<ChartLegend content=\{<ChartLegendContent \/>\}/);
+  });
+
+  test('hours-by-task top label shows actual hours and is suppressed at 0', async () => {
+    // The numeric label sits at the top of the stack showing actual logged hours
+    // (read from the row by index), and renders nothing for zero-hour bars so a
+    // project of planned-but-unworked tasks doesn't show a forest of '0's.
+    const source = await readSource();
+    expect(source).toMatch(/const row = hoursByTask\[index\]/);
+    expect(source).toMatch(/if \(!row \|\| row\.hours <= 0\) return null/);
+  });
+
+  test('hours-by-task tooltip summarises logged vs total effort, not raw stack values', async () => {
+    const source = await readSource();
+    expect(source).toContain('const TaskEffortTooltip');
+    expect(source).toMatch(
+      /content=\{<TaskEffortTooltip language=\{i18n\.language\} t=\{t\} \/>\}/,
+    );
+    expect(source).toContain("t('projects:detail.charts.totalEffortLabel')");
   });
 
   test('bar and area charts grow taller on xl screens', async () => {

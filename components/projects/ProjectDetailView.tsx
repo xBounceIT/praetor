@@ -21,6 +21,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import {
   type ChartConfig,
   ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
@@ -391,11 +393,30 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           const sample = sampleEntryByKey.get(key);
           const sampleTask = sample?.taskId ? tasks.find((t) => t.id === sample.taskId) : undefined;
           const name = currentTask?.name ?? sampleTask?.name ?? sample?.task;
+          const round = (n: number) => Math.round(n * 100) / 100;
+          const actual = round(hours);
+          // `expectedEffort` ("Impegno totale" / total effort available) drives the
+          // planned-vs-actual stack below. Legacy entries with no resolvable task
+          // (null taskId, task deleted) have no budget → expected 0.
+          const expected = round(currentTask?.expectedEffort ?? sampleTask?.expectedEffort ?? 0);
+          // Split actual hours into the segments of a single utilization bar:
+          //   logged    — consumed effort, capped at the budget (solid)
+          //   remaining — unused budget = expected − actual (faint)
+          //   over      — overrun = actual − expected (destructive)
+          // For tasks with no budget (expected 0), all hours are just `logged`
+          // and there's no overrun — a missing budget isn't "over budget".
+          const logged = expected > 0 ? Math.min(actual, expected) : actual;
+          const remaining = Math.max(0, round(expected - actual));
+          const over = expected > 0 ? Math.max(0, round(actual - expected)) : 0;
           return {
             // Stable key for the chart config / Cell fill — survives task renames.
             key,
             task: name || unknownLabel,
-            hours: Math.round(hours * 100) / 100,
+            hours: actual,
+            expected,
+            logged,
+            remaining,
+            over,
           };
         })
         // Secondary sort by name keeps the 0-hour tail in a stable, scannable order
@@ -694,13 +715,18 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     return cfg;
   }, [locationSplit, t]);
 
-  // The bar Cells set their own per-row fill below (one var(--chart-N) per task,
-  // cycling), so the config only needs the shared 'hours' label for the tooltip.
-  // We avoid keying colors by hoursByTask.key because the legacy null-taskId
-  // fallback ("name:Foo bar") contains characters that aren't valid in CSS
-  // variable identifiers.
+  // Each task renders as a single utilization bar that stacks logged hours over
+  // the remaining available effort (so the full bar height = total effort), with
+  // any overrun on top. Three semantic series share one legend across all tasks
+  // (we no longer cycle a per-task palette — the colors now mean logged / spare /
+  // over, not "which task").
   const taskChartConfig: ChartConfig = {
-    hours: { label: t('projects:detail.charts.hoursLabel') },
+    logged: { label: t('projects:detail.charts.loggedLabel'), color: 'var(--chart-1)' },
+    remaining: {
+      label: t('projects:detail.charts.remainingEffortLabel'),
+      color: 'var(--muted-foreground)',
+    },
+    over: { label: t('projects:detail.charts.overBudgetLabel'), color: 'var(--destructive)' },
   };
 
   const budgetChartConfig: ChartConfig = {
@@ -1604,7 +1630,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               <ChartEmpty />
             ) : (
               <ChartContainer config={taskChartConfig} className="h-[260px] w-full xl:h-[320px]">
-                <BarChart data={hoursByTask} margin={{ left: 8, right: 8, top: 16, bottom: 8 }}>
+                <BarChart data={hoursByTask} margin={{ left: 8, right: 8, top: 24, bottom: 8 }}>
                   <CartesianGrid vertical={false} />
                   <XAxis
                     dataKey="task"
@@ -1616,33 +1642,65 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   <YAxis tickLine={false} axisLine={false} width={36} />
                   <ChartTooltip
                     isAnimationActive={false}
-                    content={<ChartTooltipContent />}
+                    // Custom content reads the whole row so it can show logged vs
+                    // total available effort (and overrun) in one place, instead
+                    // of three raw stacked-series numbers.
+                    content={<TaskEffortTooltip language={i18n.language} t={t} />}
                     cursor={false}
-                    // Pin Y so the tooltip doesn't drift up/down as the cursor
-                    // moves inside a tall bar — it just tracks X horizontally.
                     position={{ y: 0 }}
                   />
-                  <Bar dataKey="hours" radius={[4, 4, 0, 0]}>
-                    {hoursByTask.map((row, idx) => (
-                      <Cell key={row.key} fill={`var(--chart-${(idx % 5) + 1})`} name={row.task} />
-                    ))}
-                    {/* Suppress the '0' label for seeded 0-hour bars — otherwise
-                        a project with many planned-but-not-worked tasks shows
-                        a forest of '0' texts floating above an empty plot.
-                        LabelFormatter accepts string|number|undefined, so we
-                        narrow defensively even though dataKey="hours" is num. */}
+                  <ChartLegend content={<ChartLegendContent />} />
+                  {/* Single utilization bar per task: logged (solid) + remaining
+                      available effort (faint) = total effort, with overrun on top.
+                      Same stackId so the three segments share one column. */}
+                  <Bar dataKey="logged" stackId="effort" fill="var(--color-logged)" />
+                  <Bar
+                    dataKey="remaining"
+                    stackId="effort"
+                    fill="var(--color-remaining)"
+                    fillOpacity={0.3}
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="over"
+                    stackId="effort"
+                    fill="var(--color-over)"
+                    radius={[4, 4, 0, 0]}
+                  >
+                    {/* Actual logged hours labelled at the top of the stack. Attached
+                        to the topmost segment (`over`) so its position tracks the
+                        stack top whether or not the task is over budget; the value
+                        shown is the row's actual hours (logged + over), read by index. */}
                     <LabelList
-                      dataKey="hours"
+                      dataKey="over"
                       position="top"
-                      className="fill-foreground text-xs"
-                      formatter={(value: unknown) => {
-                        // Recharts `LabelFormatter` accepts `RenderableText`
-                        // (`string | number | boolean | null | undefined`).
-                        // `unknown` is its supertype, so this signature is
-                        // assignable via contravariance — and we narrow
-                        // defensively inside.
-                        const n = typeof value === 'number' ? value : Number(value);
-                        return Number.isFinite(n) && n > 0 ? String(n) : '';
+                      content={(props) => {
+                        const { x, y, width, index } = props as {
+                          x?: number;
+                          y?: number;
+                          width?: number;
+                          index?: number;
+                        };
+                        if (
+                          typeof x !== 'number' ||
+                          typeof y !== 'number' ||
+                          typeof width !== 'number' ||
+                          typeof index !== 'number'
+                        ) {
+                          return null;
+                        }
+                        const row = hoursByTask[index];
+                        if (!row || row.hours <= 0) return null;
+                        return (
+                          <text
+                            x={x + width / 2}
+                            y={y - 6}
+                            textAnchor="middle"
+                            className="fill-foreground text-xs"
+                          >
+                            {row.hours.toLocaleString(i18n.language, { maximumFractionDigits: 1 })}
+                          </text>
+                        );
                       }}
                     />
                   </Bar>
@@ -2170,6 +2228,50 @@ const ChartLocked: React.FC<{
           <span className="text-[11px] opacity-90">{description}</span>
         </div>
       </div>
+    </div>
+  );
+};
+
+// Tooltip for the hours-by-task utilization chart. Reads the whole row so it can
+// show logged hours against the total available effort (and any overrun) as one
+// coherent summary, rather than three raw stacked-series values.
+const TaskEffortTooltip: React.FC<{
+  active?: boolean;
+  payload?: Array<{
+    payload?: { task: string; hours: number; expected: number; over: number };
+  }>;
+  language: string;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}> = ({ active, payload, language, t }) => {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload;
+  if (!row) return null;
+  const fmt = (n: number) => n.toLocaleString(language, { maximumFractionDigits: 1 });
+  return (
+    <div className="grid min-w-[11rem] gap-1.5 rounded-lg border border-border/50 bg-background px-3 py-2 text-xs shadow-xl">
+      <div className="font-medium text-foreground">{row.task}</div>
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-muted-foreground">{t('projects:detail.charts.loggedLabel')}</span>
+        <span className="font-mono font-medium tabular-nums text-foreground">
+          {fmt(row.hours)} h
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-muted-foreground">
+          {t('projects:detail.charts.totalEffortLabel')}
+        </span>
+        <span className="font-mono font-medium tabular-nums text-foreground">
+          {row.expected > 0 ? `${fmt(row.expected)} h` : '—'}
+        </span>
+      </div>
+      {row.over > 0 && (
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-destructive">{t('projects:detail.charts.overBudgetLabel')}</span>
+          <span className="font-mono font-medium tabular-nums text-destructive">
+            +{fmt(row.over)} h
+          </span>
+        </div>
+      )}
     </div>
   );
 };
