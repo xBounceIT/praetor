@@ -274,6 +274,29 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     expect(source).toMatch(/\{canShowRevenueLine && \(/);
   });
 
+  test('cost-vs-revenue YAxis domain extends to include the revenue reference line', async () => {
+    // The revenue line sat above the cost-only auto-scaled domain, so Recharts
+    // discarded it (revenue never appeared on the chart). The YAxis domain max
+    // must fold in displayedRevenue so the line is always within range.
+    const source = await readSource();
+    expect(source).toMatch(
+      /domain=\{\[\s*0,\s*\(dataMax: number\) =>[\s\S]*?Math\.max\(dataMax, canShowRevenueLine \? displayedRevenue : 0\)/,
+    );
+  });
+
+  test('cost-vs-revenue tooltip formats values with the currency symbol', async () => {
+    // Default ChartTooltipContent renders a bare `value.toLocaleString()` with no
+    // currency and crams it against the label ("Costo cumulato2505"). A formatter
+    // adds the project currency and proper spacing.
+    const source = await readSource();
+    // A formatter is passed to the cost-vs-revenue tooltip.
+    expect(source).toMatch(/formatter=\{\(value, name, item\) =>/);
+    // The formatted numeric value appends the currency with a space.
+    expect(source).toMatch(
+      /value\.toLocaleString\(i18n\.language, \{ maximumFractionDigits: 0 \}\)\}\s*\$\{currency\}/,
+    );
+  });
+
   test('missing-rights / load-failed charts render a locked placeholder, not a generic empty state', async () => {
     // The user still wants to perceive that "a chart is here" even when their
     // role can't load the entries — replacing the chart with a generic

@@ -1732,13 +1732,57 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                         tickLine={false}
                         axisLine={false}
                         width={48}
+                        // Extend the domain to include the revenue reference line
+                        // (+8% headroom, rounded up to a clean 100). Without this the
+                        // axis auto-scales to the cost data alone, so a revenue line
+                        // above the highest cost point falls outside the domain and
+                        // Recharts silently discards it.
+                        domain={[
+                          0,
+                          (dataMax: number) =>
+                            Math.ceil(
+                              (Math.max(dataMax, canShowRevenueLine ? displayedRevenue : 0) *
+                                1.08) /
+                                100,
+                            ) * 100,
+                        ]}
                         tickFormatter={(v: number) =>
                           v.toLocaleString(i18n.language, { maximumFractionDigits: 0 })
                         }
                       />
                       <ChartTooltip
                         isAnimationActive={false}
-                        content={<ChartTooltipContent indicator="line" />}
+                        content={
+                          <ChartTooltipContent
+                            indicator="line"
+                            // Default content renders a bare `value.toLocaleString()`
+                            // with no currency and crams it against the label in a
+                            // narrow tooltip. Format with the project currency and
+                            // proper spacing.
+                            formatter={(value, name, item) => (
+                              <div className="flex flex-1 items-center justify-between gap-4 leading-none">
+                                <div className="flex items-center gap-1.5">
+                                  <span
+                                    className="h-2.5 w-1 shrink-0 rounded-[2px]"
+                                    style={{
+                                      backgroundColor: item?.color ?? 'var(--color-cumulativeCost)',
+                                    }}
+                                    aria-hidden="true"
+                                  />
+                                  <span className="text-muted-foreground">
+                                    {budgetChartConfig[name as keyof typeof budgetChartConfig]
+                                      ?.label ?? name}
+                                  </span>
+                                </div>
+                                <span className="font-mono font-medium tabular-nums text-foreground">
+                                  {typeof value === 'number'
+                                    ? `${value.toLocaleString(i18n.language, { maximumFractionDigits: 0 })} ${currency}`
+                                    : String(value)}
+                                </span>
+                              </div>
+                            )}
+                          />
+                        }
                         cursor={false}
                         position={{ y: 0 }}
                       />
