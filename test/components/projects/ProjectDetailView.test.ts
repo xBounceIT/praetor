@@ -156,6 +156,39 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     expect(source).toContain("t('projects:detail.charts.totalLabel')");
   });
 
+  test('hours-by-user seeds assigned members so 0-hour users still appear', async () => {
+    // Users who are on the project but haven't logged time should still show
+    // (as 0-hour bars), like hours-by-task seeds planned tasks. The old
+    // `total > 0` filter dropped them entirely.
+    const source = await readSource();
+    // Candidate set = assigned roster ∪ users who logged time.
+    expect(source).toMatch(
+      /const candidateIds = new Set<string>\(\[\.\.\.assignedUserIds, \.\.\.byUser\.keys\(\)\]\)/,
+    );
+    // The 0-hour exclusion is gone.
+    expect(source).not.toMatch(/if \(total > 0\) userTotals\.set/);
+    // Active users first, 0-hour members last in stable name order.
+    expect(source).toMatch(
+      /b\.total - a\.total \|\| a\.userName\.localeCompare\(b\.userName, i18n\.language\)/,
+    );
+    // assignedUserIds is now a dependency so the chart updates when the roster loads.
+    expect(source).toMatch(/\}, \[entries, tasks, users, assignedUserIds, t, i18n\.language\]\)/);
+    // Empty when nobody logged hours (no task series) even if members are seeded.
+    expect(source).toMatch(
+      /hoursByUserTask\.rows\.length === 0 \|\| hoursByUserTask\.series\.length === 0/,
+    );
+  });
+
+  test('the two wide charts span full width to scale with more users/months', async () => {
+    // The per-user grouped histogram (users × tasks bars) and the monthly
+    // timeline are the wide charts; they span both grid columns so the bars
+    // have room. Long user names are truncated on the axis (full name in tooltip).
+    const source = await readSource();
+    const fullWidth = source.match(/<Card className="lg:col-span-2">/g) ?? [];
+    expect(fullWidth.length).toBe(2);
+    expect(source).toMatch(/tickFormatter=\{\(v: string\) => \(v\.length > 16 \?/);
+  });
+
   test('monthly-activity falls back to ChartEmpty when all months are zero', async () => {
     // The replaced location chart guarded the all-zero case; the new monthly
     // chart must too — only zero-duration entries should read as no data, not a

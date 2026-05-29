@@ -384,34 +384,39 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       name: taskNames.get(taskKey) ?? unknownLabel,
       color: `var(--chart-${(i % 5) + 1})`,
     }));
-    // Rank users by their hours across the selected tasks so the bars shown sum
-    // to the ranking total (no "tall user with all hours on hidden tasks").
-    const userTotals = new Map<string, number>();
-    for (const [userId, um] of byUser) {
-      let total = 0;
-      for (const k of topTaskKeys) total += um.get(k) ?? 0;
-      if (total > 0) userTotals.set(userId, total);
-    }
-    const topUserIds = Array.from(userTotals.entries())
-      .sort((a, b) => b[1] - a[1])
+    // Candidate users = everyone assigned to the project (so members who haven't
+    // logged time still appear, as 0-hour bars) ∪ anyone who logged time (covers
+    // former members no longer assigned). Seeding from the assignment roster
+    // mirrors how hours-by-task seeds planned-but-unworked tasks. When the viewer
+    // lacks assignment-view permission `assignedUserIds` is empty, so the chart
+    // gracefully degrades to just the users who logged time.
+    const candidateIds = new Set<string>([...assignedUserIds, ...byUser.keys()]);
+    const rows = Array.from(candidateIds)
+      .map((userId) => {
+        const um = byUser.get(userId);
+        let total = 0;
+        for (const k of topTaskKeys) total += um?.get(k) ?? 0;
+        return {
+          userId,
+          // Fall back to a translated "unknown" label rather than the raw UUID
+          // when the user is no longer in the loaded `users` list.
+          userName: users.find((u) => u.id === userId)?.name ?? unknownLabel,
+          total,
+        };
+      })
+      // Active users first; 0-hour members fall to the end in stable name order.
+      .sort((a, b) => b.total - a.total || a.userName.localeCompare(b.userName, i18n.language))
       .slice(0, TOP_USER_GROUPS)
-      .map(([id]) => id);
-    const rows = topUserIds.map((userId) => {
-      const um = byUser.get(userId);
-      const row: Record<string, string | number> = {
-        userId,
-        // Fall back to a translated "unknown" label rather than the raw UUID
-        // when the user is no longer in the loaded `users` list (e.g. they left
-        // the company) — mirrors the hours-by-task name resolution.
-        userName: users.find((u) => u.id === userId)?.name ?? unknownLabel,
-      };
-      for (const s of series) {
-        row[s.seriesKey] = Math.round((um?.get(s.taskKey) ?? 0) * 100) / 100;
-      }
-      return row;
-    });
+      .map(({ userId, userName }) => {
+        const um = byUser.get(userId);
+        const row: Record<string, string | number> = { userId, userName };
+        for (const s of series) {
+          row[s.seriesKey] = Math.round((um?.get(s.taskKey) ?? 0) * 100) / 100;
+        }
+        return row;
+      });
     return { rows, series };
-  }, [entries, tasks, users, t]);
+  }, [entries, tasks, users, assignedUserIds, t, i18n.language]);
 
   const hoursByTask = useMemo(() => {
     // Key by taskId where available so renamed tasks don't appear as two bars; fall back
@@ -1577,9 +1582,11 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         </Card>
       </div>
 
-      {/* Charts row */}
+      {/* Charts row. The two "wide" charts — the per-user grouped histogram
+          (many user × task bars) and the monthly timeline — span the full width
+          so they have room to scale; the two compact charts share a row. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>{t('projects:detail.charts.hoursByUser')}</CardTitle>
             <CardDescription>{t('projects:detail.charts.hoursByUserDesc')}</CardDescription>
@@ -1589,7 +1596,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               <Skeleton className="h-[260px] w-full xl:h-[320px]" />
             ) : entriesError !== null ? (
               <ChartLocked variant={entriesError} />
-            ) : hoursByUserTask.rows.length === 0 ? (
+            ) : hoursByUserTask.rows.length === 0 || hoursByUserTask.series.length === 0 ? (
+              // No users to show, or nobody logged any hours yet (no task series
+              // to plot) — show the explicit empty state rather than a bare axis.
               <ChartEmpty />
             ) : (
               /* Grouped histogram: one X-axis group per user, one bar per task
@@ -1597,7 +1606,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                  series via the shared legend. */
               <ChartContainer
                 config={userTaskChartConfig}
-                className="h-[260px] w-full xl:h-[320px]"
+                className="h-[280px] w-full xl:h-[340px]"
               >
                 <BarChart
                   data={hoursByUserTask.rows}
@@ -1610,6 +1619,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     axisLine={false}
                     tickMargin={8}
                     interval={0}
+                    // Truncate long names so up to TOP_USER_GROUPS groups stay
+                    // legible on the axis; the full name shows in the tooltip.
+                    tickFormatter={(v: string) => (v.length > 16 ? `${v.slice(0, 15)}…` : v)}
                   />
                   <YAxis tickLine={false} axisLine={false} width={36} />
                   <ChartTooltip
@@ -1929,7 +1941,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           );
         })()}
 
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>{t('projects:detail.charts.monthlyActivity')}</CardTitle>
             <CardDescription>{t('projects:detail.charts.monthlyActivityDesc')}</CardDescription>
