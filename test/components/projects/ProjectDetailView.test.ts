@@ -51,12 +51,14 @@ describe('ProjectDetailView wiring', () => {
     expect(source).toContain('ChartTooltipContent');
   });
 
-  test('renders four analytics charts: by user, by task, cost vs revenue, by location', async () => {
+  test('renders four analytics charts: by user, by task, cost vs revenue, monthly activity', async () => {
     const source = await readSource();
     expect(source).toContain("t('projects:detail.charts.hoursByUser')");
     expect(source).toContain("t('projects:detail.charts.hoursByTask')");
     expect(source).toContain("t('projects:detail.charts.costVsRevenue')");
-    expect(source).toContain("t('projects:detail.charts.locationSplit')");
+    // The hours-by-location donut was replaced with a monthly-activity bar chart.
+    expect(source).toContain("t('projects:detail.charts.monthlyActivity')");
+    expect(source).not.toContain('locationSplit');
   });
 
   test('falls back to a shadcn Empty placeholder per chart when there are no entries', async () => {
@@ -131,14 +133,14 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     expect(source).toContain('outerRadius="85%"');
   });
 
-  test('donut legends pass compact so the corner annotation reads as small', async () => {
-    // The legend now floats in the top-right corner of the chart area as a
-    // small annotation, so `compact` typography (text-[10px], tight gaps,
-    // smaller swatch) is correct again. Without it the floating annotation
-    // would render too loud relative to the centered donut.
+  test('donut legend passes compact so the corner annotation reads as small', async () => {
+    // The legend floats in the top-right corner of the chart area as a small
+    // annotation, so `compact` typography (text-[10px], tight gaps, smaller
+    // swatch) is correct. Only the hours-by-user donut remains (the location
+    // donut was replaced by the monthly-activity bar chart), so exactly one.
     const source = await readSource();
     const legendCalls = source.match(/<PieLegend[\s\S]*?\/>/g) ?? [];
-    expect(legendCalls).toHaveLength(2);
+    expect(legendCalls).toHaveLength(1);
     for (const call of legendCalls) {
       expect(call).toMatch(/\bcompact\b/);
     }
@@ -310,15 +312,16 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     // ChartEmpty is no longer used for the error/permission variants — only
     // the bare `<ChartEmpty />` (genuine "no entries" empty state) remains.
     expect(source).not.toMatch(/<ChartEmpty variant=/);
-    // All four chart sections use ChartLocked when entriesError is set.
+    // Four chart sections use ChartLocked when entriesError is set: by-user,
+    // by-task, cost-vs-revenue, monthly-activity.
     const lockedUses = source.match(/<ChartLocked variant=\{entriesError\}/g) ?? [];
     expect(lockedUses.length).toBe(4);
-    // Shapes: 2 donuts (by-user, by-location) + 3 rect (by-task, cost-vs-revenue
-    // error state, and the cost-vs-revenue cost-hidden empty state).
+    // Shapes: 1 donut (by-user — the only remaining donut) + 4 rect (by-task,
+    // cost-vs-revenue error, cost-vs-revenue cost-hidden, monthly-activity).
     const donutUses = source.match(/<ChartLocked[^/]*shape="donut"/g) ?? [];
     const rectUses = source.match(/<ChartLocked[^/]*shape="rect"/g) ?? [];
-    expect(donutUses.length).toBe(2);
-    expect(rectUses.length).toBe(3);
+    expect(donutUses.length).toBe(1);
+    expect(rectUses.length).toBe(4);
     // The placeholder visually echoes the live chart geometry (donut → dashed
     // ring sized to mx-auto; rect → dashed h-[260px] xl:h-[320px] box).
     expect(source).toMatch(/rounded-full border-\[26px\] border-dashed/);
@@ -373,18 +376,19 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     // Donut max-w cap: 480px on xl (was 560px) so the absolute legend at
     // right-0 doesn't overlap the donut's right wedges on sub-2K cards.
     expect(source).not.toMatch(/xl:max-w-\[560px\]/);
-    // Both ChartContainers + the ChartLocked donut placeholder share the same
-    // geometry tokens so the locked state matches the live chart's footprint.
+    // The one remaining donut (hours-by-user) + its ChartLocked donut placeholder
+    // share the same geometry tokens so the locked state matches the live chart's
+    // footprint. (The location donut was replaced by the monthly-activity bars.)
     const chartCtns =
       source.match(
         /mx-auto aspect-square[^"]*max-w-\[360px\][^"]*sm:max-w-\[420px\][^"]*xl:max-w-\[480px\]/g,
       ) ?? [];
-    expect(chartCtns.length).toBe(3);
-    // Both legend wrappers overlay the top-right corner on sm+ and stack on
-    // mobile (mt-4 fallback gap).
+    expect(chartCtns.length).toBe(2);
+    // The single legend wrapper overlays the top-right corner on sm+ and stacks
+    // on mobile (mt-4 fallback gap).
     const overlayWrappers =
       source.match(/mt-4 w-full sm:absolute sm:right-0 sm:top-0 sm:mt-0 sm:w-56 xl:w-64/g) ?? [];
-    expect(overlayWrappers.length).toBe(2);
+    expect(overlayWrappers.length).toBe(1);
   });
 
   test('scope-notice chips are keyboard-focusable and carry an aria-label fallback', async () => {
@@ -485,6 +489,24 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
       /content=\{<TaskEffortTooltip language=\{i18n\.language\} t=\{t\} \/>\}/,
     );
     expect(source).toContain("t('projects:detail.charts.totalEffortLabel')");
+  });
+
+  test('monthly-activity chart replaces hours-by-location with a cadence bar chart', async () => {
+    // The hours-by-location donut was low value; it's replaced by a monthly
+    // logged-hours bar chart (project pace/momentum) with a dashed average line.
+    const source = await readSource();
+    // Location machinery is fully removed.
+    expect(source).not.toMatch(/locationSplit|locationConfig|hoveredLocationKey/);
+    // New monthly aggregation: chronological buckets + a mean baseline.
+    expect(source).toContain('const monthlyActivity');
+    expect(source).toMatch(/const avg = rows\.length > 0 \?/);
+    // Chronological (left-to-right trend), not sorted by size.
+    expect(source).toMatch(/\.sort\(\(\[a\], \[b\]\) => a\.localeCompare\(b\)\)/);
+    // Renders a bar chart driven by the new config + the avg ReferenceLine.
+    expect(source).toContain("t('projects:detail.charts.monthlyActivity')");
+    expect(source).toMatch(/config=\{activityChartConfig\}/);
+    expect(source).toMatch(/monthlyActivity\.avg > 0 && \(/);
+    expect(source).toContain("t('projects:detail.charts.avgMonthlyLabel')");
   });
 
   test('bar and area charts grow taller on xl screens', async () => {

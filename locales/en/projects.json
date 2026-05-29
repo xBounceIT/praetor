@@ -150,11 +150,11 @@
       "costVsRevenue": "Cost vs revenue",
       "costVsRevenueDesc": "Cumulative entry cost over time against the project revenue ceiling.",
       "costHiddenNote": "Cumulative cost is hidden because you don't have permission to view cost data.",
-      "locationSplit": "Hours by location",
-      "locationSplitDesc": "Where the work happened.",
+      "monthlyActivity": "Monthly activity",
+      "monthlyActivityDesc": "Hours logged each month — the project's pace and momentum.",
+      "avgMonthlyLabel": "Avg / month",
       "legendHeaders": {
         "user": "User",
-        "location": "Location",
         "hours": "Hours"
       }
     },

@@ -174,7 +174,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   onDeleteTask,
   onViewOrder,
 }) => {
-  const { t, i18n } = useTranslation(['projects', 'common', 'form', 'timesheets']);
+  const { t, i18n } = useTranslation(['projects', 'common', 'form']);
 
   const canUpdateProjects = hasScopedActionPermission(permissions, 'projects.manage', 'update');
   const canDeleteProjects = hasScopedActionPermission(permissions, 'projects.manage', 'delete');
@@ -243,10 +243,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const [taskToDelete, setTaskToDelete] = useState<ProjectTask | null>(null);
   const [isTaskDeleteConfirmOpen, setIsTaskDeleteConfirmOpen] = useState(false);
   const [isAssignmentsOpen, setIsAssignmentsOpen] = useState(false);
-  // Hover-to-isolate state for the donut charts: when the user hovers a row in
-  // the legend, we dim the other slices via fillOpacity so the hovered one pops.
+  // Hover-to-isolate state for the hours-by-user donut: when the user hovers a
+  // row in the legend, we dim the other slices via fillOpacity so it pops.
   const [hoveredUserKey, setHoveredUserKey] = useState<string | null>(null);
-  const [hoveredLocationKey, setHoveredLocationKey] = useState<string | null>(null);
 
   useEffect(() => {
     // Short-circuit when the caller lacks the tracker view permission — the route
@@ -452,16 +451,27 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       });
   }, [entries, i18n.language]);
 
-  const locationSplit = useMemo(() => {
+  // Logged hours bucketed by calendar month — the project's activity cadence.
+  // Answers "is this ramping up, steady, winding down, or stalled?", which none
+  // of the other charts surface. Chronological (not sorted by size) so the trend
+  // reads left-to-right, and the mean gives a baseline to compare months against.
+  const monthlyActivity = useMemo(() => {
     const map = new Map<string, number>();
     for (const e of entries) {
-      const loc = e.location || 'remote';
-      map.set(loc, (map.get(loc) ?? 0) + (e.duration ?? 0));
+      const month = e.date.slice(0, 7);
+      map.set(month, (map.get(month) ?? 0) + (e.duration ?? 0));
     }
-    return Array.from(map.entries())
-      .map(([location, hours]) => ({ location, hours: Math.round(hours * 100) / 100 }))
-      .sort((a, b) => b.hours - a.hours);
-  }, [entries]);
+    const rows = Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, hours]) => ({
+        month,
+        label: formatMonthBucket(`${month}-01`, i18n.language),
+        hours: Math.round(hours * 100) / 100,
+      }));
+    const total = rows.reduce((s, r) => s + r.hours, 0);
+    const avg = rows.length > 0 ? Math.round((total / rows.length) * 100) / 100 : 0;
+    return { rows, avg };
+  }, [entries, i18n.language]);
 
   const clientOptions = clients.map((c) => ({ id: c.id, name: c.name }));
   // Single pass: filter to accepted/sent offers belonging to the current client and
@@ -697,23 +707,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     [hoursByUser],
   );
 
-  const locationConfig: ChartConfig = useMemo(() => {
-    // Translation keys live under `entry.locationTypes` (camelCase keys), not `tracker.*`.
-    const labelKey: Record<string, string> = {
-      remote: 'timesheets:entry.locationTypes.remote',
-      office: 'timesheets:entry.locationTypes.office',
-      customer_premise: 'timesheets:entry.locationTypes.customerPremise',
-      transfer: 'timesheets:entry.locationTypes.transfer',
-    };
-    const cfg: ChartConfig = {};
-    locationSplit.forEach((row, idx) => {
-      cfg[row.location] = {
-        label: t(labelKey[row.location] ?? row.location, row.location),
-        color: `var(--chart-${(idx % 5) + 1})`,
-      };
-    });
-    return cfg;
-  }, [locationSplit, t]);
+  const activityChartConfig: ChartConfig = {
+    hours: { label: t('projects:detail.charts.hoursLabel'), color: 'var(--chart-2)' },
+  };
 
   // Each task renders as a single utilization bar that stacks logged hours over
   // the remaining available effort (so the full bar height = total effort), with
@@ -1902,79 +1898,73 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
 
         <Card>
           <CardHeader>
-            <CardTitle>{t('projects:detail.charts.locationSplit')}</CardTitle>
-            <CardDescription>{t('projects:detail.charts.locationSplitDesc')}</CardDescription>
+            <CardTitle>{t('projects:detail.charts.monthlyActivity')}</CardTitle>
+            <CardDescription>{t('projects:detail.charts.monthlyActivityDesc')}</CardDescription>
           </CardHeader>
           <CardContent>
             {entriesLoading ? (
               <Skeleton className="h-[260px] w-full xl:h-[320px]" />
             ) : entriesError !== null ? (
-              <ChartLocked variant={entriesError} shape="donut" />
-            ) : locationSplit.length === 0 || locationSplit.every((r) => r.hours === 0) ? (
+              <ChartLocked variant={entriesError} shape="rect" />
+            ) : monthlyActivity.rows.length === 0 ? (
               <ChartEmpty />
             ) : (
-              /* Same centered-chart + corner-overlay legend layout as the
-                 hours-by-user chart. See that section for the rationale. */
-              <div className="relative">
-                <ChartContainer
-                  config={locationConfig}
-                  className="mx-auto aspect-square w-full max-w-[360px] shrink-0 sm:max-w-[420px] xl:max-w-[480px]"
+              <ChartContainer
+                config={activityChartConfig}
+                className="h-[260px] w-full xl:h-[320px]"
+              >
+                <BarChart
+                  data={monthlyActivity.rows}
+                  margin={{ left: 8, right: 8, top: 24, bottom: 8 }}
                 >
-                  <PieChart>
-                    <ChartTooltip
-                      isAnimationActive={false}
-                      content={<ChartTooltipContent nameKey="location" />}
-                    />
-                    <Pie
-                      data={locationSplit}
-                      dataKey="hours"
-                      nameKey="location"
-                      innerRadius="55%"
-                      outerRadius="85%"
-                      strokeWidth={2}
-                      isAnimationActive={false}
-                      onMouseEnter={(entry) =>
-                        setHoveredLocationKey((entry as { location?: string })?.location ?? null)
-                      }
-                      onMouseLeave={() => setHoveredLocationKey(null)}
-                    >
-                      {locationSplit.map((row) => (
-                        <Cell
-                          key={row.location}
-                          fill={`var(--color-${row.location})`}
-                          name={String(locationConfig[row.location]?.label ?? row.location)}
-                          fillOpacity={
-                            hoveredLocationKey && hoveredLocationKey !== row.location ? 0.2 : 1
-                          }
-                          style={{ transition: 'fill-opacity 150ms ease-out' }}
-                        />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ChartContainer>
-                <div className="mt-4 w-full sm:absolute sm:right-0 sm:top-0 sm:mt-0 sm:w-56 xl:w-64">
-                  <PieLegend
-                    compact
-                    rows={locationSplit.map((row, idx) => ({
-                      key: row.location,
-                      label: String(locationConfig[row.location]?.label ?? row.location),
-                      value: row.hours,
-                      // Same chart palette index as the Pie Cell fills.
-                      color: `var(--chart-${(idx % 5) + 1})`,
-                    }))}
-                    total={locationSplit.reduce((s, r) => s + r.hours, 0)}
-                    valueFormatter={(v) =>
-                      v.toLocaleString(i18n.language, { maximumFractionDigits: 1 })
-                    }
-                    onRowHover={setHoveredLocationKey}
-                    headers={{
-                      label: t('projects:detail.charts.legendHeaders.location'),
-                      value: t('projects:detail.charts.legendHeaders.hours'),
-                      share: '%',
-                    }}
+                  <CartesianGrid vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    minTickGap={16}
                   />
-                </div>
-              </div>
+                  <YAxis tickLine={false} axisLine={false} width={36} />
+                  <ChartTooltip
+                    isAnimationActive={false}
+                    content={<ChartTooltipContent />}
+                    cursor={false}
+                    position={{ y: 0 }}
+                  />
+                  <Bar dataKey="hours" fill="var(--color-hours)" radius={[4, 4, 0, 0]}>
+                    <LabelList
+                      dataKey="hours"
+                      position="top"
+                      className="fill-foreground text-xs"
+                      formatter={(value: unknown) => {
+                        const n = typeof value === 'number' ? value : Number(value);
+                        return Number.isFinite(n) && n > 0
+                          ? n.toLocaleString(i18n.language, { maximumFractionDigits: 1 })
+                          : '';
+                      }}
+                    />
+                  </Bar>
+                  {/* "Typical month" baseline so cadence reads at a glance: months
+                      above the line were busier than average, below were quieter.
+                      The mean is always <= the tallest bar, so it never clips. */}
+                  {monthlyActivity.avg > 0 && (
+                    <ReferenceLine
+                      y={monthlyActivity.avg}
+                      stroke="var(--muted-foreground)"
+                      strokeDasharray="4 4"
+                      strokeWidth={1.5}
+                      label={{
+                        value: `${t('projects:detail.charts.avgMonthlyLabel')} · ${monthlyActivity.avg.toLocaleString(i18n.language, { maximumFractionDigits: 1 })} h`,
+                        position: 'insideTopRight',
+                        fill: 'var(--muted-foreground)',
+                        fontSize: 11,
+                        fontWeight: 500,
+                      }}
+                    />
+                  )}
+                </BarChart>
+              </ChartContainer>
             )}
           </CardContent>
         </Card>
