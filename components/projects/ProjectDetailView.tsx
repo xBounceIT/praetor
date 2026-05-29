@@ -7,10 +7,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   LabelList,
-  Pie,
-  PieChart,
   ReferenceLine,
   XAxis,
   YAxis,
@@ -243,9 +240,6 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const [taskToDelete, setTaskToDelete] = useState<ProjectTask | null>(null);
   const [isTaskDeleteConfirmOpen, setIsTaskDeleteConfirmOpen] = useState(false);
   const [isAssignmentsOpen, setIsAssignmentsOpen] = useState(false);
-  // Hover-to-isolate state for the hours-by-user donut: when the user hovers a
-  // row in the legend, we dim the other slices via fillOpacity so it pops.
-  const [hoveredUserKey, setHoveredUserKey] = useState<string | null>(null);
 
   useEffect(() => {
     // Short-circuit when the caller lacks the tracker view permission — the route
@@ -343,20 +337,77 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     [entries],
   );
   const totalCost = useMemo(() => entries.reduce((sum, e) => sum + (e.cost ?? 0), 0), [entries]);
-  const hoursByUser = useMemo(() => {
-    const map = new Map<string, number>();
+  // Grouped histogram: per user, hours logged on each task. Users are the X-axis
+  // groups; tasks are the colored series, so each user shows one bar per task
+  // (5 users × 3 tasks → 15 bars). Capped to keep the cluster readable: the top
+  // tasks by total hours become the series, the top users by their hours over
+  // those tasks become the groups.
+  const TOP_TASK_SERIES = 6;
+  const TOP_USER_GROUPS = 8;
+  const hoursByUserTask = useMemo(() => {
+    const unknownLabel = t('projects:projects.unknown');
+    // userId -> taskKey -> hours
+    const byUser = new Map<string, Map<string, number>>();
+    const taskTotals = new Map<string, number>();
+    const taskNames = new Map<string, string>();
     for (const e of entries) {
-      map.set(e.userId, (map.get(e.userId) ?? 0) + (e.duration ?? 0));
+      const taskKey = e.taskId ?? `name:${e.task || ''}`;
+      const dur = e.duration ?? 0;
+      taskTotals.set(taskKey, (taskTotals.get(taskKey) ?? 0) + dur);
+      // Prefer the current task name (handles renames), then the entry snapshot.
+      const currentName = e.taskId
+        ? (tasks.find((tk) => tk.id === e.taskId)?.name ?? e.task)
+        : e.task;
+      const resolved = currentName || unknownLabel;
+      const existing = taskNames.get(taskKey);
+      if (!existing || (existing === unknownLabel && resolved !== unknownLabel)) {
+        taskNames.set(taskKey, resolved);
+      }
+      let um = byUser.get(e.userId);
+      if (!um) {
+        um = new Map();
+        byUser.set(e.userId, um);
+      }
+      um.set(taskKey, (um.get(taskKey) ?? 0) + dur);
     }
-    return Array.from(map.entries())
-      .map(([userId, hours]) => ({
+    // Top tasks → stable synthetic series keys (t0, t1, …). Synthetic keys avoid
+    // using a raw task name (or "name:…" fallback) as a Recharts dataKey, where
+    // dots would be misread as nested-path accessors.
+    const topTaskKeys = Array.from(taskTotals.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, TOP_TASK_SERIES)
+      .map(([k]) => k);
+    const series = topTaskKeys.map((taskKey, i) => ({
+      seriesKey: `t${i}`,
+      taskKey,
+      name: taskNames.get(taskKey) ?? unknownLabel,
+      color: `var(--chart-${(i % 5) + 1})`,
+    }));
+    // Rank users by their hours across the selected tasks so the bars shown sum
+    // to the ranking total (no "tall user with all hours on hidden tasks").
+    const userTotals = new Map<string, number>();
+    for (const [userId, um] of byUser) {
+      let total = 0;
+      for (const k of topTaskKeys) total += um.get(k) ?? 0;
+      if (total > 0) userTotals.set(userId, total);
+    }
+    const topUserIds = Array.from(userTotals.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, TOP_USER_GROUPS)
+      .map(([id]) => id);
+    const rows = topUserIds.map((userId) => {
+      const um = byUser.get(userId);
+      const row: Record<string, string | number> = {
         userId,
         userName: users.find((u) => u.id === userId)?.name ?? userId,
-        hours: Math.round(hours * 100) / 100,
-      }))
-      .sort((a, b) => b.hours - a.hours)
-      .slice(0, 8);
-  }, [entries, users]);
+      };
+      for (const s of series) {
+        row[s.seriesKey] = Math.round((um?.get(s.taskKey) ?? 0) * 100) / 100;
+      }
+      return row;
+    });
+    return { rows, series };
+  }, [entries, tasks, users, t]);
 
   const hoursByTask = useMemo(() => {
     // Key by taskId where available so renamed tasks don't appear as two bars; fall back
@@ -408,7 +459,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           const remaining = Math.max(0, round(expected - actual));
           const over = expected > 0 ? Math.max(0, round(actual - expected)) : 0;
           return {
-            // Stable key for the chart config / Cell fill — survives task renames.
+            // Stable key that survives task renames (used for React keys).
             key,
             task: name || unknownLabel,
             hours: actual,
@@ -694,18 +745,15 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     setIsTaskDeleteConfirmOpen(false);
   };
 
-  // Chart configs (theme-aware via --chart-N)
-  const hoursByUserConfig: ChartConfig = useMemo(
-    () =>
-      hoursByUser.reduce<ChartConfig>((acc, row, idx) => {
-        acc[row.userId] = {
-          label: row.userName,
-          color: `var(--chart-${(idx % 5) + 1})`,
-        };
-        return acc;
-      }, {}),
-    [hoursByUser],
-  );
+  // Chart configs (theme-aware via --chart-N). One series per displayed task —
+  // the legend lists task names, and var(--color-<seriesKey>) feeds each Bar.
+  const userTaskChartConfig: ChartConfig = useMemo(() => {
+    const cfg: ChartConfig = {};
+    for (const s of hoursByUserTask.series) {
+      cfg[s.seriesKey] = { label: s.name, color: s.color };
+    }
+    return cfg;
+  }, [hoursByUserTask.series]);
 
   const activityChartConfig: ChartConfig = {
     hours: { label: t('projects:detail.charts.hoursLabel'), color: 'var(--chart-2)' },
@@ -1536,75 +1584,47 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             {entriesLoading ? (
               <Skeleton className="h-[260px] w-full xl:h-[320px]" />
             ) : entriesError !== null ? (
-              <ChartLocked variant={entriesError} shape="donut" />
-            ) : hoursByUser.length === 0 || hoursByUser.every((r) => r.hours === 0) ? (
+              <ChartLocked variant={entriesError} />
+            ) : hoursByUserTask.rows.length === 0 ? (
               <ChartEmpty />
             ) : (
-              /* Relative wrapper: the donut centers in the card (mx-auto) and
-                 the legend overlays the top-right corner on sm+. On mobile the
-                 legend falls back to stacking below the chart full-width. This
-                 lets the chart visually dominate without a sidebar column
-                 pulling the layout left-of-center. */
-              <div className="relative">
-                <ChartContainer
-                  config={hoursByUserConfig}
-                  className="mx-auto aspect-square w-full max-w-[360px] shrink-0 sm:max-w-[420px] xl:max-w-[480px]"
+              /* Grouped histogram: one X-axis group per user, one bar per task
+                 within each group (users × tasks bars). Tasks are the colored
+                 series via the shared legend. */
+              <ChartContainer
+                config={userTaskChartConfig}
+                className="h-[260px] w-full xl:h-[320px]"
+              >
+                <BarChart
+                  data={hoursByUserTask.rows}
+                  margin={{ left: 8, right: 8, top: 16, bottom: 8 }}
                 >
-                  <PieChart>
-                    <ChartTooltip
-                      isAnimationActive={false}
-                      content={<ChartTooltipContent nameKey="userId" />}
-                    />
-                    <Pie
-                      data={hoursByUser}
-                      dataKey="hours"
-                      nameKey="userId"
-                      innerRadius="55%"
-                      outerRadius="85%"
-                      strokeWidth={2}
-                      isAnimationActive={false}
-                      onMouseEnter={(entry) =>
-                        setHoveredUserKey((entry as { userId?: string })?.userId ?? null)
-                      }
-                      onMouseLeave={() => setHoveredUserKey(null)}
-                    >
-                      {hoursByUser.map((row, idx) => (
-                        <Cell
-                          key={row.userId}
-                          fill={`var(--color-${row.userId})`}
-                          name={row.userName}
-                          data-idx={idx}
-                          fillOpacity={hoveredUserKey && hoveredUserKey !== row.userId ? 0.2 : 1}
-                          style={{ transition: 'fill-opacity 150ms ease-out' }}
-                        />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ChartContainer>
-                <div className="mt-4 w-full sm:absolute sm:right-0 sm:top-0 sm:mt-0 sm:w-56 xl:w-64">
-                  <PieLegend
-                    compact
-                    rows={hoursByUser.map((row, idx) => ({
-                      key: row.userId,
-                      label: row.userName,
-                      value: row.hours,
-                      // Mirrors the Pie Cell fill, which uses var(--color-<userId>)
-                      // sourced from hoursByUserConfig (var(--chart-N) cycling 1-5).
-                      color: `var(--chart-${(idx % 5) + 1})`,
-                    }))}
-                    total={totalHours}
-                    valueFormatter={(v) =>
-                      v.toLocaleString(i18n.language, { maximumFractionDigits: 1 })
-                    }
-                    onRowHover={setHoveredUserKey}
-                    headers={{
-                      label: t('projects:detail.charts.legendHeaders.user'),
-                      value: t('projects:detail.charts.legendHeaders.hours'),
-                      share: '%',
-                    }}
+                  <CartesianGrid vertical={false} />
+                  <XAxis
+                    dataKey="userName"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    interval={0}
                   />
-                </div>
-              </div>
+                  <YAxis tickLine={false} axisLine={false} width={36} />
+                  <ChartTooltip
+                    isAnimationActive={false}
+                    content={<ChartTooltipContent />}
+                    cursor={false}
+                    position={{ y: 0 }}
+                  />
+                  <ChartLegend content={<ChartLegendContent />} />
+                  {hoursByUserTask.series.map((s) => (
+                    <Bar
+                      key={s.seriesKey}
+                      dataKey={s.seriesKey}
+                      fill={`var(--color-${s.seriesKey})`}
+                      radius={[4, 4, 0, 0]}
+                    />
+                  ))}
+                </BarChart>
+              </ChartContainer>
             )}
           </CardContent>
         </Card>
@@ -1618,7 +1638,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             {entriesLoading ? (
               <Skeleton className="h-[260px] w-full xl:h-[320px]" />
             ) : entriesError !== null ? (
-              <ChartLocked variant={entriesError} shape="rect" />
+              <ChartLocked variant={entriesError} />
             ) : hoursByTask.length === 0 ? (
               // Only empty when there are neither project tasks nor entries — tasks
               // with no hours yet are still meaningful (planned/not-yet-worked-on)
@@ -1752,7 +1772,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 {entriesLoading ? (
                   <Skeleton className="h-[260px] w-full xl:h-[320px]" />
                 ) : entriesError !== null ? (
-                  <ChartLocked variant={entriesError} shape="rect" />
+                  <ChartLocked variant={entriesError} />
                 ) : !hasChartContent ? (
                   // Without cost permission the server strips cost to 0, so the
                   // cost area is always suppressed. When there's no revenue line
@@ -1761,7 +1781,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   // hours. Saying "no hours logged yet" here contradicts that, so
                   // explain the cost-permission gap instead.
                   !canViewCost ? (
-                    <ChartLocked variant="cost-hidden" shape="rect" />
+                    <ChartLocked variant="cost-hidden" />
                   ) : (
                     <ChartEmpty />
                   )
@@ -1905,7 +1925,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             {entriesLoading ? (
               <Skeleton className="h-[260px] w-full xl:h-[320px]" />
             ) : entriesError !== null ? (
-              <ChartLocked variant={entriesError} shape="rect" />
+              <ChartLocked variant={entriesError} />
             ) : monthlyActivity.rows.length === 0 ? (
               <ChartEmpty />
             ) : (
@@ -2073,84 +2093,6 @@ const KpiCard: React.FC<KpiCardProps> = ({
   </Card>
 );
 
-// Right-side legend for the donut charts. Built inline rather than via shadcn's
-// ChartLegendContent because that one is hard-coded to horizontal flex; we want a
-// vertical layout that also surfaces hours and percent-of-total per row.
-const PieLegend: React.FC<{
-  // `color` is the slice color for this row. It must be passed in because the
-  // legend renders outside the ChartContainer, where `var(--color-<key>)` from
-  // shadcn's ChartStyle isn't in scope. Without it, both the swatch and the
-  // colored value/share would render with no color at all.
-  rows: ReadonlyArray<{ key: string; label: string; value: number; color: string }>;
-  total: number;
-  valueFormatter: (v: number) => string;
-  // `compact` shrinks typography and tightens spacing so the legend can sit as a
-  // small annotation in the top-right corner of a chart rather than as a primary
-  // sidebar column.
-  compact?: boolean;
-  // Fired with the hovered row's key on mouseenter and with null on mouseleave.
-  // The parent uses this to dim non-hovered slices in the corresponding chart.
-  onRowHover?: (key: string | null) => void;
-  // Optional column headers. Color swatch column never gets a header.
-  headers?: { label: string; value: string; share?: string };
-}> = ({ rows, total, valueFormatter, compact, onRowHover, headers }) => {
-  // Width tokens shared between the header row and each body row so the columns
-  // actually line up. Keep them as constants instead of inlining so changing one
-  // tier (e.g. value column width) only needs editing in one place.
-  // Non-compact bumps up at xl: on a 2K monitor the legend has enough horizontal
-  // room to deserve `text-sm` instead of squinting at `text-xs`. Compact stays
-  // tight for the in-chart annotation use case.
-  const swatch = compact ? 'size-2' : 'size-2.5 xl:size-3';
-  const valueCol = 'min-w-[2.5rem] text-right';
-  const shareCol = compact ? 'w-8 text-right' : 'w-10 text-right xl:w-12';
-  const rowGap = compact ? 'gap-1.5' : 'gap-2 xl:gap-3';
-  return (
-    <div
-      className={`flex-1 min-w-0 ${compact ? 'text-[10px]' : 'text-xs xl:text-sm'}`}
-      onMouseLeave={onRowHover ? () => onRowHover(null) : undefined}
-    >
-      {headers && (
-        <div
-          className={`flex items-center px-1 pb-1 font-medium uppercase tracking-wide text-muted-foreground/70 ${rowGap} ${compact ? 'text-[9px]' : 'text-[10px] xl:text-xs'}`}
-        >
-          {/* Spacer to align with the color swatch column on each row */}
-          <span className={`shrink-0 ${swatch}`} aria-hidden="true" />
-          <span className="flex-1 truncate">{headers.label}</span>
-          <span className={`tabular-nums ${valueCol}`}>{headers.value}</span>
-          {headers.share && <span className={`tabular-nums ${shareCol}`}>{headers.share}</span>}
-        </div>
-      )}
-      <ul className={compact ? 'space-y-0.5' : 'space-y-1'}>
-        {rows.map((row) => {
-          const pct = total > 0 ? (row.value / total) * 100 : 0;
-          return (
-            <li
-              key={row.key}
-              className={`flex items-center rounded-sm transition-colors px-1 py-0.5 ${rowGap} ${onRowHover ? 'cursor-default hover:bg-muted/60' : ''}`}
-              onMouseEnter={onRowHover ? () => onRowHover(row.key) : undefined}
-            >
-              <span
-                className={`shrink-0 rounded-[2px] ${swatch}`}
-                style={{ backgroundColor: row.color }}
-                aria-hidden="true"
-              />
-              <span className="flex-1 truncate text-foreground">{row.label}</span>
-              {/* Numeric columns are demoted to muted text — the color signal
-                  lives in the swatch chip on the left, not in the numbers. */}
-              <span className={`tabular-nums text-muted-foreground ${valueCol}`}>
-                {valueFormatter(row.value)}
-              </span>
-              <span className={`font-medium tabular-nums text-muted-foreground ${shareCol}`}>
-                {pct.toFixed(pct >= 10 ? 0 : 1)}%
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-};
-
 // Rendered in place of a chart whose data is gated (the caller lacks the
 // required permission) or failed to load. Unlike ChartEmpty — which replaces
 // the chart with a generic "no data" callout — this keeps a chart-shaped
@@ -2158,8 +2100,7 @@ const PieLegend: React.FC<{
 // surfaces a warning chip centered on top to explain why it's locked.
 const ChartLocked: React.FC<{
   variant: 'forbidden' | 'failed' | 'cost-hidden';
-  shape: 'donut' | 'rect';
-}> = ({ variant, shape }) => {
+}> = ({ variant }) => {
   const { t } = useTranslation(['projects']);
   // The description gives users the *why* — the old ChartEmpty variant
   // rendered it via EmptyDescription. Without it the locked card just
@@ -2192,21 +2133,11 @@ const ChartLocked: React.FC<{
       tone: AMBER_TONE,
     },
   }[variant];
-  const placeholder =
-    shape === 'donut' ? (
-      // Dashed ring approximating the donut's hole+stroke. Sized to mirror the
-      // ChartContainer's max-w-[360px] sm:max-w-[420px] xl:max-w-[480px] so the
-      // locked card matches the geometry of the live one.
-      <div className="mx-auto aspect-square w-full max-w-[360px] sm:max-w-[420px] xl:max-w-[480px]">
-        <div className="size-full rounded-full border-[26px] border-dashed border-muted/40" />
-      </div>
-    ) : (
-      // Dashed box matching the bar/area chart's height tokens.
-      <div className="h-[260px] w-full rounded-lg border-2 border-dashed border-muted/40 xl:h-[320px]" />
-    );
   return (
     <div className="relative" role="status" aria-live="polite">
-      {placeholder}
+      {/* Dashed box matching the bar/area chart's height tokens, so the locked
+          state keeps the same footprint as the live chart. */}
+      <div className="h-[260px] w-full rounded-lg border-2 border-dashed border-muted/40 xl:h-[320px]" />
       <div className="absolute inset-0 flex items-center justify-center px-4">
         <div
           className={`inline-flex max-w-sm flex-col items-start gap-1 rounded-md border px-3 py-2 text-xs ${tone}`}

@@ -140,7 +140,7 @@
       "cumulativeCostLabel": "Costo cumulato",
       "revenueLabel": "Ricavo",
       "hoursByUser": "Ore per utente",
-      "hoursByUserDesc": "Distribuzione dell'effort nel team.",
+      "hoursByUserDesc": "Ore registrate da ciascun utente, suddivise per attività.",
       "hoursByTask": "Ore per attività",
       "hoursByTaskDesc": "Ore registrate rispetto all'effort disponibile, per attività.",
       "loggedLabel": "Ore registrate",
@@ -152,11 +152,7 @@
       "costHiddenNote": "Il costo cumulato è nascosto perché non hai i permessi per vedere i dati di costo.",
       "monthlyActivity": "Attività mensile",
       "monthlyActivityDesc": "Ore registrate ogni mese — il ritmo e lo slancio del progetto.",
-      "avgMonthlyLabel": "Media / mese",
-      "legendHeaders": {
-        "user": "Utente",
-        "hours": "Ore"
-      }
+      "avgMonthlyLabel": "Media / mese"
     },
     "empty": {
       "noEntriesTitle": "Ancora nessuna ora registrata",

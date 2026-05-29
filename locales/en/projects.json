@@ -140,7 +140,7 @@
       "cumulativeCostLabel": "Cumulative cost",
       "revenueLabel": "Revenue",
       "hoursByUser": "Hours by user",
-      "hoursByUserDesc": "Effort distribution across the team.",
+      "hoursByUserDesc": "Hours each user logged, broken down by task.",
       "hoursByTask": "Hours by task",
       "hoursByTaskDesc": "Logged hours against the available effort, per task.",
       "loggedLabel": "Logged hours",
@@ -152,11 +152,7 @@
       "costHiddenNote": "Cumulative cost is hidden because you don't have permission to view cost data.",
       "monthlyActivity": "Monthly activity",
       "monthlyActivityDesc": "Hours logged each month — the project's pace and momentum.",
-      "avgMonthlyLabel": "Avg / month",
-      "legendHeaders": {
-        "user": "User",
-        "hours": "Hours"
-      }
+      "avgMonthlyLabel": "Avg / month"
     },
     "empty": {
       "noEntriesTitle": "No time logged yet",

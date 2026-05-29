@@ -116,34 +116,32 @@ describe('ProjectDetailView wiring', () => {
 });
 
 describe('ProjectDetailView chart scaling on wide displays', () => {
-  test('donut charts use a fluid square container, not a fixed 300px box', async () => {
-    // On 2K monitors the old `mx-auto size-[300px]` left the donut floating in
-    // empty card space and absolute-positioned the legend at `w-[170px]` in the
-    // top-right corner. The fluid layout grows both pieces with the card.
+  test('hours-by-user is a grouped histogram: one bar per task within each user', async () => {
+    // Refactored from a donut to a grouped bar chart — X-axis groups by user,
+    // and within each user one bar per task (users × tasks bars). Tasks are the
+    // colored series via the shared legend.
     const source = await readSource();
-    expect(source).not.toMatch(/size-\[300px\]/);
-    expect(source).not.toMatch(/w-\[170px\]/);
-    // Donut sized 360/420/480 — large enough to dominate, small enough to leave
-    // breathing room for the absolute-positioned legend at xl widths without
-    // having the legend overlap the donut's right wedges on sub-2K displays.
-    expect(source).toMatch(/aspect-square[^"']*max-w-\[360px\][^"']*sm:max-w-\[420px\]/);
-    // Pie inner/outer radius switched to percentages so the hole scales with
-    // the container. Hard-coded `innerRadius={70}` would not.
-    expect(source).toContain('innerRadius="55%"');
-    expect(source).toContain('outerRadius="85%"');
-  });
-
-  test('donut legend passes compact so the corner annotation reads as small', async () => {
-    // The legend floats in the top-right corner of the chart area as a small
-    // annotation, so `compact` typography (text-[10px], tight gaps, smaller
-    // swatch) is correct. Only the hours-by-user donut remains (the location
-    // donut was replaced by the monthly-activity bar chart), so exactly one.
-    const source = await readSource();
-    const legendCalls = source.match(/<PieLegend[\s\S]*?\/>/g) ?? [];
-    expect(legendCalls).toHaveLength(1);
-    for (const call of legendCalls) {
-      expect(call).toMatch(/\bcompact\b/);
-    }
+    // Donut machinery is fully gone.
+    expect(source).not.toMatch(/\bPieLegend\b|<Pie\b|PieChart|innerRadius/);
+    // Cell / Pie / PieChart are no longer imported from recharts.
+    const rechartsImport = source.match(/import \{([\s\S]*?)\} from 'recharts';/)?.[1] ?? '';
+    expect(rechartsImport).not.toMatch(/\b(Cell|Pie|PieChart)\b/);
+    // New per-(user,task) aggregation with capped series + groups.
+    expect(source).toContain('const hoursByUserTask');
+    expect(source).toMatch(/const TOP_TASK_SERIES = \d+/);
+    expect(source).toMatch(/const TOP_USER_GROUPS = \d+/);
+    // X-axis groups by user; tasks become synthetic series keys (t0, t1, …) so a
+    // task name with dots can't be misread as a Recharts nested-path accessor.
+    expect(source).toMatch(/seriesKey: `t\$\{i\}`/);
+    expect(source).toMatch(/<XAxis\s+dataKey="userName"/);
+    // One <Bar> per task series, grouped (no stackId), driven by the config var.
+    expect(source).toMatch(/hoursByUserTask\.series\.map\(\(s\) => \(/);
+    expect(source).toMatch(
+      /dataKey=\{s\.seriesKey\}\s+fill=\{`var\(--color-\$\{s\.seriesKey\}\)`\}/,
+    );
+    expect(source).not.toMatch(/stackId="user/); // grouped, not stacked
+    // Legend distinguishes the task series.
+    expect(source).toMatch(/<ChartLegend content=\{<ChartLegendContent \/>\}/);
   });
 
   test('analytics section gets a header with the scope notice inlined beside it', async () => {
@@ -218,38 +216,6 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     );
   });
 
-  test('donut legend rows carry an explicit color since they render outside ChartContainer', async () => {
-    // shadcn's ChartContainer sets `--color-<key>` CSS vars on its own root —
-    // those vars don't resolve outside it. The legend sits as a sibling div,
-    // so it needs the slice color passed in explicitly (here we use the same
-    // var(--chart-N) palette index the Pie Cells use).
-    const source = await readSource();
-    // Both callsites pass a color per row tied to the row's palette index.
-    const callsites = source.match(/color: `var\(--chart-\$\{\(idx % 5\) \+ 1\}\)`/g) ?? [];
-    expect(callsites.length).toBeGreaterThanOrEqual(2);
-    // The PieLegend row type requires `color` (not optional) so callers can't
-    // silently regress to the broken "no color in scope" state.
-    expect(source).toMatch(
-      /rows: ReadonlyArray<\{ key: string; label: string; value: number; color: string \}>/,
-    );
-  });
-
-  test('donut legend numeric columns use muted-foreground, not the slice color', async () => {
-    // The swatch chip carries the color signal per row; the numbers (hours
-    // and %) read as secondary muted text so the legend doesn't compete
-    // visually with the donut wedges. The earlier "values match slice color"
-    // approach made the legend feel loud at the floating-corner size.
-    const source = await readSource();
-    // No more inline `color: row.color` on numeric columns. (Swatch's
-    // `backgroundColor: row.color` is a different style key and unaffected.)
-    expect(source).not.toMatch(/style=\{\{ color: row\.color \}\}/);
-    // Both numeric columns use text-muted-foreground via className.
-    expect(source).toMatch(/className=\{`tabular-nums text-muted-foreground \$\{valueCol\}`\}/);
-    expect(source).toMatch(
-      /className=\{`font-medium tabular-nums text-muted-foreground \$\{shareCol\}`\}/,
-    );
-  });
-
   test('cost-vs-revenue card is always rendered, even with no entries and no revenue', async () => {
     // Two `return null` short-circuits at the top of the IIFE used to hide the
     // whole card when the project had no cost data AND no displayed revenue —
@@ -312,19 +278,15 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     // ChartEmpty is no longer used for the error/permission variants — only
     // the bare `<ChartEmpty />` (genuine "no entries" empty state) remains.
     expect(source).not.toMatch(/<ChartEmpty variant=/);
-    // Four chart sections use ChartLocked when entriesError is set: by-user,
-    // by-task, cost-vs-revenue, monthly-activity.
+    // All four data-driven chart sections use ChartLocked when entriesError is
+    // set: by-user, by-task, cost-vs-revenue, monthly-activity. (The 5th use is
+    // the cost-hidden variant, asserted separately.)
     const lockedUses = source.match(/<ChartLocked variant=\{entriesError\}/g) ?? [];
     expect(lockedUses.length).toBe(4);
-    // Shapes: 1 donut (by-user — the only remaining donut) + 4 rect (by-task,
-    // cost-vs-revenue error, cost-vs-revenue cost-hidden, monthly-activity).
-    const donutUses = source.match(/<ChartLocked[^/]*shape="donut"/g) ?? [];
-    const rectUses = source.match(/<ChartLocked[^/]*shape="rect"/g) ?? [];
-    expect(donutUses.length).toBe(1);
-    expect(rectUses.length).toBe(4);
-    // The placeholder visually echoes the live chart geometry (donut → dashed
-    // ring sized to mx-auto; rect → dashed h-[260px] xl:h-[320px] box).
-    expect(source).toMatch(/rounded-full border-\[26px\] border-dashed/);
+    // Now that every chart is rectangular (no donuts left), ChartLocked dropped
+    // its `shape` prop and always renders the rect dashed placeholder.
+    expect(source).not.toMatch(/shape="(donut|rect)"/);
+    expect(source).not.toMatch(/rounded-full border-\[26px\]/);
     expect(source).toMatch(
       /h-\[260px\] w-full rounded-lg border-2 border-dashed border-muted\/40 xl:h-\[320px\]/,
     );
@@ -346,7 +308,7 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     // New ChartLocked variant + its cost-specific copy.
     expect(source).toMatch(/variant: 'forbidden' \| 'failed' \| 'cost-hidden';/);
     expect(source).toContain('detail.empty.costHiddenTitle');
-    expect(source).toMatch(/<ChartLocked variant="cost-hidden" shape="rect" \/>/);
+    expect(source).toMatch(/<ChartLocked variant="cost-hidden" \/>/);
     // The empty branch chooses cost-hidden vs ChartEmpty on !canViewCost.
     expect(source).toMatch(/!canViewCost \? \(\s*<ChartLocked variant="cost-hidden"/);
     // The standalone note is now gated on hasChartContent so it never shows
@@ -361,34 +323,6 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     const it = await Bun.file(new URL('../../../locales/it/projects.json', import.meta.url)).json();
     expect(en.detail.empty.costHiddenTitle).toBeTruthy();
     expect(it.detail.empty.costHiddenTitle).toBeTruthy();
-  });
-
-  test('donut chart is centered with a legend overlaid in the top-right corner', async () => {
-    // The pair-with-justify-center layout still left visible empty bands on
-    // both sides of the card on wide displays. New layout: the chart is the
-    // dominant centered visual (mx-auto) inside a relative wrapper, and the
-    // legend pops out of flow to overlay the top-right corner on sm+. On
-    // mobile the legend stacks below the chart full-width.
-    const source = await readSource();
-    // Old flex-row pair layout is gone.
-    expect(source).not.toMatch(/sm:flex-row sm:items-center sm:justify-center/);
-    expect(source).not.toMatch(/w-full sm:w-72 xl:w-80/);
-    // Donut max-w cap: 480px on xl (was 560px) so the absolute legend at
-    // right-0 doesn't overlap the donut's right wedges on sub-2K cards.
-    expect(source).not.toMatch(/xl:max-w-\[560px\]/);
-    // The one remaining donut (hours-by-user) + its ChartLocked donut placeholder
-    // share the same geometry tokens so the locked state matches the live chart's
-    // footprint. (The location donut was replaced by the monthly-activity bars.)
-    const chartCtns =
-      source.match(
-        /mx-auto aspect-square[^"]*max-w-\[360px\][^"]*sm:max-w-\[420px\][^"]*xl:max-w-\[480px\]/g,
-      ) ?? [];
-    expect(chartCtns.length).toBe(2);
-    // The single legend wrapper overlays the top-right corner on sm+ and stacks
-    // on mobile (mt-4 fallback gap).
-    const overlayWrappers =
-      source.match(/mt-4 w-full sm:absolute sm:right-0 sm:top-0 sm:mt-0 sm:w-56 xl:w-64/g) ?? [];
-    expect(overlayWrappers.length).toBe(1);
   });
 
   test('scope-notice chips are keyboard-focusable and carry an aria-label fallback', async () => {
