@@ -147,6 +147,7 @@
       "remainingEffortLabel": "Effort residuo",
       "overBudgetLabel": "Oltre budget",
       "totalEffortLabel": "Effort totale",
+      "totalLabel": "Totale",
       "costVsRevenue": "Costo vs ricavo",
       "costVsRevenueDesc": "Costo cumulato delle voci nel tempo rispetto al ricavo del progetto.",
       "costHiddenNote": "Il costo cumulato è nascosto perché non hai i permessi per vedere i dati di costo.",

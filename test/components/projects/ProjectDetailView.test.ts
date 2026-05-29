@@ -142,6 +142,28 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     expect(source).not.toMatch(/stackId="user/); // grouped, not stacked
     // Legend distinguishes the task series.
     expect(source).toMatch(/<ChartLegend content=\{<ChartLegendContent \/>\}/);
+    // Task-series cap matches the 5-color chart palette so no two task series
+    // collide on var(--chart-1) (a 6th series would wrap to chart-1).
+    expect(source).toMatch(/const TOP_TASK_SERIES = 5;/);
+    // Missing users fall back to the translated "unknown" label, not a raw UUID.
+    expect(source).toMatch(
+      /userName: users\.find\(\(u\) => u\.id === userId\)\?\.name \?\? unknownLabel/,
+    );
+    // Custom tooltip lists only non-zero tasks (+ total), not a row per series.
+    expect(source).toContain('const UserTaskTooltip');
+    expect(source).toMatch(/<UserTaskTooltip\s+series=\{hoursByUserTask\.series\}/);
+    expect(source).toMatch(/\.filter\(\(p\) => typeof p\.value === 'number' && p\.value > 0\)/);
+    expect(source).toContain("t('projects:detail.charts.totalLabel')");
+  });
+
+  test('monthly-activity falls back to ChartEmpty when all months are zero', async () => {
+    // The replaced location chart guarded the all-zero case; the new monthly
+    // chart must too — only zero-duration entries should read as no data, not a
+    // flat empty plot.
+    const source = await readSource();
+    expect(source).toMatch(
+      /monthlyActivity\.rows\.length === 0 \|\|\s*monthlyActivity\.rows\.every\(\(r\) => r\.hours === 0\)/,
+    );
   });
 
   test('analytics section gets a header with the scope notice inlined beside it', async () => {

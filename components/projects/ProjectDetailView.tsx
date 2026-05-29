@@ -341,8 +341,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   // groups; tasks are the colored series, so each user shows one bar per task
   // (5 users × 3 tasks → 15 bars). Capped to keep the cluster readable: the top
   // tasks by total hours become the series, the top users by their hours over
-  // those tasks become the groups.
-  const TOP_TASK_SERIES = 6;
+  // those tasks become the groups. The task cap matches the chart palette
+  // (--chart-1..5) so no two task series collide on the same color.
+  const TOP_TASK_SERIES = 5;
   const TOP_USER_GROUPS = 8;
   const hoursByUserTask = useMemo(() => {
     const unknownLabel = t('projects:projects.unknown');
@@ -399,7 +400,10 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       const um = byUser.get(userId);
       const row: Record<string, string | number> = {
         userId,
-        userName: users.find((u) => u.id === userId)?.name ?? userId,
+        // Fall back to a translated "unknown" label rather than the raw UUID
+        // when the user is no longer in the loaded `users` list (e.g. they left
+        // the company) — mirrors the hours-by-task name resolution.
+        userName: users.find((u) => u.id === userId)?.name ?? unknownLabel,
       };
       for (const s of series) {
         row[s.seriesKey] = Math.round((um?.get(s.taskKey) ?? 0) * 100) / 100;
@@ -1610,7 +1614,16 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   <YAxis tickLine={false} axisLine={false} width={36} />
                   <ChartTooltip
                     isAnimationActive={false}
-                    content={<ChartTooltipContent />}
+                    // Custom content lists only the tasks this user actually
+                    // logged on (the default would pad every hovered user with a
+                    // row per task, mostly zeros) plus their total.
+                    content={
+                      <UserTaskTooltip
+                        series={hoursByUserTask.series}
+                        language={i18n.language}
+                        t={t}
+                      />
+                    }
                     cursor={false}
                     position={{ y: 0 }}
                   />
@@ -1926,7 +1939,10 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               <Skeleton className="h-[260px] w-full xl:h-[320px]" />
             ) : entriesError !== null ? (
               <ChartLocked variant={entriesError} />
-            ) : monthlyActivity.rows.length === 0 ? (
+            ) : monthlyActivity.rows.length === 0 ||
+              monthlyActivity.rows.every((r) => r.hours === 0) ? (
+              // All-zero case (only zero-duration entries) reads as no data, so
+              // show the explicit empty state rather than a flat plot.
               <ChartEmpty />
             ) : (
               <ChartContainer
@@ -2193,6 +2209,58 @@ const TaskEffortTooltip: React.FC<{
           </span>
         </div>
       )}
+    </div>
+  );
+};
+
+// Tooltip for the grouped hours-by-user chart. Lists only the tasks the hovered
+// user actually logged on (the default ChartTooltipContent renders a row per
+// task series, padding most users with zeros) plus their total across them.
+const UserTaskTooltip: React.FC<{
+  active?: boolean;
+  payload?: Array<{
+    dataKey?: string;
+    value?: number;
+    payload?: { userName?: string };
+  }>;
+  series: ReadonlyArray<{ seriesKey: string; name: string; color: string }>;
+  language: string;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}> = ({ active, payload, series, language, t }) => {
+  if (!active || !payload?.length) return null;
+  const userName = payload[0]?.payload?.userName;
+  const meta = new Map(series.map((s) => [s.seriesKey, s]));
+  const rows = payload
+    .filter((p) => typeof p.value === 'number' && p.value > 0)
+    .map((p) => ({
+      key: p.dataKey ?? '',
+      name: meta.get(p.dataKey ?? '')?.name ?? p.dataKey ?? '',
+      color: meta.get(p.dataKey ?? '')?.color ?? 'var(--muted-foreground)',
+      value: p.value as number,
+    }));
+  if (rows.length === 0) return null;
+  const total = rows.reduce((s, r) => s + r.value, 0);
+  const fmt = (n: number) => n.toLocaleString(language, { maximumFractionDigits: 1 });
+  return (
+    <div className="grid min-w-[11rem] gap-1.5 rounded-lg border border-border/50 bg-background px-3 py-2 text-xs shadow-xl">
+      {userName && <div className="font-medium text-foreground">{userName}</div>}
+      {rows.map((r) => (
+        <div key={r.key} className="flex items-center gap-2">
+          <span
+            className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
+            style={{ backgroundColor: r.color }}
+            aria-hidden="true"
+          />
+          <span className="flex-1 truncate text-muted-foreground">{r.name}</span>
+          <span className="font-mono font-medium tabular-nums text-foreground">
+            {fmt(r.value)} h
+          </span>
+        </div>
+      ))}
+      <div className="mt-0.5 flex items-center justify-between gap-4 border-t border-border/50 pt-1">
+        <span className="text-muted-foreground">{t('projects:detail.charts.totalLabel')}</span>
+        <span className="font-mono font-medium tabular-nums text-foreground">{fmt(total)} h</span>
+      </div>
     </div>
   );
 };

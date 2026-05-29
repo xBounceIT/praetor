@@ -147,6 +147,7 @@
       "remainingEffortLabel": "Remaining effort",
       "overBudgetLabel": "Over budget",
       "totalEffortLabel": "Total effort",
+      "totalLabel": "Total",
       "costVsRevenue": "Cost vs revenue",
       "costVsRevenueDesc": "Cumulative entry cost over time against the project revenue ceiling.",
       "costHiddenNote": "Cumulative cost is hidden because you don't have permission to view cost data.",
