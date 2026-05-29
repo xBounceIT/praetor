@@ -50,6 +50,28 @@ clearSpyStateAfterAll();
 
 const { useAuth } = await import('../../hooks/useAuth');
 
+// Stub only window.location.assign in place, returning a restore fn. Do NOT replace
+// window.location wholesale (e.g. `{ ...window.location, assign }`): happy-dom exposes
+// href/pathname/etc. as prototype getters with no own-enumerable properties, so the spread
+// collapses to `{}`, stripping `href` and making `new URL(window.location.href)` throw in
+// suites that run later in the same process. The global guard in test/setup.ts enforces this.
+const stubLocationAssign = (impl: (url: string) => void): (() => void) => {
+  const originalDescriptor = Object.getOwnPropertyDescriptor(window.location, 'assign');
+  Object.defineProperty(window.location, 'assign', {
+    configurable: true,
+    writable: true,
+    value: impl,
+  });
+  return () => {
+    if (originalDescriptor) {
+      Object.defineProperty(window.location, 'assign', originalDescriptor);
+    } else {
+      // `assign` is inherited from Location.prototype with no own property; drop our shadow.
+      delete (window.location as { assign?: unknown }).assign;
+    }
+  };
+};
+
 describe('useAuth', () => {
   beforeEach(() => {
     tokenStore.token = null;
@@ -301,16 +323,8 @@ describe('useAuth', () => {
   // hook hands the browser to that URL after clearing local state — otherwise the IdP
   // session cookie stays alive and the next tab silently SSOs back in as the previous user.
   test('logout redirects to endSessionUrl when the server returns one', async () => {
-    // Stub Location#assign — preserves the real happy-dom Location instance so
-    // `window.location.href` keeps working for later tests in the same process.
-    // (Previously we Object.defineProperty'd window.location to a plain spread
-    //  object; the spread dropped happy-dom's `href` getter, and the matching
-    //  finally-block "restore" kept the broken spread, leaving every later test
-    //  in the bun process with a window.location that returned undefined for
-    //  href — which then blew up Login.tsx's `new URL(window.location.href)`.)
-    const originalAssign = window.location.assign;
     const assignMock = mock((_url: string) => {});
-    window.location.assign = assignMock;
+    const restoreAssign = stubLocationAssign(assignMock);
     apiMocks.authLogout.mockImplementation(() =>
       Promise.resolve({ endSessionUrl: 'https://idp.example.com/logout?id_token_hint=tok' }),
     );
@@ -333,14 +347,13 @@ describe('useAuth', () => {
       expect(result.current.currentUser).toBeNull();
       expect(setAuthTokenMock).toHaveBeenLastCalledWith(null);
     } finally {
-      window.location.assign = originalAssign;
+      restoreAssign();
     }
   });
 
   test('logout does NOT redirect when endSessionUrl is null', async () => {
-    const originalAssign = window.location.assign;
     const assignMock = mock((_url: string) => {});
-    window.location.assign = assignMock;
+    const restoreAssign = stubLocationAssign(assignMock);
     apiMocks.authLogout.mockImplementation(() => Promise.resolve({ endSessionUrl: null }));
 
     try {
@@ -354,7 +367,7 @@ describe('useAuth', () => {
 
       expect(assignMock).not.toHaveBeenCalled();
     } finally {
-      window.location.assign = originalAssign;
+      restoreAssign();
     }
   });
 

@@ -249,7 +249,7 @@ const runBulkTimeEntryTool = async <T>(
 
 const buildServer = () => {
   const server = new McpServer(
-    { name: 'praetor', version: '0.6.5' },
+    { name: 'praetor', version: '0.7.0' },
     {
       instructions:
         'Use Praetor tools to inspect and update ERP data. Tool results are scoped to the authenticated MCP token user and their current Praetor role permissions.',
