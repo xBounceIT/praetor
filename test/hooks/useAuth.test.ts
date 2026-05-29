@@ -50,6 +50,28 @@ clearSpyStateAfterAll();
 
 const { useAuth } = await import('../../hooks/useAuth');
 
+// Stub only window.location.assign in place, returning a restore fn. Do NOT replace
+// window.location wholesale (e.g. `{ ...window.location, assign }`): happy-dom exposes
+// href/pathname/etc. as prototype getters with no own-enumerable properties, so the spread
+// collapses to `{}`, stripping `href` and making `new URL(window.location.href)` throw in
+// suites that run later in the same process. The global guard in test/setup.ts enforces this.
+const stubLocationAssign = (impl: (url: string) => void): (() => void) => {
+  const originalDescriptor = Object.getOwnPropertyDescriptor(window.location, 'assign');
+  Object.defineProperty(window.location, 'assign', {
+    configurable: true,
+    writable: true,
+    value: impl,
+  });
+  return () => {
+    if (originalDescriptor) {
+      Object.defineProperty(window.location, 'assign', originalDescriptor);
+    } else {
+      // `assign` is inherited from Location.prototype with no own property; drop our shadow.
+      delete (window.location as { assign?: unknown }).assign;
+    }
+  };
+};
+
 describe('useAuth', () => {
   beforeEach(() => {
     tokenStore.token = null;
@@ -301,13 +323,8 @@ describe('useAuth', () => {
   // hook hands the browser to that URL after clearing local state — otherwise the IdP
   // session cookie stays alive and the next tab silently SSOs back in as the previous user.
   test('logout redirects to endSessionUrl when the server returns one', async () => {
-    const realLocation = window.location;
     const assignMock = mock((_url: string) => {});
-    Object.defineProperty(window, 'location', {
-      configurable: true,
-      writable: true,
-      value: { ...realLocation, assign: assignMock },
-    });
+    const restoreAssign = stubLocationAssign(assignMock);
     apiMocks.authLogout.mockImplementation(() =>
       Promise.resolve({ endSessionUrl: 'https://idp.example.com/logout?id_token_hint=tok' }),
     );
@@ -330,22 +347,13 @@ describe('useAuth', () => {
       expect(result.current.currentUser).toBeNull();
       expect(setAuthTokenMock).toHaveBeenLastCalledWith(null);
     } finally {
-      Object.defineProperty(window, 'location', {
-        configurable: true,
-        writable: true,
-        value: realLocation,
-      });
+      restoreAssign();
     }
   });
 
   test('logout does NOT redirect when endSessionUrl is null', async () => {
-    const realLocation = window.location;
     const assignMock = mock((_url: string) => {});
-    Object.defineProperty(window, 'location', {
-      configurable: true,
-      writable: true,
-      value: { ...realLocation, assign: assignMock },
-    });
+    const restoreAssign = stubLocationAssign(assignMock);
     apiMocks.authLogout.mockImplementation(() => Promise.resolve({ endSessionUrl: null }));
 
     try {
@@ -359,11 +367,7 @@ describe('useAuth', () => {
 
       expect(assignMock).not.toHaveBeenCalled();
     } finally {
-      Object.defineProperty(window, 'location', {
-        configurable: true,
-        writable: true,
-        value: realLocation,
-      });
+      restoreAssign();
     }
   });
 
