@@ -1,4 +1,13 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { FieldLabel } from '@/components/ui/field';
@@ -31,6 +40,11 @@ import InternalEmployeesView from './components/HR/InternalEmployeesView';
 import Layout from './components/Layout';
 import Login from './components/Login';
 import NotFound from './components/NotFound';
+
+// Lazy-load the detail view so the recharts bundle (~150kB) only ships when a user
+// actually navigates to a project detail page — keeps the initial app bundle slim.
+const ProjectDetailView = lazy(() => import('./components/projects/ProjectDetailView'));
+
 import ProjectsView from './components/projects/ProjectsView';
 import TasksView from './components/projects/TasksView';
 import AiReportingView from './components/reports/AiReportingView';
@@ -778,6 +792,7 @@ const AppContent: React.FC = () => {
       // Catalog module
       'catalog/internal-listing',
       'projects/manage',
+      'projects/detail',
       'projects/tasks',
       'hr/internal',
       'hr/external',
@@ -822,6 +837,7 @@ const AppContent: React.FC = () => {
       // Catalog module
       'catalog/internal-listing',
       'projects/manage',
+      'projects/detail',
       'projects/tasks',
       'hr/internal',
       'hr/external',
@@ -845,6 +861,7 @@ const AppContent: React.FC = () => {
   const [clientOfferFilterId, setClientOfferFilterId] = useState<string | null>(null);
   const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(null);
   const [clientsOrderFilterId, setClientsOrderFilterId] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   // Navigation-aware setter: clears any *FilterId state that isn't valid for
   // the destination view, batched in the SAME commit as the view change.
@@ -880,6 +897,9 @@ const AppContent: React.FC = () => {
     }
     if (resolved !== 'accounting/clients-orders') {
       setClientsOrderFilterId(null);
+    }
+    if (resolved !== 'projects/detail') {
+      setSelectedProjectId(null);
     }
   }, []);
 
@@ -2824,8 +2844,95 @@ const AppContent: React.FC = () => {
                     setClientsOrderFilterId(orderId);
                     setActiveView('accounting/clients-orders');
                   }}
+                  onNavigateToProject={(projectId) => {
+                    setSelectedProjectId(projectId);
+                    setActiveView('projects/detail');
+                  }}
                 />
               )}
+
+            {hasViewAccess(currentUser.permissions, 'projects/detail') &&
+              activeView === 'projects/detail' &&
+              (() => {
+                const selectedProject = selectedProjectId
+                  ? projects.find((p) => p.id === selectedProjectId)
+                  : undefined;
+                if (!selectedProject) {
+                  // Project unavailable (e.g. just deleted, or refresh) — fall back to list.
+                  return (
+                    <ProjectsView
+                      projects={projects}
+                      clients={clients}
+                      orders={clientsOrders}
+                      offers={clientOffers}
+                      currency={generalSettings.currency}
+                      permissions={currentUser.permissions || []}
+                      users={availableUsers}
+                      roles={roles}
+                      tasks={projectTasks}
+                      onAddProject={addProject}
+                      onUpdateProject={handleUpdateProject}
+                      onDeleteProject={handleDeleteProject}
+                      onAddTask={addProjectTask}
+                      onUpdateTask={handleUpdateTask}
+                      onDeleteTask={async (id) => {
+                        try {
+                          await api.tasks.delete(id);
+                          setProjectTasks((prev) => prev.filter((t) => t.id !== id));
+                        } catch (err) {
+                          console.error('Failed to delete task:', err);
+                        }
+                      }}
+                      onViewOrder={(orderId) => {
+                        setClientsOrderFilterId(orderId);
+                        setActiveView('accounting/clients-orders');
+                      }}
+                      onNavigateToProject={(projectId) => {
+                        setSelectedProjectId(projectId);
+                        setActiveView('projects/detail');
+                      }}
+                    />
+                  );
+                }
+                return (
+                  // key={selectedProject.id} remounts the component on project switch
+                  // so all local state (form fields, entries fetch, assignments) resets
+                  // cleanly without an in-component prop-sync useEffect.
+                  // Suspense fallback covers the lazy() chunk fetch the first time the
+                  // user enters the detail page.
+                  <Suspense fallback={null}>
+                    <ProjectDetailView
+                      key={selectedProject.id}
+                      project={selectedProject}
+                      clients={clients}
+                      orders={clientsOrders}
+                      offers={clientOffers}
+                      users={availableUsers}
+                      roles={roles}
+                      permissions={currentUser.permissions || []}
+                      currency={generalSettings.currency}
+                      tasks={projectTasks}
+                      onBack={() => setActiveView('projects/manage')}
+                      onUpdateProject={handleUpdateProject}
+                      onDeleteProject={handleDeleteProject}
+                      onAddTask={addProjectTask}
+                      onUpdateTask={handleUpdateTask}
+                      onDeleteTask={async (id) => {
+                        try {
+                          await api.tasks.delete(id);
+                          setProjectTasks((prev) => prev.filter((t) => t.id !== id));
+                        } catch (err) {
+                          console.error('Failed to delete task:', err);
+                        }
+                      }}
+                      onViewOrder={(orderId) => {
+                        setClientsOrderFilterId(orderId);
+                        setActiveView('accounting/clients-orders');
+                      }}
+                    />
+                  </Suspense>
+                );
+              })()}
 
             {hasViewAccess(currentUser.permissions, 'projects/tasks') &&
               activeView === 'projects/tasks' && (

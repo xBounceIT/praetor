@@ -76,6 +76,20 @@ describe('listAll', () => {
     expect(exec.calls[0].sql).toContain('LIMIT $3');
   });
 
+  test('date range and project filters can be combined', async () => {
+    exec.enqueue({ rows: [] });
+    await entriesRepo.listAll(
+      { fromDate: '2026-05-01', toDate: '2026-05-31', projectId: 'p-1' },
+      testDb,
+    );
+
+    expect(exec.calls[0].params).toEqual(['2026-05-01', '2026-05-31', 'p-1', 200]);
+    expect(exec.calls[0].sql).toContain('date >= $1::date');
+    expect(exec.calls[0].sql).toContain('date <= $2::date');
+    expect(exec.calls[0].sql).toContain('project_id = $3');
+    expect(exec.calls[0].sql).toContain('LIMIT $4');
+  });
+
   test('cursor adds (created_at, id) < tuple comparison with µs-precision timestamp', async () => {
     exec.enqueue({ rows: [] });
     await entriesRepo.listAll(

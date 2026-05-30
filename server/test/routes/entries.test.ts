@@ -339,6 +339,26 @@ describe('GET /api/entries', () => {
     expect(entriesListForManagerViewMock).not.toHaveBeenCalled();
   });
 
+  test('200: viewer with RIL view can read manager-scoped entries', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
+    entriesListForManagerViewMock.mockResolvedValue({
+      entries: [SAMPLE_ENTRY],
+      nextCursor: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/entries?fromDate=2026-05-01&toDate=2026-05-31',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(entriesListForManagerViewMock).toHaveBeenCalledWith(
+      'u1',
+      expect.objectContaining({ fromDate: '2026-05-01', toDate: '2026-05-31' }),
+    );
+  });
+
   test('200: explicit userId routes to listForUser', async () => {
     getRolePermissionsMock.mockResolvedValue(TRACKER_ALL_PERMS);
     entriesListForUserMock.mockResolvedValue({ entries: [], nextCursor: null });
@@ -448,8 +468,8 @@ describe('GET /api/entries', () => {
     expect(JSON.parse(res.body)).toEqual({ error: 'Access token required' });
   });
 
-  test('403: missing tracker.view permission', async () => {
-    getRolePermissionsMock.mockResolvedValue([]); // no tracker.view
+  test('403: missing tracker or RIL view permission', async () => {
+    getRolePermissionsMock.mockResolvedValue([]);
 
     const res = await testApp.inject({
       method: 'GET',

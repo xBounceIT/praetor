@@ -130,6 +130,8 @@ export type ListEntriesOptions = {
   fromDate?: string;
   /** Inclusive upper date bound (YYYY-MM-DD). */
   toDate?: string;
+  /** Restrict to entries logged against this project. */
+  projectId?: string;
 };
 
 const DEFAULT_LIMIT = 200;
@@ -149,6 +151,9 @@ const dateRangeClauses = (options: Pick<ListEntriesOptions, 'fromDate' | 'toDate
   if (options.toDate) clauses.push(sql`date <= ${options.toDate}::date`);
   return clauses;
 };
+
+const projectClause = (projectId: string | undefined): SQL | null =>
+  projectId ? sql`project_id = ${projectId}` : null;
 
 export type ListEntriesResult = {
   entries: TimeEntry[];
@@ -179,7 +184,11 @@ export const listAll = async (
   exec: DbExecutor = db,
 ): Promise<ListEntriesResult> => {
   const limit = resolveLimit(options.limit);
-  const where = joinAnd([...dateRangeClauses(options), cursorClause(options.cursor)]);
+  const where = joinAnd([
+    ...dateRangeClauses(options),
+    cursorClause(options.cursor),
+    projectClause(options.projectId),
+  ]);
   const rows = await executeRows<TimeEntryRow>(
     exec,
     sql`SELECT ${ENTRY_COLUMNS_SQL} FROM time_entries${where ? sql` WHERE ${where}` : sql``} ORDER BY created_at DESC, id DESC LIMIT ${limit}`,
@@ -197,6 +206,7 @@ export const listForUser = async (
     sql`user_id = ${userId}`,
     ...dateRangeClauses(options),
     cursorClause(options.cursor),
+    projectClause(options.projectId),
   ]);
   const rows = await executeRows<TimeEntryRow>(
     exec,
@@ -212,7 +222,12 @@ export const listForManagerView = async (
 ): Promise<ListEntriesResult> => {
   const limit = resolveLimit(options.limit);
   const managerScope = sql`(user_id = ${managerId} OR user_id IN (${managedUserIdsSubquerySql(managerId)}))`;
-  const where = joinAnd([managerScope, ...dateRangeClauses(options), cursorClause(options.cursor)]);
+  const where = joinAnd([
+    managerScope,
+    ...dateRangeClauses(options),
+    cursorClause(options.cursor),
+    projectClause(options.projectId),
+  ]);
   const rows = await executeRows<TimeEntryRow>(
     exec,
     sql`SELECT ${ENTRY_COLUMNS_SQL} FROM time_entries WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ${limit}`,

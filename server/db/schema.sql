@@ -1851,10 +1851,14 @@ DELETE FROM role_permissions WHERE permission = 'reports.ai_reporting_ai.create'
 
 ALTER TABLE report_chat_messages ADD COLUMN IF NOT EXISTS thought_content TEXT;
 
--- Seed project assignment permissions for manager and top_manager roles
+-- Seed project assignment permissions for manager and top_manager roles.
+-- `view` lets these roles load any project/activity assignment dialog regardless of
+-- per-entity membership; `update` permits editing.
 INSERT INTO role_permissions (role_id, permission)
 VALUES
+    ('manager', 'projects.assignments.view'),
     ('manager', 'projects.assignments.update'),
+    ('top_manager', 'projects.assignments.view'),
     ('top_manager', 'projects.assignments.update')
 ON CONFLICT DO NOTHING;
 

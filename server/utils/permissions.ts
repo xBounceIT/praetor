@@ -24,6 +24,7 @@ export const ADMIN_ROLE_ID = 'admin';
 export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   // Timesheets
   { id: 'timesheets.tracker', actions: CRUD },
+  { id: 'timesheets.ril', actions: VIEW_ONLY },
   { id: 'timesheets.recurring', actions: CRUD },
   { id: 'timesheets.tracker_all', actions: CRUD, isScope: true },
 
@@ -52,7 +53,9 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'projects.manage_all', actions: CRUD, isScope: true },
   { id: 'projects.tasks', actions: CRUD },
   { id: 'projects.tasks_all', actions: CRUD, isScope: true },
-  { id: 'projects.assignments', actions: ['update'] },
+  // `view` lets a role load any project/activity's assignment dialog regardless of
+  // per-entity membership (role-agnostic); `update` additionally permits editing.
+  { id: 'projects.assignments', actions: VIEW_UPDATE },
 
   // HR
   { id: 'hr.internal', actions: CRUD },

@@ -100,6 +100,125 @@
       "actions": "Azioni"
     }
   },
+  "detail": {
+    "detailsTitle": "Dettagli progetto",
+    "detailsDescription": "Modifica la configurazione di base di questo progetto.",
+    "tasksDescription": "Modifica inline attività, impegno previsto e ricavo.",
+    "analyticsTitle": "Dashboard progetto",
+    "analyticsDescription": "KPI e grafici basati sulle ore registrate per questo progetto.",
+    "createdOn": "Creato il {{date}}",
+    "unsavedChanges": "Ci sono modifiche non salvate.",
+    "newTaskDefaultName": "Nuova Attività",
+    "actions": {
+      "back": "Torna ai progetti"
+    },
+    "kpi": {
+      "totalHours": "Ore totali",
+      "totalHoursSubtitle": "Su {{count}} voci timesheet",
+      "totalCost": "Costo totale",
+      "totalCostSubtitle": "Media {{rate}} {{currency}}/h",
+      "teamSize": "Dimensione team",
+      "teamSizeSubtitle": "Membri attivi del progetto",
+      "budgetUsed": "Budget usato",
+      "budgetUsedSubtitle": "su {{budget}} {{currency}}"
+    },
+    "timeline": {
+      "title": "Cronologia progetto",
+      "description": "Giorni trascorsi rispetto alla durata totale del progetto.",
+      "daysElapsed": "giorni trascorsi",
+      "daysRemaining": "giorni rimanenti",
+      "noDates": "Imposta le date di inizio e fine sopra per vedere la cronologia.",
+      "phase": {
+        "pending": "Non iniziato",
+        "inProgress": "In corso",
+        "completed": "Completato"
+      }
+    },
+    "charts": {
+      "hoursLabel": "Ore",
+      "costLabel": "Costo",
+      "cumulativeCostLabel": "Costo cumulato",
+      "revenueLabel": "Ricavo",
+      "hoursByUser": "Ore per utente",
+      "hoursByUserDesc": "Ore registrate da ciascun utente, suddivise per attività.",
+      "hoursByTask": "Ore per attività",
+      "hoursByTaskDesc": "Ore registrate rispetto all'effort disponibile, per attività.",
+      "loggedLabel": "Ore registrate",
+      "remainingEffortLabel": "Effort residuo",
+      "overBudgetLabel": "Oltre budget",
+      "totalEffortLabel": "Effort totale",
+      "totalLabel": "Totale",
+      "costVsRevenue": "Costo vs ricavo",
+      "costVsRevenueDesc": "Costo cumulato delle voci nel tempo rispetto al ricavo del progetto.",
+      "costHiddenNote": "Il costo cumulato è nascosto perché non hai i permessi per vedere i dati di costo.",
+      "monthlyActivity": "Attività mensile",
+      "monthlyActivityDesc": "Ore registrate ogni mese — il ritmo e lo slancio del progetto.",
+      "avgMonthlyLabel": "Media / mese"
+    },
+    "dashboard": {
+      "edit": "Modifica",
+      "done": "Fatto",
+      "cancel": "Annulla",
+      "save": "Salva",
+      "views": "Viste",
+      "saveAsView": "Salva come vista",
+      "saveViewTitle": "Salva vista dashboard",
+      "viewName": "Nome vista",
+      "viewNamePlaceholder": "es. Dashboard compatta",
+      "useGlobalDefault": "Usa predefinito globale",
+      "setGlobalDefault": "Imposta come predefinito globale",
+      "noViews": "Nessuna vista salvata",
+      "deleteView": "Elimina vista",
+      "editingHint": "Trascina una scheda per spostarla, trascina i bordi per ridimensionarla, nascondi o ripristina le schede.",
+      "dragHandle": "{{name}} — trascina per spostare. Le frecce la spostano; Maiusc + frecce la ridimensionano.",
+      "resize": "Ridimensiona {{name}}",
+      "resizeWidth": "Ridimensiona la larghezza di {{name}}",
+      "resizeHeight": "Ridimensiona l'altezza di {{name}}",
+      "hide": "Nascondi",
+      "show": "Mostra",
+      "hideWidget": "Nascondi {{name}}",
+      "showWidget": "Mostra {{name}}",
+      "editOnLargerScreen": "La modifica del layout con trascinamento è disponibile su uno schermo più ampio."
+    },
+    "empty": {
+      "noEntriesTitle": "Ancora nessuna ora registrata",
+      "noEntriesDescription": "I grafici si popolano man mano che il team registra ore su questo progetto.",
+      "unavailableTitle": "Dati non disponibili",
+      "unavailableDescription": "Non è stato possibile caricare le voci timesheet — vedi l'avviso sopra per i dettagli.",
+      "costHiddenTitle": "Dati di costo nascosti"
+    },
+    "notices": {
+      "truncated": "Mostro le {{count}} voci più recenti — quelle più vecchie non sono caricate.",
+      "partialScope": "Vedi solo le voci degli utenti che puoi visualizzare; i totali di progetto potrebbero essere più alti.",
+      "forbiddenTitle": "Voci timesheet non disponibili",
+      "forbiddenDescription": "Non hai i permessi per vedere le voci timesheet, quindi le analisi non possono essere mostrate.",
+      "loadFailedTitle": "Impossibile caricare le voci timesheet",
+      "loadFailedDescription": "Ricarica la pagina o riprova più tardi."
+    },
+    "rules": {
+      "title": "Regole del progetto",
+      "description": "Controlli automatici che monitorano questo progetto e ti avvisano quando qualcosa richiede attenzione.",
+      "comingSoonBadge": "In arrivo",
+      "items": {
+        "budgetThreshold": {
+          "name": "Avviso al superamento della soglia di budget",
+          "description": "Notifica i project manager quando il costo registrato supera l'80% del ricavo del progetto."
+        },
+        "deadlineApproaching": {
+          "name": "Avviso prima della data di fine",
+          "description": "Mostra un avviso 7 giorni prima della data di fine progetto se ci sono attività aperte."
+        },
+        "staleTask": {
+          "name": "Segnala attività inattive",
+          "description": "Evidenzia le attività senza ore registrate negli ultimi 14 giorni."
+        },
+        "unassignedTask": {
+          "name": "Intercetta attività non assegnate",
+          "description": "Notifica quando un'attività viene creata senza un assegnatario o senza un impegno previsto."
+        }
+      }
+    }
+  },
   "tasks": {
     "title": "Attività",
     "subtitle": "Gestisci attività e assegnazioni",

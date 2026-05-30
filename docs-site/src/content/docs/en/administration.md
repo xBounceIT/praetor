@@ -66,6 +66,8 @@ General settings control cross-cutting features such as AI reporting and applica
 
 In **Tracking Preferences**, administrators also configure the defaults used by the RIL statement: company name, default start time, and lunch-break minutes. These values are used only to generate the RIL draft and Excel workbook; they do not change existing time entries.
 
+RIL page visibility is managed through the **timesheets.ril.view** role permission. Roles that already had Time Tracker access receive that permission automatically during migration.
+
 After changing SMTP, sender, or security options, always run a send test before considering the configuration complete.
 
 ## Logs

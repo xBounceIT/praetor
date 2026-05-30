@@ -397,8 +397,29 @@
     {
       "idx": 56,
       "version": "7",
-      "when": 1780148261000,
-      "tag": "0056_add_ril_general_settings",
+      "when": 1780084492330,
+      "tag": "0056_grant_reports_cost_to_managers",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1780147595292,
+      "tag": "0057_remove_internal_user_create_delete_from_default_managers",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1780159571587,
+      "tag": "0058_add_projects_assignments_view_permission",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1780162137411,
+      "tag": "0059_add_ril_general_settings",
       "breakpoints": true
     }
   ]

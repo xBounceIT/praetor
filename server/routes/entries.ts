@@ -109,7 +109,12 @@ const entryUpdateBodySchema = {
 const entriesListQuerySchema = {
   type: 'object',
   properties: {
-    userId: { type: 'string' },
+    userId: { type: 'string', description: 'Restrict to entries logged by this user.' },
+    projectId: {
+      type: 'string',
+      description:
+        'Restrict to entries logged against this project. Combined with any user/manager scoping the actor is already subject to.',
+    },
     limit: { type: 'integer', minimum: 1, maximum: 500 },
     cursor: { type: 'string' },
     fromDate: { type: 'string', format: 'date' },
@@ -204,7 +209,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       onRequest: [
         fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
         authenticateToken,
-        requireScopedPermission('timesheets.tracker', 'view'),
+        requireAnyPermission(
+          'timesheets.tracker.view',
+          'timesheets.tracker_all.view',
+          'timesheets.ril.view',
+        ),
       ],
       schema: {
         tags: ['entries'],
@@ -219,8 +228,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!assertAuthenticated(request, reply)) return;
 
-      const { userId, limit, cursor, fromDate, toDate } = request.query as {
+      const { userId, projectId, limit, cursor, fromDate, toDate } = request.query as {
         userId?: string;
+        projectId?: string;
         limit?: number;
         cursor?: string;
         fromDate?: string;
@@ -229,6 +239,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       try {
         const result = await listTimeEntries(actorFromRequest(request), {
           userId,
+          projectId,
           limit,
           cursor,
           fromDate,

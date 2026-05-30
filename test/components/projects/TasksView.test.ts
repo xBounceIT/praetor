@@ -54,4 +54,23 @@ describe('TasksView', () => {
       expect(source).not.toContain('handleRowsPerPageChange');
     });
   });
+
+  describe('assignment modal user list (issue #720)', () => {
+    test('filters top managers, admin-only, and disabled users out of the assignable list', async () => {
+      const source = await readTasksViewSource();
+
+      // Mirrors ProjectsView: top managers must not appear as removable members, otherwise a
+      // top manager can toggle themselves off an activity.
+      expect(source).toMatch(
+        /const assignableUsers = users\.filter\(\s*\(u\) =>\s*!u\.hasTopManagerRole && !u\.isAdminOnly && !u\.isDisabled,?\s*\);/,
+      );
+    });
+
+    test('passes the filtered list (not the raw users prop) to UserAssignmentModal', async () => {
+      const source = await readTasksViewSource();
+
+      expect(source).toContain('users={assignableUsers}');
+      expect(source).not.toContain('users={users}');
+    });
+  });
 });

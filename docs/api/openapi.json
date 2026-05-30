@@ -9202,7 +9202,17 @@
             },
             "in": "query",
             "name": "userId",
-            "required": false
+            "required": false,
+            "description": "Restrict to entries logged by this user."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "projectId",
+            "required": false,
+            "description": "Restrict to entries logged against this project. Combined with any user/manager scoping the actor is already subject to."
           },
           {
             "schema": {

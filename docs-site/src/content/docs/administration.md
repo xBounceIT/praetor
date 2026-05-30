@@ -66,6 +66,8 @@ Le impostazioni generali controllano funzioni trasversali come AI reporting e pr
 
 Dalla scheda **Preferenze di Tracciamento** gli amministratori configurano anche i valori predefiniti usati dal prospetto RIL: nome azienda, orario di entrata predefinito e minuti di pausa pranzo. Questi valori vengono usati solo per generare la bozza e il file Excel RIL; non modificano le registrazioni esistenti.
 
+La visibilità della pagina RIL si gestisce dai ruoli con il permesso **timesheets.ril.view**. I ruoli che avevano già accesso al Time Tracker ricevono automaticamente il permesso durante la migrazione.
+
 Dopo aver modificato SMTP, mittente o sicurezza, esegui sempre un test di invio prima di considerare conclusa la configurazione.
 
 ## Log

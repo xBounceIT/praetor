@@ -65,7 +65,12 @@ const mockUser: User = {
   role: 'manager',
   avatarInitials: 'TU',
   username: 'testuser',
-  permissions: ['timesheets.tracker.view', 'timesheets.recurring.view', 'crm.clients.view'],
+  permissions: [
+    'timesheets.tracker.view',
+    'timesheets.ril.view',
+    'timesheets.recurring.view',
+    'crm.clients.view',
+  ],
 };
 
 const mockRoles: Role[] = [];
@@ -253,6 +258,29 @@ describe('<Layout />', () => {
     expect(sidebar.getAttribute('data-collapsible')).toBe('icon');
   });
 
+  test('page title for projects/detail uses titles.projectDetail, not the CSS-capitalized URL slug', () => {
+    // Sub-pages with no sidebar route entry (`projects/detail` is opened from
+    // ProjectsView, not from the sidebar) would otherwise fall through to
+    // `fallbackRouteTitleKey` → `routes.detail` and ultimately render the bare
+    // "Detail" defaultValue capitalized via CSS — shipping an untranslated header.
+    renderLayout({
+      activeView: 'projects/detail',
+      currentUser: {
+        ...mockUser,
+        permissions: ['projects.manage.view'],
+      },
+    });
+
+    const header = document.querySelector('header h2');
+    expect(header).not.toBeNull();
+    expect(header?.textContent).toBe('titles.projectDetail');
+    // Guard against re-introducing the slug fallback: the old behaviour produced
+    // either 'routes.detail' (mocked i18n returns the key) or the bare 'detail'
+    // defaultValue. Neither should appear.
+    expect(header?.textContent).not.toBe('routes.detail');
+    expect(header?.textContent).not.toBe('detail');
+  });
+
   test('permission-filtered modules hide inaccessible routes', () => {
     renderLayout();
 
@@ -261,6 +289,35 @@ describe('<Layout />', () => {
     expect(screen.getAllByText('routes.timeTracker').length).toBeGreaterThan(0);
     expect(screen.queryByText('routes.suppliers')).toBeNull();
     expect(screen.queryByText('modules.accounting')).toBeNull();
+  });
+
+  test('RIL navigation uses the dedicated RIL view permission', () => {
+    const { rerender } = renderLayout({
+      currentUser: {
+        ...mockUser,
+        permissions: ['timesheets.tracker.view'],
+      },
+    });
+
+    expect(screen.queryByText('routes.ril')).toBeNull();
+
+    rerender(
+      <Layout
+        activeView="timesheets/ril"
+        onViewChange={() => {}}
+        currentUser={{
+          ...mockUser,
+          permissions: ['timesheets.ril.view'],
+        }}
+        onLogout={() => {}}
+        onSwitchRole={() => {}}
+        roles={mockRoles}
+      >
+        <div>content</div>
+      </Layout>,
+    );
+
+    expect(screen.getAllByText('routes.ril').length).toBeGreaterThan(0);
   });
 
   test('all-scope client view permission exposes the CRM clients route', () => {

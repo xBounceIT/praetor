@@ -29,15 +29,28 @@ Per ogni progetto e attività puoi indicare il tipo di consuntivazione: canone o
 
 Usa la stima di impegno mensile per pianificare il carico ricorrente e l'impegno totale per monitorare l'avanzamento rispetto alle ore complessive previste.
 
+L'azione **Aggiungi Progetto** apre una finestra dedicata alla sola creazione: cliente, nome, date, offerta, consuntivazione, ordine facoltativo, ricavo facoltativo e una tabella di attività iniziali. Al salvataggio sei portato direttamente alla pagina di dettaglio del nuovo progetto.
+
+Cliccando una riga nell'elenco progetti si apre la **pagina di dettaglio del progetto**, che sostituisce la vecchia finestra di modifica ed è organizzata in due sezioni:
+
+- La sezione superiore dispone i campi del progetto orizzontalmente (cliente, nome, descrizione, date, offerta, consuntivazione, ricavo, colore, switch di disabilitazione) accanto alla tabella attività modificabile inline.
+- Sotto, la **dashboard del progetto** mostra KPI (ore totali, costo totale, dimensione team, % budget usato) e quattro grafici: ore per utente (suddivise per attività), ore per attività (ore registrate rispetto all'effort disponibile), costo vs ricavo e attività mensile. I grafici si popolano man mano che vengono registrate ore; se non ci sono ancora voci, ogni grafico mostra uno stato vuoto. La pagina mostra anche un avviso quando (a) il progetto ha più di 5.000 voci (vengono caricate solo le più recenti), (b) il tuo ruolo limita gli utenti di cui puoi vedere le voci (i totali riflettono solo la tua visibilità), oppure (c) non hai i permessi per vedere le voci timesheet.
+
+Accanto al titolo della dashboard del progetto trovi due pulsanti, **Modifica** e **Viste**. **Modifica** trasforma l'intera dashboard — ogni scheda KPI, la cronologia del progetto e tutti e quattro i grafici — in un layout libero che puoi riorganizzare. Trascina una scheda dalla sua intestazione per spostarla ovunque sulla griglia a 12 colonne, trascina il bordo destro, il bordo inferiore o l'angolo per ridimensionarla, e usa il pulsante a forma di occhio su una scheda per nasconderla (o ripristinarne una nascosta). Puoi anche spostare la scheda attiva con i tasti freccia e ridimensionarla tenendo premuto **Maiusc** con i tasti freccia. Le schede risalgono per riempire gli spazi lasciati liberi. Quando hai finito, mantieni la disposizione per questo progetto o salvala come vista riutilizzabile. Modificare la dashboard di un progetto crea un **layout specifico del progetto** che riguarda solo quel progetto. Il menu **Viste** permette di applicare una vista salvata, scegliere **Usa predefinito globale** (rimuove il layout personalizzato del progetto così torna a seguire il predefinito condiviso) oppure **Imposta come predefinito globale** (rende la disposizione attuale la base per ogni progetto che non ha un proprio layout). Le viste salvate e il predefinito globale sono condivisi tra i progetti; i layout dei singoli progetti sono ricordati per progetto. Tutto è memorizzato localmente nel browser. Sugli schermi stretti le schede si impilano in un'unica colonna e la modifica con trascinamento non è disponibile.
+
 Quando crei o modifichi un progetto puoi compilare anche:
 
-- **Data inizio progetto** e **Data fine progetto** — definiscono la finestra temporale prevista. Entrambe sono obbligatorie alla creazione e restano modificabili sui progetti esistenti per riflettere eventuali variazioni di pianificazione; la data di fine non può precedere la data di inizio.
+- **Data inizio progetto** e **Data fine progetto** — definiscono la finestra temporale prevista. Entrambe sono obbligatorie (alla creazione e a ogni salvataggio successivo dalla pagina di dettaglio) così che i progetti abbiano sempre una finestra di pianificazione; la data di fine non può precedere la data di inizio.
 - **Riferimento offerta** — collega il progetto a un'offerta accettata. Il campo è obbligatorio.
 - **Ricavo progetto** — segue questa precedenza: (1) se le attività hanno un valore di ricavo, il ricavo del progetto è la somma di quei valori in sola lettura; (2) altrimenti, se è collegato un ordine, il ricavo è ereditato in sola lettura dal totale dell'ordine; (3) altrimenti puoi inserirlo manualmente.
 
-Praetor assegna automaticamente un colore univoco quando crei un progetto. Puoi modificarlo in seguito dalla scheda del progetto; il sistema impedisce colori duplicati e genera nuovi colori quando la palette iniziale è esaurita.
+Praetor assegna automaticamente un colore univoco quando crei un progetto. Puoi modificarlo in seguito dalla pagina di dettaglio; il sistema impedisce colori duplicati e genera nuovi colori quando la palette iniziale è esaurita.
 
 Quando un progetto termina, verifica che le attività siano coerenti e che non rimangano registrazioni pendenti.
+
+### Assegnazione utenti
+
+Dal comando **Assegna Utenti** gestisci chi è assegnato a un progetto o a una sua attività. L'accesso a questa finestra è governato dal permesso **Assegnazioni Progetto**: l'azione **View** consente di aprire le assegnazioni di qualsiasi progetto o attività indipendentemente dalla propria appartenenza, mentre **Update** consente di modificarle. Manager e Top Manager dispongono di entrambe per impostazione predefinita, quindi possono gestire le assegnazioni anche quando non sono membri del progetto o dell'attività.
 
 ## Competence Center
 

@@ -73,6 +73,9 @@ const hasTrackerPermission = (
   action: 'view' | 'create' | 'update' | 'delete',
 ) => hasScopedActionPermission(actor.permissions, 'timesheets.tracker', action);
 
+const canReadTimeEntries = (actor: AuthenticatedActor) =>
+  hasTrackerPermission(actor, 'view') || hasPermission(actor, 'timesheets.ril.view');
+
 const fail = (statusCode: number, message: string): never => {
   throw new TimeEntryServiceError(statusCode, message);
 };
@@ -145,13 +148,15 @@ export const listTimeEntries = async (
     userId?: unknown;
     limit?: unknown;
     cursor?: unknown;
+    projectId?: unknown;
     fromDate?: unknown;
     toDate?: unknown;
   },
 ): Promise<{ entries: TimeEntry[]; nextCursor: string | null }> => {
-  if (!hasTrackerPermission(actor, 'view')) fail(403, 'Insufficient permissions');
+  if (!canReadTimeEntries(actor)) fail(403, 'Insufficient permissions');
 
   const userId = typeof input.userId === 'string' ? input.userId : undefined;
+  const projectId = typeof input.projectId === 'string' ? input.projectId : undefined;
   const limit =
     input.limit === undefined || typeof input.limit === 'number'
       ? input.limit
@@ -177,6 +182,7 @@ export const listTimeEntries = async (
   const options = {
     limit,
     cursor: decodedCursor ?? undefined,
+    projectId,
     fromDate: fromDate ?? undefined,
     toDate: toDate ?? undefined,
   };

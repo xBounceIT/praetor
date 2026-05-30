@@ -11,6 +11,7 @@ export type UserRole = KnownUserRole | (string & {});
 // `string & {}` escape hatch.
 export type KnownPermissionResource =
   | 'timesheets.tracker'
+  | 'timesheets.ril'
   | 'timesheets.recurring'
   | 'timesheets.tracker_all'
   | 'crm.clients'
@@ -613,6 +614,7 @@ export type View =
   | 'accounting/supplier-invoices'
   // Projects module
   | 'projects/manage'
+  | 'projects/detail'
   | 'projects/tasks'
   // HR module
   | 'hr/internal'
