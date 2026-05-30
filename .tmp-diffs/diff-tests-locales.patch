@@ -1,0 +1,682 @@
+diff --git a/docs-site/src/content/docs/crm-projects.md b/docs-site/src/content/docs/crm-projects.md
+index 888edcaf..8937b3f3 100644
+--- a/docs-site/src/content/docs/crm-projects.md
++++ b/docs-site/src/content/docs/crm-projects.md
+@@ -29,13 +29,20 @@ Per ogni progetto e attività puoi indicare il tipo di consuntivazione: canone o
+ 
+ Usa la stima di impegno mensile per pianificare il carico ricorrente e l'impegno totale per monitorare l'avanzamento rispetto alle ore complessive previste.
+ 
++L'azione **Aggiungi Progetto** apre una finestra dedicata alla sola creazione: cliente, nome, date, offerta, consuntivazione, ordine facoltativo, ricavo facoltativo e una tabella di attività iniziali. Al salvataggio sei portato direttamente alla pagina di dettaglio del nuovo progetto.
++
++Cliccando una riga nell'elenco progetti si apre la **pagina di dettaglio del progetto**, che sostituisce la vecchia finestra di modifica ed è organizzata in due sezioni:
++
++- La sezione superiore dispone i campi del progetto orizzontalmente (cliente, nome, descrizione, date, offerta, consuntivazione, ricavo, colore, switch di disabilitazione) accanto alla tabella attività modificabile inline.
++- Sotto, una sezione analitica mostra KPI (ore totali, costo totale, dimensione team, % budget usato) e quattro grafici: ore per utente, ore per attività, ore nel tempo e ore per luogo. I grafici si popolano man mano che vengono registrate ore; se non ci sono ancora voci, ogni grafico mostra uno stato vuoto. La pagina mostra anche un avviso quando (a) il progetto ha più di 5.000 voci (vengono caricate solo le più recenti), (b) il tuo ruolo limita gli utenti di cui puoi vedere le voci (i totali riflettono solo la tua visibilità), oppure (c) non hai i permessi per vedere le voci timesheet.
++
+ Quando crei o modifichi un progetto puoi compilare anche:
+ 
+-- **Data inizio progetto** e **Data fine progetto** — definiscono la finestra temporale prevista. Entrambe sono obbligatorie alla creazione e restano modificabili sui progetti esistenti per riflettere eventuali variazioni di pianificazione; la data di fine non può precedere la data di inizio.
++- **Data inizio progetto** e **Data fine progetto** — definiscono la finestra temporale prevista. Entrambe sono obbligatorie (alla creazione e a ogni salvataggio successivo dalla pagina di dettaglio) così che i progetti abbiano sempre una finestra di pianificazione; la data di fine non può precedere la data di inizio.
+ - **Riferimento offerta** — collega il progetto a un'offerta accettata. Il campo è obbligatorio.
+ - **Ricavo progetto** — segue questa precedenza: (1) se le attività hanno un valore di ricavo, il ricavo del progetto è la somma di quei valori in sola lettura; (2) altrimenti, se è collegato un ordine, il ricavo è ereditato in sola lettura dal totale dell'ordine; (3) altrimenti puoi inserirlo manualmente.
+ 
+-Praetor assegna automaticamente un colore univoco quando crei un progetto. Puoi modificarlo in seguito dalla scheda del progetto; il sistema impedisce colori duplicati e genera nuovi colori quando la palette iniziale è esaurita.
++Praetor assegna automaticamente un colore univoco quando crei un progetto. Puoi modificarlo in seguito dalla pagina di dettaglio; il sistema impedisce colori duplicati e genera nuovi colori quando la palette iniziale è esaurita.
+ 
+ Quando un progetto termina, verifica che le attività siano coerenti e che non rimangano registrazioni pendenti.
+ 
+diff --git a/docs-site/src/content/docs/en/crm-projects.md b/docs-site/src/content/docs/en/crm-projects.md
+index 07bbef46..d21f56a5 100644
+--- a/docs-site/src/content/docs/en/crm-projects.md
++++ b/docs-site/src/content/docs/en/crm-projects.md
+@@ -29,13 +29,20 @@ For each project and task, you can set the billing type: retainer or time and ma
+ 
+ Use estimated monthly effort to plan recurring load and total effort to track progress against the overall expected hours.
+ 
+-When creating or editing a project you can also fill in:
++The **Add Project** action opens a focused dialog with only what's needed to create a project: client, name, dates, offer, billing, optional order, optional revenue, and a draft tasks table. Submitting the dialog takes you straight to the new project's dedicated detail page.
+ 
+-- **Project start date** and **Project end date** — define the planned window. Both are required at creation and remain editable on existing projects so you can adjust them when the schedule shifts; the end date must not precede the start date.
++Click any row in the projects list to open the **project detail page**. The detail page replaces the legacy edit dialog and is laid out in two areas:
++
++- The top section lays out the project fields horizontally (client, name, description, dates, offer, billing, revenue, color, disabled toggle) next to the inline-editable project tasks table.
++- Below, an analytics section shows KPIs (total hours, total cost, team size, budget used %) and four charts: hours by user, hours by task, hours over time, and hours by location. Charts populate as time is logged against the project; before any entries exist, each chart shows an empty state. The page also surfaces a notice when (a) the project has more than 5,000 entries (only the most recent are loaded), (b) your role limits which users' entries you can see (totals reflect just your scope), or (c) you don't have permission to view time entries at all.
++
++When creating or editing a project you can fill in:
++
++- **Project start date** and **Project end date** — define the planned window. Both are required (at creation and on every subsequent save from the detail page) so projects always carry a planning window; the end date must not precede the start date.
+ - **Offer reference** — links the project to an accepted offer. This field is required.
+ - **Project revenue** — resolved with this precedence: (1) if the activities have a per-row revenue, the project revenue is the sum of those values shown read-only; (2) otherwise, if an order is linked, the revenue is inherited read-only from the order total; (3) otherwise you can enter it manually.
+ 
+-Praetor assigns a unique color automatically when you create a project. You can change it later from the project record; duplicate colors are blocked, and new colors are generated when the initial palette is exhausted.
++Praetor assigns a unique color automatically when you create a project. You can change it later from the detail page; duplicate colors are blocked, and new colors are generated when the initial palette is exhausted.
+ 
+ When a project ends, check that tasks are consistent and that no pending entries remain.
+ 
+diff --git a/locales/en/projects.json b/locales/en/projects.json
+index 5eba2dbf..7e079153 100644
+--- a/locales/en/projects.json
++++ b/locales/en/projects.json
+@@ -100,6 +100,96 @@
+       "actions": "Actions"
+     }
+   },
++  "detail": {
++    "detailsTitle": "Project details",
++    "detailsDescription": "Edit the core configuration for this project.",
++    "tasksDescription": "Inline-edit tasks, expected effort and revenue.",
++    "createdOn": "Created on {{date}}",
++    "unsavedChanges": "You have unsaved changes.",
++    "newTaskDefaultName": "New Task",
++    "actions": {
++      "back": "Back to projects"
++    },
++    "kpi": {
++      "totalHours": "Total hours",
++      "totalHoursSubtitle": "Across {{count}} time entries",
++      "totalCost": "Total cost",
++      "totalCostSubtitle": "Avg {{rate}} {{currency}}/h",
++      "teamSize": "Team size",
++      "teamSizeSubtitle": "Active project members",
++      "budgetUsed": "Budget used",
++      "budgetUsedSubtitle": "of {{budget}} {{currency}}"
++    },
++    "timeline": {
++      "title": "Project timeline",
++      "description": "Days elapsed against the total project duration.",
++      "daysElapsed": "days elapsed",
++      "daysRemaining": "days remaining",
++      "noDates": "Set the project start and end dates above to see the timeline.",
++      "phase": {
++        "pending": "Not started",
++        "inProgress": "In progress",
++        "completed": "Completed"
++      }
++    },
++    "charts": {
++      "hoursLabel": "Hours",
++      "costLabel": "Cost",
++      "cumulativeCostLabel": "Cumulative cost",
++      "revenueLabel": "Revenue",
++      "hoursByUser": "Hours by user",
++      "hoursByUserDesc": "Effort distribution across the team.",
++      "hoursByTask": "Hours by task",
++      "hoursByTaskDesc": "Top tasks by logged effort.",
++      "costVsRevenue": "Cost vs revenue",
++      "costVsRevenueDesc": "Cumulative entry cost over time against the project revenue ceiling.",
++      "costHiddenNote": "Cumulative cost is hidden because you don't have permission to view cost data.",
++      "locationSplit": "Hours by location",
++      "locationSplitDesc": "Where the work happened.",
++      "legendHeaders": {
++        "user": "User",
++        "location": "Location",
++        "hours": "Hours"
++      }
++    },
++    "empty": {
++      "noEntriesTitle": "No time logged yet",
++      "noEntriesDescription": "Charts populate as team members track time against this project.",
++      "unavailableTitle": "Data unavailable",
++      "unavailableDescription": "Time-entry data couldn't be loaded — see the notice above for details."
++    },
++    "notices": {
++      "truncated": "Showing the most recent {{count}} time entries — older data is not loaded.",
++      "partialScope": "You only see entries from users you can view; project-wide totals may be higher.",
++      "forbiddenTitle": "Time entries unavailable",
++      "forbiddenDescription": "You don't have permission to view time entries, so analytics can't be displayed.",
++      "loadFailedTitle": "Couldn't load time entries",
++      "loadFailedDescription": "Please refresh the page or try again later."
++    },
++    "rules": {
++      "title": "Project rules",
++      "description": "Automatic controls that watch this project and notify you when something needs attention.",
++      "comingSoonBadge": "Coming soon",
++      "items": {
++        "budgetThreshold": {
++          "name": "Alert when budget exceeds threshold",
++          "description": "Notify project managers when logged cost crosses 80% of the project revenue."
++        },
++        "deadlineApproaching": {
++          "name": "Warn before the end date",
++          "description": "Surface a warning 7 days before the project end date if open tasks remain."
++        },
++        "staleTask": {
++          "name": "Flag stale tasks",
++          "description": "Highlight tasks with no time logged in the last 14 days."
++        },
++        "unassignedTask": {
++          "name": "Catch unassigned tasks",
++          "description": "Notify when a task is created without an assignee or with no expected effort."
++        }
++      }
++    }
++  },
+   "tasks": {
+     "title": "Tasks",
+     "subtitle": "Manage tasks and assignments",
+diff --git a/locales/it/projects.json b/locales/it/projects.json
+index 50501ee2..34177ebc 100644
+--- a/locales/it/projects.json
++++ b/locales/it/projects.json
+@@ -100,6 +100,96 @@
+       "actions": "Azioni"
+     }
+   },
++  "detail": {
++    "detailsTitle": "Dettagli progetto",
++    "detailsDescription": "Modifica la configurazione di base di questo progetto.",
++    "tasksDescription": "Modifica inline attività, impegno previsto e ricavo.",
++    "createdOn": "Creato il {{date}}",
++    "unsavedChanges": "Ci sono modifiche non salvate.",
++    "newTaskDefaultName": "Nuova Attività",
++    "actions": {
++      "back": "Torna ai progetti"
++    },
++    "kpi": {
++      "totalHours": "Ore totali",
++      "totalHoursSubtitle": "Su {{count}} voci timesheet",
++      "totalCost": "Costo totale",
++      "totalCostSubtitle": "Media {{rate}} {{currency}}/h",
++      "teamSize": "Dimensione team",
++      "teamSizeSubtitle": "Membri attivi del progetto",
++      "budgetUsed": "Budget usato",
++      "budgetUsedSubtitle": "su {{budget}} {{currency}}"
++    },
++    "timeline": {
++      "title": "Cronologia progetto",
++      "description": "Giorni trascorsi rispetto alla durata totale del progetto.",
++      "daysElapsed": "giorni trascorsi",
++      "daysRemaining": "giorni rimanenti",
++      "noDates": "Imposta le date di inizio e fine sopra per vedere la cronologia.",
++      "phase": {
++        "pending": "Non iniziato",
++        "inProgress": "In corso",
++        "completed": "Completato"
++      }
++    },
++    "charts": {
++      "hoursLabel": "Ore",
++      "costLabel": "Costo",
++      "cumulativeCostLabel": "Costo cumulato",
++      "revenueLabel": "Ricavo",
++      "hoursByUser": "Ore per utente",
++      "hoursByUserDesc": "Distribuzione dell'effort nel team.",
++      "hoursByTask": "Ore per attività",
++      "hoursByTaskDesc": "Attività con più ore registrate.",
++      "costVsRevenue": "Costo vs ricavo",
++      "costVsRevenueDesc": "Costo cumulato delle voci nel tempo rispetto al ricavo del progetto.",
++      "costHiddenNote": "Il costo cumulato è nascosto perché non hai i permessi per vedere i dati di costo.",
++      "locationSplit": "Ore per luogo",
++      "locationSplitDesc": "Dove è stato svolto il lavoro.",
++      "legendHeaders": {
++        "user": "Utente",
++        "location": "Luogo",
++        "hours": "Ore"
++      }
++    },
++    "empty": {
++      "noEntriesTitle": "Ancora nessuna ora registrata",
++      "noEntriesDescription": "I grafici si popolano man mano che il team registra ore su questo progetto.",
++      "unavailableTitle": "Dati non disponibili",
++      "unavailableDescription": "Non è stato possibile caricare le voci timesheet — vedi l'avviso sopra per i dettagli."
++    },
++    "notices": {
++      "truncated": "Mostro le {{count}} voci più recenti — quelle più vecchie non sono caricate.",
++      "partialScope": "Vedi solo le voci degli utenti che puoi visualizzare; i totali di progetto potrebbero essere più alti.",
++      "forbiddenTitle": "Voci timesheet non disponibili",
++      "forbiddenDescription": "Non hai i permessi per vedere le voci timesheet, quindi le analisi non possono essere mostrate.",
++      "loadFailedTitle": "Impossibile caricare le voci timesheet",
++      "loadFailedDescription": "Ricarica la pagina o riprova più tardi."
++    },
++    "rules": {
++      "title": "Regole del progetto",
++      "description": "Controlli automatici che monitorano questo progetto e ti avvisano quando qualcosa richiede attenzione.",
++      "comingSoonBadge": "In arrivo",
++      "items": {
++        "budgetThreshold": {
++          "name": "Avviso al superamento della soglia di budget",
++          "description": "Notifica i project manager quando il costo registrato supera l'80% del ricavo del progetto."
++        },
++        "deadlineApproaching": {
++          "name": "Avviso prima della data di fine",
++          "description": "Mostra un avviso 7 giorni prima della data di fine progetto se ci sono attività aperte."
++        },
++        "staleTask": {
++          "name": "Segnala attività inattive",
++          "description": "Evidenzia le attività senza ore registrate negli ultimi 14 giorni."
++        },
++        "unassignedTask": {
++          "name": "Intercetta attività non assegnate",
++          "description": "Notifica quando un'attività viene creata senza un assegnatario o senza un impegno previsto."
++        }
++      }
++    }
++  },
+   "tasks": {
+     "title": "Attività",
+     "subtitle": "Gestisci attività e assegnazioni",
+diff --git a/test/components/projects/ProjectDetailView.test.ts b/test/components/projects/ProjectDetailView.test.ts
+new file mode 100644
+index 00000000..3051cd00
+--- /dev/null
++++ b/test/components/projects/ProjectDetailView.test.ts
+@@ -0,0 +1,128 @@
++import { describe, expect, test } from 'bun:test';
++
++const readSource = async () => {
++  return Bun.file(
++    new URL('../../../components/projects/ProjectDetailView.tsx', import.meta.url),
++  ).text();
++};
++
++describe('ProjectDetailView wiring', () => {
++  test('declares the expected ProjectDetailViewProps surface', async () => {
++    const source = await readSource();
++    expect(source).toContain('export interface ProjectDetailViewProps');
++    for (const field of [
++      'project: Project',
++      'clients: Client[]',
++      'orders: ClientsOrder[]',
++      'offers: ClientOffer[]',
++      'users: User[]',
++      'roles: Role[]',
++      'permissions: string[]',
++      'currency: string',
++      'tasks: ProjectTask[]',
++      'onBack: () => void',
++      'onUpdateProject:',
++      'onDeleteProject: (id: string) => void',
++      'onAddTask:',
++      'onUpdateTask:',
++      'onDeleteTask:',
++    ]) {
++      expect(source).toContain(field);
++    }
++  });
++
++  test('fetches time entries server-side filtered by projectId for chart aggregations', async () => {
++    const source = await readSource();
++    // Must use the new projectId filter on entriesApi (added in the same change) so
++    // the page doesn't pull every entry in the system to aggregate one project.
++    expect(source).toMatch(/entriesApi\.listPage\(\{\s*[\s\S]*projectId:\s*project\.id/);
++  });
++
++  test('loads assigned users via projectsApi.getUsers for the team-size KPI', async () => {
++    const source = await readSource();
++    // Biome may reflow the call across lines; match the call shape leniently.
++    expect(source).toMatch(/projectsApi[\s\S]{0,20}getUsers\(project\.id,\s*ac\.signal\)/);
++  });
++
++  test('uses the shadcn Chart wrapper (theme-aware) instead of raw recharts containers', async () => {
++    const source = await readSource();
++    expect(source).toContain("from '@/components/ui/chart'");
++    expect(source).toContain('ChartContainer');
++    expect(source).toContain('ChartTooltipContent');
++  });
++
++  test('renders four analytics charts: by user, by task, cost vs revenue, by location', async () => {
++    const source = await readSource();
++    expect(source).toContain("t('projects:detail.charts.hoursByUser')");
++    expect(source).toContain("t('projects:detail.charts.hoursByTask')");
++    expect(source).toContain("t('projects:detail.charts.costVsRevenue')");
++    expect(source).toContain("t('projects:detail.charts.locationSplit')");
++  });
++
++  test('falls back to a shadcn Empty placeholder per chart when there are no entries', async () => {
++    const source = await readSource();
++    expect(source).toContain("from '@/components/ui/empty'");
++    expect(source).toContain('const ChartEmpty');
++    expect(source.match(/<ChartEmpty\s*\/>/g) ?? []).toHaveLength(4);
++  });
++
++  test('cost KPI is gated on reports.cost.view permission', async () => {
++    const source = await readSource();
++    expect(source).toContain("const canViewCost = permissions.includes('reports.cost.view')");
++    expect(source).toMatch(/canViewCost &&[\s\S]{0,80}<KpiCard[\s\S]{0,200}totalCost/);
++  });
++
++  test('sticky save bar appears only when there are unsaved changes and update is permitted', async () => {
++    const source = await readSource();
++    expect(source).toContain('hasChanges && canUpdateProjects');
++    expect(source).toContain("t('projects:detail.unsavedChanges')");
++  });
++
++  test('back button calls onBack', async () => {
++    const source = await readSource();
++    expect(source).toMatch(/onClick=\{onBack\}/);
++  });
++
++  test('delete action prompts a DeleteConfirmModal and returns to the list via onBack', async () => {
++    const source = await readSource();
++    expect(source).toContain('DeleteConfirmModal');
++    expect(source).toContain('isOpen={isDeleteConfirmOpen}');
++    expect(source).toMatch(/onDeleteProject\(project\.id\);[\s\S]{0,80}onBack\(\)/);
++  });
++
++  test('date-required validation skips legacy projects without stored dates', async () => {
++    // Hard-requiring dates on save would block rename/recolor/disable for projects
++    // created before the dates-required rule. Validation only fires when the project
++    // already carries the corresponding date.
++    const source = await readSource();
++    expect(source).toContain('if (project.startDate && !startDate)');
++    expect(source).toContain('if (project.endDate && !endDate)');
++    // Required marker also tracks the stored value so the UI doesn't lie.
++    expect(source).toContain('{project.startDate && <RequiredMark />}');
++    expect(source).toContain('{project.endDate && <RequiredMark />}');
++  });
++
++  test('team-size KPI and assignment fetch are gated on canManageAssignments', async () => {
++    // GET /projects/:id/users is server-gated on `projects.assignments.update`. Without
++    // that permission the fetch 403s and the KPI would show a misleading "0".
++    const source = await readSource();
++    expect(source).toMatch(/if \(!canManageAssignments\)[\s\S]{0,200}setAssignedUserIds\(\[\]\)/);
++    expect(source).toMatch(
++      /\{canManageAssignments && \(\s*<KpiCard[\s\S]{0,400}detail\.kpi\.teamSize/,
++    );
++  });
++});
++
++describe('ProjectDetailView wired into App.tsx', () => {
++  test("'projects/detail' is a valid view in App.tsx routing", async () => {
++    const source = await Bun.file(new URL('../../../App.tsx', import.meta.url)).text();
++    expect(source.match(/'projects\/detail'/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
++    expect(source).toContain('selectedProjectId');
++  });
++
++  test('App.tsx clears selectedProjectId on navigation away from projects/detail', async () => {
++    const source = await Bun.file(new URL('../../../App.tsx', import.meta.url)).text();
++    expect(source).toContain("if (resolved !== 'projects/detail')");
++    expect(source).toContain('setSelectedProjectId(null)');
++  });
++});
+diff --git a/test/components/projects/ProjectsView.test.ts b/test/components/projects/ProjectsView.test.ts
+index 51c28b03..95ff9a22 100644
+--- a/test/components/projects/ProjectsView.test.ts
++++ b/test/components/projects/ProjectsView.test.ts
+@@ -1,177 +1,121 @@
+ import { describe, expect, test } from 'bun:test';
+ 
+-describe('ProjectsView modal toolbar styling', () => {
+-  test('project modal add-activity actions use the shared table toolbar button class', async () => {
++describe('ProjectsView (create-only dialog after detail-page revamp)', () => {
++  test('modal title is the create-new-project label only', async () => {
+     const source = await Bun.file(
+       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+     ).text();
+-
+-    expect(source).toContain(
+-      "import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';",
+-    );
+-    expect(source.match(/className=\{TABLE_CONTROL_BUTTON_CLASSNAME\}/g) ?? []).toHaveLength(2);
++    // Edit mode lives in ProjectDetailView now — the dialog must never render
++    // the "Edit Project" title or branch on `editingProject` anywhere.
++    expect(source).toContain("t('projects:projects.createNewProject')");
++    expect(source).not.toMatch(/editProject/);
++    expect(source).not.toMatch(/\beditingProject\b/);
+   });
+-});
+ 
+-describe('ProjectsView mixed billing edit behavior', () => {
+-  test('does not submit derived mixed project billing unless the user changes billing controls', async () => {
++  test('table row click delegates to onNavigateToProject (no inline modal open)', async () => {
+     const source = await Bun.file(
+       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+     ).text();
+-
+-    expect(source).toContain("if (displayProjectBillingType !== 'mixed' || projectBillingChanged)");
+-    expect(source).toContain('const getDerivedProjectBillingType = (project: Project)');
+-    expect(source.match(/setProjectBillingChanged\(true\)/g) ?? []).toHaveLength(2);
+-  });
+-});
+-
+-describe('ProjectsView optional order on create (#319)', () => {
+-  test('create form does not require orderId — only name + clientId are validated', async () => {
+-    const source = await Bun.file(
+-      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+-    ).text();
+-
+-    expect(source).not.toContain('orderRequired');
++    expect(source).toContain('onNavigateToProject?: (projectId: string) => void');
++    // The list's row click should fire navigation, not openEditModal (which no longer exists).
+     expect(source).toContain(
+-      "if (!clientId) newErrors.clientId = t('projects:projects.clientRequired')",
++      'onRowClick={onNavigateToProject ? (row) => onNavigateToProject(row.id) : undefined}',
+     );
++    expect(source).not.toContain('openEditModal');
+   });
+ 
+-  test('onAddProject signature exposes clientId and an optional orderId', async () => {
++  test('onAddProject returns the created project so the caller can navigate to it', async () => {
+     const source = await Bun.file(
+       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+     ).text();
+-
+-    expect(source).toContain('export type AddProjectFormInput');
+-    expect(source).toMatch(/clientId:\s*string;[\s\S]*orderId\?:\s*string;/);
+-    // Submit forwards orderId via the options-object contract, normalizing '' to undefined
+-    expect(source).toMatch(/orderId:\s*orderId\s*\|\|\s*undefined,/);
++    expect(source).toContain(
++      'onAddProject: (input: AddProjectFormInput) => Promise<Project | null>',
++    );
++    // After submit, ProjectsView awaits the handler and navigates on success.
++    expect(source).toMatch(/const result = await onAddProject\(/);
++    expect(source).toContain('onNavigateToProject(result.id)');
+   });
++});
+ 
+-  test('order selector auto-fills client from the selected order', async () => {
++describe('ProjectsView create-form validation', () => {
++  test('create form requires name, client, offer, and a date range', async () => {
+     const source = await Bun.file(
+       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+     ).text();
+-
+-    expect(source).toContain('const nextOrder = orders.find((o) => o.id === nextOrderId);');
+-    expect(source).toContain('setClientId(nextOrder.clientId);');
+-    expect(source).toContain('disabled={Boolean(selectedOrder)}');
++    expect(source).toContain(
++      "if (!name?.trim()) newErrors.name = t('common:validation.projectNameRequired')",
++    );
++    expect(source).toContain(
++      "if (!clientId) newErrors.clientId = t('projects:projects.clientRequired')",
++    );
++    expect(source).toContain(
++      "if (!offerId) newErrors.offerId = t('projects:projects.offerRequired')",
++    );
++    expect(source).toContain(
++      "if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');",
++    );
++    expect(source).toContain(
++      "if (!endDate) newErrors.endDate = t('projects:projects.endDateRequired');",
++    );
++    expect(source).toContain("newErrors.dateRange = t('projects:projects.dateRangeInvalid')");
+   });
+-});
+ 
+-describe('ProjectsView lifecycle fields (issue #322)', () => {
+   test('exposes start date, end date, offer reference, and revenue inputs', async () => {
+     const source = await Bun.file(
+       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+     ).text();
+-
+     expect(source).toContain('id="project-start-date"');
+     expect(source).toContain('id="project-end-date"');
+     expect(source).toContain('id="project-offer"');
+     expect(source).toContain('id="project-revenue"');
+-    expect(source).toContain("t('projects:projects.startDate')");
+-    expect(source).toContain("t('projects:projects.endDate')");
+-    expect(source).toContain("t('projects:projects.offerReference')");
+-    expect(source).toContain("t('projects:projects.projectRevenue')");
+   });
+ 
+-  test('revenue precedence: activity sum > order > manual', async () => {
++  test('revenue precedence: activity sum > order > manual, and read-only unless manual', async () => {
+     const source = await Bun.file(
+       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+     ).text();
+-
+-    // Precedence resolution lives in a dedicated helper, used once at module top-level.
+     expect(source).toContain('const resolveRevenueSource = (');
+     expect(source).toContain("if (activitiesSum > 0) return 'activities';");
+-    expect(source).toContain('resolveRevenueSource(activitiesRevenueSum, Boolean(effectiveOrder))');
+-    expect(source).toContain('calculatePricingTotals(');
+-    // Read-only when source is not manual
+     expect(source).toContain("readOnly={revenueSource !== 'manual'}");
+-    // Submit reuses the render-scope `persistedRevenue` (no duplicate computation)
+     expect(source).toContain(
+       "const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : undefined;",
+     );
+   });
+ 
+-  test('requires offer reference and validates date range on submit', async () => {
++  test('order selector auto-fills the client and disables the client picker while bound', async () => {
+     const source = await Bun.file(
+       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+     ).text();
+-
+-    expect(source).toContain("newErrors.offerId = t('projects:projects.offerRequired')");
+-    expect(source).toContain("newErrors.dateRange = t('projects:projects.dateRangeInvalid')");
+-  });
+-
+-  test('passes new fields via the options-object onAddProject contract', async () => {
+-    const source = await Bun.file(
+-      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+-    ).text();
+-
+-    expect(source).toContain('export type AddProjectFormInput');
+-    expect(source).toContain('onAddProject: (input: AddProjectFormInput) => void');
+-    // Make sure submit calls onAddProject with the new shape
+-    expect(source).toMatch(/onAddProject\(\s*\{[\s\S]*offerId,[\s\S]*\}\s*\)/);
++    expect(source).toContain('const nextOrder = orders.find((o) => o.id === nextOrderId);');
++    expect(source).toContain('setClientId(nextOrder.clientId);');
++    expect(source).toContain('disabled={Boolean(selectedOrder)}');
+   });
+ 
+   test('offer selector filters by client and auto-fills client on select', async () => {
+-    // Mirror of the order pattern: prevents picking an offer for client X while the project is
+-    // being assigned to client Y. Server enforces the same invariant.
+     const source = await Bun.file(
+       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+     ).text();
+-
+-    // Filter offers to the selected client (unless no client is set yet)
+     expect(source).toContain('.filter((o) => !clientId || o.clientId === clientId)');
+-    // On offer select, push the offer's clientId into form state
+     expect(source).toContain('setClientId(nextOffer.clientId);');
+   });
+ 
+-  test('changing the order, offer, or client clears any link that no longer matches', async () => {
+-    // Each handler resets sibling links that belonged to a different client. The exact
+-    // mechanism (a helper vs. inline state updates) is implementation detail — assert the
+-    // observable structural facts: order/offer pickers feed into a shared clear path, and
+-    // the helper itself can clear both setters.
++  test('changing the order or offer clears any stale sibling link via the shared helper', async () => {
+     const source = await Bun.file(
+       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+     ).text();
+-
+-    // The order and offer onChange handlers each call the shared clear path with a `keep`
+-    // arg of the link they just set themselves.
+     expect(source).toMatch(/setOrderId\(nextOrderId\)[\s\S]{0,600}['"]order['"]/);
+     expect(source).toMatch(/setOfferId\(nextOfferId\)[\s\S]{0,600}['"]offer['"]/);
+   });
++});
+ 
+-  test('start and end dates are required at creation only (issue #474)', async () => {
+-    // Gated on !editingProject so legacy projects (created before this change with null
+-    // dates) can still be saved on edit — matches the backend PATCH which still accepts
+-    // null. The dateRange check stays unconditional in both modes.
++describe('ProjectsView toolbar styling', () => {
++  test('the draft-task add-row button uses the shared table toolbar button class', async () => {
+     const source = await Bun.file(
+       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+     ).text();
+-
+     expect(source).toContain(
+-      "if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');",
+-    );
+-    expect(source).toContain(
+-      "if (!endDate) newErrors.endDate = t('projects:projects.endDateRequired');",
+-    );
+-    expect(source).toMatch(
+-      /if \(!editingProject\) \{\s*if \(!startDate\) newErrors\.startDate[\s\S]*?if \(!endDate\) newErrors\.endDate/,
++      "import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';",
+     );
+-    expect(source).toMatch(/projects\.startDate'\)\}\s*\{!editingProject && <RequiredMark\s*\/>\}/);
+-    expect(source).toMatch(/projects\.endDate'\)\}\s*\{!editingProject && <RequiredMark\s*\/>\}/);
+-    expect(source).toContain('required={!editingProject}');
+-  });
+-
+-  test('edit-mode revenue resolves the effective order from editingProject.orderId', async () => {
+-    // Regression for the order-derived branch silently falling back to "manual" on edit:
+-    // the form's `orderId` state is empty in openEditModal (no order selector is shown there —
+-    // only a read-only linked-order chip), so the resolution must come from editingProject.
+-    const source = await Bun.file(
+-      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+-    ).text();
+-
+-    // Assert the dependency on editingProject.orderId rather than the exact variable name.
+-    expect(source).toMatch(/orders\.find\([\s\S]*?editingProject\.orderId/);
++    expect(source.match(/className=\{TABLE_CONTROL_BUTTON_CLASSNAME\}/g) ?? []).toHaveLength(1);
+   });
+ });
+diff --git a/test/hooks/useAuth.test.ts b/test/hooks/useAuth.test.ts
+index 5c7d0742..a0424df9 100644
+--- a/test/hooks/useAuth.test.ts
++++ b/test/hooks/useAuth.test.ts
+@@ -301,12 +301,16 @@ describe('useAuth', () => {
+   // hook hands the browser to that URL after clearing local state — otherwise the IdP
+   // session cookie stays alive and the next tab silently SSOs back in as the previous user.
+   test('logout redirects to endSessionUrl when the server returns one', async () => {
++    // Stub Location#assign — preserves the real happy-dom Location instance so
++    // `window.location.href` keeps working for later tests in the same process.
++    // (Previously we Object.defineProperty'd window.location to a plain spread
++    //  object; the spread dropped happy-dom's `href` getter, and the matching
++    //  finally-block "restore" kept the broken spread, leaving every later test
++    //  in the bun process with a window.location that returned undefined for
++    //  href — which then blew up Login.tsx's `new URL(window.location.href)`.)
+     const originalAssign = window.location.assign;
+     const assignMock = mock((_url: string) => {});
+-    Object.defineProperty(window, 'location', {
+-      writable: true,
+-      value: { ...window.location, assign: assignMock },
+-    });
++    window.location.assign = assignMock;
+     apiMocks.authLogout.mockImplementation(() =>
+       Promise.resolve({ endSessionUrl: 'https://idp.example.com/logout?id_token_hint=tok' }),
+     );
+@@ -329,20 +333,14 @@ describe('useAuth', () => {
+       expect(result.current.currentUser).toBeNull();
+       expect(setAuthTokenMock).toHaveBeenLastCalledWith(null);
+     } finally {
+-      Object.defineProperty(window, 'location', {
+-        writable: true,
+-        value: { ...window.location, assign: originalAssign },
+-      });
++      window.location.assign = originalAssign;
+     }
+   });
+ 
+   test('logout does NOT redirect when endSessionUrl is null', async () => {
+     const originalAssign = window.location.assign;
+     const assignMock = mock((_url: string) => {});
+-    Object.defineProperty(window, 'location', {
+-      writable: true,
+-      value: { ...window.location, assign: assignMock },
+-    });
++    window.location.assign = assignMock;
+     apiMocks.authLogout.mockImplementation(() => Promise.resolve({ endSessionUrl: null }));
+ 
+     try {
+@@ -356,10 +354,7 @@ describe('useAuth', () => {
+ 
+       expect(assignMock).not.toHaveBeenCalled();
+     } finally {
+-      Object.defineProperty(window, 'location', {
+-        writable: true,
+-        value: { ...window.location, assign: originalAssign },
+-      });
++      window.location.assign = originalAssign;
+     }
+   });
+ 

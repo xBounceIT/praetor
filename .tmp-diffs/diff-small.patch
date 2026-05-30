@@ -1,0 +1,1744 @@
+diff --git a/App.tsx b/App.tsx
+index ed3a60fa..70d4d84f 100644
+--- a/App.tsx
++++ b/App.tsx
+@@ -1,4 +1,13 @@
+-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
++import React, {
++  lazy,
++  Suspense,
++  useCallback,
++  useEffect,
++  useLayoutEffect,
++  useMemo,
++  useRef,
++  useState,
++} from 'react';
+ import { useTranslation } from 'react-i18next';
+ import { Button } from '@/components/ui/button';
+ import { FieldLabel } from '@/components/ui/field';
+@@ -31,6 +40,11 @@ import InternalEmployeesView from './components/HR/InternalEmployeesView';
+ import Layout from './components/Layout';
+ import Login from './components/Login';
+ import NotFound from './components/NotFound';
++
++// Lazy-load the detail view so the recharts bundle (~150kB) only ships when a user
++// actually navigates to a project detail page — keeps the initial app bundle slim.
++const ProjectDetailView = lazy(() => import('./components/projects/ProjectDetailView'));
++
+ import ProjectsView from './components/projects/ProjectsView';
+ import TasksView from './components/projects/TasksView';
+ import AiReportingView from './components/reports/AiReportingView';
+@@ -776,6 +790,7 @@ const AppContent: React.FC = () => {
+       // Catalog module
+       'catalog/internal-listing',
+       'projects/manage',
++      'projects/detail',
+       'projects/tasks',
+       'hr/internal',
+       'hr/external',
+@@ -819,6 +834,7 @@ const AppContent: React.FC = () => {
+       // Catalog module
+       'catalog/internal-listing',
+       'projects/manage',
++      'projects/detail',
+       'projects/tasks',
+       'hr/internal',
+       'hr/external',
+@@ -842,6 +858,7 @@ const AppContent: React.FC = () => {
+   const [clientOfferFilterId, setClientOfferFilterId] = useState<string | null>(null);
+   const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(null);
+   const [clientsOrderFilterId, setClientsOrderFilterId] = useState<string | null>(null);
++  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+ 
+   // Navigation-aware setter: clears any *FilterId state that isn't valid for
+   // the destination view, batched in the SAME commit as the view change.
+@@ -878,6 +895,9 @@ const AppContent: React.FC = () => {
+     if (resolved !== 'accounting/clients-orders') {
+       setClientsOrderFilterId(null);
+     }
++    if (resolved !== 'projects/detail') {
++      setSelectedProjectId(null);
++    }
+   }, []);
+ 
+   // Latest-value refs for handler factories. The handlers read these BEFORE
+@@ -2800,9 +2820,96 @@ const AppContent: React.FC = () => {
+                     setClientsOrderFilterId(orderId);
+                     setActiveView('accounting/clients-orders');
+                   }}
++                  onNavigateToProject={(projectId) => {
++                    setSelectedProjectId(projectId);
++                    setActiveView('projects/detail');
++                  }}
+                 />
+               )}
+ 
++            {hasViewAccess(currentUser.permissions, 'projects/detail') &&
++              activeView === 'projects/detail' &&
++              (() => {
++                const selectedProject = selectedProjectId
++                  ? projects.find((p) => p.id === selectedProjectId)
++                  : undefined;
++                if (!selectedProject) {
++                  // Project unavailable (e.g. just deleted, or refresh) — fall back to list.
++                  return (
++                    <ProjectsView
++                      projects={projects}
++                      clients={clients}
++                      orders={clientsOrders}
++                      offers={clientOffers}
++                      currency={generalSettings.currency}
++                      permissions={currentUser.permissions || []}
++                      users={availableUsers}
++                      roles={roles}
++                      tasks={projectTasks}
++                      onAddProject={addProject}
++                      onUpdateProject={handleUpdateProject}
++                      onDeleteProject={handleDeleteProject}
++                      onAddTask={addProjectTask}
++                      onUpdateTask={handleUpdateTask}
++                      onDeleteTask={async (id) => {
++                        try {
++                          await api.tasks.delete(id);
++                          setProjectTasks((prev) => prev.filter((t) => t.id !== id));
++                        } catch (err) {
++                          console.error('Failed to delete task:', err);
++                        }
++                      }}
++                      onViewOrder={(orderId) => {
++                        setClientsOrderFilterId(orderId);
++                        setActiveView('accounting/clients-orders');
++                      }}
++                      onNavigateToProject={(projectId) => {
++                        setSelectedProjectId(projectId);
++                        setActiveView('projects/detail');
++                      }}
++                    />
++                  );
++                }
++                return (
++                  // key={selectedProject.id} remounts the component on project switch
++                  // so all local state (form fields, entries fetch, assignments) resets
++                  // cleanly without an in-component prop-sync useEffect.
++                  // Suspense fallback covers the lazy() chunk fetch the first time the
++                  // user enters the detail page.
++                  <Suspense fallback={null}>
++                    <ProjectDetailView
++                      key={selectedProject.id}
++                      project={selectedProject}
++                      clients={clients}
++                      orders={clientsOrders}
++                      offers={clientOffers}
++                      users={availableUsers}
++                      roles={roles}
++                      permissions={currentUser.permissions || []}
++                      currency={generalSettings.currency}
++                      tasks={projectTasks}
++                      onBack={() => setActiveView('projects/manage')}
++                      onUpdateProject={handleUpdateProject}
++                      onDeleteProject={handleDeleteProject}
++                      onAddTask={addProjectTask}
++                      onUpdateTask={handleUpdateTask}
++                      onDeleteTask={async (id) => {
++                        try {
++                          await api.tasks.delete(id);
++                          setProjectTasks((prev) => prev.filter((t) => t.id !== id));
++                        } catch (err) {
++                          console.error('Failed to delete task:', err);
++                        }
++                      }}
++                      onViewOrder={(orderId) => {
++                        setClientsOrderFilterId(orderId);
++                        setActiveView('accounting/clients-orders');
++                      }}
++                    />
++                  </Suspense>
++                );
++              })()}
++
+             {hasViewAccess(currentUser.permissions, 'projects/tasks') &&
+               activeView === 'projects/tasks' && (
+                 <TasksView
+diff --git a/components/projects/ProjectsView.tsx b/components/projects/ProjectsView.tsx
+index 27ffdbcf..8eb5bf7c 100644
+--- a/components/projects/ProjectsView.tsx
++++ b/components/projects/ProjectsView.tsx
+@@ -6,7 +6,6 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+ import { Input } from '@/components/ui/input';
+ import { Textarea } from '@/components/ui/textarea';
+ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+-import { COLORS } from '../../constants';
+ import { projectsApi, tasksApi } from '../../services/api';
+ import type {
+   BillingFrequency,
+@@ -37,21 +36,10 @@ import {
+ import SelectControl from '../shared/SelectControl';
+ import StandardTable, { type Column } from '../shared/StandardTable';
+ import StatusBadge from '../shared/StatusBadge';
+-import Toggle from '../shared/Toggle';
+ import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
+ import UserAssignmentModal from '../shared/UserAssignmentModal';
+ import type { RecurringConfig } from './TaskFormModal';
+ 
+-const isValidHex = (v: string) => /^#[0-9a-fA-F]{6}$/.test(v);
+-
+-const normalizeHex = (v: string): string => {
+-  let h = v.trim();
+-  if (h && !h.startsWith('#')) h = '#' + h;
+-  const m = /^#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])$/.exec(h);
+-  if (m) h = `#${m[1]}${m[1]}${m[2]}${m[2]}${m[3]}${m[3]}`;
+-  return h;
+-};
+-
+ const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
+ 
+ type DraftTask = {
+@@ -131,7 +119,7 @@ export interface ProjectsViewProps {
+   roles: Role[];
+   currency: string;
+   tasks: ProjectTask[];
+-  onAddProject: (input: AddProjectFormInput) => void;
++  onAddProject: (input: AddProjectFormInput) => Promise<Project | null>;
+   onUpdateProject: (id: string, updates: Partial<Project>) => void;
+   onDeleteProject: (id: string) => void;
+   onAddTask: (
+@@ -147,6 +135,7 @@ export interface ProjectsViewProps {
+   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
+   onDeleteTask: (id: string) => void | Promise<void>;
+   onViewOrder?: (orderId: string) => void;
++  onNavigateToProject?: (projectId: string) => void;
+ }
+ 
+ const ProjectsView: React.FC<ProjectsViewProps> = ({
+@@ -162,10 +151,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+   onAddProject,
+   onUpdateProject,
+   onDeleteProject,
+-  onAddTask,
+-  onUpdateTask,
+-  onDeleteTask,
+-  onViewOrder,
++  onNavigateToProject,
+ }) => {
+   const { t, i18n } = useTranslation(['projects', 'common', 'form']);
+   const canCreateProjects = hasScopedActionPermission(permissions, 'projects.manage', 'create');
+@@ -175,64 +161,33 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+     permissions,
+     buildPermission('projects.assignments', 'update'),
+   );
+-  const canCreateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
+-  const canUpdateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'update');
+-  const canDeleteTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'delete');
+ 
+-  // Modal State
++  // Modal state — create only
+   const [isModalOpen, setIsModalOpen] = useState(false);
+-  const [editingProject, setEditingProject] = useState<Project | null>(null);
+   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+-
+   const [managingProjectId, setManagingProjectId] = useState<string | null>(null);
+ 
+-  // Form State
++  // Form state
+   const [name, setName] = useState('');
+   const [orderId, setOrderId] = useState('');
+   const [clientId, setClientId] = useState('');
+   const [description, setDescription] = useState('');
+-  const [color, setColor] = useState(COLORS[0]);
+-  const [tempIsDisabled, setTempIsDisabled] = useState(false);
+   const [billingType, setBillingType] = useState<StoredBillingType>('time_and_materials');
+   const [billingFrequency, setBillingFrequency] = useState<BillingFrequency>('monthly');
+-  const [projectBillingChanged, setProjectBillingChanged] = useState(false);
+   const [offerId, setOfferId] = useState('');
+   const [startDate, setStartDate] = useState('');
+   const [endDate, setEndDate] = useState('');
+   const [revenue, setRevenue] = useState('');
+   const [errors, setErrors] = useState<Record<string, string>>({});
+-
+-  // Draft tasks state (create modal only)
+   const [draftTasks, setDraftTasks] = useState<DraftTask[]>([]);
+ 
+-  // Task management state (edit modal only)
+-  const [projectTaskHours, setProjectTaskHours] = useState<Record<string, number>>({});
+-  const [hoursLoadState, setHoursLoadState] = useState<'idle' | 'loading' | 'error'>('idle');
+-  const [taskEdits, setTaskEdits] = useState<Record<string, Record<string, string>>>({});
+-  const [taskToDelete, setTaskToDelete] = useState<ProjectTask | null>(null);
+-  const [isTaskDeleteConfirmOpen, setIsTaskDeleteConfirmOpen] = useState(false);
+-  const fetchHoursAbortRef = useRef<AbortController | null>(null);
++  const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
+   const fetchAllHoursGenRef = useRef(0);
+   const [allProjectHours, setAllProjectHours] = useState<Record<
+     string,
+     Record<string, number>
+   > | null>(null);
+-  const [hexInput, setHexInput] = useState('');
+-  const skipPickerRef = useRef(false);
+-
+-  const commitHexInput = () => {
+-    skipPickerRef.current = true;
+-    const norm = normalizeHex(hexInput);
+-    if (isValidHex(norm)) {
+-      setColor(norm);
+-      setHexInput(norm);
+-    } else {
+-      setHexInput(color);
+-    }
+-  };
+-
+-  const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
+ 
+   useEffect(() => {
+     if (projectIds.length === 0) {
+@@ -297,20 +252,14 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+     return map;
+   }, [projects, tasks, allProjectHours]);
+ 
+-  // Modal Handlers
+   const openAddModal = () => {
+     if (!canCreateProjects) return;
+-    setEditingProject(null);
+     setName('');
+     setOrderId('');
+     setClientId('');
+     setDescription('');
+-    setColor(COLORS[0]);
+-    setHexInput(COLORS[0]);
+-    setTempIsDisabled(false);
+     setBillingType('time_and_materials');
+     setBillingFrequency('monthly');
+-    setProjectBillingChanged(false);
+     setOfferId('');
+     setStartDate('');
+     setEndDate('');
+@@ -320,72 +269,16 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+     setIsModalOpen(true);
+   };
+ 
+-  const openEditModal = (project: Project) => {
+-    if (!canUpdateProjects) return;
+-    setEditingProject(project);
+-    setName(project.name);
+-    setClientId(project.clientId);
+-    setOrderId('');
+-    setDescription(project.description || '');
+-    setColor(project.color);
+-    setHexInput(project.color);
+-    setTempIsDisabled(project.isDisabled || false);
+-    const storedBillingType =
+-      project.billingType === 'retainer' ? 'retainer' : 'time_and_materials';
+-    setBillingType(storedBillingType);
+-    setBillingFrequency(
+-      storedBillingType === 'time_and_materials'
+-        ? 'monthly'
+-        : (project.billingFrequency ?? 'monthly'),
+-    );
+-    setProjectBillingChanged(false);
+-    setOfferId(project.offerId ?? '');
+-    setStartDate(project.startDate ?? '');
+-    setEndDate(project.endDate ?? '');
+-    setRevenue(
+-      project.revenue !== null && project.revenue !== undefined ? String(project.revenue) : '',
+-    );
+-    setDraftTasks([]);
+-    setErrors({});
+-    setTaskEdits({});
+-    setProjectTaskHours({});
+-    setHoursLoadState('loading');
+-    setIsModalOpen(true);
+-    fetchHoursAbortRef.current?.abort();
+-    const ac = new AbortController();
+-    fetchHoursAbortRef.current = ac;
+-    tasksApi
+-      .getHours(project.id, ac.signal)
+-      .then((h) => {
+-        if (ac.signal.aborted) return;
+-        setProjectTaskHours(h);
+-        setHoursLoadState('idle');
+-      })
+-      .catch(() => {
+-        if (ac.signal.aborted) return;
+-        setHoursLoadState('error');
+-      });
+-  };
+-
+   const closeModal = () => {
+     setIsModalOpen(false);
+     setIsDeleteConfirmOpen(false);
+-    setIsTaskDeleteConfirmOpen(false);
+-    setEditingProject(null);
+     setProjectToDelete(null);
+-    setTaskToDelete(null);
+     setDraftTasks([]);
+     setErrors({});
+-    setTaskEdits({});
+-    setProjectTaskHours({});
+-    setHoursLoadState('idle');
+-    setProjectBillingChanged(false);
+   };
+ 
+   // Reset a currently-bound order/offer if it no longer matches `nextClientId`. The
+-  // `keep` flag lets the order/offer pickers skip the link they just set themselves — a
+-  // direct setX(...) call followed by this helper would otherwise race with React's
+-  // batched updates and re-clear the value via the still-old closure.
++  // `keep` flag lets the order/offer pickers skip the link they just set themselves.
+   const clearStaleClientLinks = (nextClientId: string, keep: 'order' | 'offer' | null) => {
+     if (keep !== 'offer' && offerId) {
+       const current = offers.find((o) => o.id === offerId);
+@@ -403,84 +296,60 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+     }
+   };
+ 
+-  // Direct client picker: change the client and clear both stale order and stale offer.
+   const applyClientChange = (nextClientId: string) => {
+     setClientId(nextClientId);
+     if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+     clearStaleClientLinks(nextClientId, null);
+   };
+ 
+-  const handleSubmit = (e: React.FormEvent) => {
++  const handleSubmit = async (e: React.FormEvent) => {
+     e.preventDefault();
+     setErrors({});
+ 
+-    if (editingProject && !canUpdateProjects) return;
+-    if (!editingProject && !canCreateProjects) return;
++    if (!canCreateProjects) return;
+ 
+     const newErrors: Record<string, string> = {};
+     if (!name?.trim()) newErrors.name = t('common:validation.projectNameRequired');
+     if (!clientId) newErrors.clientId = t('projects:projects.clientRequired');
+-
+     if (!offerId) newErrors.offerId = t('projects:projects.offerRequired');
+-
+-    if (!editingProject) {
+-      if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');
+-      if (!endDate) newErrors.endDate = t('projects:projects.endDateRequired');
+-    }
++    if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');
++    if (!endDate) newErrors.endDate = t('projects:projects.endDateRequired');
+     if (startDate && endDate && startDate > endDate) {
+       newErrors.dateRange = t('projects:projects.dateRangeInvalid');
+     }
+-
+     if (Object.keys(newErrors).length > 0) {
+       setErrors(newErrors);
+       return;
+     }
+ 
+-    if (editingProject) {
+-      const updates: Partial<Project> = {
+-        name,
+-        clientId,
+-        description,
+-        color,
+-        isDisabled: tempIsDisabled,
+-        offerId,
+-        startDate: startDate || null,
+-        endDate: endDate || null,
+-        revenue: persistedRevenue,
+-      };
+-      if (displayProjectBillingType !== 'mixed' || projectBillingChanged) {
+-        updates.billingType = billingType;
+-        updates.billingFrequency =
+-          billingType === 'time_and_materials' ? 'monthly' : billingFrequency;
+-      }
+-      onUpdateProject(editingProject.id, updates);
+-    } else {
+-      const taskInputs: DraftTaskInput[] = draftTasks
+-        .filter((t) => t.name.trim())
+-        .map((t) => ({
+-          name: t.name.trim(),
+-          billingType: t.billingType,
+-          billingFrequency: t.billingType === 'time_and_materials' ? 'monthly' : t.billingFrequency,
+-          monthlyEffort: t.monthlyEffort ? parseFloat(t.monthlyEffort) : undefined,
+-          expectedEffort: t.expectedEffort ? parseFloat(t.expectedEffort) : undefined,
+-          revenue: t.revenue ? parseFloat(t.revenue) : undefined,
+-          notes: t.notes.trim() || undefined,
+-        }));
+-      onAddProject({
+-        name,
+-        clientId,
+-        orderId: orderId || undefined,
+-        offerId,
+-        description,
+-        draftTasks: taskInputs.length > 0 ? taskInputs : undefined,
+-        billingType,
+-        billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
+-        startDate: startDate || null,
+-        endDate: endDate || null,
+-        revenue: persistedRevenue,
+-      });
+-    }
++    const taskInputs: DraftTaskInput[] = draftTasks
++      .filter((t) => t.name.trim())
++      .map((t) => ({
++        name: t.name.trim(),
++        billingType: t.billingType,
++        billingFrequency: t.billingType === 'time_and_materials' ? 'monthly' : t.billingFrequency,
++        monthlyEffort: t.monthlyEffort ? parseFloat(t.monthlyEffort) : undefined,
++        expectedEffort: t.expectedEffort ? parseFloat(t.expectedEffort) : undefined,
++        revenue: t.revenue ? parseFloat(t.revenue) : undefined,
++        notes: t.notes.trim() || undefined,
++      }));
++    const result = await onAddProject({
++      name,
++      clientId,
++      orderId: orderId || undefined,
++      offerId,
++      description,
++      draftTasks: taskInputs.length > 0 ? taskInputs : undefined,
++      billingType,
++      billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
++      startDate: startDate || null,
++      endDate: endDate || null,
++      revenue: persistedRevenue,
++    });
+     closeModal();
++    if (result && onNavigateToProject) {
++      onNavigateToProject(result.id);
++    }
+   };
+ 
+   const promptDelete = (project: Project) => {
+@@ -544,49 +413,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+     setDraftTasks((prev) => prev.filter((t) => t._id !== id));
+   };
+ 
+-  // Existing task inline-edit helpers
+-  const getTaskFieldValue = (taskId: string, field: string, fallback: string): string =>
+-    taskEdits[taskId]?.[field] ?? fallback;
+-
+-  const setTaskFieldValue = (taskId: string, field: string, value: string) => {
+-    setTaskEdits((prev) => ({ ...prev, [taskId]: { ...prev[taskId], [field]: value } }));
+-  };
+-
+-  const commitTaskField = (
+-    row: ProjectTask,
+-    field: keyof ProjectTask,
+-    parseValue: (v: string) => unknown,
+-  ) => {
+-    const edited = taskEdits[row.id]?.[field];
+-    if (edited === undefined) return;
+-    const parsed = parseValue(edited);
+-    if (parsed === row[field]) return;
+-    onUpdateTask(row.id, { [field]: parsed });
+-  };
+-
+-  const handleAddExistingTask = async () => {
+-    if (!editingProject || !canCreateTasks) return;
+-    await onAddTask('New Task', editingProject.id);
+-  };
+-
+-  const promptDeleteTask = (task: ProjectTask) => {
+-    setTaskToDelete(task);
+-    setIsTaskDeleteConfirmOpen(true);
+-  };
+-
+-  const handleDeleteTask = () => {
+-    if (!canDeleteTasks || !taskToDelete) return;
+-    onDeleteTask(taskToDelete.id);
+-    setIsTaskDeleteConfirmOpen(false);
+-    setTaskToDelete(null);
+-  };
+-
+-  const canSubmit = editingProject ? canUpdateProjects : canCreateProjects;
+-
+-  const editingProjectTasks = useMemo(
+-    () => (editingProject ? tasks.filter((t) => t.projectId === editingProject.id) : []),
+-    [tasks, editingProject],
+-  );
+   const getDerivedProjectBillingType = (project: Project): BillingType => {
+     if (project.billingType === 'mixed') return 'mixed';
+     const storedProjectBillingType = toStoredBillingType(project.billingType);
+@@ -599,21 +425,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+     if (taskBillingTypes.size > 1) return 'mixed';
+     return taskBillingTypes.has(storedProjectBillingType) ? storedProjectBillingType : 'mixed';
+   };
+-  const displayProjectBillingType: BillingType = editingProject
+-    ? getDerivedProjectBillingType(editingProject)
+-    : billingType;
+ 
+   const translatedBillingTypeOptions = billingTypeOptions.map((option) => ({
+     id: option.id,
+     name: t(option.name),
+   }));
+-  const projectBillingTypeOptions =
+-    displayProjectBillingType === 'mixed'
+-      ? [
+-          ...translatedBillingTypeOptions,
+-          { id: 'mixed', name: t('projects:projects.billingTypes.mixed') },
+-        ]
+-      : translatedBillingTypeOptions;
+   const translatedBillingFrequencyOptions = billingFrequencyOptions.map((option) => ({
+     id: option.id,
+     name: t(option.name),
+@@ -625,205 +441,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+   const formatBillingFrequency = (value: BillingFrequency | undefined) =>
+     translatedBillingFrequencyOptions.find((option) => option.id === value)?.name ?? '-';
+ 
+-  const existingTaskColumns: Column<ProjectTask>[] = [
+-    {
+-      header: t('projects:projects.taskName'),
+-      id: 'name',
+-      accessorKey: 'name',
+-      disableFiltering: true,
+-      cell: ({ row }) => (
+-        <Input
+-          value={getTaskFieldValue(row.id, 'name', row.name)}
+-          disabled={!canUpdateTasks}
+-          placeholder={t('projects:projects.taskName')}
+-          onChange={(e) => setTaskFieldValue(row.id, 'name', e.target.value)}
+-          onBlur={() => commitTaskField(row, 'name', (v) => v.trim() || row.name)}
+-          className="h-8 min-w-[120px] text-xs"
+-        />
+-      ),
+-    },
+-    {
+-      header: t('projects:projects.billingType'),
+-      id: 'billingType',
+-      accessorKey: 'billingType',
+-      disableFiltering: true,
+-      cell: ({ row }) => (
+-        <SelectControl
+-          options={translatedBillingTypeOptions}
+-          value={row.billingType ?? 'time_and_materials'}
+-          onChange={(val) => {
+-            const nextBillingType = val as StoredBillingType;
+-            onUpdateTask(row.id, {
+-              billingType: nextBillingType,
+-              billingFrequency:
+-                nextBillingType === 'time_and_materials' ? 'monthly' : row.billingFrequency,
+-            });
+-          }}
+-          disabled={!canUpdateTasks}
+-          className="min-w-[140px]"
+-          buttonClassName="h-8 text-xs"
+-          searchable={false}
+-        />
+-      ),
+-    },
+-    {
+-      header: t('projects:projects.billingFrequency'),
+-      id: 'billingFrequency',
+-      accessorKey: 'billingFrequency',
+-      disableFiltering: true,
+-      cell: ({ row }) => (
+-        <SelectControl
+-          options={
+-            row.billingType === 'retainer'
+-              ? translatedBillingFrequencyOptions
+-              : translatedBillingFrequencyOptions.filter((option) => option.id === 'monthly')
+-          }
+-          value={
+-            row.billingType === 'time_and_materials'
+-              ? 'monthly'
+-              : (row.billingFrequency ?? 'monthly')
+-          }
+-          onChange={(val) => onUpdateTask(row.id, { billingFrequency: val as BillingFrequency })}
+-          disabled={!canUpdateTasks || row.billingType === 'time_and_materials'}
+-          className="min-w-[120px]"
+-          buttonClassName="h-8 text-xs"
+-          searchable={false}
+-        />
+-      ),
+-    },
+-    {
+-      header: t('projects:projects.monthlyEffort'),
+-      id: 'monthlyEffort',
+-      accessorKey: 'monthlyEffort',
+-      disableFiltering: true,
+-      cell: ({ row }) => (
+-        <Input
+-          type="number"
+-          min="0"
+-          step="1"
+-          disabled={!canUpdateTasks}
+-          value={getTaskFieldValue(row.id, 'monthlyEffort', String(row.monthlyEffort ?? ''))}
+-          placeholder="0"
+-          onKeyDown={(e) => {
+-            if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
+-          }}
+-          onChange={(e) => setTaskFieldValue(row.id, 'monthlyEffort', e.target.value)}
+-          onBlur={() => commitTaskField(row, 'monthlyEffort', (v) => (v ? parseFloat(v) : 0))}
+-          className="h-8 min-w-[80px] text-xs"
+-        />
+-      ),
+-    },
+-    {
+-      header: t('projects:projects.expectedEffort'),
+-      id: 'expectedEffort',
+-      accessorKey: 'expectedEffort',
+-      disableFiltering: true,
+-      cell: ({ row }) => (
+-        <Input
+-          type="number"
+-          min="0"
+-          step="1"
+-          disabled={!canUpdateTasks}
+-          value={getTaskFieldValue(row.id, 'expectedEffort', String(row.expectedEffort ?? ''))}
+-          placeholder="0"
+-          onKeyDown={(e) => {
+-            if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
+-          }}
+-          onChange={(e) => setTaskFieldValue(row.id, 'expectedEffort', e.target.value)}
+-          onBlur={() => commitTaskField(row, 'expectedEffort', (v) => (v ? parseFloat(v) : 0))}
+-          className="h-8 min-w-[80px] text-xs"
+-        />
+-      ),
+-    },
+-    {
+-      header: `${t('projects:projects.taskRevenue')} (${currency})`,
+-      id: 'revenue',
+-      accessorKey: 'revenue',
+-      disableFiltering: true,
+-      cell: ({ row }) => (
+-        <Input
+-          type="number"
+-          min="0"
+-          step="0.01"
+-          disabled={!canUpdateTasks}
+-          value={getTaskFieldValue(row.id, 'revenue', String(row.revenue ?? ''))}
+-          placeholder="0.00"
+-          onChange={(e) => setTaskFieldValue(row.id, 'revenue', e.target.value)}
+-          onBlur={() => commitTaskField(row, 'revenue', (v) => (v ? parseFloat(v) : 0))}
+-          className="h-8 min-w-[80px] text-xs"
+-        />
+-      ),
+-    },
+-    {
+-      header: t('projects:projects.taskNotes'),
+-      id: 'notes',
+-      accessorKey: 'notes',
+-      disableFiltering: true,
+-      cell: ({ row }) => (
+-        <Input
+-          disabled={!canUpdateTasks}
+-          value={getTaskFieldValue(row.id, 'notes', row.notes ?? '')}
+-          placeholder="-"
+-          onChange={(e) => setTaskFieldValue(row.id, 'notes', e.target.value)}
+-          onBlur={() => commitTaskField(row, 'notes', (v) => v.trim())}
+-          className="h-8 min-w-[120px] text-xs"
+-        />
+-      ),
+-    },
+-    {
+-      header: t('projects:projects.progress'),
+-      id: 'progress',
+-      disableFiltering: true,
+-      cell: ({ row }) => {
+-        if (hoursLoadState === 'loading')
+-          return <span className="text-xs text-muted-foreground">...</span>;
+-        if (hoursLoadState === 'error') return <span className="text-xs text-destructive">-</span>;
+-        const logged = projectTaskHours[row.name] ?? 0;
+-        const expected = row.expectedEffort ?? 0;
+-        const pct = expected > 0 ? Math.round((logged / expected) * 100) : 0;
+-        const overBudget = expected > 0 && logged > expected;
+-        return (
+-          <span
+-            className={`text-xs font-bold tabular-nums ${overBudget ? 'text-destructive' : 'text-muted-foreground'}`}
+-          >
+-            {expected > 0 ? `${pct}%` : '-'}
+-          </span>
+-        );
+-      },
+-    },
+-    {
+-      header: t('projects:projects.tableHeaders.actions'),
+-      id: 'actions',
+-      disableFiltering: true,
+-      align: 'right',
+-      cell: ({ row }) => (
+-        <div className="flex justify-end">
+-          {canDeleteTasks && (
+-            <Tooltip>
+-              <TooltipTrigger asChild>
+-                <span className="inline-flex">
+-                  <Button
+-                    type="button"
+-                    variant="ghost"
+-                    size="icon-xs"
+-                    onClick={(e) => {
+-                      e.stopPropagation();
+-                      promptDeleteTask(row);
+-                    }}
+-                    className="text-muted-foreground hover:text-destructive"
+-                  >
+-                    <i className="fa-solid fa-trash-can text-xs"></i>
+-                  </Button>
+-                </span>
+-              </TooltipTrigger>
+-              <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
+-            </Tooltip>
+-          )}
+-        </div>
+-      ),
+-    },
+-  ];
+-
+   const clientOptions = clients.map((c: Client) => ({ id: c.id, name: c.name }));
+ 
+   const orderOptions = orders
+@@ -835,19 +452,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+ 
+   const selectedOrder = orderId ? orders.find((o) => o.id === orderId) : undefined;
+ 
+-  // The edit modal has no order selector — only a read-only chip — so the existing link lives
+-  // on `editingProject.orderId` and we resolve from there for both render and submit.
+-  const effectiveOrder = editingProject?.orderId
+-    ? orders.find((o) => o.id === editingProject.orderId)
+-    : selectedOrder;
+-
+-  // Hide drafts/denied. Filter to the current client so the user can't pick an offer for a
+-  // different client than the project (the server enforces the same invariant).
+   const offerOptions = offers
+     .filter((o) => o.status === 'sent' || o.status === 'accepted')
+     .filter((o) => !clientId || o.clientId === clientId)
+     .map((o) => ({ id: o.id, name: `${o.clientName} - ${o.id}` }));
+-  // Surface a bound-but-filtered-out offer so the user can see and resolve the mismatch.
+   if (offerId && !offerOptions.some((o) => o.id === offerId)) {
+     const fallback = offers.find((o) => o.id === offerId);
+     if (fallback) {
+@@ -855,20 +463,17 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+     }
+   }
+ 
+-  const activitiesRevenueSum = sumActivityRevenue(
+-    editingProject ? editingProjectTasks : draftTasks,
+-  );
+-
+-  const orderRevenue = effectiveOrder
++  const activitiesRevenueSum = sumActivityRevenue(draftTasks);
++  const orderRevenue = selectedOrder
+     ? calculatePricingTotals(
+-        effectiveOrder.items,
+-        effectiveOrder.discount,
++        selectedOrder.items,
++        selectedOrder.discount,
+         'hours',
+-        effectiveOrder.discountType,
++        selectedOrder.discountType,
+       ).total
+     : 0;
+ 
+-  const revenueSource = resolveRevenueSource(activitiesRevenueSum, Boolean(effectiveOrder));
++  const revenueSource = resolveRevenueSource(activitiesRevenueSum, Boolean(selectedOrder));
+   const revenueBySource: Record<RevenueSource, number> = {
+     activities: activitiesRevenueSum,
+     order: orderRevenue,
+@@ -1037,7 +642,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+ 
+   return (
+     <div className="space-y-8 animate-in fade-in duration-500">
+-      {/* Add/Edit Modal */}
++      {/* Create Project Modal */}
+       <Modal isOpen={isModalOpen} onClose={closeModal}>
+         {() => (
+           <ModalContent size="2xl">
+@@ -1045,166 +650,91 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+               <ModalHeader>
+                 <ModalTitle className="gap-3">
+                   <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+-                    <i
+-                      className={`fa-solid ${editingProject ? 'fa-pen-to-square' : 'fa-briefcase'}`}
+-                      aria-hidden="true"
+-                    ></i>
++                    <i className="fa-solid fa-briefcase" aria-hidden="true"></i>
+                   </span>
+-                  {editingProject
+-                    ? t('projects:projects.editProject')
+-                    : t('projects:projects.createNewProject')}
++                  {t('projects:projects.createNewProject')}
+                 </ModalTitle>
+                 <ModalCloseButton onClick={closeModal} />
+               </ModalHeader>
+ 
+               <ModalBody className="space-y-6">
+-                {editingProject?.orderId && (
+-                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-4">
+-                    <div className="flex items-center gap-3">
+-                      <div className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
+-                        <i className="fa-solid fa-link" aria-hidden="true"></i>
+-                      </div>
+-                      <div>
+-                        <div className="text-sm font-medium text-foreground">
+-                          {t('projects:projects.linkedOrder')}
+-                        </div>
+-                        <div className="text-xs text-muted-foreground">
+-                          {formatOrderId(editingProject.orderId)}
+-                        </div>
+-                      </div>
+-                    </div>
+-                    {onViewOrder && (
+-                      <Button
+-                        type="button"
+-                        variant="link"
+-                        size="sm"
+-                        onClick={() => onViewOrder(editingProject?.orderId ?? '')}
+-                        className="px-0"
+-                      >
+-                        {t('projects:projects.viewOrder')}
+-                      </Button>
+-                    )}
+-                  </div>
+-                )}
+                 <div className="space-y-4">
+-                  {editingProject ? (
+-                    <div className="grid gap-4 md:grid-cols-2">
+-                      <div className="space-y-1.5">
+-                        <SelectControl
+-                          id="project-client"
+-                          options={clientOptions}
+-                          value={clientId}
+-                          onChange={(val) => {
+-                            applyClientChange(val as string);
+-                          }}
+-                          label={
+-                            <>
+-                              {t('projects:projects.client')} <RequiredMark />
+-                            </>
+-                          }
+-                          placeholder={t('projects:projects.selectClient')}
+-                          searchable={true}
+-                          buttonClassName="h-9"
+-                        />
+-                        <FieldError className="text-xs">{errors.clientId}</FieldError>
+-                      </div>
+-                      <Field data-invalid={Boolean(errors.name)}>
+-                        <FieldLabel htmlFor="project-name">
+-                          {t('projects:projects.name')} <RequiredMark />
+-                        </FieldLabel>
+-                        <Input
+-                          id="project-name"
+-                          type="text"
+-                          required
+-                          value={name}
+-                          aria-invalid={Boolean(errors.name)}
+-                          onChange={(e) => {
+-                            setName(e.target.value);
+-                            if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
+-                          }}
+-                          placeholder={t('projects:projects.projectNamePlaceholder')}
+-                        />
+-                        <FieldError className="text-xs">{errors.name}</FieldError>
+-                      </Field>
++                  <div className="grid gap-4 md:grid-cols-2">
++                    <div className="space-y-1.5">
++                      <SelectControl
++                        id="project-order"
++                        options={orderOptions}
++                        value={orderId}
++                        onChange={(val) => {
++                          const nextOrderId = val as string;
++                          setOrderId(nextOrderId);
++                          if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
++                          const nextOrder = orders.find((o) => o.id === nextOrderId);
++                          if (!nextOrder) return;
++                          setClientId(nextOrder.clientId);
++                          if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
++                          clearStaleClientLinks(nextOrder.clientId, 'order');
++                        }}
++                        label={t('projects:projects.orderOptionalLabel')}
++                        placeholder={t('projects:projects.selectOrder')}
++                        searchable={true}
++                        buttonClassName="h-9"
++                      />
++                      <FieldError className="text-xs">{errors.orderId}</FieldError>
+                     </div>
+-                  ) : (
+-                    <div className="grid gap-4 md:grid-cols-2">
+-                      <div className="space-y-1.5">
+-                        <SelectControl
+-                          id="project-order"
+-                          options={orderOptions}
+-                          value={orderId}
+-                          onChange={(val) => {
+-                            const nextOrderId = val as string;
+-                            setOrderId(nextOrderId);
+-                            if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
+-                            const nextOrder = orders.find((o) => o.id === nextOrderId);
+-                            if (!nextOrder) return;
+-                            setClientId(nextOrder.clientId);
+-                            if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+-                            clearStaleClientLinks(nextOrder.clientId, 'order');
+-                          }}
+-                          label={t('projects:projects.orderOptionalLabel')}
+-                          placeholder={t('projects:projects.selectOrder')}
+-                          searchable={true}
+-                          buttonClassName="h-9"
+-                        />
+-                        <FieldError className="text-xs">{errors.orderId}</FieldError>
+-                      </div>
+-                      <div className="space-y-1.5">
+-                        <SelectControl
+-                          id="project-client"
+-                          options={clientOptions}
+-                          value={clientId}
+-                          onChange={(val) => {
+-                            applyClientChange(val as string);
+-                          }}
+-                          label={
+-                            <>
+-                              {t('projects:projects.client')} <RequiredMark />
+-                            </>
+-                          }
+-                          placeholder={t('projects:projects.selectClient')}
+-                          searchable={true}
+-                          disabled={Boolean(selectedOrder)}
+-                          buttonClassName="h-9"
+-                        />
+-                        <FieldError className="text-xs">{errors.clientId}</FieldError>
+-                        {selectedOrder && (
+-                          <div className="mt-1.5 flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+-                            <i
+-                              className="fa-solid fa-link text-xs text-muted-foreground"
+-                              aria-hidden="true"
+-                            ></i>
+-                            <span className="text-xs text-muted-foreground">
+-                              {t('projects:projects.inheritedClientLabel')}:
+-                            </span>
+-                            <span className="text-xs font-medium text-foreground">
+-                              {selectedOrder.clientName}
+-                            </span>
+-                          </div>
+-                        )}
+-                      </div>
+-                      <Field data-invalid={Boolean(errors.name)} className="md:col-span-2">
+-                        <FieldLabel htmlFor="project-name">
+-                          {t('projects:projects.name')} <RequiredMark />
+-                        </FieldLabel>
+-                        <Input
+-                          id="project-name"
+-                          type="text"
+-                          required
+-                          value={name}
+-                          aria-invalid={Boolean(errors.name)}
+-                          onChange={(e) => {
+-                            setName(e.target.value);
+-                            if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
+-                          }}
+-                          placeholder={t('projects:projects.projectNamePlaceholder')}
+-                        />
+-                        <FieldError className="text-xs">{errors.name}</FieldError>
+-                      </Field>
++                    <div className="space-y-1.5">
++                      <SelectControl
++                        id="project-client"
++                        options={clientOptions}
++                        value={clientId}
++                        onChange={(val) => {
++                          applyClientChange(val as string);
++                        }}
++                        label={
++                          <>
++                            {t('projects:projects.client')} <RequiredMark />
++                          </>
++                        }
++                        placeholder={t('projects:projects.selectClient')}
++                        searchable={true}
++                        disabled={Boolean(selectedOrder)}
++                        buttonClassName="h-9"
++                      />
++                      <FieldError className="text-xs">{errors.clientId}</FieldError>
++                      {selectedOrder && (
++                        <div className="mt-1.5 flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
++                          <i
++                            className="fa-solid fa-link text-xs text-muted-foreground"
++                            aria-hidden="true"
++                          ></i>
++                          <span className="text-xs text-muted-foreground">
++                            {t('projects:projects.inheritedClientLabel')}:
++                          </span>
++                          <span className="text-xs font-medium text-foreground">
++                            {selectedOrder.clientName}
++                          </span>
++                        </div>
++                      )}
+                     </div>
+-                  )}
++                    <Field data-invalid={Boolean(errors.name)} className="md:col-span-2">
++                      <FieldLabel htmlFor="project-name">
++                        {t('projects:projects.name')} <RequiredMark />
++                      </FieldLabel>
++                      <Input
++                        id="project-name"
++                        type="text"
++                        required
++                        value={name}
++                        aria-invalid={Boolean(errors.name)}
++                        onChange={(e) => {
++                          setName(e.target.value);
++                          if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
++                        }}
++                        placeholder={t('projects:projects.projectNamePlaceholder')}
++                      />
++                      <FieldError className="text-xs">{errors.name}</FieldError>
++                    </Field>
++                  </div>
+ 
+                   <Field>
+                     <FieldLabel htmlFor="project-description">
+@@ -1223,12 +753,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+                   <div className="grid gap-4 md:grid-cols-2">
+                     <Field data-invalid={Boolean(errors.startDate || errors.dateRange)}>
+                       <FieldLabel htmlFor="project-start-date">
+-                        {t('projects:projects.startDate')} {!editingProject && <RequiredMark />}
++                        {t('projects:projects.startDate')} <RequiredMark />
+                       </FieldLabel>
+                       <Input
+                         id="project-start-date"
+                         type="date"
+-                        required={!editingProject}
++                        required
+                         value={startDate}
+                         aria-invalid={Boolean(errors.startDate || errors.dateRange)}
+                         onChange={(e) => {
+@@ -1242,12 +772,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+                     </Field>
+                     <Field data-invalid={Boolean(errors.endDate || errors.dateRange)}>
+                       <FieldLabel htmlFor="project-end-date">
+-                        {t('projects:projects.endDate')} {!editingProject && <RequiredMark />}
++                        {t('projects:projects.endDate')} <RequiredMark />
+                       </FieldLabel>
+                       <Input
+                         id="project-end-date"
+                         type="date"
+-                        required={!editingProject}
++                        required
+                         value={endDate}
+                         aria-invalid={Boolean(errors.endDate || errors.dateRange)}
+                         onChange={(e) => {
+@@ -1316,17 +846,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+                   <div className="grid gap-4 md:grid-cols-2">
+                     <SelectControl
+                       id="project-billing-type"
+-                      options={projectBillingTypeOptions}
+-                      value={displayProjectBillingType}
++                      options={translatedBillingTypeOptions}
++                      value={billingType}
+                       onChange={(val) => {
+                         const nextBillingType = val as StoredBillingType;
+-                        setProjectBillingChanged(true);
+                         setBillingType(nextBillingType);
+                         if (nextBillingType === 'time_and_materials')
+                           setBillingFrequency('monthly');
+                       }}
+                       label={t('projects:projects.billingType')}
+-                      disabled={displayProjectBillingType === 'mixed'}
+                       searchable={false}
+                       buttonClassName="h-9"
+                     />
+@@ -1339,186 +867,39 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+                               (option) => option.id === 'monthly',
+                             )
+                       }
+-                      value={
+-                        displayProjectBillingType === 'mixed'
+-                          ? 'monthly'
+-                          : billingType === 'time_and_materials'
+-                            ? 'monthly'
+-                            : billingFrequency
+-                      }
+-                      onChange={(val) => {
+-                        setProjectBillingChanged(true);
+-                        setBillingFrequency(val as BillingFrequency);
+-                      }}
++                      value={billingType === 'time_and_materials' ? 'monthly' : billingFrequency}
++                      onChange={(val) => setBillingFrequency(val as BillingFrequency)}
+                       label={t('projects:projects.billingFrequency')}
+-                      disabled={
+-                        displayProjectBillingType === 'mixed' ||
+-                        billingType === 'time_and_materials'
+-                      }
++                      disabled={billingType === 'time_and_materials'}
+                       searchable={false}
+                       buttonClassName="h-9"
+                     />
+                   </div>
+ 
+-                  {/* Tasks section (create only) */}
+-                  {!editingProject && (
+-                    <div className="space-y-2">
+-                      <StandardTable<DraftTask>
+-                        title={t('projects:projects.projectTasks')}
+-                        data={draftTasks}
+-                        columns={draftTaskColumns}
+-                        defaultRowsPerPage={5}
+-                        emptyState={
+-                          <span className="text-xs italic text-muted-foreground">
+-                            {t('projects:projects.noTasksAdded')}
+-                          </span>
+-                        }
+-                        headerAction={
+-                          <Button
+-                            type="button"
+-                            onClick={addDraftTask}
+-                            size="sm"
+-                            className={TABLE_CONTROL_BUTTON_CLASSNAME}
+-                          >
+-                            <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+-                            {t('projects:projects.addTaskRow')}
+-                          </Button>
+-                        }
+-                      />
+-                    </div>
+-                  )}
+-
+-                  {/* Tasks section (edit only) */}
+-                  {editingProject && (
+-                    <div className="space-y-2">
+-                      <StandardTable<ProjectTask>
+-                        title={t('projects:projects.projectTasks')}
+-                        data={editingProjectTasks}
+-                        columns={existingTaskColumns}
+-                        defaultRowsPerPage={5}
+-                        emptyState={
+-                          <span className="text-xs italic text-muted-foreground">
+-                            {t('projects:projects.noTasksAdded')}
+-                          </span>
+-                        }
+-                        headerAction={
+-                          canCreateTasks ? (
+-                            <Button
+-                              type="button"
+-                              onClick={handleAddExistingTask}
+-                              size="sm"
+-                              className={TABLE_CONTROL_BUTTON_CLASSNAME}
+-                            >
+-                              <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+-                              {t('projects:projects.addTaskRow')}
+-                            </Button>
+-                          ) : undefined
+-                        }
+-                      />
+-                    </div>
+-                  )}
+-
+-                  {editingProject && (
+-                    <Field>
+-                      <FieldLabel>{t('projects:projects.color')}</FieldLabel>
+-                      <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 p-3">
+-                        {COLORS.map((c) => (
+-                          <Tooltip key={c}>
+-                            <TooltipTrigger asChild>
+-                              <span className="inline-flex">
+-                                <Button
+-                                  type="button"
+-                                  variant="ghost"
+-                                  size="icon-sm"
+-                                  onClick={() => {
+-                                    setColor(c);
+-                                    setHexInput(c);
+-                                  }}
+-                                  className={`rounded-full border-2 p-0 transition-transform active:scale-95 ${color === c ? 'border-background ring-2 ring-ring ring-offset-2 ring-offset-background' : 'border-transparent hover:scale-105'}`}
+-                                  style={{ backgroundColor: c }}
+-                                />
+-                              </span>
+-                            </TooltipTrigger>
+-                            <TooltipContent>{c}</TooltipContent>
+-                          </Tooltip>
+-                        ))}
+-                        <div className="ml-1 flex items-center gap-2 border-l border-border pl-3">
+-                          <Input
+-                            type="color"
+-                            value={color}
+-                            onFocus={() => {
+-                              skipPickerRef.current = false;
+-                            }}
+-                            onChange={(e) => {
+-                              if (skipPickerRef.current) return;
+-                              setColor(e.target.value);
+-                              setHexInput(e.target.value);
+-                            }}
+-                            className="size-8 cursor-pointer rounded-md bg-transparent p-1 [&::-moz-color-swatch]:rounded-sm [&::-moz-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-sm"
+-                          />
+-                          <Input
+-                            type="text"
+-                            value={hexInput}
+-                            onChange={(e) => {
+-                              const val = e.target.value;
+-                              setHexInput(val);
+-                              if (isValidHex(val)) {
+-                                setColor(val);
+-                              }
+-                            }}
+-                            onBlur={commitHexInput}
+-                            onKeyDown={(e) => {
+-                              if (e.key === 'Enter') {
+-                                e.preventDefault();
+-                                commitHexInput();
+-                              }
+-                            }}
+-                            placeholder="#000000"
+-                            className="h-8 w-[90px] font-mono text-xs tabular-nums"
+-                          />
+-                        </div>
+-                      </div>
+-                    </Field>
+-                  )}
+-
+-                  {editingProject && (
+-                    <Field>
+-                      {(() => {
+-                        const client = clients.find((c: Client) => c.id === clientId);
+-                        const isClientDisabled = client?.isDisabled || false;
+-                        const isCurrentlyDisabled = tempIsDisabled || isClientDisabled;
+-
+-                        return (
+-                          <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
+-                            <div>
+-                              <p
+-                                className={`text-sm font-medium ${isClientDisabled ? 'text-muted-foreground' : 'text-foreground'}`}
+-                              >
+-                                {t('projects:projects.projectDisabled')}
+-                              </p>
+-                              {isClientDisabled && (
+-                                <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-600">
+-                                  <i className="fa-solid fa-circle-info" aria-hidden="true"></i>
+-                                  {t('projects:projects.inheritedFromDisabledClient', {
+-                                    clientName: client?.name,
+-                                  })}
+-                                </p>
+-                              )}
+-                            </div>
+-                            <Toggle
+-                              checked={isCurrentlyDisabled}
+-                              onChange={() => {
+-                                if (!isClientDisabled) {
+-                                  setTempIsDisabled(!tempIsDisabled);
+-                                }
+-                              }}
+-                              disabled={isClientDisabled}
+-                            />
+-                          </div>
+-                        );
+-                      })()}
+-                    </Field>
+-                  )}
++                  <div className="space-y-2">
++                    <StandardTable<DraftTask>
++                      title={t('projects:projects.projectTasks')}
++                      data={draftTasks}
++                      columns={draftTaskColumns}
++                      defaultRowsPerPage={5}
++                      emptyState={
++                        <span className="text-xs italic text-muted-foreground">
++                          {t('projects:projects.noTasksAdded')}
++                        </span>
++                      }
++                      headerAction={
++                        <Button
++                          type="button"
++                          onClick={addDraftTask}
++                          size="sm"
++                          className={TABLE_CONTROL_BUTTON_CLASSNAME}
++                        >
++                          <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
++                          {t('projects:projects.addTaskRow')}
++                        </Button>
++                      }
++                    />
++                  </div>
+                 </div>
+               </ModalBody>
+ 
+@@ -1526,8 +907,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+                 <Button type="button" variant="outline" onClick={closeModal}>
+                   {t('common:buttons.cancel')}
+                 </Button>
+-                <Button type="submit" disabled={!canSubmit}>
+-                  {editingProject ? t('common:buttons.update') : t('projects:projects.addProject')}
++                <Button type="submit" disabled={!canCreateProjects}>
++                  {t('projects:projects.addProject')}
+                 </Button>
+               </ModalFooter>
+             </form>
+@@ -1543,15 +924,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+         description={t('projects:projects.deleteConfirm')}
+       />
+ 
+-      <DeleteConfirmModal
+-        isOpen={isTaskDeleteConfirmOpen}
+-        onClose={() => setIsTaskDeleteConfirmOpen(false)}
+-        onConfirm={handleDeleteTask}
+-        title={t('projects:projects.deleteTaskTitle', { name: taskToDelete?.name })}
+-        description={t('projects:projects.deleteTaskConfirm')}
+-      />
+-
+-      {/* User Assignment Modal */}
+       <UserAssignmentModal
+         isOpen={!!managingProjectId}
+         onClose={closeAssignments}
+@@ -1584,7 +956,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+         title={t('projects:projects.projectsDirectory')}
+         defaultRowsPerPage={5}
+         data={projects}
+-        onRowClick={canUpdateProjects ? openEditModal : undefined}
++        onRowClick={onNavigateToProject ? (row) => onNavigateToProject(row.id) : undefined}
+         rowClassName={(row) => (row.isDisabled ? 'opacity-70 grayscale hover:grayscale-0' : '')}
+         columns={
+           [
+@@ -1766,8 +1138,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+                         <TooltipContent>{t('projects:projects.manageMembers')}</TooltipContent>
+                       </Tooltip>
+                     )}
+-                    {canUpdateProjects && (
+-                      <>
++                    {canUpdateProjects &&
++                      (row.isDisabled ? (
+                         <Tooltip>
+                           <TooltipTrigger asChild>
+                             <span className="inline-flex">
+@@ -1775,58 +1147,37 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
+                                 type="button"
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+-                                  openEditModal(row);
++                                  onUpdateProject(row.id, { isDisabled: false });
+                                 }}
+-                                aria-label={t('projects:projects.editProject')}
+-                                className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
++                                aria-label={t('projects:projects.enableProject')}
++                                className="p-2 text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
+                               >
+-                                <i className="fa-solid fa-pen-to-square"></i>
++                                <i className="fa-solid fa-rotate-left"></i>
+                               </button>
+                             </span>
+                           </TooltipTrigger>
+-                          <TooltipContent>{t('projects:projects.editProject')}</TooltipContent>
++                          <TooltipContent>{t('projects:projects.enableProject')}</TooltipContent>
+                         </Tooltip>
+-                        {row.isDisabled ? (
+-                          <Tooltip>
+-                            <TooltipTrigger asChild>
+-                              <span className="inline-flex">
+-                                <button
+-                                  type="button"
+-                                  onClick={(e) => {
+-                                    e.stopPropagation();
+-                                    onUpdateProject(row.id, { isDisabled: false });
+-                                  }}
+-                                  aria-label={t('projects:projects.enableProject')}
+-                                  className="p-2 text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
+-                                >
+-                                  <i className="fa-solid fa-rotate-left"></i>
+-                                </button>
+-                              </span>
+-                            </TooltipTrigger>
+-                            <TooltipContent>{t('projects:projects.enableProject')}</TooltipContent>
+-                          </Tooltip>
+-                        ) : (
+-                          <Tooltip>
+-                            <TooltipTrigger asChild>
+-                              <span className="inline-flex">
+-                                <button
+-                                  type="button"
+-                                  onClick={(e) => {
+-                                    e.stopPropagation();
+-                                    onUpdateProject(row.id, { isDisabled: true });
+-                                  }}
+-                                  aria-label={t('projects:projects.disableProject')}
+-                                  className="p-2 text-amber-700 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+-                                >
+-                                  <i className="fa-solid fa-ban"></i>
+-                                </button>
+-                              </span>
+-                            </TooltipTrigger>
+-                            <TooltipContent>{t('projects:projects.disableProject')}</TooltipContent>
+-                          </Tooltip>
+-                        )}
+-                      </>
+-                    )}
++                      ) : (
++                        <Tooltip>
++                          <TooltipTrigger asChild>
++                            <span className="inline-flex">
++                              <button
++                                type="button"
++                                onClick={(e) => {
++                                  e.stopPropagation();
++                                  onUpdateProject(row.id, { isDisabled: true });
++                                }}
++                                aria-label={t('projects:projects.disableProject')}
++                                className="p-2 text-amber-700 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
++                              >
++                                <i className="fa-solid fa-ban"></i>
++                              </button>
++                            </span>
++                          </TooltipTrigger>
++                          <TooltipContent>{t('projects:projects.disableProject')}</TooltipContent>
++                        </Tooltip>
++                      ))}
+                     {canDeleteProjects && (
+                       <Tooltip>
+                         <TooltipTrigger asChild>
+diff --git a/hooks/handlers/projectHandlers.ts b/hooks/handlers/projectHandlers.ts
+index 7cc80683..b24fa9ca 100644
+--- a/hooks/handlers/projectHandlers.ts
++++ b/hooks/handlers/projectHandlers.ts
+@@ -17,7 +17,7 @@ export type AddProjectInput = AddProjectFormInput;
+ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
+   const { setProjects, setProjectTasks, setEntries } = deps;
+ 
+-  const add = async (input: AddProjectInput) => {
++  const add = async (input: AddProjectInput): Promise<Project | null> => {
+     try {
+       if (!input.clientId) throw new Error('Client is required');
+ 
+@@ -55,9 +55,11 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
+         );
+         setProjectTasks((prev) => [...prev, ...createdTasks]);
+       }
++      return project;
+     } catch (err) {
+       console.error('Failed to add project:', err);
+       toastError(`Failed to add project: ${getErrorMessage(err)}`);
++      return null;
+     }
+   };
+ 
+@@ -94,13 +96,15 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
+     }
+   };
+ 
+-  const update = async (id: string, updates: Partial<Project>) => {
++  const update = async (id: string, updates: Partial<Project>): Promise<Project | null> => {
+     try {
+       const updated = await api.projects.update(id, updates);
+       setProjects((prev) => prev.map((p) => (p.id === id ? updated : p)));
++      return updated;
+     } catch (err) {
+       console.error('Failed to update project:', err);
+       toastError('Failed to update project');
++      return null;
+     }
+   };
+ 
+diff --git a/server/repositories/entriesRepo.ts b/server/repositories/entriesRepo.ts
+index e85cfe5a..78ca242d 100644
+--- a/server/repositories/entriesRepo.ts
++++ b/server/repositories/entriesRepo.ts
+@@ -126,6 +126,8 @@ export type ListEntriesOptions = {
+   limit?: number;
+   /** Exclusive - return rows strictly older than this position. */
+   cursor?: EntriesCursor;
++  /** Restrict to entries logged against this project. */
++  projectId?: string;
+ };
+ 
+ const DEFAULT_LIMIT = 200;
+@@ -139,6 +141,9 @@ const resolveLimit = (limit?: number): number => {
+ const cursorClause = (cursor: EntriesCursor | undefined): SQL | null =>
+   cursor ? sql`(created_at, id) < (${cursor.createdAt}::timestamp, ${cursor.id})` : null;
+ 
++const projectClause = (projectId: string | undefined): SQL | null =>
++  projectId ? sql`project_id = ${projectId}` : null;
++
+ export type ListEntriesResult = {
+   entries: TimeEntry[];
+   nextCursor: EntriesCursor | null;
+@@ -168,7 +173,7 @@ export const listAll = async (
+   exec: DbExecutor = db,
+ ): Promise<ListEntriesResult> => {
+   const limit = resolveLimit(options.limit);
+-  const where = cursorClause(options.cursor);
++  const where = joinAnd([cursorClause(options.cursor), projectClause(options.projectId)]);
+   const rows = await executeRows<TimeEntryRow>(
+     exec,
+     sql`SELECT ${ENTRY_COLUMNS_SQL} FROM time_entries${where ? sql` WHERE ${where}` : sql``} ORDER BY created_at DESC, id DESC LIMIT ${limit}`,
+@@ -182,7 +187,11 @@ export const listForUser = async (
+   exec: DbExecutor = db,
+ ): Promise<ListEntriesResult> => {
+   const limit = resolveLimit(options.limit);
+-  const where = joinAnd([sql`user_id = ${userId}`, cursorClause(options.cursor)]);
++  const where = joinAnd([
++    sql`user_id = ${userId}`,
++    cursorClause(options.cursor),
++    projectClause(options.projectId),
++  ]);
+   const rows = await executeRows<TimeEntryRow>(
+     exec,
+     sql`SELECT ${ENTRY_COLUMNS_SQL} FROM time_entries WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ${limit}`,
+@@ -197,7 +206,11 @@ export const listForManagerView = async (
+ ): Promise<ListEntriesResult> => {
+   const limit = resolveLimit(options.limit);
+   const managerScope = sql`(user_id = ${managerId} OR user_id IN (${managedUserIdsSubquerySql(managerId)}))`;
+-  const where = joinAnd([managerScope, cursorClause(options.cursor)]);
++  const where = joinAnd([
++    managerScope,
++    cursorClause(options.cursor),
++    projectClause(options.projectId),
++  ]);
+   const rows = await executeRows<TimeEntryRow>(
+     exec,
+     sql`SELECT ${ENTRY_COLUMNS_SQL} FROM time_entries WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ${limit}`,
+diff --git a/server/routes/entries.ts b/server/routes/entries.ts
+index ec3d6d9a..1f86a80a 100644
+--- a/server/routes/entries.ts
++++ b/server/routes/entries.ts
+@@ -109,7 +109,12 @@ const entryUpdateBodySchema = {
+ const entriesListQuerySchema = {
+   type: 'object',
+   properties: {
+-    userId: { type: 'string' },
++    userId: { type: 'string', description: 'Restrict to entries logged by this user.' },
++    projectId: {
++      type: 'string',
++      description:
++        'Restrict to entries logged against this project. Combined with any user/manager scoping the actor is already subject to.',
++    },
+     limit: { type: 'integer', minimum: 1, maximum: 500 },
+     cursor: { type: 'string' },
+   },
+@@ -217,14 +222,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
+     async (request: FastifyRequest, reply: FastifyReply) => {
+       if (!assertAuthenticated(request, reply)) return;
+ 
+-      const { userId, limit, cursor } = request.query as {
++      const { userId, projectId, limit, cursor } = request.query as {
+         userId?: string;
++        projectId?: string;
+         limit?: number;
+         cursor?: string;
+       };
+       try {
+         const result = await listTimeEntries(actorFromRequest(request), {
+           userId,
++          projectId,
+           limit,
+           cursor,
+         });
+diff --git a/server/services/timeEntries.ts b/server/services/timeEntries.ts
+index 003609da..339788b2 100644
+--- a/server/services/timeEntries.ts
++++ b/server/services/timeEntries.ts
+@@ -141,11 +141,12 @@ const withSerializableWriteTransaction = async <T>(
+ 
+ export const listTimeEntries = async (
+   actor: AuthenticatedActor,
+-  input: { userId?: unknown; limit?: unknown; cursor?: unknown },
++  input: { userId?: unknown; limit?: unknown; cursor?: unknown; projectId?: unknown },
+ ): Promise<{ entries: TimeEntry[]; nextCursor: string | null }> => {
+   if (!hasTrackerPermission(actor, 'view')) fail(403, 'Insufficient permissions');
+ 
+   const userId = typeof input.userId === 'string' ? input.userId : undefined;
++  const projectId = typeof input.projectId === 'string' ? input.projectId : undefined;
+   const limit =
+     input.limit === undefined || typeof input.limit === 'number'
+       ? input.limit
+@@ -161,7 +162,7 @@ export const listTimeEntries = async (
+   const decodedCursor = cursor ? entriesRepo.decodeCursor(cursor) : undefined;
+   if (cursor && !decodedCursor) badRequest('cursor is invalid');
+ 
+-  const options = { limit, cursor: decodedCursor ?? undefined };
++  const options = { limit, cursor: decodedCursor ?? undefined, projectId };
+   const result = userId
+     ? await entriesRepo.listForUser(userId, options)
+     : canViewAll
+diff --git a/services/api/entries.ts b/services/api/entries.ts
+index 338541d0..969b1bc6 100644
+--- a/services/api/entries.ts
++++ b/services/api/entries.ts
+@@ -57,13 +57,22 @@ type UpdateTimeEntryInput = Partial<Omit<TimeEntry, 'version'>> & Pick<TimeEntry
+ 
+ export const entriesApi = {
+   listPage: async (
+-    options: { userId?: string; cursor?: string | null; limit?: number } = {},
++    options: {
++      userId?: string;
++      projectId?: string;
++      cursor?: string | null;
++      limit?: number;
++      signal?: AbortSignal;
++    } = {},
+   ): Promise<EntriesPage> => {
+     const params = new URLSearchParams();
+     if (options.userId) params.set('userId', options.userId);
++    if (options.projectId) params.set('projectId', options.projectId);
+     params.set('limit', String(options.limit ?? 500));
+     if (options.cursor) params.set('cursor', options.cursor);
+-    const page = await fetchApi<EntriesPage>(`/entries?${params.toString()}`);
++    const page = await fetchApi<EntriesPage>(`/entries?${params.toString()}`, {
++      signal: options.signal,
++    });
+     return { entries: page.entries.map(normalizeTimeEntry), nextCursor: page.nextCursor };
+   },
+ 
+diff --git a/src/index.css b/src/index.css
+index 2fd90080..32f5e53f 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -68,6 +68,11 @@
+   --sidebar-accent-foreground: var(--foreground);
+   --sidebar-border: hsl(220 13% 91%);
+   --sidebar-ring: hsl(217.2 91.2% 59.8%);
++  --chart-1: oklch(0.646 0.222 41.116);
++  --chart-2: oklch(0.6 0.118 184.704);
++  --chart-3: oklch(0.398 0.07 227.392);
++  --chart-4: oklch(0.828 0.189 84.429);
++  --chart-5: oklch(0.769 0.188 70.08);
+ }
+ 
+ html,
+@@ -160,6 +165,11 @@ input[type="number"] {
+   --sidebar-accent-foreground: var(--foreground);
+   --sidebar-border: hsl(240 3.7% 15.9%);
+   --sidebar-ring: hsl(217.2 91.2% 59.8%);
++  --chart-1: oklch(0.488 0.243 264.376);
++  --chart-2: oklch(0.696 0.17 162.48);
++  --chart-3: oklch(0.769 0.188 70.08);
++  --chart-4: oklch(0.627 0.265 303.9);
++  --chart-5: oklch(0.645 0.246 16.439);
+ }
+ 
+ [data-shadcn-theme="zebra"] {
+@@ -211,6 +221,11 @@ input[type="number"] {
+   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+   --color-sidebar-border: var(--sidebar-border);
+   --color-sidebar-ring: var(--sidebar-ring);
++  --color-chart-1: var(--chart-1);
++  --color-chart-2: var(--chart-2);
++  --color-chart-3: var(--chart-3);
++  --color-chart-4: var(--chart-4);
++  --color-chart-5: var(--chart-5);
+ }
+ 
+ /* Legacy pages still use neutral Tailwind utilities. Keep them readable inside the
+@@ -361,6 +376,11 @@ input[type="number"] {
+   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+   --color-sidebar-border: var(--sidebar-border);
+   --color-sidebar-ring: var(--sidebar-ring);
++  --color-chart-1: var(--chart-1);
++  --color-chart-2: var(--chart-2);
++  --color-chart-3: var(--chart-3);
++  --color-chart-4: var(--chart-4);
++  --color-chart-5: var(--chart-5);
+ }
+ 
+ @keyframes sidebar-entry-down {
+diff --git a/types.ts b/types.ts
+index 90605b28..bf87164a 100644
+--- a/types.ts
++++ b/types.ts
+@@ -609,6 +609,7 @@ export type View =
+   | 'accounting/supplier-invoices'
+   // Projects module
+   | 'projects/manage'
++  | 'projects/detail'
+   | 'projects/tasks'
+   // HR module
+   | 'hr/internal'
+diff --git a/utils/permissions.ts b/utils/permissions.ts
+index 6ad2cfbb..fddf5278 100644
+--- a/utils/permissions.ts
++++ b/utils/permissions.ts
+@@ -174,6 +174,7 @@ export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
+   'accounting/supplier-orders': buildPermission('accounting.supplier_orders', 'view'),
+   'accounting/supplier-invoices': buildPermission('accounting.supplier_invoices', 'view'),
+   'projects/manage': buildPermission('projects.manage', 'view'),
++  'projects/detail': buildPermission('projects.manage', 'view'),
+   'projects/tasks': buildPermission('projects.tasks', 'view'),
+   'hr/internal': buildPermission('hr.internal', 'view'),
+   'hr/external': buildPermission('hr.external', 'view'),

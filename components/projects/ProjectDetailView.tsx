@@ -2069,13 +2069,14 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                     {monthlyActivity.avg > 0 && (
                       <ReferenceLine
                         y={monthlyActivity.avg}
-                        stroke="var(--muted-foreground)"
-                        strokeDasharray="4 4"
-                        strokeWidth={1.5}
+                        stroke="var(--foreground)"
+                        strokeDasharray="6 4"
+                        strokeWidth={2}
+                        strokeOpacity={0.7}
                         label={{
                           value: `${t('projects:detail.charts.avgMonthlyLabel')} · ${monthlyActivity.avg.toLocaleString(i18n.language, { maximumFractionDigits: 1 })} h`,
                           position: 'insideTopRight',
-                          fill: 'var(--muted-foreground)',
+                          fill: 'var(--foreground)',
                           fontSize: 11,
                           fontWeight: 500,
                         }}
