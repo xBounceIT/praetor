@@ -426,7 +426,7 @@ const RilView: React.FC<RilViewProps> = ({
         </div>
       )}
 
-      <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_12rem]">
+      <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_15rem]">
         <div className="overflow-x-auto rounded-md border border-border">
           <Table className="min-w-[49rem] table-fixed text-xs">
             <TableHeader>
@@ -495,8 +495,8 @@ const RilView: React.FC<RilViewProps> = ({
                 key={row.label}
                 className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-md border border-border bg-muted/35 px-3 py-2 text-xs leading-tight"
               >
-                <dt className="text-muted-foreground">{row.label}</dt>
-                <dd className="text-right font-semibold text-foreground tabular-nums">
+                <dt className="whitespace-nowrap text-muted-foreground">{row.label}</dt>
+                <dd className="whitespace-nowrap text-right font-semibold text-foreground tabular-nums">
                   <output aria-label={row.label}>{row.value}</output>
                 </dd>
               </div>

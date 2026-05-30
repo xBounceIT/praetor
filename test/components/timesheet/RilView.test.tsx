@@ -111,9 +111,15 @@ describe('<RilView />', () => {
     expect(screen.getByLabelText('ril.summary.totalHours')).toHaveTextContent('160.0');
     expect(screen.getByLabelText('ril.summary.totalPicap')).toHaveTextContent('160.00');
     expect(screen.getByLabelText('ril.summary.title')).toHaveClass('xl:sticky', 'xl:top-24');
+    expect(screen.getByLabelText('ril.summary.title').closest('section')?.className).toContain(
+      'xl:grid-cols-[minmax(0,1fr)_15rem]',
+    );
     const summaryItem = screen.getByLabelText('ril.summary.workedDays').closest('div');
     expect(summaryItem?.className).toContain('bg-muted/35');
     expect(summaryItem?.className).not.toContain('bg-yellow');
+    const lunchSummaryItem = screen.getByLabelText('ril.summary.lunchWindow').closest('div');
+    expect(lunchSummaryItem?.querySelector('dt')?.className).toContain('whitespace-nowrap');
+    expect(lunchSummaryItem?.querySelector('dd')?.className).toContain('whitespace-nowrap');
   });
 
   test('selecting month and year reloads and syncs the draft table', async () => {
