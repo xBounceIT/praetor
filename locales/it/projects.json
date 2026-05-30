@@ -169,14 +169,16 @@
       "setGlobalDefault": "Imposta come predefinito globale",
       "noViews": "Nessuna vista salvata",
       "deleteView": "Elimina vista",
-      "editingHint": "Ridimensiona, nascondi o riordina le visualizzazioni.",
-      "moveUp": "Sposta prima",
-      "moveDown": "Sposta dopo",
-      "expand": "Larghezza intera",
-      "collapse": "Mezza larghezza",
+      "editingHint": "Trascina una scheda per spostarla, trascina i bordi per ridimensionarla, nascondi o ripristina le schede.",
+      "dragHandle": "{{name}} — trascina per spostare. Le frecce la spostano; Maiusc + frecce la ridimensionano.",
+      "resize": "Ridimensiona {{name}}",
+      "resizeWidth": "Ridimensiona la larghezza di {{name}}",
+      "resizeHeight": "Ridimensiona l'altezza di {{name}}",
       "hide": "Nascondi",
       "show": "Mostra",
-      "hiddenLabel": "Nascosto"
+      "hideWidget": "Nascondi {{name}}",
+      "showWidget": "Mostra {{name}}",
+      "editOnLargerScreen": "La modifica del layout con trascinamento è disponibile su uno schermo più ampio."
     },
     "empty": {
       "noEntriesTitle": "Ancora nessuna ora registrata",

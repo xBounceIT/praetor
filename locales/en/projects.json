@@ -169,14 +169,16 @@
       "setGlobalDefault": "Set as global default",
       "noViews": "No saved views yet",
       "deleteView": "Delete view",
-      "editingHint": "Resize, hide, or reorder visualizations.",
-      "moveUp": "Move earlier",
-      "moveDown": "Move later",
-      "expand": "Make full width",
-      "collapse": "Make half width",
+      "editingHint": "Drag a card to move it, drag its edges to resize, and hide or restore cards.",
+      "dragHandle": "{{name}} — drag to move. Arrow keys move it; Shift + arrow keys resize it.",
+      "resize": "Resize {{name}}",
+      "resizeWidth": "Resize {{name}} width",
+      "resizeHeight": "Resize {{name}} height",
       "hide": "Hide",
       "show": "Show",
-      "hiddenLabel": "Hidden"
+      "hideWidget": "Hide {{name}}",
+      "showWidget": "Show {{name}}",
+      "editOnLargerScreen": "Drag-and-drop layout editing is available on a wider screen."
     },
     "empty": {
       "noEntriesTitle": "No time logged yet",

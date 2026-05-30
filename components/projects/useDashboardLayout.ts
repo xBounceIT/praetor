@@ -3,16 +3,15 @@ import {
   type DashboardLayout,
   type DashboardView,
   type DashboardWidgetDef,
-  type DashboardWidgetSpan,
   generateDashboardViewId,
   getDashboardStorageKey,
   layoutsEqual,
-  moveWidget,
+  moveWidgetTo,
   parseStoredDashboardViews,
   parseStoredLayout,
   parseStoredOverride,
-  setWidgetHidden,
-  setWidgetSpan,
+  resizeWidgetTo,
+  toggleWidgetHidden,
 } from './dashboardLayout';
 
 const readLS = (key: string): string | null => {
@@ -53,10 +52,11 @@ export interface UseDashboardLayout {
   startEditing: () => void;
   cancelEditing: () => void;
   doneEditing: () => void;
-  // Draft mutators (meaningful only while editing)
-  moveWidgetBy: (id: string, delta: number) => void;
+  // Draft mutators (meaningful only while editing) — the grid commits one of
+  // these at the end of each drag / resize gesture.
+  moveWidget: (id: string, x: number, y: number) => void;
+  resizeWidget: (id: string, w: number, h: number) => void;
   toggleHidden: (id: string) => void;
-  setSpan: (id: string, span: DashboardWidgetSpan) => void;
   // Views (a global library shared across projects)
   saveAsView: (name: string) => void;
   applyView: (viewId: string) => void;
@@ -70,7 +70,8 @@ export interface UseDashboardLayout {
 //   - `globalId` keys the shared baseline layout + the view library.
 //   - `projectId` keys this project's optional override + which view it's on.
 // The effective layout for the project = override ?? globalLayout. `widgets`
-// must be a stable module constant (its identity is captured by callbacks).
+// must be a stable reference across renders (its identity is captured by
+// callbacks) — memoize it in the caller.
 export const useDashboardLayout = (
   globalId: string,
   projectId: string,
@@ -101,6 +102,12 @@ export const useDashboardLayout = (
 
   const effectiveLayout = useMemo(() => override ?? globalLayout, [override, globalLayout]);
   const [draft, setDraft] = useState<DashboardLayout>(effectiveLayout);
+
+  // Per-widget minimum sizes, looked up when committing a resize.
+  const minSizes = useMemo(
+    () => new Map(widgets.map((w) => [w.id, { minW: w.minW, minH: w.minH }])),
+    [widgets],
+  );
 
   const persistGlobalLayout = useCallback(
     (next: DashboardLayout) => writeLS(globalLayoutKey, JSON.stringify(next)),
@@ -146,20 +153,20 @@ export const useDashboardLayout = (
     applyOverride(cloneLayout(draft), keepActive);
   }, [draft, activeViewId, views, applyOverride]);
 
-  const moveWidgetBy = useCallback((id: string, delta: number) => {
-    setDraft((prev) => moveWidget(prev, id, delta));
+  const moveWidget = useCallback((id: string, x: number, y: number) => {
+    setDraft((prev) => moveWidgetTo(prev, id, x, y));
   }, []);
+
+  const resizeWidget = useCallback(
+    (id: string, w: number, h: number) => {
+      const min = minSizes.get(id);
+      setDraft((prev) => resizeWidgetTo(prev, id, w, h, min?.minW ?? 1, min?.minH ?? 1));
+    },
+    [minSizes],
+  );
 
   const toggleHidden = useCallback((id: string) => {
-    setDraft((prev) => {
-      const current = prev.find((w) => w.id === id);
-      if (!current) return prev;
-      return setWidgetHidden(prev, id, !current.hidden);
-    });
-  }, []);
-
-  const setSpan = useCallback((id: string, span: DashboardWidgetSpan) => {
-    setDraft((prev) => setWidgetSpan(prev, id, span));
+    setDraft((prev) => toggleWidgetHidden(prev, id));
   }, []);
 
   const saveAsView = useCallback(
@@ -243,9 +250,9 @@ export const useDashboardLayout = (
     startEditing,
     cancelEditing,
     doneEditing,
-    moveWidgetBy,
+    moveWidget,
+    resizeWidget,
     toggleHidden,
-    setSpan,
     saveAsView,
     applyView,
     deleteView,

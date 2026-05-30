@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Area,
@@ -60,8 +60,8 @@ import StatusBadge from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
 import UserAssignmentModal from '../shared/UserAssignmentModal';
 import DashboardControls from './DashboardControls';
-import DashboardWidgetFrame from './DashboardWidgetFrame';
-import type { DashboardWidgetDef, DashboardWidgetSpan } from './dashboardLayout';
+import DashboardGrid, { DashboardItem } from './DashboardGrid';
+import type { DashboardWidgetDef } from './dashboardLayout';
 import ProjectTasksTable from './ProjectTasksTable';
 import type { RecurringConfig } from './TaskFormModal';
 import { useDashboardLayout } from './useDashboardLayout';
@@ -71,17 +71,27 @@ import { useDashboardLayout } from './useDashboardLayout';
 // override of its own. Per-project overrides layer on top, keyed by project.id.
 const DASHBOARD_ID = 'project-analytics';
 
-// Canonical widget set + default layout for the analytics section. Order here
-// is the default / reset render order; `defaultSpan` 2 = full width, 1 = half.
-// IMPORTANT: each entry must have a matching widget frame in the charts grid
-// below (and vice-versa). Adding an id here without a frame would reserve an
-// invisible slot (inflating move-bounds / count); adding a frame without an id
-// here renders it unmanaged. Keep the two in lockstep.
+// Canonical widget set + default layout for the analytics section on a 12-column
+// grid: `x`/`y` is the default top-left cell, `w`/`h` the default size, `minW`/
+// `minH` the smallest the card may be resized to. The KPI stat cards, the
+// project timeline, and the four charts are all placeable.
+// IMPORTANT: each entry must have a matching item in `widgetItems` below (and
+// vice-versa). An id here without an item reserves an invisible slot; an item
+// without an id here renders unmanaged. Keep the two in lockstep.
+//
+// Permission-gated cards (totalCost / budgetUsed / teamSize) are filtered out of
+// the *active* def set before reaching the layout hook, so a user who can't see
+// them never gets an empty reserved slot.
 const DASHBOARD_WIDGETS: readonly DashboardWidgetDef[] = [
-  { id: 'hoursByUser', defaultSpan: 2 },
-  { id: 'hoursByTask', defaultSpan: 1 },
-  { id: 'costVsRevenue', defaultSpan: 1 },
-  { id: 'monthlyActivity', defaultSpan: 2 },
+  { id: 'totalHours', x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+  { id: 'totalCost', x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+  { id: 'teamSize', x: 6, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+  { id: 'budgetUsed', x: 9, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+  { id: 'timeline', x: 0, y: 2, w: 12, h: 3, minW: 4, minH: 2 },
+  { id: 'hoursByUser', x: 0, y: 5, w: 6, h: 5, minW: 4, minH: 4 },
+  { id: 'hoursByTask', x: 6, y: 5, w: 6, h: 5, minW: 4, minH: 4 },
+  { id: 'costVsRevenue', x: 0, y: 10, w: 6, h: 5, minW: 4, minH: 4 },
+  { id: 'monthlyActivity', x: 6, y: 10, w: 6, h: 5, minW: 4, minH: 4 },
 ];
 
 const isValidHex = (v: string) => /^#[0-9a-fA-F]{6}$/.test(v);
@@ -263,11 +273,27 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const [isTaskDeleteConfirmOpen, setIsTaskDeleteConfirmOpen] = useState(false);
   const [isAssignmentsOpen, setIsAssignmentsOpen] = useState(false);
 
-  // Dashboard layout: order / visibility / span of the analytics visualizations,
-  // plus saved named views. Two-tier + localStorage: a shared global default and
-  // view library (keyed by DASHBOARD_ID) with an optional per-project override
-  // (keyed by project.id).
-  const dashboard = useDashboardLayout(DASHBOARD_ID, project.id, DASHBOARD_WIDGETS);
+  // Dashboard layout: position / size / visibility of the analytics cards on a
+  // free-form grid, plus saved named views. Two-tier + localStorage: a shared
+  // global default and view library (keyed by DASHBOARD_ID) with an optional
+  // per-project override (keyed by project.id). Permission-gated cards are
+  // dropped from the active def set so they never reserve an empty slot.
+  // Single source of truth for which cards the viewer may see — used both to
+  // filter the layout def set and to gate the matching JSX below, so the two
+  // can't drift apart.
+  const widgetPermitted = useCallback(
+    (id: string): boolean => {
+      if (id === 'totalCost' || id === 'budgetUsed') return canViewCost;
+      if (id === 'teamSize') return canManageAssignments;
+      return true;
+    },
+    [canViewCost, canManageAssignments],
+  );
+  const activeWidgetDefs = useMemo(
+    () => DASHBOARD_WIDGETS.filter((d) => widgetPermitted(d.id)),
+    [widgetPermitted],
+  );
+  const dashboard = useDashboardLayout(DASHBOARD_ID, project.id, activeWidgetDefs);
 
   useEffect(() => {
     // Short-circuit when the caller lacks the tracker view permission — the route
@@ -851,26 +877,6 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     (u) => !u.hasTopManagerRole && !u.isAdminOnly && !u.isDisabled,
   );
 
-  // Props shared by every DashboardWidgetFrame — resolves a widget's current
-  // slot (order / visibility / span) from the dashboard layout and wires its
-  // edit-mode controls back to the layout hook. `index`/`state` are guaranteed:
-  // normalizeLayout keeps dashboard.layout in exact sync with DASHBOARD_WIDGETS,
-  // so every id passed here resolves to a slot (a missing id surfaces loudly
-  // rather than silently misrendering at slot 0).
-  const widgetFrameProps = (id: string, title: string) => {
-    const index = dashboard.layout.findIndex((w) => w.id === id);
-    return {
-      title,
-      state: dashboard.layout[index],
-      editing: dashboard.editing,
-      index,
-      count: dashboard.layout.length,
-      onMove: (delta: number) => dashboard.moveWidgetBy(id, delta),
-      onToggleHidden: () => dashboard.toggleHidden(id),
-      onSetSpan: (span: DashboardWidgetSpan) => dashboard.setSpan(id, span),
-    };
-  };
-
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Header */}
@@ -1421,232 +1427,222 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         </div>
       </div>
 
-      {/* KPI cards + project timeline split the row 50/50 on large screens.
-          KPIs share the left half (auto-laid in their own inner grid), timeline
-          fills the right half regardless of how many KPIs are visible. */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {(() => {
-          // Inner grid for the KPIs only. Picks the column count that lays them
-          // out cleanly in the left half: 4 → 2x2, 3 → 3 wide, 2 → 2 wide, 1 → 1.
-          const visibleKpiCount =
-            1 + (canViewCost ? 1 : 0) + (canManageAssignments ? 1 : 0) + (canViewCost ? 1 : 0);
-          const innerColsClass =
-            visibleKpiCount >= 4
-              ? 'sm:grid-cols-2'
-              : visibleKpiCount === 3
-                ? 'sm:grid-cols-3'
-                : visibleKpiCount === 2
-                  ? 'sm:grid-cols-2'
-                  : 'sm:grid-cols-1';
-          return (
-            <div className={`grid grid-cols-1 gap-4 ${innerColsClass}`}>
-              <KpiCard
-                title={t('projects:detail.kpi.totalHours')}
-                icon="fa-clock"
-                accent="blue"
-                loading={entriesLoading}
-                unavailable={entriesError !== null}
-                value={
-                  <>
-                    {totalHours.toLocaleString(i18n.language, { maximumFractionDigits: 1 })}
-                    <span className="ml-1 text-base font-medium text-muted-foreground">h</span>
-                  </>
-                }
-                subtitle={
-                  entries.length > 0
-                    ? t('projects:detail.kpi.totalHoursSubtitle', { count: entries.length })
-                    : undefined
-                }
-              />
-              {canViewCost && (
-                <KpiCard
-                  title={t('projects:detail.kpi.totalCost')}
-                  icon="fa-coins"
-                  accent="emerald"
-                  loading={entriesLoading}
-                  unavailable={entriesError !== null}
-                  value={
-                    <>
-                      <span className="mr-1 text-base font-medium text-muted-foreground">
-                        {currency}
-                      </span>
-                      {totalCost.toLocaleString(i18n.language, {
+      {/* Free-form analytics grid: the KPI stat cards, the project timeline, and
+          the four charts are all draggable / resizable cards on a 12-column grid.
+          Permission-gated KPIs render only when allowed (and are filtered out of
+          the layout def set above), so they never reserve an empty slot. */}
+      <DashboardGrid
+        layout={dashboard.layout}
+        defs={activeWidgetDefs}
+        editing={dashboard.editing}
+        onMove={dashboard.moveWidget}
+        onResize={dashboard.resizeWidget}
+        onToggleHidden={dashboard.toggleHidden}
+      >
+        <DashboardItem id="totalHours" title={t('projects:detail.kpi.totalHours')}>
+          <KpiCard
+            title={t('projects:detail.kpi.totalHours')}
+            icon="fa-clock"
+            accent="blue"
+            loading={entriesLoading}
+            unavailable={entriesError !== null}
+            value={
+              <>
+                {totalHours.toLocaleString(i18n.language, { maximumFractionDigits: 1 })}
+                <span className="ml-1 text-base font-medium text-muted-foreground">h</span>
+              </>
+            }
+            subtitle={
+              entries.length > 0
+                ? t('projects:detail.kpi.totalHoursSubtitle', { count: entries.length })
+                : undefined
+            }
+          />
+        </DashboardItem>
+        {widgetPermitted('totalCost') && (
+          <DashboardItem id="totalCost" title={t('projects:detail.kpi.totalCost')}>
+            <KpiCard
+              title={t('projects:detail.kpi.totalCost')}
+              icon="fa-coins"
+              accent="emerald"
+              loading={entriesLoading}
+              unavailable={entriesError !== null}
+              value={
+                <>
+                  <span className="mr-1 text-base font-medium text-muted-foreground">
+                    {currency}
+                  </span>
+                  {totalCost.toLocaleString(i18n.language, {
+                    maximumFractionDigits: 2,
+                    minimumFractionDigits: 2,
+                  })}
+                </>
+              }
+              subtitle={
+                totalHours > 0
+                  ? t('projects:detail.kpi.totalCostSubtitle', {
+                      rate: (totalCost / totalHours).toLocaleString(i18n.language, {
                         maximumFractionDigits: 2,
-                        minimumFractionDigits: 2,
-                      })}
-                    </>
-                  }
-                  subtitle={
-                    totalHours > 0
-                      ? t('projects:detail.kpi.totalCostSubtitle', {
-                          rate: (totalCost / totalHours).toLocaleString(i18n.language, {
-                            maximumFractionDigits: 2,
-                          }),
-                          currency,
-                        })
-                      : undefined
-                  }
-                />
-              )}
-              {canManageAssignments && (
-                <KpiCard
-                  title={t('projects:detail.kpi.teamSize')}
-                  icon="fa-users"
-                  accent="violet"
-                  loading={assignedLoading}
-                  value={teamSize}
-                  subtitle={teamSize > 0 ? t('projects:detail.kpi.teamSizeSubtitle') : undefined}
-                  footer={
-                    !assignedLoading && assignedUsers.length > 0 ? (
-                      <div className="flex -space-x-2">
-                        {assignedUsers.slice(0, 6).map((u) => (
-                          <Avatar key={u.id} className="size-7 border-2 border-card">
-                            <AvatarFallback className="text-[10px]">
-                              {getInitials(u.name)}
-                            </AvatarFallback>
-                          </Avatar>
-                        ))}
-                        {assignedUsers.length > 6 && (
-                          <div className="flex size-7 items-center justify-center rounded-full border-2 border-card bg-muted text-[10px] font-medium text-muted-foreground">
-                            +{assignedUsers.length - 6}
-                          </div>
-                        )}
+                      }),
+                      currency,
+                    })
+                  : undefined
+              }
+            />
+          </DashboardItem>
+        )}
+        {widgetPermitted('teamSize') && (
+          <DashboardItem id="teamSize" title={t('projects:detail.kpi.teamSize')}>
+            <KpiCard
+              title={t('projects:detail.kpi.teamSize')}
+              icon="fa-users"
+              accent="violet"
+              loading={assignedLoading}
+              value={teamSize}
+              subtitle={teamSize > 0 ? t('projects:detail.kpi.teamSizeSubtitle') : undefined}
+              footer={
+                !assignedLoading && assignedUsers.length > 0 ? (
+                  <div className="flex -space-x-2">
+                    {assignedUsers.slice(0, 6).map((u) => (
+                      <Avatar key={u.id} className="size-7 border-2 border-card">
+                        <AvatarFallback className="text-[10px]">
+                          {getInitials(u.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                    ))}
+                    {assignedUsers.length > 6 && (
+                      <div className="flex size-7 items-center justify-center rounded-full border-2 border-card bg-muted text-[10px] font-medium text-muted-foreground">
+                        +{assignedUsers.length - 6}
                       </div>
-                    ) : undefined
-                  }
-                />
-              )}
-              {canViewCost && (
-                <KpiCard
-                  title={t('projects:detail.kpi.budgetUsed')}
-                  icon="fa-chart-pie"
-                  accent={
-                    budgetUsedPct === null
+                    )}
+                  </div>
+                ) : undefined
+              }
+            />
+          </DashboardItem>
+        )}
+        {widgetPermitted('budgetUsed') && (
+          <DashboardItem id="budgetUsed" title={t('projects:detail.kpi.budgetUsed')}>
+            <KpiCard
+              title={t('projects:detail.kpi.budgetUsed')}
+              icon="fa-chart-pie"
+              accent={
+                budgetUsedPct === null
+                  ? 'amber'
+                  : budgetUsedPct > 100
+                    ? 'destructive'
+                    : budgetUsedPct >= 80
                       ? 'amber'
-                      : budgetUsedPct > 100
-                        ? 'destructive'
-                        : budgetUsedPct >= 80
-                          ? 'amber'
-                          : 'emerald'
-                  }
-                  loading={entriesLoading}
-                  unavailable={budgetUsedPct === null}
-                  value={budgetUsedPct !== null ? `${budgetUsedPct}%` : '—'}
-                  subtitle={
-                    displayedRevenue > 0
-                      ? t('projects:detail.kpi.budgetUsedSubtitle', {
-                          budget: displayedRevenue.toLocaleString(i18n.language, {
-                            maximumFractionDigits: 0,
-                          }),
-                          currency,
-                        })
-                      : undefined
-                  }
-                  footer={
-                    !entriesLoading && budgetUsedPct !== null ? (
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                        <div
-                          className={`h-full rounded-full transition-all ${
-                            budgetUsedPct > 100
-                              ? 'bg-destructive'
-                              : budgetUsedPct >= 80
-                                ? 'bg-amber-500'
-                                : 'bg-emerald-500'
-                          }`}
-                          style={{ width: `${Math.min(budgetUsedPct, 100)}%` }}
-                        />
-                      </div>
-                    ) : undefined
-                  }
-                />
-              )}
-            </div>
-          );
-        })()}
-        <Card>
-          <CardHeader>
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <CardDescription className="text-xs font-medium uppercase tracking-wide">
-                  {t('projects:detail.timeline.title')}
-                </CardDescription>
-              </div>
-              {projectTimeline && (
-                <span
-                  className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                    projectTimeline.phase === 'completed'
-                      ? 'bg-muted text-muted-foreground'
-                      : projectTimeline.phase === 'pending'
-                        ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
-                        : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                  }`}
-                >
+                      : 'emerald'
+              }
+              loading={entriesLoading}
+              unavailable={budgetUsedPct === null}
+              value={budgetUsedPct !== null ? `${budgetUsedPct}%` : '—'}
+              subtitle={
+                displayedRevenue > 0
+                  ? t('projects:detail.kpi.budgetUsedSubtitle', {
+                      budget: displayedRevenue.toLocaleString(i18n.language, {
+                        maximumFractionDigits: 0,
+                      }),
+                      currency,
+                    })
+                  : undefined
+              }
+              footer={
+                !entriesLoading && budgetUsedPct !== null ? (
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        budgetUsedPct > 100
+                          ? 'bg-destructive'
+                          : budgetUsedPct >= 80
+                            ? 'bg-amber-500'
+                            : 'bg-emerald-500'
+                      }`}
+                      style={{ width: `${Math.min(budgetUsedPct, 100)}%` }}
+                    />
+                  </div>
+                ) : undefined
+              }
+            />
+          </DashboardItem>
+        )}
+        <DashboardItem id="timeline" title={t('projects:detail.timeline.title')}>
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <CardDescription className="text-xs font-medium uppercase tracking-wide">
+                    {t('projects:detail.timeline.title')}
+                  </CardDescription>
+                </div>
+                {projectTimeline && (
                   <span
-                    className={`size-1.5 rounded-full ${
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${
                       projectTimeline.phase === 'completed'
-                        ? 'bg-muted-foreground'
+                        ? 'bg-muted text-muted-foreground'
                         : projectTimeline.phase === 'pending'
-                          ? 'bg-blue-500'
-                          : 'bg-emerald-500'
+                          ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                          : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
                     }`}
-                    aria-hidden="true"
-                  />
-                  {t(`projects:detail.timeline.phase.${projectTimeline.phase}`)}
-                </span>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {!projectTimeline ? (
-              <p className="text-sm text-muted-foreground">
-                {t('projects:detail.timeline.noDates')}
-              </p>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
-                  <span>{formatInsertDate(projectTimeline.start.getTime(), i18n.language)}</span>
-                  <span>{formatInsertDate(projectTimeline.end.getTime(), i18n.language)}</span>
-                </div>
-                <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className={`h-full transition-all ${
-                      projectTimeline.phase === 'completed'
-                        ? 'bg-muted-foreground'
-                        : 'bg-emerald-500'
-                    }`}
-                    style={{ width: `${projectTimeline.pct}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">
-                    <span className="font-semibold text-foreground tabular-nums">
-                      {projectTimeline.elapsedDays}
-                    </span>{' '}
-                    / {projectTimeline.totalDays} {t('projects:detail.timeline.daysElapsed')}
+                  >
+                    <span
+                      className={`size-1.5 rounded-full ${
+                        projectTimeline.phase === 'completed'
+                          ? 'bg-muted-foreground'
+                          : projectTimeline.phase === 'pending'
+                            ? 'bg-blue-500'
+                            : 'bg-emerald-500'
+                      }`}
+                      aria-hidden="true"
+                    />
+                    {t(`projects:detail.timeline.phase.${projectTimeline.phase}`)}
                   </span>
-                  <span className="text-muted-foreground">
-                    <span className="font-semibold text-foreground tabular-nums">
-                      {projectTimeline.remainingDays}
-                    </span>{' '}
-                    {t('projects:detail.timeline.daysRemaining')}
-                  </span>
-                </div>
+                )}
               </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            </CardHeader>
+            <CardContent>
+              {!projectTimeline ? (
+                <p className="text-sm text-muted-foreground">
+                  {t('projects:detail.timeline.noDates')}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
+                    <span>{formatInsertDate(projectTimeline.start.getTime(), i18n.language)}</span>
+                    <span>{formatInsertDate(projectTimeline.end.getTime(), i18n.language)}</span>
+                  </div>
+                  <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={`h-full transition-all ${
+                        projectTimeline.phase === 'completed'
+                          ? 'bg-muted-foreground'
+                          : 'bg-emerald-500'
+                      }`}
+                      style={{ width: `${projectTimeline.pct}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">
+                      <span className="font-semibold text-foreground tabular-nums">
+                        {projectTimeline.elapsedDays}
+                      </span>{' '}
+                      / {projectTimeline.totalDays} {t('projects:detail.timeline.daysElapsed')}
+                    </span>
+                    <span className="text-muted-foreground">
+                      <span className="font-semibold text-foreground tabular-nums">
+                        {projectTimeline.remainingDays}
+                      </span>{' '}
+                      {t('projects:detail.timeline.daysRemaining')}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </DashboardItem>
 
-      {/* Charts row. The two "wide" charts — the per-user grouped histogram
-          (many user × task bars) and the monthly timeline — span the full width
-          so they have room to scale; the two compact charts share a row.
-          `grid-flow-row-dense`: once users reorder / resize / hide widgets, a
-          half-width tile followed by a full-width one (or a hidden middle tile)
-          would otherwise leave an empty half-cell — dense packing backfills it. */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-flow-row-dense lg:grid-cols-2">
-        <DashboardWidgetFrame
-          {...widgetFrameProps('hoursByUser', t('projects:detail.charts.hoursByUser'))}
-        >
+        <DashboardItem id="hoursByUser" title={t('projects:detail.charts.hoursByUser')}>
           <Card className="h-full">
             <CardHeader>
               <CardTitle>{t('projects:detail.charts.hoursByUser')}</CardTitle>
@@ -1714,11 +1710,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               )}
             </CardContent>
           </Card>
-        </DashboardWidgetFrame>
+        </DashboardItem>
 
-        <DashboardWidgetFrame
-          {...widgetFrameProps('hoursByTask', t('projects:detail.charts.hoursByTask'))}
-        >
+        <DashboardItem id="hoursByTask" title={t('projects:detail.charts.hoursByTask')}>
           <Card className="h-full">
             <CardHeader>
               <CardTitle>{t('projects:detail.charts.hoursByTask')}</CardTitle>
@@ -1817,11 +1811,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               )}
             </CardContent>
           </Card>
-        </DashboardWidgetFrame>
+        </DashboardItem>
 
-        <DashboardWidgetFrame
-          {...widgetFrameProps('costVsRevenue', t('projects:detail.charts.costVsRevenue'))}
-        >
+        <DashboardItem id="costVsRevenue" title={t('projects:detail.charts.costVsRevenue')}>
           {(() => {
             // Always render the card so users see the chart exists on the page
             // — even if the project has no entries and no revenue yet. The
@@ -2012,11 +2004,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               </Card>
             );
           })()}
-        </DashboardWidgetFrame>
+        </DashboardItem>
 
-        <DashboardWidgetFrame
-          {...widgetFrameProps('monthlyActivity', t('projects:detail.charts.monthlyActivity'))}
-        >
+        <DashboardItem id="monthlyActivity" title={t('projects:detail.charts.monthlyActivity')}>
           <Card className="h-full">
             <CardHeader>
               <CardTitle>{t('projects:detail.charts.monthlyActivity')}</CardTitle>
@@ -2092,8 +2082,8 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               )}
             </CardContent>
           </Card>
-        </DashboardWidgetFrame>
-      </div>
+        </DashboardItem>
+      </DashboardGrid>
 
       <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen}

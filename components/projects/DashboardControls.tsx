@@ -29,8 +29,8 @@ export interface DashboardControlsProps {
 
 // Edit + Views buttons for the analytics section header. Mirrors the
 // StandardTable column-views affordance: "Edit" enters an inline layout editor
-// (resize / hide / reorder handled per-widget by DashboardWidgetFrame), and
-// "Views" lists saved layouts plus a reset-to-default.
+// (drag to move / drag edges to resize / hide handled per-widget by
+// DashboardGrid), and "Views" lists saved layouts plus a reset-to-default.
 const DashboardControls: React.FC<DashboardControlsProps> = ({ controls }) => {
   const { t } = useTranslation(['projects']);
   const {

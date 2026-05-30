@@ -71,7 +71,9 @@ describe('ProjectDetailView wiring', () => {
   test('cost KPI is gated on reports.cost.view permission', async () => {
     const source = await readSource();
     expect(source).toContain("const canViewCost = permissions.includes('reports.cost.view')");
-    expect(source).toMatch(/canViewCost &&[\s\S]{0,80}<KpiCard[\s\S]{0,200}totalCost/);
+    expect(source).toMatch(/widgetPermitted\('totalCost'\) && \(\s*<DashboardItem id="totalCost"/);
+    // The gate predicate maps the cost cards to the cost permission.
+    expect(source).toMatch(/id === 'totalCost' \|\| id === 'budgetUsed'\) return canViewCost/);
   });
 
   test('sticky save bar appears only when there are unsaved changes and update is permitted', async () => {
@@ -109,9 +111,9 @@ describe('ProjectDetailView wiring', () => {
     // that permission the fetch 403s and the KPI would show a misleading "0".
     const source = await readSource();
     expect(source).toMatch(/if \(!canManageAssignments\)[\s\S]{0,200}setAssignedUserIds\(\[\]\)/);
-    expect(source).toMatch(
-      /\{canManageAssignments && \(\s*<KpiCard[\s\S]{0,400}detail\.kpi\.teamSize/,
-    );
+    // The team-size card is gated via the predicate and placed via its grid item.
+    expect(source).toMatch(/widgetPermitted\('teamSize'\) && \(\s*<DashboardItem id="teamSize"/);
+    expect(source).toMatch(/id === 'teamSize'\) return canManageAssignments/);
   });
 });
 
@@ -179,16 +181,15 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     );
   });
 
-  test('the two wide charts span full width to scale with more users/months', async () => {
+  test('the two wide charts default to a 6-of-12 column footprint to scale', async () => {
     // The per-user grouped histogram (users × tasks bars) and the monthly
-    // timeline are the wide charts; they default to span 2 (full width) so the
-    // bars have room. Span is now owned by the dashboard layout (the widget
-    // registry's defaultSpan), applied by DashboardWidgetFrame, so users can
-    // also resize them. Long user names are truncated on the axis (full name in
-    // tooltip).
+    // timeline are the wide charts; they default to a 6-column width on the
+    // 12-column grid so the bars have room. Size is now owned by the dashboard
+    // layout (the widget registry's default rectangle) and freely resizable by
+    // dragging. Long user names are truncated on the axis (full name in tooltip).
     const source = await readSource();
-    expect(source).toContain("id: 'hoursByUser', defaultSpan: 2");
-    expect(source).toContain("id: 'monthlyActivity', defaultSpan: 2");
+    expect(source).toMatch(/id: 'hoursByUser', x: \d+, y: \d+, w: 6,/);
+    expect(source).toMatch(/id: 'monthlyActivity', x: \d+, y: \d+, w: 6,/);
     expect(source).toMatch(/tickFormatter=\{\(v: string\) => \(v\.length > 16 \?/);
   });
 
@@ -238,7 +239,7 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     // Scope the rest of the assertions to the header region so we don't pick
     // up unrelated `Tooltip` / `truncate` usage elsewhere in the file.
     const headerStart = source.indexOf('Analytics section header');
-    const kpiStart = source.indexOf('KPI cards + project timeline');
+    const kpiStart = source.indexOf('Free-form analytics grid');
     expect(headerStart).toBeGreaterThan(0);
     expect(kpiStart).toBeGreaterThan(headerStart);
     const headerRegion = source.slice(headerStart, kpiStart);
@@ -531,35 +532,65 @@ describe('ProjectDetailView dashboard customization', () => {
     expect(source).toContain("import DashboardControls from './DashboardControls'");
     expect(source).toContain('<DashboardControls controls={dashboard} />');
     // Two-tier: global default id + the per-project override key (project.id).
-    expect(source).toContain('useDashboardLayout(DASHBOARD_ID, project.id, DASHBOARD_WIDGETS)');
+    // Permission-gated cards are filtered out of the active def set first.
+    expect(source).toContain('useDashboardLayout(DASHBOARD_ID, project.id, activeWidgetDefs)');
   });
 
-  test('declares the canonical widget set with default spans', async () => {
+  test('declares the canonical widget set as grid rectangles (x/y/w/h + minimums)', async () => {
     const source = await readSource();
-    for (const id of ['hoursByUser', 'hoursByTask', 'costVsRevenue', 'monthlyActivity']) {
-      expect(source).toMatch(new RegExp(`id: '${id}', defaultSpan: [12]`));
+    // Every placeable card — the four KPIs, the timeline, and the four charts.
+    for (const id of [
+      'totalHours',
+      'totalCost',
+      'teamSize',
+      'budgetUsed',
+      'timeline',
+      'hoursByUser',
+      'hoursByTask',
+      'costVsRevenue',
+      'monthlyActivity',
+    ]) {
+      expect(source).toMatch(
+        new RegExp(`id: '${id}', x: \\d+, y: \\d+, w: \\d+, h: \\d+, minW: \\d+, minH: \\d+`),
+      );
     }
-    // The full-width charts default to span 2, the compact pair to span 1.
-    expect(source).toContain("id: 'hoursByUser', defaultSpan: 2");
-    expect(source).toContain("id: 'monthlyActivity', defaultSpan: 2");
-    expect(source).toContain("id: 'hoursByTask', defaultSpan: 1");
-    expect(source).toContain("id: 'costVsRevenue', defaultSpan: 1");
   });
 
-  test('wraps every chart in a DashboardWidgetFrame so it can be moved/hidden/resized', async () => {
+  test('places every card through a DashboardItem inside the DashboardGrid', async () => {
     const source = await readSource();
-    expect(source).toContain("import DashboardWidgetFrame from './DashboardWidgetFrame'");
-    // One frame per visualization.
-    expect(source.match(/<DashboardWidgetFrame/g)?.length ?? 0).toBe(4);
-    for (const id of ['hoursByUser', 'hoursByTask', 'costVsRevenue', 'monthlyActivity']) {
-      expect(source).toContain(`widgetFrameProps('${id}'`);
+    expect(source).toContain("import DashboardGrid, { DashboardItem } from './DashboardGrid'");
+    // The old per-chart frame component is gone.
+    expect(source).not.toContain('DashboardWidgetFrame');
+    // One grid wrapping all nine placeable cards.
+    expect(source.match(/<DashboardGrid/g)?.length ?? 0).toBe(1);
+    for (const id of [
+      'totalHours',
+      'totalCost',
+      'teamSize',
+      'budgetUsed',
+      'timeline',
+      'hoursByUser',
+      'hoursByTask',
+      'costVsRevenue',
+      'monthlyActivity',
+    ]) {
+      expect(source).toContain(`<DashboardItem id="${id}"`);
     }
   });
 
-  test('grid span is owned by the frame, not hard-coded on the cards', async () => {
+  test('permission-gated cards are filtered out of the active layout defs', async () => {
     const source = await readSource();
-    // The two formerly full-width cards no longer carry their own lg:col-span-2;
-    // the frame applies span from the layout state instead.
-    expect(source).not.toContain('<Card className="lg:col-span-2">');
+    // A single `widgetPermitted` predicate is the source of truth for the gate,
+    // used both to filter the def set and to gate the JSX (so they can't drift).
+    expect(source).toContain('const widgetPermitted = useCallback(');
+    expect(source).toContain('const activeWidgetDefs = useMemo(');
+    expect(source).toContain('DASHBOARD_WIDGETS.filter((d) => widgetPermitted(d.id))');
+  });
+
+  test('drag/resize is wired from the grid back to the layout hook', async () => {
+    const source = await readSource();
+    expect(source).toContain('onMove={dashboard.moveWidget}');
+    expect(source).toContain('onResize={dashboard.resizeWidget}');
+    expect(source).toContain('onToggleHidden={dashboard.toggleHidden}');
   });
 });
