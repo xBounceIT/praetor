@@ -593,4 +593,14 @@ describe('ProjectDetailView dashboard customization', () => {
     expect(source).toContain('onResize={dashboard.resizeWidget}');
     expect(source).toContain('onToggleHidden={dashboard.toggleHidden}');
   });
+
+  test('every dashboard card fills its grid cell (h-full) so no black strip shows below it', async () => {
+    const source = await readSource();
+    // KPI stat cards and the timeline card must stretch to the cell height, like
+    // the charts already do — otherwise short content leaves a transparent gap.
+    expect(source).toContain('<Card className="h-full gap-3">'); // KpiCard
+    expect(source).toMatch(/id="timeline"[\s\S]{0,120}<Card className="h-full">/); // timeline
+    // KPI cells are tall enough (h3 + minH3) to fit the team-size avatar footer.
+    expect(source).toMatch(/id: 'teamSize', x: \d+, y: \d+, w: \d+, h: 3, minW: \d+, minH: 3/);
+  });
 });

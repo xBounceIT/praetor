@@ -82,16 +82,20 @@ const DASHBOARD_ID = 'project-analytics';
 // Permission-gated cards (totalCost / budgetUsed / teamSize) are filtered out of
 // the *active* def set before reaching the layout hook, so a user who can't see
 // them never gets an empty reserved slot.
+// Heights are sized so the default cell fits its content without clipping: KPI
+// cards are h3 (the team-size card needs room for its avatar row) with a matching
+// minH3 floor so a stored h2 layout from an earlier build is bumped back up, and
+// charts are h6 so the taller xl chart variant fits.
 const DASHBOARD_WIDGETS: readonly DashboardWidgetDef[] = [
-  { id: 'totalHours', x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
-  { id: 'totalCost', x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
-  { id: 'teamSize', x: 6, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
-  { id: 'budgetUsed', x: 9, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
-  { id: 'timeline', x: 0, y: 2, w: 12, h: 3, minW: 4, minH: 2 },
-  { id: 'hoursByUser', x: 0, y: 5, w: 6, h: 5, minW: 4, minH: 4 },
-  { id: 'hoursByTask', x: 6, y: 5, w: 6, h: 5, minW: 4, minH: 4 },
-  { id: 'costVsRevenue', x: 0, y: 10, w: 6, h: 5, minW: 4, minH: 4 },
-  { id: 'monthlyActivity', x: 6, y: 10, w: 6, h: 5, minW: 4, minH: 4 },
+  { id: 'totalHours', x: 0, y: 0, w: 3, h: 3, minW: 2, minH: 3 },
+  { id: 'totalCost', x: 3, y: 0, w: 3, h: 3, minW: 2, minH: 3 },
+  { id: 'teamSize', x: 6, y: 0, w: 3, h: 3, minW: 2, minH: 3 },
+  { id: 'budgetUsed', x: 9, y: 0, w: 3, h: 3, minW: 2, minH: 3 },
+  { id: 'timeline', x: 0, y: 3, w: 12, h: 3, minW: 4, minH: 2 },
+  { id: 'hoursByUser', x: 0, y: 6, w: 6, h: 6, minW: 4, minH: 4 },
+  { id: 'hoursByTask', x: 6, y: 6, w: 6, h: 6, minW: 4, minH: 4 },
+  { id: 'costVsRevenue', x: 0, y: 12, w: 6, h: 6, minW: 4, minH: 4 },
+  { id: 'monthlyActivity', x: 6, y: 12, w: 6, h: 6, minW: 4, minH: 4 },
 ];
 
 const isValidHex = (v: string) => /^#[0-9a-fA-F]{6}$/.test(v);
@@ -1568,7 +1572,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           </DashboardItem>
         )}
         <DashboardItem id="timeline" title={t('projects:detail.timeline.title')}>
-          <Card>
+          <Card className="h-full">
             <CardHeader>
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
@@ -2158,7 +2162,9 @@ const KpiCard: React.FC<KpiCardProps> = ({
   loading,
   unavailable,
 }) => (
-  <Card className="gap-3">
+  // h-full so the card fills its dashboard grid cell instead of leaving a
+  // transparent strip below short content.
+  <Card className="h-full gap-3">
     <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
       <CardDescription className="text-xs font-medium uppercase tracking-wide">
         {title}
