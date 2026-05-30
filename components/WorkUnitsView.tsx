@@ -1,12 +1,24 @@
 import type React from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { workUnitsApi } from '../services/api/workUnits';
 import type { User, WorkUnit } from '../types';
 import { hasScopedActionPermission } from '../utils/permissions';
 import HeaderAddButton from './shared/HeaderAddButton';
 import Modal from './shared/Modal';
+import {
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from './shared/ModalLayout';
 import SelectControl from './shared/SelectControl';
 import UserAssignmentModal from './shared/UserAssignmentModal';
 
@@ -188,6 +200,115 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
   const canDeleteWorkUnits = hasScopedActionPermission(permissions, 'hr.work_units', 'delete');
   const canManageMembers = canUpdateWorkUnits;
 
+  const renderWorkUnitFormModal = ({
+    isOpen,
+    onClose,
+    onSubmit,
+    title,
+    titleIconClassName,
+    submitLabel,
+    submitDisabled = false,
+    nameInputId,
+    managersInputId,
+    descriptionInputId,
+  }: {
+    isOpen: boolean;
+    onClose: () => void;
+    onSubmit: (e: React.FormEvent) => Promise<void>;
+    title: React.ReactNode;
+    titleIconClassName: string;
+    submitLabel: React.ReactNode;
+    submitDisabled?: boolean;
+    nameInputId: string;
+    managersInputId: string;
+    descriptionInputId: string;
+  }) => (
+    <Modal isOpen={isOpen} onClose={onClose} ariaLabel={null}>
+      {() => (
+        <ModalContent size="lg">
+          <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
+            <ModalHeader>
+              <ModalTitle className="gap-3">
+                <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+                  <i className={`fa-solid ${titleIconClassName}`} aria-hidden="true"></i>
+                </span>
+                {title}
+              </ModalTitle>
+              <ModalCloseButton onClick={onClose} disabled={isSubmitting} />
+            </ModalHeader>
+
+            <ModalBody className="space-y-4">
+              <Field data-invalid={Boolean(errors.name)}>
+                <FieldLabel htmlFor={nameInputId}>{t('hr:competenceCenters.unitName')}</FieldLabel>
+                <Input
+                  id={nameInputId}
+                  type="text"
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
+                  }}
+                  aria-invalid={Boolean(errors.name)}
+                  aria-label={t('hr:competenceCenters.unitName')}
+                  className="font-semibold"
+                  required
+                  disabled={isSubmitting}
+                />
+                <FieldError className="text-xs">{errors.name}</FieldError>
+              </Field>
+
+              <div className="space-y-2">
+                <SelectControl
+                  id={managersInputId}
+                  label={t('hr:competenceCenters.managers')}
+                  options={managerOptions}
+                  value={selectedManagerIds}
+                  onChange={(val) => {
+                    setSelectedManagerIds(val as string[]);
+                    if (errors.managers) setErrors((prev) => ({ ...prev, managers: '' }));
+                  }}
+                  isMulti={true}
+                  searchable={true}
+                  placeholder={t('hr:competenceCenters.selectManagers')}
+                  disabled={isSubmitting}
+                  buttonClassName={
+                    errors.managers
+                      ? 'border-destructive focus-visible:ring-destructive/20'
+                      : undefined
+                  }
+                />
+                <FieldError className="text-xs">{errors.managers}</FieldError>
+              </div>
+
+              <Field>
+                <FieldLabel htmlFor={descriptionInputId}>
+                  {t('hr:competenceCenters.description')}
+                </FieldLabel>
+                <Textarea
+                  id={descriptionInputId}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  aria-label={t('hr:competenceCenters.description')}
+                  className="min-h-24 resize-y"
+                  disabled={isSubmitting}
+                />
+              </Field>
+            </ModalBody>
+
+            <ModalFooter>
+              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+                {t('common:buttons.cancel')}
+              </Button>
+              <Button type="submit" disabled={submitDisabled || isSubmitting}>
+                {isSubmitting ? t('common:buttons.saving') : submitLabel}
+              </Button>
+            </ModalFooter>
+          </form>
+        </ModalContent>
+      )}
+    </Modal>
+  );
+
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
       {/* Header */}
@@ -345,179 +466,30 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
         )}
       </div>
 
-      {/* Create Modal */}
-      <Modal isOpen={isCreateModalOpen} onClose={requestCloseCreateModal}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-zinc-800">
-              {t('hr:competenceCenters.newCompetenceCenter')}
-            </h3>
-            <button
-              type="button"
-              onClick={requestCloseCreateModal}
-              disabled={isSubmitting}
-              aria-label={t('common:buttons.close')}
-              className="text-zinc-400 hover:text-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <i className="fa-solid fa-xmark text-xl"></i>
-            </button>
-          </div>
-          <form onSubmit={handleCreate} className="p-6 space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                {t('hr:competenceCenters.unitName')}
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
-                }}
-                aria-label={t('hr:competenceCenters.unitName')}
-                className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 outline-none font-semibold text-zinc-700 ${errors.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
-                required
-              />
-              {errors.name && (
-                <p className="text-red-500 text-[10px] font-bold mt-1">{errors.name}</p>
-              )}
-            </div>
-            <div>
-              <SelectControl
-                label={t('hr:competenceCenters.managers')}
-                options={managerOptions}
-                value={selectedManagerIds}
-                onChange={(val) => {
-                  setSelectedManagerIds(val as string[]);
-                  if (errors.managers) setErrors((prev) => ({ ...prev, managers: '' }));
-                }}
-                isMulti={true}
-                searchable={true}
-                placeholder={t('hr:competenceCenters.selectManagers')}
-                className={errors.managers ? 'border-red-300' : ''}
-              />
-              {errors.managers && (
-                <p className="text-red-500 text-[10px] font-bold mt-1 ml-1">{errors.managers}</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                {t('hr:competenceCenters.description')}
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                aria-label={t('hr:competenceCenters.description')}
-                className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-medium text-zinc-600 min-h-25"
-              />
-            </div>
-            <div className="flex gap-3 pt-4">
-              <button
-                type="button"
-                onClick={requestCloseCreateModal}
-                disabled={isSubmitting}
-                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={selectedManagerIds.length === 0 || isSubmitting}
-                className="flex-1 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
-              >
-                {isSubmitting ? t('common:buttons.saving') : t('hr:competenceCenters.createUnit')}
-              </button>
-            </div>
-          </form>
-        </div>
-      </Modal>
+      {renderWorkUnitFormModal({
+        isOpen: isCreateModalOpen,
+        onClose: requestCloseCreateModal,
+        onSubmit: handleCreate,
+        title: t('hr:competenceCenters.newCompetenceCenter'),
+        titleIconClassName: 'fa-plus',
+        submitLabel: t('hr:competenceCenters.createUnit'),
+        submitDisabled: selectedManagerIds.length === 0,
+        nameInputId: 'work-unit-create-name',
+        managersInputId: 'work-unit-create-managers',
+        descriptionInputId: 'work-unit-create-description',
+      })}
 
-      {/* Edit Modal */}
-      <Modal isOpen={isEditModalOpen} onClose={requestCloseEditModal}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-zinc-800">
-              {t('hr:competenceCenters.editCompetenceCenter')}
-            </h3>
-            <button
-              type="button"
-              onClick={requestCloseEditModal}
-              disabled={isSubmitting}
-              aria-label={t('common:buttons.close')}
-              className="text-zinc-400 hover:text-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <i className="fa-solid fa-xmark text-xl"></i>
-            </button>
-          </div>
-          <form onSubmit={handleUpdate} className="p-6 space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                {t('hr:competenceCenters.unitName')}
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
-                }}
-                aria-label={t('hr:competenceCenters.unitName')}
-                className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 outline-none font-semibold text-zinc-700 ${errors.name ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
-                required
-              />
-              {errors.name && (
-                <p className="text-red-500 text-[10px] font-bold mt-1">{errors.name}</p>
-              )}
-            </div>
-            <div>
-              <SelectControl
-                label={t('hr:competenceCenters.managers')}
-                options={managerOptions}
-                value={selectedManagerIds}
-                onChange={(val) => {
-                  setSelectedManagerIds(val as string[]);
-                  if (errors.managers) setErrors((prev) => ({ ...prev, managers: '' }));
-                }}
-                isMulti={true}
-                searchable={true}
-                placeholder={t('hr:competenceCenters.selectManagers')}
-                className={errors.managers ? 'border-red-300' : ''}
-              />
-              {errors.managers && (
-                <p className="text-red-500 text-[10px] font-bold mt-1 ml-1">{errors.managers}</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                {t('hr:competenceCenters.description')}
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                aria-label={t('hr:competenceCenters.description')}
-                className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none font-medium text-zinc-600 min-h-25"
-              />
-            </div>
-            <div className="flex gap-3 pt-4">
-              <button
-                type="button"
-                onClick={requestCloseEditModal}
-                disabled={isSubmitting}
-                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="flex-1 py-3 bg-praetor text-white text-sm font-bold rounded-xl shadow-lg shadow-zinc-200 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
-              >
-                {isSubmitting ? t('common:buttons.saving') : t('hr:competenceCenters.saveChanges')}
-              </button>
-            </div>
-          </form>
-        </div>
-      </Modal>
+      {renderWorkUnitFormModal({
+        isOpen: isEditModalOpen,
+        onClose: requestCloseEditModal,
+        onSubmit: handleUpdate,
+        title: t('hr:competenceCenters.editCompetenceCenter'),
+        titleIconClassName: 'fa-pen-to-square',
+        submitLabel: t('hr:competenceCenters.saveChanges'),
+        nameInputId: 'work-unit-edit-name',
+        managersInputId: 'work-unit-edit-managers',
+        descriptionInputId: 'work-unit-edit-description',
+      })}
 
       {/* Assignment Modal */}
       <UserAssignmentModal
@@ -537,40 +509,46 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
       />
 
       {/* Delete Confirm Modal */}
-      <Modal isOpen={isDeleteConfirmOpen && !!targetUnit} onClose={requestCloseDeleteConfirm}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 text-center space-y-4">
-            <div className="size-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
-              <i className="fa-solid fa-triangle-exclamation text-red-600 text-xl"></i>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-zinc-800">
-                {t('hr:competenceCenters.deleteCompetenceCenter')}
-              </h3>
-              <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
-                {t('hr:competenceCenters.deleteConfirmMessage', { name: targetUnit?.name })}
-              </p>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
+      <Modal
+        isOpen={isDeleteConfirmOpen && !!targetUnit}
+        onClose={requestCloseDeleteConfirm}
+        ariaLabel={null}
+      >
+        {() => (
+          <ModalContent size="sm">
+            <ModalHeader className="justify-center text-center">
+              <div className="space-y-3">
+                <div className="size-12 bg-destructive/10 rounded-full flex items-center justify-center mx-auto text-destructive">
+                  <i className="fa-solid fa-triangle-exclamation text-xl" aria-hidden="true"></i>
+                </div>
+                <ModalTitle className="justify-center">
+                  {t('hr:competenceCenters.deleteCompetenceCenter')}
+                </ModalTitle>
+              </div>
+            </ModalHeader>
+            <ModalBody className="text-center text-sm text-muted-foreground leading-relaxed">
+              {t('hr:competenceCenters.deleteConfirmMessage', { name: targetUnit?.name })}
+            </ModalBody>
+            <ModalFooter className="grid grid-cols-2 sm:flex">
+              <Button
                 type="button"
+                variant="outline"
                 onClick={requestCloseDeleteConfirm}
                 disabled={isDeleting}
-                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {t('common:buttons.cancel')}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="destructive"
                 onClick={handleDelete}
                 disabled={isDeleting}
-                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95 disabled:opacity-50"
               >
                 {isDeleting ? t('common:buttons.saving') : t('hr:competenceCenters.yesDelete')}
-              </button>
-            </div>
-          </div>
-        </div>
+              </Button>
+            </ModalFooter>
+          </ModalContent>
+        )}
       </Modal>
     </div>
   );
