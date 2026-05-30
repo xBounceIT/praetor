@@ -24,6 +24,9 @@ export const generalSettings = pgTable(
     openrouterModelId: varchar('openrouter_model_id', { length: 255 }),
     allowWeekendSelection: boolean('allow_weekend_selection').default(true),
     defaultLocation: varchar('default_location', { length: 20 }).default('remote'),
+    rilCompanyName: varchar('ril_company_name', { length: 255 }).default(''),
+    rilDefaultStartTime: varchar('ril_default_start_time', { length: 5 }).default('09:00'),
+    rilLunchBreakMinutes: integer('ril_lunch_break_minutes').default(60),
     updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
@@ -35,6 +38,14 @@ export const generalSettings = pgTable(
     check(
       'general_settings_ai_provider_check',
       sql`${table.aiProvider} IN ('gemini', 'openrouter')`,
+    ),
+    check(
+      'general_settings_ril_default_start_time_check',
+      sql`${table.rilDefaultStartTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'`,
+    ),
+    check(
+      'general_settings_ril_lunch_break_minutes_check',
+      sql`${table.rilLunchBreakMinutes} >= 0 AND ${table.rilLunchBreakMinutes} <= 240`,
     ),
   ],
 );

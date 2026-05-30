@@ -18,6 +18,32 @@
     "notes": "Notes",
     "recurring": "Recurring"
   },
+  "ril": {
+    "title": "RIL",
+    "subtitle": "Monthly attendance statement generated from time entries.",
+    "user": "User",
+    "month": "Month",
+    "refresh": "Refresh",
+    "reset": "Reset from timesheets",
+    "exportExcel": "Export Excel",
+    "loadFailed": "Failed to load RIL data",
+    "exportFailed": "Failed to export RIL workbook",
+    "entriesLoaded": "{{count}} entries loaded",
+    "totalHours": "{{count}} hours",
+    "workedDays": "{{count}} worked days",
+    "columns": {
+      "day": "Day",
+      "entrance": "Start",
+      "exit": "End",
+      "hours": "Hours",
+      "picap": "PICAP",
+      "phoneAvailability": "Phone on-call",
+      "notes": "Notes",
+      "transfer": "Location",
+      "code": "Code",
+      "order": "Project"
+    }
+  },
   "entry": {
     "addEntry": "Add Time Entry",
     "editEntry": "Edit Time Entry",

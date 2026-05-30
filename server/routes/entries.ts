@@ -112,6 +112,8 @@ const entriesListQuerySchema = {
     userId: { type: 'string' },
     limit: { type: 'integer', minimum: 1, maximum: 500 },
     cursor: { type: 'string' },
+    fromDate: { type: 'string', format: 'date' },
+    toDate: { type: 'string', format: 'date' },
   },
 } as const;
 
@@ -217,16 +219,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!assertAuthenticated(request, reply)) return;
 
-      const { userId, limit, cursor } = request.query as {
+      const { userId, limit, cursor, fromDate, toDate } = request.query as {
         userId?: string;
         limit?: number;
         cursor?: string;
+        fromDate?: string;
+        toDate?: string;
       };
       try {
         const result = await listTimeEntries(actorFromRequest(request), {
           userId,
           limit,
           cursor,
+          fromDate,
+          toDate,
         });
         return sanitizeListResult(result, requestHasPermission(request, 'reports.cost.view'));
       } catch (err) {

@@ -156,6 +156,7 @@ export const hasScopedActionPermission = (
 
 export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'timesheets/tracker': buildPermission('timesheets.tracker', 'view'),
+  'timesheets/ril': buildPermission('timesheets.tracker', 'view'),
   'timesheets/recurring': buildPermission('timesheets.recurring', 'view'),
   'administration/authentication': buildPermission('administration.authentication', 'view'),
   'administration/general': buildPermission('administration.general', 'view'),

@@ -47,6 +47,9 @@ export const INITIAL_GENERAL_SETTINGS = deepFreeze<GeneralSettingsState>({
   geminiModelId: '',
   openrouterModelId: '',
   defaultLocation: 'remote',
+  rilCompanyName: '',
+  rilDefaultStartTime: '09:00',
+  rilLunchBreakMinutes: 60,
 });
 
 export const INITIAL_EMAIL_CONFIG = deepFreeze<EmailConfig>({

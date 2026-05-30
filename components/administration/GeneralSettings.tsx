@@ -95,6 +95,13 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
   const [defaultLocation, setDefaultLocation] = useState<TimeEntryLocation>(
     settings.defaultLocation || 'remote',
   );
+  const [rilCompanyName, setRilCompanyName] = useState(settings.rilCompanyName || '');
+  const [rilDefaultStartTime, setRilDefaultStartTime] = useState(
+    settings.rilDefaultStartTime || '09:00',
+  );
+  const [rilLunchBreakMinutes, setRilLunchBreakMinutes] = useState(
+    settings.rilLunchBreakMinutes ?? 60,
+  );
   const [enableAiReporting, setEnableAiReporting] = useState(settings.enableAiReporting);
   const [geminiApiKey, setGeminiApiKey] = useState(settings.geminiApiKey || '');
   const [aiProvider, setAiProvider] = useState<AiProvider>(settings.aiProvider || 'gemini');
@@ -129,6 +136,9 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     setTreatSaturdayAsHoliday(settings.treatSaturdayAsHoliday);
     setAllowWeekendSelection(settings.allowWeekendSelection ?? true);
     setDefaultLocation(settings.defaultLocation || 'remote');
+    setRilCompanyName(settings.rilCompanyName || '');
+    setRilDefaultStartTime(settings.rilDefaultStartTime || '09:00');
+    setRilLunchBreakMinutes(settings.rilLunchBreakMinutes ?? 60);
     setEnableAiReporting(settings.enableAiReporting);
     setGeminiApiKey(settings.geminiApiKey || '');
     setAiProvider(settings.aiProvider || 'gemini');
@@ -189,6 +199,9 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
         treatSaturdayAsHoliday,
         allowWeekendSelection,
         defaultLocation,
+        rilCompanyName,
+        rilDefaultStartTime,
+        rilLunchBreakMinutes,
         enableAiReporting,
         geminiApiKey,
         aiProvider,
@@ -212,6 +225,9 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     treatSaturdayAsHoliday !== settings.treatSaturdayAsHoliday ||
     allowWeekendSelection !== (settings.allowWeekendSelection ?? true) ||
     defaultLocation !== (settings.defaultLocation || 'remote') ||
+    rilCompanyName !== (settings.rilCompanyName || '') ||
+    rilDefaultStartTime !== (settings.rilDefaultStartTime || '09:00') ||
+    rilLunchBreakMinutes !== (settings.rilLunchBreakMinutes ?? 60) ||
     enableAiReporting !== settings.enableAiReporting ||
     geminiApiKey !== (settings.geminiApiKey || '') ||
     aiProvider !== (settings.aiProvider || 'gemini') ||
@@ -380,6 +396,65 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                 checked={allowWeekendSelection}
                 onChange={setAllowWeekendSelection}
               />
+
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    {t('general.rilSettingsTitle')}
+                  </h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t('general.rilSettingsDescription')}
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                  <Field>
+                    <FieldLabel htmlFor="general-ril-company-name">
+                      {t('general.rilCompanyNameLabel')}
+                    </FieldLabel>
+                    <Input
+                      id="general-ril-company-name"
+                      value={rilCompanyName}
+                      onChange={(event) => setRilCompanyName(event.target.value)}
+                    />
+                    <FieldDescription>{t('general.rilCompanyNameDescription')}</FieldDescription>
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="general-ril-default-start-time">
+                      {t('general.rilDefaultStartTimeLabel')}
+                    </FieldLabel>
+                    <Input
+                      id="general-ril-default-start-time"
+                      type="time"
+                      value={rilDefaultStartTime}
+                      onChange={(event) => setRilDefaultStartTime(event.target.value)}
+                    />
+                    <FieldDescription>
+                      {t('general.rilDefaultStartTimeDescription')}
+                    </FieldDescription>
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="general-ril-lunch-break-minutes">
+                      {t('general.rilLunchBreakMinutesLabel')}
+                    </FieldLabel>
+                    <ValidatedNumberInput
+                      id="general-ril-lunch-break-minutes"
+                      step="1"
+                      min={0}
+                      max={240}
+                      value={rilLunchBreakMinutes}
+                      onValueChange={(value) => {
+                        const parsed = parseInt(value, 10);
+                        setRilLunchBreakMinutes(value === '' || Number.isNaN(parsed) ? 0 : parsed);
+                      }}
+                    />
+                    <FieldDescription>
+                      {t('general.rilLunchBreakMinutesDescription')}
+                    </FieldDescription>
+                  </Field>
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}

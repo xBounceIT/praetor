@@ -254,6 +254,9 @@ const baseGeneralSettings: GeneralSettings = {
   treatSaturdayAsHoliday: false,
   enableAiReporting: false,
   allowWeekendSelection: false,
+  rilCompanyName: '',
+  rilDefaultStartTime: '09:00',
+  rilLunchBreakMinutes: 60,
 };
 
 describe('normalizeClient', () => {
@@ -778,6 +781,19 @@ describe('normalizeGeneralSettings', () => {
   test('falls back to 0 for missing dailyLimit', () => {
     const settings = make<GeneralSettings>(baseGeneralSettings, { dailyLimit: undefined });
     expect(normalizeGeneralSettings(settings).dailyLimit).toBe(0);
+  });
+
+  test('normalizes RIL settings defaults', () => {
+    const settings = make<GeneralSettings>(baseGeneralSettings, {
+      rilCompanyName: undefined,
+      rilDefaultStartTime: '',
+      rilLunchBreakMinutes: undefined,
+    });
+    expect(normalizeGeneralSettings(settings)).toMatchObject({
+      rilCompanyName: '',
+      rilDefaultStartTime: '09:00',
+      rilLunchBreakMinutes: 60,
+    });
   });
 });
 

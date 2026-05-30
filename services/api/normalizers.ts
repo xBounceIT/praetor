@@ -298,6 +298,9 @@ const normalizeTaskBilling = (
 export const normalizeGeneralSettings = (s: GeneralSettings): GeneralSettings => ({
   ...s,
   dailyLimit: Number(s.dailyLimit || 0),
+  rilCompanyName: s.rilCompanyName ?? '',
+  rilDefaultStartTime: s.rilDefaultStartTime || '09:00',
+  rilLunchBreakMinutes: Number(s.rilLunchBreakMinutes ?? 60),
 });
 
 // Allowlist mirroring the server's UNIT_OF_MEASURE_VALUES (server/routes/invoices.ts).

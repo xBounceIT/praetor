@@ -15,6 +15,9 @@ export type GeneralSettings = {
   openrouterModelId: string | null;
   allowWeekendSelection: boolean | null;
   defaultLocation: string | null;
+  rilCompanyName: string | null;
+  rilDefaultStartTime: string | null;
+  rilLunchBreakMinutes: number | null;
 };
 
 export type GeneralSettingsPatch = {
@@ -30,6 +33,9 @@ export type GeneralSettingsPatch = {
   openrouterModelId?: string | null;
   allowWeekendSelection?: boolean | null;
   defaultLocation?: string | null;
+  rilCompanyName?: string | null;
+  rilDefaultStartTime?: string | null;
+  rilLunchBreakMinutes?: number | null;
 };
 
 const GENERAL_SETTINGS_PROJECTION = {
@@ -45,6 +51,9 @@ const GENERAL_SETTINGS_PROJECTION = {
   openrouterModelId: generalSettings.openrouterModelId,
   allowWeekendSelection: generalSettings.allowWeekendSelection,
   defaultLocation: generalSettings.defaultLocation,
+  rilCompanyName: generalSettings.rilCompanyName,
+  rilDefaultStartTime: generalSettings.rilDefaultStartTime,
+  rilLunchBreakMinutes: generalSettings.rilLunchBreakMinutes,
 } as const;
 
 type GeneralSettingsRow = {
@@ -60,6 +69,9 @@ type GeneralSettingsRow = {
   openrouterModelId: string | null;
   allowWeekendSelection: boolean | null;
   defaultLocation: string | null;
+  rilCompanyName: string | null;
+  rilDefaultStartTime: string | null;
+  rilLunchBreakMinutes: number | null;
 };
 
 // Centralized fallbacks for the four non-nullable `GeneralSettings` fields. The schema
@@ -95,6 +107,9 @@ const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
   openrouterModelId: row.openrouterModelId,
   allowWeekendSelection: row.allowWeekendSelection,
   defaultLocation: row.defaultLocation,
+  rilCompanyName: row.rilCompanyName,
+  rilDefaultStartTime: row.rilDefaultStartTime,
+  rilLunchBreakMinutes: row.rilLunchBreakMinutes,
 });
 
 export const get = async (exec: DbExecutor = db): Promise<GeneralSettings | null> => {
@@ -127,6 +142,9 @@ export const update = async (
       openrouterModelId: sql`COALESCE(${patch.openrouterModelId ?? null}, ${generalSettings.openrouterModelId})`,
       allowWeekendSelection: sql`COALESCE(${patch.allowWeekendSelection ?? null}, ${generalSettings.allowWeekendSelection})`,
       defaultLocation: sql`COALESCE(${patch.defaultLocation ?? null}, ${generalSettings.defaultLocation})`,
+      rilCompanyName: sql`COALESCE(${patch.rilCompanyName ?? null}, ${generalSettings.rilCompanyName})`,
+      rilDefaultStartTime: sql`COALESCE(${patch.rilDefaultStartTime ?? null}, ${generalSettings.rilDefaultStartTime})`,
+      rilLunchBreakMinutes: sql`COALESCE(${patch.rilLunchBreakMinutes ?? null}, ${generalSettings.rilLunchBreakMinutes})`,
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })
     .where(eq(generalSettings.id, 1))

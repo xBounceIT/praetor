@@ -353,6 +353,49 @@ describe('GET /api/entries', () => {
     expect(entriesListForUserMock).toHaveBeenCalledWith('u2', expect.any(Object));
   });
 
+  test('200: fromDate/toDate are forwarded with permission-preserving user filtering', async () => {
+    isUserManagedByMock.mockResolvedValue(true);
+    entriesListForUserMock.mockResolvedValue({ entries: [], nextCursor: null });
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/entries?userId=u2&fromDate=2026-05-01&toDate=2026-05-31',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(isUserManagedByMock).toHaveBeenCalledWith('u1', 'u2');
+    expect(entriesListForUserMock).toHaveBeenCalledWith(
+      'u2',
+      expect.objectContaining({ fromDate: '2026-05-01', toDate: '2026-05-31' }),
+    );
+  });
+
+  test('400: fromDate after toDate does not query repositories', async () => {
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/entries?fromDate=2026-06-01&toDate=2026-05-31',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'fromDate must be on or before toDate' });
+    expect(entriesListForManagerViewMock).not.toHaveBeenCalled();
+    expect(entriesListAllMock).not.toHaveBeenCalled();
+    expect(entriesListForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('400: invalid fromDate is rejected', async () => {
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/entries?fromDate=2026-02-30',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(entriesListForManagerViewMock).not.toHaveBeenCalled();
+  });
+
   test('200: nextCursor encoded when present', async () => {
     entriesListForManagerViewMock.mockResolvedValue({
       entries: [],

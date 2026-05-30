@@ -18,6 +18,32 @@
     "notes": "Note",
     "recurring": "Ricorrente"
   },
+  "ril": {
+    "title": "RIL",
+    "subtitle": "Prospetto presenze mensile generato dalle voci timesheet.",
+    "user": "Utente",
+    "month": "Mese",
+    "refresh": "Aggiorna",
+    "reset": "Ripristina dai timesheet",
+    "exportExcel": "Esporta Excel",
+    "loadFailed": "Impossibile caricare i dati RIL",
+    "exportFailed": "Impossibile esportare il file RIL",
+    "entriesLoaded": "{{count}} voci caricate",
+    "totalHours": "{{count}} ore",
+    "workedDays": "{{count}} giorni lavorati",
+    "columns": {
+      "day": "Giorno",
+      "entrance": "Entrata",
+      "exit": "Uscita",
+      "hours": "Ore",
+      "picap": "PICAP",
+      "phoneAvailability": "Reperib. telef.",
+      "notes": "Note",
+      "transfer": "Trasferta",
+      "code": "Cod",
+      "order": "Commessa"
+    }
+  },
   "entry": {
     "addEntry": "Aggiungi Voce Timesheet",
     "editEntry": "Modifica Voce Timesheet",

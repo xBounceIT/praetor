@@ -130,6 +130,9 @@ export interface GeneralSettings {
   openrouterModelId?: string;
   allowWeekendSelection: boolean;
   defaultLocation?: TimeEntryLocation;
+  rilCompanyName?: string;
+  rilDefaultStartTime?: string;
+  rilLunchBreakMinutes?: number;
 }
 
 export interface Client {
@@ -585,6 +588,7 @@ export interface OrderVersion extends OrderVersionRow {
 export type View =
   // Timesheets module
   | 'timesheets/tracker'
+  | 'timesheets/ril'
   | 'timesheets/recurring'
   // Administration module
   | 'administration/authentication'

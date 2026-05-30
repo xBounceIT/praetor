@@ -64,6 +64,8 @@ If a user cannot sign in, check credentials, user status, assigned role, and aut
 
 General settings control cross-cutting features such as AI reporting and application preferences. Email settings are used for sending messages and notifications.
 
+In **Tracking Preferences**, administrators also configure the defaults used by the RIL statement: company name, default start time, and lunch-break minutes. These values are used only to generate the RIL draft and Excel workbook; they do not change existing time entries.
+
 After changing SMTP, sender, or security options, always run a send test before considering the configuration complete.
 
 ## Logs

@@ -141,7 +141,13 @@ const withSerializableWriteTransaction = async <T>(
 
 export const listTimeEntries = async (
   actor: AuthenticatedActor,
-  input: { userId?: unknown; limit?: unknown; cursor?: unknown },
+  input: {
+    userId?: unknown;
+    limit?: unknown;
+    cursor?: unknown;
+    fromDate?: unknown;
+    toDate?: unknown;
+  },
 ): Promise<{ entries: TimeEntry[]; nextCursor: string | null }> => {
   if (!hasTrackerPermission(actor, 'view')) fail(403, 'Insufficient permissions');
 
@@ -151,6 +157,13 @@ export const listTimeEntries = async (
       ? input.limit
       : Number.parseInt(String(input.limit), 10);
   const cursor = typeof input.cursor === 'string' ? input.cursor : undefined;
+  const fromDate =
+    input.fromDate === undefined ? null : requireValid(parseDateString(input.fromDate, 'fromDate'));
+  const toDate =
+    input.toDate === undefined ? null : requireValid(parseDateString(input.toDate, 'toDate'));
+  if (fromDate && toDate && fromDate > toDate) {
+    badRequest('fromDate must be on or before toDate');
+  }
 
   const canViewAll = hasPermission(actor, 'timesheets.tracker_all.view');
   if (!canViewAll && userId && userId !== actor.id) {
@@ -161,7 +174,12 @@ export const listTimeEntries = async (
   const decodedCursor = cursor ? entriesRepo.decodeCursor(cursor) : undefined;
   if (cursor && !decodedCursor) badRequest('cursor is invalid');
 
-  const options = { limit, cursor: decodedCursor ?? undefined };
+  const options = {
+    limit,
+    cursor: decodedCursor ?? undefined,
+    fromDate: fromDate ?? undefined,
+    toDate: toDate ?? undefined,
+  };
   const result = userId
     ? await entriesRepo.listForUser(userId, options)
     : canViewAll

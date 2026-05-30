@@ -6,6 +6,7 @@ import {
   ClipboardList,
   Clock,
   FileSignature,
+  FileSpreadsheet,
   FileText,
   Folder,
   FolderTree,
@@ -222,6 +223,7 @@ const Layout: React.FC<LayoutProps> = ({
         icon: Clock,
         routes: [
           { view: 'timesheets/tracker', label: t('routes.timeTracker'), icon: ListChecks },
+          { view: 'timesheets/ril', label: t('routes.ril'), icon: FileSpreadsheet },
           { view: 'timesheets/recurring', label: t('routes.recurringTasks'), icon: Repeat },
         ],
       },

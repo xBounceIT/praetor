@@ -30,6 +30,9 @@ const generalSettingsSchema = {
     openrouterModelId: { type: 'string' },
     allowWeekendSelection: { type: 'boolean' },
     defaultLocation: { type: 'string' },
+    rilCompanyName: { type: 'string', maxLength: 255 },
+    rilDefaultStartTime: { type: 'string' },
+    rilLunchBreakMinutes: { type: 'integer' },
   },
   required: [
     'currency',
@@ -44,6 +47,9 @@ const generalSettingsSchema = {
     'openrouterModelId',
     'allowWeekendSelection',
     'defaultLocation',
+    'rilCompanyName',
+    'rilDefaultStartTime',
+    'rilLunchBreakMinutes',
   ],
 } as const;
 
@@ -62,6 +68,9 @@ const generalSettingsUpdateBodySchema = {
     openrouterModelId: { type: 'string' },
     allowWeekendSelection: { type: 'boolean' },
     defaultLocation: { type: 'string' },
+    rilCompanyName: { type: 'string', maxLength: 255 },
+    rilDefaultStartTime: { type: 'string' },
+    rilLunchBreakMinutes: { type: 'integer' },
   },
 } as const;
 
@@ -78,10 +87,52 @@ const DEFAULT_SETTINGS: generalSettingsRepo.GeneralSettings = {
   openrouterModelId: null,
   allowWeekendSelection: true,
   defaultLocation: 'remote',
+  rilCompanyName: '',
+  rilDefaultStartTime: '09:00',
+  rilLunchBreakMinutes: 60,
 };
 
 const maskApiKey = (value: string | null, reveal: boolean) =>
   reveal ? (value ?? '') : value ? MASKED_SECRET : '';
+
+const TIME_OF_DAY_PATTERN = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+
+const validateOptionalTimeOfDay = (value: unknown, fieldName: string) => {
+  if (value === undefined || value === null || value === '') {
+    return { ok: true as const, value: null };
+  }
+  if (typeof value !== 'string' || !TIME_OF_DAY_PATTERN.test(value.trim())) {
+    return { ok: false as const, message: `${fieldName} must be in HH:mm format` };
+  }
+  return { ok: true as const, value: value.trim() };
+};
+
+const validateOptionalString = (value: unknown, fieldName: string) => {
+  if (value === undefined || value === null) {
+    return { ok: true as const, value: null };
+  }
+  if (typeof value !== 'string') {
+    return { ok: false as const, message: `${fieldName} must be a string` };
+  }
+  const trimmed = value.trim();
+  if (trimmed.length > 255) {
+    return { ok: false as const, message: `${fieldName} must be 255 characters or fewer` };
+  }
+  return { ok: true as const, value: trimmed };
+};
+
+const validateOptionalLunchBreakMinutes = (value: unknown) => {
+  if (value === undefined || value === null || value === '') {
+    return { ok: true as const, value: null };
+  }
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 240) {
+    return {
+      ok: false as const,
+      message: 'rilLunchBreakMinutes must be an integer between 0 and 240',
+    };
+  }
+  return { ok: true as const, value };
+};
 
 const toResponse = (settings: generalSettingsRepo.GeneralSettings, revealApiKeys: boolean) => ({
   currency: settings.currency,
@@ -96,6 +147,9 @@ const toResponse = (settings: generalSettingsRepo.GeneralSettings, revealApiKeys
   openrouterModelId: settings.openrouterModelId || '',
   allowWeekendSelection: settings.allowWeekendSelection ?? true,
   defaultLocation: settings.defaultLocation || 'remote',
+  rilCompanyName: settings.rilCompanyName ?? '',
+  rilDefaultStartTime: settings.rilDefaultStartTime || '09:00',
+  rilLunchBreakMinutes: settings.rilLunchBreakMinutes ?? 60,
 });
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -153,6 +207,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         openrouterModelId?: string;
         allowWeekendSelection?: boolean;
         defaultLocation?: string;
+        rilCompanyName?: string;
+        rilDefaultStartTime?: string;
+        rilLunchBreakMinutes?: number;
       };
       const {
         currency,
@@ -164,6 +221,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         geminiModelId,
         openrouterModelId,
         defaultLocation,
+        rilCompanyName,
+        rilDefaultStartTime,
+        rilLunchBreakMinutes,
       } = body;
       const currencyResult = optionalNonEmptyString(currency, 'currency');
       if (!currencyResult.ok) return badRequest(reply, currencyResult.message);
@@ -183,6 +243,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         'defaultLocation',
       );
       if (!defaultLocationResult.ok) return badRequest(reply, defaultLocationResult.message);
+
+      const rilCompanyNameResult = validateOptionalString(rilCompanyName, 'rilCompanyName');
+      if (!rilCompanyNameResult.ok) return badRequest(reply, rilCompanyNameResult.message);
+
+      const rilDefaultStartTimeResult = validateOptionalTimeOfDay(
+        rilDefaultStartTime,
+        'rilDefaultStartTime',
+      );
+      if (!rilDefaultStartTimeResult.ok) {
+        return badRequest(reply, rilDefaultStartTimeResult.message);
+      }
+
+      const rilLunchBreakMinutesResult = validateOptionalLunchBreakMinutes(rilLunchBreakMinutes);
+      if (!rilLunchBreakMinutesResult.ok) {
+        return badRequest(reply, rilLunchBreakMinutesResult.message);
+      }
 
       if (
         geminiModelId !== undefined &&
@@ -229,6 +305,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         openrouterModelId,
         allowWeekendSelection: allowWeekendSelectionResult.value,
         defaultLocation: defaultLocationResult.value,
+        rilCompanyName: rilCompanyNameResult.value,
+        rilDefaultStartTime: rilDefaultStartTimeResult.value,
+        rilLunchBreakMinutes: rilLunchBreakMinutesResult.value,
       });
 
       await logAudit({

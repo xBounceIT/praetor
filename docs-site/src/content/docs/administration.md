@@ -64,6 +64,8 @@ Se un utente non riesce ad accedere, controlla credenziali, stato dell'utente, r
 
 Le impostazioni generali controllano funzioni trasversali come AI reporting e preferenze applicative. Le impostazioni email servono per invii e notifiche.
 
+Dalla scheda **Preferenze di Tracciamento** gli amministratori configurano anche i valori predefiniti usati dal prospetto RIL: nome azienda, orario di entrata predefinito e minuti di pausa pranzo. Questi valori vengono usati solo per generare la bozza e il file Excel RIL; non modificano le registrazioni esistenti.
+
 Dopo aver modificato SMTP, mittente o sicurezza, esegui sempre un test di invio prima di considerare conclusa la configurazione.
 
 ## Log

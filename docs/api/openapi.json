@@ -9221,6 +9221,24 @@
             "in": "query",
             "name": "cursor",
             "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "in": "query",
+            "name": "fromDate",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "in": "query",
+            "name": "toDate",
+            "required": false
           }
         ],
         "responses": {
@@ -14777,6 +14795,16 @@
                     },
                     "defaultLocation": {
                       "type": "string"
+                    },
+                    "rilCompanyName": {
+                      "type": "string",
+                      "maxLength": 255
+                    },
+                    "rilDefaultStartTime": {
+                      "type": "string"
+                    },
+                    "rilLunchBreakMinutes": {
+                      "type": "integer"
                     }
                   },
                   "required": [
@@ -14791,7 +14819,10 @@
                     "geminiModelId",
                     "openrouterModelId",
                     "allowWeekendSelection",
-                    "defaultLocation"
+                    "defaultLocation",
+                    "rilCompanyName",
+                    "rilDefaultStartTime",
+                    "rilLunchBreakMinutes"
                   ]
                 }
               }
@@ -14993,6 +15024,16 @@
                   },
                   "defaultLocation": {
                     "type": "string"
+                  },
+                  "rilCompanyName": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "rilDefaultStartTime": {
+                    "type": "string"
+                  },
+                  "rilLunchBreakMinutes": {
+                    "type": "integer"
                   }
                 }
               }
@@ -15042,6 +15083,16 @@
                     },
                     "defaultLocation": {
                       "type": "string"
+                    },
+                    "rilCompanyName": {
+                      "type": "string",
+                      "maxLength": 255
+                    },
+                    "rilDefaultStartTime": {
+                      "type": "string"
+                    },
+                    "rilLunchBreakMinutes": {
+                      "type": "integer"
                     }
                   },
                   "required": [
@@ -15056,7 +15107,10 @@
                     "geminiModelId",
                     "openrouterModelId",
                     "allowWeekendSelection",
-                    "defaultLocation"
+                    "defaultLocation",
+                    "rilCompanyName",
+                    "rilDefaultStartTime",
+                    "rilLunchBreakMinutes"
                   ]
                 }
               }

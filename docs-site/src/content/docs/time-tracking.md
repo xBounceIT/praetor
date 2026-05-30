@@ -23,6 +23,16 @@ La vista settimanale aiuta a controllare rapidamente le ore distribuite sui gior
 
 Ogni registrazione esistente occupa una propria riga, così eventuali dati storici duplicati restano visibili e modificabili in modo indipendente. La riga "Nuova voce" in alto serve esclusivamente a creare nuove registrazioni e rispetta il controllo anti-duplicato.
 
+## RIL
+
+La pagina **RIL** nel modulo Presenze genera un prospetto mensile partendo dalle registrazioni dell'utente selezionato. È possibile scegliere il mese e, per gli utenti gestiti, anche il collaboratore da consultare.
+
+Praetor recupera le registrazioni con `GET /api/entries` usando i filtri inclusivi `fromDate` e `toDate`, quindi costruisce una bozza modificabile: le modifiche fatte nel prospetto restano locali alla pagina e all'esportazione Excel, senza aggiornare le registrazioni originali.
+
+Le righe del mese sommano le ore per giorno, usano l'orario di entrata predefinito configurato in Amministrazione e calcolano l'uscita aggiungendo la pausa pranzo quando le ore superano 6. Le festività italiane che cadono tra lunedì e venerdì vengono marcate con `FN`; le festività nel weekend non vengono marcate. Se almeno una registrazione del giorno non è `remote`, la riga viene indicata come **In sede**, altrimenti come **Telelavoro**.
+
+Il pulsante **Esporta Excel** crea un file `.xlsx` con un solo foglio, **Prospetto Presenze**, e colonne compatibili con il modello RIL: Giorno, Entrata, Uscita, Ore, PICAP, Reperib. Telef., Note, Trasferta, Cod e Commessa.
+
 ## Attività ricorrenti
 
 Le attività ricorrenti permettono di generare registrazioni ripetitive, per esempio riunioni settimanali o attività amministrative periodiche.

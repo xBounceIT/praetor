@@ -23,6 +23,16 @@ The weekly view helps you quickly review hours across days. Use it to find missi
 
 Each existing entry occupies its own row, so any historical duplicate data stays visible and can be edited independently. The "New entry" row at the top is for creating new entries only and follows the duplicate-entry guard.
 
+## RIL
+
+The **RIL** page in Timesheets generates a monthly attendance statement from the selected user's time entries. You can choose the month and, for managed users, the collaborator to review.
+
+Praetor retrieves entries with `GET /api/entries` using inclusive `fromDate` and `toDate` filters, then builds an editable draft. Edits made in the RIL table stay local to the page and Excel export; they do not update the underlying time entries.
+
+For each day, Praetor sums tracked hours, uses the Administration default start time, and calculates the end time by adding the lunch break when worked time exceeds 6 hours. Italian holidays that fall Monday through Friday are marked with `FN`; weekend holidays are not marked. If any entry for the day is not `remote`, the row is marked **In office**; otherwise it is marked **Remote working**.
+
+The **Export Excel** button creates a one-sheet `.xlsx` workbook named **Prospetto Presenze** with the RIL columns: Giorno, Entrata, Uscita, Ore, PICAP, Reperib. Telef., Note, Trasferta, Cod, and Commessa.
+
 ## Recurring tasks
 
 Recurring tasks generate repeated entries, such as weekly meetings or periodic administrative work.

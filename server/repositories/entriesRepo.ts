@@ -126,6 +126,10 @@ export type ListEntriesOptions = {
   limit?: number;
   /** Exclusive - return rows strictly older than this position. */
   cursor?: EntriesCursor;
+  /** Inclusive lower date bound (YYYY-MM-DD). */
+  fromDate?: string;
+  /** Inclusive upper date bound (YYYY-MM-DD). */
+  toDate?: string;
 };
 
 const DEFAULT_LIMIT = 200;
@@ -138,6 +142,13 @@ const resolveLimit = (limit?: number): number => {
 
 const cursorClause = (cursor: EntriesCursor | undefined): SQL | null =>
   cursor ? sql`(created_at, id) < (${cursor.createdAt}::timestamp, ${cursor.id})` : null;
+
+const dateRangeClauses = (options: Pick<ListEntriesOptions, 'fromDate' | 'toDate'>): SQL[] => {
+  const clauses: SQL[] = [];
+  if (options.fromDate) clauses.push(sql`date >= ${options.fromDate}::date`);
+  if (options.toDate) clauses.push(sql`date <= ${options.toDate}::date`);
+  return clauses;
+};
 
 export type ListEntriesResult = {
   entries: TimeEntry[];
@@ -168,7 +179,7 @@ export const listAll = async (
   exec: DbExecutor = db,
 ): Promise<ListEntriesResult> => {
   const limit = resolveLimit(options.limit);
-  const where = cursorClause(options.cursor);
+  const where = joinAnd([...dateRangeClauses(options), cursorClause(options.cursor)]);
   const rows = await executeRows<TimeEntryRow>(
     exec,
     sql`SELECT ${ENTRY_COLUMNS_SQL} FROM time_entries${where ? sql` WHERE ${where}` : sql``} ORDER BY created_at DESC, id DESC LIMIT ${limit}`,
@@ -182,7 +193,11 @@ export const listForUser = async (
   exec: DbExecutor = db,
 ): Promise<ListEntriesResult> => {
   const limit = resolveLimit(options.limit);
-  const where = joinAnd([sql`user_id = ${userId}`, cursorClause(options.cursor)]);
+  const where = joinAnd([
+    sql`user_id = ${userId}`,
+    ...dateRangeClauses(options),
+    cursorClause(options.cursor),
+  ]);
   const rows = await executeRows<TimeEntryRow>(
     exec,
     sql`SELECT ${ENTRY_COLUMNS_SQL} FROM time_entries WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ${limit}`,
@@ -197,7 +212,7 @@ export const listForManagerView = async (
 ): Promise<ListEntriesResult> => {
   const limit = resolveLimit(options.limit);
   const managerScope = sql`(user_id = ${managerId} OR user_id IN (${managedUserIdsSubquerySql(managerId)}))`;
-  const where = joinAnd([managerScope, cursorClause(options.cursor)]);
+  const where = joinAnd([managerScope, ...dateRangeClauses(options), cursorClause(options.cursor)]);
   const rows = await executeRows<TimeEntryRow>(
     exec,
     sql`SELECT ${ENTRY_COLUMNS_SQL} FROM time_entries WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ${limit}`,

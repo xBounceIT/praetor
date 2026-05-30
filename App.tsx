@@ -45,6 +45,7 @@ import StatusBadge from './components/shared/StatusBadge';
 import DailyView from './components/timesheet/DailyView';
 import EntryEditDialog from './components/timesheet/EntryEditDialog';
 import RecurringManager from './components/timesheet/RecurringManager';
+import RilView from './components/timesheet/RilView';
 import WeeklyView from './components/timesheet/WeeklyView';
 import UserSettings from './components/UserSettings';
 import { Toaster } from './components/ui/sonner';
@@ -755,6 +756,7 @@ const AppContent: React.FC = () => {
   const VALID_VIEWS: View[] = useMemo(
     () => [
       'timesheets/tracker',
+      'timesheets/ril',
       'timesheets/recurring',
       'administration/user-management',
       'administration/roles',
@@ -798,6 +800,7 @@ const AppContent: React.FC = () => {
     // So we define the list once for initialization
     const validViews: View[] = [
       'timesheets/tracker',
+      'timesheets/ril',
       'timesheets/recurring',
       'administration/user-management',
       'administration/roles',
@@ -1199,9 +1202,14 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [VALID_VIEWS, setActiveView, programmaticHashTracker]);
 
-  // Reset viewingUserId when navigating away from tracker
+  // Reset viewingUserId when navigating away from user-scoped timesheet views.
   useEffect(() => {
-    if (activeView !== 'timesheets/tracker' && currentUser && viewingUserId !== currentUser.id) {
+    if (
+      activeView !== 'timesheets/tracker' &&
+      activeView !== 'timesheets/ril' &&
+      currentUser &&
+      viewingUserId !== currentUser.id
+    ) {
       React.startTransition(() => setViewingUserId(currentUser.id));
     }
   }, [activeView, currentUser, viewingUserId]);
@@ -1271,6 +1279,9 @@ const AppContent: React.FC = () => {
         geminiModelId: genSettings.geminiModelId || '',
         openrouterModelId: genSettings.openrouterModelId || '',
         defaultLocation: genSettings.defaultLocation || 'remote',
+        rilCompanyName: genSettings.rilCompanyName || '',
+        rilDefaultStartTime: genSettings.rilDefaultStartTime || '09:00',
+        rilLunchBreakMinutes: genSettings.rilLunchBreakMinutes ?? 60,
       });
       setHasLoadedGeneralSettings(true);
     };
@@ -2274,6 +2285,9 @@ const AppContent: React.FC = () => {
         geminiModelId: updated.geminiModelId || '',
         openrouterModelId: updated.openrouterModelId || '',
         defaultLocation: updated.defaultLocation || 'remote',
+        rilCompanyName: updated.rilCompanyName || '',
+        rilDefaultStartTime: updated.rilDefaultStartTime || '09:00',
+        rilLunchBreakMinutes: updated.rilLunchBreakMinutes ?? 60,
       });
     } catch (err) {
       console.error('Failed to update general settings:', err);
@@ -2510,6 +2524,16 @@ const AppContent: React.FC = () => {
                 defaultLocation={generalSettings.defaultLocation}
                 onAddCustomTask={addProjectTask}
                 currency={generalSettings.currency}
+              />
+            )}
+            {activeView === 'timesheets/ril' && (
+              <RilView
+                currentUser={currentUser}
+                availableUsers={availableUsers}
+                viewingUserId={viewingUserId}
+                onViewUserChange={setViewingUserId}
+                projects={projects}
+                settings={generalSettings}
               />
             )}
             {hasViewAccess(currentUser.permissions, 'crm/clients') &&
