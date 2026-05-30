@@ -104,7 +104,7 @@
     "detailsTitle": "Project details",
     "detailsDescription": "Edit the core configuration for this project.",
     "tasksDescription": "Inline-edit tasks, expected effort and revenue.",
-    "analyticsTitle": "Project analytics",
+    "analyticsTitle": "Project dashboard",
     "analyticsDescription": "KPIs and charts derived from time entries on this project.",
     "createdOn": "Created on {{date}}",
     "unsavedChanges": "You have unsaved changes.",

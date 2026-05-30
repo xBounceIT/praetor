@@ -104,7 +104,7 @@
     "detailsTitle": "Dettagli progetto",
     "detailsDescription": "Modifica la configurazione di base di questo progetto.",
     "tasksDescription": "Modifica inline attività, impegno previsto e ricavo.",
-    "analyticsTitle": "Analisi progetto",
+    "analyticsTitle": "Dashboard progetto",
     "analyticsDescription": "KPI e grafici basati sulle ore registrate per questo progetto.",
     "createdOn": "Creato il {{date}}",
     "unsavedChanges": "Ci sono modifiche non salvate.",
