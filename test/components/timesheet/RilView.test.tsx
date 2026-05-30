@@ -248,4 +248,24 @@ describe('<RilView />', () => {
       }),
     );
   });
+
+  test('requires entrance and exit values on every valid day before export', async () => {
+    api.entries.listPage.mockResolvedValue({
+      entries: [entry({ date: '2026-05-04', duration: 8 })],
+      nextCursor: null,
+    });
+
+    renderRilView();
+
+    const entranceInput = await screen.findByLabelText('ril.columns.entrance 4');
+    fireEvent.change(entranceInput, { target: { value: '' } });
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /ril.exportExcel/ })).not.toBeDisabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /ril.exportExcel/ }));
+
+    expect(await screen.findByText('ril.missingTimes')).toBeInTheDocument();
+    expect(downloadRilWorkbookMock).not.toHaveBeenCalled();
+  });
 });

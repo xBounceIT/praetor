@@ -30,6 +30,7 @@
     "exportExcel": "Export Excel",
     "loadFailed": "Failed to load RIL data",
     "exportFailed": "Failed to export RIL workbook",
+    "missingTimes": "Add entrance and exit times for valid days before exporting: {{days}}",
     "entriesLoaded": "{{count}} entries loaded",
     "totalHours": "{{count}} hours",
     "workedDays": "{{count}} worked days",
