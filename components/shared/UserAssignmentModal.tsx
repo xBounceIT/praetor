@@ -31,6 +31,11 @@ export interface UserAssignmentModalProps {
   saveAssignedUserIds: (userIds: string[]) => Promise<void>;
   entityLabel: string;
   entityName: string;
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  loadErrorMessage?: string;
+  saveErrorMessage?: string;
+  saveButtonLabel?: React.ReactNode;
   disabled?: boolean;
 }
 
@@ -103,6 +108,11 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
   saveAssignedUserIds,
   entityLabel,
   entityName,
+  title,
+  description,
+  loadErrorMessage,
+  saveErrorMessage,
+  saveButtonLabel,
   disabled = false,
 }) => {
   const { t } = useTranslation('common');
@@ -113,6 +123,7 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
   const [userSearch, setUserSearch] = useState('');
   const [selectedAvailableIds, setSelectedAvailableIds] = useState<Set<string>>(new Set());
   const [selectedAssignedIds, setSelectedAssignedIds] = useState<Set<string>>(new Set());
+  const [isSaving, setIsSaving] = useState(false);
   const initializedRef = useRef(false);
   const loadAbortControllerRef = useRef<AbortController | null>(null);
 
@@ -134,12 +145,15 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
       if (controller.signal.aborted || isAbortError(err)) return;
       console.error('Failed to load assignments', err);
       setLoadState('error');
+      if (loadErrorMessage) {
+        toastError(loadErrorMessage);
+      }
     } finally {
       if (loadAbortControllerRef.current === controller) {
         loadAbortControllerRef.current = null;
       }
     }
-  }, [loadAssignedUserIds]);
+  }, [loadAssignedUserIds, loadErrorMessage]);
 
   useEffect(() => {
     if (isOpen && !initializedRef.current) {
@@ -150,6 +164,7 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
       initializedRef.current = false;
       loadAbortControllerRef.current?.abort();
       loadAbortControllerRef.current = null;
+      setIsSaving(false);
     }
   }, [isOpen, load]);
 
@@ -162,6 +177,16 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
   );
 
   const handleClose = useCallback(() => {
+    if (isSaving) return;
+    setUserSearch('');
+    setSelectedAvailableIds(new Set());
+    setSelectedAssignedIds(new Set());
+    loadAbortControllerRef.current?.abort();
+    loadAbortControllerRef.current = null;
+    onClose();
+  }, [isSaving, onClose]);
+
+  const forceClose = useCallback(() => {
     setUserSearch('');
     setSelectedAvailableIds(new Set());
     setSelectedAssignedIds(new Set());
@@ -171,15 +196,27 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
   }, [onClose]);
 
   const handleSave = useCallback(async () => {
-    if (disabled) return;
+    if (disabled || isSaving || loadState !== 'ready') return;
+    setIsSaving(true);
     try {
       await saveAssignedUserIds(assignedUserIds);
-      handleClose();
+      forceClose();
     } catch (err) {
       console.error('Failed to save assignments', err);
-      toastError(t('assignment.saveFailed'));
+      toastError(saveErrorMessage || t('assignment.saveFailed'));
+    } finally {
+      setIsSaving(false);
     }
-  }, [disabled, saveAssignedUserIds, assignedUserIds, handleClose, t]);
+  }, [
+    disabled,
+    isSaving,
+    loadState,
+    saveAssignedUserIds,
+    assignedUserIds,
+    forceClose,
+    saveErrorMessage,
+    t,
+  ]);
 
   const toggleAvailableSelection = useCallback((userId: string) => {
     setSelectedAvailableIds((prev) => {
@@ -307,12 +344,16 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
         <ModalContent size="2xl" className="max-h-[85vh]">
           <ModalHeader>
             <div>
-              <ModalTitle>{t('assignment.title')}</ModalTitle>
+              <ModalTitle>{title ?? t('assignment.title')}</ModalTitle>
               <ModalDescription>
-                {entityLabel}: <span className="font-bold text-praetor">{entityName}</span>
+                {description ?? (
+                  <>
+                    {entityLabel}: <span className="font-bold text-praetor">{entityName}</span>
+                  </>
+                )}
               </ModalDescription>
             </div>
-            <ModalCloseButton onClick={handleClose} />
+            <ModalCloseButton onClick={handleClose} disabled={isSaving} />
           </ModalHeader>
 
           <div className="p-4 border-b border-border bg-background">
@@ -432,11 +473,15 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
           </ModalBody>
 
           <ModalFooter>
-            <Button type="button" variant="outline" onClick={handleClose}>
+            <Button type="button" variant="outline" onClick={handleClose} disabled={isSaving}>
               {t('buttons.cancel')}
             </Button>
-            <Button type="button" onClick={handleSave} disabled={disabled || loadState !== 'ready'}>
-              {t('buttons.save')}
+            <Button
+              type="button"
+              onClick={handleSave}
+              disabled={disabled || isSaving || loadState !== 'ready'}
+            >
+              {isSaving ? t('buttons.saving') : (saveButtonLabel ?? t('buttons.save'))}
             </Button>
           </ModalFooter>
         </ModalContent>
