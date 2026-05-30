@@ -7,7 +7,6 @@ describe('RIL Excel export', () => {
     const rows = generateRilRows({
       year: 2026,
       month: 5,
-      defaultStartTime: '09:00',
       lunchBreakMinutes: 60,
       entries: [
         {
@@ -46,6 +45,7 @@ describe('RIL Excel export', () => {
     expect(worksheet?.getCell('B2').value).toBe('User Name');
     expect(worksheet?.getCell('A9').value).toBe(1);
     expect(worksheet?.getCell('G9').value).toBe('F');
+    expect(worksheet?.getCell('T9').value).toBe(0);
     expect(worksheet?.getCell('A12').value).toBe(4);
     expect(worksheet?.getCell('B12').value).toBe('09:00');
     expect(worksheet?.getCell('C12').value).toBe('18:00');

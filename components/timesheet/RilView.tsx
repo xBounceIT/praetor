@@ -32,6 +32,7 @@ import {
   getCurrentRilMonthKey,
   getRilLocationLabels,
   getRilMonthBounds,
+  isRequiredRilWorkday,
   type RilRow,
   roundRilPicapHours,
 } from '../../utils/ril';
@@ -141,11 +142,10 @@ const RilView: React.FC<RilViewProps> = ({
         month: monthBounds.month,
         entries,
         projects,
-        defaultStartTime,
         lunchBreakMinutes,
         locale,
       }),
-    [defaultStartTime, locale, lunchBreakMinutes, monthBounds.month, monthBounds.year, projects],
+    [locale, lunchBreakMinutes, monthBounds.month, monthBounds.year, projects],
   );
 
   const loadMonthEntries = useCallback(async () => {
@@ -222,7 +222,7 @@ const RilView: React.FC<RilViewProps> = ({
   );
 
   const handleExport = async () => {
-    const validRows = rows.filter((row) => row.date && row.isWorkday && !row.isHoliday);
+    const validRows = rows.filter(isRequiredRilWorkday);
     const missingTimeDays = validRows
       .filter((row) => !row.entrance.trim() || !row.exit.trim())
       .map((row) => String(row.day));

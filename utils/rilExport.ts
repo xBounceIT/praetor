@@ -4,6 +4,7 @@ import type { RilRow } from './ril';
 import {
   calculateRilTotals,
   createEmptyRilRow,
+  isRequiredRilWorkday,
   makeRilDownloadFilename,
   RIL_VISIBLE_HEADERS,
 } from './ril';
@@ -153,9 +154,10 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
   rows.forEach((rilRow, index) => {
     const rowNumber = FIRST_DAY_ROW + index;
     const worksheetRow = worksheet.getRow(rowNumber);
+    const isRequiredWorkday = isRequiredRilWorkday(rilRow);
     const extraHours = Math.max(rilRow.hoursDecimal - 8, 0);
     const shortfallHours =
-      rilRow.isWorkday && rilRow.hoursDecimal > 0 && rilRow.hoursDecimal < 8
+      isRequiredWorkday && rilRow.hoursDecimal > 0 && rilRow.hoursDecimal < 8
         ? 8 - rilRow.hoursDecimal
         : 0;
     const [extraWholeHours, extraMinutes] = splitDecimalHours(extraHours);
@@ -181,8 +183,8 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
       shortfallMinutes,
       workedWholeHours,
       workedMinutes,
-      rilRow.worked && rilRow.isWorkday ? 1 : 0,
-      rilRow.date && rilRow.isWorkday ? 1 : 0,
+      rilRow.worked && isRequiredWorkday ? 1 : 0,
+      isRequiredWorkday ? 1 : 0,
       NOTE_HELPER_PATTERNS.sick.test(rilRow.notes) ? 1 : 0,
       NOTE_HELPER_PATTERNS.permit.test(rilRow.notes) ? 1 : 0,
       NOTE_HELPER_PATTERNS.investment.test(rilRow.notes) ? 1 : 0,
