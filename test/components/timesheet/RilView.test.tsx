@@ -97,6 +97,7 @@ describe('<RilView />', () => {
     expect(screen.getByLabelText('ril.columns.picap 4')).toHaveTextContent('8');
     expect(screen.queryByText('ril.entriesLoaded')).toBeNull();
     expect(screen.getByLabelText('ril.summary.workedDays')).toHaveTextContent('20');
+    expect(screen.getByLabelText('ril.summary.lunchWindow')).toHaveTextContent('13:00-14:00');
     expect(screen.getByLabelText('ril.summary.extraHours')).toHaveTextContent('0.0');
     expect(screen.getByLabelText('ril.summary.totalHours')).toHaveTextContent('160.0');
     expect(screen.getByLabelText('ril.summary.totalPicap')).toHaveTextContent('160.00');

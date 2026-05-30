@@ -36,6 +36,7 @@
     "summary": {
       "title": "RIL summary",
       "workedDays": "Worked Days",
+      "lunchWindow": "Lunch Window",
       "extraHours": "Extra Hours",
       "totalHours": "Total Hours",
       "totalPicap": "Total PICAP"

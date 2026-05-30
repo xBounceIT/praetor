@@ -36,6 +36,7 @@
     "summary": {
       "title": "Riepilogo RIL",
       "workedDays": "Giorni Lavorati",
+      "lunchWindow": "Pausa Pranzo",
       "extraHours": "Ore Extra",
       "totalHours": "Totale Ore",
       "totalPicap": "Totale PICAP"

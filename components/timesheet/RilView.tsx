@@ -27,6 +27,7 @@ import {
   calculateRilTotals,
   calculateRilWorkedHoursFromTimes,
   formatRilHoursAsDuration,
+  formatRilLunchWindow,
   generateRilRows,
   getCurrentRilMonthKey,
   getRilLocationLabels,
@@ -331,6 +332,7 @@ const RilView: React.FC<RilViewProps> = ({
   const extraHours = Math.max(0, totals.totalHours - totals.workedDays * 8);
   const summaryRows = [
     { label: t('ril.summary.workedDays'), value: String(totals.workedDays) },
+    { label: t('ril.summary.lunchWindow'), value: formatRilLunchWindow(lunchBreakMinutes) },
     { label: t('ril.summary.extraHours'), value: formatOneDecimal.format(extraHours) },
     { label: t('ril.summary.totalHours'), value: formatOneDecimal.format(totals.totalHours) },
     { label: t('ril.summary.totalPicap'), value: formatTwoDecimals.format(totals.totalPicap) },

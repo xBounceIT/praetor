@@ -3,6 +3,7 @@ import type { Project, TimeEntry } from '../../types';
 import {
   calculateRilTotals,
   calculateRilWorkedHoursFromTimes,
+  formatRilLunchWindow,
   generateRilRows,
   getRilMonthBounds,
   makeRilDownloadFilename,
@@ -125,6 +126,7 @@ describe('RIL helpers', () => {
     expect(calculateRilWorkedHoursFromTimes('09:00', '13:30', 60)).toBe(4);
     expect(calculateRilWorkedHoursFromTimes('09:00', '13:00', 60)).toBe(4);
     expect(calculateRilWorkedHoursFromTimes('14:00', '18:00', 60)).toBe(4);
+    expect(formatRilLunchWindow(90)).toBe('13:00-14:30');
   });
 
   test('defaults Commessa to unique order IDs with project-name fallback', () => {

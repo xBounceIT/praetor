@@ -76,7 +76,7 @@ const WEEKDAY_FORMATTER = new Intl.DateTimeFormat('it-IT', { weekday: 'short' })
 const RIL_FIXED_ENTRANCE = '09:00';
 const RIL_FIXED_EXIT = '18:00';
 const DEFAULT_LUNCH_BREAK_MINUTES = 60;
-const RIL_LUNCH_BREAK_START_MINUTES = 13 * 60;
+export const RIL_LUNCH_BREAK_START_MINUTES = 13 * 60;
 
 export const isValidRilStartTime = (value: string | undefined | null): value is string =>
   typeof value === 'string' && TIME_OF_DAY_PATTERN.test(value);
@@ -154,6 +154,13 @@ export const formatRilMinutesAsClock = (minutes: number): string => {
   const hours = Math.floor(safeMinutes / 60);
   const mins = safeMinutes % 60;
   return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+};
+
+export const formatRilLunchWindow = (lunchBreakMinutes = DEFAULT_LUNCH_BREAK_MINUTES): string => {
+  const lunchMinutes = normalizeLunchBreakMinutes(lunchBreakMinutes);
+  return `${formatRilMinutesAsClock(RIL_LUNCH_BREAK_START_MINUTES)}-${formatRilMinutesAsClock(
+    RIL_LUNCH_BREAK_START_MINUTES + lunchMinutes,
+  )}`;
 };
 
 export const formatRilHoursAsDuration = (hours: number): string => {
