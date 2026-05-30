@@ -59,8 +59,30 @@ import SelectControl from '../shared/SelectControl';
 import StatusBadge from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
 import UserAssignmentModal from '../shared/UserAssignmentModal';
+import DashboardControls from './DashboardControls';
+import DashboardWidgetFrame from './DashboardWidgetFrame';
+import type { DashboardWidgetDef, DashboardWidgetSpan } from './dashboardLayout';
 import ProjectTasksTable from './ProjectTasksTable';
 import type { RecurringConfig } from './TaskFormModal';
+import { useDashboardLayout } from './useDashboardLayout';
+
+// Stable id for the GLOBAL tier of the project-analytics dashboard: the shared
+// default layout + the named-view library, applied to every project that has no
+// override of its own. Per-project overrides layer on top, keyed by project.id.
+const DASHBOARD_ID = 'project-analytics';
+
+// Canonical widget set + default layout for the analytics section. Order here
+// is the default / reset render order; `defaultSpan` 2 = full width, 1 = half.
+// IMPORTANT: each entry must have a matching widget frame in the charts grid
+// below (and vice-versa). Adding an id here without a frame would reserve an
+// invisible slot (inflating move-bounds / count); adding a frame without an id
+// here renders it unmanaged. Keep the two in lockstep.
+const DASHBOARD_WIDGETS: readonly DashboardWidgetDef[] = [
+  { id: 'hoursByUser', defaultSpan: 2 },
+  { id: 'hoursByTask', defaultSpan: 1 },
+  { id: 'costVsRevenue', defaultSpan: 1 },
+  { id: 'monthlyActivity', defaultSpan: 2 },
+];
 
 const isValidHex = (v: string) => /^#[0-9a-fA-F]{6}$/.test(v);
 
@@ -240,6 +262,12 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const [taskToDelete, setTaskToDelete] = useState<ProjectTask | null>(null);
   const [isTaskDeleteConfirmOpen, setIsTaskDeleteConfirmOpen] = useState(false);
   const [isAssignmentsOpen, setIsAssignmentsOpen] = useState(false);
+
+  // Dashboard layout: order / visibility / span of the analytics visualizations,
+  // plus saved named views. Two-tier + localStorage: a shared global default and
+  // view library (keyed by DASHBOARD_ID) with an optional per-project override
+  // (keyed by project.id).
+  const dashboard = useDashboardLayout(DASHBOARD_ID, project.id, DASHBOARD_WIDGETS);
 
   useEffect(() => {
     // Short-circuit when the caller lacks the tracker view permission — the route
@@ -823,6 +851,26 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     (u) => !u.hasTopManagerRole && !u.isAdminOnly && !u.isDisabled,
   );
 
+  // Props shared by every DashboardWidgetFrame — resolves a widget's current
+  // slot (order / visibility / span) from the dashboard layout and wires its
+  // edit-mode controls back to the layout hook. `index`/`state` are guaranteed:
+  // normalizeLayout keeps dashboard.layout in exact sync with DASHBOARD_WIDGETS,
+  // so every id passed here resolves to a slot (a missing id surfaces loudly
+  // rather than silently misrendering at slot 0).
+  const widgetFrameProps = (id: string, title: string) => {
+    const index = dashboard.layout.findIndex((w) => w.id === id);
+    return {
+      title,
+      state: dashboard.layout[index],
+      editing: dashboard.editing,
+      index,
+      count: dashboard.layout.length,
+      onMove: (delta: number) => dashboard.moveWidgetBy(id, delta),
+      onToggleHidden: () => dashboard.toggleHidden(id),
+      onSetSpan: (span: DashboardWidgetSpan) => dashboard.setSpan(id, span),
+    };
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Header */}
@@ -1281,89 +1329,96 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             {t('projects:detail.analyticsDescription')}
           </p>
         </div>
-        {!entriesLoading && entriesError === 'forbidden' && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              {/* <button> is keyboard-focusable by default — Radix Tooltip
+        {/* Right side of the header: scope/error chips plus the dashboard
+            Edit / Views controls (resize, hide, reorder, save layouts). */}
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          {!entriesLoading && entriesError === 'forbidden' && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {/* <button> is keyboard-focusable by default — Radix Tooltip
                   opens on focus, so keyboard / SR users get the full
                   description (aria-label) and the tooltip content without
                   needing mouse hover. Biome rejects tabIndex on a plain
                   <div>, and a button is more semantically correct anyway. */}
-              <button
-                type="button"
-                aria-label={t('projects:detail.notices.forbiddenDescription')}
-                className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-amber-300/50 bg-amber-50 px-2.5 py-1.5 text-left text-xs text-amber-800 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200 sm:max-w-xs"
-              >
-                <i className="fa-solid fa-lock shrink-0" aria-hidden="true"></i>
-                <span className="truncate font-medium">
-                  {t('projects:detail.notices.forbiddenTitle')}
-                </span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>{t('projects:detail.notices.forbiddenDescription')}</TooltipContent>
-          </Tooltip>
-        )}
-        {!entriesLoading && entriesError === 'failed' && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label={t('projects:detail.notices.loadFailedDescription')}
-                className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-left text-xs text-destructive outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:max-w-xs"
-              >
-                <i className="fa-solid fa-triangle-exclamation shrink-0" aria-hidden="true"></i>
-                <span className="truncate font-medium">
-                  {t('projects:detail.notices.loadFailedTitle')}
-                </span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>{t('projects:detail.notices.loadFailedDescription')}</TooltipContent>
-          </Tooltip>
-        )}
-        {!entriesLoading && entriesError === null && (entriesTruncated || isPartialEntryScope) && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              {/* When both notices apply, show both messages joined in the
+                <button
+                  type="button"
+                  aria-label={t('projects:detail.notices.forbiddenDescription')}
+                  className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-amber-300/50 bg-amber-50 px-2.5 py-1.5 text-left text-xs text-amber-800 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200 sm:max-w-xs"
+                >
+                  <i className="fa-solid fa-lock shrink-0" aria-hidden="true"></i>
+                  <span className="truncate font-medium">
+                    {t('projects:detail.notices.forbiddenTitle')}
+                  </span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{t('projects:detail.notices.forbiddenDescription')}</TooltipContent>
+            </Tooltip>
+          )}
+          {!entriesLoading && entriesError === 'failed' && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={t('projects:detail.notices.loadFailedDescription')}
+                  className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-left text-xs text-destructive outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:max-w-xs"
+                >
+                  <i className="fa-solid fa-triangle-exclamation shrink-0" aria-hidden="true"></i>
+                  <span className="truncate font-medium">
+                    {t('projects:detail.notices.loadFailedTitle')}
+                  </span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{t('projects:detail.notices.loadFailedDescription')}</TooltipContent>
+            </Tooltip>
+          )}
+          {!entriesLoading &&
+            entriesError === null &&
+            (entriesTruncated || isPartialEntryScope) && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* When both notices apply, show both messages joined in the
                   visible chip text so users without hover affordance still see
                   every active warning; the tooltip mirrors them for SR/keyboard
                   parity. */}
-              <button
-                type="button"
-                aria-label={[
-                  entriesTruncated
-                    ? t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })
-                    : null,
-                  isPartialEntryScope ? t('projects:detail.notices.partialScope') : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-                className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-left text-xs text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:max-w-md"
-              >
-                <i className="fa-solid fa-circle-info shrink-0" aria-hidden="true"></i>
-                <span className="truncate">
-                  {[
-                    entriesTruncated
-                      ? t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })
-                      : null,
-                    isPartialEntryScope ? t('projects:detail.notices.partialScope') : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <div className="space-y-1 text-xs">
-                {entriesTruncated && (
-                  <div>
-                    {t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })}
+                  <button
+                    type="button"
+                    aria-label={[
+                      entriesTruncated
+                        ? t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })
+                        : null,
+                      isPartialEntryScope ? t('projects:detail.notices.partialScope') : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                    className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-left text-xs text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:max-w-md"
+                  >
+                    <i className="fa-solid fa-circle-info shrink-0" aria-hidden="true"></i>
+                    <span className="truncate">
+                      {[
+                        entriesTruncated
+                          ? t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })
+                          : null,
+                        isPartialEntryScope ? t('projects:detail.notices.partialScope') : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="space-y-1 text-xs">
+                    {entriesTruncated && (
+                      <div>
+                        {t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })}
+                      </div>
+                    )}
+                    {isPartialEntryScope && <div>{t('projects:detail.notices.partialScope')}</div>}
                   </div>
-                )}
-                {isPartialEntryScope && <div>{t('projects:detail.notices.partialScope')}</div>}
-              </div>
-            </TooltipContent>
-          </Tooltip>
-        )}
+                </TooltipContent>
+              </Tooltip>
+            )}
+          <DashboardControls controls={dashboard} />
+        </div>
       </div>
 
       {/* KPI cards + project timeline split the row 50/50 on large screens.
@@ -1584,438 +1639,460 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
 
       {/* Charts row. The two "wide" charts — the per-user grouped histogram
           (many user × task bars) and the monthly timeline — span the full width
-          so they have room to scale; the two compact charts share a row. */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>{t('projects:detail.charts.hoursByUser')}</CardTitle>
-            <CardDescription>{t('projects:detail.charts.hoursByUserDesc')}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {entriesLoading ? (
-              <Skeleton className="h-[260px] w-full xl:h-[320px]" />
-            ) : entriesError !== null ? (
-              <ChartLocked variant={entriesError} />
-            ) : hoursByUserTask.rows.length === 0 || hoursByUserTask.series.length === 0 ? (
-              // No users to show, or nobody logged any hours yet (no task series
-              // to plot) — show the explicit empty state rather than a bare axis.
-              <ChartEmpty />
-            ) : (
-              /* Grouped histogram: one X-axis group per user, one bar per task
+          so they have room to scale; the two compact charts share a row.
+          `grid-flow-row-dense`: once users reorder / resize / hide widgets, a
+          half-width tile followed by a full-width one (or a hidden middle tile)
+          would otherwise leave an empty half-cell — dense packing backfills it. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-flow-row-dense lg:grid-cols-2">
+        <DashboardWidgetFrame
+          {...widgetFrameProps('hoursByUser', t('projects:detail.charts.hoursByUser'))}
+        >
+          <Card className="h-full">
+            <CardHeader>
+              <CardTitle>{t('projects:detail.charts.hoursByUser')}</CardTitle>
+              <CardDescription>{t('projects:detail.charts.hoursByUserDesc')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {entriesLoading ? (
+                <Skeleton className="h-[260px] w-full xl:h-[320px]" />
+              ) : entriesError !== null ? (
+                <ChartLocked variant={entriesError} />
+              ) : hoursByUserTask.rows.length === 0 || hoursByUserTask.series.length === 0 ? (
+                // No users to show, or nobody logged any hours yet (no task series
+                // to plot) — show the explicit empty state rather than a bare axis.
+                <ChartEmpty />
+              ) : (
+                /* Grouped histogram: one X-axis group per user, one bar per task
                  within each group (users × tasks bars). Tasks are the colored
                  series via the shared legend. */
-              <ChartContainer
-                config={userTaskChartConfig}
-                className="h-[280px] w-full xl:h-[340px]"
-              >
-                <BarChart
-                  data={hoursByUserTask.rows}
-                  margin={{ left: 8, right: 8, top: 16, bottom: 8 }}
+                <ChartContainer
+                  config={userTaskChartConfig}
+                  className="h-[280px] w-full xl:h-[340px]"
                 >
-                  <CartesianGrid vertical={false} />
-                  <XAxis
-                    dataKey="userName"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={8}
-                    interval={0}
-                    // Truncate long names so up to TOP_USER_GROUPS groups stay
-                    // legible on the axis; the full name shows in the tooltip.
-                    tickFormatter={(v: string) => (v.length > 16 ? `${v.slice(0, 15)}…` : v)}
-                  />
-                  <YAxis tickLine={false} axisLine={false} width={36} />
-                  <ChartTooltip
-                    isAnimationActive={false}
-                    // Custom content lists only the tasks this user actually
-                    // logged on (the default would pad every hovered user with a
-                    // row per task, mostly zeros) plus their total.
-                    content={
-                      <UserTaskTooltip
-                        series={hoursByUserTask.series}
-                        language={i18n.language}
-                        t={t}
-                      />
-                    }
-                    cursor={false}
-                    position={{ y: 0 }}
-                  />
-                  <ChartLegend content={<ChartLegendContent />} />
-                  {hoursByUserTask.series.map((s) => (
-                    <Bar
-                      key={s.seriesKey}
-                      dataKey={s.seriesKey}
-                      fill={`var(--color-${s.seriesKey})`}
-                      radius={[4, 4, 0, 0]}
+                  <BarChart
+                    data={hoursByUserTask.rows}
+                    margin={{ left: 8, right: 8, top: 16, bottom: 8 }}
+                  >
+                    <CartesianGrid vertical={false} />
+                    <XAxis
+                      dataKey="userName"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={8}
+                      interval={0}
+                      // Truncate long names so up to TOP_USER_GROUPS groups stay
+                      // legible on the axis; the full name shows in the tooltip.
+                      tickFormatter={(v: string) => (v.length > 16 ? `${v.slice(0, 15)}…` : v)}
                     />
-                  ))}
-                </BarChart>
-              </ChartContainer>
-            )}
-          </CardContent>
-        </Card>
+                    <YAxis tickLine={false} axisLine={false} width={36} />
+                    <ChartTooltip
+                      isAnimationActive={false}
+                      // Custom content lists only the tasks this user actually
+                      // logged on (the default would pad every hovered user with a
+                      // row per task, mostly zeros) plus their total.
+                      content={
+                        <UserTaskTooltip
+                          series={hoursByUserTask.series}
+                          language={i18n.language}
+                          t={t}
+                        />
+                      }
+                      cursor={false}
+                      position={{ y: 0 }}
+                    />
+                    <ChartLegend content={<ChartLegendContent />} />
+                    {hoursByUserTask.series.map((s) => (
+                      <Bar
+                        key={s.seriesKey}
+                        dataKey={s.seriesKey}
+                        fill={`var(--color-${s.seriesKey})`}
+                        radius={[4, 4, 0, 0]}
+                      />
+                    ))}
+                  </BarChart>
+                </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
+        </DashboardWidgetFrame>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('projects:detail.charts.hoursByTask')}</CardTitle>
-            <CardDescription>{t('projects:detail.charts.hoursByTaskDesc')}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {entriesLoading ? (
-              <Skeleton className="h-[260px] w-full xl:h-[320px]" />
-            ) : entriesError !== null ? (
-              <ChartLocked variant={entriesError} />
-            ) : hoursByTask.length === 0 ? (
-              // Only empty when there are neither project tasks nor entries — tasks
-              // with no hours yet are still meaningful (planned/not-yet-worked-on)
-              // and render as 0-height bars below.
-              <ChartEmpty />
-            ) : (
-              <ChartContainer config={taskChartConfig} className="h-[260px] w-full xl:h-[320px]">
-                <BarChart data={hoursByTask} margin={{ left: 8, right: 8, top: 24, bottom: 8 }}>
-                  <CartesianGrid vertical={false} />
-                  <XAxis
-                    dataKey="task"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={8}
-                    interval={0}
-                  />
-                  <YAxis tickLine={false} axisLine={false} width={36} />
-                  <ChartTooltip
-                    isAnimationActive={false}
-                    // Custom content reads the whole row so it can show logged vs
-                    // total available effort (and overrun) in one place, instead
-                    // of three raw stacked-series numbers.
-                    content={<TaskEffortTooltip language={i18n.language} t={t} />}
-                    cursor={false}
-                    position={{ y: 0 }}
-                  />
-                  <ChartLegend content={<ChartLegendContent />} />
-                  {/* Single utilization bar per task: logged (solid) + remaining
+        <DashboardWidgetFrame
+          {...widgetFrameProps('hoursByTask', t('projects:detail.charts.hoursByTask'))}
+        >
+          <Card className="h-full">
+            <CardHeader>
+              <CardTitle>{t('projects:detail.charts.hoursByTask')}</CardTitle>
+              <CardDescription>{t('projects:detail.charts.hoursByTaskDesc')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {entriesLoading ? (
+                <Skeleton className="h-[260px] w-full xl:h-[320px]" />
+              ) : entriesError !== null ? (
+                <ChartLocked variant={entriesError} />
+              ) : hoursByTask.length === 0 ? (
+                // Only empty when there are neither project tasks nor entries — tasks
+                // with no hours yet are still meaningful (planned/not-yet-worked-on)
+                // and render as 0-height bars below.
+                <ChartEmpty />
+              ) : (
+                <ChartContainer config={taskChartConfig} className="h-[260px] w-full xl:h-[320px]">
+                  <BarChart data={hoursByTask} margin={{ left: 8, right: 8, top: 24, bottom: 8 }}>
+                    <CartesianGrid vertical={false} />
+                    <XAxis
+                      dataKey="task"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={8}
+                      interval={0}
+                    />
+                    <YAxis tickLine={false} axisLine={false} width={36} />
+                    <ChartTooltip
+                      isAnimationActive={false}
+                      // Custom content reads the whole row so it can show logged vs
+                      // total available effort (and overrun) in one place, instead
+                      // of three raw stacked-series numbers.
+                      content={<TaskEffortTooltip language={i18n.language} t={t} />}
+                      cursor={false}
+                      position={{ y: 0 }}
+                    />
+                    <ChartLegend content={<ChartLegendContent />} />
+                    {/* Single utilization bar per task: logged (solid) + remaining
                       available effort (faint) = total effort, with overrun on top.
                       Same stackId so the three segments share one column. */}
-                  <Bar dataKey="logged" stackId="effort" fill="var(--color-logged)" />
-                  <Bar
-                    dataKey="remaining"
-                    stackId="effort"
-                    fill="var(--color-remaining)"
-                    fillOpacity={0.3}
-                    radius={[4, 4, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="over"
-                    stackId="effort"
-                    fill="var(--color-over)"
-                    radius={[4, 4, 0, 0]}
-                  >
-                    {/* Actual logged hours labelled at the top of the stack. Attached
+                    <Bar dataKey="logged" stackId="effort" fill="var(--color-logged)" />
+                    <Bar
+                      dataKey="remaining"
+                      stackId="effort"
+                      fill="var(--color-remaining)"
+                      fillOpacity={0.3}
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="over"
+                      stackId="effort"
+                      fill="var(--color-over)"
+                      radius={[4, 4, 0, 0]}
+                    >
+                      {/* Actual logged hours labelled at the top of the stack. Attached
                         to the topmost segment (`over`) so its position tracks the
                         stack top whether or not the task is over budget; the value
                         shown is the row's actual hours (logged + over), read by index. */}
-                    <LabelList
-                      dataKey="over"
-                      position="top"
-                      content={(props) => {
-                        const { x, y, width, index } = props as {
-                          x?: number;
-                          y?: number;
-                          width?: number;
-                          index?: number;
-                        };
-                        if (
-                          typeof x !== 'number' ||
-                          typeof y !== 'number' ||
-                          typeof width !== 'number' ||
-                          typeof index !== 'number'
-                        ) {
-                          return null;
-                        }
-                        const row = hoursByTask[index];
-                        if (!row || row.hours <= 0) return null;
-                        return (
-                          <text
-                            x={x + width / 2}
-                            y={y - 6}
-                            textAnchor="middle"
-                            className="fill-foreground text-xs"
-                          >
-                            {row.hours.toLocaleString(i18n.language, { maximumFractionDigits: 1 })}
-                          </text>
-                        );
-                      }}
-                    />
-                  </Bar>
-                </BarChart>
-              </ChartContainer>
-            )}
-          </CardContent>
-        </Card>
+                      <LabelList
+                        dataKey="over"
+                        position="top"
+                        content={(props) => {
+                          const { x, y, width, index } = props as {
+                            x?: number;
+                            y?: number;
+                            width?: number;
+                            index?: number;
+                          };
+                          if (
+                            typeof x !== 'number' ||
+                            typeof y !== 'number' ||
+                            typeof width !== 'number' ||
+                            typeof index !== 'number'
+                          ) {
+                            return null;
+                          }
+                          const row = hoursByTask[index];
+                          if (!row || row.hours <= 0) return null;
+                          return (
+                            <text
+                              x={x + width / 2}
+                              y={y - 6}
+                              textAnchor="middle"
+                              className="fill-foreground text-xs"
+                            >
+                              {row.hours.toLocaleString(i18n.language, {
+                                maximumFractionDigits: 1,
+                              })}
+                            </text>
+                          );
+                        }}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
+        </DashboardWidgetFrame>
 
-        {(() => {
-          // Always render the card so users see the chart exists on the page
-          // — even if the project has no entries and no revenue yet. The
-          // empty-state below handles the "nothing to draw" case so the card
-          // doesn't silently vanish from the layout.
-          const hasEntryTimeline =
-            costOverTime.length > 0 && costOverTime.some((r) => r.cumulativeCost > 0);
-          const canShowCostArea = canViewCost && hasEntryTimeline;
-          const canShowRevenueLine = displayedRevenue > 0;
-          // Synthesise two X-axis anchors from the project window when there's
-          // no entry-driven cost data, so the revenue reference line still has
-          // something to draw against. Only worth doing when we actually have
-          // a revenue line to render — otherwise the fallback is just empty
-          // axes.
-          const fallbackTimeline =
-            canShowRevenueLine && project.startDate && project.endDate
-              ? [
-                  {
-                    month: project.startDate.slice(0, 7),
-                    label: formatMonthBucket(project.startDate, i18n.language),
-                    monthlyCost: 0,
-                    cumulativeCost: 0,
-                  },
-                  {
-                    month: project.endDate.slice(0, 7),
-                    label: formatMonthBucket(project.endDate, i18n.language),
-                    monthlyCost: 0,
-                    cumulativeCost: 0,
-                  },
-                ]
-              : [];
-          const chartData = hasEntryTimeline ? costOverTime : fallbackTimeline;
-          // Chart is meaningless when there's nothing to render — no permitted
-          // cost area AND no revenue reference line (or no X-axis to anchor the
-          // line). In that case fall back to ChartEmpty.
-          const hasChartContent = canShowCostArea || (canShowRevenueLine && chartData.length > 0);
-          return (
-            <Card>
-              <CardHeader>
-                <CardTitle>{t('projects:detail.charts.costVsRevenue')}</CardTitle>
-                <CardDescription>{t('projects:detail.charts.costVsRevenueDesc')}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {entriesLoading ? (
-                  <Skeleton className="h-[260px] w-full xl:h-[320px]" />
-                ) : entriesError !== null ? (
-                  <ChartLocked variant={entriesError} />
-                ) : !hasChartContent ? (
-                  // Without cost permission the server strips cost to 0, so the
-                  // cost area is always suppressed. When there's no revenue line
-                  // either, the chart is empty *for this user* even though
-                  // entries may exist — the Total Hours KPI above can show real
-                  // hours. Saying "no hours logged yet" here contradicts that, so
-                  // explain the cost-permission gap instead.
-                  !canViewCost ? (
-                    <ChartLocked variant="cost-hidden" />
+        <DashboardWidgetFrame
+          {...widgetFrameProps('costVsRevenue', t('projects:detail.charts.costVsRevenue'))}
+        >
+          {(() => {
+            // Always render the card so users see the chart exists on the page
+            // — even if the project has no entries and no revenue yet. The
+            // empty-state below handles the "nothing to draw" case so the card
+            // doesn't silently vanish from the layout.
+            const hasEntryTimeline =
+              costOverTime.length > 0 && costOverTime.some((r) => r.cumulativeCost > 0);
+            const canShowCostArea = canViewCost && hasEntryTimeline;
+            const canShowRevenueLine = displayedRevenue > 0;
+            // Synthesise two X-axis anchors from the project window when there's
+            // no entry-driven cost data, so the revenue reference line still has
+            // something to draw against. Only worth doing when we actually have
+            // a revenue line to render — otherwise the fallback is just empty
+            // axes.
+            const fallbackTimeline =
+              canShowRevenueLine && project.startDate && project.endDate
+                ? [
+                    {
+                      month: project.startDate.slice(0, 7),
+                      label: formatMonthBucket(project.startDate, i18n.language),
+                      monthlyCost: 0,
+                      cumulativeCost: 0,
+                    },
+                    {
+                      month: project.endDate.slice(0, 7),
+                      label: formatMonthBucket(project.endDate, i18n.language),
+                      monthlyCost: 0,
+                      cumulativeCost: 0,
+                    },
+                  ]
+                : [];
+            const chartData = hasEntryTimeline ? costOverTime : fallbackTimeline;
+            // Chart is meaningless when there's nothing to render — no permitted
+            // cost area AND no revenue reference line (or no X-axis to anchor the
+            // line). In that case fall back to ChartEmpty.
+            const hasChartContent = canShowCostArea || (canShowRevenueLine && chartData.length > 0);
+            return (
+              <Card className="h-full">
+                <CardHeader>
+                  <CardTitle>{t('projects:detail.charts.costVsRevenue')}</CardTitle>
+                  <CardDescription>{t('projects:detail.charts.costVsRevenueDesc')}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {entriesLoading ? (
+                    <Skeleton className="h-[260px] w-full xl:h-[320px]" />
+                  ) : entriesError !== null ? (
+                    <ChartLocked variant={entriesError} />
+                  ) : !hasChartContent ? (
+                    // Without cost permission the server strips cost to 0, so the
+                    // cost area is always suppressed. When there's no revenue line
+                    // either, the chart is empty *for this user* even though
+                    // entries may exist — the Total Hours KPI above can show real
+                    // hours. Saying "no hours logged yet" here contradicts that, so
+                    // explain the cost-permission gap instead.
+                    !canViewCost ? (
+                      <ChartLocked variant="cost-hidden" />
+                    ) : (
+                      <ChartEmpty />
+                    )
                   ) : (
-                    <ChartEmpty />
-                  )
-                ) : (
-                  <ChartContainer
-                    config={budgetChartConfig}
-                    className="max-h-[260px] w-full xl:max-h-[320px]"
-                  >
-                    <AreaChart
-                      data={chartData}
-                      margin={{ left: 12, right: 12, top: 16, bottom: 8 }}
+                    <ChartContainer
+                      config={budgetChartConfig}
+                      className="max-h-[260px] w-full xl:max-h-[320px]"
                     >
-                      <CartesianGrid vertical={false} />
-                      <XAxis
-                        dataKey="label"
-                        tickLine={false}
-                        axisLine={false}
-                        tickMargin={8}
-                        minTickGap={32}
-                      />
-                      <YAxis
-                        tickLine={false}
-                        axisLine={false}
-                        width={48}
-                        // Extend the domain to include the revenue reference line
-                        // (+8% headroom, rounded up to a clean 100). Without this the
-                        // axis auto-scales to the cost data alone, so a revenue line
-                        // above the highest cost point falls outside the domain and
-                        // Recharts silently discards it.
-                        domain={[
-                          0,
-                          (dataMax: number) =>
-                            Math.ceil(
-                              (Math.max(dataMax, canShowRevenueLine ? displayedRevenue : 0) *
-                                1.08) /
-                                100,
-                            ) * 100,
-                        ]}
-                        tickFormatter={(v: number) =>
-                          v.toLocaleString(i18n.language, { maximumFractionDigits: 0 })
-                        }
-                      />
-                      <ChartTooltip
-                        isAnimationActive={false}
-                        content={
-                          <ChartTooltipContent
-                            indicator="line"
-                            // Default content renders a bare `value.toLocaleString()`
-                            // with no currency and crams it against the label in a
-                            // narrow tooltip. Format with the project currency and
-                            // proper spacing.
-                            formatter={(value, name, item) => (
-                              <div className="flex flex-1 items-center justify-between gap-4 leading-none">
-                                <div className="flex items-center gap-1.5">
-                                  <span
-                                    className="h-2.5 w-1 shrink-0 rounded-[2px]"
-                                    style={{
-                                      backgroundColor: item?.color ?? 'var(--color-cumulativeCost)',
-                                    }}
-                                    aria-hidden="true"
-                                  />
-                                  <span className="text-muted-foreground">
-                                    {budgetChartConfig[name as keyof typeof budgetChartConfig]
-                                      ?.label ?? name}
+                      <AreaChart
+                        data={chartData}
+                        margin={{ left: 12, right: 12, top: 16, bottom: 8 }}
+                      >
+                        <CartesianGrid vertical={false} />
+                        <XAxis
+                          dataKey="label"
+                          tickLine={false}
+                          axisLine={false}
+                          tickMargin={8}
+                          minTickGap={32}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          width={48}
+                          // Extend the domain to include the revenue reference line
+                          // (+8% headroom, rounded up to a clean 100). Without this the
+                          // axis auto-scales to the cost data alone, so a revenue line
+                          // above the highest cost point falls outside the domain and
+                          // Recharts silently discards it.
+                          domain={[
+                            0,
+                            (dataMax: number) =>
+                              Math.ceil(
+                                (Math.max(dataMax, canShowRevenueLine ? displayedRevenue : 0) *
+                                  1.08) /
+                                  100,
+                              ) * 100,
+                          ]}
+                          tickFormatter={(v: number) =>
+                            v.toLocaleString(i18n.language, { maximumFractionDigits: 0 })
+                          }
+                        />
+                        <ChartTooltip
+                          isAnimationActive={false}
+                          content={
+                            <ChartTooltipContent
+                              indicator="line"
+                              // Default content renders a bare `value.toLocaleString()`
+                              // with no currency and crams it against the label in a
+                              // narrow tooltip. Format with the project currency and
+                              // proper spacing.
+                              formatter={(value, name, item) => (
+                                <div className="flex flex-1 items-center justify-between gap-4 leading-none">
+                                  <div className="flex items-center gap-1.5">
+                                    <span
+                                      className="h-2.5 w-1 shrink-0 rounded-[2px]"
+                                      style={{
+                                        backgroundColor:
+                                          item?.color ?? 'var(--color-cumulativeCost)',
+                                      }}
+                                      aria-hidden="true"
+                                    />
+                                    <span className="text-muted-foreground">
+                                      {budgetChartConfig[name as keyof typeof budgetChartConfig]
+                                        ?.label ?? name}
+                                    </span>
+                                  </div>
+                                  <span className="font-mono font-medium tabular-nums text-foreground">
+                                    {typeof value === 'number'
+                                      ? `${value.toLocaleString(i18n.language, { maximumFractionDigits: 0 })} ${currency}`
+                                      : String(value)}
                                   </span>
                                 </div>
-                                <span className="font-mono font-medium tabular-nums text-foreground">
-                                  {typeof value === 'number'
-                                    ? `${value.toLocaleString(i18n.language, { maximumFractionDigits: 0 })} ${currency}`
-                                    : String(value)}
-                                </span>
-                              </div>
-                            )}
-                          />
-                        }
-                        cursor={false}
-                        position={{ y: 0 }}
-                      />
-                      <defs>
-                        <linearGradient id="fillCumulativeCost" x1="0" y1="0" x2="0" y2="1">
-                          <stop
-                            offset="5%"
-                            stopColor="var(--color-cumulativeCost)"
-                            stopOpacity={0.4}
-                          />
-                          <stop
-                            offset="95%"
-                            stopColor="var(--color-cumulativeCost)"
-                            stopOpacity={0.05}
-                          />
-                        </linearGradient>
-                      </defs>
-                      {canShowCostArea && (
-                        <Area
-                          type="monotone"
-                          dataKey="cumulativeCost"
-                          stroke="var(--color-cumulativeCost)"
-                          fill="url(#fillCumulativeCost)"
-                          strokeWidth={2}
+                              )}
+                            />
+                          }
+                          cursor={false}
+                          position={{ y: 0 }}
                         />
-                      )}
-                      {canShowRevenueLine && (
-                        <ReferenceLine
-                          y={displayedRevenue}
-                          stroke="var(--color-revenue)"
-                          strokeDasharray="4 4"
-                          strokeWidth={1.5}
-                          label={{
-                            value: `${t('projects:detail.charts.revenueLabel')} · ${displayedRevenue.toLocaleString(i18n.language, { maximumFractionDigits: 0 })} ${currency}`,
-                            position: 'insideTopRight',
-                            fill: 'var(--color-revenue)',
-                            fontSize: 11,
-                            fontWeight: 500,
-                          }}
-                        />
-                      )}
-                    </AreaChart>
-                  </ChartContainer>
-                )}
-                {/* Only show the note below the chart when the chart is actually
+                        <defs>
+                          <linearGradient id="fillCumulativeCost" x1="0" y1="0" x2="0" y2="1">
+                            <stop
+                              offset="5%"
+                              stopColor="var(--color-cumulativeCost)"
+                              stopOpacity={0.4}
+                            />
+                            <stop
+                              offset="95%"
+                              stopColor="var(--color-cumulativeCost)"
+                              stopOpacity={0.05}
+                            />
+                          </linearGradient>
+                        </defs>
+                        {canShowCostArea && (
+                          <Area
+                            type="monotone"
+                            dataKey="cumulativeCost"
+                            stroke="var(--color-cumulativeCost)"
+                            fill="url(#fillCumulativeCost)"
+                            strokeWidth={2}
+                          />
+                        )}
+                        {canShowRevenueLine && (
+                          <ReferenceLine
+                            y={displayedRevenue}
+                            stroke="var(--color-revenue)"
+                            strokeDasharray="4 4"
+                            strokeWidth={1.5}
+                            label={{
+                              value: `${t('projects:detail.charts.revenueLabel')} · ${displayedRevenue.toLocaleString(i18n.language, { maximumFractionDigits: 0 })} ${currency}`,
+                              position: 'insideTopRight',
+                              fill: 'var(--color-revenue)',
+                              fontSize: 11,
+                              fontWeight: 500,
+                            }}
+                          />
+                        )}
+                      </AreaChart>
+                    </ChartContainer>
+                  )}
+                  {/* Only show the note below the chart when the chart is actually
                     rendering (revenue line present). When the chart is empty for
                     a no-cost-permission user, the cost-hidden placeholder above
                     already carries this message — showing it twice (and beside a
                     misleading empty state) is what confused users. */}
-                {!canViewCost && !entriesLoading && entriesError === null && hasChartContent && (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {t('projects:detail.charts.costHiddenNote')}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })()}
+                  {!canViewCost && !entriesLoading && entriesError === null && hasChartContent && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {t('projects:detail.charts.costHiddenNote')}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+        </DashboardWidgetFrame>
 
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>{t('projects:detail.charts.monthlyActivity')}</CardTitle>
-            <CardDescription>{t('projects:detail.charts.monthlyActivityDesc')}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {entriesLoading ? (
-              <Skeleton className="h-[260px] w-full xl:h-[320px]" />
-            ) : entriesError !== null ? (
-              <ChartLocked variant={entriesError} />
-            ) : monthlyActivity.rows.length === 0 ||
-              monthlyActivity.rows.every((r) => r.hours === 0) ? (
-              // All-zero case (only zero-duration entries) reads as no data, so
-              // show the explicit empty state rather than a flat plot.
-              <ChartEmpty />
-            ) : (
-              <ChartContainer
-                config={activityChartConfig}
-                className="h-[260px] w-full xl:h-[320px]"
-              >
-                <BarChart
-                  data={monthlyActivity.rows}
-                  margin={{ left: 8, right: 8, top: 24, bottom: 8 }}
+        <DashboardWidgetFrame
+          {...widgetFrameProps('monthlyActivity', t('projects:detail.charts.monthlyActivity'))}
+        >
+          <Card className="h-full">
+            <CardHeader>
+              <CardTitle>{t('projects:detail.charts.monthlyActivity')}</CardTitle>
+              <CardDescription>{t('projects:detail.charts.monthlyActivityDesc')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {entriesLoading ? (
+                <Skeleton className="h-[260px] w-full xl:h-[320px]" />
+              ) : entriesError !== null ? (
+                <ChartLocked variant={entriesError} />
+              ) : monthlyActivity.rows.length === 0 ||
+                monthlyActivity.rows.every((r) => r.hours === 0) ? (
+                // All-zero case (only zero-duration entries) reads as no data, so
+                // show the explicit empty state rather than a flat plot.
+                <ChartEmpty />
+              ) : (
+                <ChartContainer
+                  config={activityChartConfig}
+                  className="h-[260px] w-full xl:h-[320px]"
                 >
-                  <CartesianGrid vertical={false} />
-                  <XAxis
-                    dataKey="label"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={8}
-                    minTickGap={16}
-                  />
-                  <YAxis tickLine={false} axisLine={false} width={36} />
-                  <ChartTooltip
-                    isAnimationActive={false}
-                    content={<ChartTooltipContent />}
-                    cursor={false}
-                    position={{ y: 0 }}
-                  />
-                  <Bar dataKey="hours" fill="var(--color-hours)" radius={[4, 4, 0, 0]}>
-                    <LabelList
-                      dataKey="hours"
-                      position="top"
-                      className="fill-foreground text-xs"
-                      formatter={(value: unknown) => {
-                        const n = typeof value === 'number' ? value : Number(value);
-                        return Number.isFinite(n) && n > 0
-                          ? n.toLocaleString(i18n.language, { maximumFractionDigits: 1 })
-                          : '';
-                      }}
+                  <BarChart
+                    data={monthlyActivity.rows}
+                    margin={{ left: 8, right: 8, top: 24, bottom: 8 }}
+                  >
+                    <CartesianGrid vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={8}
+                      minTickGap={16}
                     />
-                  </Bar>
-                  {/* "Typical month" baseline so cadence reads at a glance: months
+                    <YAxis tickLine={false} axisLine={false} width={36} />
+                    <ChartTooltip
+                      isAnimationActive={false}
+                      content={<ChartTooltipContent />}
+                      cursor={false}
+                      position={{ y: 0 }}
+                    />
+                    <Bar dataKey="hours" fill="var(--color-hours)" radius={[4, 4, 0, 0]}>
+                      <LabelList
+                        dataKey="hours"
+                        position="top"
+                        className="fill-foreground text-xs"
+                        formatter={(value: unknown) => {
+                          const n = typeof value === 'number' ? value : Number(value);
+                          return Number.isFinite(n) && n > 0
+                            ? n.toLocaleString(i18n.language, { maximumFractionDigits: 1 })
+                            : '';
+                        }}
+                      />
+                    </Bar>
+                    {/* "Typical month" baseline so cadence reads at a glance: months
                       above the line were busier than average, below were quieter.
                       The mean is always <= the tallest bar, so it never clips. */}
-                  {monthlyActivity.avg > 0 && (
-                    <ReferenceLine
-                      y={monthlyActivity.avg}
-                      stroke="var(--muted-foreground)"
-                      strokeDasharray="4 4"
-                      strokeWidth={1.5}
-                      label={{
-                        value: `${t('projects:detail.charts.avgMonthlyLabel')} · ${monthlyActivity.avg.toLocaleString(i18n.language, { maximumFractionDigits: 1 })} h`,
-                        position: 'insideTopRight',
-                        fill: 'var(--muted-foreground)',
-                        fontSize: 11,
-                        fontWeight: 500,
-                      }}
-                    />
-                  )}
-                </BarChart>
-              </ChartContainer>
-            )}
-          </CardContent>
-        </Card>
+                    {monthlyActivity.avg > 0 && (
+                      <ReferenceLine
+                        y={monthlyActivity.avg}
+                        stroke="var(--muted-foreground)"
+                        strokeDasharray="4 4"
+                        strokeWidth={1.5}
+                        label={{
+                          value: `${t('projects:detail.charts.avgMonthlyLabel')} · ${monthlyActivity.avg.toLocaleString(i18n.language, { maximumFractionDigits: 1 })} h`,
+                          position: 'insideTopRight',
+                          fill: 'var(--muted-foreground)',
+                          fontSize: 11,
+                          fontWeight: 500,
+                        }}
+                      />
+                    )}
+                  </BarChart>
+                </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
+        </DashboardWidgetFrame>
       </div>
 
       <DeleteConfirmModal

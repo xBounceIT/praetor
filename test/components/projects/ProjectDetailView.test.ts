@@ -181,11 +181,14 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
 
   test('the two wide charts span full width to scale with more users/months', async () => {
     // The per-user grouped histogram (users × tasks bars) and the monthly
-    // timeline are the wide charts; they span both grid columns so the bars
-    // have room. Long user names are truncated on the axis (full name in tooltip).
+    // timeline are the wide charts; they default to span 2 (full width) so the
+    // bars have room. Span is now owned by the dashboard layout (the widget
+    // registry's defaultSpan), applied by DashboardWidgetFrame, so users can
+    // also resize them. Long user names are truncated on the axis (full name in
+    // tooltip).
     const source = await readSource();
-    const fullWidth = source.match(/<Card className="lg:col-span-2">/g) ?? [];
-    expect(fullWidth.length).toBe(2);
+    expect(source).toContain("id: 'hoursByUser', defaultSpan: 2");
+    expect(source).toContain("id: 'monthlyActivity', defaultSpan: 2");
     expect(source).toMatch(/tickFormatter=\{\(v: string\) => \(v\.length > 16 \?/);
   });
 
@@ -518,5 +521,45 @@ describe('ProjectDetailView wired into App.tsx', () => {
     const source = await Bun.file(new URL('../../../App.tsx', import.meta.url)).text();
     expect(source).toContain("if (resolved !== 'projects/detail')");
     expect(source).toContain('setSelectedProjectId(null)');
+  });
+});
+
+describe('ProjectDetailView dashboard customization', () => {
+  test('renders the Edit + Views controls in the analytics header', async () => {
+    const source = await readSource();
+    // The toolbar is delegated to DashboardControls, fed by the layout hook.
+    expect(source).toContain("import DashboardControls from './DashboardControls'");
+    expect(source).toContain('<DashboardControls controls={dashboard} />');
+    // Two-tier: global default id + the per-project override key (project.id).
+    expect(source).toContain('useDashboardLayout(DASHBOARD_ID, project.id, DASHBOARD_WIDGETS)');
+  });
+
+  test('declares the canonical widget set with default spans', async () => {
+    const source = await readSource();
+    for (const id of ['hoursByUser', 'hoursByTask', 'costVsRevenue', 'monthlyActivity']) {
+      expect(source).toMatch(new RegExp(`id: '${id}', defaultSpan: [12]`));
+    }
+    // The full-width charts default to span 2, the compact pair to span 1.
+    expect(source).toContain("id: 'hoursByUser', defaultSpan: 2");
+    expect(source).toContain("id: 'monthlyActivity', defaultSpan: 2");
+    expect(source).toContain("id: 'hoursByTask', defaultSpan: 1");
+    expect(source).toContain("id: 'costVsRevenue', defaultSpan: 1");
+  });
+
+  test('wraps every chart in a DashboardWidgetFrame so it can be moved/hidden/resized', async () => {
+    const source = await readSource();
+    expect(source).toContain("import DashboardWidgetFrame from './DashboardWidgetFrame'");
+    // One frame per visualization.
+    expect(source.match(/<DashboardWidgetFrame/g)?.length ?? 0).toBe(4);
+    for (const id of ['hoursByUser', 'hoursByTask', 'costVsRevenue', 'monthlyActivity']) {
+      expect(source).toContain(`widgetFrameProps('${id}'`);
+    }
+  });
+
+  test('grid span is owned by the frame, not hard-coded on the cards', async () => {
+    const source = await readSource();
+    // The two formerly full-width cards no longer carry their own lg:col-span-2;
+    // the frame applies span from the layout state instead.
+    expect(source).not.toContain('<Card className="lg:col-span-2">');
   });
 });
