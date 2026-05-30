@@ -70,6 +70,8 @@ const RIL_LOCATION_LABELS: Record<RilLocale, { office: string; remote: string }>
   it: { office: 'In sede', remote: 'Telelavoro' },
 };
 
+export const getRilLocationLabels = (locale: RilLocale) => RIL_LOCATION_LABELS[locale];
+
 const WEEKDAY_FORMATTER = new Intl.DateTimeFormat('it-IT', { weekday: 'short' });
 
 export const isValidRilStartTime = (value: string | undefined | null): value is string =>

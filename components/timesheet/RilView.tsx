@@ -19,6 +19,7 @@ import {
   calculateRilTotals,
   generateRilRows,
   getCurrentRilMonthKey,
+  getRilLocationLabels,
   getRilMonthBounds,
   type RilRow,
 } from '../../utils/ril';
@@ -37,15 +38,7 @@ interface RilViewProps {
   >;
 }
 
-type EditableRilField =
-  | 'entrance'
-  | 'exit'
-  | 'hours'
-  | 'picap'
-  | 'phoneAvailability'
-  | 'notes'
-  | 'transfer'
-  | 'code';
+type EditableRilField = 'entrance' | 'exit' | 'hours' | 'notes' | 'transfer';
 
 const parseDraftHours = (value: string): number => {
   const trimmed = value.trim().replace(',', '.');
@@ -169,17 +162,12 @@ const RilView: React.FC<RilViewProps> = ({
             worked: hoursDecimal > 0,
           };
         }
-        if (field === 'picap') {
-          const picap = Number(value.replace(',', '.'));
-          return { ...row, picap: Number.isFinite(picap) ? picap : 0 };
-        }
         return { ...row, [field]: value };
       }),
     );
   }, []);
 
   const getEditableValue = useCallback((row: RilRow, field: EditableRilField): string => {
-    if (field === 'picap' && row.picap === 0 && !row.worked) return '';
     return String(row[field] ?? '');
   }, []);
 
@@ -205,6 +193,9 @@ const RilView: React.FC<RilViewProps> = ({
   };
 
   const columns = useMemo<Column<RilRow>[]>(() => {
+    const locationLabels = getRilLocationLabels(locale);
+    const transferOptions = [locationLabels.office, locationLabels.remote];
+
     const editableColumn = (
       field: EditableRilField,
       label: string,
@@ -226,6 +217,8 @@ const RilView: React.FC<RilViewProps> = ({
       ),
     });
 
+    const transferLabel = t('ril.columns.transfer');
+
     return [
       {
         header: t('ril.columns.day'),
@@ -245,19 +238,45 @@ const RilView: React.FC<RilViewProps> = ({
       editableColumn('entrance', t('ril.columns.entrance')),
       editableColumn('exit', t('ril.columns.exit')),
       editableColumn('hours', t('ril.columns.hours')),
-      editableColumn('picap', t('ril.columns.picap'), 'min-w-[5rem]'),
-      editableColumn('phoneAvailability', t('ril.columns.phoneAvailability')),
       editableColumn('notes', t('ril.columns.notes'), 'min-w-[9rem]'),
-      editableColumn('transfer', t('ril.columns.transfer'), 'min-w-[10rem]'),
-      editableColumn('code', t('ril.columns.code'), 'min-w-[7rem]'),
+      {
+        header: transferLabel,
+        id: 'transfer',
+        accessorKey: 'transfer',
+        disableFiltering: true,
+        disableSorting: true,
+        cell: ({ row }) => (
+          <Select
+            value={row.transfer || undefined}
+            onValueChange={(value) => updateRow(row.day, 'transfer', value)}
+            disabled={row.isHoliday}
+          >
+            <SelectTrigger
+              aria-label={`${transferLabel} ${row.day}`}
+              className="h-8 min-w-[10rem] text-xs disabled:cursor-not-allowed"
+            >
+              <SelectValue placeholder="-" />
+            </SelectTrigger>
+            <SelectContent>
+              {transferOptions.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ),
+      },
     ];
-  }, [getEditableValue, t, updateRow]);
+  }, [getEditableValue, locale, t, updateRow]);
 
   const getRowClassName = useCallback(
     (row: RilRow) =>
       row.isHoliday
         ? 'bg-amber-50/80 text-amber-950 hover:bg-amber-50 dark:bg-amber-950/30 dark:text-amber-100'
-        : 'hover:bg-muted/50',
+        : row.date && !row.isWorkday
+          ? 'bg-sky-50/70 text-sky-950 hover:bg-sky-50 dark:bg-sky-950/25 dark:text-sky-100'
+          : 'hover:bg-muted/50',
     [],
   );
 

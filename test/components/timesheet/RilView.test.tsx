@@ -87,6 +87,9 @@ describe('<RilView />', () => {
     expect(screen.getByText('ril.title')).toBeInTheDocument();
     expect(screen.getByText('ril.tableTitle')).toBeInTheDocument();
     expect(screen.getByText('ril.columns.day')).toBeInTheDocument();
+    expect(screen.queryByText('ril.columns.picap')).toBeNull();
+    expect(screen.queryByText('ril.columns.phoneAvailability')).toBeNull();
+    expect(screen.queryByText('ril.columns.code')).toBeNull();
     expect(screen.queryByText('ril.columns.order')).toBeNull();
   });
 
@@ -124,6 +127,29 @@ describe('<RilView />', () => {
     expect(holidayNotesInput).toHaveValue('FN');
     expect(holidayNotesInput.closest('tr')?.className).toContain('bg-amber-50');
     expect(holidayNotesInput.closest('tr')?.querySelector('td')?.textContent).toMatch(/^1\D/);
+  });
+
+  test('highlights weekend rows without disabling editing', async () => {
+    api.entries.listPage.mockResolvedValue({ entries: [], nextCursor: null });
+
+    renderRilView();
+
+    const weekendNotesInput = await screen.findByLabelText('ril.columns.notes 2');
+    expect(weekendNotesInput).not.toBeDisabled();
+    expect(weekendNotesInput.closest('tr')?.className).toContain('bg-sky-50');
+  });
+
+  test('renders transfer as a select between office and remote values', async () => {
+    api.entries.listPage.mockResolvedValue({
+      entries: [entry({ date: '2026-05-04', duration: 8, location: 'remote' })],
+      nextCursor: null,
+    });
+
+    renderRilView();
+
+    const transferSelect = await screen.findByLabelText('ril.columns.transfer 4');
+    expect(transferSelect).toHaveTextContent('Remote working');
+    expect(transferSelect.tagName).toBe('BUTTON');
   });
 
   test('exports the current draft rows', async () => {

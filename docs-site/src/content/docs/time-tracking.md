@@ -27,7 +27,7 @@ Ogni registrazione esistente occupa una propria riga, così eventuali dati stori
 
 La pagina **RIL** nel modulo Presenze genera un prospetto mensile partendo dalle registrazioni dell'utente selezionato. È disponibile agli utenti con il permesso **timesheets.ril.view**; la migrazione assegna automaticamente questo permesso ai ruoli che già avevano accesso alla vista Time Tracker. È possibile scegliere il mese e, per gli utenti gestiti, anche il collaboratore da consultare.
 
-Praetor recupera le registrazioni con `GET /api/entries` usando i filtri inclusivi `fromDate` e `toDate`, quindi costruisce una bozza modificabile: le modifiche fatte nel prospetto restano locali alla pagina e all'esportazione Excel, senza aggiornare le registrazioni originali. Le righe festive marcate automaticamente restano evidenziate e non modificabili.
+Praetor recupera le registrazioni con `GET /api/entries` usando i filtri inclusivi `fromDate` e `toDate`, quindi costruisce una bozza modificabile: le modifiche fatte nel prospetto restano locali alla pagina e all'esportazione Excel, senza aggiornare le registrazioni originali. Le righe festive marcate automaticamente restano evidenziate e non modificabili; le righe del weekend sono evidenziate per riconoscerle rapidamente.
 
 Le righe del mese sommano le ore per giorno, usano l'orario di entrata predefinito configurato in Amministrazione e calcolano l'uscita aggiungendo la pausa pranzo quando le ore superano 6. Le festività italiane che cadono tra lunedì e venerdì vengono marcate con `FN`; le festività nel weekend non vengono marcate. Se almeno una registrazione del giorno non è `remote`, la riga viene indicata come **In sede**, altrimenti come **Telelavoro**.
 
