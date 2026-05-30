@@ -17,7 +17,7 @@ export type AddProjectInput = AddProjectFormInput;
 export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
   const { setProjects, setProjectTasks, setEntries } = deps;
 
-  const add = async (input: AddProjectInput) => {
+  const add = async (input: AddProjectInput): Promise<Project | null> => {
     try {
       if (!input.clientId) throw new Error('Client is required');
 
@@ -55,9 +55,11 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
         );
         setProjectTasks((prev) => [...prev, ...createdTasks]);
       }
+      return project;
     } catch (err) {
       console.error('Failed to add project:', err);
       toastError(`Failed to add project: ${getErrorMessage(err)}`);
+      return null;
     }
   };
 
@@ -94,13 +96,15 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
     }
   };
 
-  const update = async (id: string, updates: Partial<Project>) => {
+  const update = async (id: string, updates: Partial<Project>): Promise<Project | null> => {
     try {
       const updated = await api.projects.update(id, updates);
       setProjects((prev) => prev.map((p) => (p.id === id ? updated : p)));
+      return updated;
     } catch (err) {
       console.error('Failed to update project:', err);
       toastError('Failed to update project');
+      return null;
     }
   };
 

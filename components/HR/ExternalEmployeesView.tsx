@@ -404,6 +404,7 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
         title={t('externalEmployees.title')}
         data={externalEmployees}
         columns={columns}
+        onRowClick={canUpdateEmployees ? openEditModal : undefined}
         emptyState={
           <EmptyState
             title={t('externalEmployees.noEmployees')}

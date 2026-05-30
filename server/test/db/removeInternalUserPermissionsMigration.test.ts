@@ -1,14 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import { readMigrationFile } from '../helpers/schemaFiles.ts';
 
-// Migration 0056 strips the ability to CREATE and DELETE internal users from
+// Migration 0057 strips the ability to CREATE and DELETE internal users from
 // the default Manager and Top Manager roles. The create/delete user routes gate
 // employee_type = 'internal' behind hr.internal.create / hr.internal.delete, so
 // this guards that the data migration removes exactly those grants from exactly
 // those two roles and leaves view/update plus the external set untouched.
 
 const MIGRATION_SQL = readMigrationFile(
-  '0056_remove_internal_user_create_delete_from_default_managers.sql',
+  '0057_remove_internal_user_create_delete_from_default_managers.sql',
 );
 
 const extractInList = (clause: string): string[] => {

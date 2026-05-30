@@ -435,6 +435,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
         title={t('internalEmployees.allEmployees')}
         data={allEmployees}
         columns={columns}
+        onRowClick={canUpdateEmployees ? openEditModal : undefined}
         emptyState={
           <EmptyState
             title={t('internalEmployees.noEmployees')}
