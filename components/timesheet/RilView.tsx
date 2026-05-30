@@ -26,6 +26,18 @@ import {
 import { downloadRilWorkbook } from '../../utils/rilExport';
 import StandardTable, { type Column } from '../shared/StandardTable';
 
+const EMPTY_SELECT_VALUE = '__empty__';
+const RIL_NOTES_OPTIONS = [
+  { value: 'P', label: 'Ferie' },
+  { value: 'P2', label: 'Permesso' },
+  { value: 'M', label: 'Malattia' },
+  { value: 'F', label: 'Festivita' },
+] as const;
+const RIL_CODE_OPTIONS = [
+  { value: 'TR', label: 'Trasferta' },
+  { value: 'SD', label: 'Sede Disagiata' },
+] as const;
+
 interface RilViewProps {
   currentUser: User;
   availableUsers: User[];
@@ -38,7 +50,7 @@ interface RilViewProps {
   >;
 }
 
-type EditableRilField = 'entrance' | 'exit' | 'hours' | 'notes' | 'transfer';
+type EditableRilField = 'entrance' | 'exit' | 'hours' | 'picap' | 'notes' | 'transfer' | 'code';
 
 const parseDraftHours = (value: string): number => {
   const trimmed = value.trim().replace(',', '.');
@@ -162,12 +174,17 @@ const RilView: React.FC<RilViewProps> = ({
             worked: hoursDecimal > 0,
           };
         }
+        if (field === 'picap') {
+          const picap = Number(value.replace(',', '.'));
+          return { ...row, picap: Number.isFinite(picap) ? picap : 0 };
+        }
         return { ...row, [field]: value };
       }),
     );
   }, []);
 
   const getEditableValue = useCallback((row: RilRow, field: EditableRilField): string => {
+    if (field === 'picap' && row.picap === 0 && !row.worked) return '';
     return String(row[field] ?? '');
   }, []);
 
@@ -194,12 +211,15 @@ const RilView: React.FC<RilViewProps> = ({
 
   const columns = useMemo<Column<RilRow>[]>(() => {
     const locationLabels = getRilLocationLabels(locale);
-    const transferOptions = [locationLabels.office, locationLabels.remote];
+    const transferOptions = [
+      { value: locationLabels.office, label: locationLabels.office },
+      { value: locationLabels.remote, label: locationLabels.remote },
+    ];
 
     const editableColumn = (
       field: EditableRilField,
       label: string,
-      inputClassName = 'min-w-[7rem]',
+      inputClassName = 'min-w-[5rem]',
     ): Column<RilRow> => ({
       header: label,
       id: field,
@@ -212,9 +232,49 @@ const RilView: React.FC<RilViewProps> = ({
           value={getEditableValue(row, field)}
           disabled={row.isHoliday}
           onChange={(event) => updateRow(row.day, field, event.target.value)}
-          className={`h-8 text-xs disabled:cursor-not-allowed ${inputClassName}`}
+          className={`h-7 px-2 text-[11px] disabled:cursor-not-allowed ${inputClassName}`}
         />
       ),
+    });
+
+    const selectColumn = (
+      field: EditableRilField,
+      label: string,
+      options: ReadonlyArray<{ value: string; label: string }>,
+      triggerClassName = 'min-w-[7rem]',
+    ): Column<RilRow> => ({
+      header: label,
+      id: field,
+      accessorKey: field,
+      disableFiltering: true,
+      disableSorting: true,
+      cell: ({ row }) => {
+        const rawValue = getEditableValue(row, field);
+        return (
+          <Select
+            value={rawValue || EMPTY_SELECT_VALUE}
+            onValueChange={(value) =>
+              updateRow(row.day, field, value === EMPTY_SELECT_VALUE ? '' : value)
+            }
+            disabled={row.isHoliday}
+          >
+            <SelectTrigger
+              aria-label={`${label} ${row.day}`}
+              className={`h-7 px-2 text-[11px] disabled:cursor-not-allowed ${triggerClassName}`}
+            >
+              <SelectValue placeholder="-" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={EMPTY_SELECT_VALUE}>-</SelectItem>
+              {options.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.value} - {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        );
+      },
     });
 
     const transferLabel = t('ril.columns.transfer');
@@ -227,46 +287,21 @@ const RilView: React.FC<RilViewProps> = ({
         disableFiltering: true,
         disableSorting: true,
         cell: ({ row }) => (
-          <span className="inline-flex items-baseline gap-2 font-medium">
-            <span className="tabular-nums">{row.day}</span>
+          <span className="flex min-w-[3.5rem] items-center justify-between gap-2 font-medium">
             {row.weekday && (
               <span className="text-xs font-normal text-muted-foreground">{row.weekday}</span>
             )}
+            <span className="tabular-nums">{row.day}</span>
           </span>
         ),
       },
       editableColumn('entrance', t('ril.columns.entrance')),
       editableColumn('exit', t('ril.columns.exit')),
       editableColumn('hours', t('ril.columns.hours')),
-      editableColumn('notes', t('ril.columns.notes'), 'min-w-[9rem]'),
-      {
-        header: transferLabel,
-        id: 'transfer',
-        accessorKey: 'transfer',
-        disableFiltering: true,
-        disableSorting: true,
-        cell: ({ row }) => (
-          <Select
-            value={row.transfer || undefined}
-            onValueChange={(value) => updateRow(row.day, 'transfer', value)}
-            disabled={row.isHoliday}
-          >
-            <SelectTrigger
-              aria-label={`${transferLabel} ${row.day}`}
-              className="h-8 min-w-[10rem] text-xs disabled:cursor-not-allowed"
-            >
-              <SelectValue placeholder="-" />
-            </SelectTrigger>
-            <SelectContent>
-              {transferOptions.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {option}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ),
-      },
+      editableColumn('picap', t('ril.columns.picap'), 'min-w-[4.5rem]'),
+      selectColumn('notes', t('ril.columns.notes'), RIL_NOTES_OPTIONS, 'min-w-[7rem]'),
+      selectColumn('transfer', transferLabel, transferOptions, 'min-w-[9rem]'),
+      selectColumn('code', t('ril.columns.code'), RIL_CODE_OPTIONS, 'min-w-[7rem]'),
     ];
   }, [getEditableValue, locale, t, updateRow]);
 
@@ -341,6 +376,7 @@ const RilView: React.FC<RilViewProps> = ({
         defaultRowsPerPage={50}
         minBodyRows={31}
         rowClassName={getRowClassName}
+        tableContainerClassName="overflow-x-auto [&_td]:!px-2 [&_td]:!py-1 [&_th]:!h-8 [&_th]:!px-2"
         headerExtras={
           <div className="flex flex-wrap gap-2">
             <Badge variant="secondary">

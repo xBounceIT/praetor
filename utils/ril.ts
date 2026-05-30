@@ -73,6 +73,8 @@ const RIL_LOCATION_LABELS: Record<RilLocale, { office: string; remote: string }>
 export const getRilLocationLabels = (locale: RilLocale) => RIL_LOCATION_LABELS[locale];
 
 const WEEKDAY_FORMATTER = new Intl.DateTimeFormat('it-IT', { weekday: 'short' });
+const RIL_FIXED_ENTRANCE = '09:00';
+const RIL_FIXED_EXIT = '18:00';
 
 export const isValidRilStartTime = (value: string | undefined | null): value is string =>
   typeof value === 'string' && TIME_OF_DAY_PATTERN.test(value);
@@ -118,11 +120,6 @@ export const formatRilHoursAsDuration = (hours: number): string => {
 
 export const roundRilPicapHours = (hours: number): number => Math.round(hours * 4) / 4;
 
-const normalizeLunchBreak = (value: number | undefined): number => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return 60;
-  return Math.min(Math.max(Math.round(value), 0), 240);
-};
-
 const getProjectCode = (entry: TimeEntry, projectById: Map<string, Project>): string => {
   const project = projectById.get(entry.projectId);
   const orderId = project?.orderId?.trim();
@@ -153,13 +150,9 @@ export const generateRilRows = ({
   month,
   entries,
   projects = [],
-  defaultStartTime = '09:00',
-  lunchBreakMinutes = 60,
   locale = 'en',
 }: RilGenerationOptions): RilRow[] => {
   const daysInMonth = new Date(year, month, 0).getDate();
-  const safeStartTime = isValidRilStartTime(defaultStartTime) ? defaultStartTime : '09:00';
-  const safeLunchBreak = normalizeLunchBreak(lunchBreakMinutes);
   const projectById = new Map(projects.map((project) => [project.id, project]));
   const entriesByDate = new Map<string, TimeEntry[]>();
   const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
@@ -183,9 +176,6 @@ export const generateRilRows = ({
     const dayEntries = entriesByDate.get(date) ?? [];
     const duration = dayEntries.reduce((sum, entry) => sum + Number(entry.duration || 0), 0);
     const worked = duration > 0;
-    const workedMinutes = Math.round(duration * 60);
-    const lunchMinutes = duration > 6 ? safeLunchBreak : 0;
-    const startMinutes = parseRilTimeToMinutes(safeStartTime);
     const uniqueProjects = new Set<string>();
     for (const entry of dayEntries) {
       const code = getProjectCode(entry, projectById);
@@ -199,13 +189,13 @@ export const generateRilRows = ({
       day,
       date,
       weekday: WEEKDAY_FORMATTER.format(dateObj),
-      entrance: worked ? safeStartTime : '',
-      exit: worked ? formatRilMinutesAsClock(startMinutes + workedMinutes + lunchMinutes) : '',
+      entrance: worked ? RIL_FIXED_ENTRANCE : '',
+      exit: worked ? RIL_FIXED_EXIT : '',
       hours: formatRilHoursAsDuration(duration),
       hoursDecimal: duration,
       picap: worked ? roundRilPicapHours(duration) : 0,
       phoneAvailability: '',
-      notes: isHoliday ? 'FN' : '',
+      notes: isHoliday ? 'F' : '',
       transfer: worked
         ? allRemote
           ? RIL_LOCATION_LABELS[locale].remote

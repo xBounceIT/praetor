@@ -43,8 +43,8 @@ const NOTE_HELPER_PATTERNS = {
   sick: /(^|\s)M($|\s)/i,
   permit: /(^|\s)P($|\s)|P2/i,
   investment: /(^|\s)I($|\s)|I2/i,
-  holiday: /(^|\s)FN($|\s)/i,
-  hardship: /(^|\s)D($|\s)/i,
+  holiday: /(^|\s)F(N)?($|\s)/i,
+  hardship: /(^|\s)(D|SD)($|\s)/i,
 } as const;
 
 const splitDecimalHours = (hours: number): [number, number] => [
@@ -161,6 +161,7 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
     const [extraWholeHours, extraMinutes] = splitDecimalHours(extraHours);
     const [shortfallWholeHours, shortfallMinutes] = splitDecimalHours(shortfallHours);
     const [workedWholeHours, workedMinutes] = splitDecimalHours(rilRow.hoursDecimal);
+    const normalizedCode = rilRow.code.trim().toUpperCase();
     const values = [
       rilRow.date ? rilRow.day : '',
       rilRow.entrance,
@@ -186,8 +187,8 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
       NOTE_HELPER_PATTERNS.permit.test(rilRow.notes) ? 1 : 0,
       NOTE_HELPER_PATTERNS.investment.test(rilRow.notes) ? 1 : 0,
       NOTE_HELPER_PATTERNS.holiday.test(rilRow.notes) ? 1 : 0,
-      rilRow.transfer ? 1 : 0,
-      NOTE_HELPER_PATTERNS.hardship.test(rilRow.notes) ? 1 : 0,
+      normalizedCode === 'TR' ? 1 : 0,
+      normalizedCode === 'SD' || NOTE_HELPER_PATTERNS.hardship.test(rilRow.notes) ? 1 : 0,
       rilRow.phoneAvailability ? 1 : 0,
     ];
     values.forEach((value, cellIndex) => {

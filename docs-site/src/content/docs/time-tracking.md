@@ -29,7 +29,9 @@ La pagina **RIL** nel modulo Presenze genera un prospetto mensile partendo dalle
 
 Praetor recupera le registrazioni con `GET /api/entries` usando i filtri inclusivi `fromDate` e `toDate`, quindi costruisce una bozza modificabile: le modifiche fatte nel prospetto restano locali alla pagina e all'esportazione Excel, senza aggiornare le registrazioni originali. Le righe festive marcate automaticamente restano evidenziate e non modificabili; le righe del weekend sono evidenziate per riconoscerle rapidamente.
 
-Le righe del mese sommano le ore per giorno, usano l'orario di entrata predefinito configurato in Amministrazione e calcolano l'uscita aggiungendo la pausa pranzo quando le ore superano 6. Le festività italiane che cadono tra lunedì e venerdì vengono marcate con `FN`; le festività nel weekend non vengono marcate. Se almeno una registrazione del giorno non è `remote`, la riga viene indicata come **In sede**, altrimenti come **Telelavoro**.
+Le righe del mese sommano le ore per giorno e usano sempre **09:00** come entrata e **18:00** come uscita quando il giorno contiene ore tracciate. Le festività italiane che cadono tra lunedì e venerdì vengono marcate con `F`; le festività nel weekend non vengono marcate. Se almeno una registrazione del giorno non è `remote`, la riga viene indicata come **In sede**, altrimenti come **Telelavoro**.
+
+Nel prospetto, **Note** è selezionabile tra `P` ferie, `P2` permesso, `M` malattia e `F` festività. **Cod** è selezionabile tra `TR` trasferta e `SD` sede disagiata.
 
 Il pulsante **Esporta Excel** crea un file `.xlsx` con un solo foglio, **Prospetto Presenze**, e colonne compatibili con il modello RIL: Giorno, Entrata, Uscita, Ore, PICAP, Reperib. Telef., Note, Trasferta, Cod e Commessa.
 

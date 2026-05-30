@@ -45,7 +45,7 @@ describe('RIL Excel export', () => {
     expect(worksheet?.getCell('A2').value).toBe('Consulente');
     expect(worksheet?.getCell('B2').value).toBe('User Name');
     expect(worksheet?.getCell('A9').value).toBe(1);
-    expect(worksheet?.getCell('G9').value).toBe('FN');
+    expect(worksheet?.getCell('G9').value).toBe('F');
     expect(worksheet?.getCell('A12').value).toBe(4);
     expect(worksheet?.getCell('B12').value).toBe('09:00');
     expect(worksheet?.getCell('C12').value).toBe('18:00');

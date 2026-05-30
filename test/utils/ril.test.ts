@@ -32,14 +32,14 @@ const project = (overrides: Partial<Project>): Project => ({
 });
 
 describe('RIL helpers', () => {
-  test('tags weekday Italian holidays with FN but leaves weekend holidays untagged', () => {
+  test('tags weekday Italian holidays with F but leaves weekend holidays untagged', () => {
     const mayRows = generateRilRows({
       year: 2026,
       month: 5,
       entries: [],
       locale: 'it',
     });
-    expect(mayRows.find((row) => row.day === 1)?.notes).toBe('FN');
+    expect(mayRows.find((row) => row.day === 1)?.notes).toBe('F');
 
     const augustRows = generateRilRows({
       year: 2026,
@@ -64,23 +64,23 @@ describe('RIL helpers', () => {
     expect(rows.find((row) => row.day === 4)?.transfer).toBe('In office');
   });
 
-  test('calculates start, end, lunch break, hours, and PICAP quarter rounding', () => {
+  test('uses fixed start/end values while deriving hours and PICAP from duration', () => {
     const rows = generateRilRows({
       year: 2026,
       month: 5,
-      defaultStartTime: '09:00',
+      defaultStartTime: '08:30',
       lunchBreakMinutes: 60,
       entries: [entry({ date: '2026-05-04', duration: 7.62 })],
     });
     const row = rows.find((candidate) => candidate.day === 4);
 
     expect(row?.entrance).toBe('09:00');
-    expect(row?.exit).toBe('17:37');
+    expect(row?.exit).toBe('18:00');
     expect(row?.hours).toBe('7:37');
     expect(row?.picap).toBe(7.5);
   });
 
-  test('does not add lunch break when duration is 6 hours or less', () => {
+  test('keeps fixed exit time when duration is 6 hours or less', () => {
     const rows = generateRilRows({
       year: 2026,
       month: 5,
@@ -89,7 +89,7 @@ describe('RIL helpers', () => {
       entries: [entry({ date: '2026-05-05', duration: 6 })],
     });
 
-    expect(rows.find((row) => row.day === 5)?.exit).toBe('15:00');
+    expect(rows.find((row) => row.day === 5)?.exit).toBe('18:00');
   });
 
   test('defaults Commessa to unique order IDs with project-name fallback', () => {

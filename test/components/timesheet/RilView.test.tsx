@@ -87,9 +87,9 @@ describe('<RilView />', () => {
     expect(screen.getByText('ril.title')).toBeInTheDocument();
     expect(screen.getByText('ril.tableTitle')).toBeInTheDocument();
     expect(screen.getByText('ril.columns.day')).toBeInTheDocument();
-    expect(screen.queryByText('ril.columns.picap')).toBeNull();
+    expect(screen.getByText('ril.columns.picap')).toBeInTheDocument();
+    expect(screen.getByText('ril.columns.code')).toBeInTheDocument();
     expect(screen.queryByText('ril.columns.phoneAvailability')).toBeNull();
-    expect(screen.queryByText('ril.columns.code')).toBeNull();
     expect(screen.queryByText('ril.columns.order')).toBeNull();
   });
 
@@ -101,15 +101,15 @@ describe('<RilView />', () => {
 
     renderRilView();
 
-    const notesInput = await screen.findByLabelText('ril.columns.notes 4');
-    fireEvent.change(notesInput, { target: { value: 'Draft note' } });
-    expect(notesInput).toHaveValue('Draft note');
+    const hoursInput = await screen.findByLabelText('ril.columns.hours 4');
+    fireEvent.change(hoursInput, { target: { value: '6:00' } });
+    expect(hoursInput).toHaveValue('6:00');
 
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /ril.reset/ })).not.toBeDisabled(),
     );
     fireEvent.click(screen.getByRole('button', { name: /ril.reset/ }));
-    await waitFor(() => expect(notesInput).toHaveValue(''));
+    await waitFor(() => expect(hoursInput).toHaveValue('8:00'));
     expect(api.entries.update).not.toHaveBeenCalled();
     expect(api.entries.create).not.toHaveBeenCalled();
   });
@@ -119,14 +119,11 @@ describe('<RilView />', () => {
 
     renderRilView();
 
-    const holidayNotesInput = await screen.findByLabelText('ril.columns.notes 1');
-    expect(holidayNotesInput).toBeDisabled();
-    expect(holidayNotesInput).toHaveValue('FN');
-
-    fireEvent.change(holidayNotesInput, { target: { value: 'Changed' } });
-    expect(holidayNotesInput).toHaveValue('FN');
-    expect(holidayNotesInput.closest('tr')?.className).toContain('bg-amber-50');
-    expect(holidayNotesInput.closest('tr')?.querySelector('td')?.textContent).toMatch(/^1\D/);
+    const holidayNotesSelect = await screen.findByLabelText('ril.columns.notes 1');
+    expect(holidayNotesSelect).toBeDisabled();
+    expect(holidayNotesSelect).toHaveTextContent('F - Festivita');
+    expect(holidayNotesSelect.closest('tr')?.className).toContain('bg-amber-50');
+    expect(holidayNotesSelect.closest('tr')?.querySelector('td')?.textContent).toMatch(/\D1$/);
   });
 
   test('highlights weekend rows without disabling editing', async () => {
@@ -134,12 +131,12 @@ describe('<RilView />', () => {
 
     renderRilView();
 
-    const weekendNotesInput = await screen.findByLabelText('ril.columns.notes 2');
-    expect(weekendNotesInput).not.toBeDisabled();
-    expect(weekendNotesInput.closest('tr')?.className).toContain('bg-sky-50');
+    const weekendNotesSelect = await screen.findByLabelText('ril.columns.notes 2');
+    expect(weekendNotesSelect).not.toBeDisabled();
+    expect(weekendNotesSelect.closest('tr')?.className).toContain('bg-sky-50');
   });
 
-  test('renders transfer as a select between office and remote values', async () => {
+  test('renders notes, transfer, and code as compact selects', async () => {
     api.entries.listPage.mockResolvedValue({
       entries: [entry({ date: '2026-05-04', duration: 8, location: 'remote' })],
       nextCursor: null,
@@ -147,9 +144,13 @@ describe('<RilView />', () => {
 
     renderRilView();
 
+    const notesSelect = await screen.findByLabelText('ril.columns.notes 4');
+    expect(notesSelect.tagName).toBe('BUTTON');
     const transferSelect = await screen.findByLabelText('ril.columns.transfer 4');
     expect(transferSelect).toHaveTextContent('Remote working');
     expect(transferSelect.tagName).toBe('BUTTON');
+    const codeSelect = await screen.findByLabelText('ril.columns.code 4');
+    expect(codeSelect.tagName).toBe('BUTTON');
   });
 
   test('exports the current draft rows', async () => {
