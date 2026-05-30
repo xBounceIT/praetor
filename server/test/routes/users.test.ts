@@ -432,6 +432,29 @@ describe('GET /api/users', () => {
     expect(listAllForAdminMock).not.toHaveBeenCalled();
   });
 
+  test('200 RIL viewer can list scoped users for the RIL user picker', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
+    listScopedForManagerMock.mockResolvedValue([SAMPLE_USER_ROW]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users',
+      headers: managerAuth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(listScopedForManagerMock).toHaveBeenCalledWith(
+      MANAGER_USER.id,
+      expect.objectContaining({
+        canViewManagedUsers: true,
+        canViewInternal: false,
+        canViewExternal: false,
+      }),
+    );
+    expect(listAllForAdminMock).not.toHaveBeenCalled();
+  });
+
   test('200 user without cost view → cost masked to 0, email masked to ""', async () => {
     findAuthUserByIdMock.mockResolvedValue(REGULAR_USER);
     getRolePermissionsMock.mockResolvedValue(USER_ONLY_PERMS);

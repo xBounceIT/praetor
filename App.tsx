@@ -1369,6 +1369,7 @@ const AppContent: React.FC = () => {
         const permissions = currentUser.permissions || [];
         const canViewTimesheets = hasAnyPermission(permissions, [
           ...equivalentPermissionsFor('timesheets.tracker', 'view'),
+          buildPermission('timesheets.ril', 'view'),
           buildPermission('timesheets.recurring', 'view'),
         ]);
         const canViewHr = hasAnyPermission(permissions, [
@@ -1431,6 +1432,7 @@ const AppContent: React.FC = () => {
           ...equivalentPermissionsFor('projects.manage', 'view'),
           ...equivalentPermissionsFor('projects.tasks', 'view'),
           ...equivalentPermissionsFor('timesheets.tracker', 'view'),
+          buildPermission('timesheets.ril', 'view'),
           buildPermission('timesheets.recurring', 'view'),
         ]);
         const canListTasks = hasAnyPermission(permissions, [
@@ -1446,6 +1448,7 @@ const AppContent: React.FC = () => {
           buildPermission('hr.internal', 'view'),
           buildPermission('hr.external', 'view'),
           ...equivalentPermissionsFor('timesheets.tracker', 'view'),
+          buildPermission('timesheets.ril', 'view'),
           ...equivalentPermissionsFor('projects.manage', 'view'),
           ...equivalentPermissionsFor('projects.tasks', 'view'),
           ...equivalentPermissionsFor('hr.work_units', 'view'),

@@ -296,6 +296,21 @@ describe('GET /api/projects', () => {
     expect(listAllMock).not.toHaveBeenCalled();
   });
 
+  test('200: RIL viewer can list scoped projects for RIL order codes', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
+    listForUserMock.mockResolvedValue([]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(listForUserMock).toHaveBeenCalledWith('u1');
+    expect(listAllMock).not.toHaveBeenCalled();
+  });
+
   test('401: missing token', async () => {
     const res = await testApp.inject({ method: 'GET', url: '/api/projects' });
     expect(res.statusCode).toBe(401);

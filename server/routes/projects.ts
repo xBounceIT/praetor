@@ -157,6 +157,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           'projects.tasks_all.view',
           'timesheets.tracker.view',
           'timesheets.tracker_all.view',
+          'timesheets.ril.view',
           'timesheets.recurring.view',
         ),
       ],
