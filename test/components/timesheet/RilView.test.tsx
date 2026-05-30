@@ -85,7 +85,7 @@ describe('<RilView />', () => {
       }),
     );
     expect(screen.getByText('ril.title')).toBeInTheDocument();
-    expect(screen.getByText('ril.tableTitle')).toBeInTheDocument();
+    expect(screen.queryByText('ril.tableTitle')).toBeNull();
     expect(screen.getByText('ril.columns.day')).toBeInTheDocument();
     expect(screen.getByText('ril.columns.picap')).toBeInTheDocument();
     expect(screen.getByText('ril.columns.code')).toBeInTheDocument();
@@ -95,6 +95,11 @@ describe('<RilView />', () => {
     expect(screen.getByLabelText('ril.columns.exit 4')).toHaveValue('18:00');
     expect(screen.getByLabelText('ril.columns.hours 4')).toHaveTextContent('8:00');
     expect(screen.getByLabelText('ril.columns.picap 4')).toHaveTextContent('8');
+    expect(screen.queryByText('ril.entriesLoaded')).toBeNull();
+    expect(screen.getByLabelText('ril.summary.workedDays')).toHaveTextContent('20');
+    expect(screen.getByLabelText('ril.summary.extraHours')).toHaveTextContent('0.0');
+    expect(screen.getByLabelText('ril.summary.totalHours')).toHaveTextContent('160.0');
+    expect(screen.getByLabelText('ril.summary.totalPicap')).toHaveTextContent('160.00');
   });
 
   test('keeps draft edits local, recalculates totals from times, and resets from timesheets', async () => {
@@ -134,14 +139,14 @@ describe('<RilView />', () => {
     expect(holidayNotesSelect.closest('tr')?.querySelector('td')?.textContent).toMatch(/\D1$/);
   });
 
-  test('highlights weekend rows without disabling editing', async () => {
+  test('highlights weekend rows in muted grey without disabling editing', async () => {
     api.entries.listPage.mockResolvedValue({ entries: [], nextCursor: null });
 
     renderRilView();
 
     const weekendNotesSelect = await screen.findByLabelText('ril.columns.notes 2');
     expect(weekendNotesSelect).not.toBeDisabled();
-    expect(weekendNotesSelect.closest('tr')?.className).toContain('bg-sky-50');
+    expect(weekendNotesSelect.closest('tr')?.className).toContain('bg-zinc-900');
   });
 
   test('renders notes, transfer, and code as compact selects', async () => {

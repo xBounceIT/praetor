@@ -2,7 +2,6 @@ import { Download, Loader2, RefreshCcw, RotateCcw } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -121,7 +120,6 @@ const RilView: React.FC<RilViewProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastExportFilename, setLastExportFilename] = useState<string | null>(null);
   const loadTokenRef = useRef(0);
 
   const effectiveUserId = viewingUserId || currentUser.id;
@@ -149,7 +147,6 @@ const RilView: React.FC<RilViewProps> = ({
     const token = ++loadTokenRef.current;
     setIsLoading(true);
     setError(null);
-    setLastExportFilename(null);
     try {
       const nextEntries: TimeEntry[] = [];
       let cursor: string | null = null;
@@ -185,7 +182,6 @@ const RilView: React.FC<RilViewProps> = ({
 
   const handleReset = () => {
     setRows(generateRows(sourceEntries));
-    setLastExportFilename(null);
   };
 
   const updateRow = useCallback(
@@ -224,7 +220,7 @@ const RilView: React.FC<RilViewProps> = ({
     setIsExporting(true);
     setError(null);
     try {
-      const filename = await downloadRilWorkbook({
+      await downloadRilWorkbook({
         rows,
         employeeName: selectedUser.name,
         companyName: settings.rilCompanyName || '',
@@ -233,7 +229,6 @@ const RilView: React.FC<RilViewProps> = ({
         defaultStartTime,
         lunchBreakMinutes,
       });
-      setLastExportFilename(filename);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('ril.exportFailed'));
     } finally {
@@ -318,12 +313,31 @@ const RilView: React.FC<RilViewProps> = ({
     { key: 'code', label: t('ril.columns.code'), className: 'w-32 min-w-32' },
   ];
 
+  const numberLocale = locale === 'it' ? 'it-IT' : 'en-US';
+  const formatOneDecimal = useMemo(
+    () =>
+      new Intl.NumberFormat(numberLocale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+    [numberLocale],
+  );
+  const formatTwoDecimals = useMemo(
+    () =>
+      new Intl.NumberFormat(numberLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    [numberLocale],
+  );
+  const extraHours = Math.max(0, totals.totalHours - totals.workedDays * 8);
+  const summaryRows = [
+    { label: t('ril.summary.workedDays'), value: String(totals.workedDays) },
+    { label: t('ril.summary.extraHours'), value: formatOneDecimal.format(extraHours) },
+    { label: t('ril.summary.totalHours'), value: formatOneDecimal.format(totals.totalHours) },
+    { label: t('ril.summary.totalPicap'), value: formatTwoDecimals.format(totals.totalPicap) },
+  ];
+
   const getRowClassName = useCallback(
     (row: RilRow) =>
       row.isHoliday
         ? 'bg-amber-50/80 text-amber-950 hover:bg-amber-50 dark:bg-amber-950/30 dark:text-amber-100'
         : row.date && !row.isWorkday
-          ? 'bg-sky-50/70 text-sky-950 hover:bg-sky-50 dark:bg-sky-950/25 dark:text-sky-100'
+          ? 'bg-zinc-900/85 text-zinc-100 hover:bg-zinc-900 dark:bg-zinc-900/80 dark:text-zinc-100'
           : 'hover:bg-muted/50',
     [],
   );
@@ -382,20 +396,7 @@ const RilView: React.FC<RilViewProps> = ({
         </div>
       )}
 
-      <section className="space-y-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="text-base font-semibold text-foreground">{t('ril.tableTitle')}</h3>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary">
-              {t('ril.entriesLoaded', { count: sourceEntries.length })}
-            </Badge>
-            <Badge variant="secondary">
-              {t('ril.totalHours', { count: totals.totalHours.toFixed(2) })}
-            </Badge>
-            <Badge variant="secondary">{t('ril.workedDays', { count: totals.workedDays })}</Badge>
-            {lastExportFilename && <Badge variant="outline">{lastExportFilename}</Badge>}
-          </div>
-        </div>
+      <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_12rem]">
         <div className="overflow-x-auto rounded-md border border-border">
           <Table className="min-w-[49rem] table-fixed text-xs">
             <TableHeader>
@@ -453,6 +454,24 @@ const RilView: React.FC<RilViewProps> = ({
             </TableBody>
           </Table>
         </div>
+        <aside
+          aria-label={t('ril.summary.title')}
+          className="rounded-md border border-border bg-card p-2 shadow-lg xl:sticky xl:top-4"
+        >
+          <dl className="space-y-2">
+            {summaryRows.map((row) => (
+              <div
+                key={row.label}
+                className="grid grid-cols-[1fr_auto] items-center gap-2 border border-black bg-yellow-400 px-2 py-1 text-[11px] font-semibold leading-tight text-blue-700"
+              >
+                <dt>{row.label}</dt>
+                <dd className="text-right tabular-nums">
+                  <output aria-label={row.label}>{row.value}</output>
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </aside>
       </section>
     </div>
   );

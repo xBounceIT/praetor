@@ -32,6 +32,13 @@
     "entriesLoaded": "{{count}} voci caricate",
     "totalHours": "{{count}} ore",
     "workedDays": "{{count}} giorni lavorati",
+    "summary": {
+      "title": "Riepilogo RIL",
+      "workedDays": "Giorni Lavorati",
+      "extraHours": "Ore Extra",
+      "totalHours": "Totale Ore",
+      "totalPicap": "Totale PICAP"
+    },
     "columns": {
       "day": "Giorno",
       "entrance": "Entrata",

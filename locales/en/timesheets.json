@@ -32,6 +32,13 @@
     "entriesLoaded": "{{count}} entries loaded",
     "totalHours": "{{count}} hours",
     "workedDays": "{{count}} worked days",
+    "summary": {
+      "title": "RIL summary",
+      "workedDays": "Worked Days",
+      "extraHours": "Extra Hours",
+      "totalHours": "Total Hours",
+      "totalPicap": "Total PICAP"
+    },
     "columns": {
       "day": "Day",
       "entrance": "Start",
