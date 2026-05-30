@@ -71,21 +71,13 @@ describe('<WorkUnitsView /> assignment-load failure', () => {
       // Click Manage Members on the only work unit row.
       fireEvent.click(screen.getByText('hr:competenceCenters.manageMembers'));
 
-      // After the rejected load settles, Save Assignments must be disabled.
-      const saveBtn = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll('button')).find(
-          (b) => b.textContent?.trim() === 'hr:competenceCenters.saveAssignments',
-        ) as HTMLButtonElement | undefined;
-        if (!btn) throw new Error('Save button not yet rendered');
-        return btn;
-      });
+      const saveBtn = (await screen.findByRole('button', {
+        name: 'hr:competenceCenters.saveAssignments',
+      })) as HTMLButtonElement;
 
-      await waitFor(() => {
-        if (!saveBtn.disabled) throw new Error('Save still enabled');
-      });
+      await waitFor(() => expect(toastErrorMock).toHaveBeenCalled());
 
       expect(saveBtn.disabled).toBe(true);
-      expect(toastErrorMock).toHaveBeenCalled();
       expect(toastErrorMock.mock.calls[0][0]).toBe('hr:competenceCenters.failedToLoadUnitUsers');
     } finally {
       console.error = originalError;

@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { screen } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import UserAssignmentModal from '../../../components/shared/UserAssignmentModal';
 import type { Role, User } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
@@ -74,5 +74,45 @@ describe('<UserAssignmentModal /> dark-mode contrast', () => {
     // Token-based replacements that adapt to the active theme.
     expect(markup).toContain('bg-card');
     expect(markup).toContain('border-border');
+  });
+
+  test('guards save while an assignment update is pending', async () => {
+    let resolveSave: (() => void) | undefined;
+    const saveAssignedUserIds = mock(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+    const onClose = mock(() => {});
+
+    render(
+      <UserAssignmentModal
+        isOpen
+        onClose={onClose}
+        users={users}
+        roles={roles}
+        loadAssignedUserIds={mock(async () => [])}
+        saveAssignedUserIds={saveAssignedUserIds}
+        entityLabel="Progetto"
+        entityName="Website Redesign"
+      />,
+    );
+    await screen.findByText('Marco Bianchi');
+
+    const saveButton = screen.getByRole('button', { name: 'buttons.save' }) as HTMLButtonElement;
+    fireEvent.click(saveButton);
+
+    await waitFor(() => expect(saveButton.disabled).toBe(true));
+    fireEvent.click(saveButton);
+
+    expect(saveAssignedUserIds).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'buttons.cancel' })).toBeDisabled();
+
+    await act(async () => {
+      resolveSave?.();
+    });
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 });
