@@ -393,6 +393,13 @@
       "when": 1779878737658,
       "tag": "0055_reseed_hr_cost_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1780147595292,
+      "tag": "0056_remove_internal_user_create_delete_from_default_managers",
+      "breakpoints": true
     }
   ]
 }
