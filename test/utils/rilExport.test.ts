@@ -56,5 +56,7 @@ describe('RIL Excel export', () => {
     expect(worksheet?.getColumn(27).hidden).toBe(true);
     expect(worksheet?.getCell('A40').value).toBe('Totali');
     expect(worksheet?.getCell('A44').value).toBe('Giorni Lavorativi');
+    expect(worksheet?.getCell('B44').value).toBe(20);
+    expect(worksheet?.getCell('B42').value).toBe(0);
   });
 });

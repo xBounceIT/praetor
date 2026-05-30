@@ -161,7 +161,7 @@ describe('RIL helpers', () => {
       totalHours: 160,
       totalPicap: 160,
       workedDays: 20,
-      workdays: 21,
+      workdays: 20,
       holidayWeekdays: 1,
     });
     expect(getRilMonthBounds('2026-05').toDate).toBe('2026-05-31');
