@@ -64,7 +64,7 @@ Se un utente non riesce ad accedere, controlla credenziali, stato dell'utente, r
 
 Le impostazioni generali controllano funzioni trasversali come AI reporting e preferenze applicative. Le impostazioni email servono per invii e notifiche.
 
-Dalla scheda **Preferenze di Tracciamento** gli amministratori configurano anche i metadati usati dal prospetto RIL: nome azienda, orario di entrata predefinito e minuti di pausa pranzo. Questi valori vengono stampati nell'intestazione del file Excel RIL; non modificano le registrazioni esistenti.
+Dalla scheda **Preferenze di Tracciamento** gli amministratori configurano anche i metadati usati dal prospetto RIL: nome azienda, orario di entrata predefinito e minuti di pausa pranzo. Il valore della pausa pranzo viene usato anche per ricalcolare Ore e PICAP dai valori modificabili di entrata e uscita; nessuna di queste impostazioni modifica le registrazioni esistenti.
 
 La visibilità della pagina RIL si gestisce dai ruoli con il permesso **timesheets.ril.view**. I ruoli che avevano già accesso al Time Tracker ricevono automaticamente il permesso durante la migrazione.
 

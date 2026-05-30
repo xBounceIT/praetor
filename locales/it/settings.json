@@ -194,7 +194,7 @@
     "rilDefaultStartTimeLabel": "Orario Entrata Predefinito",
     "rilDefaultStartTimeDescription": "Stampato nell'intestazione del file RIL; le righe RIL usano orari fissi 09:00-18:00.",
     "rilLunchBreakMinutesLabel": "Minuti Pausa Pranzo",
-    "rilLunchBreakMinutesDescription": "Stampati nell'intestazione del file RIL; le righe RIL usano orari fissi 09:00-18:00.",
+    "rilLunchBreakMinutesDescription": "Usati per calcolare Ore/PICAP dagli orari di entrata e uscita e stampati nell'intestazione del file RIL.",
     "locationTypes": {
       "office": "Ufficio",
       "customerPremise": "Sede Cliente",

@@ -64,32 +64,59 @@ describe('RIL helpers', () => {
     expect(rows.find((row) => row.day === 4)?.transfer).toBe('In office');
   });
 
-  test('uses fixed start/end values while deriving hours and PICAP from duration', () => {
+  test('uses fixed start/end values on every valid weekday and derives hours/PICAP from them', () => {
     const rows = generateRilRows({
       year: 2026,
       month: 5,
-      defaultStartTime: '08:30',
       lunchBreakMinutes: 60,
-      entries: [entry({ date: '2026-05-04', duration: 7.62 })],
+      entries: [],
     });
     const row = rows.find((candidate) => candidate.day === 4);
 
     expect(row?.entrance).toBe('09:00');
     expect(row?.exit).toBe('18:00');
-    expect(row?.hours).toBe('7:37');
-    expect(row?.picap).toBe(7.5);
+    expect(row?.hours).toBe('8:00');
+    expect(row?.picap).toBe(8);
+    expect(row?.worked).toBe(true);
   });
 
-  test('keeps fixed exit time when duration is 6 hours or less', () => {
+  test('leaves weekends and holidays without default times', () => {
     const rows = generateRilRows({
       year: 2026,
       month: 5,
-      defaultStartTime: '09:00',
-      lunchBreakMinutes: 60,
-      entries: [entry({ date: '2026-05-05', duration: 6 })],
+      entries: [],
     });
 
-    expect(rows.find((row) => row.day === 5)?.exit).toBe('18:00');
+    expect(rows.find((row) => row.day === 1)).toMatchObject({
+      entrance: '',
+      exit: '',
+      hours: '',
+      picap: 0,
+      notes: 'F',
+      worked: false,
+    });
+    expect(rows.find((row) => row.day === 2)).toMatchObject({
+      entrance: '',
+      exit: '',
+      hours: '',
+      picap: 0,
+      worked: false,
+    });
+  });
+
+  test('calculates worked time from entrance and exit values minus lunch pause', () => {
+    const rows = generateRilRows({
+      year: 2026,
+      month: 5,
+      lunchBreakMinutes: 30,
+      entries: [],
+    });
+
+    expect(rows.find((row) => row.day === 4)).toMatchObject({
+      hours: '8:30',
+      hoursDecimal: 8.5,
+      picap: 8.5,
+    });
   });
 
   test('defaults Commessa to unique order IDs with project-name fallback', () => {
@@ -121,9 +148,9 @@ describe('RIL helpers', () => {
     });
 
     expect(calculateRilTotals(rows)).toMatchObject({
-      totalHours: 12,
-      totalPicap: 12,
-      workedDays: 2,
+      totalHours: 160,
+      totalPicap: 160,
+      workedDays: 20,
       workdays: 21,
       holidayWeekdays: 1,
     });

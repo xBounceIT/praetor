@@ -194,7 +194,7 @@
     "rilDefaultStartTimeLabel": "Default Start Time",
     "rilDefaultStartTimeDescription": "Printed in the RIL workbook header; RIL rows use fixed 09:00-18:00 times.",
     "rilLunchBreakMinutesLabel": "Lunch Break Minutes",
-    "rilLunchBreakMinutesDescription": "Printed in the RIL workbook header; RIL rows use fixed 09:00-18:00 times.",
+    "rilLunchBreakMinutesDescription": "Used to calculate RIL hours/PICAP from entrance and exit times and printed in the workbook header.",
     "locationTypes": {
       "office": "Office",
       "customerPremise": "Customer Premise",

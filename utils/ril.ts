@@ -75,6 +75,8 @@ export const getRilLocationLabels = (locale: RilLocale) => RIL_LOCATION_LABELS[l
 const WEEKDAY_FORMATTER = new Intl.DateTimeFormat('it-IT', { weekday: 'short' });
 const RIL_FIXED_ENTRANCE = '09:00';
 const RIL_FIXED_EXIT = '18:00';
+const DEFAULT_LUNCH_BREAK_MINUTES = 60;
+const LUNCH_BREAK_THRESHOLD_MINUTES = 6 * 60;
 
 export const isValidRilStartTime = (value: string | undefined | null): value is string =>
   typeof value === 'string' && TIME_OF_DAY_PATTERN.test(value);
@@ -103,6 +105,31 @@ export const parseRilTimeToMinutes = (value: string): number => {
   if (!isValidRilStartTime(value)) return 0;
   const [hours, minutes] = value.split(':').map(Number);
   return hours * 60 + minutes;
+};
+
+const normalizeLunchBreakMinutes = (value: number | undefined): number => {
+  const parsed = Number(value ?? DEFAULT_LUNCH_BREAK_MINUTES);
+  if (!Number.isFinite(parsed)) return DEFAULT_LUNCH_BREAK_MINUTES;
+  return Math.min(240, Math.max(0, Math.round(parsed)));
+};
+
+const calculateRilWorkedHoursFromTimes = (
+  entrance: string,
+  exit: string,
+  lunchBreakMinutes = DEFAULT_LUNCH_BREAK_MINUTES,
+): number => {
+  if (!isValidRilStartTime(entrance) || !isValidRilStartTime(exit)) return 0;
+
+  const startMinutes = parseRilTimeToMinutes(entrance);
+  const exitMinutes = parseRilTimeToMinutes(exit);
+  if (exitMinutes <= startMinutes) return 0;
+
+  const elapsedMinutes = exitMinutes - startMinutes;
+  const lunchMinutes =
+    elapsedMinutes > LUNCH_BREAK_THRESHOLD_MINUTES
+      ? normalizeLunchBreakMinutes(lunchBreakMinutes)
+      : 0;
+  return Math.max(0, (elapsedMinutes - lunchMinutes) / 60);
 };
 
 export const formatRilMinutesAsClock = (minutes: number): string => {
@@ -150,6 +177,7 @@ export const generateRilRows = ({
   month,
   entries,
   projects = [],
+  lunchBreakMinutes = DEFAULT_LUNCH_BREAK_MINUTES,
   locale = 'en',
 }: RilGenerationOptions): RilRow[] => {
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -173,9 +201,12 @@ export const generateRilRows = ({
     const dayOfWeek = dateObj.getDay();
     const isWorkday = dayOfWeek >= 1 && dayOfWeek <= 5;
     const isHoliday = isWorkday && isItalianHoliday(dateObj) !== null;
+    const isValidWorkday = isWorkday && !isHoliday;
     const dayEntries = entriesByDate.get(date) ?? [];
-    const duration = dayEntries.reduce((sum, entry) => sum + Number(entry.duration || 0), 0);
-    const worked = duration > 0;
+    const hoursDecimal = isValidWorkday
+      ? calculateRilWorkedHoursFromTimes(RIL_FIXED_ENTRANCE, RIL_FIXED_EXIT, lunchBreakMinutes)
+      : 0;
+    const worked = hoursDecimal > 0;
     const uniqueProjects = new Set<string>();
     for (const entry of dayEntries) {
       const code = getProjectCode(entry, projectById);
@@ -189,18 +220,19 @@ export const generateRilRows = ({
       day,
       date,
       weekday: WEEKDAY_FORMATTER.format(dateObj),
-      entrance: worked ? RIL_FIXED_ENTRANCE : '',
-      exit: worked ? RIL_FIXED_EXIT : '',
-      hours: formatRilHoursAsDuration(duration),
-      hoursDecimal: duration,
-      picap: worked ? roundRilPicapHours(duration) : 0,
+      entrance: isValidWorkday ? RIL_FIXED_ENTRANCE : '',
+      exit: isValidWorkday ? RIL_FIXED_EXIT : '',
+      hours: formatRilHoursAsDuration(hoursDecimal),
+      hoursDecimal,
+      picap: worked ? roundRilPicapHours(hoursDecimal) : 0,
       phoneAvailability: '',
       notes: isHoliday ? 'F' : '',
-      transfer: worked
-        ? allRemote
-          ? RIL_LOCATION_LABELS[locale].remote
-          : RIL_LOCATION_LABELS[locale].office
-        : '',
+      transfer:
+        dayEntries.length > 0
+          ? allRemote
+            ? RIL_LOCATION_LABELS[locale].remote
+            : RIL_LOCATION_LABELS[locale].office
+          : '',
       code: '',
       order: Array.from(uniqueProjects).join('; '),
       isHoliday,

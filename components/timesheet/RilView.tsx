@@ -13,18 +13,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import api from '../../services/api';
 import type { GeneralSettings, Project, TimeEntry, User } from '../../types';
 import {
   calculateRilTotals,
+  formatRilHoursAsDuration,
   generateRilRows,
   getCurrentRilMonthKey,
   getRilLocationLabels,
   getRilMonthBounds,
+  isValidRilStartTime,
+  parseRilTimeToMinutes,
   type RilRow,
+  roundRilPicapHours,
 } from '../../utils/ril';
 import { downloadRilWorkbook } from '../../utils/rilExport';
-import StandardTable, { type Column } from '../shared/StandardTable';
 
 const EMPTY_SELECT_VALUE = '__empty__';
 const RIL_NOTES_OPTIONS = [
@@ -38,6 +49,12 @@ const RIL_CODE_OPTIONS = [
   { value: 'SD', label: 'Sede Disagiata' },
 ] as const;
 
+type RilSelectOption = {
+  value: string;
+  label: string;
+  display?: string;
+};
+
 interface RilViewProps {
   currentUser: User;
   availableUsers: User[];
@@ -50,21 +67,33 @@ interface RilViewProps {
   >;
 }
 
-type EditableRilField = 'entrance' | 'exit' | 'hours' | 'picap' | 'notes' | 'transfer' | 'code';
+type EditableRilField = 'entrance' | 'exit' | 'notes' | 'transfer' | 'code';
 
-const parseDraftHours = (value: string): number => {
-  const trimmed = value.trim().replace(',', '.');
-  if (!trimmed) return 0;
-  if (trimmed.includes(':')) {
-    const [hours, minutes = '0'] = trimmed.split(':');
-    const parsedHours = Number(hours);
-    const parsedMinutes = Number(minutes);
-    if (Number.isFinite(parsedHours) && Number.isFinite(parsedMinutes)) {
-      return Math.max(0, parsedHours + parsedMinutes / 60);
-    }
-  }
-  const parsed = Number(trimmed);
-  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+const LUNCH_BREAK_THRESHOLD_MINUTES = 6 * 60;
+
+const normalizeLunchBreakMinutes = (value: number): number => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 60;
+  return Math.min(240, Math.max(0, Math.round(parsed)));
+};
+
+const calculateDraftHoursFromTimes = (
+  entrance: string,
+  exit: string,
+  lunchBreakMinutes: number,
+): number => {
+  if (!isValidRilStartTime(entrance) || !isValidRilStartTime(exit)) return 0;
+
+  const startMinutes = parseRilTimeToMinutes(entrance);
+  const exitMinutes = parseRilTimeToMinutes(exit);
+  if (exitMinutes <= startMinutes) return 0;
+
+  const elapsedMinutes = exitMinutes - startMinutes;
+  const lunchMinutes =
+    elapsedMinutes > LUNCH_BREAK_THRESHOLD_MINUTES
+      ? normalizeLunchBreakMinutes(lunchBreakMinutes)
+      : 0;
+  return Math.max(0, (elapsedMinutes - lunchMinutes) / 60);
 };
 
 const normalizeMonthKey = (value: string): string => {
@@ -159,34 +188,37 @@ const RilView: React.FC<RilViewProps> = ({
     setLastExportFilename(null);
   };
 
-  const updateRow = useCallback((day: number, field: EditableRilField, value: string) => {
-    setRows((prev) =>
-      prev.map((row) => {
-        if (row.day !== day) return row;
-        if (row.isHoliday) return row;
-        if (field === 'hours') {
-          const hoursDecimal = parseDraftHours(value);
+  const updateRow = useCallback(
+    (day: number, field: EditableRilField, value: string) => {
+      setRows((prev) =>
+        prev.map((row) => {
+          if (row.day !== day || row.isHoliday) return row;
+
+          const nextRow = { ...row, [field]: value };
+          if (field !== 'entrance' && field !== 'exit') return nextRow;
+
+          const hoursDecimal = calculateDraftHoursFromTimes(
+            nextRow.entrance,
+            nextRow.exit,
+            lunchBreakMinutes,
+          );
           return {
-            ...row,
-            hours: value,
+            ...nextRow,
+            hours: formatRilHoursAsDuration(hoursDecimal),
             hoursDecimal,
-            picap: Math.round(hoursDecimal * 4) / 4,
+            picap: hoursDecimal > 0 ? roundRilPicapHours(hoursDecimal) : 0,
             worked: hoursDecimal > 0,
           };
-        }
-        if (field === 'picap') {
-          const picap = Number(value.replace(',', '.'));
-          return { ...row, picap: Number.isFinite(picap) ? picap : 0 };
-        }
-        return { ...row, [field]: value };
-      }),
-    );
-  }, []);
+        }),
+      );
+    },
+    [lunchBreakMinutes],
+  );
 
-  const getEditableValue = useCallback((row: RilRow, field: EditableRilField): string => {
-    if (field === 'picap' && row.picap === 0 && !row.worked) return '';
-    return String(row[field] ?? '');
-  }, []);
+  const getEditableValue = useCallback(
+    (row: RilRow, field: EditableRilField): string => String(row[field] ?? ''),
+    [],
+  );
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -209,101 +241,82 @@ const RilView: React.FC<RilViewProps> = ({
     }
   };
 
-  const columns = useMemo<Column<RilRow>[]>(() => {
+  const transferOptions = useMemo<RilSelectOption[]>(() => {
     const locationLabels = getRilLocationLabels(locale);
-    const transferOptions = [
-      { value: locationLabels.office, label: locationLabels.office },
-      { value: locationLabels.remote, label: locationLabels.remote },
-    ];
-
-    const editableColumn = (
-      field: EditableRilField,
-      label: string,
-      inputClassName = 'min-w-[5rem]',
-    ): Column<RilRow> => ({
-      header: label,
-      id: field,
-      accessorKey: field,
-      disableFiltering: true,
-      disableSorting: true,
-      cell: ({ row }) => (
-        <Input
-          aria-label={`${label} ${row.day}`}
-          value={getEditableValue(row, field)}
-          disabled={row.isHoliday}
-          onChange={(event) => updateRow(row.day, field, event.target.value)}
-          className={`h-7 px-2 text-[11px] disabled:cursor-not-allowed ${inputClassName}`}
-        />
-      ),
-    });
-
-    const selectColumn = (
-      field: EditableRilField,
-      label: string,
-      options: ReadonlyArray<{ value: string; label: string }>,
-      triggerClassName = 'min-w-[7rem]',
-    ): Column<RilRow> => ({
-      header: label,
-      id: field,
-      accessorKey: field,
-      disableFiltering: true,
-      disableSorting: true,
-      cell: ({ row }) => {
-        const rawValue = getEditableValue(row, field);
-        return (
-          <Select
-            value={rawValue || EMPTY_SELECT_VALUE}
-            onValueChange={(value) =>
-              updateRow(row.day, field, value === EMPTY_SELECT_VALUE ? '' : value)
-            }
-            disabled={row.isHoliday}
-          >
-            <SelectTrigger
-              aria-label={`${label} ${row.day}`}
-              className={`h-7 px-2 text-[11px] disabled:cursor-not-allowed ${triggerClassName}`}
-            >
-              <SelectValue placeholder="-" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={EMPTY_SELECT_VALUE}>-</SelectItem>
-              {options.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.value} - {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        );
-      },
-    });
-
-    const transferLabel = t('ril.columns.transfer');
-
     return [
       {
-        header: t('ril.columns.day'),
-        id: 'day',
-        accessorKey: 'day',
-        disableFiltering: true,
-        disableSorting: true,
-        cell: ({ row }) => (
-          <span className="flex min-w-[3.5rem] items-center justify-between gap-2 font-medium">
-            {row.weekday && (
-              <span className="text-xs font-normal text-muted-foreground">{row.weekday}</span>
-            )}
-            <span className="tabular-nums">{row.day}</span>
-          </span>
-        ),
+        value: locationLabels.office,
+        label: locationLabels.office,
+        display: locationLabels.office,
       },
-      editableColumn('entrance', t('ril.columns.entrance')),
-      editableColumn('exit', t('ril.columns.exit')),
-      editableColumn('hours', t('ril.columns.hours')),
-      editableColumn('picap', t('ril.columns.picap'), 'min-w-[4.5rem]'),
-      selectColumn('notes', t('ril.columns.notes'), RIL_NOTES_OPTIONS, 'min-w-[7rem]'),
-      selectColumn('transfer', transferLabel, transferOptions, 'min-w-[9rem]'),
-      selectColumn('code', t('ril.columns.code'), RIL_CODE_OPTIONS, 'min-w-[7rem]'),
+      {
+        value: locationLabels.remote,
+        label: locationLabels.remote,
+        display: locationLabels.remote,
+      },
     ];
-  }, [getEditableValue, locale, t, updateRow]);
+  }, [locale]);
+
+  const renderEditableInput = (row: RilRow, field: EditableRilField, label: string) => (
+    <Input
+      aria-label={`${label} ${row.day}`}
+      type="time"
+      value={getEditableValue(row, field)}
+      disabled={row.isHoliday}
+      onChange={(event) => updateRow(row.day, field, event.target.value)}
+      className="h-7 w-full min-w-0 px-2 text-xs tabular-nums disabled:cursor-not-allowed"
+    />
+  );
+
+  const renderComputedValue = (row: RilRow, label: string, value: string | number) => (
+    <output
+      aria-label={`${label} ${row.day}`}
+      className="block min-h-7 px-1 py-1.5 text-right text-xs tabular-nums"
+    >
+      {value || '-'}
+    </output>
+  );
+
+  const renderSelectControl = (
+    row: RilRow,
+    field: EditableRilField,
+    label: string,
+    options: ReadonlyArray<RilSelectOption>,
+  ) => (
+    <Select
+      value={getEditableValue(row, field) || EMPTY_SELECT_VALUE}
+      onValueChange={(value) =>
+        updateRow(row.day, field, value === EMPTY_SELECT_VALUE ? '' : value)
+      }
+      disabled={row.isHoliday}
+    >
+      <SelectTrigger
+        aria-label={`${label} ${row.day}`}
+        className="h-7 w-full min-w-0 px-2 text-xs disabled:cursor-not-allowed [&>svg]:size-3"
+      >
+        <SelectValue placeholder="-" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={EMPTY_SELECT_VALUE}>-</SelectItem>
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.display ?? `${option.value} - ${option.label}`}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  const tableHeaders = [
+    { key: 'day', label: t('ril.columns.day'), className: 'w-[4.25rem] min-w-[4.25rem]' },
+    { key: 'entrance', label: t('ril.columns.entrance'), className: 'w-24 min-w-24' },
+    { key: 'exit', label: t('ril.columns.exit'), className: 'w-24 min-w-24' },
+    { key: 'hours', label: t('ril.columns.hours'), className: 'w-20 min-w-20 text-right' },
+    { key: 'picap', label: t('ril.columns.picap'), className: 'w-20 min-w-20 text-right' },
+    { key: 'notes', label: t('ril.columns.notes'), className: 'w-32 min-w-32' },
+    { key: 'transfer', label: t('ril.columns.transfer'), className: 'w-40 min-w-40' },
+    { key: 'code', label: t('ril.columns.code'), className: 'w-32 min-w-32' },
+  ];
 
   const getRowClassName = useCallback(
     (row: RilRow) =>
@@ -369,15 +382,9 @@ const RilView: React.FC<RilViewProps> = ({
         </div>
       )}
 
-      <StandardTable<RilRow>
-        title={t('ril.tableTitle')}
-        data={rows}
-        columns={columns}
-        defaultRowsPerPage={50}
-        minBodyRows={31}
-        rowClassName={getRowClassName}
-        tableContainerClassName="overflow-x-auto [&_td]:!px-2 [&_td]:!py-1 [&_th]:!h-8 [&_th]:!px-2"
-        headerExtras={
+      <section className="space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="text-base font-semibold text-foreground">{t('ril.tableTitle')}</h3>
           <div className="flex flex-wrap gap-2">
             <Badge variant="secondary">
               {t('ril.entriesLoaded', { count: sourceEntries.length })}
@@ -388,8 +395,65 @@ const RilView: React.FC<RilViewProps> = ({
             <Badge variant="secondary">{t('ril.workedDays', { count: totals.workedDays })}</Badge>
             {lastExportFilename && <Badge variant="outline">{lastExportFilename}</Badge>}
           </div>
-        }
-      />
+        </div>
+        <div className="overflow-x-auto rounded-md border border-border">
+          <Table className="min-w-[49rem] table-fixed text-xs">
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                {tableHeaders.map((header) => (
+                  <TableHead key={header.key} className={`h-8 px-2 ${header.className}`}>
+                    {header.label}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row) => (
+                <TableRow key={row.day} className={getRowClassName(row)}>
+                  <TableCell className="w-[4.25rem] min-w-[4.25rem] px-2 py-1 font-medium">
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-normal text-muted-foreground">
+                        {row.weekday || '-'}
+                      </span>
+                      <span className="tabular-nums">{row.day}</span>
+                    </span>
+                  </TableCell>
+                  <TableCell className="w-24 min-w-24 px-2 py-1">
+                    {renderEditableInput(row, 'entrance', t('ril.columns.entrance'))}
+                  </TableCell>
+                  <TableCell className="w-24 min-w-24 px-2 py-1">
+                    {renderEditableInput(row, 'exit', t('ril.columns.exit'))}
+                  </TableCell>
+                  <TableCell className="w-20 min-w-20 px-2 py-1">
+                    {renderComputedValue(row, t('ril.columns.hours'), row.hours)}
+                  </TableCell>
+                  <TableCell className="w-20 min-w-20 px-2 py-1">
+                    {renderComputedValue(
+                      row,
+                      t('ril.columns.picap'),
+                      row.worked || row.picap > 0 ? row.picap : '',
+                    )}
+                  </TableCell>
+                  <TableCell className="w-32 min-w-32 px-2 py-1">
+                    {renderSelectControl(row, 'notes', t('ril.columns.notes'), RIL_NOTES_OPTIONS)}
+                  </TableCell>
+                  <TableCell className="w-40 min-w-40 px-2 py-1">
+                    {renderSelectControl(
+                      row,
+                      'transfer',
+                      t('ril.columns.transfer'),
+                      transferOptions,
+                    )}
+                  </TableCell>
+                  <TableCell className="w-32 min-w-32 px-2 py-1">
+                    {renderSelectControl(row, 'code', t('ril.columns.code'), RIL_CODE_OPTIONS)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </section>
     </div>
   );
 };

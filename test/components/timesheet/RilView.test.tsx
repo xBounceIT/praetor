@@ -91,9 +91,13 @@ describe('<RilView />', () => {
     expect(screen.getByText('ril.columns.code')).toBeInTheDocument();
     expect(screen.queryByText('ril.columns.phoneAvailability')).toBeNull();
     expect(screen.queryByText('ril.columns.order')).toBeNull();
+    expect(await screen.findByLabelText('ril.columns.entrance 4')).toHaveValue('09:00');
+    expect(screen.getByLabelText('ril.columns.exit 4')).toHaveValue('18:00');
+    expect(screen.getByLabelText('ril.columns.hours 4')).toHaveTextContent('8:00');
+    expect(screen.getByLabelText('ril.columns.picap 4')).toHaveTextContent('8');
   });
 
-  test('keeps draft edits local and reset rebuilds from timesheets', async () => {
+  test('keeps draft edits local, recalculates totals from times, and resets from timesheets', async () => {
     api.entries.listPage.mockResolvedValue({
       entries: [entry({ date: '2026-05-04', duration: 8 })],
       nextCursor: null,
@@ -101,15 +105,19 @@ describe('<RilView />', () => {
 
     renderRilView();
 
-    const hoursInput = await screen.findByLabelText('ril.columns.hours 4');
-    fireEvent.change(hoursInput, { target: { value: '6:00' } });
-    expect(hoursInput).toHaveValue('6:00');
+    const exitInput = await screen.findByLabelText('ril.columns.exit 4');
+    fireEvent.change(exitInput, { target: { value: '17:00' } });
+    expect(exitInput).toHaveValue('17:00');
+    expect(screen.getByLabelText('ril.columns.hours 4')).toHaveTextContent('7:00');
+    expect(screen.getByLabelText('ril.columns.picap 4')).toHaveTextContent('7');
 
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /ril.reset/ })).not.toBeDisabled(),
     );
     fireEvent.click(screen.getByRole('button', { name: /ril.reset/ }));
-    await waitFor(() => expect(hoursInput).toHaveValue('8:00'));
+    await waitFor(() => expect(exitInput).toHaveValue('18:00'));
+    expect(screen.getByLabelText('ril.columns.hours 4')).toHaveTextContent('8:00');
+    expect(screen.getByLabelText('ril.columns.picap 4')).toHaveTextContent('8');
     expect(api.entries.update).not.toHaveBeenCalled();
     expect(api.entries.create).not.toHaveBeenCalled();
   });
