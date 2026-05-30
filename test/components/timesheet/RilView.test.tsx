@@ -95,6 +95,13 @@ describe('<RilView />', () => {
     expect(screen.getByLabelText('ril.columns.exit 4')).toHaveValue('18:00');
     expect(screen.getByLabelText('ril.columns.hours 4')).toHaveTextContent('8:00');
     expect(screen.getByLabelText('ril.columns.picap 4')).toHaveTextContent('8');
+    const dayCell = screen
+      .getByLabelText('ril.columns.entrance 4')
+      .closest('tr')
+      ?.querySelector('td');
+    expect(dayCell?.className).toContain('w-14');
+    expect(dayCell?.querySelector('span')?.className).toContain('inline-flex');
+    expect(dayCell?.querySelector('span')?.className).not.toContain('justify-between');
     expect(screen.queryByText('ril.entriesLoaded')).toBeNull();
     expect(screen.getByLabelText('ril.summary.workedDays')).toHaveTextContent('20');
     expect(screen.getByLabelText('ril.summary.lunchWindow')).toHaveTextContent('13:00-14:00');

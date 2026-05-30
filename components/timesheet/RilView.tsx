@@ -308,7 +308,7 @@ const RilView: React.FC<RilViewProps> = ({
   );
 
   const tableHeaders = [
-    { key: 'day', label: t('ril.columns.day'), className: 'w-[4.25rem] min-w-[4.25rem]' },
+    { key: 'day', label: t('ril.columns.day'), className: 'w-14 min-w-14' },
     { key: 'entrance', label: t('ril.columns.entrance'), className: 'w-24 min-w-24' },
     { key: 'exit', label: t('ril.columns.exit'), className: 'w-24 min-w-24' },
     { key: 'hours', label: t('ril.columns.hours'), className: 'w-20 min-w-20 text-right' },
@@ -442,8 +442,8 @@ const RilView: React.FC<RilViewProps> = ({
             <TableBody>
               {rows.map((row) => (
                 <TableRow key={row.day} className={getRowClassName(row)}>
-                  <TableCell className="w-[4.25rem] min-w-[4.25rem] px-2 py-1 font-medium">
-                    <span className="flex items-center justify-between gap-2">
+                  <TableCell className="w-14 min-w-14 px-2 py-1 font-medium">
+                    <span className="inline-flex items-center gap-1.5">
                       <span className="text-xs font-normal text-muted-foreground">
                         {row.weekday || '-'}
                       </span>
