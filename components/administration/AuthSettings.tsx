@@ -1,8 +1,24 @@
-import { CircleAlert, Save } from 'lucide-react';
+import {
+  ArrowRight,
+  Check,
+  CircleAlert,
+  FileUp,
+  FlaskConical,
+  FolderTree,
+  Loader2,
+  Lock,
+  Pencil,
+  Plus,
+  Save,
+  Server,
+  ShieldCheck,
+  Trash2,
+} from 'lucide-react';
 import type React from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { siOpenid } from 'simple-icons';
+import { cn } from '@/lib/utils';
 import { useSecretReplaceState } from '../../hooks/useSecretReplaceState';
 import { ldapApi } from '../../services/api/ldap';
 import { ssoApi } from '../../services/api/sso';
@@ -18,11 +34,21 @@ import type {
 import { isStoredSecret, MASKED_SECRET } from '../../utils/maskedSecret';
 import SecretField from '../shared/SecretField';
 import SelectControl from '../shared/SelectControl';
-import Toggle from '../shared/Toggle';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Button } from '../ui/button';
-import { FieldDescription, FieldLabel } from '../ui/field';
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '../ui/card';
+import { FieldDescription, FieldError, FieldLabel, Field as UIField } from '../ui/field';
+import { Input } from '../ui/input';
 import { Switch } from '../ui/switch';
+import { Textarea } from '../ui/textarea';
 
 const PEM_BEGIN_MARKER = '-----BEGIN CERTIFICATE-----';
 const PEM_END_MARKER = '-----END CERTIFICATE-----';
@@ -88,7 +114,7 @@ const renderProviderIcon = (protocol: SsoProtocol, className?: string) =>
   protocol === 'oidc' ? (
     <OpenIdIcon className={className} />
   ) : (
-    <i className={`fa-solid fa-building-shield ${className ?? ''}`.trim()}></i>
+    <ShieldCheck aria-hidden="true" className={className} />
   );
 
 // The backend builds the SAML callback URL from SSO_CALLBACK_BASE_URL/FRONTEND_URL, not from
@@ -534,371 +560,401 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   );
 
   const renderProviderList = (protocol: SsoProtocol) => (
-    <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
-      <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3">
-        {renderProviderIcon(protocol, 'size-4 text-praetor')}
-        <h3 className="font-semibold text-zinc-800">
+    <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+      <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+        <CardTitle className="flex items-center gap-3 text-base">
+          {renderProviderIcon(protocol, 'size-4 text-praetor')}
           {protocol === 'oidc'
             ? t('admin.sso.oidcProviders', 'OpenID Connect Providers')
             : t('admin.sso.samlProviders', 'SAML Providers')}
-        </h3>
-      </div>
-      <div className="divide-y divide-zinc-100">
-        {providersByProtocol[protocol].length === 0 ? (
-          <p className="p-6 text-sm text-zinc-400">
-            {t('admin.sso.noProviders', 'No providers configured.')}
-          </p>
-        ) : (
-          providersByProtocol[protocol].map((provider) => (
-            <div key={provider.id} className="p-4 flex items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-zinc-800">{provider.name}</span>
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${provider.enabled ? 'bg-emerald-50 text-emerald-600' : 'bg-zinc-100 text-emerald-700'}`}
-                  >
-                    {provider.enabled
-                      ? t('admin.sso.enabled', 'Enabled')
-                      : t('admin.sso.disabled', 'Disabled')}
-                  </span>
+        </CardTitle>
+        <CardDescription>
+          {protocol === 'oidc'
+            ? t(
+                'admin.sso.oidcProvidersDescription',
+                'Manage OpenID Connect identity providers for single sign-on.',
+              )
+            : t(
+                'admin.sso.samlProvidersDescription',
+                'Manage SAML identity providers for single sign-on.',
+              )}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="divide-y divide-border">
+          {providersByProtocol[protocol].length === 0 ? (
+            <p className="p-6 text-sm text-muted-foreground">
+              {t('admin.sso.noProviders', 'No providers configured.')}
+            </p>
+          ) : (
+            providersByProtocol[protocol].map((provider) => (
+              <div key={provider.id} className="p-4 flex items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-foreground">{provider.name}</span>
+                    <span
+                      className={cn(
+                        'text-[10px] font-bold px-2 py-0.5 rounded-full',
+                        provider.enabled
+                          ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400'
+                          : 'bg-muted text-muted-foreground',
+                      )}
+                    >
+                      {provider.enabled
+                        ? t('admin.sso.enabled', 'Enabled')
+                        : t('admin.sso.disabled', 'Disabled')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground font-mono">{provider.slug}</p>
                 </div>
-                <p className="text-xs text-zinc-400 font-mono">{provider.slug}</p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => loadProviderDraft(protocol, provider)}
+                    className="text-muted-foreground hover:text-primary"
+                    title={t('admin.sso.editProvider', 'Edit provider')}
+                  >
+                    <Pencil aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => onDeleteSsoProvider(provider.id)}
+                    className="text-muted-foreground hover:text-destructive"
+                    title={t('admin.sso.deleteProvider', 'Delete provider')}
+                  >
+                    <Trash2 aria-hidden="true" />
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => loadProviderDraft(protocol, provider)}
-                  className="text-muted-foreground hover:text-primary"
-                  title={t('admin.sso.editProvider', 'Edit provider')}
-                >
-                  <i className="fa-solid fa-pen"></i>
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => onDeleteSsoProvider(provider.id)}
-                  className="text-muted-foreground hover:text-destructive"
-                  title={t('admin.sso.deleteProvider', 'Delete provider')}
-                >
-                  <i className="fa-solid fa-trash-can"></i>
-                </Button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
+            ))
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 
   const renderProviderForm = (protocol: SsoProtocol) => {
     const draft = providerDrafts[protocol];
     const prefix = `${protocol}_`;
     return (
-      <form
-        onSubmit={(event) => handleSaveProvider(protocol, event)}
-        className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden"
-      >
-        <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <i className={`fa-solid ${draft.id ? 'fa-pen' : 'fa-plus'} text-praetor`}></i>
-            <h3 className="font-semibold text-zinc-800">
+      <form onSubmit={(event) => handleSaveProvider(protocol, event)}>
+        <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+          <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+            <CardTitle className="flex items-center gap-3 text-base">
+              {draft.id ? (
+                <Pencil aria-hidden="true" className="size-4 text-praetor" />
+              ) : (
+                <Plus aria-hidden="true" className="size-4 text-praetor" />
+              )}
               {draft.id
                 ? t('admin.sso.editProvider', 'Edit provider')
                 : t('admin.sso.newProvider', 'New provider')}
-            </h3>
-          </div>
-          <div className="flex items-center gap-3">
-            <Toggle
-              checked={!!draft.enabled}
-              onChange={(enabled) => updateProviderDraft(protocol, { enabled })}
-            />
-            <span className="text-sm font-medium text-zinc-600">
-              {t('admin.sso.enabled', 'Enabled')}
-            </span>
-          </div>
-        </div>
+            </CardTitle>
+            <CardDescription>
+              {t(
+                'admin.sso.providerFormDescription',
+                'Configure the connection details and attribute mappings for this identity provider.',
+              )}
+            </CardDescription>
+            <CardAction>
+              <UIField className="flex-row items-center gap-2">
+                <Switch
+                  id={`provider-enabled-${protocol}`}
+                  checked={!!draft.enabled}
+                  onCheckedChange={(enabled) => updateProviderDraft(protocol, { enabled })}
+                />
+                <FieldLabel htmlFor={`provider-enabled-${protocol}`}>
+                  {t('admin.sso.enabled', 'Enabled')}
+                </FieldLabel>
+              </UIField>
+            </CardAction>
+          </CardHeader>
 
-        <div className="p-6 space-y-6">
-          {providerSaveErrors[protocol] && (
-            <Alert variant="destructive" className="border-destructive/30">
-              <CircleAlert />
-              <AlertTitle>
-                {t('admin.sso.errors.saveFailedTitle', 'Provider could not be saved')}
-              </AlertTitle>
-              <AlertDescription>{providerSaveErrors[protocol]}</AlertDescription>
-            </Alert>
-          )}
+          <CardContent className="p-6 space-y-6">
+            {providerSaveErrors[protocol] && (
+              <Alert variant="destructive" className="border-destructive/30">
+                <CircleAlert />
+                <AlertTitle>
+                  {t('admin.sso.errors.saveFailedTitle', 'Provider could not be saved')}
+                </AlertTitle>
+                <AlertDescription>{providerSaveErrors[protocol]}</AlertDescription>
+              </Alert>
+            )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Field
-              label={t('admin.sso.name', 'Name')}
-              value={draft.name || ''}
-              error={errors[`${prefix}name`]}
-              onChange={(name) => updateProviderDraft(protocol, { name })}
-            />
-            <Field
-              label={t('admin.sso.slug', 'Slug')}
-              value={draft.slug || ''}
-              error={errors[`${prefix}slug`]}
-              monospace
-              onChange={(slug) => updateProviderDraft(protocol, { slug: slug.toLowerCase() })}
-            />
-          </div>
-
-          {protocol === 'oidc' ? (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Field
-                  label={t('admin.sso.issuerUrl', 'Issuer URL')}
-                  value={draft.issuerUrl || ''}
-                  error={errors[`${prefix}issuerUrl`]}
-                  monospace
-                  onChange={(issuerUrl) => updateProviderDraft(protocol, { issuerUrl })}
-                />
-                <Field
-                  label={t('admin.sso.clientId', 'Client ID')}
-                  value={draft.clientId || ''}
-                  error={errors[`${prefix}clientId`]}
-                  monospace
-                  onChange={(clientId) => updateProviderDraft(protocol, { clientId })}
-                />
-                <SecretField
-                  label={t('admin.sso.clientSecret', 'Client Secret')}
-                  value={draft.clientSecret || ''}
-                  monospace
-                  isStored={isStoredSecret(draft.clientSecret)}
-                  isReplacing={!!replacingSecrets[protocol].clientSecret}
-                  onStartReplace={() => startReplaceSecret(protocol, 'clientSecret')}
-                  onCancelReplace={() => cancelReplaceSecret(protocol, 'clientSecret')}
-                  onChange={(clientSecret) => updateProviderDraft(protocol, { clientSecret })}
-                  storedLabel={t('admin.sso.secretStored', 'Secret stored')}
-                  storedHelp={t(
-                    'admin.sso.secretStoredHelp',
-                    'Leave as-is to keep the stored secret, or click Replace to overwrite it.',
-                  )}
-                />
-                <Field
-                  label={t('admin.sso.scopes', 'Scopes')}
-                  value={draft.scopes || 'openid profile email'}
-                  monospace
-                  onChange={(scopes) => updateProviderDraft(protocol, { scopes })}
-                />
-              </div>
-              <div className="flex items-start gap-3 rounded-lg border border-border bg-muted p-4">
-                <Toggle
-                  checked={!!draft.endSessionEnabled}
-                  onChange={(endSessionEnabled) =>
-                    updateProviderDraft(protocol, { endSessionEnabled })
-                  }
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-foreground">
-                    {t('admin.sso.endSessionEnabled', 'Call IdP end-session endpoint on logout')}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {t(
-                      'admin.sso.endSessionHint',
-                      "When enabled, logging out of Praetor also terminates the user's session at the IdP (OIDC RP-Initiated Logout). Requires the IdP's discovery document to advertise an end_session_endpoint and the post-logout redirect URI to be registered with the IdP.",
-                    )}
-                  </p>
-                </div>
-              </div>
-            </>
-          ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Field
-                label={t('admin.sso.metadataUrl', 'Metadata URL')}
-                value={draft.metadataUrl || ''}
-                monospace
-                onChange={(metadataUrl) => updateProviderDraft(protocol, { metadataUrl })}
+                label={t('admin.sso.name', 'Name')}
+                value={draft.name || ''}
+                error={errors[`${prefix}name`]}
+                onChange={(name) => updateProviderDraft(protocol, { name })}
               />
               <Field
-                label={t('admin.sso.entryPoint', 'Entry Point')}
-                value={draft.entryPoint || ''}
+                label={t('admin.sso.slug', 'Slug')}
+                value={draft.slug || ''}
+                error={errors[`${prefix}slug`]}
                 monospace
-                onChange={(entryPoint) => updateProviderDraft(protocol, { entryPoint })}
+                onChange={(slug) => updateProviderDraft(protocol, { slug: slug.toLowerCase() })}
               />
-              <Field
-                label={t('admin.sso.idpIssuer', 'IdP Issuer')}
-                value={draft.idpIssuer || ''}
-                monospace
-                error={errors[`${prefix}idpIssuer`]}
-                onChange={(idpIssuer) => updateProviderDraft(protocol, { idpIssuer })}
-              />
-              <Field
-                label={t('admin.sso.spIssuer', 'SP Issuer')}
-                value={draft.spIssuer || ''}
-                monospace
-                onChange={(spIssuer) => updateProviderDraft(protocol, { spIssuer })}
-              />
-              <SecretField
-                multiline
-                monospace
-                label={t('admin.sso.metadataXml', 'Metadata XML')}
-                value={draft.metadataXml || ''}
-                isStored={isStoredSecret(draft.metadataXml)}
-                isReplacing={!!replacingSecrets[protocol].metadataXml}
-                onStartReplace={() => startReplaceSecret(protocol, 'metadataXml')}
-                onCancelReplace={() => cancelReplaceSecret(protocol, 'metadataXml')}
-                onChange={(metadataXml) => updateProviderDraft(protocol, { metadataXml })}
-                storedLabel={t('admin.sso.metadataXmlStored', 'Metadata XML stored')}
-                storedHelp={t(
-                  'admin.sso.metadataXmlStoredHelp',
-                  'Leave as-is to keep the stored metadata, or click Replace to overwrite it.',
-                )}
-              />
-              <SecretField
-                multiline
-                monospace
-                label={t('admin.sso.idpCert', 'IdP Certificate')}
-                value={draft.idpCert || ''}
-                isStored={isStoredSecret(draft.idpCert)}
-                isReplacing={!!replacingSecrets[protocol].idpCert}
-                onStartReplace={() => startReplaceSecret(protocol, 'idpCert')}
-                onCancelReplace={() => cancelReplaceSecret(protocol, 'idpCert')}
-                onChange={(idpCert) => updateProviderDraft(protocol, { idpCert })}
-                storedLabel={t('admin.sso.idpCertStored', 'Certificate stored')}
-                storedHelp={t(
-                  'admin.sso.idpCertStoredHelp',
-                  'Leave as-is to keep the stored certificate, or click Replace to overwrite it.',
-                )}
-              />
-              <SecretField
-                multiline
-                monospace
-                label={t('admin.sso.privateKey', 'Signing Private Key')}
-                value={draft.privateKey || ''}
-                isStored={isStoredSecret(draft.privateKey)}
-                isReplacing={!!replacingSecrets[protocol].privateKey}
-                onStartReplace={() => startReplaceSecret(protocol, 'privateKey')}
-                onCancelReplace={() => cancelReplaceSecret(protocol, 'privateKey')}
-                onChange={(privateKey) => updateProviderDraft(protocol, { privateKey })}
-                storedLabel={t('admin.sso.privateKeyStored', 'Private key stored')}
-                storedHelp={t(
-                  'admin.sso.privateKeyStoredHelp',
-                  'Leave as-is to keep the stored key, or click Replace to overwrite it.',
-                )}
-              />
-              <TextArea
-                label={t('admin.sso.publicCert', 'Signing Public Certificate')}
-                value={draft.publicCert || ''}
-                onChange={(publicCert) => updateProviderDraft(protocol, { publicCert })}
-              />
-              {!!draft.slug?.trim() && acsUrlState.status !== 'loading' && (
-                <div className="md:col-span-2">
-                  {acsUrlState.status === 'ready' ? (
-                    <ReadOnlyField
-                      label={t('admin.sso.acsUrl', 'ACS URL')}
-                      value={fillSlugTemplate(
-                        acsUrlState.template,
-                        draft.slug.trim().toLowerCase(),
-                      )}
-                      monospace
-                    />
-                  ) : (
-                    <>
-                      <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-                        {t('admin.sso.acsUrl', 'ACS URL')}
-                      </label>
-                      <p className="text-xs text-red-500 font-bold">
-                        {acsUrlState.message ||
-                          t(
-                            'admin.sso.errors.acsUrlUnavailable',
-                            'ACS URL unavailable: configure SSO_CALLBACK_BASE_URL on the backend.',
-                          )}
-                      </p>
-                    </>
-                  )}
-                </div>
-              )}
-              {errors[`${prefix}samlConfig`] && (
-                <p className="md:col-span-2 text-red-500 text-xs font-bold">
-                  {errors[`${prefix}samlConfig`]}
-                </p>
-              )}
             </div>
-          )}
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Field
-              label={
-                protocol === 'oidc'
-                  ? t('admin.sso.usernameClaim', 'Username Claim')
-                  : t('admin.sso.usernameAttribute', 'Username Attribute')
-              }
-              value={draft.usernameAttribute || ''}
-              error={errors[`${prefix}usernameAttribute`]}
-              monospace
-              onChange={(usernameAttribute) => updateProviderDraft(protocol, { usernameAttribute })}
-            />
-            <Field
-              label={t('admin.sso.nameAttribute', 'Name Attribute')}
-              value={draft.nameAttribute || ''}
-              monospace
-              onChange={(nameAttribute) => updateProviderDraft(protocol, { nameAttribute })}
-            />
-            <Field
-              label={t('admin.sso.emailAttribute', 'Email Attribute')}
-              value={draft.emailAttribute || ''}
-              monospace
-              onChange={(emailAttribute) => updateProviderDraft(protocol, { emailAttribute })}
-            />
-            <Field
-              label={t('admin.sso.groupsAttribute', 'Groups Attribute')}
-              value={draft.groupsAttribute || ''}
-              monospace
-              onChange={(groupsAttribute) => updateProviderDraft(protocol, { groupsAttribute })}
-            />
-          </div>
-
-          <RoleMappings
-            mappings={draft.roleMappings || []}
-            roleOptions={roleOptions}
-            errors={errors}
-            errorPrefix={`${prefix}mapping_`}
-            heading={t('admin.sso.roleMappings', 'Role Mappings')}
-            addLabel={t('admin.sso.addMapping', 'Add Mapping')}
-            noMappingsLabel={t('admin.sso.noMappingsConfigured', 'No mappings configured.')}
-            externalPlaceholder={t('admin.sso.externalGroupPlaceholder', 'External group')}
-            onAdd={() =>
-              updateProviderDraft(protocol, {
-                roleMappings: [
-                  ...(draft.roleMappings || []),
-                  { externalGroup: '', role: roleOptions[0]?.id || 'user' },
-                ],
-              })
-            }
-            onRemove={(index) =>
-              updateProviderDraft(protocol, {
-                roleMappings: (draft.roleMappings || []).filter((_, idx) => idx !== index),
-              })
-            }
-            onChange={(index, field, value) => updateProviderMapping(protocol, index, field, value)}
-            renderRoleSelect={renderRoleSelect}
-          />
-        </div>
-
-        <div className="px-6 py-4 bg-zinc-50 border-t border-zinc-200 flex justify-between">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => loadProviderDraft(protocol, buildDefaultProvider(protocol))}
-            className="font-bold text-muted-foreground hover:text-foreground"
-          >
-            {t('admin.sso.clearForm', 'Clear')}
-          </Button>
-          <Button type="submit" size="lg" disabled={savingProvider === protocol}>
-            {savingProvider === protocol ? (
-              <i className="fa-solid fa-circle-notch fa-spin"></i>
+            {protocol === 'oidc' ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Field
+                    label={t('admin.sso.issuerUrl', 'Issuer URL')}
+                    value={draft.issuerUrl || ''}
+                    error={errors[`${prefix}issuerUrl`]}
+                    monospace
+                    onChange={(issuerUrl) => updateProviderDraft(protocol, { issuerUrl })}
+                  />
+                  <Field
+                    label={t('admin.sso.clientId', 'Client ID')}
+                    value={draft.clientId || ''}
+                    error={errors[`${prefix}clientId`]}
+                    monospace
+                    onChange={(clientId) => updateProviderDraft(protocol, { clientId })}
+                  />
+                  <SecretField
+                    label={t('admin.sso.clientSecret', 'Client Secret')}
+                    value={draft.clientSecret || ''}
+                    monospace
+                    isStored={isStoredSecret(draft.clientSecret)}
+                    isReplacing={!!replacingSecrets[protocol].clientSecret}
+                    onStartReplace={() => startReplaceSecret(protocol, 'clientSecret')}
+                    onCancelReplace={() => cancelReplaceSecret(protocol, 'clientSecret')}
+                    onChange={(clientSecret) => updateProviderDraft(protocol, { clientSecret })}
+                    storedLabel={t('admin.sso.secretStored', 'Secret stored')}
+                    storedHelp={t(
+                      'admin.sso.secretStoredHelp',
+                      'Leave as-is to keep the stored secret, or click Replace to overwrite it.',
+                    )}
+                  />
+                  <Field
+                    label={t('admin.sso.scopes', 'Scopes')}
+                    value={draft.scopes || 'openid profile email'}
+                    monospace
+                    onChange={(scopes) => updateProviderDraft(protocol, { scopes })}
+                  />
+                </div>
+                <UIField className="flex-row items-start gap-3 rounded-lg border border-border bg-muted p-4">
+                  <Switch
+                    id={`provider-end-session-${protocol}`}
+                    checked={!!draft.endSessionEnabled}
+                    onCheckedChange={(endSessionEnabled) =>
+                      updateProviderDraft(protocol, { endSessionEnabled })
+                    }
+                    className="mt-0.5"
+                  />
+                  <div className="flex flex-col gap-1">
+                    <FieldLabel htmlFor={`provider-end-session-${protocol}`}>
+                      {t('admin.sso.endSessionEnabled', 'Call IdP end-session endpoint on logout')}
+                    </FieldLabel>
+                    <FieldDescription>
+                      {t(
+                        'admin.sso.endSessionHint',
+                        "When enabled, logging out of Praetor also terminates the user's session at the IdP (OIDC RP-Initiated Logout). Requires the IdP's discovery document to advertise an end_session_endpoint and the post-logout redirect URI to be registered with the IdP.",
+                      )}
+                    </FieldDescription>
+                  </div>
+                </UIField>
+              </>
             ) : (
-              t('admin.sso.saveProvider', 'Save Provider')
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Field
+                  label={t('admin.sso.metadataUrl', 'Metadata URL')}
+                  value={draft.metadataUrl || ''}
+                  monospace
+                  onChange={(metadataUrl) => updateProviderDraft(protocol, { metadataUrl })}
+                />
+                <Field
+                  label={t('admin.sso.entryPoint', 'Entry Point')}
+                  value={draft.entryPoint || ''}
+                  monospace
+                  onChange={(entryPoint) => updateProviderDraft(protocol, { entryPoint })}
+                />
+                <Field
+                  label={t('admin.sso.idpIssuer', 'IdP Issuer')}
+                  value={draft.idpIssuer || ''}
+                  monospace
+                  error={errors[`${prefix}idpIssuer`]}
+                  onChange={(idpIssuer) => updateProviderDraft(protocol, { idpIssuer })}
+                />
+                <Field
+                  label={t('admin.sso.spIssuer', 'SP Issuer')}
+                  value={draft.spIssuer || ''}
+                  monospace
+                  onChange={(spIssuer) => updateProviderDraft(protocol, { spIssuer })}
+                />
+                <SecretField
+                  multiline
+                  monospace
+                  label={t('admin.sso.metadataXml', 'Metadata XML')}
+                  value={draft.metadataXml || ''}
+                  isStored={isStoredSecret(draft.metadataXml)}
+                  isReplacing={!!replacingSecrets[protocol].metadataXml}
+                  onStartReplace={() => startReplaceSecret(protocol, 'metadataXml')}
+                  onCancelReplace={() => cancelReplaceSecret(protocol, 'metadataXml')}
+                  onChange={(metadataXml) => updateProviderDraft(protocol, { metadataXml })}
+                  storedLabel={t('admin.sso.metadataXmlStored', 'Metadata XML stored')}
+                  storedHelp={t(
+                    'admin.sso.metadataXmlStoredHelp',
+                    'Leave as-is to keep the stored metadata, or click Replace to overwrite it.',
+                  )}
+                />
+                <SecretField
+                  multiline
+                  monospace
+                  label={t('admin.sso.idpCert', 'IdP Certificate')}
+                  value={draft.idpCert || ''}
+                  isStored={isStoredSecret(draft.idpCert)}
+                  isReplacing={!!replacingSecrets[protocol].idpCert}
+                  onStartReplace={() => startReplaceSecret(protocol, 'idpCert')}
+                  onCancelReplace={() => cancelReplaceSecret(protocol, 'idpCert')}
+                  onChange={(idpCert) => updateProviderDraft(protocol, { idpCert })}
+                  storedLabel={t('admin.sso.idpCertStored', 'Certificate stored')}
+                  storedHelp={t(
+                    'admin.sso.idpCertStoredHelp',
+                    'Leave as-is to keep the stored certificate, or click Replace to overwrite it.',
+                  )}
+                />
+                <SecretField
+                  multiline
+                  monospace
+                  label={t('admin.sso.privateKey', 'Signing Private Key')}
+                  value={draft.privateKey || ''}
+                  isStored={isStoredSecret(draft.privateKey)}
+                  isReplacing={!!replacingSecrets[protocol].privateKey}
+                  onStartReplace={() => startReplaceSecret(protocol, 'privateKey')}
+                  onCancelReplace={() => cancelReplaceSecret(protocol, 'privateKey')}
+                  onChange={(privateKey) => updateProviderDraft(protocol, { privateKey })}
+                  storedLabel={t('admin.sso.privateKeyStored', 'Private key stored')}
+                  storedHelp={t(
+                    'admin.sso.privateKeyStoredHelp',
+                    'Leave as-is to keep the stored key, or click Replace to overwrite it.',
+                  )}
+                />
+                <TextArea
+                  label={t('admin.sso.publicCert', 'Signing Public Certificate')}
+                  value={draft.publicCert || ''}
+                  onChange={(publicCert) => updateProviderDraft(protocol, { publicCert })}
+                />
+                {!!draft.slug?.trim() && acsUrlState.status !== 'loading' && (
+                  <div className="md:col-span-2">
+                    {acsUrlState.status === 'ready' ? (
+                      <ReadOnlyField
+                        label={t('admin.sso.acsUrl', 'ACS URL')}
+                        value={fillSlugTemplate(
+                          acsUrlState.template,
+                          draft.slug.trim().toLowerCase(),
+                        )}
+                        monospace
+                      />
+                    ) : (
+                      <UIField>
+                        <FieldLabel>{t('admin.sso.acsUrl', 'ACS URL')}</FieldLabel>
+                        <FieldError>
+                          {acsUrlState.message ||
+                            t(
+                              'admin.sso.errors.acsUrlUnavailable',
+                              'ACS URL unavailable: configure SSO_CALLBACK_BASE_URL on the backend.',
+                            )}
+                        </FieldError>
+                      </UIField>
+                    )}
+                  </div>
+                )}
+                {errors[`${prefix}samlConfig`] && (
+                  <FieldError className="md:col-span-2">{errors[`${prefix}samlConfig`]}</FieldError>
+                )}
+              </div>
             )}
-          </Button>
-        </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Field
+                label={
+                  protocol === 'oidc'
+                    ? t('admin.sso.usernameClaim', 'Username Claim')
+                    : t('admin.sso.usernameAttribute', 'Username Attribute')
+                }
+                value={draft.usernameAttribute || ''}
+                error={errors[`${prefix}usernameAttribute`]}
+                monospace
+                onChange={(usernameAttribute) =>
+                  updateProviderDraft(protocol, { usernameAttribute })
+                }
+              />
+              <Field
+                label={t('admin.sso.nameAttribute', 'Name Attribute')}
+                value={draft.nameAttribute || ''}
+                monospace
+                onChange={(nameAttribute) => updateProviderDraft(protocol, { nameAttribute })}
+              />
+              <Field
+                label={t('admin.sso.emailAttribute', 'Email Attribute')}
+                value={draft.emailAttribute || ''}
+                monospace
+                onChange={(emailAttribute) => updateProviderDraft(protocol, { emailAttribute })}
+              />
+              <Field
+                label={t('admin.sso.groupsAttribute', 'Groups Attribute')}
+                value={draft.groupsAttribute || ''}
+                monospace
+                onChange={(groupsAttribute) => updateProviderDraft(protocol, { groupsAttribute })}
+              />
+            </div>
+
+            <RoleMappings
+              mappings={draft.roleMappings || []}
+              roleOptions={roleOptions}
+              errors={errors}
+              errorPrefix={`${prefix}mapping_`}
+              heading={t('admin.sso.roleMappings', 'Role Mappings')}
+              addLabel={t('admin.sso.addMapping', 'Add Mapping')}
+              noMappingsLabel={t('admin.sso.noMappingsConfigured', 'No mappings configured.')}
+              externalPlaceholder={t('admin.sso.externalGroupPlaceholder', 'External group')}
+              onAdd={() =>
+                updateProviderDraft(protocol, {
+                  roleMappings: [
+                    ...(draft.roleMappings || []),
+                    { externalGroup: '', role: roleOptions[0]?.id || 'user' },
+                  ],
+                })
+              }
+              onRemove={(index) =>
+                updateProviderDraft(protocol, {
+                  roleMappings: (draft.roleMappings || []).filter((_, idx) => idx !== index),
+                })
+              }
+              onChange={(index, field, value) =>
+                updateProviderMapping(protocol, index, field, value)
+              }
+              renderRoleSelect={renderRoleSelect}
+            />
+          </CardContent>
+
+          <CardFooter className="justify-between border-t border-border px-6 py-4 [.border-t]:pt-4">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => loadProviderDraft(protocol, buildDefaultProvider(protocol))}
+              className="font-bold text-muted-foreground hover:text-foreground"
+            >
+              {t('admin.sso.clearForm', 'Clear')}
+            </Button>
+            <Button type="submit" size="lg" disabled={savingProvider === protocol}>
+              {savingProvider === protocol ? (
+                <Loader2 aria-hidden="true" className="animate-spin" />
+              ) : (
+                t('admin.sso.saveProvider', 'Save Provider')
+              )}
+            </Button>
+          </CardFooter>
+        </Card>
       </form>
     );
   };
@@ -907,20 +963,21 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-semibold text-zinc-800">{t('admin.title')}</h2>
-          <p className="text-sm text-zinc-500 mt-1">{t('admin.subtitle')}</p>
+          <h2 className="text-2xl font-semibold text-foreground">{t('admin.title')}</h2>
+          <p className="text-sm text-muted-foreground mt-1">{t('admin.subtitle')}</p>
         </div>
         {isSaved && (
           <div className="bg-emerald-500 text-white px-4 py-2 rounded-lg shadow-md animate-in fade-in slide-in-from-right-4 flex items-center gap-2">
-            <i className="fa-solid fa-check"></i> {t('admin.ldap.changesSaved', 'Changes Saved')}
+            <Check aria-hidden="true" className="size-4" />{' '}
+            {t('admin.ldap.changesSaved', 'Changes Saved')}
           </div>
         )}
       </div>
 
-      <div className="flex border-b border-zinc-200 gap-8">
+      <div className="flex border-b border-border gap-8">
         {renderTabButton(
           'ldap',
-          <i className="fa-solid fa-folder-tree"></i>,
+          <FolderTree aria-hidden="true" className="size-4" />,
           t('admin.tabs.ldap', 'LDAP / Active Directory'),
         )}
         {renderTabButton(
@@ -930,7 +987,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
         )}
         {renderTabButton(
           'saml',
-          <i className="fa-solid fa-building-shield"></i>,
+          <ShieldCheck aria-hidden="true" className="size-4" />,
           t('admin.tabs.saml', 'SAML'),
         )}
       </div>
@@ -938,24 +995,31 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
       {activeTab === 'ldap' && (
         <div className="space-y-8">
           <form onSubmit={handleSaveLdap} className="space-y-8">
-            <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <i className="fa-solid fa-server text-praetor"></i>
-                  <h3 className="font-semibold text-zinc-800">{t('admin.ldap.serverConfig')}</h3>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Toggle
-                    checked={ldapForm.enabled}
-                    onChange={(enabled) => setLdapForm((prev) => ({ ...prev, enabled }))}
-                  />
-                  <span className="text-sm font-medium text-zinc-600">
-                    {t('admin.ldap.enabled')}
-                  </span>
-                </div>
-              </div>
+            <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+              <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+                <CardTitle className="flex items-center gap-3 text-base">
+                  <Server aria-hidden="true" className="size-4 text-praetor" />
+                  {t('admin.ldap.serverConfig')}
+                </CardTitle>
+                <CardDescription>
+                  {t(
+                    'admin.ldap.serverConfigDescription',
+                    'Connect Praetor to your LDAP or Active Directory to authenticate users.',
+                  )}
+                </CardDescription>
+                <CardAction>
+                  <UIField className="flex-row items-center gap-2">
+                    <Switch
+                      id="ldap-enabled"
+                      checked={ldapForm.enabled}
+                      onCheckedChange={(enabled) => setLdapForm((prev) => ({ ...prev, enabled }))}
+                    />
+                    <FieldLabel htmlFor="ldap-enabled">{t('admin.ldap.enabled')}</FieldLabel>
+                  </UIField>
+                </CardAction>
+              </CardHeader>
 
-              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Field
                   label={t('admin.ldap.serverUrlLabel')}
                   value={ldapForm.serverUrl}
@@ -1012,9 +1076,9 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   monospace
                   onChange={(groupFilter) => setLdapForm((prev) => ({ ...prev, groupFilter }))}
                 />
-              </div>
+              </CardContent>
 
-              <fieldset className="border-t border-zinc-100 p-6 space-y-4">
+              <fieldset className="border-t border-border p-6 space-y-4">
                 <legend className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
                   {t('admin.ldap.provisioning.heading', 'User Provisioning')}
                 </legend>
@@ -1060,7 +1124,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 </div>
               </fieldset>
 
-              <div className="border-t border-zinc-100 p-6">
+              <div className="border-t border-border p-6">
                 <RoleMappings
                   mappings={ldapForm.roleMappings.map((mapping) => ({
                     externalGroup: mapping.ldapGroup,
@@ -1098,92 +1162,98 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   renderRoleSelect={renderRoleSelect}
                 />
               </div>
-            </section>
+            </Card>
 
-            <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3">
-                <i className="fa-solid fa-lock text-praetor"></i>
-                <h3 className="font-semibold text-zinc-800">
+            <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+              <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+                <CardTitle className="flex items-center gap-3 text-base">
+                  <Lock aria-hidden="true" className="size-4 text-praetor" />
                   {t('admin.ldap.tls.title', 'TLS / Certificates')}
-                </h3>
-              </div>
-              <div className="p-6 space-y-3">
-                <label
-                  htmlFor="ldap-tls-ca-textarea"
-                  className="block text-xs font-bold text-zinc-400 uppercase tracking-wider"
-                >
-                  {t('admin.ldap.tls.caCertificateLabel', 'Custom CA Certificate (Optional)')}
-                </label>
-                <p className="text-xs text-zinc-500">
+                </CardTitle>
+                <CardDescription>
                   {t(
-                    'admin.ldap.tls.caCertificateHelp',
-                    'Paste a PEM-encoded CA certificate or chain used to verify the LDAP server when using ldaps://. Required only if the server uses a certificate not signed by a publicly trusted CA.',
+                    'admin.ldap.tls.description',
+                    "Verify the LDAP server's certificate when connecting over ldaps://.",
                   )}
-                </p>
-                <textarea
-                  id="ldap-tls-ca-textarea"
-                  rows={8}
-                  value={ldapForm.tlsCaCertificate}
-                  onChange={(event) => {
-                    setLdapForm((prev) => ({ ...prev, tlsCaCertificate: event.target.value }));
-                    if (errors.tlsCaCertificate)
-                      setErrors((prev) => ({ ...prev, tlsCaCertificate: '' }));
-                  }}
-                  placeholder={`${PEM_BEGIN_MARKER}\nMIIDdzCCAl+gAwIBAgI...\n${PEM_END_MARKER}`}
-                  aria-label={t(
-                    'admin.ldap.tls.caCertificateLabel',
-                    'Custom CA Certificate (Optional)',
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-6">
+                <UIField>
+                  <FieldLabel htmlFor="ldap-tls-ca-textarea">
+                    {t('admin.ldap.tls.caCertificateLabel', 'Custom CA Certificate (Optional)')}
+                  </FieldLabel>
+                  <FieldDescription>
+                    {t(
+                      'admin.ldap.tls.caCertificateHelp',
+                      'Paste a PEM-encoded CA certificate or chain used to verify the LDAP server when using ldaps://. Required only if the server uses a certificate not signed by a publicly trusted CA.',
+                    )}
+                  </FieldDescription>
+                  <Textarea
+                    id="ldap-tls-ca-textarea"
+                    rows={8}
+                    value={ldapForm.tlsCaCertificate}
+                    onChange={(event) => {
+                      setLdapForm((prev) => ({ ...prev, tlsCaCertificate: event.target.value }));
+                      if (errors.tlsCaCertificate)
+                        setErrors((prev) => ({ ...prev, tlsCaCertificate: '' }));
+                    }}
+                    placeholder={`${PEM_BEGIN_MARKER}\nMIIDdzCCAl+gAwIBAgI...\n${PEM_END_MARKER}`}
+                    aria-label={t(
+                      'admin.ldap.tls.caCertificateLabel',
+                      'Custom CA Certificate (Optional)',
+                    )}
+                    aria-invalid={!!errors.tlsCaCertificate}
+                    className="font-mono text-xs leading-relaxed"
+                    spellCheck={false}
+                  />
+                  {errors.tlsCaCertificate && (
+                    <FieldError errors={[{ message: errors.tlsCaCertificate }]} />
                   )}
-                  className={`w-full px-4 py-2.5 bg-zinc-50 border rounded-lg focus:ring-2 outline-none font-mono text-xs leading-relaxed ${errors.tlsCaCertificate ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
-                  spellCheck={false}
-                />
-                {errors.tlsCaCertificate && (
-                  <p className="text-red-500 text-[10px] font-bold">{errors.tlsCaCertificate}</p>
-                )}
-                <div className="flex items-center gap-3 flex-wrap">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => tlsCaFileInputRef.current?.click()}
-                    className="text-xs font-bold"
-                  >
-                    <i className="fa-solid fa-file-arrow-up"></i>
-                    {t('admin.ldap.tls.importPemFile', 'Import .pem file')}
-                  </Button>
-                  {ldapForm.tlsCaCertificate.trim() !== '' && (
+                  <div className="flex items-center gap-3 flex-wrap">
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="secondary"
                       size="sm"
-                      onClick={() => {
-                        setLdapForm((prev) => ({ ...prev, tlsCaCertificate: '' }));
-                        if (errors.tlsCaCertificate)
-                          setErrors((prev) => ({ ...prev, tlsCaCertificate: '' }));
-                      }}
-                      className="text-xs font-bold text-muted-foreground hover:text-destructive"
+                      onClick={() => tlsCaFileInputRef.current?.click()}
+                      className="text-xs font-bold"
                     >
-                      <i className="fa-solid fa-trash-can"></i>
-                      {t('admin.ldap.tls.clear', 'Clear')}
+                      <FileUp aria-hidden="true" />
+                      {t('admin.ldap.tls.importPemFile', 'Import .pem file')}
                     </Button>
-                  )}
-                  <span className="text-[10px] text-zinc-400 italic">
-                    {t(
-                      'admin.ldap.tls.caClearedHint',
-                      'Leave blank to use the system trust store (or LDAP_TLS_CA_FILE env var if set).',
+                    {ldapForm.tlsCaCertificate.trim() !== '' && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setLdapForm((prev) => ({ ...prev, tlsCaCertificate: '' }));
+                          if (errors.tlsCaCertificate)
+                            setErrors((prev) => ({ ...prev, tlsCaCertificate: '' }));
+                        }}
+                        className="text-xs font-bold text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 aria-hidden="true" />
+                        {t('admin.ldap.tls.clear', 'Clear')}
+                      </Button>
                     )}
-                  </span>
-                </div>
-                <input
-                  ref={tlsCaFileInputRef}
-                  type="file"
-                  accept=".pem,.crt,.cer,.cert"
-                  onChange={handleTlsCaFileImport}
-                  aria-label={t('admin.ldap.tls.importPemFile', 'Import .pem file')}
-                  className="hidden"
-                />
-              </div>
-            </section>
+                    <span className="text-[10px] text-muted-foreground italic">
+                      {t(
+                        'admin.ldap.tls.caClearedHint',
+                        'Leave blank to use the system trust store (or LDAP_TLS_CA_FILE env var if set).',
+                      )}
+                    </span>
+                  </div>
+                  <input
+                    ref={tlsCaFileInputRef}
+                    type="file"
+                    accept=".pem,.crt,.cer,.cert"
+                    onChange={handleTlsCaFileImport}
+                    aria-label={t('admin.ldap.tls.importPemFile', 'Import .pem file')}
+                    className="hidden"
+                  />
+                </UIField>
+              </CardContent>
+            </Card>
 
             {errors.general && (
               <div
@@ -1202,21 +1272,23 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
             </div>
           </form>
 
-          <section className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex items-center gap-3">
-              <i className="fa-solid fa-vial text-praetor"></i>
-              <h3 className="font-semibold text-zinc-800">{t('admin.ldap.connectionTester')}</h3>
-            </div>
-            <div className="p-6 grid grid-cols-1 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] gap-8">
+          <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+            <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+              <CardTitle className="flex items-center gap-3 text-base">
+                <FlaskConical aria-hidden="true" className="size-4 text-praetor" />
+                {t('admin.ldap.connectionTester')}
+              </CardTitle>
+              <CardDescription>
+                {t(
+                  'admin.ldap.testDescription',
+                  'Enter credentials to test authentication and group retrieval against the saved configuration.',
+                )}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-6 grid grid-cols-1 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] gap-8">
               <form onSubmit={handleTestLdap} className="space-y-4">
-                <p className="text-xs text-zinc-500">
-                  {t(
-                    'admin.ldap.testDescription',
-                    'Enter credentials to test authentication and group retrieval against the saved configuration.',
-                  )}
-                </p>
                 {isLdapDirty && (
-                  <p className="text-[10px] font-bold text-amber-600">
+                  <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
                     {t(
                       'admin.ldap.test.unsavedChanges',
                       'Save the LDAP configuration before testing recent changes.',
@@ -1246,22 +1318,27 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 />
                 <Button type="submit" size="lg" className="w-full" disabled={isTestingLdap}>
                   {isTestingLdap ? (
-                    <i className="fa-solid fa-circle-notch fa-spin"></i>
+                    <Loader2 aria-hidden="true" className="animate-spin" />
                   ) : (
                     t('admin.ldap.testAuthentication')
                   )}
                 </Button>
               </form>
 
-              <div className="bg-zinc-900 rounded-xl p-4 font-mono text-xs overflow-y-auto min-h-64 border border-zinc-800 shadow-inner">
+              <div className="min-h-64 overflow-y-auto rounded-md border border-border bg-muted/40 p-4 font-mono text-xs">
                 {isTestingLdap ? (
-                  <div className="text-zinc-400 animate-pulse">
+                  <div className="text-muted-foreground animate-pulse">
                     {t('admin.ldap.test.connecting', 'Connecting to LDAP server...')}
                   </div>
                 ) : testResult ? (
                   <div className="space-y-3">
                     <div
-                      className={`font-bold ${testResult.authenticated ? 'text-emerald-400' : 'text-red-400'}`}
+                      className={cn(
+                        'font-bold',
+                        testResult.authenticated
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-destructive',
+                      )}
                     >
                       [
                       {testResult.authenticated
@@ -1273,54 +1350,54 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                       (() => {
                         const helpKey = LDAP_ROLE_RESOLUTION_HELP_KEYS[testResult.roleResolution];
                         return (
-                          <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-2 text-zinc-400">
+                          <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-2 text-muted-foreground">
                             <span>{t('admin.ldap.test.userDn', 'User DN')}</span>
-                            <span className="text-zinc-200 break-all">
+                            <span className="text-foreground break-all">
                               {testResult.userDn || '-'}
                             </span>
                             <span>
                               {t(LDAP_ROLE_RESOLUTION_LABEL_KEYS[testResult.roleResolution])}
                             </span>
-                            <span className="text-zinc-200">
+                            <span className="text-foreground">
                               {testResult.roleIds.length ? testResult.roleIds.join(', ') : '-'}
                             </span>
                             {helpKey && (
                               <span
-                                className="col-span-2 text-xs text-zinc-500"
+                                className="col-span-2 text-xs text-muted-foreground"
                                 data-testid="ldap-test-role-resolution-help"
                               >
                                 {t(helpKey)}
                               </span>
                             )}
                             <span>{t('admin.ldap.test.groupsFound', 'Groups Found:')}</span>
-                            <span className="text-zinc-200">
+                            <span className="text-foreground">
                               {testResult.groups.length ? testResult.groups.join(', ') : '-'}
                             </span>
                           </div>
                         );
                       })()}
-                    <div className="border-t border-zinc-800 pt-3">
-                      <div className="text-zinc-500 mb-2">
+                    <div className="border-t border-border pt-3">
+                      <div className="text-muted-foreground mb-2">
                         {t('admin.ldap.test.serverResponse', 'Server Response')}
                       </div>
-                      <pre className="text-zinc-300 whitespace-pre-wrap break-words">
+                      <pre className="text-foreground/80 whitespace-pre-wrap break-words">
                         {JSON.stringify(testResult, null, 2)}
                       </pre>
                     </div>
                   </div>
                 ) : (
-                  <div className="text-zinc-600 italic">
+                  <div className="text-muted-foreground italic">
                     {t('admin.ldap.test.waiting', 'Waiting for test execution...')}
                     <br />
                     <br />
-                    <span className="opacity-50">
+                    <span className="opacity-70">
                       {t('admin.ldap.test.logOutput', 'Log output will appear here after testing.')}
                     </span>
                   </div>
                 )}
               </div>
-            </div>
-          </section>
+            </CardContent>
+          </Card>
         </div>
       )}
 
@@ -1350,21 +1427,24 @@ const Field: React.FC<FieldProps> = ({
   error,
   type = 'text',
   monospace,
-}) => (
-  <div>
-    <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-      {label}
-    </label>
-    <input
-      type={type}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      aria-label={label}
-      className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 outline-none text-sm ${monospace ? 'font-mono' : 'font-semibold text-zinc-700'} ${error ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
-    />
-    {error && <p className="text-red-500 text-[10px] font-bold mt-1">{error}</p>}
-  </div>
-);
+}) => {
+  const id = useId();
+  return (
+    <UIField>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Input
+        id={id}
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        aria-label={label}
+        aria-invalid={!!error}
+        className={cn(monospace && 'font-mono')}
+      />
+      {error && <FieldError errors={[{ message: error }]} />}
+    </UIField>
+  );
+};
 
 type TextAreaProps = {
   label: string;
@@ -1372,20 +1452,22 @@ type TextAreaProps = {
   onChange: (value: string) => void;
 };
 
-const TextArea: React.FC<TextAreaProps> = ({ label, value, onChange }) => (
-  <div>
-    <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-      {label}
-    </label>
-    <textarea
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      rows={5}
-      aria-label={label}
-      className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-mono"
-    />
-  </div>
-);
+const TextArea: React.FC<TextAreaProps> = ({ label, value, onChange }) => {
+  const id = useId();
+  return (
+    <UIField>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Textarea
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        rows={5}
+        aria-label={label}
+        className="font-mono"
+      />
+    </UIField>
+  );
+};
 
 type ReadOnlyFieldProps = {
   label: string;
@@ -1393,20 +1475,22 @@ type ReadOnlyFieldProps = {
   monospace?: boolean;
 };
 
-const ReadOnlyField: React.FC<ReadOnlyFieldProps> = ({ label, value, monospace }) => (
-  <div>
-    <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-      {label}
-    </label>
-    <input
-      type="text"
-      readOnly
-      value={value}
-      aria-label={label}
-      className={`w-full px-4 py-2 bg-zinc-100 border border-zinc-200 rounded-lg text-sm text-zinc-500 ${monospace ? 'font-mono' : 'font-semibold'}`}
-    />
-  </div>
-);
+const ReadOnlyField: React.FC<ReadOnlyFieldProps> = ({ label, value, monospace }) => {
+  const id = useId();
+  return (
+    <UIField>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Input
+        id={id}
+        type="text"
+        readOnly
+        value={value}
+        aria-label={label}
+        className={cn('bg-muted text-muted-foreground', monospace && 'font-mono')}
+      />
+    </UIField>
+  );
+};
 
 type RoleMappingsProps = {
   mappings: SsoRoleMapping[];
@@ -1439,7 +1523,7 @@ const RoleMappings: React.FC<RoleMappingsProps> = ({
 }) => (
   <div>
     <div className="flex justify-between items-center mb-4">
-      <h4 className="text-sm font-semibold text-zinc-800">{heading}</h4>
+      <h4 className="text-sm font-semibold text-foreground">{heading}</h4>
       <Button
         type="button"
         variant="secondary"
@@ -1447,32 +1531,34 @@ const RoleMappings: React.FC<RoleMappingsProps> = ({
         onClick={onAdd}
         className="text-xs font-bold"
       >
-        <i className="fa-solid fa-plus"></i>
+        <Plus aria-hidden="true" />
         {addLabel}
       </Button>
     </div>
     <div className="space-y-3">
       {mappings.length === 0 ? (
-        <p className="text-xs text-zinc-400 italic">{noMappingsLabel}</p>
+        <p className="text-xs text-muted-foreground italic">{noMappingsLabel}</p>
       ) : (
         mappings.map((mapping, index) => (
           <div key={index} className="flex gap-4 items-start">
             <div className="flex-1">
-              <input
+              <Input
                 type="text"
                 value={mapping.externalGroup}
                 onChange={(event) => onChange(index, 'externalGroup', event.target.value)}
                 placeholder={externalPlaceholder}
                 aria-label={externalPlaceholder}
-                className={`w-full px-3 py-2 bg-zinc-50 border rounded-lg text-sm font-mono focus:ring-2 outline-none ${errors[`${errorPrefix}${index}`] ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'focus:ring-praetor border-zinc-200'}`}
+                aria-invalid={!!errors[`${errorPrefix}${index}`]}
+                className="font-mono"
               />
               {errors[`${errorPrefix}${index}`] && (
-                <p className="text-red-500 text-[10px] font-bold mt-1">
-                  {errors[`${errorPrefix}${index}`]}
-                </p>
+                <FieldError
+                  className="mt-1"
+                  errors={[{ message: errors[`${errorPrefix}${index}`] }]}
+                />
               )}
             </div>
-            <i className="fa-solid fa-arrow-right text-zinc-300 text-xs mt-3"></i>
+            <ArrowRight aria-hidden="true" className="size-3 text-muted-foreground mt-3 shrink-0" />
             <div className="w-44">
               {renderRoleSelect(mapping.role || roleOptions[0]?.id || 'user', (role) =>
                 onChange(index, 'role', role),
@@ -1485,7 +1571,7 @@ const RoleMappings: React.FC<RoleMappingsProps> = ({
               onClick={() => onRemove(index)}
               className="text-muted-foreground hover:text-destructive"
             >
-              <i className="fa-solid fa-trash-can"></i>
+              <Trash2 aria-hidden="true" />
             </Button>
           </div>
         ))

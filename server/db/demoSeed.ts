@@ -154,10 +154,12 @@ const insertCompatibilityDefaults = async (client: PoolClient, counts: Record<st
 
   const projectsResult = await executeStatement(
     client,
-    `INSERT INTO projects (id, name, client_id, color, description) VALUES
-        ('p1', 'Website Redesign', 'c1', '#3b82f6', 'Complete overhaul of the main marketing site.'),
-        ('p2', 'Mobile App', 'c1', '#10b981', 'Native iOS and Android application development.'),
-        ('p3', 'Internal Research', 'c2', '#8b5cf6', 'Ongoing research into new market trends.')
+    // start_date/end_date bracket the demo time entries logged against each project so every
+    // entry falls inside its project window (kept in sync with seed.sql).
+    `INSERT INTO projects (id, name, client_id, color, description, start_date, end_date) VALUES
+        ('p1', 'Website Redesign', 'c1', '#3b82f6', 'Complete overhaul of the main marketing site.', (CURRENT_DATE - INTERVAL '30 days')::date, (CURRENT_DATE + INTERVAL '30 days')::date),
+        ('p2', 'Mobile App', 'c1', '#10b981', 'Native iOS and Android application development.', (CURRENT_DATE - INTERVAL '28 days')::date, (CURRENT_DATE + INTERVAL '28 days')::date),
+        ('p3', 'Internal Research', 'c2', '#8b5cf6', 'Ongoing research into new market trends.', (CURRENT_DATE - INTERVAL '25 days')::date, (CURRENT_DATE + INTERVAL '25 days')::date)
      ON CONFLICT (id) DO NOTHING`,
   );
   incrementCount(counts, 'projects', projectsResult.rowCount ?? 0);

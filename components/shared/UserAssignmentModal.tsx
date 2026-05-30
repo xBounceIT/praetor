@@ -16,6 +16,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from './ModalLayout';
+import StatusBadge, { type StatusType } from './StatusBadge';
 
 type LoadState = 'loading' | 'error' | 'ready';
 
@@ -43,22 +44,15 @@ const getRolePresentation = (user: User, roleLookup: Map<string, Role>) => {
     (role?.isSystem && !isAdminRole && role?.id === 'manager') || user.role === 'manager';
 
   return {
-    roleBadgeClass: isAdminRole
-      ? 'bg-zinc-800 text-white border-zinc-700'
+    roleBadgeType: (isAdminRole
+      ? 'role_admin'
       : isTopManagerRole
-        ? 'bg-amber-50 text-amber-700 border-amber-200'
+        ? 'role_top_manager'
         : isManagerRole
-          ? 'bg-blue-50 text-blue-700 border-blue-200'
+          ? 'role_manager'
           : role?.isSystem
-            ? 'bg-zinc-100 text-zinc-600 border-zinc-200'
-            : 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    roleIcon: isAdminRole
-      ? 'fa-shield-halved'
-      : isTopManagerRole
-        ? 'fa-crown'
-        : isManagerRole
-          ? 'fa-briefcase'
-          : 'fa-user',
+            ? 'role_user'
+            : 'role_custom') as StatusType,
     roleName: role?.name || user.role,
   };
 };
@@ -70,37 +64,32 @@ const UserRow: React.FC<{
   onDoubleClick: () => void;
   roleLookup: Map<string, Role>;
 }> = ({ user, isSelected, onSelect, onDoubleClick, roleLookup }) => {
-  const { roleBadgeClass, roleIcon, roleName } = getRolePresentation(user, roleLookup);
+  const { roleBadgeType, roleName } = getRolePresentation(user, roleLookup);
   return (
     <div
       onClick={onSelect}
       onDoubleClick={onDoubleClick}
       className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
         isSelected
-          ? 'bg-praetor/5 border-praetor'
-          : 'bg-white border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50'
+          ? 'bg-primary/10 border-primary'
+          : 'bg-card border-border hover:border-input hover:bg-accent'
       }`}
     >
       <div
         className={`size-9 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
-          isSelected ? 'bg-praetor text-white' : 'bg-zinc-100 text-zinc-500'
+          isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
         }`}
       >
         {user.avatarInitials || user.name.substring(0, 2).toUpperCase()}
       </div>
       <div className="flex flex-col min-w-0 flex-1">
         <span
-          className={`text-sm font-bold truncate ${isSelected ? 'text-zinc-800' : 'text-zinc-600'}`}
+          className={`text-sm font-bold truncate ${isSelected ? 'text-foreground' : 'text-muted-foreground'}`}
         >
           {user.name}
         </span>
       </div>
-      <span
-        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider shrink-0 ${roleBadgeClass}`}
-      >
-        <i className={`fa-solid ${roleIcon}`}></i>
-        {roleName}
-      </span>
+      <StatusBadge type={roleBadgeType} label={roleName} className="shrink-0" />
     </div>
   );
 };
@@ -288,8 +277,8 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
   ) => {
     if (list.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center py-10 text-zinc-400">
-          <div className="size-12 bg-zinc-100 rounded-full flex items-center justify-center mb-2 text-zinc-300">
+        <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+          <div className="size-12 bg-muted rounded-full flex items-center justify-center mb-2 text-muted-foreground">
             <i className="fa-solid fa-user-slash text-lg"></i>
           </div>
           <span className="text-xs italic">{emptyMessage}</span>
@@ -348,12 +337,14 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
             ) : loadState === 'error' ? (
               <div className="flex items-center justify-center py-16 flex-1">
                 <div className="max-w-sm text-center space-y-4">
-                  <div className="size-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto">
+                  <div className="size-16 bg-destructive/10 text-destructive rounded-full flex items-center justify-center mx-auto">
                     <i className="fa-solid fa-triangle-exclamation text-2xl"></i>
                   </div>
                   <div className="space-y-2">
-                    <p className="text-sm font-bold text-zinc-800">{t('assignment.loadFailed')}</p>
-                    <p className="text-sm text-zinc-500">{t('assignment.loadRetryHint')}</p>
+                    <p className="text-sm font-bold text-foreground">
+                      {t('assignment.loadFailed')}
+                    </p>
+                    <p className="text-sm text-muted-foreground">{t('assignment.loadRetryHint')}</p>
                   </div>
                   <Button type="button" onClick={load} variant="outline">
                     <i className="fa-solid fa-rotate-right"></i>
@@ -364,9 +355,9 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
             ) : (
               <div className="flex-1 flex gap-0 overflow-hidden p-4">
                 <div className="flex-1 flex flex-col min-w-0">
-                  <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-1">
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">
                     {t('assignment.availableUsers')}
-                    <span className="ml-2 text-zinc-300 font-normal">
+                    <span className="ml-2 text-muted-foreground/70 font-normal">
                       ({availableUsers.length})
                     </span>
                   </h4>
@@ -379,7 +370,7 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
                       t('assignment.noUsersToAssign'),
                     )}
                   </div>
-                  <div className="pt-3 mt-2 border-t border-zinc-200/60">
+                  <div className="pt-3 mt-2 border-t border-border">
                     <Button
                       type="button"
                       onClick={assignSelected}
@@ -389,7 +380,7 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
                       {t('assignment.assignSelected')}
                       <i className="fa-solid fa-angles-right text-xs"></i>
                       {selectedAvailableIds.size > 0 && (
-                        <span className="bg-white/20 px-1.5 py-0.5 rounded text-xs">
+                        <span className="bg-primary-foreground/20 px-1.5 py-0.5 rounded text-xs">
                           {selectedAvailableIds.size}
                         </span>
                       )}
@@ -398,15 +389,17 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
                 </div>
 
                 <div className="flex items-center justify-center px-3 shrink-0">
-                  <div className="flex flex-col items-center gap-3 text-zinc-300">
+                  <div className="flex flex-col items-center gap-3 text-muted-foreground">
                     <i className="fa-solid fa-right-left text-lg"></i>
                   </div>
                 </div>
 
                 <div className="flex-1 flex flex-col min-w-0">
-                  <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-1">
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">
                     {t('assignment.assignedUsers')}
-                    <span className="ml-2 text-zinc-300 font-normal">({assignedUsers.length})</span>
+                    <span className="ml-2 text-muted-foreground/70 font-normal">
+                      ({assignedUsers.length})
+                    </span>
                   </h4>
                   <div className="flex-1 overflow-y-auto pr-2">
                     {renderUserList(
@@ -417,7 +410,7 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
                       t('assignment.noUsersAssigned'),
                     )}
                   </div>
-                  <div className="pt-3 mt-2 border-t border-zinc-200/60">
+                  <div className="pt-3 mt-2 border-t border-border">
                     <Button
                       type="button"
                       onClick={unassignSelected}
@@ -427,7 +420,7 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
                       <i className="fa-solid fa-angles-left text-xs"></i>
                       {t('assignment.unassignSelected')}
                       {selectedAssignedIds.size > 0 && (
-                        <span className="bg-white/20 px-1.5 py-0.5 rounded text-xs">
+                        <span className="bg-primary-foreground/20 px-1.5 py-0.5 rounded text-xs">
                           {selectedAssignedIds.size}
                         </span>
                       )}

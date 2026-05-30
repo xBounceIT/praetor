@@ -80,11 +80,11 @@ describe('<Login />', () => {
     expect(screen.getByPlaceholderText('auth:login.password')).toBeInTheDocument();
   });
 
-  test('submitting empty fields shows usernameRequired and passwordRequired errors', () => {
+  test('submitting empty fields shows usernameRequired and passwordRequired errors', async () => {
     render(<Login onLogin={() => {}} />);
     const submit = screen.getByRole('button', { name: /auth:login.signIn/ });
     fireEvent.click(submit);
-    expect(screen.getByText('common:validation.usernameRequired')).toBeInTheDocument();
+    expect(await screen.findByText('common:validation.usernameRequired')).toBeInTheDocument();
     expect(screen.getByText('common:validation.passwordRequired')).toBeInTheDocument();
     expect(apiAuthLogin).not.toHaveBeenCalled();
   });
@@ -103,10 +103,8 @@ describe('<Login />', () => {
     const submit = screen.getByRole('button', { name: /auth:login.signIn/ });
     fireEvent.click(submit);
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(apiAuthLogin).toHaveBeenCalledWith('admin', 'password');
-    expect(onLogin).toHaveBeenCalledWith({ id: 'u1', name: 'Test' }, 'tok');
+    await waitFor(() => expect(apiAuthLogin).toHaveBeenCalledWith('admin', 'password'));
+    await waitFor(() => expect(onLogin).toHaveBeenCalledWith({ id: 'u1', name: 'Test' }, 'tok'));
   });
 
   test('login rejection surfaces error message', async () => {
@@ -121,9 +119,7 @@ describe('<Login />', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /auth:login.signIn/ }));
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(screen.getByText('Bad credentials')).toBeInTheDocument();
+    expect(await screen.findByText('Bad credentials')).toBeInTheDocument();
   });
 
   test('503 ldap_unavailable shows specific i18n message instead of server text', async () => {
@@ -147,9 +143,7 @@ describe('<Login />', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /auth:login.signIn/ }));
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(screen.getByText('auth:login.errors.ldapUnavailable')).toBeInTheDocument();
+    expect(await screen.findByText('auth:login.errors.ldapUnavailable')).toBeInTheDocument();
   });
 
   test('password toggle flips input type between password and text', () => {
@@ -157,15 +151,11 @@ describe('<Login />', () => {
     const passwordInput = screen.getByPlaceholderText('auth:login.password') as HTMLInputElement;
     expect(passwordInput.type).toBe('password');
 
-    // The toggle button is the only button without text - sibling of the password input.
-    const toggleButtons = screen.getAllByRole('button');
-    const toggle = toggleButtons.find((btn) => btn.querySelector('i.fa-eye, i.fa-eye-slash'));
-    if (!toggle) throw new Error('toggle button not found');
-
-    fireEvent.click(toggle);
+    // The toggle is identified by its aria-label, which flips with the revealed state.
+    fireEvent.click(screen.getByLabelText('common:labels.showPassword'));
     expect(passwordInput.type).toBe('text');
 
-    fireEvent.click(toggle);
+    fireEvent.click(screen.getByLabelText('common:labels.hidePassword'));
     expect(passwordInput.type).toBe('password');
   });
 
@@ -208,21 +198,40 @@ describe('<Login />', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /auth:login.signIn/ }));
 
-    expect(screen.getByText('auth:login.signingIn')).toBeInTheDocument();
+    expect(await screen.findByText('auth:login.signingIn')).toBeInTheDocument();
 
     if (resolveLogin) resolveLogin({ user: { id: 'u', name: 'u' }, token: 't' });
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitFor(() => expect(screen.queryByText('auth:login.signingIn')).not.toBeInTheDocument());
   });
 
-  test('typing clears the field error', () => {
+  test('typing clears the field error', async () => {
     render(<Login onLogin={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: /auth:login.signIn/ }));
-    expect(screen.getByText('common:validation.usernameRequired')).toBeInTheDocument();
+    expect(await screen.findByText('common:validation.usernameRequired')).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText('auth:login.username'), {
       target: { value: 'admin' },
     });
-    expect(screen.queryByText('common:validation.usernameRequired')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByText('common:validation.usernameRequired')).not.toBeInTheDocument(),
+    );
+  });
+
+  test('submitting empty fields clears a pre-existing error banner', async () => {
+    // A pre-existing SSO error banner must not linger once the user re-attempts login,
+    // even when field validation blocks the submit.
+    setTestUrl('http://localhost/?sso_error=invalid_response');
+    render(<Login onLogin={() => {}} />);
+    expect(screen.getByText('auth:admin.sso.loginErrors.invalid_response')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /auth:login.signIn/ }));
+
+    await waitFor(() =>
+      expect(
+        screen.queryByText('auth:admin.sso.loginErrors.invalid_response'),
+      ).not.toBeInTheDocument(),
+    );
+    expect(await screen.findByText('common:validation.usernameRequired')).toBeInTheDocument();
   });
 
   test('renders public SSO providers and redirects to provider start URL', async () => {

@@ -57,13 +57,22 @@ type UpdateTimeEntryInput = Partial<Omit<TimeEntry, 'version'>> & Pick<TimeEntry
 
 export const entriesApi = {
   listPage: async (
-    options: { userId?: string; cursor?: string | null; limit?: number } = {},
+    options: {
+      userId?: string;
+      projectId?: string;
+      cursor?: string | null;
+      limit?: number;
+      signal?: AbortSignal;
+    } = {},
   ): Promise<EntriesPage> => {
     const params = new URLSearchParams();
     if (options.userId) params.set('userId', options.userId);
+    if (options.projectId) params.set('projectId', options.projectId);
     params.set('limit', String(options.limit ?? 500));
     if (options.cursor) params.set('cursor', options.cursor);
-    const page = await fetchApi<EntriesPage>(`/entries?${params.toString()}`);
+    const page = await fetchApi<EntriesPage>(`/entries?${params.toString()}`, {
+      signal: options.signal,
+    });
     return { entries: page.entries.map(normalizeTimeEntry), nextCursor: page.nextCursor };
   },
 

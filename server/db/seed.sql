@@ -26,10 +26,12 @@ INSERT INTO clients (id, name, created_at) VALUES
     ('c2', 'Global Tech', '2024-03-05 14:15:00')
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO projects (id, name, client_id, color, description) VALUES
-    ('p1', 'Website Redesign', 'c1', '#3b82f6', 'Complete overhaul of the main marketing site.'),
-    ('p2', 'Mobile App', 'c1', '#10b981', 'Native iOS and Android application development.'),
-    ('p3', 'Internal Research', 'c2', '#8b5cf6', 'Ongoing research into new market trends.')
+-- start_date/end_date bracket the demo time entries logged against each project
+-- (see the first time_entries block below) so every entry falls inside its project window.
+INSERT INTO projects (id, name, client_id, color, description, start_date, end_date) VALUES
+    ('p1', 'Website Redesign', 'c1', '#3b82f6', 'Complete overhaul of the main marketing site.', (CURRENT_DATE - INTERVAL '30 days')::date, (CURRENT_DATE + INTERVAL '30 days')::date),
+    ('p2', 'Mobile App', 'c1', '#10b981', 'Native iOS and Android application development.', (CURRENT_DATE - INTERVAL '28 days')::date, (CURRENT_DATE + INTERVAL '28 days')::date),
+    ('p3', 'Internal Research', 'c2', '#8b5cf6', 'Ongoing research into new market trends.', (CURRENT_DATE - INTERVAL '25 days')::date, (CURRENT_DATE + INTERVAL '25 days')::date)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO tasks (id, name, project_id, description) VALUES
@@ -477,7 +479,7 @@ INSERT INTO quotes (
     ('dm_cq_03', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '28 days', 'Accepted quote intentionally left without an offer to expose the CTA.', CURRENT_TIMESTAMP - INTERVAL '112 days', CURRENT_TIMESTAMP - INTERVAL '108 days'),
     ('dm_cq_04', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 4.00, 'accepted', CURRENT_DATE + INTERVAL '30 days', 'Accepted quote with a draft offer downstream.', CURRENT_TIMESTAMP - INTERVAL '101 days', CURRENT_TIMESTAMP - INTERVAL '96 days'),
     ('dm_cq_05', 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 1.50, 'accepted', CURRENT_DATE + INTERVAL '26 days', 'Accepted quote with a sent offer downstream.', CURRENT_TIMESTAMP - INTERVAL '92 days', CURRENT_TIMESTAMP - INTERVAL '88 days'),
-    ('dm_cq_06', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '24 days', 'Accepted quote linked to an accepted offer that is ready to become an order.', CURRENT_TIMESTAMP - INTERVAL '78 days', CURRENT_TIMESTAMP - INTERVAL '72 days'),
+    ('dm_cq_06', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '24 days', 'Accepted assessment + deployment quote that flowed into an accepted offer and a confirmed order.', CURRENT_TIMESTAMP - INTERVAL '78 days', CURRENT_TIMESTAMP - INTERVAL '72 days'),
     ('dm_cq_07', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'accepted', CURRENT_DATE + INTERVAL '20 days', 'Accepted quote linked to an accepted offer that already generated an order.', CURRENT_TIMESTAMP - INTERVAL '66 days', CURRENT_TIMESTAMP - INTERVAL '61 days'),
     ('dm_cq_08', 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'accepted', CURRENT_DATE + INTERVAL '12 days', 'Accepted quote linked to a denied offer.', CURRENT_TIMESTAMP - INTERVAL '58 days', CURRENT_TIMESTAMP - INTERVAL '54 days'),
     ('dm_cq_09', 'dm_cli_02', 'Helios Energy Services S.r.l.', '30gg', 5.00, 'denied', CURRENT_DATE + INTERVAL '10 days', 'Rejected customer quote kept for history coverage.', CURRENT_TIMESTAMP - INTERVAL '36 days', CURRENT_TIMESTAMP - INTERVAL '34 days'),
@@ -525,7 +527,8 @@ FROM (
         ('dm_cqi_05', 'dm_cq_04', 'dm_prd_01', 3.00, 1230.00, 0.00, 'Strategic assessment package'),
         ('dm_cqi_06', 'dm_cq_04', 'dm_prd_04', 1.00, 1090.00, 5.00, 'Executive training day'),
         ('dm_cqi_07', 'dm_cq_05', 'dm_prd_07', 2.00, 1795.00, 0.00, 'Firewall appliances for branch perimeter refresh'),
-        ('dm_cqi_08', 'dm_cq_06', 'dm_prd_06', 25.00, 210.00, 0.00, 'Accepted subscription bundle ready for offer creation'),
+        ('dm_cqi_08', 'dm_cq_06', 'dm_prd_01', 4.00, 1230.00, 0.00, 'Strategy assessment lot for the operations engagement'),
+        ('dm_cqi_15', 'dm_cq_06', 'dm_prd_02', 1.00, 1715.00, 0.00, 'Deployment sprint for the phase-one rollout'),
         ('dm_cqi_09', 'dm_cq_07', 'dm_prd_01', 2.00, 1230.00, 0.00, 'Assessment for public-sector rollout'),
         ('dm_cqi_10', 'dm_cq_07', 'dm_prd_02', 1.00, 1715.00, 0.00, 'Deployment sprint for the first implementation lot'),
         ('dm_cqi_11', 'dm_cq_08', 'dm_prd_04', 2.00, 1090.00, 0.00, 'Training package for a small customer'),
@@ -560,7 +563,7 @@ INSERT INTO customer_offers (
 ) VALUES
     ('dm_co_01', 'dm_cq_04', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 4.00, 'draft', CURRENT_DATE + INTERVAL '24 days', 'Editable draft offer created from an accepted quote.', CURRENT_TIMESTAMP - INTERVAL '90 days', CURRENT_TIMESTAMP - INTERVAL '88 days'),
     ('dm_co_02', 'dm_cq_05', 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 1.50, 'sent', CURRENT_DATE + INTERVAL '22 days', 'Sent offer waiting for customer reply.', CURRENT_TIMESTAMP - INTERVAL '80 days', CURRENT_TIMESTAMP - INTERVAL '77 days'),
-    ('dm_co_03', 'dm_cq_06', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '18 days', 'Accepted offer intentionally left without an order.', CURRENT_TIMESTAMP - INTERVAL '68 days', CURRENT_TIMESTAMP - INTERVAL '65 days'),
+    ('dm_co_03', 'dm_cq_06', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '18 days', 'Accepted offer converted into the confirmed delivery order that spawned the demo projects.', CURRENT_TIMESTAMP - INTERVAL '68 days', CURRENT_TIMESTAMP - INTERVAL '65 days'),
     ('dm_co_04', 'dm_cq_07', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'accepted', CURRENT_DATE + INTERVAL '16 days', 'Accepted offer already converted into an order.', CURRENT_TIMESTAMP - INTERVAL '56 days', CURRENT_TIMESTAMP - INTERVAL '52 days'),
     ('dm_co_05', 'dm_cq_08', 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'denied', CURRENT_DATE + INTERVAL '8 days', 'Denied offer for historical state coverage.', CURRENT_TIMESTAMP - INTERVAL '46 days', CURRENT_TIMESTAMP - INTERVAL '43 days')
 ON CONFLICT (id) DO UPDATE SET
@@ -603,7 +606,8 @@ FROM (
         ('dm_coi_01', 'dm_co_01', 'dm_prd_01', 3.00, 1230.00, 0.00, 'Draft offer line copied from the accepted quote'),
         ('dm_coi_02', 'dm_co_01', 'dm_prd_04', 1.00, 1090.00, 5.00, 'Editable training line'),
         ('dm_coi_03', 'dm_co_02', 'dm_prd_07', 2.00, 1795.00, 0.00, 'Pending security appliance offer'),
-        ('dm_coi_04', 'dm_co_03', 'dm_prd_06', 25.00, 210.00, 0.00, 'Accepted software bundle without downstream order'),
+        ('dm_coi_04', 'dm_co_03', 'dm_prd_01', 4.00, 1230.00, 5.00, 'Accepted assessment lot for the operations engagement'),
+        ('dm_coi_08', 'dm_co_03', 'dm_prd_02', 1.00, 1715.00, 5.00, 'Accepted deployment sprint for the phase-one rollout'),
         ('dm_coi_05', 'dm_co_04', 'dm_prd_01', 2.00, 1230.00, 0.00, 'Accepted assessment lot'),
         ('dm_coi_06', 'dm_co_04', 'dm_prd_02', 1.00, 1715.00, 0.00, 'Accepted deployment sprint'),
         ('dm_coi_07', 'dm_co_05', 'dm_prd_04', 2.00, 1090.00, 0.00, 'Denied training offer')
@@ -636,7 +640,7 @@ INSERT INTO sales (
     ('dm_so_01', NULL, NULL, 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'draft', 'Editable manual sale order used for direct accounting workflow.', CURRENT_TIMESTAMP - INTERVAL '42 days', CURRENT_TIMESTAMP - INTERVAL '41 days'),
     ('dm_so_02', 'dm_cq_07', 'dm_co_04', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'confirmed', 'Linked order generated from an accepted offer and confirmed.', CURRENT_TIMESTAMP - INTERVAL '33 days', CURRENT_TIMESTAMP - INTERVAL '30 days'),
     ('dm_so_03', NULL, NULL, 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 1.50, 'confirmed', 'Confirmed manual order intentionally left without an invoice.', CURRENT_TIMESTAMP - INTERVAL '28 days', CURRENT_TIMESTAMP - INTERVAL '24 days'),
-    ('dm_so_04', NULL, NULL, 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 5.00, 'confirmed', 'Confirmed order already invoiced and mirrored into demo projects.', CURRENT_TIMESTAMP - INTERVAL '21 days', CURRENT_TIMESTAMP - INTERVAL '18 days'),
+    ('dm_so_04', 'dm_cq_06', 'dm_co_03', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'confirmed', 'Confirmed order generated from the accepted Northwind offer, already invoiced, and used to generate the demo delivery projects. No order-level discount so the order total, invoice dm_inv_03, and the two linked projects all reconcile to 6303.25.', CURRENT_TIMESTAMP - INTERVAL '21 days', CURRENT_TIMESTAMP - INTERVAL '18 days'),
     ('dm_so_05', NULL, NULL, 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 0.00, 'denied', 'Denied order retained for accounting history coverage.', CURRENT_TIMESTAMP - INTERVAL '16 days', CURRENT_TIMESTAMP - INTERVAL '14 days')
 ON CONFLICT (id) DO UPDATE SET
     linked_quote_id = EXCLUDED.linked_quote_id,
@@ -955,6 +959,11 @@ ON CONFLICT (id) DO UPDATE SET
     unit_price = EXCLUDED.unit_price,
     discount = EXCLUDED.discount;
 
+-- Demo delivery projects generated from the confirmed order dm_so_04 (← offer dm_co_03 ←
+-- quote dm_cq_06), all for client dm_cli_01. order_id/offer_id mirror the chain the app
+-- enforces when a project is created (offer + client must match). start_date/end_date wrap
+-- the dm_te_21..dm_te_25 time entries below, and revenue splits the order/invoice total of
+-- 6303.25 across the two product lines (assessment 4674.00 + deployment 1629.25).
 INSERT INTO projects (
     id,
     name,
@@ -962,7 +971,12 @@ INSERT INTO projects (
     color,
     description,
     is_disabled,
-    created_at
+    created_at,
+    order_id,
+    offer_id,
+    start_date,
+    end_date,
+    revenue
 ) VALUES
     (
         'dm_proj_01',
@@ -971,7 +985,12 @@ INSERT INTO projects (
         '#0f766e',
         'Assessment track for operations',
         FALSE,
-        CURRENT_TIMESTAMP - INTERVAL '18 days'
+        CURRENT_TIMESTAMP - INTERVAL '18 days',
+        'dm_so_04',
+        'dm_co_03',
+        (CURRENT_DATE - INTERVAL '18 days')::date,
+        (CURRENT_DATE + INTERVAL '30 days')::date,
+        4674.00
     ),
     (
         'dm_proj_02',
@@ -980,7 +999,12 @@ INSERT INTO projects (
         '#1d4ed8',
         'Deployment wave for phase one',
         FALSE,
-        CURRENT_TIMESTAMP - INTERVAL '18 days'
+        CURRENT_TIMESTAMP - INTERVAL '18 days',
+        'dm_so_04',
+        'dm_co_03',
+        (CURRENT_DATE - INTERVAL '18 days')::date,
+        (CURRENT_DATE + INTERVAL '60 days')::date,
+        1629.25
     )
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
@@ -988,7 +1012,12 @@ ON CONFLICT (id) DO UPDATE SET
     color = EXCLUDED.color,
     description = EXCLUDED.description,
     is_disabled = EXCLUDED.is_disabled,
-    created_at = EXCLUDED.created_at;
+    created_at = EXCLUDED.created_at,
+    order_id = EXCLUDED.order_id,
+    offer_id = EXCLUDED.offer_id,
+    start_date = EXCLUDED.start_date,
+    end_date = EXCLUDED.end_date,
+    revenue = EXCLUDED.revenue;
 
 -- Tasks for the demo projects above. Without these rows the second time_entries block
 -- below resolves task_id to NULL because it looks up tasks by (project_id, name). See
