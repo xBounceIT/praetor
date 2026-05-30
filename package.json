@@ -30,6 +30,7 @@
     ]
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.4.0",
     "@tanstack/react-table": "^8.21.3",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
@@ -43,6 +44,7 @@
     "radix-ui": "^1.4.3",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
+    "react-hook-form": "^7.76.1",
     "react-i18next": "^17.0.6",
     "react-markdown": "^10.1.0",
     "recharts": "^3.8.1",
@@ -51,7 +53,8 @@
     "simple-icons": "^16.19.0",
     "sonner": "^2.0.7",
     "swagger-ui-react": "^5.32.5",
-    "tailwind-merge": "^3.5.0"
+    "tailwind-merge": "^3.5.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@astrojs/starlight": "^0.39.2",
