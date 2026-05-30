@@ -384,8 +384,9 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
 
         const isActive = drag?.id === item.id;
         const isMoving = isActive && drag?.mode === 'move';
-        // A moving card follows the cursor (origin rect + pixel offset); every
-        // other card reflows to its snapped preview slot with a transition.
+        // A moving card follows the cursor pixel-for-pixel (no transition); every
+        // other card — including a card being *resized* — animates to its snapped
+        // slot/size so resizing eases between grid steps instead of jumping.
         const style: React.CSSProperties = isMoving
           ? {
               ...rectStyle(drag.origin),
@@ -405,7 +406,7 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
         return (
           <div
             key={item.id}
-            className={cn('flex flex-col', !isActive && 'transition-all')}
+            className={cn('flex flex-col', !isMoving && 'transition-all')}
             style={style}
           >
             <div
