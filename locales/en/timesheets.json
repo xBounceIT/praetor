@@ -20,6 +20,7 @@
   },
   "ril": {
     "title": "RIL",
+    "tableTitle": "Attendance rows",
     "subtitle": "Monthly attendance statement generated from time entries.",
     "user": "User",
     "month": "Month",

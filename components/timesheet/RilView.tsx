@@ -13,14 +13,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import api from '../../services/api';
 import type { GeneralSettings, Project, TimeEntry, User } from '../../types';
 import {
@@ -31,6 +23,7 @@ import {
   type RilRow,
 } from '../../utils/ril';
 import { downloadRilWorkbook } from '../../utils/rilExport';
+import StandardTable, { type Column } from '../shared/StandardTable';
 
 interface RilViewProps {
   currentUser: User;
@@ -52,8 +45,7 @@ type EditableRilField =
   | 'phoneAvailability'
   | 'notes'
   | 'transfer'
-  | 'code'
-  | 'order';
+  | 'code';
 
 const parseDraftHours = (value: string): number => {
   const trimmed = value.trim().replace(',', '.');
@@ -162,10 +154,11 @@ const RilView: React.FC<RilViewProps> = ({
     setLastExportFilename(null);
   };
 
-  const updateRow = (day: number, field: EditableRilField, value: string) => {
+  const updateRow = useCallback((day: number, field: EditableRilField, value: string) => {
     setRows((prev) =>
       prev.map((row) => {
         if (row.day !== day) return row;
+        if (row.isHoliday) return row;
         if (field === 'hours') {
           const hoursDecimal = parseDraftHours(value);
           return {
@@ -183,12 +176,12 @@ const RilView: React.FC<RilViewProps> = ({
         return { ...row, [field]: value };
       }),
     );
-  };
+  }, []);
 
-  const getEditableValue = (row: RilRow, field: EditableRilField): string => {
+  const getEditableValue = useCallback((row: RilRow, field: EditableRilField): string => {
     if (field === 'picap' && row.picap === 0 && !row.worked) return '';
     return String(row[field] ?? '');
-  };
+  }, []);
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -211,21 +204,62 @@ const RilView: React.FC<RilViewProps> = ({
     }
   };
 
-  const editableColumns: Array<{ field: EditableRilField; label: string; className?: string }> = [
-    { field: 'entrance', label: t('ril.columns.entrance'), className: 'min-w-24' },
-    { field: 'exit', label: t('ril.columns.exit'), className: 'min-w-24' },
-    { field: 'hours', label: t('ril.columns.hours'), className: 'min-w-24' },
-    { field: 'picap', label: t('ril.columns.picap'), className: 'min-w-24' },
-    {
-      field: 'phoneAvailability',
-      label: t('ril.columns.phoneAvailability'),
-      className: 'min-w-32',
-    },
-    { field: 'notes', label: t('ril.columns.notes'), className: 'min-w-32' },
-    { field: 'transfer', label: t('ril.columns.transfer'), className: 'min-w-40' },
-    { field: 'code', label: t('ril.columns.code'), className: 'min-w-28' },
-    { field: 'order', label: t('ril.columns.order'), className: 'min-w-56' },
-  ];
+  const columns = useMemo<Column<RilRow>[]>(() => {
+    const editableColumn = (
+      field: EditableRilField,
+      label: string,
+      inputClassName = 'min-w-[7rem]',
+    ): Column<RilRow> => ({
+      header: label,
+      id: field,
+      accessorKey: field,
+      disableFiltering: true,
+      disableSorting: true,
+      cell: ({ row }) => (
+        <Input
+          aria-label={`${label} ${row.day}`}
+          value={getEditableValue(row, field)}
+          disabled={row.isHoliday}
+          onChange={(event) => updateRow(row.day, field, event.target.value)}
+          className={`h-8 text-xs disabled:cursor-not-allowed ${inputClassName}`}
+        />
+      ),
+    });
+
+    return [
+      {
+        header: t('ril.columns.day'),
+        id: 'day',
+        accessorKey: 'day',
+        disableFiltering: true,
+        disableSorting: true,
+        cell: ({ row }) => (
+          <span className="inline-flex items-baseline gap-2 font-medium">
+            <span className="tabular-nums">{row.day}</span>
+            {row.weekday && (
+              <span className="text-xs font-normal text-muted-foreground">{row.weekday}</span>
+            )}
+          </span>
+        ),
+      },
+      editableColumn('entrance', t('ril.columns.entrance')),
+      editableColumn('exit', t('ril.columns.exit')),
+      editableColumn('hours', t('ril.columns.hours')),
+      editableColumn('picap', t('ril.columns.picap'), 'min-w-[5rem]'),
+      editableColumn('phoneAvailability', t('ril.columns.phoneAvailability')),
+      editableColumn('notes', t('ril.columns.notes'), 'min-w-[9rem]'),
+      editableColumn('transfer', t('ril.columns.transfer'), 'min-w-[10rem]'),
+      editableColumn('code', t('ril.columns.code'), 'min-w-[7rem]'),
+    ];
+  }, [getEditableValue, t, updateRow]);
+
+  const getRowClassName = useCallback(
+    (row: RilRow) =>
+      row.isHoliday
+        ? 'bg-amber-50/80 text-amber-950 hover:bg-amber-50 dark:bg-amber-950/30 dark:text-amber-100'
+        : 'hover:bg-muted/50',
+    [],
+  );
 
   return (
     <div className="space-y-6">
@@ -275,59 +309,32 @@ const RilView: React.FC<RilViewProps> = ({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Badge variant="secondary">{t('ril.entriesLoaded', { count: sourceEntries.length })}</Badge>
-        <Badge variant="secondary">
-          {t('ril.totalHours', { count: totals.totalHours.toFixed(2) })}
-        </Badge>
-        <Badge variant="secondary">{t('ril.workedDays', { count: totals.workedDays })}</Badge>
-        {lastExportFilename && <Badge variant="outline">{lastExportFilename}</Badge>}
-      </div>
-
       {error && (
         <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-md border border-border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="min-w-24">{t('ril.columns.day')}</TableHead>
-              {editableColumns.map((column) => (
-                <TableHead key={column.field} className={column.className}>
-                  {column.label}
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((row) => (
-              <TableRow key={row.day} className={row.isHoliday ? 'bg-muted/50' : undefined}>
-                <TableCell className="font-medium">
-                  <div className="flex flex-col">
-                    <span>{row.day}</span>
-                    {row.weekday && (
-                      <span className="text-xs text-muted-foreground">{row.weekday}</span>
-                    )}
-                  </div>
-                </TableCell>
-                {editableColumns.map((column) => (
-                  <TableCell key={column.field}>
-                    <Input
-                      aria-label={`${column.label} ${row.day}`}
-                      value={getEditableValue(row, column.field)}
-                      onChange={(event) => updateRow(row.day, column.field, event.target.value)}
-                      className="h-8 min-w-0"
-                    />
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      <StandardTable<RilRow>
+        title={t('ril.tableTitle')}
+        data={rows}
+        columns={columns}
+        defaultRowsPerPage={50}
+        minBodyRows={31}
+        rowClassName={getRowClassName}
+        headerExtras={
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="secondary">
+              {t('ril.entriesLoaded', { count: sourceEntries.length })}
+            </Badge>
+            <Badge variant="secondary">
+              {t('ril.totalHours', { count: totals.totalHours.toFixed(2) })}
+            </Badge>
+            <Badge variant="secondary">{t('ril.workedDays', { count: totals.workedDays })}</Badge>
+            {lastExportFilename && <Badge variant="outline">{lastExportFilename}</Badge>}
+          </div>
+        }
+      />
     </div>
   );
 };

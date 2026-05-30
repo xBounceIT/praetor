@@ -20,6 +20,7 @@
   },
   "ril": {
     "title": "RIL",
+    "tableTitle": "Righe presenze",
     "subtitle": "Prospetto presenze mensile generato dalle voci timesheet.",
     "user": "Utente",
     "month": "Mese",

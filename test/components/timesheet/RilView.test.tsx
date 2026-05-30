@@ -85,7 +85,9 @@ describe('<RilView />', () => {
       }),
     );
     expect(screen.getByText('ril.title')).toBeInTheDocument();
+    expect(screen.getByText('ril.tableTitle')).toBeInTheDocument();
     expect(screen.getByText('ril.columns.day')).toBeInTheDocument();
+    expect(screen.queryByText('ril.columns.order')).toBeNull();
   });
 
   test('keeps draft edits local and reset rebuilds from timesheets', async () => {
@@ -107,6 +109,21 @@ describe('<RilView />', () => {
     await waitFor(() => expect(notesInput).toHaveValue(''));
     expect(api.entries.update).not.toHaveBeenCalled();
     expect(api.entries.create).not.toHaveBeenCalled();
+  });
+
+  test('highlights holiday rows and keeps them read-only', async () => {
+    api.entries.listPage.mockResolvedValue({ entries: [], nextCursor: null });
+
+    renderRilView();
+
+    const holidayNotesInput = await screen.findByLabelText('ril.columns.notes 1');
+    expect(holidayNotesInput).toBeDisabled();
+    expect(holidayNotesInput).toHaveValue('FN');
+
+    fireEvent.change(holidayNotesInput, { target: { value: 'Changed' } });
+    expect(holidayNotesInput).toHaveValue('FN');
+    expect(holidayNotesInput.closest('tr')?.className).toContain('bg-amber-50');
+    expect(holidayNotesInput.closest('tr')?.querySelector('td')?.textContent).toMatch(/^1\D/);
   });
 
   test('exports the current draft rows', async () => {

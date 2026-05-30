@@ -27,7 +27,7 @@ Each existing entry occupies its own row, so any historical duplicate data stays
 
 The **RIL** page in Timesheets generates a monthly attendance statement from the selected user's time entries. It is available to users with **timesheets.ril.view**; the migration automatically grants that permission to roles that already had Time Tracker access. You can choose the month and, for managed users, the collaborator to review.
 
-Praetor retrieves entries with `GET /api/entries` using inclusive `fromDate` and `toDate` filters, then builds an editable draft. Edits made in the RIL table stay local to the page and Excel export; they do not update the underlying time entries.
+Praetor retrieves entries with `GET /api/entries` using inclusive `fromDate` and `toDate` filters, then builds an editable draft. Edits made in the RIL table stay local to the page and Excel export; they do not update the underlying time entries. Automatically marked holiday rows are highlighted and read-only.
 
 For each day, Praetor sums tracked hours, uses the Administration default start time, and calculates the end time by adding the lunch break when worked time exceeds 6 hours. Italian holidays that fall Monday through Friday are marked with `FN`; weekend holidays are not marked. If any entry for the day is not `remote`, the row is marked **In office**; otherwise it is marked **Remote working**.
 
