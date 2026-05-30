@@ -150,7 +150,7 @@ export const DEMO_SALES = [
   { id: 'dm_so_01', linkedOfferId: null },
   { id: 'dm_so_02', linkedOfferId: 'dm_co_04' },
   { id: 'dm_so_03', linkedOfferId: null },
-  { id: 'dm_so_04', linkedOfferId: null },
+  { id: 'dm_so_04', linkedOfferId: 'dm_co_03' },
   { id: 'dm_so_05', linkedOfferId: null },
 ] as const;
 
@@ -246,8 +246,8 @@ export const DEMO_USER_WORK_UNITS = [
 export const DEMO_TIME_ENTRY_IDS = rangeIds('dm_te_', 25);
 
 export const DEMO_ITEM_IDS = {
-  quoteItems: rangeIds('dm_cqi_', 14),
-  customerOfferItems: rangeIds('dm_coi_', 7),
+  quoteItems: rangeIds('dm_cqi_', 15),
+  customerOfferItems: rangeIds('dm_coi_', 8),
   saleItems: rangeIds('dm_soi_', 8),
   invoiceItems: rangeIds('dm_inv_item_', 6),
   supplierQuoteItems: rangeIds('dm_sqi_', 15),

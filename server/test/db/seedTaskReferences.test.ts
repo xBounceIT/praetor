@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { extractTopLevelTuples, unquote } from './seedSqlParsing.ts';
 
 // Regression: GitHub issue #423. Both `INSERT INTO time_entries` blocks in seed.sql resolve
 // task_id via `(SELECT t.id FROM tasks t WHERE t.project_id = v.project_id AND t.name = v.task
@@ -11,74 +12,6 @@ import { join } from 'node:path';
 
 const SERVER_ROOT = join(import.meta.dirname, '..', '..');
 const SEED_SQL = readFileSync(join(SERVER_ROOT, 'db', 'seed.sql'), 'utf-8');
-
-type TopLevelEvent = { type: 'comma' | 'open' | 'close'; index: number };
-
-// Walk a SQL fragment yielding top-level commas and the outer `(...)` boundaries while
-// respecting `'…''…'` strings and nested parens. The two parsers below build on this so
-// the string/paren state machine lives in one place.
-function* walkSqlTopLevel(input: string): Generator<TopLevelEvent> {
-  let depth = 0;
-  let inString = false;
-  for (let i = 0; i < input.length; i += 1) {
-    const c = input[i];
-    if (inString) {
-      if (c === "'") {
-        if (input[i + 1] === "'") {
-          i += 1;
-          continue;
-        }
-        inString = false;
-      }
-      continue;
-    }
-    if (c === "'") {
-      inString = true;
-      continue;
-    }
-    if (c === '(') {
-      if (depth === 0) yield { type: 'open', index: i };
-      depth += 1;
-    } else if (c === ')') {
-      depth -= 1;
-      if (depth === 0) yield { type: 'close', index: i };
-    } else if (c === ',' && depth === 0) {
-      yield { type: 'comma', index: i };
-    }
-  }
-}
-
-const splitTopLevelCommas = (input: string): string[] => {
-  const parts: string[] = [];
-  let start = 0;
-  for (const evt of walkSqlTopLevel(input)) {
-    if (evt.type !== 'comma') continue;
-    parts.push(input.slice(start, evt.index));
-    start = evt.index + 1;
-  }
-  parts.push(input.slice(start));
-  return parts.map((s) => s.trim());
-};
-
-const unquote = (value: string): string => {
-  const trimmed = value.trim();
-  const m = trimmed.match(/^'((?:''|[^'])*)'$/);
-  return m ? m[1].replace(/''/g, "'") : trimmed;
-};
-
-const extractTopLevelTuples = (body: string): string[][] => {
-  const tuples: string[][] = [];
-  let start = -1;
-  for (const evt of walkSqlTopLevel(body)) {
-    if (evt.type === 'open') {
-      start = evt.index + 1;
-    } else if (evt.type === 'close' && start !== -1) {
-      tuples.push(splitTopLevelCommas(body.slice(start, evt.index)));
-      start = -1;
-    }
-  }
-  return tuples;
-};
 
 const collectTaskKeys = (sql: string): Set<string> => {
   const keys = new Set<string>();
@@ -166,8 +99,11 @@ const parseDmFirstBlockTimeEntries = (sql: string): DemoTimeEntry[] => {
   throw new Error('seed.sql: failed to locate the non-JOIN-projects time_entries block');
 };
 
+// Both describe blocks validate against the same (project_id, task) key set, so parse it
+// once at module load rather than per-block.
+const taskKeys = collectTaskKeys(SEED_SQL);
+
 describe('seed.sql demo time entries (issue #423)', () => {
-  const taskKeys = collectTaskKeys(SEED_SQL);
   const entries = parseDmJoinTimeEntries(SEED_SQL);
 
   test('parses exactly dm_te_21..dm_te_25 from the JOIN-projects block', () => {
@@ -189,7 +125,6 @@ describe('seed.sql demo time entries (issue #423)', () => {
 });
 
 describe('seed.sql demo time entries (first block, no JOIN projects)', () => {
-  const taskKeys = collectTaskKeys(SEED_SQL);
   const entries = parseDmFirstBlockTimeEntries(SEED_SQL);
 
   test('parses exactly dm_te_01..dm_te_20 from the first block', () => {
