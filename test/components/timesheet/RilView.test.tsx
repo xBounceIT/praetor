@@ -95,13 +95,15 @@ describe('<RilView />', () => {
     expect(screen.getByLabelText('ril.columns.exit 4')).toHaveValue('18:00');
     expect(screen.getByLabelText('ril.columns.hours 4')).toHaveTextContent('8:00');
     expect(screen.getByLabelText('ril.columns.picap 4')).toHaveTextContent('8');
-    const dayCell = screen
+    expect(screen.getByText('ril.columns.day').closest('th')).toHaveAttribute('colspan', '2');
+    const dayCells = screen
       .getByLabelText('ril.columns.entrance 4')
       .closest('tr')
-      ?.querySelector('td');
-    expect(dayCell?.className).toContain('w-14');
-    expect(dayCell?.querySelector('span')?.className).toContain('inline-flex');
-    expect(dayCell?.querySelector('span')?.className).not.toContain('justify-between');
+      ?.querySelectorAll('td');
+    expect(dayCells?.[0].className).toContain('w-8');
+    expect(dayCells?.[0]).toHaveTextContent('lun');
+    expect(dayCells?.[1].className).toContain('w-8');
+    expect(dayCells?.[1]).toHaveTextContent('4');
     expect(screen.queryByText('ril.entriesLoaded')).toBeNull();
     expect(screen.getByLabelText('ril.summary.workedDays')).toHaveTextContent('20');
     expect(screen.getByLabelText('ril.summary.lunchWindow')).toHaveTextContent('13:00-14:00');
@@ -184,7 +186,9 @@ describe('<RilView />', () => {
     expect(holidayNotesSelect).toBeDisabled();
     expect(holidayNotesSelect).toHaveTextContent('F - Festivita');
     expect(holidayNotesSelect.closest('tr')?.className).toContain('bg-amber-50');
-    expect(holidayNotesSelect.closest('tr')?.querySelector('td')?.textContent).toMatch(/\D1$/);
+    const holidayDayCells = holidayNotesSelect.closest('tr')?.querySelectorAll('td');
+    expect(holidayDayCells?.[0]).toHaveTextContent('ven');
+    expect(holidayDayCells?.[1]).toHaveTextContent('1');
   });
 
   test('highlights weekend rows in muted grey without disabling editing', async () => {

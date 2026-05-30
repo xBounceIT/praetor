@@ -308,7 +308,6 @@ const RilView: React.FC<RilViewProps> = ({
   );
 
   const tableHeaders = [
-    { key: 'day', label: t('ril.columns.day'), className: 'w-14 min-w-14' },
     { key: 'entrance', label: t('ril.columns.entrance'), className: 'w-24 min-w-24' },
     { key: 'exit', label: t('ril.columns.exit'), className: 'w-24 min-w-24' },
     { key: 'hours', label: t('ril.columns.hours'), className: 'w-20 min-w-20 text-right' },
@@ -432,6 +431,9 @@ const RilView: React.FC<RilViewProps> = ({
           <Table className="min-w-[49rem] table-fixed text-xs">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
+                <TableHead colSpan={2} className="h-8 w-16 min-w-16 px-2 text-center">
+                  {t('ril.columns.day')}
+                </TableHead>
                 {tableHeaders.map((header) => (
                   <TableHead key={header.key} className={`h-8 px-2 ${header.className}`}>
                     {header.label}
@@ -442,13 +444,11 @@ const RilView: React.FC<RilViewProps> = ({
             <TableBody>
               {rows.map((row) => (
                 <TableRow key={row.day} className={getRowClassName(row)}>
-                  <TableCell className="w-14 min-w-14 px-2 py-1 font-medium">
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="text-xs font-normal text-muted-foreground">
-                        {row.weekday || '-'}
-                      </span>
-                      <span className="tabular-nums">{row.day}</span>
-                    </span>
+                  <TableCell className="w-8 min-w-8 py-1 pr-1 pl-2 text-xs font-normal text-muted-foreground">
+                    {row.weekday || '-'}
+                  </TableCell>
+                  <TableCell className="w-8 min-w-8 py-1 pr-2 pl-1 text-right font-medium tabular-nums">
+                    {row.day}
                   </TableCell>
                   <TableCell className="w-24 min-w-24 px-2 py-1">
                     {renderEditableInput(row, 'entrance', t('ril.columns.entrance'))}
