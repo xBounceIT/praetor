@@ -34,7 +34,9 @@ const NotFound: React.FC<NotFoundProps> = ({ onReturn }) => {
       </div>
 
       <EmptyHeader>
-        <EmptyTitle className="text-2xl">{t('notFound.title')}</EmptyTitle>
+        <EmptyTitle role="heading" aria-level={2} className="text-2xl">
+          {t('notFound.title')}
+        </EmptyTitle>
         <EmptyDescription>{t('notFound.message')}</EmptyDescription>
       </EmptyHeader>
 

@@ -17,6 +17,14 @@ describe('<NotFound />', () => {
     expect(screen.getByRole('button', { name: 'notFound.return' })).toBeInTheDocument();
   });
 
+  test('exposes the title as a level-2 heading for screen readers', () => {
+    render(<NotFound onReturn={() => {}} />);
+
+    // EmptyTitle renders a <div>, so it must carry explicit heading semantics
+    // to preserve the navigable <h2> the legacy page provided.
+    expect(screen.getByRole('heading', { level: 2, name: 'notFound.title' })).toBeInTheDocument();
+  });
+
   test('invokes onReturn when the home button is clicked', () => {
     const onReturn = mock(() => {});
     render(<NotFound onReturn={onReturn} />);
