@@ -513,7 +513,7 @@ const RilView: React.FC<RilViewProps> = ({
         </div>
         <aside
           aria-label={t('ril.summary.title')}
-          className="rounded-md border border-border bg-card p-2 shadow-lg xl:sticky xl:top-4"
+          className="rounded-md border border-border bg-card p-2 shadow-lg xl:sticky xl:top-24"
         >
           <dl className="space-y-2">
             {summaryRows.map((row) => (

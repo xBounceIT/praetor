@@ -100,6 +100,7 @@ describe('<RilView />', () => {
     expect(screen.getByLabelText('ril.summary.extraHours')).toHaveTextContent('0.0');
     expect(screen.getByLabelText('ril.summary.totalHours')).toHaveTextContent('160.0');
     expect(screen.getByLabelText('ril.summary.totalPicap')).toHaveTextContent('160.00');
+    expect(screen.getByLabelText('ril.summary.title')).toHaveClass('xl:sticky', 'xl:top-24');
   });
 
   test('selecting month and year reloads and syncs the draft table', async () => {
