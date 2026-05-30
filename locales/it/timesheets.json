@@ -31,6 +31,7 @@
     "loadFailed": "Impossibile caricare i dati RIL",
     "exportFailed": "Impossibile esportare il file RIL",
     "missingTimes": "Aggiungi entrata e uscita per i giorni validi prima di esportare: {{days}}",
+    "missingTransfer": "Seleziona un valore trasferta per i giorni validi prima di esportare: {{days}}",
     "entriesLoaded": "{{count}} voci caricate",
     "totalHours": "{{count}} ore",
     "workedDays": "{{count}} giorni lavorati",

@@ -33,7 +33,7 @@ For every valid weekday, Praetor starts the draft with **09:00** as the entrance
 
 In the statement, **Notes** can be selected from `P` vacation, `P2` leave, `M` sick leave, and `F` holiday. **Code** can be selected from `TR` business trip and `SD` hardship office.
 
-The **Export Excel** button creates a one-sheet `.xlsx` workbook named **Prospetto Presenze** with the RIL columns: Giorno, Entrata, Uscita, Ore, PICAP, Reperib. Telef., Note, Trasferta, Cod, and Commessa.
+Before export, every valid weekday must have **Start**, **End**, and **Location** filled in. The **Export Excel** button creates a one-sheet `.xlsx` workbook named **Prospetto Presenze** with the RIL columns: Giorno, Entrata, Uscita, Ore, PICAP, Reperib. Telef., Note, Trasferta, Cod, and Commessa.
 
 ## Recurring tasks
 

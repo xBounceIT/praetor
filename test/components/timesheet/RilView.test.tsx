@@ -27,6 +27,19 @@ const projects: Project[] = [
   { id: 'p1', name: 'Project', clientId: 'c1', color: '#111111', orderId: 'ORD-1' },
 ];
 
+const may2026ValidWeekdays = [
+  4, 5, 6, 7, 8, 11, 12, 13, 14, 15, 18, 19, 20, 21, 22, 25, 26, 27, 28, 29,
+];
+
+const entriesForAllMay2026ValidWeekdays = () =>
+  may2026ValidWeekdays.map((day) =>
+    entry({
+      id: `te-2026-05-${day}`,
+      date: `2026-05-${String(day).padStart(2, '0')}`,
+      location: 'remote',
+    }),
+  );
+
 const entry = (overrides: Partial<TimeEntry>): TimeEntry => ({
   id: overrides.id ?? 'te-1',
   userId: overrides.userId ?? 'u1',
@@ -226,7 +239,7 @@ describe('<RilView />', () => {
 
   test('exports the current draft rows', async () => {
     api.entries.listPage.mockResolvedValue({
-      entries: [entry({ date: '2026-05-04', duration: 8 })],
+      entries: entriesForAllMay2026ValidWeekdays(),
       nextCursor: null,
     });
 
@@ -266,6 +279,21 @@ describe('<RilView />', () => {
     fireEvent.click(screen.getByRole('button', { name: /ril.exportExcel/ }));
 
     expect(await screen.findByText('ril.missingTimes')).toBeInTheDocument();
+    expect(downloadRilWorkbookMock).not.toHaveBeenCalled();
+  });
+
+  test('requires transfer values on every valid day before export', async () => {
+    api.entries.listPage.mockResolvedValue({ entries: [], nextCursor: null });
+
+    renderRilView();
+
+    await screen.findByLabelText('ril.columns.entrance 4');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /ril.exportExcel/ })).not.toBeDisabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /ril.exportExcel/ }));
+
+    expect(await screen.findByText('ril.missingTransfer')).toBeInTheDocument();
     expect(downloadRilWorkbookMock).not.toHaveBeenCalled();
   });
 });

@@ -222,12 +222,20 @@ const RilView: React.FC<RilViewProps> = ({
   );
 
   const handleExport = async () => {
-    const missingTimeDays = rows
-      .filter((row) => row.date && row.isWorkday && !row.isHoliday)
+    const validRows = rows.filter((row) => row.date && row.isWorkday && !row.isHoliday);
+    const missingTimeDays = validRows
       .filter((row) => !row.entrance.trim() || !row.exit.trim())
       .map((row) => String(row.day));
     if (missingTimeDays.length > 0) {
       setError(t('ril.missingTimes', { days: missingTimeDays.join(', ') }));
+      return;
+    }
+
+    const missingTransferDays = validRows
+      .filter((row) => !row.transfer.trim())
+      .map((row) => String(row.day));
+    if (missingTransferDays.length > 0) {
+      setError(t('ril.missingTransfer', { days: missingTransferDays.join(', ') }));
       return;
     }
 
