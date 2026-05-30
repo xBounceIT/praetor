@@ -485,16 +485,16 @@ const RilView: React.FC<RilViewProps> = ({
         </div>
         <aside
           aria-label={t('ril.summary.title')}
-          className="rounded-md border border-border bg-card p-2 shadow-lg xl:sticky xl:top-24"
+          className="rounded-lg border border-border bg-card/95 p-3 shadow-sm xl:sticky xl:top-24"
         >
           <dl className="space-y-2">
             {summaryRows.map((row) => (
               <div
                 key={row.label}
-                className="grid grid-cols-[1fr_auto] items-center gap-2 border border-black bg-yellow-400 px-2 py-1 text-[11px] font-semibold leading-tight text-blue-700"
+                className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-md border border-border bg-muted/35 px-3 py-2 text-xs leading-tight"
               >
-                <dt>{row.label}</dt>
-                <dd className="text-right tabular-nums">
+                <dt className="text-muted-foreground">{row.label}</dt>
+                <dd className="text-right font-semibold text-foreground tabular-nums">
                   <output aria-label={row.label}>{row.value}</output>
                 </dd>
               </div>
