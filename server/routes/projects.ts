@@ -760,7 +760,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/:id/users',
     {
-      onRequest: [authenticateToken, requirePermission('projects.assignments.update')],
+      onRequest: [
+        authenticateToken,
+        requireAnyPermission('projects.assignments.view', 'projects.assignments.update'),
+      ],
       schema: {
         tags: ['projects'],
         summary: 'Get project user assignments',
@@ -775,7 +778,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      if (!(await canAccessProject(request, idResult.value))) {
+      // Role-agnostic: `projects.assignments.view` is a "view all assignments" marker (seeded to
+      // the manager/top_manager roles) that grants access to any project's assignments regardless
+      // of membership. Otherwise fall back to the prior per-project membership / all-scope check so
+      // existing scoped roles (e.g. assignments.update without view) are unaffected.
+      const canViewAssignments =
+        hasPermission(request, 'projects.assignments.view') ||
+        (await canAccessProject(request, idResult.value));
+      if (!canViewAssignments) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',

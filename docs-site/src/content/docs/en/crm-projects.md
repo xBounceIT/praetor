@@ -39,6 +39,10 @@ Praetor assigns a unique color automatically when you create a project. You can 
 
 When a project ends, check that tasks are consistent and that no pending entries remain.
 
+### Assigning users
+
+The **Assign Users** command manages who is assigned to a project or one of its activities. Access to this dialog is governed by the **Project Assignments** permission: the **View** action lets a role open the assignments of any project or activity regardless of its own membership, while **Update** lets it edit them. Managers and Top Managers hold both by default, so they can manage assignments even when they are not members of the project or activity.
+
 ## Competence centers
 
 Competence centers connect people, costs, and assignments. They support HR analysis and economic project control.

@@ -393,6 +393,13 @@
       "when": 1779878737658,
       "tag": "0055_reseed_hr_cost_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1780147445750,
+      "tag": "0056_add_projects_assignments_view_permission",
+      "breakpoints": true
     }
   ]
 }
