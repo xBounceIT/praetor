@@ -325,13 +325,22 @@ const Layout: React.FC<LayoutProps> = ({
     buildPermission('notifications', 'view'),
   );
 
+  // Sub-pages with no sidebar entry (so no `activeRoute`) need an explicit title
+  // mapping — otherwise the fallback below capitalizes the URL slug and we ship
+  // an untranslated "Detail" header.
+  const subPageTitleKey: Partial<Record<View, string>> = {
+    'projects/detail': 'titles.projectDetail',
+  };
+  const subPageTitleKeyForView = subPageTitleKey[activeView as View];
   const pageTitle = isNotFound
     ? t('notFound')
-    : (activeRoute?.title ??
-      activeRoute?.label ??
-      t(fallbackRouteTitleKey(activeView), {
-        defaultValue: activeView.split('/').pop()?.replace('-', ' ') || activeView,
-      }));
+    : subPageTitleKeyForView
+      ? t(subPageTitleKeyForView)
+      : (activeRoute?.title ??
+        activeRoute?.label ??
+        t(fallbackRouteTitleKey(activeView), {
+          defaultValue: activeView.split('/').pop()?.replace('-', ' ') || activeView,
+        }));
 
   return (
     <SidebarProvider>

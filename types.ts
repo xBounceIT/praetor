@@ -609,6 +609,7 @@ export type View =
   | 'accounting/supplier-invoices'
   // Projects module
   | 'projects/manage'
+  | 'projects/detail'
   | 'projects/tasks'
   // HR module
   | 'hr/internal'

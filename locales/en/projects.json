@@ -100,6 +100,125 @@
       "actions": "Actions"
     }
   },
+  "detail": {
+    "detailsTitle": "Project details",
+    "detailsDescription": "Edit the core configuration for this project.",
+    "tasksDescription": "Inline-edit tasks, expected effort and revenue.",
+    "analyticsTitle": "Project dashboard",
+    "analyticsDescription": "KPIs and charts derived from time entries on this project.",
+    "createdOn": "Created on {{date}}",
+    "unsavedChanges": "You have unsaved changes.",
+    "newTaskDefaultName": "New Task",
+    "actions": {
+      "back": "Back to projects"
+    },
+    "kpi": {
+      "totalHours": "Total hours",
+      "totalHoursSubtitle": "Across {{count}} time entries",
+      "totalCost": "Total cost",
+      "totalCostSubtitle": "Avg {{rate}} {{currency}}/h",
+      "teamSize": "Team size",
+      "teamSizeSubtitle": "Active project members",
+      "budgetUsed": "Budget used",
+      "budgetUsedSubtitle": "of {{budget}} {{currency}}"
+    },
+    "timeline": {
+      "title": "Project timeline",
+      "description": "Days elapsed against the total project duration.",
+      "daysElapsed": "days elapsed",
+      "daysRemaining": "days remaining",
+      "noDates": "Set the project start and end dates above to see the timeline.",
+      "phase": {
+        "pending": "Not started",
+        "inProgress": "In progress",
+        "completed": "Completed"
+      }
+    },
+    "charts": {
+      "hoursLabel": "Hours",
+      "costLabel": "Cost",
+      "cumulativeCostLabel": "Cumulative cost",
+      "revenueLabel": "Revenue",
+      "hoursByUser": "Hours by user",
+      "hoursByUserDesc": "Hours each user logged, broken down by task.",
+      "hoursByTask": "Hours by task",
+      "hoursByTaskDesc": "Logged hours against the available effort, per task.",
+      "loggedLabel": "Logged hours",
+      "remainingEffortLabel": "Remaining effort",
+      "overBudgetLabel": "Over budget",
+      "totalEffortLabel": "Total effort",
+      "totalLabel": "Total",
+      "costVsRevenue": "Cost vs revenue",
+      "costVsRevenueDesc": "Cumulative entry cost over time against the project revenue ceiling.",
+      "costHiddenNote": "Cumulative cost is hidden because you don't have permission to view cost data.",
+      "monthlyActivity": "Monthly activity",
+      "monthlyActivityDesc": "Hours logged each month — the project's pace and momentum.",
+      "avgMonthlyLabel": "Avg / month"
+    },
+    "dashboard": {
+      "edit": "Edit",
+      "done": "Done",
+      "cancel": "Cancel",
+      "save": "Save",
+      "views": "Views",
+      "saveAsView": "Save as view",
+      "saveViewTitle": "Save dashboard view",
+      "viewName": "View name",
+      "viewNamePlaceholder": "e.g. Compact dashboard",
+      "useGlobalDefault": "Use global default",
+      "setGlobalDefault": "Set as global default",
+      "noViews": "No saved views yet",
+      "deleteView": "Delete view",
+      "editingHint": "Drag a card to move it, drag its edges to resize, and hide or restore cards.",
+      "dragHandle": "{{name}} — drag to move. Arrow keys move it; Shift + arrow keys resize it.",
+      "resize": "Resize {{name}}",
+      "resizeWidth": "Resize {{name}} width",
+      "resizeHeight": "Resize {{name}} height",
+      "hide": "Hide",
+      "show": "Show",
+      "hideWidget": "Hide {{name}}",
+      "showWidget": "Show {{name}}",
+      "editOnLargerScreen": "Drag-and-drop layout editing is available on a wider screen."
+    },
+    "empty": {
+      "noEntriesTitle": "No time logged yet",
+      "noEntriesDescription": "Charts populate as team members track time against this project.",
+      "unavailableTitle": "Data unavailable",
+      "unavailableDescription": "Time-entry data couldn't be loaded — see the notice above for details.",
+      "costHiddenTitle": "Cost data hidden"
+    },
+    "notices": {
+      "truncated": "Showing the most recent {{count}} time entries — older data is not loaded.",
+      "partialScope": "You only see entries from users you can view; project-wide totals may be higher.",
+      "forbiddenTitle": "Time entries unavailable",
+      "forbiddenDescription": "You don't have permission to view time entries, so analytics can't be displayed.",
+      "loadFailedTitle": "Couldn't load time entries",
+      "loadFailedDescription": "Please refresh the page or try again later."
+    },
+    "rules": {
+      "title": "Project rules",
+      "description": "Automatic controls that watch this project and notify you when something needs attention.",
+      "comingSoonBadge": "Coming soon",
+      "items": {
+        "budgetThreshold": {
+          "name": "Alert when budget exceeds threshold",
+          "description": "Notify project managers when logged cost crosses 80% of the project revenue."
+        },
+        "deadlineApproaching": {
+          "name": "Warn before the end date",
+          "description": "Surface a warning 7 days before the project end date if open tasks remain."
+        },
+        "staleTask": {
+          "name": "Flag stale tasks",
+          "description": "Highlight tasks with no time logged in the last 14 days."
+        },
+        "unassignedTask": {
+          "name": "Catch unassigned tasks",
+          "description": "Notify when a task is created without an assignee or with no expected effort."
+        }
+      }
+    }
+  },
   "tasks": {
     "title": "Tasks",
     "subtitle": "Manage tasks and assignments",

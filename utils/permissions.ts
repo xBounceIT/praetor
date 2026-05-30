@@ -174,6 +174,7 @@ export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'accounting/supplier-orders': buildPermission('accounting.supplier_orders', 'view'),
   'accounting/supplier-invoices': buildPermission('accounting.supplier_invoices', 'view'),
   'projects/manage': buildPermission('projects.manage', 'view'),
+  'projects/detail': buildPermission('projects.manage', 'view'),
   'projects/tasks': buildPermission('projects.tasks', 'view'),
   'hr/internal': buildPermission('hr.internal', 'view'),
   'hr/external': buildPermission('hr.external', 'view'),
