@@ -1511,6 +1511,31 @@ describe('POST /api/projects/:id/users', () => {
     expect(res.statusCode).toBe(200);
   });
 
+  // The assignments view+update markers bypass membership consistently with the task endpoints.
+  test('200: assignments view+update saves even when not a member', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'projects.assignments.view',
+      'projects.assignments.update',
+    ]);
+    isProjectAssignedToUserMock.mockResolvedValue(false);
+    lockNameAndClientByIdMock.mockResolvedValue({ name: 'Website', clientId: 'c-1' });
+    findNonTopManagerUserIdsMock.mockResolvedValue([]);
+    clearNonTopManagerAssignmentsMock.mockResolvedValue(undefined);
+    addManualAssignmentsMock.mockResolvedValue(undefined);
+    ensureClientCascadeAssignmentsMock.mockResolvedValue(undefined);
+    removeClientCascadeForUsersIfUnusedMock.mockResolvedValue(undefined);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects/p-1/users',
+      headers: authHeader(),
+      payload: { userIds: ['u2'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(clearNonTopManagerAssignmentsMock).toHaveBeenCalledWith('p-1', TX_SENTINEL);
+  });
+
   test('404: project not found', async () => {
     lockNameAndClientByIdMock.mockResolvedValue(null);
 

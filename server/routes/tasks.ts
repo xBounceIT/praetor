@@ -735,10 +735,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      // Role-agnostic: `projects.assignments.view` is a "view all assignments" marker (seeded to
-      // the manager/top_manager roles) that grants access to any activity's assignments regardless
-      // of membership (issue #720). Otherwise fall back to the prior per-task membership / all-scope
-      // check so existing scoped roles (e.g. assignments.update without view) are unaffected.
+      // `projects.assignments.view` is the "view all assignments" marker (issue #720); without it,
+      // access stays scoped to membership / tasks_all.update exactly as before.
       const canViewAssignments =
         hasPermission(request, 'projects.assignments.view') ||
         (await canAccessTask(request, idResult.value, 'projects.tasks_all.update'));
@@ -784,11 +782,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { userIds } = request.body as { userIds: string[] };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      // Role-agnostic: the onRequest guard already required an edit permission
-      // (`projects.assignments.update` or task update). `projects.assignments.view` is the
-      // "manages all assignments" marker (seeded to manager/top_manager) that lifts the per-task
-      // membership requirement (issue #720); without it, editing stays scoped to membership /
-      // all-scope exactly as before.
+      // `projects.assignments.view` is the "manages all assignments" marker (issue #720); without
+      // it, editing stays scoped to membership / tasks_all.update exactly as before.
       const canEditAssignments =
         hasPermission(request, 'projects.assignments.view') ||
         (await canAccessTask(request, idResult.value, 'projects.tasks_all.update'));

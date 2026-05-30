@@ -778,10 +778,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      // Role-agnostic: `projects.assignments.view` is a "view all assignments" marker (seeded to
-      // the manager/top_manager roles) that grants access to any project's assignments regardless
-      // of membership. Otherwise fall back to the prior per-project membership / all-scope check so
-      // existing scoped roles (e.g. assignments.update without view) are unaffected.
+      // `projects.assignments.view` is the "view all assignments" marker; without it, access stays
+      // scoped to membership / manage_all.view exactly as before.
       const canViewAssignments =
         hasPermission(request, 'projects.assignments.view') ||
         (await canAccessProject(request, idResult.value));
@@ -820,7 +818,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { userIds } = request.body as { userIds: string[] };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      if (!(await canAccessProject(request, idResult.value))) {
+      // `projects.assignments.view` is the "manages all assignments" marker; without it, editing
+      // stays scoped to membership / manage_all.view exactly as before.
+      const canEditAssignments =
+        hasPermission(request, 'projects.assignments.view') ||
+        (await canAccessProject(request, idResult.value));
+      if (!canEditAssignments) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',
