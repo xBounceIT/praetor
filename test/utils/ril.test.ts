@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { Project, TimeEntry } from '../../types';
 import {
   calculateRilTotals,
+  calculateRilWorkedHoursFromTimes,
   generateRilRows,
   getRilMonthBounds,
   makeRilDownloadFilename,
@@ -117,6 +118,13 @@ describe('RIL helpers', () => {
       hoursDecimal: 8.5,
       picap: 8.5,
     });
+  });
+
+  test('subtracts only the lunch-window overlap from edited entrance and exit values', () => {
+    expect(calculateRilWorkedHoursFromTimes('09:00', '15:00', 60)).toBe(5);
+    expect(calculateRilWorkedHoursFromTimes('09:00', '13:30', 60)).toBe(4);
+    expect(calculateRilWorkedHoursFromTimes('09:00', '13:00', 60)).toBe(4);
+    expect(calculateRilWorkedHoursFromTimes('14:00', '18:00', 60)).toBe(4);
   });
 
   test('defaults Commessa to unique order IDs with project-name fallback', () => {

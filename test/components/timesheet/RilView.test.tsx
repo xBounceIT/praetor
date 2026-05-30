@@ -148,6 +148,11 @@ describe('<RilView />', () => {
     expect(screen.getByLabelText('ril.columns.hours 4')).toHaveTextContent('7:00');
     expect(screen.getByLabelText('ril.columns.picap 4')).toHaveTextContent('7');
 
+    fireEvent.change(exitInput, { target: { value: '15:00' } });
+    expect(exitInput).toHaveValue('15:00');
+    expect(screen.getByLabelText('ril.columns.hours 4')).toHaveTextContent('5:00');
+    expect(screen.getByLabelText('ril.columns.picap 4')).toHaveTextContent('5');
+
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /ril.reset/ })).not.toBeDisabled(),
     );

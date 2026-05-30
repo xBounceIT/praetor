@@ -76,7 +76,7 @@ const WEEKDAY_FORMATTER = new Intl.DateTimeFormat('it-IT', { weekday: 'short' })
 const RIL_FIXED_ENTRANCE = '09:00';
 const RIL_FIXED_EXIT = '18:00';
 const DEFAULT_LUNCH_BREAK_MINUTES = 60;
-const LUNCH_BREAK_THRESHOLD_MINUTES = 6 * 60;
+const RIL_LUNCH_BREAK_START_MINUTES = 13 * 60;
 
 export const isValidRilStartTime = (value: string | undefined | null): value is string =>
   typeof value === 'string' && TIME_OF_DAY_PATTERN.test(value);
@@ -113,7 +113,23 @@ const normalizeLunchBreakMinutes = (value: number | undefined): number => {
   return Math.min(240, Math.max(0, Math.round(parsed)));
 };
 
-const calculateRilWorkedHoursFromTimes = (
+const calculateRilLunchOverlapMinutes = (
+  startMinutes: number,
+  exitMinutes: number,
+  lunchBreakMinutes: number | undefined,
+): number => {
+  const lunchMinutes = normalizeLunchBreakMinutes(lunchBreakMinutes);
+  if (lunchMinutes <= 0) return 0;
+
+  const lunchStartMinutes = RIL_LUNCH_BREAK_START_MINUTES;
+  const lunchEndMinutes = lunchStartMinutes + lunchMinutes;
+  return Math.max(
+    0,
+    Math.min(exitMinutes, lunchEndMinutes) - Math.max(startMinutes, lunchStartMinutes),
+  );
+};
+
+export const calculateRilWorkedHoursFromTimes = (
   entrance: string,
   exit: string,
   lunchBreakMinutes = DEFAULT_LUNCH_BREAK_MINUTES,
@@ -125,10 +141,11 @@ const calculateRilWorkedHoursFromTimes = (
   if (exitMinutes <= startMinutes) return 0;
 
   const elapsedMinutes = exitMinutes - startMinutes;
-  const lunchMinutes =
-    elapsedMinutes > LUNCH_BREAK_THRESHOLD_MINUTES
-      ? normalizeLunchBreakMinutes(lunchBreakMinutes)
-      : 0;
+  const lunchMinutes = calculateRilLunchOverlapMinutes(
+    startMinutes,
+    exitMinutes,
+    lunchBreakMinutes,
+  );
   return Math.max(0, (elapsedMinutes - lunchMinutes) / 60);
 };
 

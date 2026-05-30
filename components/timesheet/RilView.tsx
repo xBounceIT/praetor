@@ -25,13 +25,12 @@ import api from '../../services/api';
 import type { GeneralSettings, Project, TimeEntry, User } from '../../types';
 import {
   calculateRilTotals,
+  calculateRilWorkedHoursFromTimes,
   formatRilHoursAsDuration,
   generateRilRows,
   getCurrentRilMonthKey,
   getRilLocationLabels,
   getRilMonthBounds,
-  isValidRilStartTime,
-  parseRilTimeToMinutes,
   type RilRow,
   roundRilPicapHours,
 } from '../../utils/ril';
@@ -69,33 +68,6 @@ interface RilViewProps {
 }
 
 type EditableRilField = 'entrance' | 'exit' | 'notes' | 'transfer' | 'code';
-
-const LUNCH_BREAK_THRESHOLD_MINUTES = 6 * 60;
-
-const normalizeLunchBreakMinutes = (value: number): number => {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return 60;
-  return Math.min(240, Math.max(0, Math.round(parsed)));
-};
-
-const calculateDraftHoursFromTimes = (
-  entrance: string,
-  exit: string,
-  lunchBreakMinutes: number,
-): number => {
-  if (!isValidRilStartTime(entrance) || !isValidRilStartTime(exit)) return 0;
-
-  const startMinutes = parseRilTimeToMinutes(entrance);
-  const exitMinutes = parseRilTimeToMinutes(exit);
-  if (exitMinutes <= startMinutes) return 0;
-
-  const elapsedMinutes = exitMinutes - startMinutes;
-  const lunchMinutes =
-    elapsedMinutes > LUNCH_BREAK_THRESHOLD_MINUTES
-      ? normalizeLunchBreakMinutes(lunchBreakMinutes)
-      : 0;
-  return Math.max(0, (elapsedMinutes - lunchMinutes) / 60);
-};
 
 const normalizeMonthKey = (value: string): string => {
   try {
@@ -225,7 +197,7 @@ const RilView: React.FC<RilViewProps> = ({
           const nextRow = { ...row, [field]: value };
           if (field !== 'entrance' && field !== 'exit') return nextRow;
 
-          const hoursDecimal = calculateDraftHoursFromTimes(
+          const hoursDecimal = calculateRilWorkedHoursFromTimes(
             nextRow.entrance,
             nextRow.exit,
             lunchBreakMinutes,
