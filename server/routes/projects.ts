@@ -760,7 +760,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/:id/users',
     {
-      onRequest: [authenticateToken, requirePermission('projects.assignments.update')],
+      onRequest: [
+        authenticateToken,
+        requireAnyPermission('projects.assignments.view', 'projects.assignments.update'),
+      ],
       schema: {
         tags: ['projects'],
         summary: 'Get project user assignments',
@@ -775,7 +778,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      if (!(await canAccessProject(request, idResult.value))) {
+      // `projects.assignments.view` is the "view all assignments" marker; without it, access stays
+      // scoped to membership / manage_all.view exactly as before.
+      const canViewAssignments =
+        hasPermission(request, 'projects.assignments.view') ||
+        (await canAccessProject(request, idResult.value));
+      if (!canViewAssignments) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',
@@ -810,7 +818,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { userIds } = request.body as { userIds: string[] };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      if (!(await canAccessProject(request, idResult.value))) {
+      // `projects.assignments.view` is the "manages all assignments" marker; without it, editing
+      // stays scoped to membership / manage_all.view exactly as before.
+      const canEditAssignments =
+        hasPermission(request, 'projects.assignments.view') ||
+        (await canAccessProject(request, idResult.value));
+      if (!canEditAssignments) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',

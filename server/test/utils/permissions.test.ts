@@ -54,6 +54,15 @@ describe('PERMISSION_DEFINITIONS / ALL_PERMISSIONS', () => {
     expect(ALL_PERMISSIONS).toContain('hr.costs_all.update');
   });
 
+  test('projects.assignments is view+update only — view is the role-agnostic "all" marker', () => {
+    // `view` lets a role load any project/activity assignment dialog regardless of membership
+    // (issue #720); `update` permits editing. create/delete must not exist on this resource.
+    expect(ALL_PERMISSIONS).toContain('projects.assignments.view');
+    expect(ALL_PERMISSIONS).toContain('projects.assignments.update');
+    expect(ALL_PERMISSIONS).not.toContain('projects.assignments.create');
+    expect(ALL_PERMISSIONS).not.toContain('projects.assignments.delete');
+  });
+
   test('hr.costs is view+update only — no create/delete on either scope', () => {
     // The hr.costs resource is the personal-scope cost gate: view (read your own
     // cost, read-only counterpart of update) and update (edit your own cost) apply,

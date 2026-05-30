@@ -407,6 +407,13 @@
       "when": 1780147595292,
       "tag": "0057_remove_internal_user_create_delete_from_default_managers",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1780159571587,
+      "tag": "0058_add_projects_assignments_view_permission",
+      "breakpoints": true
     }
   ]
 }

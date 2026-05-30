@@ -712,7 +712,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/:id/users',
     {
-      onRequest: [authenticateToken, requireScopedPermission('projects.tasks', 'update')],
+      onRequest: [
+        authenticateToken,
+        requireAnyPermission(
+          'projects.assignments.view',
+          'projects.assignments.update',
+          'projects.tasks.update',
+          'projects.tasks_all.update',
+        ),
+      ],
       schema: {
         tags: ['tasks'],
         summary: 'Get task user assignments',
@@ -727,7 +735,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      if (!(await canAccessTask(request, idResult.value, 'projects.tasks_all.update'))) {
+      // `projects.assignments.view` is the "view all assignments" marker (issue #720); without it,
+      // access stays scoped to membership / tasks_all.update exactly as before.
+      const canViewAssignments =
+        hasPermission(request, 'projects.assignments.view') ||
+        (await canAccessTask(request, idResult.value, 'projects.tasks_all.update'));
+      if (!canViewAssignments) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',
@@ -745,7 +758,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/:id/users',
     {
-      onRequest: [authenticateToken, requireScopedPermission('projects.tasks', 'update')],
+      onRequest: [
+        authenticateToken,
+        requireAnyPermission(
+          'projects.assignments.update',
+          'projects.tasks.update',
+          'projects.tasks_all.update',
+        ),
+      ],
       schema: {
         tags: ['tasks'],
         summary: 'Update task user assignments',
@@ -762,7 +782,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { userIds } = request.body as { userIds: string[] };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      if (!(await canAccessTask(request, idResult.value, 'projects.tasks_all.update'))) {
+      // `projects.assignments.view` is the "manages all assignments" marker (issue #720); without
+      // it, editing stays scoped to membership / tasks_all.update exactly as before.
+      const canEditAssignments =
+        hasPermission(request, 'projects.assignments.view') ||
+        (await canAccessTask(request, idResult.value, 'projects.tasks_all.update'));
+      if (!canEditAssignments) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',
@@ -789,8 +814,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await withDbTransaction(async (tx) => {
-        await tasksRepo.clearUserAssignments(idResult.value, tx);
-        await tasksRepo.addUserAssignments(idResult.value, validUserIds, tx);
+        await tasksRepo.clearNonTopManagerAssignments(idResult.value, tx);
+        await tasksRepo.addManualAssignments(idResult.value, validUserIds, tx);
       });
 
       await logAudit({
