@@ -102,6 +102,37 @@ describe('<RilView />', () => {
     expect(screen.getByLabelText('ril.summary.totalPicap')).toHaveTextContent('160.00');
   });
 
+  test('selecting month and year reloads and syncs the draft table', async () => {
+    api.entries.listPage.mockResolvedValue({ entries: [], nextCursor: null });
+
+    renderRilView();
+
+    await waitFor(() =>
+      expect(api.entries.listPage).toHaveBeenCalledWith(
+        expect.objectContaining({ fromDate: '2026-05-01', toDate: '2026-05-31' }),
+      ),
+    );
+
+    fireEvent.click(screen.getByLabelText('ril.month'));
+    fireEvent.click(screen.getByRole('option', { name: 'June' }));
+
+    await waitFor(() =>
+      expect(api.entries.listPage).toHaveBeenCalledWith(
+        expect.objectContaining({ fromDate: '2026-06-01', toDate: '2026-06-30' }),
+      ),
+    );
+    expect(screen.getByLabelText('ril.columns.entrance 1')).toHaveValue('09:00');
+
+    fireEvent.click(screen.getByLabelText('ril.year'));
+    fireEvent.click(screen.getByRole('option', { name: '2025' }));
+
+    await waitFor(() =>
+      expect(api.entries.listPage).toHaveBeenCalledWith(
+        expect.objectContaining({ fromDate: '2025-06-01', toDate: '2025-06-30' }),
+      ),
+    );
+  });
+
   test('keeps draft edits local, recalculates totals from times, and resets from timesheets', async () => {
     api.entries.listPage.mockResolvedValue({
       entries: [entry({ date: '2026-05-04', duration: 8 })],

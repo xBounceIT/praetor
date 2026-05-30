@@ -25,7 +25,7 @@ Ogni registrazione esistente occupa una propria riga, così eventuali dati stori
 
 ## RIL
 
-La pagina **RIL** nel modulo Presenze genera un prospetto mensile partendo dalle registrazioni dell'utente selezionato. È disponibile agli utenti con il permesso **timesheets.ril.view**; la migrazione assegna automaticamente questo permesso ai ruoli che già avevano accesso alla vista Time Tracker. È possibile scegliere il mese e, per gli utenti gestiti, anche il collaboratore da consultare.
+La pagina **RIL** nel modulo Presenze genera un prospetto mensile partendo dalle registrazioni dell'utente selezionato. È disponibile agli utenti con il permesso **timesheets.ril.view**; la migrazione assegna automaticamente questo permesso ai ruoli che già avevano accesso alla vista Time Tracker. È possibile scegliere mese e anno e, per gli utenti gestiti, anche il collaboratore da consultare.
 
 Praetor recupera le registrazioni con `GET /api/entries` usando i filtri inclusivi `fromDate` e `toDate`, quindi costruisce una bozza modificabile: le modifiche fatte nel prospetto restano locali alla pagina e all'esportazione Excel, senza aggiornare le registrazioni originali. Le righe festive marcate automaticamente restano evidenziate e non modificabili; le righe del weekend sono evidenziate per riconoscerle rapidamente.
 

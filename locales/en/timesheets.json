@@ -24,6 +24,7 @@
     "subtitle": "Monthly attendance statement generated from time entries.",
     "user": "User",
     "month": "Month",
+    "year": "Year",
     "refresh": "Refresh",
     "reset": "Reset from timesheets",
     "exportExcel": "Export Excel",

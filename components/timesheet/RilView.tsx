@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -47,6 +48,7 @@ const RIL_CODE_OPTIONS = [
   { value: 'TR', label: 'Trasferta' },
   { value: 'SD', label: 'Sede Disagiata' },
 ] as const;
+const RIL_MONTH_OPTION_DATE_YEAR = 2020;
 
 type RilSelectOption = {
   value: string;
@@ -128,6 +130,36 @@ const RilView: React.FC<RilViewProps> = ({
   const locale = getLocale(i18n.language);
   const defaultStartTime = settings.rilDefaultStartTime || '09:00';
   const lunchBreakMinutes = settings.rilLunchBreakMinutes ?? 60;
+  const selectedMonthValue = String(monthBounds.month).padStart(2, '0');
+  const selectedYearValue = String(monthBounds.year);
+
+  const monthOptions = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(locale === 'it' ? 'it-IT' : 'en-US', {
+      month: 'long',
+    });
+    return Array.from({ length: 12 }, (_, index) => ({
+      value: String(index + 1).padStart(2, '0'),
+      label: formatter.format(new Date(RIL_MONTH_OPTION_DATE_YEAR, index, 1)),
+    }));
+  }, [locale]);
+
+  const yearOptions = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const years = new Set<number>();
+    for (let year = currentYear - 5; year <= currentYear + 1; year += 1) {
+      years.add(year);
+    }
+    years.add(monthBounds.year);
+    return Array.from(years).sort((a, b) => a - b);
+  }, [monthBounds.year]);
+
+  const updateSelectedMonth = (nextMonth: string) => {
+    setMonthKey(`${monthBounds.year}-${nextMonth}`);
+  };
+
+  const updateSelectedYear = (nextYear: string) => {
+    setMonthKey(`${nextYear}-${selectedMonthValue}`);
+  };
 
   const generateRows = useCallback(
     (entries: TimeEntry[]) =>
@@ -366,14 +398,39 @@ const RilView: React.FC<RilViewProps> = ({
               </SelectContent>
             </Select>
           </Field>
-          <Field className="min-w-44">
-            <FieldLabel htmlFor="ril-month">{t('ril.month')}</FieldLabel>
-            <Input
-              id="ril-month"
-              type="month"
-              value={monthKey}
-              onChange={(event) => setMonthKey(normalizeMonthKey(event.target.value))}
-            />
+          <Field className="min-w-40">
+            <FieldLabel htmlFor="ril-month-select">{t('ril.month')}</FieldLabel>
+            <Select value={selectedMonthValue} onValueChange={updateSelectedMonth}>
+              <SelectTrigger id="ril-month-select" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {monthOptions.map((month) => (
+                    <SelectItem key={month.value} value={month.value}>
+                      {month.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field className="min-w-28">
+            <FieldLabel htmlFor="ril-year-select">{t('ril.year')}</FieldLabel>
+            <Select value={selectedYearValue} onValueChange={updateSelectedYear}>
+              <SelectTrigger id="ril-year-select" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {yearOptions.map((year) => (
+                    <SelectItem key={year} value={String(year)}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </Field>
           <Button type="button" variant="outline" onClick={loadMonthEntries} disabled={isLoading}>
             {isLoading ? <Loader2 aria-hidden="true" className="animate-spin" /> : <RefreshCcw />}

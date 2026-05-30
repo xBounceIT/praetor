@@ -24,6 +24,7 @@
     "subtitle": "Prospetto presenze mensile generato dalle voci timesheet.",
     "user": "Utente",
     "month": "Mese",
+    "year": "Anno",
     "refresh": "Aggiorna",
     "reset": "Ripristina dai timesheet",
     "exportExcel": "Esporta Excel",
