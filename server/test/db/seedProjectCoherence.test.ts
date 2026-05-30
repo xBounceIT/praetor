@@ -65,6 +65,8 @@ const sales = new Map(
     {
       clientId: row.client_id,
       status: row.status,
+      // Order-level discount (percentage; demo sales never set discount_type).
+      discount: Number(row.discount),
       linkedOfferId: isNullCell(row.linked_offer_id) ? null : row.linked_offer_id,
     },
   ]),
@@ -118,16 +120,31 @@ describe('seed.sql demo projects link to their offer/order chain', () => {
     expect(order?.linkedOfferId).toBe(project.offerId);
   });
 
-  test('demo project revenue adds up to the linked order line-item total', () => {
+  test('demo project revenue adds up to the linked order total (after discounts)', () => {
     const projectRevenue = DEMO_PROJECT_IDS.reduce(
       (sum, id) => sum + (projects.get(id)?.revenue ?? 0),
       0,
     );
     const orderId = projects.get('dm_proj_01')?.orderId;
     expect(orderId).toBeTruthy();
-    // Both demo projects derive from the same order; their combined revenue should equal the
-    // order's net line-item total (the amount also invoiced) — derived, not hardcoded.
-    expect(projectRevenue).toBeCloseTo(orderNetTotal(orderId as string), 2);
+    const order = orderId ? sales.get(orderId) : undefined;
+    // Mirror calculatePricingTotals (utils/numbers.ts): net line items, then the percentage
+    // order-level discount. The projects' combined revenue must equal the order total the app
+    // actually displays — so an order-level discount that isn't reflected in the projects fails
+    // here. Derived, not hardcoded.
+    const orderTotal = orderNetTotal(orderId as string) * (1 - (order?.discount ?? 0) / 100);
+    expect(projectRevenue).toBeCloseTo(orderTotal, 2);
+  });
+
+  test('linked invoice total reconciles with the order total', () => {
+    const orderId = projects.get('dm_proj_01')?.orderId;
+    const order = orderId ? sales.get(orderId) : undefined;
+    const orderTotal = orderNetTotal(orderId as string) * (1 - (order?.discount ?? 0) / 100);
+    const invoice = parseInsertValuesBlocks(SEED_SQL, 'invoices').find(
+      (row) => row.linked_sale_id === orderId,
+    );
+    expect(invoice).toBeDefined();
+    expect(Number(invoice?.total)).toBeCloseTo(orderTotal, 2);
   });
 });
 
