@@ -698,7 +698,9 @@ describe('<AuthSettings />', () => {
     // The form initially renders an empty "new provider" draft. Click the pen icon on the
     // listed SAML provider to load its values into the form.
     fireEvent.click(screen.getByRole('button', { name: 'admin.sso.editProvider' }));
-    const heading = screen.getByText('admin.sso.editProvider', { selector: 'h3' });
+    const heading = screen.getByText('admin.sso.editProvider', {
+      selector: '[data-slot="card-title"]',
+    });
     const form = heading.closest('form') as HTMLFormElement | null;
     if (!form) throw new Error('SAML provider form not found');
 
