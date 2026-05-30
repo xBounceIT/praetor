@@ -174,7 +174,7 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
       rilRow.notes,
       rilRow.transfer,
       rilRow.code,
-      rilRow.order,
+      '',
       extraHours,
       extraWholeHours,
       extraMinutes,
