@@ -73,13 +73,6 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id'];
 
-const getRilNoteOptionDrafts = (value: unknown): RilNoteOption[] =>
-  normalizeRilNoteOptions(value).map((option) => ({ ...option }));
-
-const getRilTransferOptionDrafts = (value: unknown): string[] => [
-  ...normalizeRilTransferOptions(value),
-];
-
 const areRilNoteOptionsEqual = (left: RilNoteOption[], right: unknown): boolean =>
   JSON.stringify(normalizeRilNoteOptions(left)) === JSON.stringify(normalizeRilNoteOptions(right));
 
@@ -140,10 +133,10 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     settings.rilLunchBreakMinutes ?? 60,
   );
   const [rilNoteOptions, setRilNoteOptions] = useState<RilNoteOption[]>(() =>
-    getRilNoteOptionDrafts(settings.rilNoteOptions),
+    normalizeRilNoteOptions(settings.rilNoteOptions),
   );
   const [rilTransferOptions, setRilTransferOptions] = useState<string[]>(() =>
-    getRilTransferOptionDrafts(settings.rilTransferOptions),
+    normalizeRilTransferOptions(settings.rilTransferOptions),
   );
   const [enableAiReporting, setEnableAiReporting] = useState(settings.enableAiReporting);
   const [geminiApiKey, setGeminiApiKey] = useState(settings.geminiApiKey || '');
@@ -183,8 +176,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     setRilDefaultStartTime(settings.rilDefaultStartTime || DEFAULT_RIL_START_TIME);
     setRilDefaultExitTime(settings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME);
     setRilLunchBreakMinutes(settings.rilLunchBreakMinutes ?? 60);
-    setRilNoteOptions(getRilNoteOptionDrafts(settings.rilNoteOptions));
-    setRilTransferOptions(getRilTransferOptionDrafts(settings.rilTransferOptions));
+    setRilNoteOptions(normalizeRilNoteOptions(settings.rilNoteOptions));
+    setRilTransferOptions(normalizeRilTransferOptions(settings.rilTransferOptions));
     setEnableAiReporting(settings.enableAiReporting);
     setGeminiApiKey(settings.geminiApiKey || '');
     setAiProvider(settings.aiProvider || 'gemini');
@@ -577,7 +570,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                       </div>
                       {rilNoteOptions.map((option, index) => (
                         <div
-                          key={`${option.value}-${index}`}
+                          key={`note-${index}`}
                           className="grid grid-cols-[5rem_minmax(0,1fr)_2rem] items-center gap-2"
                         >
                           <Input
@@ -636,7 +629,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                       </div>
                       {rilTransferOptions.map((option, index) => (
                         <div
-                          key={`${option}-${index}`}
+                          key={`transfer-${index}`}
                           className="grid grid-cols-[minmax(0,1fr)_2rem] items-center gap-2"
                         >
                           <Input
