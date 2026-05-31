@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { GeneralSettings, Project, TimeEntry, User } from '../../../types';
+import type { RilWorkbookInput } from '../../../utils/rilExport';
 import { installApiMock } from '../../helpers/api';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
 
 installI18nMock();
 const api = installApiMock();
-const downloadRilWorkbookMock = mock(async () => 'RIL_2026_05_User_Name.xlsx');
+const downloadRilWorkbookMock = mock(
+  async (_input: RilWorkbookInput) => 'RIL_2026_05_User_Name.xlsx',
+);
 
 mock.module('../../../utils/rilExport', () => ({
   downloadRilWorkbook: downloadRilWorkbookMock,
@@ -81,9 +84,15 @@ const renderRilView = (settingsOverrides: Partial<GeneralSettings> = {}) =>
     />,
   );
 
+const mockProjectList = (value: Project[]) => {
+  api.projects.list.mockImplementation(() => Promise.resolve(value));
+};
+
 describe('<RilView />', () => {
   beforeEach(() => {
     api.entries.listPage.mockReset();
+    api.projects.list.mockReset();
+    mockProjectList(projects);
     api.entries.create.mockReset();
     api.entries.update.mockReset();
     downloadRilWorkbookMock.mockClear();
@@ -106,6 +115,7 @@ describe('<RilView />', () => {
         toDate: '2026-05-31',
       }),
     );
+    expect(api.projects.list).toHaveBeenCalledWith({ userId: 'u1' });
     expect(screen.getByText('ril.title')).toBeInTheDocument();
     expect(screen.queryByText('ril.tableTitle')).toBeNull();
     expect(screen.getByText('ril.columns.day')).toBeInTheDocument();
@@ -173,6 +183,62 @@ describe('<RilView />', () => {
         expect.objectContaining({ fromDate: '2025-06-01', toDate: '2025-06-30' }),
       ),
     );
+  });
+
+  test('loads project catalog for the selected managed user', async () => {
+    const managedUser: User = {
+      id: 'u2',
+      name: 'Managed User',
+      role: 'user',
+      avatarInitials: 'MU',
+      username: 'managed',
+    };
+    api.entries.listPage.mockResolvedValue({
+      entries: entriesForAllMay2026ValidWeekdays().map((timeEntry) => ({
+        ...timeEntry,
+        userId: 'u2',
+        projectId: 'p2',
+        projectName: 'Fallback',
+      })),
+      nextCursor: null,
+    });
+    mockProjectList([
+      { id: 'p2', name: 'Managed Project', clientId: 'c1', color: '#222222', orderId: 'ORD-2' },
+    ]);
+
+    render(
+      <RilView
+        currentUser={currentUser}
+        availableUsers={[currentUser, managedUser]}
+        viewingUserId="u2"
+        onViewUserChange={() => {}}
+        projects={projects}
+        settings={{
+          rilCompanyName: 'ACME',
+          rilDefaultStartTime: '09:00',
+          rilDefaultExitTime: '18:00',
+          rilLunchBreakMinutes: 60,
+          rilNoteOptions: [
+            { value: 'P', label: 'Ferie' },
+            { value: 'P2', label: 'Permesso' },
+            { value: 'M', label: 'Malattia' },
+            { value: 'F', label: 'Festivita' },
+          ],
+          rilTransferOptions: ['In office', 'Remote working'],
+        }}
+      />,
+    );
+
+    await waitFor(() => expect(api.projects.list).toHaveBeenCalledWith({ userId: 'u2' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /ril.exportExcel/ })).not.toBeDisabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /ril.exportExcel/ }));
+
+    await waitFor(() => expect(downloadRilWorkbookMock).toHaveBeenCalled());
+    const exportInput = downloadRilWorkbookMock.mock.calls.at(-1)?.[0];
+    expect(exportInput).toMatchObject({ employeeName: 'Managed User' });
+    expect(exportInput?.rows.find((row) => row.day === 4)?.order).toBe('ORD-2');
   });
 
   test('keeps draft edits local, recalculates totals from times, and resets from timesheets', async () => {

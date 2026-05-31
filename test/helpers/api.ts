@@ -11,7 +11,7 @@ import { ApiErrorStub } from './apiErrorStub';
  */
 export const installApiMock = () => {
   const noop = mock(() => Promise.resolve({}));
-  const noopList = mock(() => Promise.resolve([]));
+  const noopList = mock((): Promise<unknown[]> => Promise.resolve([]));
 
   const apiObject = {
     auth: {

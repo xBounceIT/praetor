@@ -7,6 +7,7 @@ import * as realProjectsRepo from '../../repositories/projectsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import * as realWorkUnitsRepo from '../../repositories/workUnitsRepo.ts';
 import * as realAudit from '../../utils/audit.ts';
 import { ForeignKeyError } from '../../utils/http-errors.ts';
 import * as realPermissions from '../../utils/permissions.ts';
@@ -29,6 +30,7 @@ const clientsOrdersRepoSnap = { ...realClientsOrdersRepo };
 const clientOffersRepoSnap = { ...realClientOffersRepo };
 const userAssignmentsRepoSnap = { ...realUserAssignmentsRepo };
 const auditSnap = { ...realAudit };
+const workUnitsRepoSnap = { ...realWorkUnitsRepo };
 const drizzleSnap = { ...realDrizzle };
 
 // Auth-middleware deps
@@ -69,6 +71,7 @@ const assignClientToTopManagersMock = mock(async () => undefined);
 const assignProjectToTopManagersMock = mock(async () => undefined);
 const isClientAssignedToUserMock = mock();
 const isProjectAssignedToUserMock = mock();
+const isUserManagedByMock = mock();
 
 // audit + db
 const logAuditMock = mock(async () => undefined);
@@ -129,6 +132,10 @@ beforeAll(async () => {
     isClientAssignedToUser: isClientAssignedToUserMock,
     isProjectAssignedToUser: isProjectAssignedToUserMock,
   }));
+  mock.module('../../repositories/workUnitsRepo.ts', () => ({
+    ...workUnitsRepoSnap,
+    isUserManagedBy: isUserManagedByMock,
+  }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
     logAudit: logAuditMock,
@@ -150,6 +157,7 @@ afterAll(() => {
   mock.module('../../repositories/clientsOrdersRepo.ts', () => clientsOrdersRepoSnap);
   mock.module('../../repositories/clientOffersRepo.ts', () => clientOffersRepoSnap);
   mock.module('../../repositories/userAssignmentsRepo.ts', () => userAssignmentsRepoSnap);
+  mock.module('../../repositories/workUnitsRepo.ts', () => workUnitsRepoSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
 });
@@ -231,6 +239,7 @@ const allMocks = [
   assignProjectToTopManagersMock,
   isClientAssignedToUserMock,
   isProjectAssignedToUserMock,
+  isUserManagedByMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -250,6 +259,7 @@ beforeEach(async () => {
   assignProjectToTopManagersMock.mockImplementation(async () => undefined);
   isClientAssignedToUserMock.mockResolvedValue(true);
   isProjectAssignedToUserMock.mockResolvedValue(true);
+  isUserManagedByMock.mockResolvedValue(true);
   // Default: order/offer lookups return null (not in DB) so the consistency check is a no-op
   // and the real FK violation surfaces from the repo path under test.
   findOrderClientIdByIdMock.mockResolvedValue(null);
@@ -308,6 +318,37 @@ describe('GET /api/projects', () => {
 
     expect(res.statusCode).toBe(200);
     expect(listForUserMock).toHaveBeenCalledWith('u1');
+    expect(listAllMock).not.toHaveBeenCalled();
+  });
+
+  test('200: RIL viewer can list projects for an explicitly selected managed user', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
+    listForUserMock.mockResolvedValue([]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects?userId=u2',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(isUserManagedByMock).toHaveBeenCalledWith('u1', 'u2');
+    expect(listForUserMock).toHaveBeenCalledWith('u2');
+    expect(listAllMock).not.toHaveBeenCalled();
+  });
+
+  test('403: RIL viewer cannot list projects for an unmanaged user', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
+    isUserManagedByMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects?userId=u2',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(listForUserMock).not.toHaveBeenCalled();
     expect(listAllMock).not.toHaveBeenCalled();
   });
 

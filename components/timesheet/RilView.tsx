@@ -94,6 +94,7 @@ const RilView: React.FC<RilViewProps> = ({
   const { t, i18n } = useTranslation('timesheets');
   const [monthKey, setMonthKey] = useState(() => getCurrentRilMonthKey());
   const [sourceEntries, setSourceEntries] = useState<TimeEntry[]>([]);
+  const [projectCatalog, setProjectCatalog] = useState<Project[]>(projects);
   const [rows, setRows] = useState<RilRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -160,12 +161,12 @@ const RilView: React.FC<RilViewProps> = ({
   };
 
   const generateRows = useCallback(
-    (entries: TimeEntry[]) =>
+    (entries: TimeEntry[], catalogProjects: Project[]) =>
       generateRilRows({
         year: monthBounds.year,
         month: monthBounds.month,
         entries,
-        projects,
+        projects: catalogProjects,
         defaultStartTime,
         defaultExitTime,
         lunchBreakMinutes,
@@ -180,7 +181,6 @@ const RilView: React.FC<RilViewProps> = ({
       lunchBreakMinutes,
       monthBounds.month,
       monthBounds.year,
-      projects,
       settings.rilNoteOptions,
       transferOptionValues,
     ],
@@ -191,27 +191,36 @@ const RilView: React.FC<RilViewProps> = ({
     setIsLoading(true);
     setError(null);
     try {
-      const nextEntries: TimeEntry[] = [];
-      let cursor: string | null = null;
-      do {
-        const page = await api.entries.listPage({
-          userId: effectiveUserId,
-          fromDate: monthBounds.fromDate,
-          toDate: monthBounds.toDate,
-          cursor,
-          limit: 500,
-        });
-        if (loadTokenRef.current !== token) return;
-        nextEntries.push(...page.entries);
-        cursor = page.nextCursor;
-      } while (cursor);
+      const entriesPromise = (async () => {
+        const nextEntries: TimeEntry[] = [];
+        let cursor: string | null = null;
+        do {
+          const page = await api.entries.listPage({
+            userId: effectiveUserId,
+            fromDate: monthBounds.fromDate,
+            toDate: monthBounds.toDate,
+            cursor,
+            limit: 500,
+          });
+          if (loadTokenRef.current !== token) return null;
+          nextEntries.push(...page.entries);
+          cursor = page.nextCursor;
+        } while (cursor);
+        return nextEntries;
+      })();
+      const [nextEntries, nextProjects] = await Promise.all([
+        entriesPromise,
+        api.projects.list({ userId: effectiveUserId }),
+      ]);
+      if (loadTokenRef.current !== token || !nextEntries) return;
       setSourceEntries(nextEntries);
-      setRows(generateRows(nextEntries));
+      setProjectCatalog(nextProjects);
+      setRows(generateRows(nextEntries, nextProjects));
     } catch (err) {
       if (loadTokenRef.current !== token) return;
       setError(err instanceof Error ? err.message : 'Failed to load RIL data');
       setSourceEntries([]);
-      setRows(generateRows([]));
+      setRows(generateRows([], []));
     } finally {
       if (loadTokenRef.current === token) setIsLoading(false);
     }
@@ -224,7 +233,7 @@ const RilView: React.FC<RilViewProps> = ({
   const totals = useMemo(() => calculateRilTotals(rows), [rows]);
 
   const handleReset = () => {
-    setRows(generateRows(sourceEntries));
+    setRows(generateRows(sourceEntries, projectCatalog));
   };
 
   const updateRow = useCallback(
