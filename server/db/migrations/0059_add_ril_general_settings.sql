@@ -6,5 +6,5 @@ ALTER TABLE "general_settings" ADD CONSTRAINT "general_settings_ril_lunch_break_
 INSERT INTO role_permissions (role_id, permission)
 SELECT role_id, 'timesheets.ril.view'
 FROM role_permissions
-WHERE permission = 'timesheets.tracker.view'
+WHERE permission IN ('timesheets.tracker.view', 'timesheets.tracker_all.view')
 ON CONFLICT DO NOTHING;

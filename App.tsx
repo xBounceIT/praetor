@@ -1422,6 +1422,7 @@ const AppContent: React.FC = () => {
           permissions,
           buildPermission('sales.supplier_quotes', 'view'),
         );
+        const canListEntries = hasViewAccess(permissions, 'timesheets/tracker');
 
         const canListClients = hasAnyPermission(permissions, [
           ...equivalentPermissionsFor('crm.clients', 'view'),
@@ -1643,7 +1644,7 @@ const AppContent: React.FC = () => {
               [
                 {
                   dataset: 'entries',
-                  enabled: true,
+                  enabled: canListEntries,
                   load: () => api.entries.listPage({ limit: 500 }),
                   apply: (page) => {
                     const token = ++entriesStreamTokenRef.current;

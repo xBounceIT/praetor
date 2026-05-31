@@ -15,9 +15,10 @@ describe('migration 0059: adds RIL defaults and grants RIL view access', () => {
     expect(MIGRATION).toContain('general_settings_ril_lunch_break_minutes_check');
   });
 
-  test('grants timesheets.ril.view to roles that already had tracker view', () => {
+  test('grants timesheets.ril.view to roles that already had tracker view access', () => {
     expect(MIGRATION).toMatch(/SELECT role_id,\s*'timesheets\.ril\.view'/i);
-    expect(MIGRATION).toMatch(/WHERE permission = 'timesheets\.tracker\.view'/i);
+    expect(MIGRATION).toContain("'timesheets.tracker.view'");
+    expect(MIGRATION).toContain("'timesheets.tracker_all.view'");
   });
 
   test('keeps the permission grant idempotent', () => {

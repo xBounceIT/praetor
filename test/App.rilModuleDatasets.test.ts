@@ -25,4 +25,15 @@ describe('App.tsx RIL module dataset permissions', () => {
     );
     expect(initializerFor('canListUsers')).toContain("buildPermission('timesheets.ril', 'view')");
   });
+
+  test('RIL view permission does not enable the generic tracker entries preload', () => {
+    expect(source).toContain(
+      "const canListEntries = hasViewAccess(permissions, 'timesheets/tracker')",
+    );
+
+    const datasetStart = source.indexOf("dataset: 'entries'");
+    expect(datasetStart).toBeGreaterThan(-1);
+    const datasetEnd = source.indexOf('}', datasetStart);
+    expect(source.slice(datasetStart, datasetEnd)).toContain('enabled: canListEntries');
+  });
 });
