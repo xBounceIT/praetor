@@ -198,7 +198,6 @@
     "rilLunchBreakMinutesLabel": "Lunch Break Minutes",
     "rilLunchBreakMinutesDescription": "Used to calculate RIL hours/PICAP from entrance and exit times and printed in the workbook header.",
     "rilNoteOptionsLabel": "RIL Notes Options",
-    "rilNoteOptionsDescription": "The F code is used for holidays.",
     "rilOptionCodeLabel": "Code",
     "rilOptionNameLabel": "Name",
     "rilTransferOptionNameLabel": "Transfer option",

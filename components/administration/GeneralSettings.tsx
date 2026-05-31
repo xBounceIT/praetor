@@ -609,7 +609,6 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                         </div>
                       ))}
                     </fieldset>
-                    <FieldDescription>{t('general.rilNoteOptionsDescription')}</FieldDescription>
                   </Field>
 
                   <Field>

@@ -198,7 +198,6 @@
     "rilLunchBreakMinutesLabel": "Minuti Pausa Pranzo",
     "rilLunchBreakMinutesDescription": "Usati per calcolare Ore/PICAP dagli orari di entrata e uscita e stampati nell'intestazione del file RIL.",
     "rilNoteOptionsLabel": "Opzioni Note RIL",
-    "rilNoteOptionsDescription": "Il codice F viene usato per le festivita.",
     "rilOptionCodeLabel": "Codice",
     "rilOptionNameLabel": "Nome",
     "rilTransferOptionNameLabel": "Opzione trasferta",
