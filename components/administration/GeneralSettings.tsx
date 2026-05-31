@@ -1,4 +1,14 @@
-import { Check, Clock, Globe, Loader2, Save, Sparkles, TriangleAlert } from 'lucide-react';
+import {
+  Check,
+  Clock,
+  Globe,
+  Loader2,
+  Plus,
+  Save,
+  Sparkles,
+  Trash2,
+  TriangleAlert,
+} from 'lucide-react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,7 +18,17 @@ import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import api from '../../services/api';
-import type { GeneralSettings as IGeneralSettings, TimeEntryLocation } from '../../types';
+import type {
+  GeneralSettings as IGeneralSettings,
+  RilNoteOption,
+  TimeEntryLocation,
+} from '../../types';
+import {
+  DEFAULT_RIL_EXIT_TIME,
+  DEFAULT_RIL_START_TIME,
+  normalizeRilNoteOptions,
+  normalizeRilTransferOptions,
+} from '../../utils/ril';
 import SelectControl, { type Option } from '../shared/SelectControl';
 import Toggle from '../shared/Toggle';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
@@ -53,6 +73,13 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id'];
 
+const areRilNoteOptionsEqual = (left: RilNoteOption[], right: unknown): boolean =>
+  JSON.stringify(normalizeRilNoteOptions(left)) === JSON.stringify(normalizeRilNoteOptions(right));
+
+const areRilTransferOptionsEqual = (left: string[], right: unknown): boolean =>
+  JSON.stringify(normalizeRilTransferOptions(left)) ===
+  JSON.stringify(normalizeRilTransferOptions(right));
+
 interface ToggleSettingRowProps {
   label: string;
   description: string;
@@ -95,6 +122,22 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
   const [defaultLocation, setDefaultLocation] = useState<TimeEntryLocation>(
     settings.defaultLocation || 'remote',
   );
+  const [rilCompanyName, setRilCompanyName] = useState(settings.rilCompanyName || '');
+  const [rilDefaultStartTime, setRilDefaultStartTime] = useState(
+    settings.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
+  );
+  const [rilDefaultExitTime, setRilDefaultExitTime] = useState(
+    settings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,
+  );
+  const [rilLunchBreakMinutes, setRilLunchBreakMinutes] = useState(
+    settings.rilLunchBreakMinutes ?? 60,
+  );
+  const [rilNoteOptions, setRilNoteOptions] = useState<RilNoteOption[]>(() =>
+    normalizeRilNoteOptions(settings.rilNoteOptions),
+  );
+  const [rilTransferOptions, setRilTransferOptions] = useState<string[]>(() =>
+    normalizeRilTransferOptions(settings.rilTransferOptions),
+  );
   const [enableAiReporting, setEnableAiReporting] = useState(settings.enableAiReporting);
   const [geminiApiKey, setGeminiApiKey] = useState(settings.geminiApiKey || '');
   const [aiProvider, setAiProvider] = useState<AiProvider>(settings.aiProvider || 'gemini');
@@ -129,6 +172,12 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     setTreatSaturdayAsHoliday(settings.treatSaturdayAsHoliday);
     setAllowWeekendSelection(settings.allowWeekendSelection ?? true);
     setDefaultLocation(settings.defaultLocation || 'remote');
+    setRilCompanyName(settings.rilCompanyName || '');
+    setRilDefaultStartTime(settings.rilDefaultStartTime || DEFAULT_RIL_START_TIME);
+    setRilDefaultExitTime(settings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME);
+    setRilLunchBreakMinutes(settings.rilLunchBreakMinutes ?? 60);
+    setRilNoteOptions(normalizeRilNoteOptions(settings.rilNoteOptions));
+    setRilTransferOptions(normalizeRilTransferOptions(settings.rilTransferOptions));
     setEnableAiReporting(settings.enableAiReporting);
     setGeminiApiKey(settings.geminiApiKey || '');
     setAiProvider(settings.aiProvider || 'gemini');
@@ -189,6 +238,12 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
         treatSaturdayAsHoliday,
         allowWeekendSelection,
         defaultLocation,
+        rilCompanyName,
+        rilDefaultStartTime,
+        rilDefaultExitTime,
+        rilLunchBreakMinutes,
+        rilNoteOptions: normalizeRilNoteOptions(rilNoteOptions),
+        rilTransferOptions: normalizeRilTransferOptions(rilTransferOptions),
         enableAiReporting,
         geminiApiKey,
         aiProvider,
@@ -212,6 +267,12 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     treatSaturdayAsHoliday !== settings.treatSaturdayAsHoliday ||
     allowWeekendSelection !== (settings.allowWeekendSelection ?? true) ||
     defaultLocation !== (settings.defaultLocation || 'remote') ||
+    rilCompanyName !== (settings.rilCompanyName || '') ||
+    rilDefaultStartTime !== (settings.rilDefaultStartTime || DEFAULT_RIL_START_TIME) ||
+    rilDefaultExitTime !== (settings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME) ||
+    rilLunchBreakMinutes !== (settings.rilLunchBreakMinutes ?? 60) ||
+    !areRilNoteOptionsEqual(rilNoteOptions, settings.rilNoteOptions) ||
+    !areRilTransferOptionsEqual(rilTransferOptions, settings.rilTransferOptions) ||
     enableAiReporting !== settings.enableAiReporting ||
     geminiApiKey !== (settings.geminiApiKey || '') ||
     aiProvider !== (settings.aiProvider || 'gemini') ||
@@ -225,6 +286,40 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     isModelMissing() ||
     isModelNotFound ||
     (!hasChanges && !isSaved);
+
+  const updateRilNoteOption = (index: number, field: keyof RilNoteOption, value: string) => {
+    setRilNoteOptions((prev) =>
+      prev.map((option, optionIndex) =>
+        optionIndex === index ? { ...option, [field]: value } : option,
+      ),
+    );
+  };
+
+  const addRilNoteOption = () => {
+    setRilNoteOptions((prev) => [...prev, { value: '', label: '' }]);
+  };
+
+  const removeRilNoteOption = (index: number) => {
+    setRilNoteOptions((prev) =>
+      prev.length > 1 ? prev.filter((_, optionIndex) => optionIndex !== index) : prev,
+    );
+  };
+
+  const updateRilTransferOption = (index: number, value: string) => {
+    setRilTransferOptions((prev) =>
+      prev.map((option, optionIndex) => (optionIndex === index ? value : option)),
+    );
+  };
+
+  const addRilTransferOption = () => {
+    setRilTransferOptions((prev) => [...prev, '']);
+  };
+
+  const removeRilTransferOption = (index: number) => {
+    setRilTransferOptions((prev) =>
+      prev.length > 1 ? prev.filter((_, optionIndex) => optionIndex !== index) : prev,
+    );
+  };
 
   const {
     Icon: SubmitIcon,
@@ -380,6 +475,185 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                 checked={allowWeekendSelection}
                 onChange={setAllowWeekendSelection}
               />
+
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    {t('general.rilSettingsTitle')}
+                  </h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t('general.rilSettingsDescription')}
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+                  <Field>
+                    <FieldLabel htmlFor="general-ril-company-name">
+                      {t('general.rilCompanyNameLabel')}
+                    </FieldLabel>
+                    <Input
+                      id="general-ril-company-name"
+                      value={rilCompanyName}
+                      onChange={(event) => setRilCompanyName(event.target.value)}
+                    />
+                    <FieldDescription>{t('general.rilCompanyNameDescription')}</FieldDescription>
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="general-ril-default-start-time">
+                      {t('general.rilDefaultStartTimeLabel')}
+                    </FieldLabel>
+                    <Input
+                      id="general-ril-default-start-time"
+                      type="time"
+                      value={rilDefaultStartTime}
+                      onChange={(event) => setRilDefaultStartTime(event.target.value)}
+                    />
+                    <FieldDescription>
+                      {t('general.rilDefaultStartTimeDescription')}
+                    </FieldDescription>
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="general-ril-default-exit-time">
+                      {t('general.rilDefaultExitTimeLabel')}
+                    </FieldLabel>
+                    <Input
+                      id="general-ril-default-exit-time"
+                      type="time"
+                      value={rilDefaultExitTime}
+                      onChange={(event) => setRilDefaultExitTime(event.target.value)}
+                    />
+                    <FieldDescription>
+                      {t('general.rilDefaultExitTimeDescription')}
+                    </FieldDescription>
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="general-ril-lunch-break-minutes">
+                      {t('general.rilLunchBreakMinutesLabel')}
+                    </FieldLabel>
+                    <ValidatedNumberInput
+                      id="general-ril-lunch-break-minutes"
+                      step="1"
+                      min={0}
+                      max={240}
+                      value={rilLunchBreakMinutes}
+                      onValueChange={(value) => {
+                        const parsed = parseInt(value, 10);
+                        setRilLunchBreakMinutes(value === '' || Number.isNaN(parsed) ? 0 : parsed);
+                      }}
+                    />
+                    <FieldDescription>
+                      {t('general.rilLunchBreakMinutesDescription')}
+                    </FieldDescription>
+                  </Field>
+                </div>
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <Field>
+                    <div className="flex items-center justify-between gap-3">
+                      <FieldLabel id="general-ril-note-options-label">
+                        {t('general.rilNoteOptionsLabel')}
+                      </FieldLabel>
+                      <Button type="button" variant="outline" size="sm" onClick={addRilNoteOption}>
+                        <Plus aria-hidden="true" />
+                        {t('general.rilAddNoteOption')}
+                      </Button>
+                    </div>
+                    <fieldset
+                      aria-labelledby="general-ril-note-options-label"
+                      className="space-y-2"
+                    >
+                      <div className="grid grid-cols-[5rem_minmax(0,1fr)_2rem] gap-2 px-1 text-xs font-medium text-muted-foreground">
+                        <span>{t('general.rilOptionCodeLabel')}</span>
+                        <span>{t('general.rilOptionNameLabel')}</span>
+                        <span className="sr-only">{t('general.actions')}</span>
+                      </div>
+                      {rilNoteOptions.map((option, index) => (
+                        <div
+                          key={`note-${index}`}
+                          className="grid grid-cols-[5rem_minmax(0,1fr)_2rem] items-center gap-2"
+                        >
+                          <Input
+                            aria-label={`${t('general.rilOptionCodeLabel')} ${index + 1}`}
+                            value={option.value}
+                            onChange={(event) =>
+                              updateRilNoteOption(index, 'value', event.target.value)
+                            }
+                            className="h-8 font-mono text-xs"
+                          />
+                          <Input
+                            aria-label={`${t('general.rilOptionNameLabel')} ${index + 1}`}
+                            value={option.label}
+                            onChange={(event) =>
+                              updateRilNoteOption(index, 'label', event.target.value)
+                            }
+                            className="h-8 text-xs"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => removeRilNoteOption(index)}
+                            disabled={rilNoteOptions.length <= 1}
+                            aria-label={`${t('general.rilRemoveNoteOption')} ${index + 1}`}
+                          >
+                            <Trash2 aria-hidden="true" />
+                          </Button>
+                        </div>
+                      ))}
+                    </fieldset>
+                  </Field>
+
+                  <Field>
+                    <div className="flex items-center justify-between gap-3">
+                      <FieldLabel id="general-ril-transfer-options-label">
+                        {t('general.rilTransferOptionsLabel')}
+                      </FieldLabel>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={addRilTransferOption}
+                      >
+                        <Plus aria-hidden="true" />
+                        {t('general.rilAddTransferOption')}
+                      </Button>
+                    </div>
+                    <fieldset
+                      aria-labelledby="general-ril-transfer-options-label"
+                      className="space-y-2"
+                    >
+                      <div className="grid grid-cols-[minmax(0,1fr)_2rem] gap-2 px-1 text-xs font-medium text-muted-foreground">
+                        <span>{t('general.rilOptionNameLabel')}</span>
+                        <span className="sr-only">{t('general.actions')}</span>
+                      </div>
+                      {rilTransferOptions.map((option, index) => (
+                        <div
+                          key={`transfer-${index}`}
+                          className="grid grid-cols-[minmax(0,1fr)_2rem] items-center gap-2"
+                        >
+                          <Input
+                            aria-label={`${t('general.rilTransferOptionNameLabel')} ${index + 1}`}
+                            value={option}
+                            onChange={(event) => updateRilTransferOption(index, event.target.value)}
+                            className="h-8 text-xs"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => removeRilTransferOption(index)}
+                            disabled={rilTransferOptions.length <= 1}
+                            aria-label={`${t('general.rilRemoveTransferOption')} ${index + 1}`}
+                          >
+                            <Trash2 aria-hidden="true" />
+                          </Button>
+                        </div>
+                      ))}
+                    </fieldset>
+                  </Field>
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}

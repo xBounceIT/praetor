@@ -88,6 +88,17 @@ const SETTINGS_WITH_KEYS = {
   openrouterModelId: 'anthropic/claude-3-haiku',
   allowWeekendSelection: false,
   defaultLocation: 'remote',
+  rilCompanyName: 'ACME Consulting',
+  rilDefaultStartTime: '08:30',
+  rilDefaultExitTime: '17:30',
+  rilLunchBreakMinutes: 45,
+  rilNoteOptions: [
+    { value: 'P', label: 'Ferie' },
+    { value: 'P2', label: 'Permesso' },
+    { value: 'M', label: 'Malattia' },
+    { value: 'F', label: 'Festivita' },
+  ],
+  rilTransferOptions: ['In sede', 'Telelavoro'],
 };
 
 const allMocks = [
@@ -165,6 +176,17 @@ describe('GET /api/general-settings', () => {
     expect(body.dailyLimit).toBe(8);
     expect(body.startOfWeek).toBe('Monday');
     expect(body.allowWeekendSelection).toBe(true);
+    expect(body.rilCompanyName).toBe('');
+    expect(body.rilDefaultStartTime).toBe('09:00');
+    expect(body.rilDefaultExitTime).toBe('18:00');
+    expect(body.rilLunchBreakMinutes).toBe(60);
+    expect(body.rilNoteOptions).toEqual([
+      { value: 'P', label: 'Ferie' },
+      { value: 'P2', label: 'Permesso' },
+      { value: 'M', label: 'Malattia' },
+      { value: 'F', label: 'Festivita' },
+    ]);
+    expect(body.rilTransferOptions).toEqual(['In sede', 'Telelavoro']);
   });
 
   test('401 missing token', async () => {
@@ -202,6 +224,67 @@ describe('PUT /api/general-settings', () => {
     );
     const body = JSON.parse(res.body);
     expect(body.geminiApiKey).toBe('plaintext-gemini-key');
+  });
+
+  test('200 accepts RIL settings and returns them', async () => {
+    settingsUpdateMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      rilCompanyName: 'Example Spa',
+      rilDefaultStartTime: '09:15',
+      rilDefaultExitTime: '17:45',
+      rilLunchBreakMinutes: 30,
+      rilNoteOptions: [{ value: 'HOL', label: 'Holiday' }],
+      rilTransferOptions: ['Office', 'Remote'],
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: {
+        rilCompanyName: 'Example Spa',
+        rilDefaultStartTime: '09:15',
+        rilDefaultExitTime: '17:45',
+        rilLunchBreakMinutes: 30,
+        rilNoteOptions: [{ value: 'HOL', label: 'Holiday' }],
+        rilTransferOptions: ['Office', 'Remote'],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(settingsUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rilCompanyName: 'Example Spa',
+        rilDefaultStartTime: '09:15',
+        rilDefaultExitTime: '17:45',
+        rilLunchBreakMinutes: 30,
+        rilNoteOptions: [{ value: 'HOL', label: 'Holiday' }],
+        rilTransferOptions: ['Office', 'Remote'],
+      }),
+    );
+    const body = JSON.parse(res.body);
+    expect(body.rilCompanyName).toBe('Example Spa');
+    expect(body.rilDefaultStartTime).toBe('09:15');
+    expect(body.rilDefaultExitTime).toBe('17:45');
+    expect(body.rilLunchBreakMinutes).toBe(30);
+    expect(body.rilNoteOptions).toEqual([{ value: 'HOL', label: 'Holiday' }]);
+    expect(body.rilTransferOptions).toEqual(['Office', 'Remote']);
+  });
+
+  test('200 accepts blank RIL company name so admins can clear it', async () => {
+    settingsUpdateMock.mockResolvedValue({ ...SETTINGS_WITH_KEYS, rilCompanyName: '' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { rilCompanyName: '' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(settingsUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ rilCompanyName: '' }),
+    );
   });
 
   test('200 boolean strings parsed via strict boolean field validation', async () => {
@@ -293,6 +376,71 @@ describe('PUT /api/general-settings', () => {
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/defaultLocation must be one of/);
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 invalid RIL default start time, repo not called', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { rilDefaultStartTime: '24:01' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/rilDefaultStartTime must be in HH:mm format/);
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 invalid RIL default exit time, repo not called', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { rilDefaultExitTime: '24:01' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/rilDefaultExitTime must be in HH:mm format/);
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 invalid RIL lunch break, repo not called', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { rilLunchBreakMinutes: 241 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/rilLunchBreakMinutes must be an integer/);
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 invalid RIL note options, repo not called', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { rilNoteOptions: [{ value: '', label: 'Blank' }] },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/rilNoteOptions\[0\]\.value cannot be blank/);
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 invalid RIL transfer options, repo not called', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { rilTransferOptions: [''] },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/rilTransferOptions\[0\] cannot be blank/);
     expect(settingsUpdateMock).not.toHaveBeenCalled();
   });
 

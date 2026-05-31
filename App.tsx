@@ -59,6 +59,7 @@ import StatusBadge from './components/shared/StatusBadge';
 import DailyView from './components/timesheet/DailyView';
 import EntryEditDialog from './components/timesheet/EntryEditDialog';
 import RecurringManager from './components/timesheet/RecurringManager';
+import RilView from './components/timesheet/RilView';
 import WeeklyView from './components/timesheet/WeeklyView';
 import UserSettings from './components/UserSettings';
 import { Toaster } from './components/ui/sonner';
@@ -135,6 +136,12 @@ import {
   type ProgrammaticHashTracker,
 } from './utils/programmaticHashTracker';
 import { retryTransient } from './utils/retry';
+import {
+  DEFAULT_RIL_EXIT_TIME,
+  DEFAULT_RIL_START_TIME,
+  normalizeRilNoteOptions,
+  normalizeRilTransferOptions,
+} from './utils/ril';
 import { applyBrowserTheme, applyTheme, getTheme } from './utils/theme';
 import { toastError } from './utils/toast';
 import {
@@ -766,6 +773,7 @@ const AppContent: React.FC = () => {
   const VALID_VIEWS: View[] = useMemo(
     () => [
       'timesheets/tracker',
+      'timesheets/ril',
       'timesheets/recurring',
       'administration/user-management',
       'administration/roles',
@@ -810,6 +818,7 @@ const AppContent: React.FC = () => {
     // So we define the list once for initialization
     const validViews: View[] = [
       'timesheets/tracker',
+      'timesheets/ril',
       'timesheets/recurring',
       'administration/user-management',
       'administration/roles',
@@ -1233,9 +1242,14 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [VALID_VIEWS, setActiveView, programmaticHashTracker]);
 
-  // Reset viewingUserId when navigating away from tracker
+  // Reset viewingUserId when navigating away from user-scoped timesheet views.
   useEffect(() => {
-    if (activeView !== 'timesheets/tracker' && currentUser && viewingUserId !== currentUser.id) {
+    if (
+      activeView !== 'timesheets/tracker' &&
+      activeView !== 'timesheets/ril' &&
+      currentUser &&
+      viewingUserId !== currentUser.id
+    ) {
       React.startTransition(() => setViewingUserId(currentUser.id));
     }
   }, [activeView, currentUser, viewingUserId]);
@@ -1305,6 +1319,12 @@ const AppContent: React.FC = () => {
         geminiModelId: genSettings.geminiModelId || '',
         openrouterModelId: genSettings.openrouterModelId || '',
         defaultLocation: genSettings.defaultLocation || 'remote',
+        rilCompanyName: genSettings.rilCompanyName || '',
+        rilDefaultStartTime: genSettings.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
+        rilDefaultExitTime: genSettings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,
+        rilLunchBreakMinutes: genSettings.rilLunchBreakMinutes ?? 60,
+        rilNoteOptions: normalizeRilNoteOptions(genSettings.rilNoteOptions),
+        rilTransferOptions: normalizeRilTransferOptions(genSettings.rilTransferOptions),
       });
       setHasLoadedGeneralSettings(true);
     };
@@ -1372,6 +1392,7 @@ const AppContent: React.FC = () => {
         const permissions = currentUser.permissions || [];
         const canViewTimesheets = hasAnyPermission(permissions, [
           ...equivalentPermissionsFor('timesheets.tracker', 'view'),
+          buildPermission('timesheets.ril', 'view'),
           buildPermission('timesheets.recurring', 'view'),
         ]);
         const canViewHr = hasAnyPermission(permissions, [
@@ -1415,6 +1436,7 @@ const AppContent: React.FC = () => {
           permissions,
           buildPermission('sales.supplier_quotes', 'view'),
         );
+        const canListEntries = hasViewAccess(permissions, 'timesheets/tracker');
 
         const canListClients = hasAnyPermission(permissions, [
           ...equivalentPermissionsFor('crm.clients', 'view'),
@@ -1434,6 +1456,7 @@ const AppContent: React.FC = () => {
           ...equivalentPermissionsFor('projects.manage', 'view'),
           ...equivalentPermissionsFor('projects.tasks', 'view'),
           ...equivalentPermissionsFor('timesheets.tracker', 'view'),
+          buildPermission('timesheets.ril', 'view'),
           buildPermission('timesheets.recurring', 'view'),
         ]);
         const canListTasks = hasAnyPermission(permissions, [
@@ -1449,6 +1472,7 @@ const AppContent: React.FC = () => {
           buildPermission('hr.internal', 'view'),
           buildPermission('hr.external', 'view'),
           ...equivalentPermissionsFor('timesheets.tracker', 'view'),
+          buildPermission('timesheets.ril', 'view'),
           ...equivalentPermissionsFor('projects.manage', 'view'),
           ...equivalentPermissionsFor('projects.tasks', 'view'),
           ...equivalentPermissionsFor('hr.work_units', 'view'),
@@ -1634,7 +1658,7 @@ const AppContent: React.FC = () => {
               [
                 {
                   dataset: 'entries',
-                  enabled: true,
+                  enabled: canListEntries,
                   load: () => api.entries.listPage({ limit: 500 }),
                   apply: (page) => {
                     const token = ++entriesStreamTokenRef.current;
@@ -2308,6 +2332,12 @@ const AppContent: React.FC = () => {
         geminiModelId: updated.geminiModelId || '',
         openrouterModelId: updated.openrouterModelId || '',
         defaultLocation: updated.defaultLocation || 'remote',
+        rilCompanyName: updated.rilCompanyName || '',
+        rilDefaultStartTime: updated.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
+        rilDefaultExitTime: updated.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,
+        rilLunchBreakMinutes: updated.rilLunchBreakMinutes ?? 60,
+        rilNoteOptions: normalizeRilNoteOptions(updated.rilNoteOptions),
+        rilTransferOptions: normalizeRilTransferOptions(updated.rilTransferOptions),
       });
     } catch (err) {
       console.error('Failed to update general settings:', err);
@@ -2544,6 +2574,16 @@ const AppContent: React.FC = () => {
                 defaultLocation={generalSettings.defaultLocation}
                 onAddCustomTask={addProjectTask}
                 currency={generalSettings.currency}
+              />
+            )}
+            {activeView === 'timesheets/ril' && (
+              <RilView
+                currentUser={currentUser}
+                availableUsers={availableUsers}
+                viewingUserId={viewingUserId}
+                onViewUserChange={setViewingUserId}
+                projects={projects}
+                settings={generalSettings}
               />
             )}
             {hasViewAccess(currentUser.permissions, 'crm/clients') &&

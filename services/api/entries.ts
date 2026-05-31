@@ -62,6 +62,9 @@ export const entriesApi = {
       projectId?: string;
       cursor?: string | null;
       limit?: number;
+      fromDate?: string;
+      toDate?: string;
+      purpose?: 'ril';
       signal?: AbortSignal;
     } = {},
   ): Promise<EntriesPage> => {
@@ -70,6 +73,9 @@ export const entriesApi = {
     if (options.projectId) params.set('projectId', options.projectId);
     params.set('limit', String(options.limit ?? 500));
     if (options.cursor) params.set('cursor', options.cursor);
+    if (options.fromDate) params.set('fromDate', options.fromDate);
+    if (options.toDate) params.set('toDate', options.toDate);
+    if (options.purpose) params.set('purpose', options.purpose);
     const page = await fetchApi<EntriesPage>(`/entries?${params.toString()}`, {
       signal: options.signal,
     });

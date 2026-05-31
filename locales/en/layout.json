@@ -17,6 +17,7 @@
   },
   "routes": {
     "timeTracker": "Time Tracker",
+    "ril": "RIL",
     "tracker": "Tracker",
     "recurring": "Recurring",
     "recurringTasks": "Recurring Tasks",

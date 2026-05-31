@@ -20,6 +20,7 @@
   "permissions": {
     "timesheets": {
       "tracker": "Tracker",
+      "ril": "RIL",
       "recurring": "Recurring",
       "tracker_all": "Tracker (All)"
     },

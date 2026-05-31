@@ -31,6 +31,12 @@ const PROJECTION_KEYS = [
   'openrouterModelId',
   'allowWeekendSelection',
   'defaultLocation',
+  'rilCompanyName',
+  'rilDefaultStartTime',
+  'rilDefaultExitTime',
+  'rilLunchBreakMinutes',
+  'rilNoteOptions',
+  'rilTransferOptions',
 ] as const;
 type ProjectionKey = (typeof PROJECTION_KEYS)[number];
 type RowFields = Record<ProjectionKey, unknown>;
@@ -50,6 +56,17 @@ const baseFields: RowFields = {
   openrouterModelId: null,
   allowWeekendSelection: null,
   defaultLocation: null,
+  rilCompanyName: '',
+  rilDefaultStartTime: '09:00',
+  rilDefaultExitTime: '18:00',
+  rilLunchBreakMinutes: 60,
+  rilNoteOptions: [
+    { value: 'P', label: 'Ferie' },
+    { value: 'P2', label: 'Permesso' },
+    { value: 'M', label: 'Malattia' },
+    { value: 'F', label: 'Festivita' },
+  ],
+  rilTransferOptions: ['In sede', 'Telelavoro'],
 };
 
 const buildRow = (overrides: Partial<RowFields> = {}): unknown[] => {
@@ -72,12 +89,30 @@ describe('get', () => {
 
   test('preserves non-numeric fields verbatim', async () => {
     exec.enqueue({
-      rows: [buildRow({ currency: 'USD', enableAiReporting: true, defaultLocation: 'office' })],
+      rows: [
+        buildRow({
+          currency: 'USD',
+          enableAiReporting: true,
+          defaultLocation: 'office',
+          rilCompanyName: 'ACME',
+          rilDefaultStartTime: '08:30',
+          rilDefaultExitTime: '17:30',
+          rilLunchBreakMinutes: 45,
+          rilNoteOptions: [{ value: 'HOL', label: 'Holiday' }],
+          rilTransferOptions: ['Office', 'Remote'],
+        }),
+      ],
     });
     const result = await generalSettingsRepo.get(testDb);
     expect(result?.currency).toBe('USD');
     expect(result?.enableAiReporting).toBe(true);
     expect(result?.defaultLocation).toBe('office');
+    expect(result?.rilCompanyName).toBe('ACME');
+    expect(result?.rilDefaultStartTime).toBe('08:30');
+    expect(result?.rilDefaultExitTime).toBe('17:30');
+    expect(result?.rilLunchBreakMinutes).toBe(45);
+    expect(result?.rilNoteOptions).toEqual([{ value: 'HOL', label: 'Holiday' }]);
+    expect(result?.rilTransferOptions).toEqual(['Office', 'Remote']);
   });
 
   test('targets the singleton row via WHERE id = 1', async () => {
@@ -131,6 +166,12 @@ describe('update', () => {
         openrouterModelId: 'or/model',
         allowWeekendSelection: true,
         defaultLocation: 'home',
+        rilCompanyName: 'ACME',
+        rilDefaultStartTime: '08:30',
+        rilDefaultExitTime: '17:30',
+        rilLunchBreakMinutes: 45,
+        rilNoteOptions: [{ value: 'HOL', label: 'Holiday' }],
+        rilTransferOptions: ['Office', 'Remote'],
       },
       testDb,
     );
@@ -146,13 +187,21 @@ describe('update', () => {
     expect(params).toContain('gemini-2.0');
     expect(params).toContain('or/model');
     expect(params).toContain('home');
+    expect(params).toContain('ACME');
+    expect(params).toContain('08:30');
+    expect(params).toContain('17:30');
+    expect(params).toContain(45);
+    const noteOptionsJson = JSON.stringify([{ value: 'HOL', label: 'Holiday' }]);
+    const transferOptionsJson = JSON.stringify(['Office', 'Remote']);
+    expect(params).toContain(noteOptionsJson);
+    expect(params).toContain(transferOptionsJson);
     // Tighter check on top of the .toContain() pattern from the canonical ldap/email tests:
-    // since the SET clause emits its 12 COALESCE pairs in projection-declaration order and
+    // since the SET clause emits its 18 COALESCE pairs in projection-declaration order and
     // each pair binds exactly one patch-value param (the column ref renders as a SQL
-    // identifier, not a parameter), the first 12 params must match PROJECTION_KEYS order.
+    // identifier, not a parameter), the first 18 params must match PROJECTION_KEYS order.
     // Catches column→param wiring bugs where two same-typed booleans (e.g.,
     // treatSaturdayAsHoliday vs allowWeekendSelection) get swapped.
-    expect(params.slice(0, 12)).toEqual([
+    expect(params.slice(0, 18)).toEqual([
       'USD',
       9,
       'Sunday',
@@ -165,17 +214,33 @@ describe('update', () => {
       'or/model',
       true,
       'home',
+      'ACME',
+      '08:30',
+      '17:30',
+      45,
+      noteOptionsJson,
+      transferOptionsJson,
     ]);
   });
 
   test('binds NULL for omitted patch fields (COALESCE preserves existing column)', async () => {
     exec.enqueue({ rows: [buildRow()] });
     await generalSettingsRepo.update({ currency: 'USD' }, testDb);
-    // The SET clause always emits 12 COALESCE pairs (one per patchable column); 11 of those
+    // The SET clause always emits 18 COALESCE pairs (one per patchable column); 17 of those
     // patch-value params are null when only `currency` is provided. The UPDATE also binds the
-    // singleton WHERE param (1), so we expect ≥11 nulls in the param list.
+    // singleton WHERE param (1), so we expect >=17 nulls in the param list.
     const nullCount = exec.calls[0].params.filter((p) => p === null).length;
-    expect(nullCount).toBeGreaterThanOrEqual(11);
+    expect(nullCount).toBeGreaterThanOrEqual(17);
+  });
+
+  test('binds NULL for explicit null RIL arrays to preserve existing values', async () => {
+    exec.enqueue({ rows: [buildRow()] });
+    await generalSettingsRepo.update({ rilNoteOptions: null, rilTransferOptions: null }, testDb);
+
+    const params = exec.calls[0].params;
+    expect(params[16]).toBeNull();
+    expect(params[17]).toBeNull();
+    expect(params).not.toContain('null');
   });
 
   test('targets the singleton row via WHERE id = 1', async () => {

@@ -45,6 +45,7 @@ describe('PERMISSION_DEFINITIONS / ALL_PERMISSIONS', () => {
     expect(ALL_PERMISSIONS).toContain('crm.suppliers_all.update');
     expect(ALL_PERMISSIONS).toContain('projects.manage_all.delete');
     expect(ALL_PERMISSIONS).toContain('projects.tasks_all.create');
+    expect(ALL_PERMISSIONS).toContain('timesheets.ril.view');
     expect(ALL_PERMISSIONS).toContain('timesheets.tracker_all.update');
     expect(ALL_PERMISSIONS).toContain('hr.work_units.delete');
     expect(ALL_PERMISSIONS).toContain('hr.work_units_all.delete');
@@ -61,6 +62,13 @@ describe('PERMISSION_DEFINITIONS / ALL_PERMISSIONS', () => {
     expect(ALL_PERMISSIONS).toContain('projects.assignments.update');
     expect(ALL_PERMISSIONS).not.toContain('projects.assignments.create');
     expect(ALL_PERMISSIONS).not.toContain('projects.assignments.delete');
+  });
+
+  test('timesheets.ril is view-only', () => {
+    expect(ALL_PERMISSIONS).toContain('timesheets.ril.view');
+    expect(ALL_PERMISSIONS).not.toContain('timesheets.ril.create');
+    expect(ALL_PERMISSIONS).not.toContain('timesheets.ril.update');
+    expect(ALL_PERMISSIONS).not.toContain('timesheets.ril.delete');
   });
 
   test('hr.costs is view+update only — no create/delete on either scope', () => {

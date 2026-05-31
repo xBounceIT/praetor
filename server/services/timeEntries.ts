@@ -73,6 +73,21 @@ const hasTrackerPermission = (
   action: 'view' | 'create' | 'update' | 'delete',
 ) => hasScopedActionPermission(actor.permissions, 'timesheets.tracker', action);
 
+const canReadTrackerEntries = (actor: AuthenticatedActor) => hasTrackerPermission(actor, 'view');
+
+const isFullCalendarMonthRange = (fromDate: string | null, toDate: string | null): boolean => {
+  if (!fromDate || !toDate) return false;
+  const monthKey = fromDate.slice(0, 7);
+  if (toDate.slice(0, 7) !== monthKey) return false;
+  const year = Number(fromDate.slice(0, 4));
+  const month = Number(fromDate.slice(5, 7));
+  const daysInMonth = new Date(year, month, 0).getDate();
+  return (
+    fromDate === `${monthKey}-01` &&
+    toDate === `${monthKey}-${String(daysInMonth).padStart(2, '0')}`
+  );
+};
+
 const fail = (statusCode: number, message: string): never => {
   throw new TimeEntryServiceError(statusCode, message);
 };
@@ -141,9 +156,22 @@ const withSerializableWriteTransaction = async <T>(
 
 export const listTimeEntries = async (
   actor: AuthenticatedActor,
-  input: { userId?: unknown; limit?: unknown; cursor?: unknown; projectId?: unknown },
+  input: {
+    userId?: unknown;
+    limit?: unknown;
+    cursor?: unknown;
+    projectId?: unknown;
+    fromDate?: unknown;
+    toDate?: unknown;
+    purpose?: unknown;
+  },
 ): Promise<{ entries: TimeEntry[]; nextCursor: string | null }> => {
-  if (!hasTrackerPermission(actor, 'view')) fail(403, 'Insufficient permissions');
+  const purpose = input.purpose === 'ril' ? 'ril' : 'tracker';
+  const hasTrackerRead = canReadTrackerEntries(actor);
+  const hasRilRead = hasPermission(actor, 'timesheets.ril.view');
+  if (!hasTrackerRead && !(purpose === 'ril' && hasRilRead)) {
+    fail(403, 'Insufficient permissions');
+  }
 
   const userId = typeof input.userId === 'string' ? input.userId : undefined;
   const projectId = typeof input.projectId === 'string' ? input.projectId : undefined;
@@ -152,6 +180,16 @@ export const listTimeEntries = async (
       ? input.limit
       : Number.parseInt(String(input.limit), 10);
   const cursor = typeof input.cursor === 'string' ? input.cursor : undefined;
+  const fromDate =
+    input.fromDate === undefined ? null : requireValid(parseDateString(input.fromDate, 'fromDate'));
+  const toDate =
+    input.toDate === undefined ? null : requireValid(parseDateString(input.toDate, 'toDate'));
+  if (fromDate && toDate && fromDate > toDate) {
+    badRequest('fromDate must be on or before toDate');
+  }
+  if (purpose === 'ril' && !isFullCalendarMonthRange(fromDate, toDate)) {
+    badRequest('RIL entry requests require a full calendar month');
+  }
 
   const canViewAll = hasPermission(actor, 'timesheets.tracker_all.view');
   if (!canViewAll && userId && userId !== actor.id) {
@@ -162,7 +200,13 @@ export const listTimeEntries = async (
   const decodedCursor = cursor ? entriesRepo.decodeCursor(cursor) : undefined;
   if (cursor && !decodedCursor) badRequest('cursor is invalid');
 
-  const options = { limit, cursor: decodedCursor ?? undefined, projectId };
+  const options = {
+    limit,
+    cursor: decodedCursor ?? undefined,
+    projectId,
+    fromDate: fromDate ?? undefined,
+    toDate: toDate ?? undefined,
+  };
   const result = userId
     ? await entriesRepo.listForUser(userId, options)
     : canViewAll
