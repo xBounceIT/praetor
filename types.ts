@@ -61,6 +61,11 @@ export type StoredBillingType = 'retainer' | 'time_and_materials';
 export type BillingType = StoredBillingType | 'mixed';
 export type BillingFrequency = 'monthly' | 'one_time';
 
+export interface RilNoteOption {
+  value: string;
+  label: string;
+}
+
 export interface RoleSummary {
   id: string;
   name: string;
@@ -134,6 +139,8 @@ export interface GeneralSettings {
   rilCompanyName?: string;
   rilDefaultStartTime?: string;
   rilLunchBreakMinutes?: number;
+  rilNoteOptions?: RilNoteOption[];
+  rilTransferOptions?: string[];
 }
 
 export interface Client {

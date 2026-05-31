@@ -30,21 +30,16 @@ import {
   formatRilLunchWindow,
   generateRilRows,
   getCurrentRilMonthKey,
-  getRilLocationLabels,
   getRilMonthBounds,
   isRequiredRilWorkday,
+  normalizeRilNoteOptions,
+  normalizeRilTransferOptions,
   type RilRow,
   roundRilPicapHours,
 } from '../../utils/ril';
 import { downloadRilWorkbook } from '../../utils/rilExport';
 
 const EMPTY_SELECT_VALUE = '__empty__';
-const RIL_NOTES_OPTIONS = [
-  { value: 'P', label: 'Ferie' },
-  { value: 'P2', label: 'Permesso' },
-  { value: 'M', label: 'Malattia' },
-  { value: 'F', label: 'Festivita' },
-] as const;
 const RIL_CODE_OPTIONS = [
   { value: 'TR', label: 'Trasferta' },
   { value: 'SD', label: 'Sede Disagiata' },
@@ -65,7 +60,11 @@ interface RilViewProps {
   projects: Project[];
   settings: Pick<
     GeneralSettings,
-    'rilCompanyName' | 'rilDefaultStartTime' | 'rilLunchBreakMinutes'
+    | 'rilCompanyName'
+    | 'rilDefaultStartTime'
+    | 'rilLunchBreakMinutes'
+    | 'rilNoteOptions'
+    | 'rilTransferOptions'
   >;
 }
 
@@ -106,6 +105,27 @@ const RilView: React.FC<RilViewProps> = ({
   const lunchBreakMinutes = settings.rilLunchBreakMinutes ?? 60;
   const selectedMonthValue = String(monthBounds.month).padStart(2, '0');
   const selectedYearValue = String(monthBounds.year);
+  const noteOptions = useMemo<RilSelectOption[]>(
+    () =>
+      normalizeRilNoteOptions(settings.rilNoteOptions).map((option) => ({
+        ...option,
+        display: `${option.value} - ${option.label}`,
+      })),
+    [settings.rilNoteOptions],
+  );
+  const transferOptionValues = useMemo(
+    () => normalizeRilTransferOptions(settings.rilTransferOptions),
+    [settings.rilTransferOptions],
+  );
+  const transferOptions = useMemo<RilSelectOption[]>(
+    () =>
+      transferOptionValues.map((value) => ({
+        value,
+        label: value,
+        display: value,
+      })),
+    [transferOptionValues],
+  );
 
   const monthOptions = useMemo(() => {
     const formatter = new Intl.DateTimeFormat(locale === 'it' ? 'it-IT' : 'en-US', {
@@ -144,8 +164,18 @@ const RilView: React.FC<RilViewProps> = ({
         projects,
         lunchBreakMinutes,
         locale,
+        noteOptions: normalizeRilNoteOptions(settings.rilNoteOptions),
+        transferOptions: transferOptionValues,
       }),
-    [locale, lunchBreakMinutes, monthBounds.month, monthBounds.year, projects],
+    [
+      locale,
+      lunchBreakMinutes,
+      monthBounds.month,
+      monthBounds.year,
+      projects,
+      settings.rilNoteOptions,
+      transferOptionValues,
+    ],
   );
 
   const loadMonthEntries = useCallback(async () => {
@@ -258,22 +288,6 @@ const RilView: React.FC<RilViewProps> = ({
     }
   };
 
-  const transferOptions = useMemo<RilSelectOption[]>(() => {
-    const locationLabels = getRilLocationLabels(locale);
-    return [
-      {
-        value: locationLabels.office,
-        label: locationLabels.office,
-        display: locationLabels.office,
-      },
-      {
-        value: locationLabels.remote,
-        label: locationLabels.remote,
-        display: locationLabels.remote,
-      },
-    ];
-  }, [locale]);
-
   const renderEditableInput = (row: RilRow, field: EditableRilField, label: string) => (
     <Input
       aria-label={`${label} ${row.day}`}
@@ -299,30 +313,38 @@ const RilView: React.FC<RilViewProps> = ({
     field: EditableRilField,
     label: string,
     options: ReadonlyArray<RilSelectOption>,
-  ) => (
-    <Select
-      value={getEditableValue(row, field) || EMPTY_SELECT_VALUE}
-      onValueChange={(value) =>
-        updateRow(row.day, field, value === EMPTY_SELECT_VALUE ? '' : value)
-      }
-      disabled={row.isHoliday}
-    >
-      <SelectTrigger
-        aria-label={`${label} ${row.day}`}
-        className="h-7 w-full min-w-0 px-2 text-xs disabled:cursor-not-allowed [&>svg]:size-3"
+  ) => {
+    const currentValue = getEditableValue(row, field).trim();
+    const selectOptions =
+      currentValue && !options.some((option) => option.value === currentValue)
+        ? [{ value: currentValue, label: currentValue, display: currentValue }, ...options]
+        : options;
+
+    return (
+      <Select
+        value={currentValue || EMPTY_SELECT_VALUE}
+        onValueChange={(value) =>
+          updateRow(row.day, field, value === EMPTY_SELECT_VALUE ? '' : value)
+        }
+        disabled={row.isHoliday}
       >
-        <SelectValue placeholder="-" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={EMPTY_SELECT_VALUE}>-</SelectItem>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.display ?? `${option.value} - ${option.label}`}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
+        <SelectTrigger
+          aria-label={`${label} ${row.day}`}
+          className="h-7 w-full min-w-0 px-2 text-xs disabled:cursor-not-allowed [&>svg]:size-3"
+        >
+          <SelectValue placeholder="-" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={EMPTY_SELECT_VALUE}>-</SelectItem>
+          {selectOptions.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.display ?? `${option.value} - ${option.label}`}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  };
 
   const tableHeaders = [
     { key: 'entrance', label: t('ril.columns.entrance'), className: 'w-24 min-w-24' },
@@ -484,7 +506,7 @@ const RilView: React.FC<RilViewProps> = ({
                     )}
                   </TableCell>
                   <TableCell className="w-32 min-w-32 px-2 py-1">
-                    {renderSelectControl(row, 'notes', t('ril.columns.notes'), RIL_NOTES_OPTIONS)}
+                    {renderSelectControl(row, 'notes', t('ril.columns.notes'), noteOptions)}
                   </TableCell>
                   <TableCell className="w-40 min-w-40 px-2 py-1">
                     {renderSelectControl(

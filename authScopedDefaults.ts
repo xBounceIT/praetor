@@ -1,4 +1,5 @@
 import type { EmailConfig, GeneralSettings, LdapConfig } from './types';
+import { DEFAULT_RIL_NOTE_OPTIONS, DEFAULT_RIL_TRANSFER_OPTIONS } from './utils/ril';
 
 // State variant: every optional field on the API-response type is present as
 // a concrete value (empty string / default) so consumers never see `undefined`.
@@ -50,6 +51,8 @@ export const INITIAL_GENERAL_SETTINGS = deepFreeze<GeneralSettingsState>({
   rilCompanyName: '',
   rilDefaultStartTime: '09:00',
   rilLunchBreakMinutes: 60,
+  rilNoteOptions: DEFAULT_RIL_NOTE_OPTIONS.map((option) => ({ ...option })),
+  rilTransferOptions: [...DEFAULT_RIL_TRANSFER_OPTIONS],
 });
 
 export const INITIAL_EMAIL_CONFIG = deepFreeze<EmailConfig>({

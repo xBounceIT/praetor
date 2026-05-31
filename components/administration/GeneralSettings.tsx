@@ -6,9 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import api from '../../services/api';
 import type { GeneralSettings as IGeneralSettings, TimeEntryLocation } from '../../types';
+import { normalizeRilNoteOptions, normalizeRilTransferOptions } from '../../utils/ril';
 import SelectControl, { type Option } from '../shared/SelectControl';
 import Toggle from '../shared/Toggle';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
@@ -52,6 +54,41 @@ const TABS = [
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
+
+const serializeRilNoteOptions = (value: unknown) =>
+  normalizeRilNoteOptions(value)
+    .map((option) => `${option.value} | ${option.label}`)
+    .join('\n');
+
+const parseRilNoteOptionsText = (value: string) =>
+  normalizeRilNoteOptions(
+    value
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const separatorIndex = line.indexOf('|');
+        if (separatorIndex >= 0) {
+          return {
+            value: line.slice(0, separatorIndex).trim(),
+            label: line.slice(separatorIndex + 1).trim(),
+          };
+        }
+        const [code = '', ...labelParts] = line.split(/\s+/);
+        return { value: code, label: labelParts.join(' ').trim() || code };
+      }),
+  );
+
+const serializeRilTransferOptions = (value: unknown) =>
+  normalizeRilTransferOptions(value).join('\n');
+
+const parseRilTransferOptionsText = (value: string) =>
+  normalizeRilTransferOptions(
+    value
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean),
+  );
 
 interface ToggleSettingRowProps {
   label: string;
@@ -102,6 +139,12 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
   const [rilLunchBreakMinutes, setRilLunchBreakMinutes] = useState(
     settings.rilLunchBreakMinutes ?? 60,
   );
+  const [rilNoteOptionsText, setRilNoteOptionsText] = useState(() =>
+    serializeRilNoteOptions(settings.rilNoteOptions),
+  );
+  const [rilTransferOptionsText, setRilTransferOptionsText] = useState(() =>
+    serializeRilTransferOptions(settings.rilTransferOptions),
+  );
   const [enableAiReporting, setEnableAiReporting] = useState(settings.enableAiReporting);
   const [geminiApiKey, setGeminiApiKey] = useState(settings.geminiApiKey || '');
   const [aiProvider, setAiProvider] = useState<AiProvider>(settings.aiProvider || 'gemini');
@@ -139,6 +182,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     setRilCompanyName(settings.rilCompanyName || '');
     setRilDefaultStartTime(settings.rilDefaultStartTime || '09:00');
     setRilLunchBreakMinutes(settings.rilLunchBreakMinutes ?? 60);
+    setRilNoteOptionsText(serializeRilNoteOptions(settings.rilNoteOptions));
+    setRilTransferOptionsText(serializeRilTransferOptions(settings.rilTransferOptions));
     setEnableAiReporting(settings.enableAiReporting);
     setGeminiApiKey(settings.geminiApiKey || '');
     setAiProvider(settings.aiProvider || 'gemini');
@@ -202,6 +247,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
         rilCompanyName,
         rilDefaultStartTime,
         rilLunchBreakMinutes,
+        rilNoteOptions: parseRilNoteOptionsText(rilNoteOptionsText),
+        rilTransferOptions: parseRilTransferOptionsText(rilTransferOptionsText),
         enableAiReporting,
         geminiApiKey,
         aiProvider,
@@ -228,6 +275,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     rilCompanyName !== (settings.rilCompanyName || '') ||
     rilDefaultStartTime !== (settings.rilDefaultStartTime || '09:00') ||
     rilLunchBreakMinutes !== (settings.rilLunchBreakMinutes ?? 60) ||
+    rilNoteOptionsText !== serializeRilNoteOptions(settings.rilNoteOptions) ||
+    rilTransferOptionsText !== serializeRilTransferOptions(settings.rilTransferOptions) ||
     enableAiReporting !== settings.enableAiReporting ||
     geminiApiKey !== (settings.geminiApiKey || '') ||
     aiProvider !== (settings.aiProvider || 'gemini') ||
@@ -451,6 +500,35 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                     />
                     <FieldDescription>
                       {t('general.rilLunchBreakMinutesDescription')}
+                    </FieldDescription>
+                  </Field>
+                </div>
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <Field>
+                    <FieldLabel htmlFor="general-ril-note-options">
+                      {t('general.rilNoteOptionsLabel')}
+                    </FieldLabel>
+                    <Textarea
+                      id="general-ril-note-options"
+                      value={rilNoteOptionsText}
+                      onChange={(event) => setRilNoteOptionsText(event.target.value)}
+                      className="min-h-32 font-mono text-xs"
+                    />
+                    <FieldDescription>{t('general.rilNoteOptionsDescription')}</FieldDescription>
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="general-ril-transfer-options">
+                      {t('general.rilTransferOptionsLabel')}
+                    </FieldLabel>
+                    <Textarea
+                      id="general-ril-transfer-options"
+                      value={rilTransferOptionsText}
+                      onChange={(event) => setRilTransferOptionsText(event.target.value)}
+                      className="min-h-32 font-mono text-xs"
+                    />
+                    <FieldDescription>
+                      {t('general.rilTransferOptionsDescription')}
                     </FieldDescription>
                   </Field>
                 </div>

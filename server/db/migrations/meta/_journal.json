@@ -421,6 +421,13 @@
       "when": 1780162137411,
       "tag": "0059_add_ril_general_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1780229225602,
+      "tag": "0060_add_ril_option_settings",
+      "breakpoints": true
     }
   ]
 }

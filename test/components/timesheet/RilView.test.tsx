@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
-import type { Project, TimeEntry, User } from '../../../types';
+import type { GeneralSettings, Project, TimeEntry, User } from '../../../types';
 import { installApiMock } from '../../helpers/api';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
@@ -56,7 +56,7 @@ const entry = (overrides: Partial<TimeEntry>): TimeEntry => ({
   ...overrides,
 });
 
-const renderRilView = () =>
+const renderRilView = (settingsOverrides: Partial<GeneralSettings> = {}) =>
   render(
     <RilView
       currentUser={currentUser}
@@ -68,6 +68,14 @@ const renderRilView = () =>
         rilCompanyName: 'ACME',
         rilDefaultStartTime: '09:00',
         rilLunchBreakMinutes: 60,
+        rilNoteOptions: [
+          { value: 'P', label: 'Ferie' },
+          { value: 'P2', label: 'Permesso' },
+          { value: 'M', label: 'Malattia' },
+          { value: 'F', label: 'Festivita' },
+        ],
+        rilTransferOptions: ['In office', 'Remote working'],
+        ...settingsOverrides,
       }}
     />,
   );
@@ -235,6 +243,22 @@ describe('<RilView />', () => {
     expect(transferSelect.tagName).toBe('BUTTON');
     const codeSelect = await screen.findByLabelText('ril.columns.code 4');
     expect(codeSelect.tagName).toBe('BUTTON');
+  });
+
+  test('uses RIL note and transfer options from general settings', async () => {
+    api.entries.listPage.mockResolvedValue({
+      entries: [entry({ date: '2026-05-04', duration: 8, location: 'remote' })],
+      nextCursor: null,
+    });
+
+    renderRilView({
+      rilNoteOptions: [{ value: 'FEST', label: 'Festivo' }],
+      rilTransferOptions: ['Sede configurata', 'Remoto configurato'],
+    });
+
+    const holidayNotesSelect = await screen.findByLabelText('ril.columns.notes 1');
+    expect(holidayNotesSelect).toHaveTextContent('FEST - Festivo');
+    expect(screen.getByLabelText('ril.columns.transfer 4')).toHaveTextContent('Remoto configurato');
   });
 
   test('exports the current draft rows', async () => {

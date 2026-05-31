@@ -26,6 +26,7 @@ import type {
   UserAuthMethod,
 } from '../../types';
 import { normalizeDateOnlyString } from '../../utils/date';
+import { normalizeRilNoteOptions, normalizeRilTransferOptions } from '../../utils/ril';
 
 const nullableNumber = (value: unknown, fallback: number | null = null): number | null =>
   value === undefined || value === null ? fallback : Number(value);
@@ -301,6 +302,8 @@ export const normalizeGeneralSettings = (s: GeneralSettings): GeneralSettings =>
   rilCompanyName: s.rilCompanyName ?? '',
   rilDefaultStartTime: s.rilDefaultStartTime || '09:00',
   rilLunchBreakMinutes: Number(s.rilLunchBreakMinutes ?? 60),
+  rilNoteOptions: normalizeRilNoteOptions(s.rilNoteOptions),
+  rilTransferOptions: normalizeRilTransferOptions(s.rilTransferOptions),
 });
 
 // Allowlist mirroring the server's UNIT_OF_MEASURE_VALUES (server/routes/invoices.ts).

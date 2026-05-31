@@ -257,6 +257,13 @@ const baseGeneralSettings: GeneralSettings = {
   rilCompanyName: '',
   rilDefaultStartTime: '09:00',
   rilLunchBreakMinutes: 60,
+  rilNoteOptions: [
+    { value: 'P', label: 'Ferie' },
+    { value: 'P2', label: 'Permesso' },
+    { value: 'M', label: 'Malattia' },
+    { value: 'F', label: 'Festivita' },
+  ],
+  rilTransferOptions: ['In sede', 'Telelavoro'],
 };
 
 describe('normalizeClient', () => {
@@ -788,11 +795,34 @@ describe('normalizeGeneralSettings', () => {
       rilCompanyName: undefined,
       rilDefaultStartTime: '',
       rilLunchBreakMinutes: undefined,
+      rilNoteOptions: undefined,
+      rilTransferOptions: undefined,
     });
     expect(normalizeGeneralSettings(settings)).toMatchObject({
       rilCompanyName: '',
       rilDefaultStartTime: '09:00',
       rilLunchBreakMinutes: 60,
+      rilNoteOptions: [
+        { value: 'P', label: 'Ferie' },
+        { value: 'P2', label: 'Permesso' },
+        { value: 'M', label: 'Malattia' },
+        { value: 'F', label: 'Festivita' },
+      ],
+      rilTransferOptions: ['In sede', 'Telelavoro'],
+    });
+  });
+
+  test('normalizes custom RIL option settings', () => {
+    const settings = make<GeneralSettings>(baseGeneralSettings, {
+      rilNoteOptions: [
+        { value: ' P ', label: ' Paid leave ' },
+        { value: 'P', label: 'Duplicate' },
+      ],
+      rilTransferOptions: [' Office ', 'Office', ' Remote '],
+    });
+    expect(normalizeGeneralSettings(settings)).toMatchObject({
+      rilNoteOptions: [{ value: 'P', label: 'Paid leave' }],
+      rilTransferOptions: ['Office', 'Remote'],
     });
   });
 });

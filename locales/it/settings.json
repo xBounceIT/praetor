@@ -195,6 +195,10 @@
     "rilDefaultStartTimeDescription": "Stampato nell'intestazione del file RIL; le righe RIL usano orari fissi 09:00-18:00.",
     "rilLunchBreakMinutesLabel": "Minuti Pausa Pranzo",
     "rilLunchBreakMinutesDescription": "Usati per calcolare Ore/PICAP dagli orari di entrata e uscita e stampati nell'intestazione del file RIL.",
+    "rilNoteOptionsLabel": "Opzioni Note RIL",
+    "rilNoteOptionsDescription": "Un'opzione per riga nel formato CODICE | Etichetta. Il codice F viene usato per le festivita.",
+    "rilTransferOptionsLabel": "Opzioni Trasferta RIL",
+    "rilTransferOptionsDescription": "Un'opzione per riga. La prima viene usata per i giorni in sede, la seconda per il telelavoro.",
     "locationTypes": {
       "office": "Ufficio",
       "customerPremise": "Sede Cliente",

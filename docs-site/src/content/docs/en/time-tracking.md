@@ -29,9 +29,9 @@ The **RIL** page in Timesheets generates a monthly attendance statement from the
 
 Praetor retrieves entries with `GET /api/entries` using inclusive `fromDate` and `toDate` filters, then builds an editable draft. Edits made in the RIL table stay local to the page and Excel export; they do not update the underlying time entries. Automatically marked holiday rows are highlighted and read-only; weekend rows are highlighted for quick scanning.
 
-For every valid weekday, Praetor starts the draft with **09:00** as the entrance and **18:00** as the exit, even when that day has no tracked entries. **Hours** and **PICAP** are recalculated from the editable entrance and exit values, subtracting the portion of the span that overlaps the configured lunch break starting at **13:00**. Italian holidays that fall Monday through Friday are marked with `F`; weekend holidays are not marked. If any entry for the day is not `remote`, the row is marked **In office**; otherwise it is marked **Remote working**.
+For every valid weekday, Praetor starts the draft with **09:00** as the entrance and **18:00** as the exit, even when that day has no tracked entries. **Hours** and **PICAP** are recalculated from the editable entrance and exit values, subtracting the portion of the span that overlaps the configured lunch break starting at **13:00**. Italian holidays that fall Monday through Friday are marked with the configured holiday note code, `F` by default; weekend holidays are not marked. If any entry for the day is not `remote`, the row uses the first Location option configured in RIL global settings; otherwise it uses the second.
 
-In the statement, **Notes** can be selected from `P` vacation, `P2` leave, `M` sick leave, and `F` holiday. **Code** can be selected from `TR` business trip and `SD` hardship office.
+In the statement, **Notes** and **Location** use the option lists configured by administrators in RIL global settings. **Code** can be selected from `TR` business trip and `SD` hardship office.
 
 Before export, every valid weekday must have **Start**, **End**, and **Location** filled in. The **Export Excel** button creates a one-sheet `.xlsx` workbook named **Prospetto Presenze** with the RIL columns: Giorno, Entrata, Uscita, Ore, PICAP, Reperib. Telef., Note, Trasferta, Cod, and Commessa.
 

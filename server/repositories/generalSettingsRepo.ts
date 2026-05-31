@@ -1,5 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
+import type { StoredRilNoteOption } from '../db/schema/generalSettings.ts';
 import { generalSettings } from '../db/schema/generalSettings.ts';
 
 export type GeneralSettings = {
@@ -18,6 +19,8 @@ export type GeneralSettings = {
   rilCompanyName: string | null;
   rilDefaultStartTime: string | null;
   rilLunchBreakMinutes: number | null;
+  rilNoteOptions: StoredRilNoteOption[] | null;
+  rilTransferOptions: string[] | null;
 };
 
 export type GeneralSettingsPatch = {
@@ -36,6 +39,8 @@ export type GeneralSettingsPatch = {
   rilCompanyName?: string | null;
   rilDefaultStartTime?: string | null;
   rilLunchBreakMinutes?: number | null;
+  rilNoteOptions?: StoredRilNoteOption[] | null;
+  rilTransferOptions?: string[] | null;
 };
 
 const GENERAL_SETTINGS_PROJECTION = {
@@ -54,6 +59,8 @@ const GENERAL_SETTINGS_PROJECTION = {
   rilCompanyName: generalSettings.rilCompanyName,
   rilDefaultStartTime: generalSettings.rilDefaultStartTime,
   rilLunchBreakMinutes: generalSettings.rilLunchBreakMinutes,
+  rilNoteOptions: generalSettings.rilNoteOptions,
+  rilTransferOptions: generalSettings.rilTransferOptions,
 } as const;
 
 type GeneralSettingsRow = {
@@ -72,6 +79,8 @@ type GeneralSettingsRow = {
   rilCompanyName: string | null;
   rilDefaultStartTime: string | null;
   rilLunchBreakMinutes: number | null;
+  rilNoteOptions: StoredRilNoteOption[] | null;
+  rilTransferOptions: string[] | null;
 };
 
 // Centralized fallbacks for the four non-nullable `GeneralSettings` fields. The schema
@@ -110,6 +119,8 @@ const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
   rilCompanyName: row.rilCompanyName,
   rilDefaultStartTime: row.rilDefaultStartTime,
   rilLunchBreakMinutes: row.rilLunchBreakMinutes,
+  rilNoteOptions: row.rilNoteOptions,
+  rilTransferOptions: row.rilTransferOptions,
 });
 
 export const get = async (exec: DbExecutor = db): Promise<GeneralSettings | null> => {
@@ -127,6 +138,11 @@ export const update = async (
   // COALESCE preserves the existing column when the patch value is undefined (legacy
   // "undefined leaves column unchanged" semantic). Same pattern as ldapRepo.update /
   // emailRepo.update / settingsRepo.upsertForUser.
+  const rilNoteOptionsParam =
+    patch.rilNoteOptions === undefined ? null : JSON.stringify(patch.rilNoteOptions);
+  const rilTransferOptionsParam =
+    patch.rilTransferOptions === undefined ? null : JSON.stringify(patch.rilTransferOptions);
+
   const result = await exec
     .update(generalSettings)
     .set({
@@ -145,6 +161,8 @@ export const update = async (
       rilCompanyName: sql`COALESCE(${patch.rilCompanyName ?? null}, ${generalSettings.rilCompanyName})`,
       rilDefaultStartTime: sql`COALESCE(${patch.rilDefaultStartTime ?? null}, ${generalSettings.rilDefaultStartTime})`,
       rilLunchBreakMinutes: sql`COALESCE(${patch.rilLunchBreakMinutes ?? null}, ${generalSettings.rilLunchBreakMinutes})`,
+      rilNoteOptions: sql`COALESCE(${rilNoteOptionsParam}::jsonb, ${generalSettings.rilNoteOptions})`,
+      rilTransferOptions: sql`COALESCE(${rilTransferOptionsParam}::jsonb, ${generalSettings.rilTransferOptions})`,
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })
     .where(eq(generalSettings.id, 1))

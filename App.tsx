@@ -136,6 +136,7 @@ import {
   type ProgrammaticHashTracker,
 } from './utils/programmaticHashTracker';
 import { retryTransient } from './utils/retry';
+import { normalizeRilNoteOptions, normalizeRilTransferOptions } from './utils/ril';
 import { applyTheme, getTheme } from './utils/theme';
 import { toastError } from './utils/toast';
 import {
@@ -1302,6 +1303,8 @@ const AppContent: React.FC = () => {
         rilCompanyName: genSettings.rilCompanyName || '',
         rilDefaultStartTime: genSettings.rilDefaultStartTime || '09:00',
         rilLunchBreakMinutes: genSettings.rilLunchBreakMinutes ?? 60,
+        rilNoteOptions: normalizeRilNoteOptions(genSettings.rilNoteOptions),
+        rilTransferOptions: normalizeRilTransferOptions(genSettings.rilTransferOptions),
       });
       setHasLoadedGeneralSettings(true);
     };
@@ -2311,6 +2314,8 @@ const AppContent: React.FC = () => {
         rilCompanyName: updated.rilCompanyName || '',
         rilDefaultStartTime: updated.rilDefaultStartTime || '09:00',
         rilLunchBreakMinutes: updated.rilLunchBreakMinutes ?? 60,
+        rilNoteOptions: normalizeRilNoteOptions(updated.rilNoteOptions),
+        rilTransferOptions: normalizeRilTransferOptions(updated.rilTransferOptions),
       });
     } catch (err) {
       console.error('Failed to update general settings:', err);

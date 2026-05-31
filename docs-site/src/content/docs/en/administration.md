@@ -64,7 +64,7 @@ If a user cannot sign in, check credentials, user status, assigned role, and aut
 
 General settings control cross-cutting features such as AI reporting and application preferences. Email settings are used for sending messages and notifications.
 
-In **Tracking Preferences**, administrators also configure the metadata used by the RIL statement: company name, default start time, and lunch-break minutes. The lunch-break value is also used to recalculate RIL Hours and PICAP from editable entrance and exit times; none of these settings change existing time entries.
+In **Tracking Preferences**, administrators also configure the metadata used by the RIL statement: company name, default start time, lunch-break minutes, Notes options, and Location options. Notes are entered one per line as `CODE | Label`; Location options are entered one per line, with the first option used for office days and the second for remote days. The lunch-break value is also used to recalculate RIL Hours and PICAP from editable entrance and exit times; none of these settings change existing time entries.
 
 RIL page visibility is managed through the **timesheets.ril.view** role permission. Roles that already had Time Tracker access receive that permission automatically during migration.
 

@@ -3,10 +3,14 @@ import type { Project, TimeEntry } from '../../types';
 import {
   calculateRilTotals,
   calculateRilWorkedHoursFromTimes,
+  DEFAULT_RIL_NOTE_OPTIONS,
+  DEFAULT_RIL_TRANSFER_OPTIONS,
   formatRilLunchWindow,
   generateRilRows,
   getRilMonthBounds,
   makeRilDownloadFilename,
+  normalizeRilNoteOptions,
+  normalizeRilTransferOptions,
 } from '../../utils/ril';
 
 const entry = (overrides: Partial<TimeEntry>): TimeEntry => ({
@@ -64,6 +68,36 @@ describe('RIL helpers', () => {
     });
 
     expect(rows.find((row) => row.day === 4)?.transfer).toBe('In office');
+  });
+
+  test('uses configured note and transfer options for generated rows', () => {
+    const rows = generateRilRows({
+      year: 2026,
+      month: 5,
+      locale: 'en',
+      noteOptions: [{ value: 'FEST', label: 'Holiday' }],
+      transferOptions: ['Configured office', 'Configured remote'],
+      entries: [
+        entry({ id: 'remote', date: '2026-05-04', duration: 8, location: 'remote' }),
+        entry({ id: 'office', date: '2026-05-05', duration: 8, location: 'office' }),
+      ],
+    });
+
+    expect(rows.find((row) => row.day === 1)?.notes).toBe('FEST');
+    expect(rows.find((row) => row.day === 4)?.transfer).toBe('Configured remote');
+    expect(rows.find((row) => row.day === 5)?.transfer).toBe('Configured office');
+  });
+
+  test('normalizes RIL option lists with safe defaults', () => {
+    expect(normalizeRilNoteOptions([{ value: ' P ', label: ' Paid leave ' }])).toEqual([
+      { value: 'P', label: 'Paid leave' },
+    ]);
+    expect(normalizeRilNoteOptions(null)).toEqual([...DEFAULT_RIL_NOTE_OPTIONS]);
+    expect(normalizeRilTransferOptions([' Office ', 'Office', ' Remote '])).toEqual([
+      'Office',
+      'Remote',
+    ]);
+    expect(normalizeRilTransferOptions(undefined)).toEqual([...DEFAULT_RIL_TRANSFER_OPTIONS]);
   });
 
   test('uses fixed start/end values on every valid weekday and derives hours/PICAP from them', () => {

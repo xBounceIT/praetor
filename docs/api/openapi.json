@@ -14815,6 +14815,35 @@
                     },
                     "rilLunchBreakMinutes": {
                       "type": "integer"
+                    },
+                    "rilNoteOptions": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 30,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "label"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "rilTransferOptions": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 30,
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -14832,7 +14861,9 @@
                     "defaultLocation",
                     "rilCompanyName",
                     "rilDefaultStartTime",
-                    "rilLunchBreakMinutes"
+                    "rilLunchBreakMinutes",
+                    "rilNoteOptions",
+                    "rilTransferOptions"
                   ]
                 }
               }
@@ -15044,6 +15075,35 @@
                   },
                   "rilLunchBreakMinutes": {
                     "type": "integer"
+                  },
+                  "rilNoteOptions": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 30,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "value",
+                        "label"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "rilTransferOptions": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 30,
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -15103,6 +15163,35 @@
                     },
                     "rilLunchBreakMinutes": {
                       "type": "integer"
+                    },
+                    "rilNoteOptions": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 30,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "label"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "rilTransferOptions": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 30,
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -15120,7 +15209,9 @@
                     "defaultLocation",
                     "rilCompanyName",
                     "rilDefaultStartTime",
-                    "rilLunchBreakMinutes"
+                    "rilLunchBreakMinutes",
+                    "rilNoteOptions",
+                    "rilTransferOptions"
                   ]
                 }
               }

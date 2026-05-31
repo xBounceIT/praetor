@@ -15,6 +15,41 @@ import {
   parseBooleanField,
 } from '../utils/validation.ts';
 
+const DEFAULT_RIL_NOTE_OPTIONS = [
+  { value: 'P', label: 'Ferie' },
+  { value: 'P2', label: 'Permesso' },
+  { value: 'M', label: 'Malattia' },
+  { value: 'F', label: 'Festivita' },
+] as const;
+const DEFAULT_RIL_TRANSFER_OPTIONS = ['In sede', 'Telelavoro'] as const;
+
+type RilNoteOption = {
+  value: string;
+  label: string;
+};
+
+const rilNoteOptionsSchema = {
+  type: 'array',
+  minItems: 1,
+  maxItems: 30,
+  items: {
+    type: 'object',
+    properties: {
+      value: { type: 'string' },
+      label: { type: 'string' },
+    },
+    required: ['value', 'label'],
+    additionalProperties: false,
+  },
+} as const;
+
+const rilTransferOptionsSchema = {
+  type: 'array',
+  minItems: 1,
+  maxItems: 30,
+  items: { type: 'string' },
+} as const;
+
 const generalSettingsSchema = {
   type: 'object',
   properties: {
@@ -33,6 +68,8 @@ const generalSettingsSchema = {
     rilCompanyName: { type: 'string', maxLength: 255 },
     rilDefaultStartTime: { type: 'string' },
     rilLunchBreakMinutes: { type: 'integer' },
+    rilNoteOptions: rilNoteOptionsSchema,
+    rilTransferOptions: rilTransferOptionsSchema,
   },
   required: [
     'currency',
@@ -50,6 +87,8 @@ const generalSettingsSchema = {
     'rilCompanyName',
     'rilDefaultStartTime',
     'rilLunchBreakMinutes',
+    'rilNoteOptions',
+    'rilTransferOptions',
   ],
 } as const;
 
@@ -71,6 +110,8 @@ const generalSettingsUpdateBodySchema = {
     rilCompanyName: { type: 'string', maxLength: 255 },
     rilDefaultStartTime: { type: 'string' },
     rilLunchBreakMinutes: { type: 'integer' },
+    rilNoteOptions: rilNoteOptionsSchema,
+    rilTransferOptions: rilTransferOptionsSchema,
   },
 } as const;
 
@@ -90,6 +131,8 @@ const DEFAULT_SETTINGS: generalSettingsRepo.GeneralSettings = {
   rilCompanyName: '',
   rilDefaultStartTime: '09:00',
   rilLunchBreakMinutes: 60,
+  rilNoteOptions: DEFAULT_RIL_NOTE_OPTIONS.map((option) => ({ ...option })),
+  rilTransferOptions: [...DEFAULT_RIL_TRANSFER_OPTIONS],
 };
 
 const maskApiKey = (value: string | null, reveal: boolean) =>
@@ -134,6 +177,119 @@ const validateOptionalLunchBreakMinutes = (value: unknown) => {
   return { ok: true as const, value };
 };
 
+const validateOptionString = (
+  value: unknown,
+  fieldName: string,
+  maxLength: number,
+): { ok: true; value: string } | { ok: false; message: string } => {
+  if (typeof value !== 'string') {
+    return { ok: false, message: `${fieldName} must be a string` };
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { ok: false, message: `${fieldName} cannot be blank` };
+  }
+  if (trimmed.length > maxLength) {
+    return { ok: false, message: `${fieldName} must be ${maxLength} characters or fewer` };
+  }
+  return { ok: true, value: trimmed };
+};
+
+const normalizeRilNoteOptions = (value: unknown): RilNoteOption[] => {
+  if (!Array.isArray(value)) return DEFAULT_RIL_NOTE_OPTIONS.map((option) => ({ ...option }));
+  const options: RilNoteOption[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const option = entry as Partial<RilNoteOption>;
+    const code = typeof option.value === 'string' ? option.value.trim() : '';
+    if (!code || seen.has(code)) continue;
+    const label = typeof option.label === 'string' ? option.label.trim() : '';
+    options.push({ value: code, label: label || code });
+    seen.add(code);
+  }
+  return options.length > 0 ? options : DEFAULT_RIL_NOTE_OPTIONS.map((option) => ({ ...option }));
+};
+
+const normalizeRilTransferOptions = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [...DEFAULT_RIL_TRANSFER_OPTIONS];
+  const options: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    const option = typeof entry === 'string' ? entry.trim() : '';
+    if (!option || seen.has(option)) continue;
+    options.push(option);
+    seen.add(option);
+  }
+  return options.length > 0 ? options : [...DEFAULT_RIL_TRANSFER_OPTIONS];
+};
+
+const validateOptionalRilNoteOptions = (value: unknown) => {
+  if (value === undefined || value === null) {
+    return { ok: true as const, value: null };
+  }
+  if (!Array.isArray(value)) {
+    return { ok: false as const, message: 'rilNoteOptions must be an array' };
+  }
+  if (value.length === 0 || value.length > 30) {
+    return { ok: false as const, message: 'rilNoteOptions must contain 1 to 30 options' };
+  }
+
+  const options: RilNoteOption[] = [];
+  const seen = new Set<string>();
+  for (const [index, entry] of value.entries()) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      return {
+        ok: false as const,
+        message: `rilNoteOptions[${index}] must be an object`,
+      };
+    }
+    const option = entry as Partial<RilNoteOption>;
+    const valueResult = validateOptionString(option.value, `rilNoteOptions[${index}].value`, 20);
+    if (!valueResult.ok) return valueResult;
+    const labelResult = validateOptionString(option.label, `rilNoteOptions[${index}].label`, 120);
+    if (!labelResult.ok) return labelResult;
+    if (seen.has(valueResult.value)) continue;
+    options.push({ value: valueResult.value, label: labelResult.value });
+    seen.add(valueResult.value);
+  }
+
+  if (options.length === 0) {
+    return { ok: false as const, message: 'rilNoteOptions must contain at least one valid option' };
+  }
+  return { ok: true as const, value: options };
+};
+
+const validateOptionalRilTransferOptions = (value: unknown) => {
+  if (value === undefined || value === null) {
+    return { ok: true as const, value: null };
+  }
+  if (!Array.isArray(value)) {
+    return { ok: false as const, message: 'rilTransferOptions must be an array' };
+  }
+  if (value.length === 0 || value.length > 30) {
+    return { ok: false as const, message: 'rilTransferOptions must contain 1 to 30 options' };
+  }
+
+  const options: string[] = [];
+  const seen = new Set<string>();
+  for (const [index, entry] of value.entries()) {
+    const result = validateOptionString(entry, `rilTransferOptions[${index}]`, 120);
+    if (!result.ok) return result;
+    if (seen.has(result.value)) continue;
+    options.push(result.value);
+    seen.add(result.value);
+  }
+
+  if (options.length === 0) {
+    return {
+      ok: false as const,
+      message: 'rilTransferOptions must contain at least one valid option',
+    };
+  }
+  return { ok: true as const, value: options };
+};
+
 const toResponse = (settings: generalSettingsRepo.GeneralSettings, revealApiKeys: boolean) => ({
   currency: settings.currency,
   dailyLimit: settings.dailyLimit,
@@ -150,6 +306,8 @@ const toResponse = (settings: generalSettingsRepo.GeneralSettings, revealApiKeys
   rilCompanyName: settings.rilCompanyName ?? '',
   rilDefaultStartTime: settings.rilDefaultStartTime || '09:00',
   rilLunchBreakMinutes: settings.rilLunchBreakMinutes ?? 60,
+  rilNoteOptions: normalizeRilNoteOptions(settings.rilNoteOptions),
+  rilTransferOptions: normalizeRilTransferOptions(settings.rilTransferOptions),
 });
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -210,6 +368,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         rilCompanyName?: string;
         rilDefaultStartTime?: string;
         rilLunchBreakMinutes?: number;
+        rilNoteOptions?: RilNoteOption[];
+        rilTransferOptions?: string[];
       };
       const {
         currency,
@@ -224,6 +384,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         rilCompanyName,
         rilDefaultStartTime,
         rilLunchBreakMinutes,
+        rilNoteOptions,
+        rilTransferOptions,
       } = body;
       const currencyResult = optionalNonEmptyString(currency, 'currency');
       if (!currencyResult.ok) return badRequest(reply, currencyResult.message);
@@ -258,6 +420,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const rilLunchBreakMinutesResult = validateOptionalLunchBreakMinutes(rilLunchBreakMinutes);
       if (!rilLunchBreakMinutesResult.ok) {
         return badRequest(reply, rilLunchBreakMinutesResult.message);
+      }
+
+      const rilNoteOptionsResult = validateOptionalRilNoteOptions(rilNoteOptions);
+      if (!rilNoteOptionsResult.ok) return badRequest(reply, rilNoteOptionsResult.message);
+
+      const rilTransferOptionsResult = validateOptionalRilTransferOptions(rilTransferOptions);
+      if (!rilTransferOptionsResult.ok) {
+        return badRequest(reply, rilTransferOptionsResult.message);
       }
 
       if (
@@ -308,6 +478,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         rilCompanyName: rilCompanyNameResult.value,
         rilDefaultStartTime: rilDefaultStartTimeResult.value,
         rilLunchBreakMinutes: rilLunchBreakMinutesResult.value,
+        rilNoteOptions: rilNoteOptionsResult.value,
+        rilTransferOptions: rilTransferOptionsResult.value,
       });
 
       await logAudit({

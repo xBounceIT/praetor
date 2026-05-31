@@ -91,6 +91,13 @@ const SETTINGS_WITH_KEYS = {
   rilCompanyName: 'ACME Consulting',
   rilDefaultStartTime: '08:30',
   rilLunchBreakMinutes: 45,
+  rilNoteOptions: [
+    { value: 'P', label: 'Ferie' },
+    { value: 'P2', label: 'Permesso' },
+    { value: 'M', label: 'Malattia' },
+    { value: 'F', label: 'Festivita' },
+  ],
+  rilTransferOptions: ['In sede', 'Telelavoro'],
 };
 
 const allMocks = [
@@ -171,6 +178,13 @@ describe('GET /api/general-settings', () => {
     expect(body.rilCompanyName).toBe('');
     expect(body.rilDefaultStartTime).toBe('09:00');
     expect(body.rilLunchBreakMinutes).toBe(60);
+    expect(body.rilNoteOptions).toEqual([
+      { value: 'P', label: 'Ferie' },
+      { value: 'P2', label: 'Permesso' },
+      { value: 'M', label: 'Malattia' },
+      { value: 'F', label: 'Festivita' },
+    ]);
+    expect(body.rilTransferOptions).toEqual(['In sede', 'Telelavoro']);
   });
 
   test('401 missing token', async () => {
@@ -216,6 +230,8 @@ describe('PUT /api/general-settings', () => {
       rilCompanyName: 'Example Spa',
       rilDefaultStartTime: '09:15',
       rilLunchBreakMinutes: 30,
+      rilNoteOptions: [{ value: 'HOL', label: 'Holiday' }],
+      rilTransferOptions: ['Office', 'Remote'],
     });
 
     const res = await testApp.inject({
@@ -226,6 +242,8 @@ describe('PUT /api/general-settings', () => {
         rilCompanyName: 'Example Spa',
         rilDefaultStartTime: '09:15',
         rilLunchBreakMinutes: 30,
+        rilNoteOptions: [{ value: 'HOL', label: 'Holiday' }],
+        rilTransferOptions: ['Office', 'Remote'],
       },
     });
 
@@ -235,12 +253,16 @@ describe('PUT /api/general-settings', () => {
         rilCompanyName: 'Example Spa',
         rilDefaultStartTime: '09:15',
         rilLunchBreakMinutes: 30,
+        rilNoteOptions: [{ value: 'HOL', label: 'Holiday' }],
+        rilTransferOptions: ['Office', 'Remote'],
       }),
     );
     const body = JSON.parse(res.body);
     expect(body.rilCompanyName).toBe('Example Spa');
     expect(body.rilDefaultStartTime).toBe('09:15');
     expect(body.rilLunchBreakMinutes).toBe(30);
+    expect(body.rilNoteOptions).toEqual([{ value: 'HOL', label: 'Holiday' }]);
+    expect(body.rilTransferOptions).toEqual(['Office', 'Remote']);
   });
 
   test('200 accepts blank RIL company name so admins can clear it', async () => {
@@ -374,6 +396,32 @@ describe('PUT /api/general-settings', () => {
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/rilLunchBreakMinutes must be an integer/);
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 invalid RIL note options, repo not called', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { rilNoteOptions: [{ value: '', label: 'Blank' }] },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/rilNoteOptions\[0\]\.value cannot be blank/);
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 invalid RIL transfer options, repo not called', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { rilTransferOptions: [''] },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/rilTransferOptions\[0\] cannot be blank/);
     expect(settingsUpdateMock).not.toHaveBeenCalled();
   });
 

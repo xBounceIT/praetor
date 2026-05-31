@@ -1,4 +1,4 @@
-import type { Project, TimeEntry } from '../types';
+import type { Project, RilNoteOption, TimeEntry } from '../types';
 import { dateOnlyStringToLocalDate, getLocalDateString } from './date';
 import { isItalianHoliday } from './holidays';
 
@@ -12,6 +12,8 @@ export interface RilGenerationOptions {
   defaultStartTime?: string;
   lunchBreakMinutes?: number;
   locale?: RilLocale;
+  noteOptions?: readonly RilNoteOption[];
+  transferOptions?: readonly string[];
 }
 
 export interface RilMonthBounds {
@@ -72,6 +74,15 @@ const RIL_LOCATION_LABELS: Record<RilLocale, { office: string; remote: string }>
 
 export const getRilLocationLabels = (locale: RilLocale) => RIL_LOCATION_LABELS[locale];
 
+export const DEFAULT_RIL_NOTE_OPTIONS: readonly RilNoteOption[] = [
+  { value: 'P', label: 'Ferie' },
+  { value: 'P2', label: 'Permesso' },
+  { value: 'M', label: 'Malattia' },
+  { value: 'F', label: 'Festivita' },
+] as const;
+
+export const DEFAULT_RIL_TRANSFER_OPTIONS: readonly string[] = ['In sede', 'Telelavoro'] as const;
+
 const WEEKDAY_FORMATTER = new Intl.DateTimeFormat('it-IT', { weekday: 'short' });
 const RIL_FIXED_ENTRANCE = '09:00';
 const RIL_FIXED_EXIT = '18:00';
@@ -111,6 +122,50 @@ const normalizeLunchBreakMinutes = (value: number | undefined): number => {
   const parsed = Number(value ?? DEFAULT_LUNCH_BREAK_MINUTES);
   if (!Number.isFinite(parsed)) return DEFAULT_LUNCH_BREAK_MINUTES;
   return Math.min(240, Math.max(0, Math.round(parsed)));
+};
+
+export const normalizeRilNoteOptions = (
+  value: unknown,
+  fallback: readonly RilNoteOption[] = DEFAULT_RIL_NOTE_OPTIONS,
+): RilNoteOption[] => {
+  const source = Array.isArray(value) ? value : [];
+  const options: RilNoteOption[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of source) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const candidate = entry as Partial<RilNoteOption>;
+    const optionValue = typeof candidate.value === 'string' ? candidate.value.trim() : '';
+    if (!optionValue || seen.has(optionValue)) continue;
+    const label = typeof candidate.label === 'string' ? candidate.label.trim() : '';
+    options.push({ value: optionValue, label: label || optionValue });
+    seen.add(optionValue);
+  }
+
+  return options.length > 0 ? options : fallback.map((option) => ({ ...option }));
+};
+
+export const normalizeRilTransferOptions = (
+  value: unknown,
+  fallback: readonly string[] = DEFAULT_RIL_TRANSFER_OPTIONS,
+): string[] => {
+  const source = Array.isArray(value) ? value : [];
+  const options: string[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of source) {
+    const optionValue =
+      typeof entry === 'string'
+        ? entry.trim()
+        : entry && typeof entry === 'object' && !Array.isArray(entry)
+          ? String((entry as { value?: unknown }).value ?? '').trim()
+          : '';
+    if (!optionValue || seen.has(optionValue)) continue;
+    options.push(optionValue);
+    seen.add(optionValue);
+  }
+
+  return options.length > 0 ? options : [...fallback];
 };
 
 const calculateRilLunchOverlapMinutes = (
@@ -203,11 +258,31 @@ export const generateRilRows = ({
   projects = [],
   lunchBreakMinutes = DEFAULT_LUNCH_BREAK_MINUTES,
   locale = 'en',
+  noteOptions,
+  transferOptions,
 }: RilGenerationOptions): RilRow[] => {
   const daysInMonth = new Date(year, month, 0).getDate();
   const projectById = new Map(projects.map((project) => [project.id, project]));
   const entriesByDate = new Map<string, TimeEntry[]>();
   const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
+  const normalizedNoteOptions = normalizeRilNoteOptions(noteOptions);
+  const holidayNoteValue =
+    normalizedNoteOptions.find((option) => option.value.toUpperCase() === 'F')?.value ??
+    normalizedNoteOptions.find((option) => option.value.toUpperCase().startsWith('F'))?.value ??
+    'F';
+  const localizedTransferFallback = [
+    RIL_LOCATION_LABELS[locale].office,
+    RIL_LOCATION_LABELS[locale].remote,
+  ];
+  const normalizedTransferOptions = normalizeRilTransferOptions(
+    transferOptions,
+    localizedTransferFallback,
+  );
+  const officeTransferValue = normalizedTransferOptions[0] ?? RIL_LOCATION_LABELS[locale].office;
+  const remoteTransferValue =
+    normalizedTransferOptions[1] ??
+    normalizedTransferOptions[0] ??
+    RIL_LOCATION_LABELS[locale].remote;
 
   for (const entry of entries) {
     if (!entry.date.startsWith(monthPrefix)) continue;
@@ -250,13 +325,9 @@ export const generateRilRows = ({
       hoursDecimal,
       picap: worked ? roundRilPicapHours(hoursDecimal) : 0,
       phoneAvailability: '',
-      notes: isHoliday ? 'F' : '',
+      notes: isHoliday ? holidayNoteValue : '',
       transfer:
-        dayEntries.length > 0
-          ? allRemote
-            ? RIL_LOCATION_LABELS[locale].remote
-            : RIL_LOCATION_LABELS[locale].office
-          : '',
+        dayEntries.length > 0 ? (allRemote ? remoteTransferValue : officeTransferValue) : '',
       code: '',
       order: Array.from(uniqueProjects).join('; '),
       isHoliday,
