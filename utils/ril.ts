@@ -347,12 +347,16 @@ export const generateRilRows = ({
 export const isRequiredRilWorkday = (row: RilRow): boolean =>
   Boolean(row.date && row.isWorkday && !row.isHoliday);
 
+export const isRilAbsenceRow = (row: RilRow): boolean =>
+  isRequiredRilWorkday(row) && row.notes.trim().length > 0;
+
 export const calculateRilTotals = (rows: RilRow[]): RilTotals => {
   const datedRows = rows.filter((row) => row.date);
+  const attendanceRows = datedRows.filter((row) => !isRilAbsenceRow(row));
   return {
-    totalHours: datedRows.reduce((sum, row) => sum + (Number(row.hoursDecimal) || 0), 0),
-    totalPicap: datedRows.reduce((sum, row) => sum + (Number(row.picap) || 0), 0),
-    workedDays: datedRows.filter((row) => row.worked && isRequiredRilWorkday(row)).length,
+    totalHours: attendanceRows.reduce((sum, row) => sum + (Number(row.hoursDecimal) || 0), 0),
+    totalPicap: attendanceRows.reduce((sum, row) => sum + (Number(row.picap) || 0), 0),
+    workedDays: attendanceRows.filter((row) => row.worked && isRequiredRilWorkday(row)).length,
     workdays: datedRows.filter(isRequiredRilWorkday).length,
     holidayWeekdays: datedRows.filter((row) => row.isHoliday).length,
   };

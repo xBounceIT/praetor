@@ -34,6 +34,7 @@ import {
   getCurrentRilMonthKey,
   getRilMonthBounds,
   isRequiredRilWorkday,
+  isRilAbsenceRow,
   normalizeRilNoteOptions,
   normalizeRilTransferOptions,
   type RilRow,
@@ -246,6 +247,18 @@ const RilView: React.FC<RilViewProps> = ({
           if (row.day !== day || !canEditRilRow(row)) return row;
 
           const nextRow = { ...row, [field]: value };
+          if (field === 'notes' && isRilAbsenceRow(nextRow)) {
+            return {
+              ...nextRow,
+              entrance: '',
+              exit: '',
+              hours: '',
+              hoursDecimal: 0,
+              picap: 0,
+              transfer: '',
+              worked: false,
+            };
+          }
           if (field !== 'entrance' && field !== 'exit') return nextRow;
 
           const hoursDecimal = calculateRilWorkedHoursFromTimes(
@@ -273,7 +286,8 @@ const RilView: React.FC<RilViewProps> = ({
 
   const handleExport = async () => {
     const validRows = rows.filter(isRequiredRilWorkday);
-    const missingTimeDays = validRows
+    const attendanceRows = validRows.filter((row) => !isRilAbsenceRow(row));
+    const missingTimeDays = attendanceRows
       .filter((row) => !row.entrance.trim() || !row.exit.trim())
       .map((row) => String(row.day));
     if (missingTimeDays.length > 0) {
@@ -281,7 +295,7 @@ const RilView: React.FC<RilViewProps> = ({
       return;
     }
 
-    const missingTransferDays = validRows
+    const missingTransferDays = attendanceRows
       .filter((row) => !row.transfer.trim())
       .map((row) => String(row.day));
     if (missingTransferDays.length > 0) {

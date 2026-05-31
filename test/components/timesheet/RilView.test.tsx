@@ -411,6 +411,42 @@ describe('<RilView />', () => {
     expect(downloadRilWorkbookMock).not.toHaveBeenCalled();
   });
 
+  test('allows absence-note weekdays to export without times or transfer', async () => {
+    api.entries.listPage.mockResolvedValue({
+      entries: entriesForAllMay2026ValidWeekdays(),
+      nextCursor: null,
+    });
+
+    renderRilView();
+
+    const notesSelect = await screen.findByLabelText('ril.columns.notes 4');
+    fireEvent.click(notesSelect);
+    fireEvent.click(screen.getByRole('option', { name: 'P - Ferie' }));
+
+    expect(screen.getByLabelText('ril.columns.entrance 4')).toHaveValue('');
+    expect(screen.getByLabelText('ril.columns.exit 4')).toHaveValue('');
+    expect(screen.getByLabelText('ril.columns.hours 4')).toHaveTextContent('-');
+    expect(screen.getByLabelText('ril.columns.picap 4')).toHaveTextContent('-');
+    expect(screen.getByLabelText('ril.columns.transfer 4')).toHaveTextContent('-');
+
+    fireEvent.click(screen.getByRole('button', { name: /ril.exportExcel/ }));
+
+    await waitFor(() => expect(downloadRilWorkbookMock).toHaveBeenCalled());
+    const absenceRow = downloadRilWorkbookMock.mock.calls
+      .at(-1)?.[0]
+      .rows.find((row) => row.day === 4);
+    expect(absenceRow).toMatchObject({
+      entrance: '',
+      exit: '',
+      hours: '',
+      hoursDecimal: 0,
+      picap: 0,
+      notes: 'P',
+      transfer: '',
+      worked: false,
+    });
+  });
+
   test('requires transfer values on every valid day before export', async () => {
     api.entries.listPage.mockResolvedValue({ entries: [], nextCursor: null });
 

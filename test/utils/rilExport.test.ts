@@ -103,4 +103,44 @@ describe('RIL Excel export', () => {
     expect(worksheet?.getCell('D40').value).toBe(160);
     expect(worksheet?.getCell('E40').value).toBe(160);
   });
+
+  test('exports absence-note rows without worked time', () => {
+    const rows = generateRilRows({
+      year: 2026,
+      month: 5,
+      entries: [],
+    }).map((row) =>
+      row.day === 4
+        ? {
+            ...row,
+            notes: 'P',
+            transfer: 'Remote working',
+          }
+        : row,
+    );
+
+    const workbook = buildRilWorkbook({
+      rows,
+      employeeName: 'User Name',
+      companyName: 'ACME',
+      year: 2026,
+      month: 5,
+      defaultStartTime: '09:00',
+      defaultExitTime: '18:00',
+      lunchBreakMinutes: 60,
+    });
+    const worksheet = workbook.getWorksheet('Prospetto Presenze');
+
+    expect(worksheet?.getCell('B12').value).toBe('');
+    expect(worksheet?.getCell('C12').value).toBe('');
+    expect(worksheet?.getCell('D12').value).toBe('');
+    expect(worksheet?.getCell('E12').value).toBe('');
+    expect(worksheet?.getCell('G12').value).toBe('P');
+    expect(worksheet?.getCell('H12').value).toBe('');
+    expect(worksheet?.getCell('S12').value).toBe(0);
+    expect(worksheet?.getCell('V12').value).toBe(1);
+    expect(worksheet?.getCell('D40').value).toBe(152);
+    expect(worksheet?.getCell('E40').value).toBe(152);
+    expect(worksheet?.getCell('B45').value).toBe(19);
+  });
 });

@@ -5,6 +5,7 @@ import {
   calculateRilTotals,
   createEmptyRilRow,
   isRequiredRilWorkday,
+  isRilAbsenceRow,
   makeRilDownloadFilename,
   RIL_VISIBLE_HEADERS,
 } from './ril';
@@ -158,24 +159,25 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
     const rowNumber = FIRST_DAY_ROW + index;
     const worksheetRow = worksheet.getRow(rowNumber);
     const isRequiredWorkday = isRequiredRilWorkday(rilRow);
-    const extraHours = Math.max(rilRow.hoursDecimal - 8, 0);
+    const isAbsenceRow = isRilAbsenceRow(rilRow);
+    const hoursDecimal = isAbsenceRow ? 0 : rilRow.hoursDecimal;
+    const worked = !isAbsenceRow && rilRow.worked;
+    const extraHours = Math.max(hoursDecimal - 8, 0);
     const shortfallHours =
-      isRequiredWorkday && rilRow.hoursDecimal > 0 && rilRow.hoursDecimal < 8
-        ? 8 - rilRow.hoursDecimal
-        : 0;
+      isRequiredWorkday && hoursDecimal > 0 && hoursDecimal < 8 ? 8 - hoursDecimal : 0;
     const [extraWholeHours, extraMinutes] = splitDecimalHours(extraHours);
     const [shortfallWholeHours, shortfallMinutes] = splitDecimalHours(shortfallHours);
-    const [workedWholeHours, workedMinutes] = splitDecimalHours(rilRow.hoursDecimal);
+    const [workedWholeHours, workedMinutes] = splitDecimalHours(hoursDecimal);
     const normalizedCode = rilRow.code.trim().toUpperCase();
     const values = [
       rilRow.date ? rilRow.day : '',
-      rilRow.entrance,
-      rilRow.exit,
-      rilRow.hours,
-      rilRow.picap || '',
+      isAbsenceRow ? '' : rilRow.entrance,
+      isAbsenceRow ? '' : rilRow.exit,
+      isAbsenceRow ? '' : rilRow.hours,
+      isAbsenceRow ? '' : rilRow.picap || '',
       rilRow.phoneAvailability,
       rilRow.notes,
-      rilRow.transfer,
+      isAbsenceRow ? '' : rilRow.transfer,
       rilRow.code,
       rilRow.order,
       extraHours,
@@ -186,7 +188,7 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
       shortfallMinutes,
       workedWholeHours,
       workedMinutes,
-      rilRow.worked && isRequiredWorkday ? 1 : 0,
+      worked && isRequiredWorkday ? 1 : 0,
       isRequiredWorkday ? 1 : 0,
       NOTE_HELPER_PATTERNS.sick.test(rilRow.notes) ? 1 : 0,
       NOTE_HELPER_PATTERNS.permit.test(rilRow.notes) ? 1 : 0,

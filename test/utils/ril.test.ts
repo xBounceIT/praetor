@@ -8,6 +8,7 @@ import {
   formatRilLunchWindow,
   generateRilRows,
   getRilMonthBounds,
+  isRilAbsenceRow,
   makeRilDownloadFilename,
   normalizeRilNoteOptions,
   normalizeRilTransferOptions,
@@ -202,6 +203,25 @@ describe('RIL helpers', () => {
     });
     expect(getRilMonthBounds('2026-05').toDate).toBe('2026-05-31');
     expect(makeRilDownloadFilename(2026, 5, 'User Name')).toBe('RIL_2026_05_User_Name.xlsx');
+  });
+
+  test('excludes absence-note workdays from worked totals', () => {
+    const rows = generateRilRows({
+      year: 2026,
+      month: 5,
+      entries: [],
+    }).map((row) => (row.day === 4 ? { ...row, notes: 'P' } : row));
+
+    const absenceRow = rows.find((row) => row.day === 4);
+
+    expect(absenceRow).toBeDefined();
+    expect(absenceRow ? isRilAbsenceRow(absenceRow) : false).toBe(true);
+    expect(calculateRilTotals(rows)).toMatchObject({
+      totalHours: 152,
+      totalPicap: 152,
+      workedDays: 19,
+      workdays: 20,
+    });
   });
 
   test('ignores non-month placeholder rows in totals', () => {
