@@ -1580,6 +1580,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
       <StandardTable<User>
         title={t('hr:workforce.title')}
+        viewKey="admin.users"
         data={sortedUsers}
         columns={userColumns}
         defaultRowsPerPage={5}

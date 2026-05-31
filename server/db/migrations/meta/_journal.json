@@ -435,6 +435,13 @@
       "when": 1780230332141,
       "tag": "0061_add_ril_default_exit_time",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1780245338082,
+      "tag": "0062_add_saved_views_and_shares",
+      "breakpoints": true
     }
   ]
 }

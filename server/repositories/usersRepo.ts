@@ -495,6 +495,36 @@ export const findCoreById = async (id: string, exec: DbExecutor = db): Promise<U
   };
 };
 
+export type DirectoryUser = {
+  id: string;
+  name: string;
+  username: string;
+  avatarInitials: string;
+};
+
+// Minimal, feature-scoped user list for the saved-view share picker. Surfaced at
+// GET /api/views/directory so any authenticated user can pick share recipients without
+// loosening the permission-gated /api/users list. Excludes disabled accounts and returns
+// only the fields the picker renders (no PII beyond name/username/initials).
+export const listDirectory = async (exec: DbExecutor = db): Promise<DirectoryUser[]> => {
+  const rows = await exec
+    .select({
+      id: users.id,
+      name: users.name,
+      username: users.username,
+      avatarInitials: users.avatarInitials,
+    })
+    .from(users)
+    .where(sql`COALESCE(${users.isDisabled}, false) = false`)
+    .orderBy(users.name);
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    username: row.username,
+    avatarInitials: row.avatarInitials ?? '',
+  }));
+};
+
 export const existsByUsername = async (
   username: string,
   exec: DbExecutor = db,

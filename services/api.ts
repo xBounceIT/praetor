@@ -32,6 +32,17 @@ export { supplierQuotesApi } from './api/supplierQuotes';
 export { suppliersApi } from './api/suppliers';
 export { tasksApi } from './api/tasks';
 export { usersApi } from './api/users';
+export type {
+  CreateViewBody,
+  SavedViewAccess,
+  SavedViewDto,
+  SavedViewKind,
+  SavedViewPermission,
+  UpdateViewPatch,
+  ViewDirectoryUser,
+  ViewShare,
+} from './api/views';
+export { viewsApi } from './api/views';
 export { workUnitsApi } from './api/workUnits';
 
 import { aiApi } from './api/ai';
@@ -61,6 +72,7 @@ import { supplierQuotesApi } from './api/supplierQuotes';
 import { suppliersApi } from './api/suppliers';
 import { tasksApi } from './api/tasks';
 import { usersApi } from './api/users';
+import { viewsApi } from './api/views';
 import { workUnitsApi } from './api/workUnits';
 
 export default {
@@ -84,6 +96,7 @@ export default {
   supplierInvoices: supplierInvoicesApi,
   notifications: notificationsApi,
   workUnits: workUnitsApi,
+  views: viewsApi,
   settings: settingsApi,
   sso: ssoApi,
   ldap: ldapApi,

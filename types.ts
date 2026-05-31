@@ -911,6 +911,7 @@ export const AUDIT_ENTITY_TYPES = [
   'reports_ai_message',
   'reports_ai_session',
   'role',
+  'saved_view',
   'settings',
   'sso_provider',
   'supplier',
