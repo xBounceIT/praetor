@@ -11,6 +11,7 @@ import { createChildLogger, logger, loggerOptions, serializeError } from '../../
 //   `loggerOptions` against whatever NODE_ENV happened to be active during import.
 
 const isProduction = (process.env.NODE_ENV ?? 'development') === 'production';
+const isCi = ['1', 'true', 'yes', 'on'].includes((process.env.CI ?? '').trim().toLowerCase());
 
 describe('loggerOptions (snapshot of module-load env)', () => {
   test('level falls back to "info" when LOG_LEVEL is unset, otherwise reflects the env', () => {
@@ -51,7 +52,7 @@ describe('loggerOptions (snapshot of module-load env)', () => {
     const raw = process.env.LOG_PRETTY;
     let shouldBePretty: boolean;
     if (raw === undefined) {
-      shouldBePretty = !isProduction;
+      shouldBePretty = !isProduction && !isCi;
     } else {
       const normalized = raw.trim().toLowerCase();
       shouldBePretty =

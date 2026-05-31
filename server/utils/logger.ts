@@ -13,7 +13,8 @@ const parseBooleanEnv = (value: string | undefined, fallback: boolean): boolean 
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
 };
 
-const shouldUsePrettyLogs = parseBooleanEnv(process.env.LOG_PRETTY, !isProduction);
+const isCi = parseBooleanEnv(process.env.CI, false);
+const shouldUsePrettyLogs = parseBooleanEnv(process.env.LOG_PRETTY, !isProduction && !isCi);
 
 const baseLoggerOptions: LoggerOptions = {
   level: logLevel,
