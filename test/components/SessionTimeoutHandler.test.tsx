@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import { installI18nMock } from '../helpers/i18n';
 import { clearSpyStateAfterAll } from '../helpers/mockCleanup.ts';
@@ -102,6 +102,18 @@ describe('<SessionTimeoutHandler />', () => {
     await waitFor(() => {
       expect(screen.getByText('sessionTimeout.title')).toBeInTheDocument();
     });
+  });
+
+  test('focuses the stay-logged-in action when the warning appears', async () => {
+    render(<SessionTimeoutHandler onLogout={() => {}} warnAfterMs={60} logoutAfterMs={10_000} />);
+
+    const stayLoggedInButton = await screen.findByRole('button', {
+      name: 'sessionTimeout.stayLoggedIn',
+    });
+    const dialogButtons = within(screen.getByRole('dialog')).getAllByRole('button');
+
+    expect(dialogButtons[0]).toBe(stayLoggedInButton);
+    await waitFor(() => expect(stayLoggedInButton).toHaveFocus());
   });
 
   test('user activity resets the warning timer', async () => {
