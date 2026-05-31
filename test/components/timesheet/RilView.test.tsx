@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from 'bun:test';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { GeneralSettings, Project, TimeEntry, User } from '../../../types';
 import type { RilWorkbookInput } from '../../../utils/rilExport';
@@ -90,6 +90,7 @@ const mockProjectList = (value: Project[]) => {
 
 describe('<RilView />', () => {
   beforeEach(() => {
+    setSystemTime(new Date('2026-05-15T12:00:00Z'));
     api.entries.listPage.mockReset();
     api.projects.list.mockReset();
     mockProjectList(projects);
@@ -100,6 +101,7 @@ describe('<RilView />', () => {
 
   afterEach(() => {
     cleanup();
+    setSystemTime();
   });
 
   test('retrieves the selected month and renders translated labels', async () => {
