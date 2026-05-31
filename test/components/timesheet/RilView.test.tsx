@@ -67,6 +67,7 @@ const renderRilView = (settingsOverrides: Partial<GeneralSettings> = {}) =>
       settings={{
         rilCompanyName: 'ACME',
         rilDefaultStartTime: '09:00',
+        rilDefaultExitTime: '18:00',
         rilLunchBreakMinutes: 60,
         rilNoteOptions: [
           { value: 'P', label: 'Ferie' },
@@ -261,6 +262,16 @@ describe('<RilView />', () => {
     expect(screen.getByLabelText('ril.columns.transfer 4')).toHaveTextContent('Remoto configurato');
   });
 
+  test('uses RIL default exit time from general settings', async () => {
+    api.entries.listPage.mockResolvedValue({ entries: [], nextCursor: null });
+
+    renderRilView({ rilDefaultStartTime: '08:30', rilDefaultExitTime: '17:30' });
+
+    expect(await screen.findByLabelText('ril.columns.entrance 4')).toHaveValue('08:30');
+    expect(screen.getByLabelText('ril.columns.exit 4')).toHaveValue('17:30');
+    expect(screen.getByLabelText('ril.columns.hours 4')).toHaveTextContent('8:00');
+  });
+
   test('exports the current draft rows', async () => {
     api.entries.listPage.mockResolvedValue({
       entries: entriesForAllMay2026ValidWeekdays(),
@@ -282,6 +293,8 @@ describe('<RilView />', () => {
         companyName: 'ACME',
         year: 2026,
         month: 5,
+        defaultStartTime: '09:00',
+        defaultExitTime: '18:00',
       }),
     );
   });

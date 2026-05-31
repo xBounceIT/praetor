@@ -10,6 +10,7 @@ export interface RilGenerationOptions {
   entries: TimeEntry[];
   projects?: Project[];
   defaultStartTime?: string;
+  defaultExitTime?: string;
   lunchBreakMinutes?: number;
   locale?: RilLocale;
   noteOptions?: readonly RilNoteOption[];
@@ -84,8 +85,8 @@ export const DEFAULT_RIL_NOTE_OPTIONS: readonly RilNoteOption[] = [
 export const DEFAULT_RIL_TRANSFER_OPTIONS: readonly string[] = ['In sede', 'Telelavoro'] as const;
 
 const WEEKDAY_FORMATTER = new Intl.DateTimeFormat('it-IT', { weekday: 'short' });
-const RIL_FIXED_ENTRANCE = '09:00';
-const RIL_FIXED_EXIT = '18:00';
+export const DEFAULT_RIL_START_TIME = '09:00';
+export const DEFAULT_RIL_EXIT_TIME = '18:00';
 const DEFAULT_LUNCH_BREAK_MINUTES = 60;
 export const RIL_LUNCH_BREAK_START_MINUTES = 13 * 60;
 
@@ -256,6 +257,8 @@ export const generateRilRows = ({
   month,
   entries,
   projects = [],
+  defaultStartTime = DEFAULT_RIL_START_TIME,
+  defaultExitTime = DEFAULT_RIL_EXIT_TIME,
   lunchBreakMinutes = DEFAULT_LUNCH_BREAK_MINUTES,
   locale = 'en',
   noteOptions,
@@ -283,6 +286,10 @@ export const generateRilRows = ({
     normalizedTransferOptions[1] ??
     normalizedTransferOptions[0] ??
     RIL_LOCATION_LABELS[locale].remote;
+  const entranceValue = isValidRilStartTime(defaultStartTime)
+    ? defaultStartTime
+    : DEFAULT_RIL_START_TIME;
+  const exitValue = isValidRilStartTime(defaultExitTime) ? defaultExitTime : DEFAULT_RIL_EXIT_TIME;
 
   for (const entry of entries) {
     if (!entry.date.startsWith(monthPrefix)) continue;
@@ -303,7 +310,7 @@ export const generateRilRows = ({
     const isValidWorkday = isWorkday && !isHoliday;
     const dayEntries = entriesByDate.get(date) ?? [];
     const hoursDecimal = isValidWorkday
-      ? calculateRilWorkedHoursFromTimes(RIL_FIXED_ENTRANCE, RIL_FIXED_EXIT, lunchBreakMinutes)
+      ? calculateRilWorkedHoursFromTimes(entranceValue, exitValue, lunchBreakMinutes)
       : 0;
     const worked = hoursDecimal > 0;
     const uniqueProjects = new Set<string>();
@@ -319,8 +326,8 @@ export const generateRilRows = ({
       day,
       date,
       weekday: WEEKDAY_FORMATTER.format(dateObj),
-      entrance: isValidWorkday ? RIL_FIXED_ENTRANCE : '',
-      exit: isValidWorkday ? RIL_FIXED_EXIT : '',
+      entrance: isValidWorkday ? entranceValue : '',
+      exit: isValidWorkday ? exitValue : '',
       hours: formatRilHoursAsDuration(hoursDecimal),
       hoursDecimal,
       picap: worked ? roundRilPicapHours(hoursDecimal) : 0,

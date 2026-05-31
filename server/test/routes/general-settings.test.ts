@@ -90,6 +90,7 @@ const SETTINGS_WITH_KEYS = {
   defaultLocation: 'remote',
   rilCompanyName: 'ACME Consulting',
   rilDefaultStartTime: '08:30',
+  rilDefaultExitTime: '17:30',
   rilLunchBreakMinutes: 45,
   rilNoteOptions: [
     { value: 'P', label: 'Ferie' },
@@ -177,6 +178,7 @@ describe('GET /api/general-settings', () => {
     expect(body.allowWeekendSelection).toBe(true);
     expect(body.rilCompanyName).toBe('');
     expect(body.rilDefaultStartTime).toBe('09:00');
+    expect(body.rilDefaultExitTime).toBe('18:00');
     expect(body.rilLunchBreakMinutes).toBe(60);
     expect(body.rilNoteOptions).toEqual([
       { value: 'P', label: 'Ferie' },
@@ -229,6 +231,7 @@ describe('PUT /api/general-settings', () => {
       ...SETTINGS_WITH_KEYS,
       rilCompanyName: 'Example Spa',
       rilDefaultStartTime: '09:15',
+      rilDefaultExitTime: '17:45',
       rilLunchBreakMinutes: 30,
       rilNoteOptions: [{ value: 'HOL', label: 'Holiday' }],
       rilTransferOptions: ['Office', 'Remote'],
@@ -241,6 +244,7 @@ describe('PUT /api/general-settings', () => {
       payload: {
         rilCompanyName: 'Example Spa',
         rilDefaultStartTime: '09:15',
+        rilDefaultExitTime: '17:45',
         rilLunchBreakMinutes: 30,
         rilNoteOptions: [{ value: 'HOL', label: 'Holiday' }],
         rilTransferOptions: ['Office', 'Remote'],
@@ -252,6 +256,7 @@ describe('PUT /api/general-settings', () => {
       expect.objectContaining({
         rilCompanyName: 'Example Spa',
         rilDefaultStartTime: '09:15',
+        rilDefaultExitTime: '17:45',
         rilLunchBreakMinutes: 30,
         rilNoteOptions: [{ value: 'HOL', label: 'Holiday' }],
         rilTransferOptions: ['Office', 'Remote'],
@@ -260,6 +265,7 @@ describe('PUT /api/general-settings', () => {
     const body = JSON.parse(res.body);
     expect(body.rilCompanyName).toBe('Example Spa');
     expect(body.rilDefaultStartTime).toBe('09:15');
+    expect(body.rilDefaultExitTime).toBe('17:45');
     expect(body.rilLunchBreakMinutes).toBe(30);
     expect(body.rilNoteOptions).toEqual([{ value: 'HOL', label: 'Holiday' }]);
     expect(body.rilTransferOptions).toEqual(['Office', 'Remote']);
@@ -383,6 +389,19 @@ describe('PUT /api/general-settings', () => {
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/rilDefaultStartTime must be in HH:mm format/);
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 invalid RIL default exit time, repo not called', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { rilDefaultExitTime: '24:01' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/rilDefaultExitTime must be in HH:mm format/);
     expect(settingsUpdateMock).not.toHaveBeenCalled();
   });
 

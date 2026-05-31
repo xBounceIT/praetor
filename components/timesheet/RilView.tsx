@@ -26,6 +26,8 @@ import type { GeneralSettings, Project, TimeEntry, User } from '../../types';
 import {
   calculateRilTotals,
   calculateRilWorkedHoursFromTimes,
+  DEFAULT_RIL_EXIT_TIME,
+  DEFAULT_RIL_START_TIME,
   formatRilHoursAsDuration,
   formatRilLunchWindow,
   generateRilRows,
@@ -62,6 +64,7 @@ interface RilViewProps {
     GeneralSettings,
     | 'rilCompanyName'
     | 'rilDefaultStartTime'
+    | 'rilDefaultExitTime'
     | 'rilLunchBreakMinutes'
     | 'rilNoteOptions'
     | 'rilTransferOptions'
@@ -101,7 +104,8 @@ const RilView: React.FC<RilViewProps> = ({
   const selectedUser = availableUsers.find((user) => user.id === effectiveUserId) ?? currentUser;
   const monthBounds = useMemo(() => getRilMonthBounds(normalizeMonthKey(monthKey)), [monthKey]);
   const locale = getLocale(i18n.language);
-  const defaultStartTime = settings.rilDefaultStartTime || '09:00';
+  const defaultStartTime = settings.rilDefaultStartTime || DEFAULT_RIL_START_TIME;
+  const defaultExitTime = settings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME;
   const lunchBreakMinutes = settings.rilLunchBreakMinutes ?? 60;
   const selectedMonthValue = String(monthBounds.month).padStart(2, '0');
   const selectedYearValue = String(monthBounds.year);
@@ -162,6 +166,8 @@ const RilView: React.FC<RilViewProps> = ({
         month: monthBounds.month,
         entries,
         projects,
+        defaultStartTime,
+        defaultExitTime,
         lunchBreakMinutes,
         locale,
         noteOptions: normalizeRilNoteOptions(settings.rilNoteOptions),
@@ -169,6 +175,8 @@ const RilView: React.FC<RilViewProps> = ({
       }),
     [
       locale,
+      defaultStartTime,
+      defaultExitTime,
       lunchBreakMinutes,
       monthBounds.month,
       monthBounds.year,
@@ -279,6 +287,7 @@ const RilView: React.FC<RilViewProps> = ({
         year: monthBounds.year,
         month: monthBounds.month,
         defaultStartTime,
+        defaultExitTime,
         lunchBreakMinutes,
       });
     } catch (err) {

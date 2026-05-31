@@ -10,7 +10,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import api from '../../services/api';
 import type { GeneralSettings as IGeneralSettings, TimeEntryLocation } from '../../types';
-import { normalizeRilNoteOptions, normalizeRilTransferOptions } from '../../utils/ril';
+import {
+  DEFAULT_RIL_EXIT_TIME,
+  DEFAULT_RIL_START_TIME,
+  normalizeRilNoteOptions,
+  normalizeRilTransferOptions,
+} from '../../utils/ril';
 import SelectControl, { type Option } from '../shared/SelectControl';
 import Toggle from '../shared/Toggle';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
@@ -134,7 +139,10 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
   );
   const [rilCompanyName, setRilCompanyName] = useState(settings.rilCompanyName || '');
   const [rilDefaultStartTime, setRilDefaultStartTime] = useState(
-    settings.rilDefaultStartTime || '09:00',
+    settings.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
+  );
+  const [rilDefaultExitTime, setRilDefaultExitTime] = useState(
+    settings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,
   );
   const [rilLunchBreakMinutes, setRilLunchBreakMinutes] = useState(
     settings.rilLunchBreakMinutes ?? 60,
@@ -180,7 +188,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     setAllowWeekendSelection(settings.allowWeekendSelection ?? true);
     setDefaultLocation(settings.defaultLocation || 'remote');
     setRilCompanyName(settings.rilCompanyName || '');
-    setRilDefaultStartTime(settings.rilDefaultStartTime || '09:00');
+    setRilDefaultStartTime(settings.rilDefaultStartTime || DEFAULT_RIL_START_TIME);
+    setRilDefaultExitTime(settings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME);
     setRilLunchBreakMinutes(settings.rilLunchBreakMinutes ?? 60);
     setRilNoteOptionsText(serializeRilNoteOptions(settings.rilNoteOptions));
     setRilTransferOptionsText(serializeRilTransferOptions(settings.rilTransferOptions));
@@ -246,6 +255,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
         defaultLocation,
         rilCompanyName,
         rilDefaultStartTime,
+        rilDefaultExitTime,
         rilLunchBreakMinutes,
         rilNoteOptions: parseRilNoteOptionsText(rilNoteOptionsText),
         rilTransferOptions: parseRilTransferOptionsText(rilTransferOptionsText),
@@ -273,7 +283,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     allowWeekendSelection !== (settings.allowWeekendSelection ?? true) ||
     defaultLocation !== (settings.defaultLocation || 'remote') ||
     rilCompanyName !== (settings.rilCompanyName || '') ||
-    rilDefaultStartTime !== (settings.rilDefaultStartTime || '09:00') ||
+    rilDefaultStartTime !== (settings.rilDefaultStartTime || DEFAULT_RIL_START_TIME) ||
+    rilDefaultExitTime !== (settings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME) ||
     rilLunchBreakMinutes !== (settings.rilLunchBreakMinutes ?? 60) ||
     rilNoteOptionsText !== serializeRilNoteOptions(settings.rilNoteOptions) ||
     rilTransferOptionsText !== serializeRilTransferOptions(settings.rilTransferOptions) ||
@@ -455,7 +466,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                     {t('general.rilSettingsDescription')}
                   </p>
                 </div>
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
                   <Field>
                     <FieldLabel htmlFor="general-ril-company-name">
                       {t('general.rilCompanyNameLabel')}
@@ -480,6 +491,21 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                     />
                     <FieldDescription>
                       {t('general.rilDefaultStartTimeDescription')}
+                    </FieldDescription>
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="general-ril-default-exit-time">
+                      {t('general.rilDefaultExitTimeLabel')}
+                    </FieldLabel>
+                    <Input
+                      id="general-ril-default-exit-time"
+                      type="time"
+                      value={rilDefaultExitTime}
+                      onChange={(event) => setRilDefaultExitTime(event.target.value)}
+                    />
+                    <FieldDescription>
+                      {t('general.rilDefaultExitTimeDescription')}
                     </FieldDescription>
                   </Field>
 

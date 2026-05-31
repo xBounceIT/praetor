@@ -67,6 +67,7 @@ const generalSettingsSchema = {
     defaultLocation: { type: 'string' },
     rilCompanyName: { type: 'string', maxLength: 255 },
     rilDefaultStartTime: { type: 'string' },
+    rilDefaultExitTime: { type: 'string' },
     rilLunchBreakMinutes: { type: 'integer' },
     rilNoteOptions: rilNoteOptionsSchema,
     rilTransferOptions: rilTransferOptionsSchema,
@@ -86,6 +87,7 @@ const generalSettingsSchema = {
     'defaultLocation',
     'rilCompanyName',
     'rilDefaultStartTime',
+    'rilDefaultExitTime',
     'rilLunchBreakMinutes',
     'rilNoteOptions',
     'rilTransferOptions',
@@ -109,6 +111,7 @@ const generalSettingsUpdateBodySchema = {
     defaultLocation: { type: 'string' },
     rilCompanyName: { type: 'string', maxLength: 255 },
     rilDefaultStartTime: { type: 'string' },
+    rilDefaultExitTime: { type: 'string' },
     rilLunchBreakMinutes: { type: 'integer' },
     rilNoteOptions: rilNoteOptionsSchema,
     rilTransferOptions: rilTransferOptionsSchema,
@@ -130,6 +133,7 @@ const DEFAULT_SETTINGS: generalSettingsRepo.GeneralSettings = {
   defaultLocation: 'remote',
   rilCompanyName: '',
   rilDefaultStartTime: '09:00',
+  rilDefaultExitTime: '18:00',
   rilLunchBreakMinutes: 60,
   rilNoteOptions: DEFAULT_RIL_NOTE_OPTIONS.map((option) => ({ ...option })),
   rilTransferOptions: [...DEFAULT_RIL_TRANSFER_OPTIONS],
@@ -305,6 +309,7 @@ const toResponse = (settings: generalSettingsRepo.GeneralSettings, revealApiKeys
   defaultLocation: settings.defaultLocation || 'remote',
   rilCompanyName: settings.rilCompanyName ?? '',
   rilDefaultStartTime: settings.rilDefaultStartTime || '09:00',
+  rilDefaultExitTime: settings.rilDefaultExitTime || '18:00',
   rilLunchBreakMinutes: settings.rilLunchBreakMinutes ?? 60,
   rilNoteOptions: normalizeRilNoteOptions(settings.rilNoteOptions),
   rilTransferOptions: normalizeRilTransferOptions(settings.rilTransferOptions),
@@ -367,6 +372,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         defaultLocation?: string;
         rilCompanyName?: string;
         rilDefaultStartTime?: string;
+        rilDefaultExitTime?: string;
         rilLunchBreakMinutes?: number;
         rilNoteOptions?: RilNoteOption[];
         rilTransferOptions?: string[];
@@ -383,6 +389,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         defaultLocation,
         rilCompanyName,
         rilDefaultStartTime,
+        rilDefaultExitTime,
         rilLunchBreakMinutes,
         rilNoteOptions,
         rilTransferOptions,
@@ -415,6 +422,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
       if (!rilDefaultStartTimeResult.ok) {
         return badRequest(reply, rilDefaultStartTimeResult.message);
+      }
+
+      const rilDefaultExitTimeResult = validateOptionalTimeOfDay(
+        rilDefaultExitTime,
+        'rilDefaultExitTime',
+      );
+      if (!rilDefaultExitTimeResult.ok) {
+        return badRequest(reply, rilDefaultExitTimeResult.message);
       }
 
       const rilLunchBreakMinutesResult = validateOptionalLunchBreakMinutes(rilLunchBreakMinutes);
@@ -477,6 +492,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         defaultLocation: defaultLocationResult.value,
         rilCompanyName: rilCompanyNameResult.value,
         rilDefaultStartTime: rilDefaultStartTimeResult.value,
+        rilDefaultExitTime: rilDefaultExitTimeResult.value,
         rilLunchBreakMinutes: rilLunchBreakMinutesResult.value,
         rilNoteOptions: rilNoteOptionsResult.value,
         rilTransferOptions: rilTransferOptionsResult.value,

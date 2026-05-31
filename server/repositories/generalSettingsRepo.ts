@@ -18,6 +18,7 @@ export type GeneralSettings = {
   defaultLocation: string | null;
   rilCompanyName: string | null;
   rilDefaultStartTime: string | null;
+  rilDefaultExitTime: string | null;
   rilLunchBreakMinutes: number | null;
   rilNoteOptions: StoredRilNoteOption[] | null;
   rilTransferOptions: string[] | null;
@@ -38,6 +39,7 @@ export type GeneralSettingsPatch = {
   defaultLocation?: string | null;
   rilCompanyName?: string | null;
   rilDefaultStartTime?: string | null;
+  rilDefaultExitTime?: string | null;
   rilLunchBreakMinutes?: number | null;
   rilNoteOptions?: StoredRilNoteOption[] | null;
   rilTransferOptions?: string[] | null;
@@ -58,6 +60,7 @@ const GENERAL_SETTINGS_PROJECTION = {
   defaultLocation: generalSettings.defaultLocation,
   rilCompanyName: generalSettings.rilCompanyName,
   rilDefaultStartTime: generalSettings.rilDefaultStartTime,
+  rilDefaultExitTime: generalSettings.rilDefaultExitTime,
   rilLunchBreakMinutes: generalSettings.rilLunchBreakMinutes,
   rilNoteOptions: generalSettings.rilNoteOptions,
   rilTransferOptions: generalSettings.rilTransferOptions,
@@ -78,6 +81,7 @@ type GeneralSettingsRow = {
   defaultLocation: string | null;
   rilCompanyName: string | null;
   rilDefaultStartTime: string | null;
+  rilDefaultExitTime: string | null;
   rilLunchBreakMinutes: number | null;
   rilNoteOptions: StoredRilNoteOption[] | null;
   rilTransferOptions: string[] | null;
@@ -118,6 +122,7 @@ const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
   defaultLocation: row.defaultLocation,
   rilCompanyName: row.rilCompanyName,
   rilDefaultStartTime: row.rilDefaultStartTime,
+  rilDefaultExitTime: row.rilDefaultExitTime,
   rilLunchBreakMinutes: row.rilLunchBreakMinutes,
   rilNoteOptions: row.rilNoteOptions,
   rilTransferOptions: row.rilTransferOptions,
@@ -160,6 +165,7 @@ export const update = async (
       defaultLocation: sql`COALESCE(${patch.defaultLocation ?? null}, ${generalSettings.defaultLocation})`,
       rilCompanyName: sql`COALESCE(${patch.rilCompanyName ?? null}, ${generalSettings.rilCompanyName})`,
       rilDefaultStartTime: sql`COALESCE(${patch.rilDefaultStartTime ?? null}, ${generalSettings.rilDefaultStartTime})`,
+      rilDefaultExitTime: sql`COALESCE(${patch.rilDefaultExitTime ?? null}, ${generalSettings.rilDefaultExitTime})`,
       rilLunchBreakMinutes: sql`COALESCE(${patch.rilLunchBreakMinutes ?? null}, ${generalSettings.rilLunchBreakMinutes})`,
       rilNoteOptions: sql`COALESCE(${rilNoteOptionsParam}::jsonb, ${generalSettings.rilNoteOptions})`,
       rilTransferOptions: sql`COALESCE(${rilTransferOptionsParam}::jsonb, ${generalSettings.rilTransferOptions})`,

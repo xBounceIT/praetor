@@ -428,6 +428,13 @@
       "when": 1780229225602,
       "tag": "0060_add_ril_option_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1780230332141,
+      "tag": "0061_add_ril_default_exit_time",
+      "breakpoints": true
     }
   ]
 }

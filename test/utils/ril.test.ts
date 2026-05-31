@@ -100,17 +100,19 @@ describe('RIL helpers', () => {
     expect(normalizeRilTransferOptions(undefined)).toEqual([...DEFAULT_RIL_TRANSFER_OPTIONS]);
   });
 
-  test('uses fixed start/end values on every valid weekday and derives hours/PICAP from them', () => {
+  test('uses configured start/end values on every valid weekday and derives hours/PICAP from them', () => {
     const rows = generateRilRows({
       year: 2026,
       month: 5,
+      defaultStartTime: '08:30',
+      defaultExitTime: '17:30',
       lunchBreakMinutes: 60,
       entries: [],
     });
     const row = rows.find((candidate) => candidate.day === 4);
 
-    expect(row?.entrance).toBe('09:00');
-    expect(row?.exit).toBe('18:00');
+    expect(row?.entrance).toBe('08:30');
+    expect(row?.exit).toBe('17:30');
     expect(row?.hours).toBe('8:00');
     expect(row?.picap).toBe(8);
     expect(row?.worked).toBe(true);

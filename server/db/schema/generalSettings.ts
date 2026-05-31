@@ -40,6 +40,7 @@ export const generalSettings = pgTable(
     defaultLocation: varchar('default_location', { length: 20 }).default('remote'),
     rilCompanyName: varchar('ril_company_name', { length: 255 }).default(''),
     rilDefaultStartTime: varchar('ril_default_start_time', { length: 5 }).default('09:00'),
+    rilDefaultExitTime: varchar('ril_default_exit_time', { length: 5 }).default('18:00'),
     rilLunchBreakMinutes: integer('ril_lunch_break_minutes').default(60),
     rilNoteOptions: jsonb('ril_note_options')
       .$type<StoredRilNoteOption[]>()
@@ -64,6 +65,10 @@ export const generalSettings = pgTable(
     check(
       'general_settings_ril_default_start_time_check',
       sql`${table.rilDefaultStartTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'`,
+    ),
+    check(
+      'general_settings_ril_default_exit_time_check',
+      sql`${table.rilDefaultExitTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'`,
     ),
     check(
       'general_settings_ril_lunch_break_minutes_check',

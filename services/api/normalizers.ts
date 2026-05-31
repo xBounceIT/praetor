@@ -26,7 +26,12 @@ import type {
   UserAuthMethod,
 } from '../../types';
 import { normalizeDateOnlyString } from '../../utils/date';
-import { normalizeRilNoteOptions, normalizeRilTransferOptions } from '../../utils/ril';
+import {
+  DEFAULT_RIL_EXIT_TIME,
+  DEFAULT_RIL_START_TIME,
+  normalizeRilNoteOptions,
+  normalizeRilTransferOptions,
+} from '../../utils/ril';
 
 const nullableNumber = (value: unknown, fallback: number | null = null): number | null =>
   value === undefined || value === null ? fallback : Number(value);
@@ -300,7 +305,8 @@ export const normalizeGeneralSettings = (s: GeneralSettings): GeneralSettings =>
   ...s,
   dailyLimit: Number(s.dailyLimit || 0),
   rilCompanyName: s.rilCompanyName ?? '',
-  rilDefaultStartTime: s.rilDefaultStartTime || '09:00',
+  rilDefaultStartTime: s.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
+  rilDefaultExitTime: s.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,
   rilLunchBreakMinutes: Number(s.rilLunchBreakMinutes ?? 60),
   rilNoteOptions: normalizeRilNoteOptions(s.rilNoteOptions),
   rilTransferOptions: normalizeRilTransferOptions(s.rilTransferOptions),

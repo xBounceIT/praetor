@@ -136,7 +136,12 @@ import {
   type ProgrammaticHashTracker,
 } from './utils/programmaticHashTracker';
 import { retryTransient } from './utils/retry';
-import { normalizeRilNoteOptions, normalizeRilTransferOptions } from './utils/ril';
+import {
+  DEFAULT_RIL_EXIT_TIME,
+  DEFAULT_RIL_START_TIME,
+  normalizeRilNoteOptions,
+  normalizeRilTransferOptions,
+} from './utils/ril';
 import { applyTheme, getTheme } from './utils/theme';
 import { toastError } from './utils/toast';
 import {
@@ -1301,7 +1306,8 @@ const AppContent: React.FC = () => {
         openrouterModelId: genSettings.openrouterModelId || '',
         defaultLocation: genSettings.defaultLocation || 'remote',
         rilCompanyName: genSettings.rilCompanyName || '',
-        rilDefaultStartTime: genSettings.rilDefaultStartTime || '09:00',
+        rilDefaultStartTime: genSettings.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
+        rilDefaultExitTime: genSettings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,
         rilLunchBreakMinutes: genSettings.rilLunchBreakMinutes ?? 60,
         rilNoteOptions: normalizeRilNoteOptions(genSettings.rilNoteOptions),
         rilTransferOptions: normalizeRilTransferOptions(genSettings.rilTransferOptions),
@@ -2312,7 +2318,8 @@ const AppContent: React.FC = () => {
         openrouterModelId: updated.openrouterModelId || '',
         defaultLocation: updated.defaultLocation || 'remote',
         rilCompanyName: updated.rilCompanyName || '',
-        rilDefaultStartTime: updated.rilDefaultStartTime || '09:00',
+        rilDefaultStartTime: updated.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
+        rilDefaultExitTime: updated.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,
         rilLunchBreakMinutes: updated.rilLunchBreakMinutes ?? 60,
         rilNoteOptions: normalizeRilNoteOptions(updated.rilNoteOptions),
         rilTransferOptions: normalizeRilTransferOptions(updated.rilTransferOptions),

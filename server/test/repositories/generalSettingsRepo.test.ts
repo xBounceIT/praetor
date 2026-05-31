@@ -33,6 +33,7 @@ const PROJECTION_KEYS = [
   'defaultLocation',
   'rilCompanyName',
   'rilDefaultStartTime',
+  'rilDefaultExitTime',
   'rilLunchBreakMinutes',
   'rilNoteOptions',
   'rilTransferOptions',
@@ -57,6 +58,7 @@ const baseFields: RowFields = {
   defaultLocation: null,
   rilCompanyName: '',
   rilDefaultStartTime: '09:00',
+  rilDefaultExitTime: '18:00',
   rilLunchBreakMinutes: 60,
   rilNoteOptions: [
     { value: 'P', label: 'Ferie' },
@@ -94,6 +96,7 @@ describe('get', () => {
           defaultLocation: 'office',
           rilCompanyName: 'ACME',
           rilDefaultStartTime: '08:30',
+          rilDefaultExitTime: '17:30',
           rilLunchBreakMinutes: 45,
           rilNoteOptions: [{ value: 'HOL', label: 'Holiday' }],
           rilTransferOptions: ['Office', 'Remote'],
@@ -106,6 +109,7 @@ describe('get', () => {
     expect(result?.defaultLocation).toBe('office');
     expect(result?.rilCompanyName).toBe('ACME');
     expect(result?.rilDefaultStartTime).toBe('08:30');
+    expect(result?.rilDefaultExitTime).toBe('17:30');
     expect(result?.rilLunchBreakMinutes).toBe(45);
     expect(result?.rilNoteOptions).toEqual([{ value: 'HOL', label: 'Holiday' }]);
     expect(result?.rilTransferOptions).toEqual(['Office', 'Remote']);
@@ -164,6 +168,7 @@ describe('update', () => {
         defaultLocation: 'home',
         rilCompanyName: 'ACME',
         rilDefaultStartTime: '08:30',
+        rilDefaultExitTime: '17:30',
         rilLunchBreakMinutes: 45,
         rilNoteOptions: [{ value: 'HOL', label: 'Holiday' }],
         rilTransferOptions: ['Office', 'Remote'],
@@ -184,18 +189,19 @@ describe('update', () => {
     expect(params).toContain('home');
     expect(params).toContain('ACME');
     expect(params).toContain('08:30');
+    expect(params).toContain('17:30');
     expect(params).toContain(45);
     const noteOptionsJson = JSON.stringify([{ value: 'HOL', label: 'Holiday' }]);
     const transferOptionsJson = JSON.stringify(['Office', 'Remote']);
     expect(params).toContain(noteOptionsJson);
     expect(params).toContain(transferOptionsJson);
     // Tighter check on top of the .toContain() pattern from the canonical ldap/email tests:
-    // since the SET clause emits its 17 COALESCE pairs in projection-declaration order and
+    // since the SET clause emits its 18 COALESCE pairs in projection-declaration order and
     // each pair binds exactly one patch-value param (the column ref renders as a SQL
-    // identifier, not a parameter), the first 17 params must match PROJECTION_KEYS order.
+    // identifier, not a parameter), the first 18 params must match PROJECTION_KEYS order.
     // Catches column→param wiring bugs where two same-typed booleans (e.g.,
     // treatSaturdayAsHoliday vs allowWeekendSelection) get swapped.
-    expect(params.slice(0, 17)).toEqual([
+    expect(params.slice(0, 18)).toEqual([
       'USD',
       9,
       'Sunday',
@@ -210,6 +216,7 @@ describe('update', () => {
       'home',
       'ACME',
       '08:30',
+      '17:30',
       45,
       noteOptionsJson,
       transferOptionsJson,
@@ -219,11 +226,11 @@ describe('update', () => {
   test('binds NULL for omitted patch fields (COALESCE preserves existing column)', async () => {
     exec.enqueue({ rows: [buildRow()] });
     await generalSettingsRepo.update({ currency: 'USD' }, testDb);
-    // The SET clause always emits 17 COALESCE pairs (one per patchable column); 16 of those
+    // The SET clause always emits 18 COALESCE pairs (one per patchable column); 17 of those
     // patch-value params are null when only `currency` is provided. The UPDATE also binds the
-    // singleton WHERE param (1), so we expect >=16 nulls in the param list.
+    // singleton WHERE param (1), so we expect >=17 nulls in the param list.
     const nullCount = exec.calls[0].params.filter((p) => p === null).length;
-    expect(nullCount).toBeGreaterThanOrEqual(16);
+    expect(nullCount).toBeGreaterThanOrEqual(17);
   });
 
   test('targets the singleton row via WHERE id = 1', async () => {

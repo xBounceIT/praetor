@@ -138,6 +138,7 @@ export interface GeneralSettings {
   defaultLocation?: TimeEntryLocation;
   rilCompanyName?: string;
   rilDefaultStartTime?: string;
+  rilDefaultExitTime?: string;
   rilLunchBreakMinutes?: number;
   rilNoteOptions?: RilNoteOption[];
   rilTransferOptions?: string[];

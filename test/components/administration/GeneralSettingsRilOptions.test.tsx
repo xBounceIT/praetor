@@ -19,6 +19,7 @@ const settings: IGeneralSettings = {
   defaultLocation: 'remote',
   rilCompanyName: '',
   rilDefaultStartTime: '09:00',
+  rilDefaultExitTime: '18:00',
   rilLunchBreakMinutes: 60,
   rilNoteOptions: [
     { value: 'P', label: 'Ferie' },
@@ -40,6 +41,9 @@ describe('<GeneralSettings /> RIL option settings', () => {
     fireEvent.change(screen.getByLabelText('general.rilNoteOptionsLabel'), {
       target: { value: 'HOL | Holiday\nP | Permit' },
     });
+    fireEvent.change(screen.getByLabelText('general.rilDefaultExitTimeLabel'), {
+      target: { value: '17:30' },
+    });
     fireEvent.change(screen.getByLabelText('general.rilTransferOptionsLabel'), {
       target: { value: 'Office\nRemote' },
     });
@@ -52,6 +56,7 @@ describe('<GeneralSettings /> RIL option settings', () => {
           { value: 'HOL', label: 'Holiday' },
           { value: 'P', label: 'Permit' },
         ],
+        rilDefaultExitTime: '17:30',
         rilTransferOptions: ['Office', 'Remote'],
       }),
     );

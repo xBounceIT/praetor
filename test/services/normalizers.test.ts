@@ -256,6 +256,7 @@ const baseGeneralSettings: GeneralSettings = {
   allowWeekendSelection: false,
   rilCompanyName: '',
   rilDefaultStartTime: '09:00',
+  rilDefaultExitTime: '18:00',
   rilLunchBreakMinutes: 60,
   rilNoteOptions: [
     { value: 'P', label: 'Ferie' },
@@ -794,6 +795,7 @@ describe('normalizeGeneralSettings', () => {
     const settings = make<GeneralSettings>(baseGeneralSettings, {
       rilCompanyName: undefined,
       rilDefaultStartTime: '',
+      rilDefaultExitTime: '',
       rilLunchBreakMinutes: undefined,
       rilNoteOptions: undefined,
       rilTransferOptions: undefined,
@@ -801,6 +803,7 @@ describe('normalizeGeneralSettings', () => {
     expect(normalizeGeneralSettings(settings)).toMatchObject({
       rilCompanyName: '',
       rilDefaultStartTime: '09:00',
+      rilDefaultExitTime: '18:00',
       rilLunchBreakMinutes: 60,
       rilNoteOptions: [
         { value: 'P', label: 'Ferie' },

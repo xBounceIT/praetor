@@ -16,6 +16,7 @@ export interface RilWorkbookInput {
   year: number;
   month: number;
   defaultStartTime: string;
+  defaultExitTime: string;
   lunchBreakMinutes: number;
 }
 
@@ -132,7 +133,8 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
   setMetadataRow(worksheet, 3, 'Azienda', input.companyName);
   setMetadataRow(worksheet, 4, 'Mese', formatMonthLabel(input.year, input.month));
   setMetadataRow(worksheet, 5, 'Entrata predefinita', input.defaultStartTime);
-  setMetadataRow(worksheet, 6, 'Pausa pranzo', `${input.lunchBreakMinutes} min`);
+  setMetadataRow(worksheet, 6, 'Uscita predefinita', input.defaultExitTime);
+  setMetadataRow(worksheet, 7, 'Pausa pranzo', `${input.lunchBreakMinutes} min`);
 
   const headerRow = worksheet.getRow(8);
   RIL_VISIBLE_HEADERS.forEach((header, index) => {

@@ -33,6 +33,7 @@ describe('RIL Excel export', () => {
       year: 2026,
       month: 5,
       defaultStartTime: '09:00',
+      defaultExitTime: '18:00',
       lunchBreakMinutes: 60,
     });
     const worksheet = workbook.getWorksheet('Prospetto Presenze');
@@ -43,6 +44,8 @@ describe('RIL Excel export', () => {
     ]);
     expect(worksheet?.getCell('A2').value).toBe('Consulente');
     expect(worksheet?.getCell('B2').value).toBe('User Name');
+    expect(worksheet?.getCell('A6').value).toBe('Uscita predefinita');
+    expect(worksheet?.getCell('B6').value).toBe('18:00');
     expect(worksheet?.getCell('A9').value).toBe(1);
     expect(worksheet?.getCell('G9').value).toBe('F');
     expect(worksheet?.getCell('T9').value).toBe(0);
