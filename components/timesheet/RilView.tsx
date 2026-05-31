@@ -1,4 +1,4 @@
-import { Download, Loader2, RefreshCcw, RotateCcw } from 'lucide-react';
+import { Download, Loader2, RotateCcw } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -453,10 +453,6 @@ const RilView: React.FC<RilViewProps> = ({
               </SelectContent>
             </Select>
           </Field>
-          <Button type="button" variant="outline" onClick={loadMonthEntries} disabled={isLoading}>
-            {isLoading ? <Loader2 aria-hidden="true" className="animate-spin" /> : <RefreshCcw />}
-            {t('ril.refresh')}
-          </Button>
           <Button type="button" variant="outline" onClick={handleReset} disabled={isLoading}>
             <RotateCcw aria-hidden="true" />
             {t('ril.reset')}

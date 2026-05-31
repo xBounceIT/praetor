@@ -25,7 +25,6 @@
     "user": "Utente",
     "month": "Mese",
     "year": "Anno",
-    "refresh": "Aggiorna",
     "reset": "Ripristina dai timesheet",
     "exportExcel": "Esporta Excel",
     "loadFailed": "Impossibile caricare i dati RIL",

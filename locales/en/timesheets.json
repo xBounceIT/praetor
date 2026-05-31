@@ -25,7 +25,6 @@
     "user": "User",
     "month": "Month",
     "year": "Year",
-    "refresh": "Refresh",
     "reset": "Reset from timesheets",
     "exportExcel": "Export Excel",
     "loadFailed": "Failed to load RIL data",
