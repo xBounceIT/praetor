@@ -90,7 +90,8 @@ const normalizeRows = (rows: RilRow[]): RilRow[] => {
   const byDay = new Map(rows.map((row) => [row.day, row]));
   return Array.from({ length: 31 }, (_, index) => {
     const day = index + 1;
-    return byDay.get(day) ?? createEmptyRilRow(day);
+    const row = byDay.get(day);
+    return row?.date ? row : createEmptyRilRow(day);
   });
 };
 

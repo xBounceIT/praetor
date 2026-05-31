@@ -347,13 +347,16 @@ export const generateRilRows = ({
 export const isRequiredRilWorkday = (row: RilRow): boolean =>
   Boolean(row.date && row.isWorkday && !row.isHoliday);
 
-export const calculateRilTotals = (rows: RilRow[]): RilTotals => ({
-  totalHours: rows.reduce((sum, row) => sum + (Number(row.hoursDecimal) || 0), 0),
-  totalPicap: rows.reduce((sum, row) => sum + (Number(row.picap) || 0), 0),
-  workedDays: rows.filter((row) => row.worked && isRequiredRilWorkday(row)).length,
-  workdays: rows.filter(isRequiredRilWorkday).length,
-  holidayWeekdays: rows.filter((row) => row.isHoliday).length,
-});
+export const calculateRilTotals = (rows: RilRow[]): RilTotals => {
+  const datedRows = rows.filter((row) => row.date);
+  return {
+    totalHours: datedRows.reduce((sum, row) => sum + (Number(row.hoursDecimal) || 0), 0),
+    totalPicap: datedRows.reduce((sum, row) => sum + (Number(row.picap) || 0), 0),
+    workedDays: datedRows.filter((row) => row.worked && isRequiredRilWorkday(row)).length,
+    workdays: datedRows.filter(isRequiredRilWorkday).length,
+    holidayWeekdays: datedRows.filter((row) => row.isHoliday).length,
+  };
+};
 
 export const makeRilDownloadFilename = (year: number, month: number, userName: string): string => {
   const safeUserName = (userName || 'User')

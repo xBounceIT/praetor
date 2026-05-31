@@ -203,4 +203,32 @@ describe('RIL helpers', () => {
     expect(getRilMonthBounds('2026-05').toDate).toBe('2026-05-31');
     expect(makeRilDownloadFilename(2026, 5, 'User Name')).toBe('RIL_2026_05_User_Name.xlsx');
   });
+
+  test('ignores non-month placeholder rows in totals', () => {
+    const rows = generateRilRows({
+      year: 2026,
+      month: 2,
+      entries: [],
+    }).map((row) =>
+      row.day === 30
+        ? {
+            ...row,
+            entrance: '09:00',
+            exit: '18:00',
+            hours: '8:00',
+            hoursDecimal: 8,
+            picap: 8,
+            transfer: 'Remote working',
+            worked: true,
+          }
+        : row,
+    );
+
+    expect(calculateRilTotals(rows)).toMatchObject({
+      totalHours: 160,
+      totalPicap: 160,
+      workedDays: 20,
+      workdays: 20,
+    });
+  });
 });

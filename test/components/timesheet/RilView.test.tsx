@@ -295,6 +295,29 @@ describe('<RilView />', () => {
     expect(weekendNotesSelect.closest('tr')?.className).toContain('bg-zinc-900');
   });
 
+  test('keeps non-month placeholder rows read-only', async () => {
+    api.entries.listPage.mockResolvedValue({ entries: [], nextCursor: null });
+
+    renderRilView();
+
+    fireEvent.click(screen.getByLabelText('ril.month'));
+    fireEvent.click(screen.getByRole('option', { name: 'February' }));
+
+    await waitFor(() =>
+      expect(api.entries.listPage).toHaveBeenCalledWith(
+        expect.objectContaining({ fromDate: '2026-02-01', toDate: '2026-02-28' }),
+      ),
+    );
+    const placeholderEntrance = await screen.findByLabelText('ril.columns.entrance 30');
+    expect(placeholderEntrance).toBeDisabled();
+    fireEvent.change(placeholderEntrance, { target: { value: '09:00' } });
+    expect(placeholderEntrance).toHaveValue('');
+
+    const placeholderNotes = screen.getByLabelText('ril.columns.notes 30');
+    expect(placeholderNotes).toBeDisabled();
+    expect(placeholderNotes.closest('tr')?.className).toContain('bg-muted/30');
+  });
+
   test('renders notes, transfer, and code as compact selects', async () => {
     api.entries.listPage.mockResolvedValue({
       entries: [entry({ date: '2026-05-04', duration: 8, location: 'remote' })],

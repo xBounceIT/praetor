@@ -73,6 +73,8 @@ interface RilViewProps {
 
 type EditableRilField = 'entrance' | 'exit' | 'notes' | 'transfer' | 'code';
 
+const canEditRilRow = (row: RilRow) => Boolean(row.date && !row.isHoliday);
+
 const normalizeMonthKey = (value: string): string => {
   try {
     return getRilMonthBounds(value).monthKey;
@@ -240,7 +242,7 @@ const RilView: React.FC<RilViewProps> = ({
     (day: number, field: EditableRilField, value: string) => {
       setRows((prev) =>
         prev.map((row) => {
-          if (row.day !== day || row.isHoliday) return row;
+          if (row.day !== day || !canEditRilRow(row)) return row;
 
           const nextRow = { ...row, [field]: value };
           if (field !== 'entrance' && field !== 'exit') return nextRow;
@@ -311,7 +313,7 @@ const RilView: React.FC<RilViewProps> = ({
       aria-label={`${label} ${row.day}`}
       type="time"
       value={getEditableValue(row, field)}
-      disabled={row.isHoliday}
+      disabled={!canEditRilRow(row)}
       onChange={(event) => updateRow(row.day, field, event.target.value)}
       className="h-7 w-full min-w-0 px-2 text-xs tabular-nums disabled:cursor-not-allowed"
     />
@@ -344,7 +346,7 @@ const RilView: React.FC<RilViewProps> = ({
         onValueChange={(value) =>
           updateRow(row.day, field, value === EMPTY_SELECT_VALUE ? '' : value)
         }
-        disabled={row.isHoliday}
+        disabled={!canEditRilRow(row)}
       >
         <SelectTrigger
           aria-label={`${label} ${row.day}`}
@@ -396,11 +398,13 @@ const RilView: React.FC<RilViewProps> = ({
 
   const getRowClassName = useCallback(
     (row: RilRow) =>
-      row.isHoliday
-        ? 'bg-amber-50/80 text-amber-950 hover:bg-amber-50 dark:bg-amber-950/30 dark:text-amber-100'
-        : row.date && !row.isWorkday
-          ? 'bg-zinc-900/85 text-zinc-100 hover:bg-zinc-900 dark:bg-zinc-900/80 dark:text-zinc-100'
-          : 'hover:bg-muted/50',
+      !row.date
+        ? 'bg-muted/30 text-muted-foreground hover:bg-muted/30'
+        : row.isHoliday
+          ? 'bg-amber-50/80 text-amber-950 hover:bg-amber-50 dark:bg-amber-950/30 dark:text-amber-100'
+          : row.date && !row.isWorkday
+            ? 'bg-zinc-900/85 text-zinc-100 hover:bg-zinc-900 dark:bg-zinc-900/80 dark:text-zinc-100'
+            : 'hover:bg-muted/50',
     [],
   );
 

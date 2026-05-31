@@ -64,4 +64,43 @@ describe('RIL Excel export', () => {
     expect(worksheet?.getCell('B44').value).toBe(20);
     expect(worksheet?.getCell('B42').value).toBe(0);
   });
+
+  test('does not export values from non-month placeholder rows', () => {
+    const rows = generateRilRows({
+      year: 2026,
+      month: 2,
+      entries: [],
+    }).map((row) =>
+      row.day === 30
+        ? {
+            ...row,
+            entrance: '09:00',
+            exit: '18:00',
+            hours: '8:00',
+            hoursDecimal: 8,
+            picap: 8,
+            transfer: 'Remote working',
+            worked: true,
+          }
+        : row,
+    );
+
+    const workbook = buildRilWorkbook({
+      rows,
+      employeeName: 'User Name',
+      companyName: 'ACME',
+      year: 2026,
+      month: 2,
+      defaultStartTime: '09:00',
+      defaultExitTime: '18:00',
+      lunchBreakMinutes: 60,
+    });
+    const worksheet = workbook.getWorksheet('Prospetto Presenze');
+
+    expect(worksheet?.getCell('A38').value).toBe('');
+    expect(worksheet?.getCell('B38').value).toBe('');
+    expect(worksheet?.getCell('D38').value).toBe('');
+    expect(worksheet?.getCell('D40').value).toBe(160);
+    expect(worksheet?.getCell('E40').value).toBe(160);
+  });
 });
