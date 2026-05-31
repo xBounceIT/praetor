@@ -11,7 +11,7 @@ import { ApiErrorStub } from './apiErrorStub';
  */
 export const installApiMock = () => {
   const noop = mock(() => Promise.resolve({}));
-  const noopList = mock(() => Promise.resolve([]));
+  const noopList = mock((): Promise<unknown[]> => Promise.resolve([]));
 
   const apiObject = {
     auth: {
@@ -40,7 +40,14 @@ export const installApiMock = () => {
     supplierQuotes: { list: noopList, create: noop, update: noop, delete: noop },
     supplierOrders: { list: noopList, create: noop, update: noop, delete: noop },
     supplierInvoices: { list: noopList, create: noop, update: noop, delete: noop },
-    entries: { list: noopList, create: noop, update: noop, delete: noop },
+    entries: {
+      list: noopList,
+      listPage: mock(() => Promise.resolve({ entries: [] as unknown[], nextCursor: null })),
+      create: noop,
+      update: noop,
+      delete: noop,
+      generateRecurring: noop,
+    },
     tasks: { list: noopList, create: noop, update: noop, delete: noop },
     users: { list: noopList, create: noop, update: noop, delete: noop, updateRoles: noop },
     employees: { create: noop, update: noop, delete: noop },

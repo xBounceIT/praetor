@@ -339,6 +339,83 @@ describe('GET /api/entries', () => {
     expect(entriesListForManagerViewMock).not.toHaveBeenCalled();
   });
 
+  test('403: viewer with only RIL view cannot read the generic tracker feed', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/entries?fromDate=2026-05-01&toDate=2026-05-31',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(entriesListForManagerViewMock).not.toHaveBeenCalled();
+  });
+
+  test('200: viewer with RIL view can read a redacted monthly RIL source feed', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
+    entriesListForManagerViewMock.mockResolvedValue({
+      entries: [SAMPLE_ENTRY],
+      nextCursor: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/entries?purpose=ril&fromDate=2026-05-01&toDate=2026-05-31',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).entries[0]).toMatchObject({
+      projectId: 'p1',
+      projectName: 'Project',
+      task: '',
+      taskId: null,
+      notes: null,
+      duration: 0,
+      location: 'remote',
+    });
+    expect(entriesListForManagerViewMock).toHaveBeenCalledWith(
+      'u1',
+      expect.objectContaining({ fromDate: '2026-05-01', toDate: '2026-05-31' }),
+    );
+  });
+
+  test('200: viewer with RIL view can read an explicitly selected managed user', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
+    isUserManagedByMock.mockResolvedValue(true);
+    entriesListForUserMock.mockResolvedValue({ entries: [], nextCursor: null });
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/entries?purpose=ril&userId=u2&fromDate=2026-05-01&toDate=2026-05-31',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(isUserManagedByMock).toHaveBeenCalledWith('u1', 'u2');
+    expect(entriesListForUserMock).toHaveBeenCalledWith(
+      'u2',
+      expect.objectContaining({ fromDate: '2026-05-01', toDate: '2026-05-31' }),
+    );
+  });
+
+  test('400: RIL source feed requires a full calendar month', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/entries?purpose=ril&fromDate=2026-05-02&toDate=2026-05-31',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'RIL entry requests require a full calendar month',
+    });
+    expect(entriesListForManagerViewMock).not.toHaveBeenCalled();
+  });
+
   test('200: explicit userId routes to listForUser', async () => {
     getRolePermissionsMock.mockResolvedValue(TRACKER_ALL_PERMS);
     entriesListForUserMock.mockResolvedValue({ entries: [], nextCursor: null });
@@ -351,6 +428,49 @@ describe('GET /api/entries', () => {
 
     expect(res.statusCode).toBe(200);
     expect(entriesListForUserMock).toHaveBeenCalledWith('u2', expect.any(Object));
+  });
+
+  test('200: fromDate/toDate are forwarded with permission-preserving user filtering', async () => {
+    isUserManagedByMock.mockResolvedValue(true);
+    entriesListForUserMock.mockResolvedValue({ entries: [], nextCursor: null });
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/entries?userId=u2&fromDate=2026-05-01&toDate=2026-05-31',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(isUserManagedByMock).toHaveBeenCalledWith('u1', 'u2');
+    expect(entriesListForUserMock).toHaveBeenCalledWith(
+      'u2',
+      expect.objectContaining({ fromDate: '2026-05-01', toDate: '2026-05-31' }),
+    );
+  });
+
+  test('400: fromDate after toDate does not query repositories', async () => {
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/entries?fromDate=2026-06-01&toDate=2026-05-31',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'fromDate must be on or before toDate' });
+    expect(entriesListForManagerViewMock).not.toHaveBeenCalled();
+    expect(entriesListAllMock).not.toHaveBeenCalled();
+    expect(entriesListForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('400: invalid fromDate is rejected', async () => {
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/entries?fromDate=2026-02-30',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(entriesListForManagerViewMock).not.toHaveBeenCalled();
   });
 
   test('200: nextCursor encoded when present', async () => {
@@ -405,8 +525,8 @@ describe('GET /api/entries', () => {
     expect(JSON.parse(res.body)).toEqual({ error: 'Access token required' });
   });
 
-  test('403: missing tracker.view permission', async () => {
-    getRolePermissionsMock.mockResolvedValue([]); // no tracker.view
+  test('403: missing tracker or RIL view permission', async () => {
+    getRolePermissionsMock.mockResolvedValue([]);
 
     const res = await testApp.inject({
       method: 'GET',

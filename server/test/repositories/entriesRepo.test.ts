@@ -67,6 +67,29 @@ describe('listAll', () => {
     expect(exec.calls[0].params).toEqual([500]);
   });
 
+  test('fromDate/toDate add inclusive date clauses before limit', async () => {
+    exec.enqueue({ rows: [] });
+    await entriesRepo.listAll({ fromDate: '2026-05-01', toDate: '2026-05-31' }, testDb);
+    expect(exec.calls[0].params).toEqual(['2026-05-01', '2026-05-31', 200]);
+    expect(exec.calls[0].sql).toContain('date >= $1::date');
+    expect(exec.calls[0].sql).toContain('date <= $2::date');
+    expect(exec.calls[0].sql).toContain('LIMIT $3');
+  });
+
+  test('date range and project filters can be combined', async () => {
+    exec.enqueue({ rows: [] });
+    await entriesRepo.listAll(
+      { fromDate: '2026-05-01', toDate: '2026-05-31', projectId: 'p-1' },
+      testDb,
+    );
+
+    expect(exec.calls[0].params).toEqual(['2026-05-01', '2026-05-31', 'p-1', 200]);
+    expect(exec.calls[0].sql).toContain('date >= $1::date');
+    expect(exec.calls[0].sql).toContain('date <= $2::date');
+    expect(exec.calls[0].sql).toContain('project_id = $3');
+    expect(exec.calls[0].sql).toContain('LIMIT $4');
+  });
+
   test('cursor adds (created_at, id) < tuple comparison with µs-precision timestamp', async () => {
     exec.enqueue({ rows: [] });
     await entriesRepo.listAll(
@@ -113,6 +136,33 @@ describe('listForUser', () => {
     expect(sql).toContain('$2::timestamp');
     expect(sql).toContain('LIMIT $4');
   });
+
+  test('with date range: date params follow userId and cursor stays after dates', async () => {
+    exec.enqueue({ rows: [] });
+    await entriesRepo.listForUser(
+      'u-1',
+      {
+        fromDate: '2026-05-01',
+        toDate: '2026-05-31',
+        cursor: { createdAt: '2026-05-30 12:00:00.123456', id: 'e-9' },
+      },
+      testDb,
+    );
+    expect(exec.calls[0].params).toEqual([
+      'u-1',
+      '2026-05-01',
+      '2026-05-31',
+      '2026-05-30 12:00:00.123456',
+      'e-9',
+      200,
+    ]);
+    const sql = exec.calls[0].sql;
+    expect(sql).toContain('user_id = $1');
+    expect(sql).toContain('date >= $2::date');
+    expect(sql).toContain('date <= $3::date');
+    expect(sql).toContain('$4::timestamp');
+    expect(sql).toContain('LIMIT $6');
+  });
 });
 
 describe('listForManagerView', () => {
@@ -138,6 +188,20 @@ describe('listForManagerView', () => {
     expect(exec.calls[0].params).toEqual(['mgr', 'mgr', '2026-04-30 12:00:00.123456', 'e-9', 25]);
     const sql = exec.calls[0].sql;
     expect(sql).toContain('$3::timestamp');
+    expect(sql).toContain('LIMIT $5');
+  });
+
+  test('with date range: date params follow manager scope params', async () => {
+    exec.enqueue({ rows: [] });
+    await entriesRepo.listForManagerView(
+      'mgr',
+      { limit: 25, fromDate: '2026-05-01', toDate: '2026-05-31' },
+      testDb,
+    );
+    expect(exec.calls[0].params).toEqual(['mgr', 'mgr', '2026-05-01', '2026-05-31', 25]);
+    const sql = exec.calls[0].sql;
+    expect(sql).toContain('date >= $3::date');
+    expect(sql).toContain('date <= $4::date');
     expect(sql).toContain('LIMIT $5');
   });
 });

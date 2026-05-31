@@ -65,7 +65,12 @@ const mockUser: User = {
   role: 'manager',
   avatarInitials: 'TU',
   username: 'testuser',
-  permissions: ['timesheets.tracker.view', 'timesheets.recurring.view', 'crm.clients.view'],
+  permissions: [
+    'timesheets.tracker.view',
+    'timesheets.ril.view',
+    'timesheets.recurring.view',
+    'crm.clients.view',
+  ],
 };
 
 const mockRoles: Role[] = [];
@@ -284,6 +289,35 @@ describe('<Layout />', () => {
     expect(screen.getAllByText('routes.timeTracker').length).toBeGreaterThan(0);
     expect(screen.queryByText('routes.suppliers')).toBeNull();
     expect(screen.queryByText('modules.accounting')).toBeNull();
+  });
+
+  test('RIL navigation uses the dedicated RIL view permission', () => {
+    const { rerender } = renderLayout({
+      currentUser: {
+        ...mockUser,
+        permissions: ['timesheets.tracker.view'],
+      },
+    });
+
+    expect(screen.queryByText('routes.ril')).toBeNull();
+
+    rerender(
+      <Layout
+        activeView="timesheets/ril"
+        onViewChange={() => {}}
+        currentUser={{
+          ...mockUser,
+          permissions: ['timesheets.ril.view'],
+        }}
+        onLogout={() => {}}
+        onSwitchRole={() => {}}
+        roles={mockRoles}
+      >
+        <div>content</div>
+      </Layout>,
+    );
+
+    expect(screen.getAllByText('routes.ril').length).toBeGreaterThan(0);
   });
 
   test('all-scope client view permission exposes the CRM clients route', () => {

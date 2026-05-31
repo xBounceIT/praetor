@@ -1,0 +1,4 @@
+ALTER TABLE "general_settings" ADD COLUMN "ril_note_options" jsonb DEFAULT '[{"value":"P","label":"Ferie"},{"value":"P2","label":"Permesso"},{"value":"M","label":"Malattia"},{"value":"F","label":"Festivita"}]'::jsonb;--> statement-breakpoint
+ALTER TABLE "general_settings" ADD COLUMN "ril_transfer_options" jsonb DEFAULT '["In sede","Telelavoro"]'::jsonb;--> statement-breakpoint
+ALTER TABLE "general_settings" ADD CONSTRAINT "general_settings_ril_note_options_array_check" CHECK (jsonb_typeof("general_settings"."ril_note_options") = 'array');--> statement-breakpoint
+ALTER TABLE "general_settings" ADD CONSTRAINT "general_settings_ril_transfer_options_array_check" CHECK (jsonb_typeof("general_settings"."ril_transfer_options") = 'array');

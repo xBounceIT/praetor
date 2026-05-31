@@ -17,10 +17,14 @@
 import 'dotenv/config';
 import { runDrizzleMigrations } from '../db/migrationsRunner.ts';
 
+let exitCode = 0;
+
 try {
   await runDrizzleMigrations();
 } catch (err) {
   console.error('Migration failed:');
   console.error(err);
-  process.exitCode = 1;
+  exitCode = 1;
 }
+
+process.exit(exitCode);

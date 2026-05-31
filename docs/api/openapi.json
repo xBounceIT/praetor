@@ -9202,7 +9202,17 @@
             },
             "in": "query",
             "name": "userId",
-            "required": false
+            "required": false,
+            "description": "Restrict to entries logged by this user."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "projectId",
+            "required": false,
+            "description": "Restrict to entries logged against this project. Combined with any user/manager scoping the actor is already subject to."
           },
           {
             "schema": {
@@ -9220,6 +9230,24 @@
             },
             "in": "query",
             "name": "cursor",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "in": "query",
+            "name": "fromDate",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "in": "query",
+            "name": "toDate",
             "required": false
           }
         ],
@@ -14777,6 +14805,48 @@
                     },
                     "defaultLocation": {
                       "type": "string"
+                    },
+                    "rilCompanyName": {
+                      "type": "string",
+                      "maxLength": 255
+                    },
+                    "rilDefaultStartTime": {
+                      "type": "string"
+                    },
+                    "rilDefaultExitTime": {
+                      "type": "string"
+                    },
+                    "rilLunchBreakMinutes": {
+                      "type": "integer"
+                    },
+                    "rilNoteOptions": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 30,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "label"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "rilTransferOptions": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 30,
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -14791,7 +14861,13 @@
                     "geminiModelId",
                     "openrouterModelId",
                     "allowWeekendSelection",
-                    "defaultLocation"
+                    "defaultLocation",
+                    "rilCompanyName",
+                    "rilDefaultStartTime",
+                    "rilDefaultExitTime",
+                    "rilLunchBreakMinutes",
+                    "rilNoteOptions",
+                    "rilTransferOptions"
                   ]
                 }
               }
@@ -14993,6 +15069,48 @@
                   },
                   "defaultLocation": {
                     "type": "string"
+                  },
+                  "rilCompanyName": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "rilDefaultStartTime": {
+                    "type": "string"
+                  },
+                  "rilDefaultExitTime": {
+                    "type": "string"
+                  },
+                  "rilLunchBreakMinutes": {
+                    "type": "integer"
+                  },
+                  "rilNoteOptions": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 30,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "value",
+                        "label"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "rilTransferOptions": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 30,
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -15042,6 +15160,48 @@
                     },
                     "defaultLocation": {
                       "type": "string"
+                    },
+                    "rilCompanyName": {
+                      "type": "string",
+                      "maxLength": 255
+                    },
+                    "rilDefaultStartTime": {
+                      "type": "string"
+                    },
+                    "rilDefaultExitTime": {
+                      "type": "string"
+                    },
+                    "rilLunchBreakMinutes": {
+                      "type": "integer"
+                    },
+                    "rilNoteOptions": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 30,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "value",
+                          "label"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "rilTransferOptions": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 30,
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -15056,7 +15216,13 @@
                     "geminiModelId",
                     "openrouterModelId",
                     "allowWeekendSelection",
-                    "defaultLocation"
+                    "defaultLocation",
+                    "rilCompanyName",
+                    "rilDefaultStartTime",
+                    "rilDefaultExitTime",
+                    "rilLunchBreakMinutes",
+                    "rilNoteOptions",
+                    "rilTransferOptions"
                   ]
                 }
               }

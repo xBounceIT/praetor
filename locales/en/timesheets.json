@@ -18,6 +18,43 @@
     "notes": "Notes",
     "recurring": "Recurring"
   },
+  "ril": {
+    "title": "RIL",
+    "tableTitle": "Attendance rows",
+    "subtitle": "Monthly attendance statement generated from time entries.",
+    "user": "User",
+    "month": "Month",
+    "year": "Year",
+    "reset": "Reset from timesheets",
+    "exportExcel": "Export Excel",
+    "loadFailed": "Failed to load RIL data",
+    "exportFailed": "Failed to export RIL workbook",
+    "missingTimes": "Add entrance and exit times for valid days before exporting: {{days}}",
+    "missingTransfer": "Select a location value for valid days before exporting: {{days}}",
+    "entriesLoaded": "{{count}} entries loaded",
+    "totalHours": "{{count}} hours",
+    "workedDays": "{{count}} worked days",
+    "summary": {
+      "title": "RIL summary",
+      "workedDays": "Worked Days",
+      "lunchWindow": "Lunch Window",
+      "extraHours": "Extra Hours",
+      "totalHours": "Total Hours",
+      "totalPicap": "Total PICAP"
+    },
+    "columns": {
+      "day": "Day",
+      "entrance": "Start",
+      "exit": "End",
+      "hours": "Hours",
+      "picap": "PICAP",
+      "phoneAvailability": "Phone on-call",
+      "notes": "Notes",
+      "transfer": "Location",
+      "code": "Code",
+      "order": "Project"
+    }
+  },
   "entry": {
     "addEntry": "Add Time Entry",
     "editEntry": "Edit Time Entry",

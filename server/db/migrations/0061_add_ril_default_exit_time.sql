@@ -1,0 +1,2 @@
+ALTER TABLE "general_settings" ADD COLUMN "ril_default_exit_time" varchar(5) DEFAULT '18:00';--> statement-breakpoint
+ALTER TABLE "general_settings" ADD CONSTRAINT "general_settings_ril_default_exit_time_check" CHECK ("general_settings"."ril_default_exit_time" ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$');

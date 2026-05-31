@@ -64,6 +64,10 @@ Se un utente non riesce ad accedere, controlla credenziali, stato dell'utente, r
 
 Le impostazioni generali controllano funzioni trasversali come AI reporting e preferenze applicative. Le impostazioni email servono per invii e notifiche.
 
+Dalla scheda **Preferenze di Tracciamento** gli amministratori configurano anche i metadati usati dal prospetto RIL: nome azienda, orari di entrata e uscita predefiniti, minuti di pausa pranzo, opzioni Note e opzioni Trasferta. Le Note si configurano con campi separati **Codice** e **Nome**; le Trasferte si configurano con righe nome aggiungibili, con la prima opzione usata per i giorni in sede e la seconda per il telelavoro. Gli orari predefiniti popolano i giorni RIL validi, e il valore della pausa pranzo viene usato per ricalcolare Ore e PICAP dai valori modificabili di entrata e uscita; nessuna di queste impostazioni modifica le registrazioni esistenti.
+
+La visibilità della pagina RIL si gestisce dai ruoli con il permesso **timesheets.ril.view**. I ruoli che avevano già accesso al Time Tracker ricevono automaticamente il permesso durante la migrazione.
+
 Dopo aver modificato SMTP, mittente o sicurezza, esegui sempre un test di invio prima di considerare conclusa la configurazione.
 
 ## Log

@@ -24,6 +24,7 @@ export const ADMIN_ROLE_ID = 'admin';
 export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   // Timesheets
   { id: 'timesheets.tracker', actions: CRUD },
+  { id: 'timesheets.ril', actions: VIEW_ONLY },
   { id: 'timesheets.recurring', actions: CRUD },
   { id: 'timesheets.tracker_all', actions: CRUD, isScope: true },
 

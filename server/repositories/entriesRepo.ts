@@ -126,6 +126,10 @@ export type ListEntriesOptions = {
   limit?: number;
   /** Exclusive - return rows strictly older than this position. */
   cursor?: EntriesCursor;
+  /** Inclusive lower date bound (YYYY-MM-DD). */
+  fromDate?: string;
+  /** Inclusive upper date bound (YYYY-MM-DD). */
+  toDate?: string;
   /** Restrict to entries logged against this project. */
   projectId?: string;
 };
@@ -140,6 +144,13 @@ const resolveLimit = (limit?: number): number => {
 
 const cursorClause = (cursor: EntriesCursor | undefined): SQL | null =>
   cursor ? sql`(created_at, id) < (${cursor.createdAt}::timestamp, ${cursor.id})` : null;
+
+const dateRangeClauses = (options: Pick<ListEntriesOptions, 'fromDate' | 'toDate'>): SQL[] => {
+  const clauses: SQL[] = [];
+  if (options.fromDate) clauses.push(sql`date >= ${options.fromDate}::date`);
+  if (options.toDate) clauses.push(sql`date <= ${options.toDate}::date`);
+  return clauses;
+};
 
 const projectClause = (projectId: string | undefined): SQL | null =>
   projectId ? sql`project_id = ${projectId}` : null;
@@ -173,7 +184,11 @@ export const listAll = async (
   exec: DbExecutor = db,
 ): Promise<ListEntriesResult> => {
   const limit = resolveLimit(options.limit);
-  const where = joinAnd([cursorClause(options.cursor), projectClause(options.projectId)]);
+  const where = joinAnd([
+    ...dateRangeClauses(options),
+    cursorClause(options.cursor),
+    projectClause(options.projectId),
+  ]);
   const rows = await executeRows<TimeEntryRow>(
     exec,
     sql`SELECT ${ENTRY_COLUMNS_SQL} FROM time_entries${where ? sql` WHERE ${where}` : sql``} ORDER BY created_at DESC, id DESC LIMIT ${limit}`,
@@ -189,6 +204,7 @@ export const listForUser = async (
   const limit = resolveLimit(options.limit);
   const where = joinAnd([
     sql`user_id = ${userId}`,
+    ...dateRangeClauses(options),
     cursorClause(options.cursor),
     projectClause(options.projectId),
   ]);
@@ -208,6 +224,7 @@ export const listForManagerView = async (
   const managerScope = sql`(user_id = ${managerId} OR user_id IN (${managedUserIdsSubquerySql(managerId)}))`;
   const where = joinAnd([
     managerScope,
+    ...dateRangeClauses(options),
     cursorClause(options.cursor),
     projectClause(options.projectId),
   ]);
