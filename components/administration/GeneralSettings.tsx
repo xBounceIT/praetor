@@ -1,4 +1,14 @@
-import { Check, Clock, Globe, Loader2, Save, Sparkles, TriangleAlert } from 'lucide-react';
+import {
+  Check,
+  Clock,
+  Globe,
+  Loader2,
+  Plus,
+  Save,
+  Sparkles,
+  Trash2,
+  TriangleAlert,
+} from 'lucide-react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,10 +16,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import api from '../../services/api';
-import type { GeneralSettings as IGeneralSettings, TimeEntryLocation } from '../../types';
+import type {
+  GeneralSettings as IGeneralSettings,
+  RilNoteOption,
+  TimeEntryLocation,
+} from '../../types';
 import {
   DEFAULT_RIL_EXIT_TIME,
   DEFAULT_RIL_START_TIME,
@@ -60,40 +73,19 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id'];
 
-const serializeRilNoteOptions = (value: unknown) =>
-  normalizeRilNoteOptions(value)
-    .map((option) => `${option.value} | ${option.label}`)
-    .join('\n');
+const getRilNoteOptionDrafts = (value: unknown): RilNoteOption[] =>
+  normalizeRilNoteOptions(value).map((option) => ({ ...option }));
 
-const parseRilNoteOptionsText = (value: string) =>
-  normalizeRilNoteOptions(
-    value
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const separatorIndex = line.indexOf('|');
-        if (separatorIndex >= 0) {
-          return {
-            value: line.slice(0, separatorIndex).trim(),
-            label: line.slice(separatorIndex + 1).trim(),
-          };
-        }
-        const [code = '', ...labelParts] = line.split(/\s+/);
-        return { value: code, label: labelParts.join(' ').trim() || code };
-      }),
-  );
+const getRilTransferOptionDrafts = (value: unknown): string[] => [
+  ...normalizeRilTransferOptions(value),
+];
 
-const serializeRilTransferOptions = (value: unknown) =>
-  normalizeRilTransferOptions(value).join('\n');
+const areRilNoteOptionsEqual = (left: RilNoteOption[], right: unknown): boolean =>
+  JSON.stringify(normalizeRilNoteOptions(left)) === JSON.stringify(normalizeRilNoteOptions(right));
 
-const parseRilTransferOptionsText = (value: string) =>
-  normalizeRilTransferOptions(
-    value
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean),
-  );
+const areRilTransferOptionsEqual = (left: string[], right: unknown): boolean =>
+  JSON.stringify(normalizeRilTransferOptions(left)) ===
+  JSON.stringify(normalizeRilTransferOptions(right));
 
 interface ToggleSettingRowProps {
   label: string;
@@ -147,11 +139,11 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
   const [rilLunchBreakMinutes, setRilLunchBreakMinutes] = useState(
     settings.rilLunchBreakMinutes ?? 60,
   );
-  const [rilNoteOptionsText, setRilNoteOptionsText] = useState(() =>
-    serializeRilNoteOptions(settings.rilNoteOptions),
+  const [rilNoteOptions, setRilNoteOptions] = useState<RilNoteOption[]>(() =>
+    getRilNoteOptionDrafts(settings.rilNoteOptions),
   );
-  const [rilTransferOptionsText, setRilTransferOptionsText] = useState(() =>
-    serializeRilTransferOptions(settings.rilTransferOptions),
+  const [rilTransferOptions, setRilTransferOptions] = useState<string[]>(() =>
+    getRilTransferOptionDrafts(settings.rilTransferOptions),
   );
   const [enableAiReporting, setEnableAiReporting] = useState(settings.enableAiReporting);
   const [geminiApiKey, setGeminiApiKey] = useState(settings.geminiApiKey || '');
@@ -191,8 +183,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     setRilDefaultStartTime(settings.rilDefaultStartTime || DEFAULT_RIL_START_TIME);
     setRilDefaultExitTime(settings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME);
     setRilLunchBreakMinutes(settings.rilLunchBreakMinutes ?? 60);
-    setRilNoteOptionsText(serializeRilNoteOptions(settings.rilNoteOptions));
-    setRilTransferOptionsText(serializeRilTransferOptions(settings.rilTransferOptions));
+    setRilNoteOptions(getRilNoteOptionDrafts(settings.rilNoteOptions));
+    setRilTransferOptions(getRilTransferOptionDrafts(settings.rilTransferOptions));
     setEnableAiReporting(settings.enableAiReporting);
     setGeminiApiKey(settings.geminiApiKey || '');
     setAiProvider(settings.aiProvider || 'gemini');
@@ -257,8 +249,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
         rilDefaultStartTime,
         rilDefaultExitTime,
         rilLunchBreakMinutes,
-        rilNoteOptions: parseRilNoteOptionsText(rilNoteOptionsText),
-        rilTransferOptions: parseRilTransferOptionsText(rilTransferOptionsText),
+        rilNoteOptions: normalizeRilNoteOptions(rilNoteOptions),
+        rilTransferOptions: normalizeRilTransferOptions(rilTransferOptions),
         enableAiReporting,
         geminiApiKey,
         aiProvider,
@@ -286,8 +278,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     rilDefaultStartTime !== (settings.rilDefaultStartTime || DEFAULT_RIL_START_TIME) ||
     rilDefaultExitTime !== (settings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME) ||
     rilLunchBreakMinutes !== (settings.rilLunchBreakMinutes ?? 60) ||
-    rilNoteOptionsText !== serializeRilNoteOptions(settings.rilNoteOptions) ||
-    rilTransferOptionsText !== serializeRilTransferOptions(settings.rilTransferOptions) ||
+    !areRilNoteOptionsEqual(rilNoteOptions, settings.rilNoteOptions) ||
+    !areRilTransferOptionsEqual(rilTransferOptions, settings.rilTransferOptions) ||
     enableAiReporting !== settings.enableAiReporting ||
     geminiApiKey !== (settings.geminiApiKey || '') ||
     aiProvider !== (settings.aiProvider || 'gemini') ||
@@ -301,6 +293,40 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     isModelMissing() ||
     isModelNotFound ||
     (!hasChanges && !isSaved);
+
+  const updateRilNoteOption = (index: number, field: keyof RilNoteOption, value: string) => {
+    setRilNoteOptions((prev) =>
+      prev.map((option, optionIndex) =>
+        optionIndex === index ? { ...option, [field]: value } : option,
+      ),
+    );
+  };
+
+  const addRilNoteOption = () => {
+    setRilNoteOptions((prev) => [...prev, { value: '', label: '' }]);
+  };
+
+  const removeRilNoteOption = (index: number) => {
+    setRilNoteOptions((prev) =>
+      prev.length > 1 ? prev.filter((_, optionIndex) => optionIndex !== index) : prev,
+    );
+  };
+
+  const updateRilTransferOption = (index: number, value: string) => {
+    setRilTransferOptions((prev) =>
+      prev.map((option, optionIndex) => (optionIndex === index ? value : option)),
+    );
+  };
+
+  const addRilTransferOption = () => {
+    setRilTransferOptions((prev) => [...prev, '']);
+  };
+
+  const removeRilTransferOption = (index: number) => {
+    setRilTransferOptions((prev) =>
+      prev.length > 1 ? prev.filter((_, optionIndex) => optionIndex !== index) : prev,
+    );
+  };
 
   const {
     Icon: SubmitIcon,
@@ -531,28 +557,108 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                 </div>
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                   <Field>
-                    <FieldLabel htmlFor="general-ril-note-options">
-                      {t('general.rilNoteOptionsLabel')}
-                    </FieldLabel>
-                    <Textarea
-                      id="general-ril-note-options"
-                      value={rilNoteOptionsText}
-                      onChange={(event) => setRilNoteOptionsText(event.target.value)}
-                      className="min-h-32 font-mono text-xs"
-                    />
+                    <div className="flex items-center justify-between gap-3">
+                      <FieldLabel id="general-ril-note-options-label">
+                        {t('general.rilNoteOptionsLabel')}
+                      </FieldLabel>
+                      <Button type="button" variant="outline" size="sm" onClick={addRilNoteOption}>
+                        <Plus aria-hidden="true" />
+                        {t('general.rilAddNoteOption')}
+                      </Button>
+                    </div>
+                    <fieldset
+                      aria-labelledby="general-ril-note-options-label"
+                      className="space-y-2"
+                    >
+                      <div className="grid grid-cols-[5rem_minmax(0,1fr)_2rem] gap-2 px-1 text-xs font-medium text-muted-foreground">
+                        <span>{t('general.rilOptionCodeLabel')}</span>
+                        <span>{t('general.rilOptionNameLabel')}</span>
+                        <span className="sr-only">{t('general.actions')}</span>
+                      </div>
+                      {rilNoteOptions.map((option, index) => (
+                        <div
+                          key={`${option.value}-${index}`}
+                          className="grid grid-cols-[5rem_minmax(0,1fr)_2rem] items-center gap-2"
+                        >
+                          <Input
+                            aria-label={`${t('general.rilOptionCodeLabel')} ${index + 1}`}
+                            value={option.value}
+                            onChange={(event) =>
+                              updateRilNoteOption(index, 'value', event.target.value)
+                            }
+                            className="h-8 font-mono text-xs"
+                          />
+                          <Input
+                            aria-label={`${t('general.rilOptionNameLabel')} ${index + 1}`}
+                            value={option.label}
+                            onChange={(event) =>
+                              updateRilNoteOption(index, 'label', event.target.value)
+                            }
+                            className="h-8 text-xs"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => removeRilNoteOption(index)}
+                            disabled={rilNoteOptions.length <= 1}
+                            aria-label={`${t('general.rilRemoveNoteOption')} ${index + 1}`}
+                          >
+                            <Trash2 aria-hidden="true" />
+                          </Button>
+                        </div>
+                      ))}
+                    </fieldset>
                     <FieldDescription>{t('general.rilNoteOptionsDescription')}</FieldDescription>
                   </Field>
 
                   <Field>
-                    <FieldLabel htmlFor="general-ril-transfer-options">
-                      {t('general.rilTransferOptionsLabel')}
-                    </FieldLabel>
-                    <Textarea
-                      id="general-ril-transfer-options"
-                      value={rilTransferOptionsText}
-                      onChange={(event) => setRilTransferOptionsText(event.target.value)}
-                      className="min-h-32 font-mono text-xs"
-                    />
+                    <div className="flex items-center justify-between gap-3">
+                      <FieldLabel id="general-ril-transfer-options-label">
+                        {t('general.rilTransferOptionsLabel')}
+                      </FieldLabel>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={addRilTransferOption}
+                      >
+                        <Plus aria-hidden="true" />
+                        {t('general.rilAddTransferOption')}
+                      </Button>
+                    </div>
+                    <fieldset
+                      aria-labelledby="general-ril-transfer-options-label"
+                      className="space-y-2"
+                    >
+                      <div className="grid grid-cols-[minmax(0,1fr)_2rem] gap-2 px-1 text-xs font-medium text-muted-foreground">
+                        <span>{t('general.rilOptionNameLabel')}</span>
+                        <span className="sr-only">{t('general.actions')}</span>
+                      </div>
+                      {rilTransferOptions.map((option, index) => (
+                        <div
+                          key={`${option}-${index}`}
+                          className="grid grid-cols-[minmax(0,1fr)_2rem] items-center gap-2"
+                        >
+                          <Input
+                            aria-label={`${t('general.rilTransferOptionNameLabel')} ${index + 1}`}
+                            value={option}
+                            onChange={(event) => updateRilTransferOption(index, event.target.value)}
+                            className="h-8 text-xs"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => removeRilTransferOption(index)}
+                            disabled={rilTransferOptions.length <= 1}
+                            aria-label={`${t('general.rilRemoveTransferOption')} ${index + 1}`}
+                          >
+                            <Trash2 aria-hidden="true" />
+                          </Button>
+                        </div>
+                      ))}
+                    </fieldset>
                     <FieldDescription>
                       {t('general.rilTransferOptionsDescription')}
                     </FieldDescription>
