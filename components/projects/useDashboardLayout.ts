@@ -318,6 +318,7 @@ export const useDashboardLayout = (
 
   // Owner-only. Optimistic remove + rollback on failure. A 403 (ownership lost
   // mid-session) self-corrects via reloadViews rather than a silent rollback.
+  // Errors are handled internally (callers fire-and-forget), so this never rejects.
   const deleteView = useCallback(
     async (viewId: string): Promise<void> => {
       const previous = views;
@@ -342,7 +343,6 @@ export const useDashboardLayout = (
             persistActiveView(viewId);
           }
         }
-        throw err;
       }
     },
     [views, activeViewId, persistActiveView, reloadViews],
@@ -375,20 +375,20 @@ export const useDashboardLayout = (
   // rollback. 403 → reloadViews.
   const resaveView = useCallback(
     async (viewId: string): Promise<boolean> => {
-      const previous = views;
-      const target = previous.find((v) => v.id === viewId);
+      const target = views.find((v) => v.id === viewId);
       if (!target) return false;
       const snapshot = cloneLayout(editing ? draft : effectiveLayout);
-      setViews((prev) => prev.map((v) => (v.id === viewId ? { ...v, layout: snapshot } : v)));
-      setEditing(false);
-      applyOverride(cloneLayout(snapshot), viewId);
       try {
         await viewsApi.update(viewId, { config: { layout: snapshot } });
+        // Commit only after the server confirms, so a failed save never leaves the
+        // library, the editing flag, and the override in a half-applied state.
+        setViews((prev) => prev.map((v) => (v.id === viewId ? { ...v, layout: snapshot } : v)));
+        setEditing(false);
+        applyOverride(cloneLayout(snapshot), viewId);
         return true;
       } catch (err) {
         console.error('Failed to re-save dashboard view', err);
         if (isForbidden(err)) reloadViews();
-        else setViews(previous);
         return false;
       }
     },

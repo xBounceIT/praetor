@@ -192,6 +192,47 @@ const validateConfig = (
   return { ok: true, value: config };
 };
 
+// Centralizes the find-access + 404/403 boilerplate the mutating /:id handlers share.
+// Returns the access record on success; otherwise sends the matching error reply (awaited so
+// the audit row is written before the response) and returns null for the caller to `return` on.
+// `actionBase` namespaces the audit actions: `${actionBase}.not_found` / `${actionBase}.denied`.
+async function authorizeViewAccess(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  viewId: string,
+  userId: string,
+  need: 'owner' | 'write',
+  actionBase: string,
+): Promise<Awaited<ReturnType<typeof viewsRepo.findAccess>> | null> {
+  const found = await viewsRepo.findAccess(viewId, userId);
+  if (found.ownerId === null) {
+    await replyError(request, reply, {
+      statusCode: 404,
+      message: 'Saved view not found',
+      action: `${actionBase}.not_found`,
+      entityType: 'saved_view',
+      entityId: viewId,
+    });
+    return null;
+  }
+  const allowed =
+    need === 'owner'
+      ? found.access === 'owner'
+      : found.access === 'owner' || found.access === 'write';
+  if (!allowed) {
+    await replyError(request, reply, {
+      statusCode: 403,
+      message: 'Insufficient permissions',
+      action: `${actionBase}.denied`,
+      entityType: 'saved_view',
+      entityId: viewId,
+      details: { secondaryLabel: 'view_access_denied' },
+    });
+    return null;
+  }
+  return found;
+}
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // Saved views are a per-user productivity feature available to any authenticated user.
   // Ownership / share permission is enforced in-handler via viewsRepo.findAccess.
@@ -319,25 +360,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const { ownerId, access } = await viewsRepo.findAccess(idResult.value, request.user.id);
-      if (ownerId === null) {
-        return replyError(request, reply, {
-          statusCode: 404,
-          message: 'Saved view not found',
-          action: 'saved_view.update.not_found',
-          entityType: 'saved_view',
-          entityId: idResult.value,
-        });
-      }
-      if (access !== 'owner' && access !== 'write') {
-        return replyError(request, reply, {
-          statusCode: 403,
-          message: 'Insufficient permissions',
-          action: 'saved_view.update.denied',
-          entityType: 'saved_view',
-          entityId: idResult.value,
-          details: { secondaryLabel: 'view_access_denied' },
-        });
+      if (
+        !(await authorizeViewAccess(
+          request,
+          reply,
+          idResult.value,
+          request.user.id,
+          'write',
+          'saved_view.update',
+        ))
+      ) {
+        return;
       }
 
       const body = request.body as { name?: unknown; config?: unknown };
@@ -408,25 +441,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const { ownerId, access } = await viewsRepo.findAccess(idResult.value, request.user.id);
-      if (ownerId === null) {
-        return replyError(request, reply, {
-          statusCode: 404,
-          message: 'Saved view not found',
-          action: 'saved_view.delete.not_found',
-          entityType: 'saved_view',
-          entityId: idResult.value,
-        });
-      }
-      if (access !== 'owner') {
-        return replyError(request, reply, {
-          statusCode: 403,
-          message: 'Insufficient permissions',
-          action: 'saved_view.delete.denied',
-          entityType: 'saved_view',
-          entityId: idResult.value,
-          details: { secondaryLabel: 'view_access_denied' },
-        });
+      if (
+        !(await authorizeViewAccess(
+          request,
+          reply,
+          idResult.value,
+          request.user.id,
+          'owner',
+          'saved_view.delete',
+        ))
+      ) {
+        return;
       }
 
       await viewsRepo.deleteById(idResult.value);
@@ -461,25 +486,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const { ownerId, access } = await viewsRepo.findAccess(idResult.value, request.user.id);
-      if (ownerId === null) {
-        return replyError(request, reply, {
-          statusCode: 404,
-          message: 'Saved view not found',
-          action: 'saved_view.shares_view.not_found',
-          entityType: 'saved_view',
-          entityId: idResult.value,
-        });
-      }
-      if (access !== 'owner') {
-        return replyError(request, reply, {
-          statusCode: 403,
-          message: 'Insufficient permissions',
-          action: 'saved_view.shares_view.denied',
-          entityType: 'saved_view',
-          entityId: idResult.value,
-          details: { secondaryLabel: 'view_access_denied' },
-        });
+      if (
+        !(await authorizeViewAccess(
+          request,
+          reply,
+          idResult.value,
+          request.user.id,
+          'owner',
+          'saved_view.shares_view',
+        ))
+      ) {
+        return;
       }
 
       const shares = await viewsRepo.getShares(idResult.value);
@@ -508,26 +525,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const { ownerId, access } = await viewsRepo.findAccess(idResult.value, request.user.id);
-      if (ownerId === null) {
-        return replyError(request, reply, {
-          statusCode: 404,
-          message: 'Saved view not found',
-          action: 'saved_view.shares_update.not_found',
-          entityType: 'saved_view',
-          entityId: idResult.value,
-        });
-      }
-      if (access !== 'owner') {
-        return replyError(request, reply, {
-          statusCode: 403,
-          message: 'Insufficient permissions',
-          action: 'saved_view.shares_update.denied',
-          entityType: 'saved_view',
-          entityId: idResult.value,
-          details: { secondaryLabel: 'view_access_denied' },
-        });
-      }
+      const access = await authorizeViewAccess(
+        request,
+        reply,
+        idResult.value,
+        request.user.id,
+        'owner',
+        'saved_view.shares_update',
+      );
+      if (!access) return;
+      const { ownerId } = access;
 
       const body = request.body as { shares?: unknown };
       if (!Array.isArray(body.shares)) {

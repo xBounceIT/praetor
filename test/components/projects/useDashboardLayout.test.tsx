@@ -412,8 +412,9 @@ describe('useDashboardLayout — deleteView (owner-only, optimistic)', () => {
     const { result } = await renderAReady();
     act(() => result.current.applyView('sv-del'));
 
+    // deleteView handles failures internally (no throw — callers fire-and-forget).
     await act(async () => {
-      await expect(result.current.deleteView('sv-del')).rejects.toThrow();
+      await result.current.deleteView('sv-del');
     });
 
     // The optimistic removal was reverted: the row and its active marker are back.

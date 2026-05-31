@@ -356,6 +356,15 @@ const StandardTable = <T extends object>({
   const [viewsLoadFailed, setViewsLoadFailed] = useState(false);
   const [viewBusy, setViewBusy] = useState(false);
   const [shareModalView, setShareModalView] = useState<CustomView | null>(null);
+
+  // Upsert a view's ownership/permission metadata from a server response (server-backed only).
+  const rememberServerViewMeta = useCallback((dto: SavedViewDto) => {
+    setServerViewMeta((prev) => {
+      const next = new Map(prev);
+      next.set(dto.id, { access: dto.access, ownerId: dto.ownerId, ownerName: dto.ownerName });
+      return next;
+    });
+  }, []);
   const [activeViewId, setActiveViewId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     return localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.activeView));
@@ -1244,29 +1253,13 @@ const StandardTable = <T extends object>({
         const dto = await viewsApi.update(editingId, { name, config });
         const updated = serverViewToCustomView(dto);
         updateCustomViews((prev) => prev.map((v) => (v.id === editingId ? updated : v)));
-        setServerViewMeta((prev) => {
-          const next = new Map(prev);
-          next.set(dto.id, {
-            access: dto.access,
-            ownerId: dto.ownerId,
-            ownerName: dto.ownerName,
-          });
-          return next;
-        });
+        rememberServerViewMeta(dto);
         if (activeViewId === editingId) setHiddenColIds(new Set(hidden));
       } else {
         const dto = await viewsApi.create({ kind: 'table', scopeKey: viewKey, name, config });
         const created = serverViewToCustomView(dto);
         updateCustomViews((prev) => [...prev, created]);
-        setServerViewMeta((prev) => {
-          const next = new Map(prev);
-          next.set(dto.id, {
-            access: dto.access,
-            ownerId: dto.ownerId,
-            ownerName: dto.ownerName,
-          });
-          return next;
-        });
+        rememberServerViewMeta(dto);
         updateActiveViewId(created.id);
         setHiddenColIds(new Set(hidden));
       }
@@ -1326,11 +1319,7 @@ const StandardTable = <T extends object>({
       });
       const created = serverViewToCustomView(dto);
       updateCustomViews((prev) => [...prev, created]);
-      setServerViewMeta((prev) => {
-        const next = new Map(prev);
-        next.set(dto.id, { access: dto.access, ownerId: dto.ownerId, ownerName: dto.ownerName });
-        return next;
-      });
+      rememberServerViewMeta(dto);
     } catch (err) {
       handleViewCrudError(err, 'views.saveFailed');
     } finally {
