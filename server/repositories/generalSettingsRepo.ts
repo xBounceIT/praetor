@@ -140,13 +140,13 @@ export const update = async (
   patch: GeneralSettingsPatch,
   exec: DbExecutor = db,
 ): Promise<GeneralSettings> => {
-  // COALESCE preserves the existing column when the patch value is undefined (legacy
-  // "undefined leaves column unchanged" semantic). Same pattern as ldapRepo.update /
+  // COALESCE preserves the existing column when the patch value is nullish (legacy
+  // "undefined/null leaves column unchanged" semantic). Same pattern as ldapRepo.update /
   // emailRepo.update / settingsRepo.upsertForUser.
   const rilNoteOptionsParam =
-    patch.rilNoteOptions === undefined ? null : JSON.stringify(patch.rilNoteOptions);
+    patch.rilNoteOptions == null ? null : JSON.stringify(patch.rilNoteOptions);
   const rilTransferOptionsParam =
-    patch.rilTransferOptions === undefined ? null : JSON.stringify(patch.rilTransferOptions);
+    patch.rilTransferOptions == null ? null : JSON.stringify(patch.rilTransferOptions);
 
   const result = await exec
     .update(generalSettings)

@@ -8,6 +8,7 @@ describe('RIL Excel export', () => {
       year: 2026,
       month: 5,
       lunchBreakMinutes: 60,
+      projects: [{ id: 'p1', name: 'Project', clientId: 'c1', color: '#111111', orderId: 'ORD-1' }],
       entries: [
         {
           id: 'te-1',
@@ -55,7 +56,7 @@ describe('RIL Excel export', () => {
     expect(worksheet?.getCell('D12').value).toBe('8:00');
     expect(worksheet?.getCell('E12').value).toBe(8);
     expect(worksheet?.getCell('H12').value).toBe('Remote working');
-    expect(worksheet?.getCell('J12').value).toBe('');
+    expect(worksheet?.getCell('J12').value).toBe('ORD-1');
     expect(worksheet?.getColumn(11).hidden).toBe(true);
     expect(worksheet?.getColumn(27).hidden).toBe(true);
     expect(worksheet?.getCell('A40').value).toBe('Totali');

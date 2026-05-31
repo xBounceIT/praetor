@@ -359,6 +359,25 @@ describe('GET /api/entries', () => {
     );
   });
 
+  test('200: viewer with RIL view can read an explicitly selected managed user', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
+    isUserManagedByMock.mockResolvedValue(true);
+    entriesListForUserMock.mockResolvedValue({ entries: [], nextCursor: null });
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/entries?userId=u2&fromDate=2026-05-01&toDate=2026-05-31',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(isUserManagedByMock).toHaveBeenCalledWith('u1', 'u2');
+    expect(entriesListForUserMock).toHaveBeenCalledWith(
+      'u2',
+      expect.objectContaining({ fromDate: '2026-05-01', toDate: '2026-05-31' }),
+    );
+  });
+
   test('200: explicit userId routes to listForUser', async () => {
     getRolePermissionsMock.mockResolvedValue(TRACKER_ALL_PERMS);
     entriesListForUserMock.mockResolvedValue({ entries: [], nextCursor: null });

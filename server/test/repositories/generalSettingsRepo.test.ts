@@ -233,6 +233,16 @@ describe('update', () => {
     expect(nullCount).toBeGreaterThanOrEqual(17);
   });
 
+  test('binds NULL for explicit null RIL arrays to preserve existing values', async () => {
+    exec.enqueue({ rows: [buildRow()] });
+    await generalSettingsRepo.update({ rilNoteOptions: null, rilTransferOptions: null }, testDb);
+
+    const params = exec.calls[0].params;
+    expect(params[16]).toBeNull();
+    expect(params[17]).toBeNull();
+    expect(params).not.toContain('null');
+  });
+
   test('targets the singleton row via WHERE id = 1', async () => {
     exec.enqueue({ rows: [buildRow()] });
     await generalSettingsRepo.update({ currency: 'USD' }, testDb);
