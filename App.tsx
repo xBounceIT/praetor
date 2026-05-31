@@ -1001,6 +1001,10 @@ const AppContent: React.FC = () => {
   // app honors the user's saved theme. applyBrowserTheme() never persists, so a
   // logged-out screen can't clobber the stored preference. useLayoutEffect runs
   // before paint so the correct theme is in place without a flash on toggle.
+  // Login additionally self-themes its own scope via useBrowserTheme so it's
+  // correct even on a cold, token-less load where this effect runs before Login
+  // mounts; the call here keeps the global theme state and any portaled overlays
+  // in sync with the OS while logged out — both are intentional, not redundant.
   useLayoutEffect(() => {
     if (isAuthenticated) {
       applyTheme(getTheme());
