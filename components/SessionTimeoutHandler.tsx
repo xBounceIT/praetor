@@ -1,8 +1,17 @@
+import { Clock, Loader2, LogOut, ShieldCheck } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import api from '../services/api';
-import Modal from './shared/Modal';
 
 export interface SessionTimeoutHandlerProps {
   onLogout: () => void;
@@ -86,58 +95,55 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
   };
 
   return (
-    <Modal
-      isOpen={showWarning}
-      onClose={() => {}}
-      closeOnBackdrop={false}
-      closeOnEsc={false}
-      zIndex={100}
-      backdropClass="bg-zinc-900/60 backdrop-blur-md"
-    >
-      <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-300 border border-zinc-200">
-        <div className="p-8 text-center">
-          <div className="size-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6">
-            <i className="fa-solid fa-hourglass-half text-amber-500 text-3xl animate-pulse"></i>
-          </div>
+    <Dialog open={showWarning}>
+      <DialogContent
+        showCloseButton={false}
+        overlayClassName="z-[100] bg-black/60 backdrop-blur-sm"
+        className="z-[101] gap-0 overflow-hidden p-0 sm:max-w-md"
+        onEscapeKeyDown={(event) => event.preventDefault()}
+        onInteractOutside={(event) => event.preventDefault()}
+      >
+        <div className="border-b border-border bg-muted/40 px-6 py-5">
+          <DialogHeader className="gap-0 text-left">
+            <div className="flex items-start gap-3">
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 text-primary">
+                <Clock className="size-5" aria-hidden="true" />
+              </div>
+              <div className="min-w-0">
+                <DialogTitle className="text-base leading-6">
+                  {t('sessionTimeout.title')}
+                </DialogTitle>
+                <DialogDescription className="mt-1 leading-6">
+                  {t('sessionTimeout.message')}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+        </div>
 
-          <h3 className="text-2xl font-semibold text-zinc-800 mb-2 tracking-tight">
-            {t('sessionTimeout.title')}
-          </h3>
-          <p className="text-zinc-500 leading-relaxed mb-8">{t('sessionTimeout.message')}</p>
-
-          <div className="flex flex-col gap-3">
-            <button
-              type="button"
-              onClick={handleStayLoggedIn}
-              disabled={isRefreshing}
-              className="w-full py-4 bg-praetor text-white rounded-2xl font-bold hover:shadow-lg hover:shadow-praetor/30 transition-all flex items-center justify-center gap-2 group"
-            >
-              {isRefreshing ? (
-                <i className="fa-solid fa-circle-notch fa-spin"></i>
-              ) : (
-                <i className="fa-solid fa-check group-hover:scale-110 transition-transform"></i>
-              )}
-              {t('sessionTimeout.stayLoggedIn')}
-            </button>
-
-            <button
-              type="button"
-              onClick={onLogout}
-              className="w-full py-4 bg-zinc-50 text-zinc-500 rounded-2xl font-bold hover:bg-zinc-100 transition-colors"
-            >
-              {t('sessionTimeout.logout')}
-            </button>
+        <div className="px-6 py-5">
+          <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
+            <ShieldCheck className="size-4 shrink-0 text-primary" aria-hidden="true" />
+            <span>{t('sessionTimeout.secure')}</span>
           </div>
         </div>
 
-        <div className="bg-zinc-50 px-8 py-4 border-t border-zinc-100 flex justify-center">
-          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
-            <i className="fa-solid fa-shield-halved"></i>
-            {t('sessionTimeout.secure')}
-          </p>
-        </div>
-      </div>
-    </Modal>
+        <DialogFooter className="border-t border-border bg-muted/20 px-6 py-4">
+          <Button type="button" variant="outline" onClick={onLogout}>
+            <LogOut data-icon="inline-start" />
+            {t('sessionTimeout.logout')}
+          </Button>
+          <Button type="button" onClick={handleStayLoggedIn} disabled={isRefreshing}>
+            {isRefreshing ? (
+              <Loader2 data-icon="inline-start" className="animate-spin" />
+            ) : (
+              <ShieldCheck data-icon="inline-start" />
+            )}
+            {t('sessionTimeout.stayLoggedIn')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 
