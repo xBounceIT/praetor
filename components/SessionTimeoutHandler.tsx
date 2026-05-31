@@ -128,11 +128,7 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
           </div>
         </div>
 
-        <DialogFooter className="border-t border-border bg-muted/20 px-6 py-4">
-          <Button type="button" variant="outline" onClick={onLogout}>
-            <LogOut data-icon="inline-start" />
-            {t('sessionTimeout.logout')}
-          </Button>
+        <DialogFooter className="flex-col border-t border-border bg-muted/20 px-6 py-4 sm:flex-row">
           <Button type="button" onClick={handleStayLoggedIn} disabled={isRefreshing}>
             {isRefreshing ? (
               <Loader2 data-icon="inline-start" className="animate-spin" />
@@ -140,6 +136,10 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
               <ShieldCheck data-icon="inline-start" />
             )}
             {t('sessionTimeout.stayLoggedIn')}
+          </Button>
+          <Button type="button" variant="outline" onClick={onLogout}>
+            <LogOut data-icon="inline-start" />
+            {t('sessionTimeout.logout')}
           </Button>
         </DialogFooter>
       </DialogContent>
