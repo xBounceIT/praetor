@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import {
+  applyBrowserTheme,
   applyTheme,
   getBrowserTheme,
   getTheme,
+  subscribeBrowserTheme,
   THEME_CHANGE_EVENT,
   THEME_MEDIA_QUERY,
   THEME_SCOPE_SELECTOR,
@@ -216,5 +218,98 @@ describe('applyTheme', () => {
       applyTheme(theme);
       expect(getTheme()).toBe(theme);
     }
+  });
+
+  test('does not persist when persistence is disabled', () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+    applyTheme('light', { persist: false });
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
+  });
+});
+
+describe('applyBrowserTheme', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetRootTheme();
+    setBrowserDarkMode(false);
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    resetRootTheme();
+    window.matchMedia = originalMatchMedia;
+  });
+
+  test('applies the dark browser theme to shadcn scopes', () => {
+    const scope = appendThemeScope();
+    setBrowserDarkMode(true);
+    applyBrowserTheme();
+    expect(scope.classList.contains('dark')).toBe(true);
+    expect(scope.dataset.shadcnTheme).toBe('dark');
+  });
+
+  test('applies the light browser theme to shadcn scopes', () => {
+    const scope = appendThemeScope();
+    setBrowserDarkMode(false);
+    applyBrowserTheme();
+    expect(scope.classList.contains('dark')).toBe(false);
+    expect(scope.dataset.shadcnTheme).toBe('light');
+  });
+
+  test('does not persist or overwrite the saved theme preference', () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+    setBrowserDarkMode(false);
+    applyBrowserTheme();
+    // The login screen rendered light from the OS, but the user's choice stays.
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
+    expect(getTheme()).toBe('dark');
+  });
+
+  test('keeps following the OS theme after it is applied', () => {
+    const scope = appendThemeScope();
+    const mediaQuery = window.matchMedia(THEME_MEDIA_QUERY) as MediaQueryList & {
+      triggerChange: (nextMatches: boolean) => void;
+    };
+
+    applyBrowserTheme();
+    expect(scope.classList.contains('dark')).toBe(false);
+
+    mediaQuery.triggerChange(true);
+    expect(scope.classList.contains('dark')).toBe(true);
+  });
+});
+
+describe('subscribeBrowserTheme', () => {
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+  });
+
+  test('notifies the listener with the resolved theme on change', () => {
+    setBrowserDarkMode(false);
+    const seen: string[] = [];
+    const unsubscribe = subscribeBrowserTheme((theme) => seen.push(theme));
+
+    const mediaQuery = window.matchMedia(THEME_MEDIA_QUERY) as MediaQueryList & {
+      triggerChange: (nextMatches: boolean) => void;
+    };
+    mediaQuery.triggerChange(true);
+    mediaQuery.triggerChange(false);
+
+    expect(seen).toEqual(['dark', 'light']);
+    unsubscribe();
+  });
+
+  test('stops notifying after unsubscribe', () => {
+    setBrowserDarkMode(false);
+    const seen: string[] = [];
+    const unsubscribe = subscribeBrowserTheme((theme) => seen.push(theme));
+
+    const mediaQuery = window.matchMedia(THEME_MEDIA_QUERY) as MediaQueryList & {
+      triggerChange: (nextMatches: boolean) => void;
+    };
+    unsubscribe();
+    mediaQuery.triggerChange(true);
+
+    expect(seen).toEqual([]);
   });
 });

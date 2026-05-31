@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
+import { getShadcnThemeClassName, useBrowserTheme } from '@/components/ui/use-shadcn-theme';
+import { cn } from '@/lib/utils';
 import api, { ApiError } from '../services/api';
 import { type PublicSsoProvider, SSO_LOGIN_ERROR_CODES, type User } from '../types';
 
@@ -59,6 +61,9 @@ const Login: React.FC<LoginProps> = ({
   onDismissServerUnreachable,
 }) => {
   const { t } = useTranslation(['auth', 'common', 'notifications']);
+  // The login screen follows the OS/browser color scheme rather than any saved
+  // user preference — the signed-in user isn't known yet at this point.
+  const browserTheme = useBrowserTheme();
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -168,7 +173,14 @@ const Login: React.FC<LoginProps> = ({
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/70 p-4">
+    <div
+      data-shadcn-theme-scope
+      data-shadcn-theme={browserTheme}
+      className={cn(
+        'shadcn-theme-bridge flex min-h-screen items-center justify-center bg-muted/70 p-4',
+        getShadcnThemeClassName(browserTheme),
+      )}
+    >
       <div className="relative w-full max-w-md overflow-hidden rounded-xl border bg-card px-8 py-8 shadow-lg">
         <div className="absolute inset-0 -top-px -left-px z-0" style={gridOverlayStyle} />
 

@@ -1,10 +1,48 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { THEME_STORAGE_KEY } from '../../utils/theme';
 import { ApiErrorStub } from '../helpers/apiErrorStub';
 import { installI18nMock } from '../helpers/i18n';
 import { clearSpyStateAfterAll } from '../helpers/mockCleanup.ts';
 
 installI18nMock();
+
+// Drive the login screen's theme from a controllable `prefers-color-scheme`
+// media query so we can assert it follows the OS instead of any saved choice.
+// Installed per-test and restored afterward so the override never leaks into
+// other suites (a stale dark preference would flip their resolved theme).
+let prefersDarkScheme = false;
+type ColorSchemeListener = (event: MediaQueryListEvent) => void;
+const colorSchemeListeners = new Set<ColorSchemeListener>();
+const originalMatchMedia = window.matchMedia;
+
+const mockMatchMedia = ((query: string) =>
+  ({
+    get matches() {
+      return query.includes('prefers-color-scheme: dark') ? prefersDarkScheme : false;
+    },
+    media: query,
+    onchange: null,
+    addEventListener: (_type: string, callback: ColorSchemeListener) => {
+      colorSchemeListeners.add(callback);
+    },
+    removeEventListener: (_type: string, callback: ColorSchemeListener) => {
+      colorSchemeListeners.delete(callback);
+    },
+    addListener: (callback: ColorSchemeListener) => {
+      colorSchemeListeners.add(callback);
+    },
+    removeListener: (callback: ColorSchemeListener) => {
+      colorSchemeListeners.delete(callback);
+    },
+    dispatchEvent: () => false,
+  }) as MediaQueryList) as typeof window.matchMedia;
+
+const setPrefersDarkScheme = (matches: boolean) => {
+  prefersDarkScheme = matches;
+  const event = { matches } as MediaQueryListEvent;
+  for (const listener of colorSchemeListeners) listener(event);
+};
 
 const apiAuthLogin = mock((_u: string, _p: string) =>
   Promise.resolve({ user: { id: 'u1', name: 'Test' }, token: 'tok' }),
@@ -64,6 +102,10 @@ describe('<Login />', () => {
     );
     apiSsoListPublicProviders.mockImplementation(pendingProviderLoad);
     setTestUrl('http://localhost/');
+    localStorage.clear();
+    colorSchemeListeners.clear();
+    prefersDarkScheme = false;
+    window.matchMedia = mockMatchMedia;
   });
 
   afterEach(() => {
@@ -71,6 +113,9 @@ describe('<Login />', () => {
     apiAuthConsumeSsoTicket.mockReset();
     apiAuthGetSsoStartUrl.mockReset();
     apiSsoListPublicProviders.mockReset();
+    window.matchMedia = originalMatchMedia;
+    colorSchemeListeners.clear();
+    prefersDarkScheme = false;
   });
 
   test('renders title and both input fields', () => {
@@ -281,5 +326,56 @@ describe('<Login />', () => {
 
     expect(screen.getByText('auth:admin.sso.loginErrors.generic')).toBeInTheDocument();
     expect(screen.queryByText(/SAML response did not include a subject/)).not.toBeInTheDocument();
+  });
+
+  describe('respects the OS/browser theme instead of the saved preference', () => {
+    test('renders in dark mode when the OS prefers a dark color scheme', () => {
+      setPrefersDarkScheme(true);
+
+      const { container } = render(<Login onLogin={() => {}} />);
+      const scope = container.querySelector('[data-shadcn-theme-scope]');
+
+      expect(scope?.getAttribute('data-shadcn-theme')).toBe('dark');
+      expect(scope?.classList.contains('dark')).toBe(true);
+    });
+
+    test('renders in light mode when the OS prefers a light color scheme', () => {
+      setPrefersDarkScheme(false);
+
+      const { container } = render(<Login onLogin={() => {}} />);
+      const scope = container.querySelector('[data-shadcn-theme-scope]');
+
+      expect(scope?.getAttribute('data-shadcn-theme')).toBe('light');
+      expect(scope?.classList.contains('dark')).toBe(false);
+    });
+
+    test('ignores a saved theme preference and follows the OS instead', () => {
+      // A previously signed-in user picked the dark theme...
+      localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+      // ...but the OS is in light mode, so the login screen must render light.
+      setPrefersDarkScheme(false);
+
+      const { container } = render(<Login onLogin={() => {}} />);
+      const scope = container.querySelector('[data-shadcn-theme-scope]');
+
+      expect(scope?.getAttribute('data-shadcn-theme')).toBe('light');
+      expect(scope?.classList.contains('dark')).toBe(false);
+      // The stored preference is left untouched for use after sign-in.
+      expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
+    });
+
+    test('updates live when the OS color scheme changes', async () => {
+      setPrefersDarkScheme(false);
+
+      const { container } = render(<Login onLogin={() => {}} />);
+      const scope = container.querySelector('[data-shadcn-theme-scope]');
+      expect(scope?.classList.contains('dark')).toBe(false);
+
+      await act(async () => {
+        setPrefersDarkScheme(true);
+      });
+
+      await waitFor(() => expect(scope?.classList.contains('dark')).toBe(true));
+    });
   });
 });

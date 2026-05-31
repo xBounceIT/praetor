@@ -135,7 +135,7 @@ import {
   type ProgrammaticHashTracker,
 } from './utils/programmaticHashTracker';
 import { retryTransient } from './utils/retry';
-import { applyTheme, getTheme } from './utils/theme';
+import { applyBrowserTheme, applyTheme, getTheme } from './utils/theme';
 import { toastError } from './utils/toast';
 import {
   filterTrackerCatalogs,
@@ -694,9 +694,6 @@ const TrackerView: React.FC<{
 
 const AppContent: React.FC = () => {
   const { t: tApp } = useTranslation(['common', 'reports']);
-  useLayoutEffect(() => {
-    applyTheme(getTheme());
-  }, []);
 
   const [users, setUsers] = useState<User[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -967,6 +964,7 @@ const AppContent: React.FC = () => {
 
   const {
     currentUser,
+    isAuthenticated,
     isLoading,
     logoutReason,
     clearLogoutReason,
@@ -998,6 +996,18 @@ const AppContent: React.FC = () => {
   // without the effect resubscribing — events fired during teardown are lost.
   const currentUserRef = useRef(currentUser);
   currentUserRef.current = currentUser;
+
+  // The login screen always follows the OS/browser color scheme; the signed-in
+  // app honors the user's saved theme. applyBrowserTheme() never persists, so a
+  // logged-out screen can't clobber the stored preference. useLayoutEffect runs
+  // before paint so the correct theme is in place without a flash on toggle.
+  useLayoutEffect(() => {
+    if (isAuthenticated) {
+      applyTheme(getTheme());
+    } else {
+      applyBrowserTheme();
+    }
+  }, [isAuthenticated]);
 
   const handleLogin = login;
   const handleLogout = logout;
