@@ -658,9 +658,6 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                         </div>
                       ))}
                     </fieldset>
-                    <FieldDescription>
-                      {t('general.rilTransferOptionsDescription')}
-                    </FieldDescription>
                   </Field>
                 </div>
               </div>

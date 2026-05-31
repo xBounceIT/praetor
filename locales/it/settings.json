@@ -206,7 +206,6 @@
     "rilRemoveNoteOption": "Rimuovi nota",
     "rilRemoveTransferOption": "Rimuovi trasferta",
     "rilTransferOptionsLabel": "Opzioni Trasferta RIL",
-    "rilTransferOptionsDescription": "La prima viene usata per i giorni in sede, la seconda per il telelavoro.",
     "actions": "Azioni",
     "locationTypes": {
       "office": "Ufficio",

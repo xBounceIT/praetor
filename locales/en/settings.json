@@ -206,7 +206,6 @@
     "rilRemoveNoteOption": "Remove note",
     "rilRemoveTransferOption": "Remove transfer",
     "rilTransferOptionsLabel": "RIL Transfer Options",
-    "rilTransferOptionsDescription": "The first option is used for office days, the second for remote days.",
     "actions": "Actions",
     "locationTypes": {
       "office": "Office",
