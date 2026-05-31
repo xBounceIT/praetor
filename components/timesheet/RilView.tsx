@@ -203,6 +203,7 @@ const RilView: React.FC<RilViewProps> = ({
             toDate: monthBounds.toDate,
             cursor,
             limit: 500,
+            purpose: 'ril',
           });
           if (loadTokenRef.current !== token) return null;
           nextEntries.push(...page.entries);

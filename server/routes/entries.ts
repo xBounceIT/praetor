@@ -119,6 +119,7 @@ const entriesListQuerySchema = {
     cursor: { type: 'string' },
     fromDate: { type: 'string', format: 'date' },
     toDate: { type: 'string', format: 'date' },
+    purpose: { type: 'string', enum: ['ril'] },
   },
 } as const;
 
@@ -194,6 +195,23 @@ const sanitizeListResult = (
   nextCursor: result.nextCursor,
 });
 
+const sanitizeRilListResult = (result: {
+  entries: TimeEntry[];
+  nextCursor: string | null;
+}): { entries: SanitizedEntry[]; nextCursor: string | null } => ({
+  entries: result.entries.map((entry) => {
+    const sanitized = sanitizeEntry(entry, false);
+    return {
+      ...sanitized,
+      task: '',
+      taskId: null,
+      notes: null,
+      duration: 0,
+    };
+  }),
+  nextCursor: result.nextCursor,
+});
+
 const handleTimeEntryServiceError = (err: unknown, reply: FastifyReply) => {
   if (err instanceof TimeEntryServiceError) {
     return reply.code(err.statusCode).send({ error: err.message });
@@ -228,13 +246,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!assertAuthenticated(request, reply)) return;
 
-      const { userId, projectId, limit, cursor, fromDate, toDate } = request.query as {
+      const { userId, projectId, limit, cursor, fromDate, toDate, purpose } = request.query as {
         userId?: string;
         projectId?: string;
         limit?: number;
         cursor?: string;
         fromDate?: string;
         toDate?: string;
+        purpose?: 'ril';
       };
       try {
         const result = await listTimeEntries(actorFromRequest(request), {
@@ -244,7 +263,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           cursor,
           fromDate,
           toDate,
+          purpose,
         });
+        if (purpose === 'ril') return sanitizeRilListResult(result);
         return sanitizeListResult(result, requestHasPermission(request, 'reports.cost.view'));
       } catch (err) {
         return handleTimeEntryServiceError(err, reply);

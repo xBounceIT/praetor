@@ -113,6 +113,7 @@ describe('<RilView />', () => {
         userId: 'u1',
         fromDate: '2026-05-01',
         toDate: '2026-05-31',
+        purpose: 'ril',
       }),
     );
     expect(api.projects.list).toHaveBeenCalledWith({ userId: 'u1' });
