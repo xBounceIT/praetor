@@ -34,7 +34,6 @@ const project = (overrides: Partial<Project>): Project => ({
   id: overrides.id ?? 'p1',
   name: overrides.name ?? 'Project',
   clientId: overrides.clientId ?? 'c1',
-  color: overrides.color ?? '#000000',
   ...overrides,
 });
 

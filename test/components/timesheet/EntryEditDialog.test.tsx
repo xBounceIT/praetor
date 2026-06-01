@@ -21,8 +21,8 @@ const clients: Client[] = [
 ];
 
 const projects: Project[] = [
-  { id: 'project-alpha', name: 'Alpha Project', clientId: 'client-alpha', color: '#111111' },
-  { id: 'project-beta', name: 'Beta Project', clientId: 'client-beta', color: '#222222' },
+  { id: 'project-alpha', name: 'Alpha Project', clientId: 'client-alpha' },
+  { id: 'project-beta', name: 'Beta Project', clientId: 'client-beta' },
 ];
 
 const projectTasks: ProjectTask[] = [

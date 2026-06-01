@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Area,
@@ -36,7 +36,6 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { COLORS } from '../../constants';
 import { entriesApi, projectsApi } from '../../services/api';
 import type {
   BillingFrequency,
@@ -98,16 +97,6 @@ const DASHBOARD_WIDGETS: readonly DashboardWidgetDef[] = [
   { id: 'costVsRevenue', x: 0, y: 12, w: 6, h: 6, minW: 4, minH: 4 },
   { id: 'monthlyActivity', x: 6, y: 12, w: 6, h: 6, minW: 4, minH: 4 },
 ];
-
-const isValidHex = (v: string) => /^#[0-9a-fA-F]{6}$/.test(v);
-
-const normalizeHex = (v: string): string => {
-  let h = v.trim();
-  if (h && !h.startsWith('#')) h = '#' + h;
-  const m = /^#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])$/.exec(h);
-  if (m) h = `#${m[1]}${m[1]}${m[2]}${m[2]}${m[3]}${m[3]}`;
-  return h;
-};
 
 const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
 
@@ -236,8 +225,6 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const [revenue, setRevenue] = useState(
     project.revenue !== null && project.revenue !== undefined ? String(project.revenue) : '',
   );
-  const [color, setColor] = useState(project.color);
-  const [hexInput, setHexInput] = useState(project.color);
   const [tempIsDisabled, setTempIsDisabled] = useState(project.isDisabled ?? false);
   const storedInitialBillingType = toStoredBillingType(project.billingType);
   const [billingType, setBillingType] = useState<StoredBillingType>(storedInitialBillingType);
@@ -248,18 +235,6 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   );
   const [projectBillingChanged, setProjectBillingChanged] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const skipPickerRef = useRef(false);
-  const commitHexInput = () => {
-    skipPickerRef.current = true;
-    const norm = normalizeHex(hexInput);
-    if (isValidHex(norm)) {
-      setColor(norm);
-      setHexInput(norm);
-    } else {
-      setHexInput(color);
-    }
-  };
 
   // No prop-sync useEffect: the parent passes `key={project.id}` so this component
   // remounts on project switch — useState initializers above re-run with the new
@@ -713,7 +688,6 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     endDate !== (project.endDate ?? '') ||
     offerId !== (project.offerId ?? '') ||
     revenueChanged ||
-    color !== project.color ||
     tempIsDisabled !== (project.isDisabled ?? false) ||
     projectBillingChanged;
 
@@ -727,8 +701,6 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     setRevenue(
       project.revenue !== null && project.revenue !== undefined ? String(project.revenue) : '',
     );
-    setColor(project.color);
-    setHexInput(project.color);
     setTempIsDisabled(project.isDisabled ?? false);
     const stored = toStoredBillingType(project.billingType);
     setBillingType(stored);
@@ -747,7 +719,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     if (!offerId) newErrors.offerId = t('projects:projects.offerRequired');
     // Only enforce required dates on projects that already carry them. Legacy projects
     // predating the dates-required rule still allow null dates on the PATCH endpoint;
-    // forcing dates here would block unrelated edits (rename, color, disable) until the
+    // forcing dates here would block unrelated edits (rename, disable) until the
     // user invented a planning window.
     if (project.startDate && !startDate) {
       newErrors.startDate = t('projects:projects.startDateRequired');
@@ -766,7 +738,6 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       name,
       clientId,
       description,
-      color,
       isDisabled: tempIsDisabled,
       offerId,
       startDate: startDate || null,
@@ -896,11 +867,6 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             {t('projects:detail.actions.back')}
           </button>
           <div className="flex flex-wrap items-center gap-3">
-            <span
-              className="inline-block size-6 rounded-md border border-border shadow-sm"
-              style={{ backgroundColor: project.color }}
-              aria-hidden="true"
-            />
             <h1 className="text-2xl font-semibold text-foreground">{project.name}</h1>
             {project.isDisabled ? (
               <StatusBadge type="disabled" label={t('projects:projects.statusDisabled')} />
@@ -1189,67 +1155,6 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           <Separator />
 
           <div className="grid gap-4 md:grid-cols-2">
-            <Field>
-              <FieldLabel>{t('projects:projects.color')}</FieldLabel>
-              <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 p-3">
-                {COLORS.map((c) => (
-                  <Tooltip key={c}>
-                    <TooltipTrigger asChild>
-                      <span className="inline-flex">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          disabled={!canUpdateProjects}
-                          onClick={() => {
-                            setColor(c);
-                            setHexInput(c);
-                          }}
-                          className={`rounded-full border-2 p-0 transition-transform active:scale-95 ${color === c ? 'border-background ring-2 ring-ring ring-offset-2 ring-offset-background' : 'border-transparent hover:scale-105'}`}
-                          style={{ backgroundColor: c }}
-                        />
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>{c}</TooltipContent>
-                  </Tooltip>
-                ))}
-                <div className="ml-1 flex items-center gap-2 border-l border-border pl-3">
-                  <Input
-                    type="color"
-                    value={color}
-                    disabled={!canUpdateProjects}
-                    onFocus={() => {
-                      skipPickerRef.current = false;
-                    }}
-                    onChange={(e) => {
-                      if (skipPickerRef.current) return;
-                      setColor(e.target.value);
-                      setHexInput(e.target.value);
-                    }}
-                    className="size-8 cursor-pointer rounded-md bg-transparent p-1 [&::-moz-color-swatch]:rounded-sm [&::-moz-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-sm"
-                  />
-                  <Input
-                    type="text"
-                    value={hexInput}
-                    disabled={!canUpdateProjects}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setHexInput(val);
-                      if (isValidHex(val)) setColor(val);
-                    }}
-                    onBlur={commitHexInput}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        commitHexInput();
-                      }
-                    }}
-                    placeholder="#000000"
-                    className="h-8 w-[90px] font-mono text-xs tabular-nums"
-                  />
-                </div>
-              </div>
-            </Field>
             <Field>
               <FieldLabel>{t('projects:projects.projectDisabled')}</FieldLabel>
               <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">

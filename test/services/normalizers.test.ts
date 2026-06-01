@@ -760,7 +760,6 @@ describe('normalizeProject', () => {
     id: 'p-1',
     name: 'Project',
     clientId: 'c-1',
-    color: '#3b82f6',
   };
 
   test('normalizes legacy partial billing payloads to time and materials monthly', () => {

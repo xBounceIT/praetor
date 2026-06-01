@@ -8,7 +8,7 @@ describe('RIL Excel export', () => {
       year: 2026,
       month: 5,
       lunchBreakMinutes: 60,
-      projects: [{ id: 'p1', name: 'Project', clientId: 'c1', color: '#111111', orderId: 'ORD-1' }],
+      projects: [{ id: 'p1', name: 'Project', clientId: 'c1', orderId: 'ORD-1' }],
       entries: [
         {
           id: 'te-1',

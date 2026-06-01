@@ -61,15 +61,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
         accessorFn: (task) => projectsById.get(task.projectId)?.name || '',
         cell: ({ row: task }) => {
           const project = projectsById.get(task.projectId);
-          return (
-            <span className="text-zinc-600 inline-flex items-center gap-1.5">
-              <span
-                className="size-1.5 rounded-full flex-shrink-0"
-                style={{ backgroundColor: project?.color || '#ccc' }}
-              ></span>
-              {project?.name || t('recurring.unknown')}
-            </span>
-          );
+          return <span className="text-zinc-600">{project?.name || t('recurring.unknown')}</span>;
         },
       },
       {

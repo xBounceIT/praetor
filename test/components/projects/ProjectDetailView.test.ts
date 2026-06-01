@@ -95,7 +95,7 @@ describe('ProjectDetailView wiring', () => {
   });
 
   test('date-required validation skips legacy projects without stored dates', async () => {
-    // Hard-requiring dates on save would block rename/recolor/disable for projects
+    // Hard-requiring dates on save would block rename/disable for projects
     // created before the dates-required rule. Validation only fires when the project
     // already carries the corresponding date.
     const source = await readSource();

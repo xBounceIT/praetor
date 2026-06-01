@@ -11,13 +11,11 @@ import * as realWorkUnitsRepo from '../../repositories/workUnitsRepo.ts';
 import * as realAudit from '../../utils/audit.ts';
 import { ForeignKeyError } from '../../utils/http-errors.ts';
 import * as realPermissions from '../../utils/permissions.ts';
-import { PROJECT_COLOR_PALETTE } from '../../utils/project-colors.ts';
 import {
   installAuthMiddlewareMock,
   restoreAuthMiddlewareMock,
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
-import { makeDbError } from '../helpers/dbErrors.ts';
 import { signToken } from '../helpers/jwt.ts';
 import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
@@ -44,8 +42,6 @@ const listForUserMock = mock();
 const createMock = mock();
 const updateMock = mock();
 const findByIdMock = mock();
-const lockColorAllocationMock = mock();
-const listColorsForAllocationMock = mock();
 const findDateRangeByIdMock = mock();
 const findClientLinksByIdMock = mock();
 const deleteByIdMock = mock();
@@ -101,8 +97,6 @@ beforeAll(async () => {
     create: createMock,
     update: updateMock,
     findById: findByIdMock,
-    lockColorAllocation: lockColorAllocationMock,
-    listColorsForAllocation: listColorsForAllocationMock,
     findDateRangeById: findDateRangeByIdMock,
     findClientLinksById: findClientLinksByIdMock,
     deleteById: deleteByIdMock,
@@ -188,7 +182,6 @@ const SAMPLE_PROJECT = {
   id: 'p-1',
   name: 'Website',
   clientId: 'c-1',
-  color: '#3b82f6',
   description: null,
   isDisabled: false,
   createdAt: 1_700_000_000_000,
@@ -218,8 +211,6 @@ const allMocks = [
   createMock,
   updateMock,
   findByIdMock,
-  lockColorAllocationMock,
-  listColorsForAllocationMock,
   findDateRangeByIdMock,
   findClientLinksByIdMock,
   deleteByIdMock,
@@ -264,8 +255,6 @@ beforeEach(async () => {
   // and the real FK violation surfaces from the repo path under test.
   findOrderClientIdByIdMock.mockResolvedValue(null);
   findOfferClientIdByIdMock.mockResolvedValue(null);
-  lockColorAllocationMock.mockResolvedValue(undefined);
-  listColorsForAllocationMock.mockResolvedValue([]);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/projects');
 });
@@ -382,7 +371,6 @@ describe('POST /api/projects', () => {
         ...VALID_CREATE_PAYLOAD,
         name: 'Website',
         description: 'A new site',
-        color: '#abcdef',
         orderId: 'o-1',
       },
     });
@@ -392,7 +380,6 @@ describe('POST /api/projects', () => {
       expect.objectContaining({
         name: 'Website',
         clientId: 'c-1',
-        color: '#abcdef',
         description: 'A new site',
         orderId: 'o-1',
         offerId: 'of-1',
@@ -407,6 +394,27 @@ describe('POST /api/projects', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'project.created', entityType: 'project' }),
     );
+  });
+
+  test('201: color is no longer part of the project model (create)', async () => {
+    createMock.mockResolvedValue(SAMPLE_PROJECT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      // A client that still sends `color` must be ignored, not honored.
+      payload: { ...VALID_CREATE_PAYLOAD, color: '#abcdef' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    // The repo is called without a color field...
+    expect(createMock).toHaveBeenCalledWith(
+      expect.not.objectContaining({ color: expect.anything() }),
+      TX_SENTINEL,
+    );
+    // ...and the serialized project never exposes one.
+    expect(JSON.parse(res.body)).not.toHaveProperty('color');
   });
 
   test('201: persists startDate, endDate, offerId, revenue', async () => {
@@ -448,86 +456,6 @@ describe('POST /api/projects', () => {
       endDate: '2026-12-31',
       revenue: 12345.5,
     });
-  });
-
-  test('201: assigns the first available server color when omitted', async () => {
-    createMock.mockImplementation(async (project: Record<string, unknown>) => ({
-      ...SAMPLE_PROJECT,
-      color: project.color,
-    }));
-
-    const res = await testApp.inject({
-      method: 'POST',
-      url: '/api/projects',
-      headers: authHeader(),
-      payload: { ...VALID_CREATE_PAYLOAD },
-    });
-
-    expect(res.statusCode).toBe(201);
-    expect(lockColorAllocationMock).toHaveBeenCalledWith(TX_SENTINEL);
-    expect(listColorsForAllocationMock).toHaveBeenCalledWith(TX_SENTINEL);
-    expect(createMock).toHaveBeenCalledWith(
-      expect.objectContaining({ color: '#ef4444', orderId: null, description: null }),
-      TX_SENTINEL,
-    );
-    expect(JSON.parse(res.body).color).toBe('#ef4444');
-  });
-
-  test('201: generates an extra unique color when the palette is exhausted', async () => {
-    listColorsForAllocationMock.mockResolvedValue([...PROJECT_COLOR_PALETTE]);
-    createMock.mockImplementation(async (project: Record<string, unknown>) => ({
-      ...SAMPLE_PROJECT,
-      color: project.color,
-    }));
-
-    const res = await testApp.inject({
-      method: 'POST',
-      url: '/api/projects',
-      headers: authHeader(),
-      payload: { ...VALID_CREATE_PAYLOAD },
-    });
-
-    const color = JSON.parse(res.body).color;
-    expect(res.statusCode).toBe(201);
-    expect(color).toMatch(/^#[0-9a-f]{6}$/);
-    expect(PROJECT_COLOR_PALETTE).not.toContain(color);
-    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ color }), TX_SENTINEL);
-  });
-
-  test('409: explicit duplicate color is rejected case-insensitively', async () => {
-    listColorsForAllocationMock.mockResolvedValue(['#aabbcc']);
-
-    const res = await testApp.inject({
-      method: 'POST',
-      url: '/api/projects',
-      headers: authHeader(),
-      payload: { ...VALID_CREATE_PAYLOAD, color: '#ABC' },
-    });
-
-    expect(res.statusCode).toBe(409);
-    expect(JSON.parse(res.body)).toEqual({ error: 'Project color already exists' });
-    expect(createMock).not.toHaveBeenCalled();
-  });
-
-  test('201: retries generated colors after a concurrent unique conflict', async () => {
-    listColorsForAllocationMock.mockResolvedValueOnce([]).mockResolvedValueOnce(['#ef4444']);
-    createMock
-      .mockRejectedValueOnce(makeDbError('23505', 'idx_projects_color_unique'))
-      .mockImplementationOnce(async (project: Record<string, unknown>) => ({
-        ...SAMPLE_PROJECT,
-        color: project.color,
-      }));
-
-    const res = await testApp.inject({
-      method: 'POST',
-      url: '/api/projects',
-      headers: authHeader(),
-      payload: { ...VALID_CREATE_PAYLOAD },
-    });
-
-    expect(res.statusCode).toBe(201);
-    expect(createMock).toHaveBeenCalledTimes(2);
-    expect(JSON.parse(res.body).color).toBe('#f59e0b');
   });
 
   test('400: orderId belonging to a different client is rejected', async () => {
@@ -735,18 +663,6 @@ describe('POST /api/projects', () => {
     expect(JSON.parse(res.body).error).toMatch(/revenue must be zero or positive/);
   });
 
-  test('400: invalid hex color', async () => {
-    const res = await testApp.inject({
-      method: 'POST',
-      url: '/api/projects',
-      headers: authHeader(),
-      payload: { ...VALID_CREATE_PAYLOAD, color: 'not-a-hex' },
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body).error).toMatch(/color must be a valid hex color/);
-  });
-
   test('400: invalid billing type', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -946,6 +862,27 @@ describe('PUT /api/projects/:id', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'project.updated' }),
     );
+  });
+
+  test('200: color is no longer part of the project model (update)', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, name: 'Renamed' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      // A client that still sends `color` must be ignored, not forwarded to the repo.
+      payload: { name: 'Renamed', color: '#abcdef' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'p-1',
+      expect.not.objectContaining({ color: expect.anything() }),
+      TX_SENTINEL,
+    );
+    expect(JSON.parse(res.body)).not.toHaveProperty('color');
   });
 
   test('200: client change triggers cascade assignments + removal', async () => {
@@ -1328,40 +1265,6 @@ describe('PUT /api/projects/:id', () => {
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body)).toEqual({ error: 'Linked offer not found' });
-  });
-
-  test('400: invalid hex color', async () => {
-    const res = await testApp.inject({
-      method: 'PUT',
-      url: '/api/projects/p-1',
-      headers: authHeader(),
-      payload: { color: 'bogus' },
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body).error).toMatch(/color must be a valid hex color/);
-  });
-
-  test('409: duplicate color on update maps to conflict', async () => {
-    lockClientIdByIdMock.mockResolvedValue('c-1');
-    updateMock.mockImplementation(async () => {
-      throw makeDbError('23505', 'idx_projects_color_unique');
-    });
-
-    const res = await testApp.inject({
-      method: 'PUT',
-      url: '/api/projects/p-1',
-      headers: authHeader(),
-      payload: { color: '#ABC' },
-    });
-
-    expect(res.statusCode).toBe(409);
-    expect(JSON.parse(res.body)).toEqual({ error: 'Project color already exists' });
-    expect(updateMock).toHaveBeenCalledWith(
-      'p-1',
-      expect.objectContaining({ color: '#aabbcc' }),
-      TX_SENTINEL,
-    );
   });
 
   test('404: project not found (lock returns null)', async () => {

@@ -9,7 +9,7 @@ import {
   normalizeBillingFrequency,
   type StoredBillingType,
 } from '../utils/billing.ts';
-import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
+import { getForeignKeyViolation } from '../utils/db-errors.ts';
 import { ForeignKeyError } from '../utils/http-errors.ts';
 import { numericForDb, parseNullableDbNumber } from '../utils/parse.ts';
 import {
@@ -22,7 +22,6 @@ export type Project = {
   id: string;
   name: string;
   clientId: string;
-  color: string;
   description: string | null;
   isDisabled: boolean;
   createdAt: number;
@@ -39,7 +38,6 @@ const mapRow = (row: typeof projects.$inferSelect): Project => ({
   id: row.id,
   name: row.name,
   clientId: row.clientId,
-  color: row.color,
   description: row.description,
   isDisabled: row.isDisabled ?? false,
   // `created_at` has DEFAULT CURRENT_TIMESTAMP but is technically nullable in the schema;
@@ -58,7 +56,6 @@ type ProjectRawRow = {
   id: string;
   name: string;
   client_id: string;
-  color: string;
   description: string | null;
   is_disabled: boolean | null;
   created_at: string | Date | null;
@@ -87,7 +84,6 @@ const mapRawRow = (row: ProjectRawRow): Project => ({
   id: row.id,
   name: row.name,
   clientId: row.client_id,
-  color: row.color,
   description: row.description,
   isDisabled: row.is_disabled ?? false,
   createdAt: row.created_at ? new Date(row.created_at).getTime() : 0,
@@ -100,7 +96,7 @@ const mapRawRow = (row: ProjectRawRow): Project => ({
   billingFrequency: row.billing_frequency ?? DEFAULT_BILLING_FREQUENCY,
 });
 
-const projectSelectSql = sql`p.id, p.name, p.client_id, p.color, p.description, p.is_disabled, p.created_at, p.order_id,
+const projectSelectSql = sql`p.id, p.name, p.client_id, p.description, p.is_disabled, p.created_at, p.order_id,
        p.offer_id, p.start_date::text AS start_date, p.end_date::text AS end_date, p.revenue,
        ${derivedBillingTypeSql} AS billing_type, p.billing_frequency`;
 
@@ -230,7 +226,6 @@ export type NewProject = {
   id: string;
   name: string;
   clientId: string;
-  color: string;
   description: string | null;
   isDisabled: boolean;
   orderId?: string | null;
@@ -250,32 +245,6 @@ const PROJECT_ORDER_FK_CONSTRAINTS = new Set<string | undefined>([
   'projects_order_id_sales_id_fk',
 ]);
 const PROJECT_OFFER_FK_CONSTRAINT = 'projects_offer_id_customer_offers_id_fk';
-const PROJECT_COLOR_UNIQUE_CONSTRAINT = 'idx_projects_color_unique';
-
-export const isColorUniqueViolation = (err: unknown): boolean => {
-  const dup = getUniqueViolation(err);
-  if (!dup) return false;
-  return (
-    dup.constraint === PROJECT_COLOR_UNIQUE_CONSTRAINT ||
-    (dup.constraint === undefined && dup.detail?.includes('(color)') === true) ||
-    dup.detail?.includes('projects.color') === true
-  );
-};
-
-export const lockColorAllocation = async (exec: DbExecutor = db): Promise<void> => {
-  await executeRows(
-    exec,
-    sql`SELECT pg_advisory_xact_lock(hashtext('praetor.projects.color')::bigint)`,
-  );
-};
-
-export const listColorsForAllocation = async (exec: DbExecutor = db): Promise<string[]> => {
-  const rows = await executeRows<{ color: string }>(
-    exec,
-    sql`SELECT color FROM projects ORDER BY created_at, id`,
-  );
-  return rows.map((row) => row.color);
-};
 
 export const create = async (project: NewProject, exec: DbExecutor = db): Promise<Project> => {
   try {
@@ -285,7 +254,6 @@ export const create = async (project: NewProject, exec: DbExecutor = db): Promis
         id: project.id,
         name: project.name,
         clientId: project.clientId,
-        color: project.color,
         description: project.description,
         isDisabled: project.isDisabled,
         orderId: project.orderId ?? null,
@@ -316,7 +284,6 @@ export const create = async (project: NewProject, exec: DbExecutor = db): Promis
 export type ProjectUpdate = {
   name?: string | null;
   clientId?: string | null;
-  color?: string | null;
   description?: string | null;
   isDisabled?: boolean;
   orderId?: string | null;
@@ -336,7 +303,6 @@ export const update = async (
   const set: Record<string, unknown> = {};
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.clientId !== undefined) set.clientId = patch.clientId;
-  if (patch.color !== undefined) set.color = patch.color;
   if (patch.description !== undefined) set.description = patch.description;
   if (patch.isDisabled !== undefined) set.isDisabled = patch.isDisabled;
   if (patch.orderId !== undefined) set.orderId = patch.orderId;

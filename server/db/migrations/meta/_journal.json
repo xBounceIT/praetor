@@ -463,6 +463,13 @@
       "when": 1780323489128,
       "tag": "0065_add_project_rule_condition_chains",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1780341361868,
+      "tag": "0066_remove_project_color",
+      "breakpoints": true
     }
   ]
 }

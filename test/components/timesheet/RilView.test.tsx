@@ -26,9 +26,7 @@ const currentUser: User = {
   username: 'user',
 };
 
-const projects: Project[] = [
-  { id: 'p1', name: 'Project', clientId: 'c1', color: '#111111', orderId: 'ORD-1' },
-];
+const projects: Project[] = [{ id: 'p1', name: 'Project', clientId: 'c1', orderId: 'ORD-1' }];
 
 const may2026ValidWeekdays = [
   4, 5, 6, 7, 8, 11, 12, 13, 14, 15, 18, 19, 20, 21, 22, 25, 26, 27, 28, 29,
@@ -205,9 +203,7 @@ describe('<RilView />', () => {
       })),
       nextCursor: null,
     });
-    mockProjectList([
-      { id: 'p2', name: 'Managed Project', clientId: 'c1', color: '#222222', orderId: 'ORD-2' },
-    ]);
+    mockProjectList([{ id: 'p2', name: 'Managed Project', clientId: 'c1', orderId: 'ORD-2' }]);
 
     render(
       <RilView

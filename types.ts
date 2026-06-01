@@ -217,7 +217,6 @@ export interface Project {
   id: string;
   name: string;
   clientId: string;
-  color: string;
   description?: string;
   isDisabled?: boolean;
   createdAt?: number;
