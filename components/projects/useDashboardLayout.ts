@@ -155,6 +155,15 @@ export const useDashboardLayout = (
   const widgetsRef = useRef(widgets);
   widgetsRef.current = widgets;
 
+  // Live refs so the async load reconcile reads fresh values without making them
+  // fetch dependencies (which would re-load the library on every render).
+  const activeViewIdRef = useRef(activeViewId);
+  activeViewIdRef.current = activeViewId;
+  const overrideRef = useRef(override);
+  overrideRef.current = override;
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
+
   const persistGlobalLayout = useCallback(
     (next: DashboardLayout) => writeLS(globalLayoutKey, JSON.stringify(next)),
     [globalLayoutKey],
@@ -165,20 +174,32 @@ export const useDashboardLayout = (
   );
   const persistActiveView = useCallback((id: string | null) => writeLS(activeKey, id), [activeKey]);
 
-  // Drop the active marker if it no longer matches a loaded view (deleted /
-  // unshared elsewhere). The override layout itself stays put — only the marker
-  // is reconciled. Returns the still-valid id list for chained callers.
-  const reconcileActiveView = useCallback(
+  // Reconcile the active marker AND its override against a freshly loaded library:
+  //  - active view gone (deleted / unshared elsewhere) → drop the marker; the override
+  //    layout stays put as a now-custom layout.
+  //  - active view still present → re-apply its loaded layout so a re-save by the owner
+  //    or another write recipient propagates to viewers who already had it active. Without
+  //    this, the per-project override cloned at apply-time (and persisted to localStorage)
+  //    keeps showing the stale layout, so "re-save changes it for everyone" wouldn't hold.
+  // Skipped mid-edit so an in-progress draft isn't disturbed (it re-syncs on the next load).
+  const reconcileAfterLoad = useCallback(
     (loaded: ServerDashboardView[]) => {
-      setActiveViewId((current) => {
-        if (current && !loaded.some((v) => v.id === current)) {
-          persistActiveView(null);
-          return null;
-        }
-        return current;
-      });
+      const activeId = activeViewIdRef.current;
+      if (!activeId) return;
+      const active = loaded.find((v) => v.id === activeId);
+      if (!active) {
+        setActiveViewId(null);
+        persistActiveView(null);
+        return;
+      }
+      if (editingRef.current) return;
+      const next = cloneLayout(active.layout);
+      if (!overrideRef.current || !layoutsEqual(overrideRef.current, next)) {
+        setOverride(next);
+        persistOverride(next);
+      }
     },
-    [persistActiveView],
+    [persistActiveView, persistOverride],
   );
 
   // Load the server view library for this scope. Guarded by a per-call token so a
@@ -202,7 +223,7 @@ export const useDashboardLayout = (
       if (seq !== loadSeqRef.current) return;
       const mapped = dtos.map((dto) => mapServerView(dto, widgetsRef.current));
       setViews(mapped);
-      reconcileActiveView(mapped);
+      reconcileAfterLoad(mapped);
     } catch (err) {
       if (seq !== loadSeqRef.current) return;
       console.error('Failed to load dashboard views', err);
@@ -210,7 +231,7 @@ export const useDashboardLayout = (
     } finally {
       if (seq === loadSeqRef.current) setViewsLoading(false);
     }
-  }, [currentUserId, scopeKey, reconcileActiveView]);
+  }, [currentUserId, scopeKey, reconcileAfterLoad]);
 
   // Initial load + reload whenever the scope or viewer changes. The list is
   // intentionally NOT a function of `widgets`: the permission-filtered def set

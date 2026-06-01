@@ -232,6 +232,59 @@ describe('useDashboardLayout — local tiers (global default + per-project overr
     expect(result.current.activeViewId).toBeNull();
     expect(result.current.followingGlobal).toBe(true);
   });
+
+  test('reloading an active view re-saved elsewhere refreshes the override layout', async () => {
+    // The viewer applies a shared view (pins it as their per-project override).
+    backing.list = async () => [
+      makeDto({
+        id: 'sv-live',
+        name: 'Live',
+        config: { layout: [{ id: 'hoursByUser', x: 0, y: 0, w: 6, h: 4, hidden: false }] },
+      }),
+    ];
+    const { result } = await renderAReady();
+    act(() => result.current.applyView('sv-live'));
+    expect(result.current.activeViewId).toBe('sv-live');
+    expect(find(result.current.layout, 'hoursByUser')?.h).toBe(4);
+
+    // The owner (or another write recipient) re-saves it taller. A reload must re-apply
+    // the new layout to this viewer's active override, not just the library row —
+    // otherwise the stale localStorage override keeps showing the old layout.
+    backing.list = async () => [
+      makeDto({
+        id: 'sv-live',
+        name: 'Live',
+        config: { layout: [{ id: 'hoursByUser', x: 0, y: 0, w: 6, h: 6, hidden: false }] },
+      }),
+    ];
+    await act(async () => {
+      result.current.reloadViews();
+    });
+    await waitFor(() => expect(find(result.current.views[0].layout, 'hoursByUser')?.h).toBe(6));
+
+    expect(result.current.activeViewId).toBe('sv-live');
+    // The rendered (override) layout reflects the re-save — "changes it for everyone".
+    expect(find(result.current.layout, 'hoursByUser')?.h).toBe(6);
+  });
+
+  test('reloading does NOT disturb the override when no view is active', async () => {
+    // A custom (non-view) override must survive a reload untouched.
+    backing.list = async () => [makeDto({ id: 'sv-other', name: 'Other' })];
+    const { result } = await renderAReady();
+    act(() => result.current.startEditing());
+    act(() => result.current.resizeWidget('hoursByUser', 6, 6));
+    act(() => result.current.doneEditing());
+    expect(result.current.activeViewId).toBeNull();
+    expect(find(result.current.layout, 'hoursByUser')?.h).toBe(6);
+
+    await act(async () => {
+      result.current.reloadViews();
+    });
+    await waitFor(() => expect(result.current.views).toHaveLength(1));
+    // No active marker → reconcile leaves the custom override alone.
+    expect(result.current.activeViewId).toBeNull();
+    expect(find(result.current.layout, 'hoursByUser')?.h).toBe(6);
+  });
 });
 
 describe('useDashboardLayout — server-backed view library', () => {
