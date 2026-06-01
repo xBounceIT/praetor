@@ -1670,6 +1670,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
       <StandardTable<Client>
         title={t('crm:clients.clientsDirectory')}
+        viewKey="clients.directory"
         data={clients}
         columns={columns}
         defaultRowsPerPage={10}

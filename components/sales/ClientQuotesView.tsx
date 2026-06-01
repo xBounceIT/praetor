@@ -2115,6 +2115,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
       <StandardTable<Quote>
         title={t('sales:clientQuotes.activeQuotes')}
+        viewKey="sales.client_quotes"
         data={quotes}
         columns={columns}
         defaultRowsPerPage={5}

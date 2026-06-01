@@ -532,8 +532,19 @@ describe('ProjectDetailView dashboard customization', () => {
     expect(source).toContain("import DashboardControls from './DashboardControls'");
     expect(source).toContain('<DashboardControls controls={dashboard} />');
     // Two-tier: global default id + the per-project override key (project.id).
-    // Permission-gated cards are filtered out of the active def set first.
-    expect(source).toContain('useDashboardLayout(DASHBOARD_ID, project.id, activeWidgetDefs)');
+    // Permission-gated cards are filtered out of the active def set first. The hook
+    // now also takes the authenticated user id (server-backed shareable views) so
+    // ownership/share access is resolved per viewer.
+    expect(source).toContain(
+      'useDashboardLayout(DASHBOARD_ID, project.id, activeWidgetDefs, currentUserId)',
+    );
+    // currentUserId flows from the CurrentUserId context — the same source the
+    // DashboardControls views menu (and the ShareViewModal it opens) reads to gate
+    // owner-only actions — rather than being prop-drilled through the page.
+    expect(source).toContain(
+      "import { useCurrentUserId } from '../../contexts/CurrentUserContext'",
+    );
+    expect(source).toContain('const currentUserId = useCurrentUserId();');
   });
 
   test('declares the canonical widget set as grid rectangles (x/y/w/h + minimums)', async () => {

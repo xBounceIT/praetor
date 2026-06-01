@@ -918,6 +918,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
       <StandardTable<Invoice>
         title={t('accounting:clientsInvoices.allInvoices')}
+        viewKey="invoices.clients"
         data={invoices}
         columns={columns}
         defaultRowsPerPage={10}

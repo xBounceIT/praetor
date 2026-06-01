@@ -25,6 +25,16 @@ The sidebar groups the main modules. Available items depend on your role:
 - **Reports** for analysis and AI reporting.
 - **Administration** for configuration and audit.
 
+## Table views and sharing
+
+Most lists in Praetor (projects, tasks, customers, suppliers, accounting documents, users) use a shared table where you can show or hide columns, sort, and apply filters. You can save a combination as a **named view** to recall it later.
+
+Named views are stored on the server and owned by whoever creates them, so they stay available from any device and can be shared. The owner can **share** a view with specific users, granting each one **read** access (apply only) or **write** access (edit, rename, and re-save it — and the change then applies to everyone the view is shared with). Only the owner can **delete** a view or manage its sharing; read recipients can still **duplicate** it into their own editable copy. Views shared with you show a badge with the author and your access level, and edits made by write recipients propagate the next time you load or apply the view, not in real time.
+
+View-only preferences such as row density, text size, column widths, and which view is active stay local to the browser, and are therefore private to each device.
+
+Shared views are backed by the `GET/POST/PUT/DELETE /api/views/*` endpoints documented in the **API** section. On the development side, a table enables the server-backed, shareable mode only when it receives a stable `viewKey` (for example `projects.directory`): the key namespaces the view and prevents collisions between different tables; tables without a `viewKey` keep saving views in the browser only.
+
 ## Personal settings
 
 From the user menu you can open settings, switch role when multiple profiles are available, open this documentation, and log out.

@@ -32,6 +32,7 @@ import supplierQuotesRoutes from './routes/supplier-quotes.ts';
 import suppliersRoutes from './routes/suppliers.ts';
 import tasksRoutes from './routes/tasks.ts';
 import usersRoutes from './routes/users.ts';
+import viewsRoutes from './routes/views.ts';
 import workUnitsRoutes from './routes/work-units.ts';
 import { ajvFormatsPlugin, ajvFormatsPluginOptions } from './utils/ajv-formats.ts';
 import { loggerOptions, serializeError } from './utils/logger.ts';
@@ -163,6 +164,7 @@ export const buildApp = async () => {
   await fastify.register(ssoAuthRoutes, { prefix: '/api/auth/sso' });
   await fastify.register(aiRoutes, { prefix: '/api/ai' });
   await fastify.register(usersRoutes, { prefix: '/api/users' });
+  await fastify.register(viewsRoutes, { prefix: '/api/views' });
   await fastify.register(clientsRoutes, { prefix: '/api/clients' });
   await fastify.register(projectsRoutes, { prefix: '/api/projects' });
   await fastify.register(projectRulesRoutes, { prefix: '/api/projects' });

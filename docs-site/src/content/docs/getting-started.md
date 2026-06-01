@@ -25,6 +25,16 @@ La barra laterale raggruppa i moduli principali. Le voci disponibili dipendono d
 - **Report** per analisi e AI reporting.
 - **Amministrazione** per configurazioni e audit.
 
+## Viste tabella e condivisione
+
+La maggior parte degli elenchi in Praetor (progetti, attività, clienti, fornitori, documenti contabili, utenti) usa una tabella comune con cui puoi mostrare o nascondere colonne, ordinare e applicare filtri. Puoi salvare una combinazione come **vista con nome** per richiamarla in seguito.
+
+Le viste con nome sono memorizzate sul server e appartengono a chi le crea, quindi restano disponibili da qualsiasi dispositivo e possono essere condivise. Il proprietario può **condividere** una vista con utenti specifici assegnando a ciascuno il permesso **lettura** (può solo applicarla) o **scrittura** (può modificarla, rinominarla e risalvarla, e la modifica diventa effettiva per tutti coloro con cui è condivisa). Solo il proprietario può **eliminare** una vista o gestirne la condivisione; chi ha accesso in sola lettura può comunque **duplicarla** in una copia propria e modificabile. Le viste condivise con te mostrano un'etichetta con l'autore e il livello di accesso, e le modifiche di chi ha accesso in scrittura si propagano al successivo caricamento o applicazione della vista, non in tempo reale.
+
+Restano invece locali al browser, e quindi privati per ciascun dispositivo, le preferenze di sola visualizzazione come densità delle righe, dimensione del testo, larghezza delle colonne e quale vista è attiva.
+
+Le viste condivise sono gestite dagli endpoint `GET/POST/PUT/DELETE /api/views/*` documentati nella sezione **API**. Lato sviluppo, una tabella abilita la modalità con server e condivisione solo quando riceve una `viewKey` stabile (per esempio `projects.directory`): la chiave definisce lo spazio dei nomi della vista ed evita collisioni tra tabelle diverse; le tabelle senza `viewKey` continuano a salvare le viste solo nel browser.
+
 ## Impostazioni personali
 
 Dal menu utente puoi aprire le impostazioni, cambiare ruolo se hai più profili disponibili, consultare questa documentazione e uscire dall'applicazione.

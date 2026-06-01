@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -12,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import Modal from '../shared/Modal';
 import {
   ModalBody,
@@ -21,22 +23,39 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
+import ShareViewModal from '../shared/ShareViewModal';
+import ViewOwnerAvatar from '../shared/ViewOwnerAvatar';
+import type { ServerDashboardView } from './dashboardLayout';
 import type { UseDashboardLayout } from './useDashboardLayout';
 
 export interface DashboardControlsProps {
   controls: UseDashboardLayout;
 }
 
+// Modes for the name-prompt modal: a brand-new "Save as" snapshot, a "Rename" of
+// an existing view, or a "Duplicate" into an owned copy. All three collect a name
+// and round-trip through the server, so they share one modal.
+type NameModalMode =
+  | { kind: 'save' }
+  | { kind: 'rename'; view: ServerDashboardView }
+  | { kind: 'duplicate'; view: ServerDashboardView };
+
 // Edit + Views buttons for the analytics section header. Mirrors the
 // StandardTable column-views affordance: "Edit" enters an inline layout editor
 // (drag to move / drag edges to resize / hide handled per-widget by
 // DashboardGrid), and "Views" lists saved layouts plus a reset-to-default.
+// The named-view library is now server-backed + shareable (own + shared-with-me);
+// the global default and per-project override stay local per-user.
 const DashboardControls: React.FC<DashboardControlsProps> = ({ controls }) => {
-  const { t } = useTranslation(['projects']);
+  const { t } = useTranslation(['projects', 'common']);
   const {
     editing,
     views,
     activeViewId,
+    viewsLoading,
+    viewsError,
+    savingView,
+    reloadViews,
     followingGlobal,
     startEditing,
     cancelEditing,
@@ -44,24 +63,42 @@ const DashboardControls: React.FC<DashboardControlsProps> = ({ controls }) => {
     saveAsView,
     applyView,
     deleteView,
+    renameView,
+    resaveView,
+    duplicateView,
     followGlobalDefault,
     setAsGlobalDefault,
   } = controls;
 
-  const [saveOpen, setSaveOpen] = useState(false);
   const [viewsOpen, setViewsOpen] = useState(false);
-  const [name, setName] = useState('');
+  // The name-prompt modal (save / rename / duplicate), or null when closed.
+  const [nameModal, setNameModal] = useState<NameModalMode | null>(null);
+  // The view currently being shared (owner-only), or null when the modal is closed.
+  const [sharingView, setSharingView] = useState<ServerDashboardView | null>(null);
 
-  const openSave = () => {
-    setName('');
-    setSaveOpen(true);
-  };
+  const activeView = activeViewId ? views.find((v) => v.id === activeViewId) : undefined;
+  // "Save changes to {name}" is offered only when the active view is writable
+  // (owner or write) — re-saving overwrites the shared layout for everyone.
+  const canResaveActive = Boolean(activeView && activeView.permission === 'write');
 
-  const handleSave = () => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    saveAsView(trimmed);
-    setSaveOpen(false);
+  const openSave = () => setNameModal({ kind: 'save' });
+
+  // Remount the name modal per open so its internal `name` state re-seeds from the
+  // mode (empty for save/duplicate, the existing name for rename).
+  const nameModalKey =
+    nameModal == null
+      ? 'closed'
+      : nameModal.kind === 'save'
+        ? 'save'
+        : `${nameModal.kind}-${nameModal.view.id}`;
+
+  // Resolve the modal's submit against its mode. Each handler returns a boolean so
+  // the modal can stay open on failure (e.g. the create round-trip rejected).
+  const submitNameModal = async (name: string): Promise<boolean> => {
+    if (!nameModal) return false;
+    if (nameModal.kind === 'save') return saveAsView(name);
+    if (nameModal.kind === 'rename') return renameView(nameModal.view.id, name);
+    return duplicateView(nameModal.view.id, name);
   };
 
   if (editing) {
@@ -74,9 +111,23 @@ const DashboardControls: React.FC<DashboardControlsProps> = ({ controls }) => {
           <Button type="button" variant="outline" size="sm" onClick={cancelEditing}>
             {t('projects:detail.dashboard.cancel')}
           </Button>
+          {canResaveActive && activeView && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={savingView}
+              onClick={() => {
+                void resaveView(activeView.id);
+              }}
+            >
+              <i className="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+              {t('common:views.saveChangesTo', { name: activeView.name })}
+            </Button>
+          )}
           <Button type="button" variant="outline" size="sm" onClick={openSave}>
             <i className="fa-solid fa-bookmark" aria-hidden="true"></i>
-            {t('projects:detail.dashboard.saveAsView')}
+            {t('common:views.saveAsNew')}
           </Button>
           <Button type="button" size="sm" onClick={doneEditing}>
             <i className="fa-solid fa-check" aria-hidden="true"></i>
@@ -84,12 +135,12 @@ const DashboardControls: React.FC<DashboardControlsProps> = ({ controls }) => {
           </Button>
         </div>
 
-        <SaveViewModal
-          isOpen={saveOpen}
-          name={name}
-          onNameChange={setName}
-          onClose={() => setSaveOpen(false)}
-          onSave={handleSave}
+        <NameViewModal
+          key={nameModalKey}
+          mode={nameModal}
+          saving={savingView}
+          onSubmit={submitNameModal}
+          onClose={() => setNameModal(null)}
         />
       </>
     );
@@ -105,7 +156,7 @@ const DashboardControls: React.FC<DashboardControlsProps> = ({ controls }) => {
             <i className="fa-solid fa-chevron-down text-xs opacity-70" aria-hidden="true"></i>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuContent align="end" className="w-72">
           <DropdownMenuLabel>{t('projects:detail.dashboard.views')}</DropdownMenuLabel>
           <DropdownMenuItem onSelect={() => followGlobalDefault()}>
             <i className="fa-solid fa-globe" aria-hidden="true"></i>
@@ -115,19 +166,38 @@ const DashboardControls: React.FC<DashboardControlsProps> = ({ controls }) => {
             )}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          {views.length === 0 ? (
+          {viewsLoading ? (
+            <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
+              <i className="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>
+              {t('common:views.loadingViews')}
+            </div>
+          ) : viewsError ? (
+            // Error + retry row. preventDefault keeps the menu open so the retry
+            // result lands in place without re-opening.
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault();
+                reloadViews();
+              }}
+              className="flex items-center gap-2 text-destructive"
+            >
+              <i className="fa-solid fa-triangle-exclamation text-xs" aria-hidden="true"></i>
+              <span className="flex-1">{t('common:views.loadViewsFailed')}</span>
+              <span className="text-xs underline">{t('common:views.retry')}</span>
+            </DropdownMenuItem>
+          ) : views.length === 0 ? (
             <div className="px-2 py-2 text-xs text-muted-foreground">
               {t('projects:detail.dashboard.noViews')}
             </div>
           ) : (
             views.map((view) => (
-              // Row is a plain flex container holding two SIBLING menu items
-              // (apply + delete). Both are real DropdownMenuItems so keyboard /
-              // screen-reader users can reach delete via arrow keys — nesting a
-              // raw <button> inside a single menu item makes it mouse-only
-              // (Radix gives an item's focusable descendants tabindex=-1).
-              // Mirrors the StandardTable custom-views pattern.
-              <div key={view.id} className="group flex items-center gap-1">
+              // Each row is a flex container holding SIBLING menu items (apply +
+              // per-permission actions). Every action is a real DropdownMenuItem so
+              // keyboard / screen-reader users can reach it via arrow keys — nesting
+              // a raw <button> inside a single menu item makes it mouse-only (Radix
+              // gives an item's focusable descendants tabindex=-1). Mirrors the
+              // StandardTable custom-views pattern.
+              <div key={view.id} className="group flex items-start gap-1">
                 <DropdownMenuItem
                   // Apply closes the menu; preventDefault stops Radix's own close
                   // so the manual setViewsOpen(false) is the single close path.
@@ -136,31 +206,93 @@ const DashboardControls: React.FC<DashboardControlsProps> = ({ controls }) => {
                     applyView(view.id);
                     setViewsOpen(false);
                   }}
-                  className="flex min-w-0 flex-1 items-center gap-2"
+                  className="flex min-w-0 flex-1 items-start gap-2"
                 >
                   {view.id === activeViewId ? (
-                    <i className="fa-solid fa-check text-xs" aria-hidden="true"></i>
+                    <i className="fa-solid fa-check mt-0.5 text-xs" aria-hidden="true"></i>
                   ) : (
                     <i
-                      className="fa-solid fa-table-cells-large text-xs opacity-50"
+                      className="fa-solid fa-table-cells-large mt-0.5 text-xs opacity-50"
                       aria-hidden="true"
                     ></i>
                   )}
-                  <span className="flex-1 truncate">{view.name}</span>
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="truncate">{view.name}</span>
+                    {!view.isOwner && (
+                      <span className="flex items-center gap-1">
+                        <ViewOwnerAvatar ownerName={view.ownerName} />
+                        <Badge variant="outline" className="px-1.5 py-0 text-[10px] font-normal">
+                          {view.permission === 'write'
+                            ? t('common:views.permissionWrite')
+                            : t('common:views.permissionRead')}
+                        </Badge>
+                      </span>
+                    )}
+                  </span>
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  aria-label={t('projects:detail.dashboard.deleteView')}
-                  variant="destructive"
-                  // Keep the menu open after delete (no manual close) so several
-                  // views can be removed without re-opening.
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    deleteView(view.id);
-                  }}
-                  className="size-7 shrink-0 justify-center p-0"
-                >
-                  <i className="fa-solid fa-trash text-xs" aria-hidden="true"></i>
-                </DropdownMenuItem>
+                {/* Duplicate — available to everyone (read recipients fork an
+                    editable owned copy). Close the menu so the name dialog takes
+                    over cleanly instead of stacking behind the open dropdown. */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuItem
+                      aria-label={t('common:views.duplicateView')}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        setNameModal({ kind: 'duplicate', view });
+                        setViewsOpen(false);
+                      }}
+                      className="size-7 shrink-0 justify-center p-0"
+                    >
+                      <i className="fa-solid fa-copy text-xs" aria-hidden="true"></i>
+                    </DropdownMenuItem>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{t('common:views.duplicateView')}</TooltipContent>
+                </Tooltip>
+                {/* Rename — owner or write. Overwrites the shared name for everyone.
+                    Close the menu so the name dialog takes over cleanly. */}
+                {view.permission === 'write' && (
+                  <DropdownMenuItem
+                    aria-label={t('common:views.rename')}
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      setNameModal({ kind: 'rename', view });
+                      setViewsOpen(false);
+                    }}
+                    className="size-7 shrink-0 justify-center p-0"
+                  >
+                    <i className="fa-solid fa-pen text-xs" aria-hidden="true"></i>
+                  </DropdownMenuItem>
+                )}
+                {/* Share — owner only (opens the self-contained ShareViewModal). */}
+                {view.isOwner && (
+                  <DropdownMenuItem
+                    aria-label={t('common:views.shareView')}
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      setSharingView(view);
+                      setViewsOpen(false);
+                    }}
+                    className="size-7 shrink-0 justify-center p-0"
+                  >
+                    <i className="fa-solid fa-user-plus text-xs" aria-hidden="true"></i>
+                  </DropdownMenuItem>
+                )}
+                {/* Delete — owner only. Keep the menu open so several views can be
+                    removed without re-opening. */}
+                {view.isOwner && (
+                  <DropdownMenuItem
+                    aria-label={t('projects:detail.dashboard.deleteView')}
+                    variant="destructive"
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      void deleteView(view.id);
+                    }}
+                    className="size-7 shrink-0 justify-center p-0"
+                  >
+                    <i className="fa-solid fa-trash text-xs" aria-hidden="true"></i>
+                  </DropdownMenuItem>
+                )}
               </div>
             ))
           )}
@@ -176,19 +308,59 @@ const DashboardControls: React.FC<DashboardControlsProps> = ({ controls }) => {
         <i className="fa-solid fa-sliders" aria-hidden="true"></i>
         {t('projects:detail.dashboard.edit')}
       </Button>
+
+      <NameViewModal
+        key={nameModalKey}
+        mode={nameModal}
+        saving={savingView}
+        onSubmit={submitNameModal}
+        onClose={() => setNameModal(null)}
+      />
+
+      {sharingView && (
+        <ShareViewModal
+          isOpen={true}
+          viewId={sharingView.id}
+          viewName={sharingView.name}
+          onClose={() => setSharingView(null)}
+        />
+      )}
     </div>
   );
 };
 
-const SaveViewModal: React.FC<{
-  isOpen: boolean;
-  name: string;
-  onNameChange: (v: string) => void;
+// Seed name: rename pre-fills the existing name; save/duplicate start empty.
+const initialName = (mode: NameModalMode | null): string =>
+  mode?.kind === 'rename' ? mode.view.name : '';
+
+// One name-prompt modal shared by save / rename / duplicate. Submit is async and
+// the modal stays open on failure (the round-trip rejected) so the user can retry
+// without re-typing. Title + initial name are driven by the active mode. The
+// parent keys this element on the mode so its `name` state resets on each open.
+const NameViewModal: React.FC<{
+  mode: NameModalMode | null;
+  saving: boolean;
+  onSubmit: (name: string) => Promise<boolean>;
   onClose: () => void;
-  onSave: () => void;
-}> = ({ isOpen, name, onNameChange, onClose, onSave }) => {
-  const { t } = useTranslation(['projects']);
-  const canSave = name.trim().length > 0;
+}> = ({ mode, saving, onSubmit, onClose }) => {
+  const { t } = useTranslation(['projects', 'common']);
+  const [name, setName] = useState(() => initialName(mode));
+  const isOpen = mode !== null;
+  const canSave = name.trim().length > 0 && !saving;
+
+  const handleSubmit = async () => {
+    if (!canSave) return;
+    const ok = await onSubmit(name.trim());
+    if (ok) onClose();
+  };
+
+  const title =
+    mode?.kind === 'rename'
+      ? t('common:views.rename')
+      : mode?.kind === 'duplicate'
+        ? t('common:views.duplicateView')
+        : t('projects:detail.dashboard.saveViewTitle');
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} ariaLabel={null}>
       {() => (
@@ -196,9 +368,9 @@ const SaveViewModal: React.FC<{
           <ModalHeader>
             <ModalTitle>
               <i className="fa-solid fa-bookmark text-praetor"></i>
-              {t('projects:detail.dashboard.saveViewTitle')}
+              {title}
             </ModalTitle>
-            <ModalCloseButton onClick={onClose} />
+            <ModalCloseButton onClick={onClose} disabled={saving} />
           </ModalHeader>
           <ModalBody className="space-y-4">
             <Field>
@@ -210,23 +382,24 @@ const SaveViewModal: React.FC<{
                 type="text"
                 data-autofocus
                 value={name}
-                onChange={(e) => onNameChange(e.target.value)}
+                disabled={saving}
+                onChange={(e) => setName(e.target.value)}
                 placeholder={t('projects:detail.dashboard.viewNamePlaceholder')}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && canSave) {
                     e.preventDefault();
-                    onSave();
+                    void handleSubmit();
                   }
                 }}
               />
             </Field>
           </ModalBody>
           <ModalFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
               {t('projects:detail.dashboard.cancel')}
             </Button>
-            <Button type="button" onClick={onSave} disabled={!canSave}>
-              {t('projects:detail.dashboard.save')}
+            <Button type="button" onClick={() => void handleSubmit()} disabled={!canSave}>
+              {saving ? t('common:buttons.saving') : t('projects:detail.dashboard.save')}
             </Button>
           </ModalFooter>
         </ModalContent>

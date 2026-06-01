@@ -607,6 +607,7 @@ const TasksView: React.FC<TasksViewProps> = ({
 
       <StandardTable<ProjectTask>
         title={t('tasks.tasksDirectory')}
+        viewKey="tasks.list"
         data={tasks}
         columns={columns}
         defaultRowsPerPage={5}

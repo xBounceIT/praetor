@@ -425,13 +425,9 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
                   </div>
                 </div>
                 {canManageMembers && (
-                  <button
-                    type="button"
-                    onClick={() => openAssignments(unit)}
-                    className="text-xs font-bold text-praetor hover:text-zinc-700 bg-zinc-100 hover:bg-zinc-200 px-3 py-1.5 rounded-lg transition-colors"
-                  >
+                  <Button type="button" onClick={() => openAssignments(unit)}>
                     {t('hr:competenceCenters.manageMembers')}
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
