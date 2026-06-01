@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { CreateViewBody, SavedViewDto } from '../../services/api/views';
+import type {
+  CreateViewBody,
+  SavedViewDto,
+  ViewDirectoryUser,
+  ViewShare,
+} from '../../services/api/views';
 import { installI18nMock } from '../helpers/i18n';
 import { clearSpyStateAfterAll } from '../helpers/mockCleanup.ts';
 import { render } from '../helpers/render';
@@ -57,6 +62,15 @@ const createMock = mock(
 );
 const updateMock = mock(async (id: string): Promise<SavedViewDto> => ({ ...OWNED_VIEW, id }));
 const removeMock = mock(async (_id: string): Promise<void> => {});
+// ShareViewModal is rendered for real (not stubbed) so this file never mock.module-replaces a
+// component another suite tests — a global override would leak into ShareViewModal.test.tsx. These
+// feed the modal's own loads; kept empty since this suite only checks that Share opens the modal
+// for the right view (the modal's behavior is covered by ShareViewModal.test.tsx).
+const directoryMock = mock(async (_signal?: AbortSignal): Promise<ViewDirectoryUser[]> => []);
+const getSharesMock = mock(async (_id: string, _signal?: AbortSignal): Promise<ViewShare[]> => []);
+const replaceSharesMock = mock(
+  async (_id: string, shares: ViewShare[]): Promise<ViewShare[]> => shares,
+);
 
 mock.module('../../services/api/views', () => ({
   viewsApi: {
@@ -64,22 +78,15 @@ mock.module('../../services/api/views', () => ({
     create: createMock,
     update: updateMock,
     remove: removeMock,
+    directory: directoryMock,
+    getShares: getSharesMock,
+    replaceShares: replaceSharesMock,
   },
 }));
 
 let currentUserId: string | undefined = CURRENT_USER_ID;
 mock.module('../../contexts/CurrentUserContext', () => ({
   useCurrentUserId: () => currentUserId,
-}));
-
-// Stub ShareViewModal so opening it doesn't reach into viewsApi.directory/getShares
-// (those live on the real client; this suite only verifies StandardTable's own gating).
-const shareModalProps: { isOpen: boolean; viewId: string; viewName: string }[] = [];
-mock.module('../../components/shared/ShareViewModal', () => ({
-  default: (props: { isOpen: boolean; viewId: string; viewName: string }) => {
-    shareModalProps.push({ isOpen: props.isOpen, viewId: props.viewId, viewName: props.viewName });
-    return props.isOpen ? <div data-testid="share-view-modal">{props.viewName}</div> : null;
-  },
 }));
 
 clearSpyStateAfterAll();
@@ -122,12 +129,16 @@ describe('<StandardTable /> server-backed sharing', () => {
   beforeEach(() => {
     localStorage.clear();
     currentUserId = CURRENT_USER_ID;
-    shareModalProps.length = 0;
     listMock.mockClear();
     createMock.mockClear();
     updateMock.mockClear();
     removeMock.mockClear();
+    directoryMock.mockClear();
+    getSharesMock.mockClear();
+    replaceSharesMock.mockClear();
     listMock.mockImplementation(async () => []);
+    directoryMock.mockImplementation(async () => []);
+    getSharesMock.mockImplementation(async () => []);
   });
 
   afterEach(() => {
@@ -179,7 +190,7 @@ describe('<StandardTable /> server-backed sharing', () => {
     expect(screen.queryByLabelText('views.shareView')).not.toBeInTheDocument();
   });
 
-  test('opening Share passes the owned viewId/name to ShareViewModal', async () => {
+  test('opening Share mounts the real ShareViewModal for the owned view', async () => {
     listMock.mockImplementation(async () => [OWNED_VIEW]);
     renderTable({ viewKey: 'people.directory' });
     await waitFor(() => expect(listMock).toHaveBeenCalledTimes(1));
@@ -191,11 +202,10 @@ describe('<StandardTable /> server-backed sharing', () => {
       fireEvent.click(screen.getByLabelText('views.shareView'));
     });
 
-    const modal = await screen.findByTestId('share-view-modal');
-    expect(modal).toHaveTextContent('My Owned View');
-    const lastOpen = shareModalProps.filter((p) => p.isOpen).at(-1);
-    expect(lastOpen?.viewId).toBe('sv-owned');
-    expect(lastOpen?.viewName).toBe('My Owned View');
+    // The real modal mounts (its search box renders) and loads shares for the view it opened on.
+    await screen.findByPlaceholderText('views.searchUsers');
+    await waitFor(() => expect(getSharesMock).toHaveBeenCalledTimes(1));
+    expect(getSharesMock.mock.calls[0][0]).toBe('sv-owned');
   });
 
   test('duplicate on a read view creates a new owned view via viewsApi.create', async () => {

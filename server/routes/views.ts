@@ -360,18 +360,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      if (
-        !(await authorizeViewAccess(
-          request,
-          reply,
-          idResult.value,
-          request.user.id,
-          'write',
-          'saved_view.update',
-        ))
-      ) {
-        return;
-      }
+      const viewAccess = await authorizeViewAccess(
+        request,
+        reply,
+        idResult.value,
+        request.user.id,
+        'write',
+        'saved_view.update',
+      );
+      if (!viewAccess) return;
 
       const body = request.body as { name?: unknown; config?: unknown };
       const patch: viewsRepo.UpdateSavedViewInput = {};
@@ -417,7 +414,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityId: idResult.value,
         details: { targetLabel: updated.name, secondaryLabel: updated.scopeKey },
       });
-      return updated;
+      // viewsRepo.update reports the owner-perspective access:'owner'; report the CALLER's real
+      // access instead, since a 'write' recipient can reach this handler too — otherwise the client
+      // would show them owner-only controls (delete/share) for a view they can only edit.
+      return { ...updated, access: viewAccess.access ?? updated.access };
     },
   );
 

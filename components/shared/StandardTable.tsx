@@ -590,7 +590,9 @@ const StandardTable = <T extends object>({
   const getViewAccess = useCallback(
     (id: string): SavedViewAccess => {
       if (!isServerBacked) return 'owner';
-      return serverViewMeta.get(id)?.access ?? 'owner';
+      // Fail closed to least privilege if a server view's metadata isn't resolved yet:
+      // never surface owner-only controls (delete/share) for a view we can't vouch for.
+      return serverViewMeta.get(id)?.access ?? 'read';
     },
     [isServerBacked, serverViewMeta],
   );

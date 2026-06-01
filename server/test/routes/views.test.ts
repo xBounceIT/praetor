@@ -266,7 +266,8 @@ describe('PUT /api/views/:id', () => {
   test('200 when a write recipient updates the config', async () => {
     findAccessMock.mockResolvedValue({ ownerId: 'owner-x', access: 'write' });
     getViewKindMock.mockResolvedValue('table');
-    updateMock.mockResolvedValue({ ...OWNED_VIEW, ownerId: 'owner-x', access: 'write' });
+    // The repo returns the owner-perspective row (access:'owner') regardless of caller.
+    updateMock.mockResolvedValue({ ...OWNED_VIEW, ownerId: 'owner-x', access: 'owner' });
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -279,6 +280,9 @@ describe('PUT /api/views/:id', () => {
     // The config patch is validated against the view's own kind before persisting.
     expect(getViewKindMock).toHaveBeenCalledWith('sv-1');
     expect(updateMock).toHaveBeenCalledWith('sv-1', { config: TABLE_CONFIG });
+    // The response must report the CALLER's real access ('write'), not the repo's owner row —
+    // otherwise the client would render owner-only delete/share controls for a write recipient.
+    expect(res.json().access).toBe('write');
   });
 
   test('403 when a read recipient tries to update', async () => {
