@@ -3,12 +3,14 @@ import { ApiError } from '../../services/api/client';
 import { type SavedViewDto, viewsApi } from '../../services/api/views';
 import {
   type DashboardLayout,
+  type DashboardView,
   type DashboardWidgetDef,
   getDashboardStorageKey,
   layoutsEqual,
   moveWidgetTo,
   parseServerViewConfig,
   parseServerViewRawLayout,
+  parseStoredDashboardViews,
   parseStoredLayout,
   parseStoredOverride,
   resizeWidgetTo,
@@ -204,6 +206,73 @@ export const useDashboardLayout = (
     [persistActiveView, persistOverride],
   );
 
+  // One-time, best-effort migration of legacy localStorage dashboard views (the pre-server
+  // `praetor_dashboard_v2_views_*` library) into the server store on the first server-backed load.
+  // Mirrors the table migration: a per-scope sentinel tracks progress ('pending' → 'done'); a view
+  // is dropped from localStorage only once uploaded and the sentinel reaches 'done' only after all
+  // upload, so a transient failure retries the leftovers. If THIS project had a legacy view active,
+  // its marker is re-pointed at the new server id so the preset stays applied after upgrade.
+  const migrateLegacyDashboardViews = useCallback(
+    async (key: string, serverEmpty: boolean, isCurrent: () => boolean): Promise<boolean> => {
+      const sentinelKey = `praetor_dashboard_v2_viewsmigrated_${key}`;
+      const legacyViewsKey = getDashboardStorageKey(key, 'views');
+      const state = readLS(sentinelKey);
+      if (state === 'done') return false;
+
+      const legacy = parseStoredDashboardViews(readLS(legacyViewsKey), widgetsRef.current);
+
+      if (state !== 'pending') {
+        // First attempt: nothing to migrate, or the server already has views (migrated on another
+        // device) → mark done so we never touch localStorage again.
+        if (legacy.length === 0 || !serverEmpty) {
+          writeLS(sentinelKey, 'done');
+          return false;
+        }
+        // Commit to migrating: 'pending' resumes a transient failure on a later load.
+        writeLS(sentinelKey, 'pending');
+      }
+
+      const activeId = activeViewIdRef.current;
+      const remaining: DashboardView[] = [];
+      let uploaded = false;
+      for (const view of legacy) {
+        if (!isCurrent()) {
+          remaining.push(view);
+          continue;
+        }
+        try {
+          const dto = await viewsApi.create({
+            kind: 'dashboard',
+            scopeKey: key,
+            name: view.name,
+            config: { layout: view.layout },
+          });
+          uploaded = true;
+          // If this project had the legacy view active, re-point its marker at the new server id
+          // (and the ref, so the post-load reconcile matches it instead of clearing a dangling id).
+          if (view.id === activeId) {
+            setActiveViewId(dto.id);
+            persistActiveView(dto.id);
+            activeViewIdRef.current = dto.id;
+          }
+        } catch (err) {
+          console.error('Failed to migrate a legacy dashboard view', err);
+          remaining.push(view);
+        }
+      }
+
+      if (remaining.length === 0) {
+        writeLS(sentinelKey, 'done');
+        writeLS(legacyViewsKey, null);
+      } else {
+        // Keep only the not-yet-uploaded views; the 'pending' sentinel stays so a later load retries.
+        writeLS(legacyViewsKey, JSON.stringify(remaining));
+      }
+      return uploaded;
+    },
+    [persistActiveView],
+  );
+
   // Load the server view library for this scope. Guarded by a per-call token so a
   // stale response (scope changed, or a manual reload superseded it) can't clobber
   // fresh state. Re-runs the dangling-activeViewId guard after a successful load.
@@ -221,8 +290,20 @@ export const useDashboardLayout = (
     setViewsLoading(true);
     setViewsError(false);
     try {
-      const dtos = await viewsApi.list('dashboard', scopeKey);
+      let dtos = await viewsApi.list('dashboard', scopeKey);
       if (seq !== loadSeqRef.current) return;
+      // One-time migration of pre-upgrade localStorage dashboard views; re-list if anything uploaded.
+      if (
+        await migrateLegacyDashboardViews(
+          scopeKey,
+          dtos.length === 0,
+          () => seq === loadSeqRef.current,
+        )
+      ) {
+        if (seq !== loadSeqRef.current) return;
+        dtos = await viewsApi.list('dashboard', scopeKey);
+        if (seq !== loadSeqRef.current) return;
+      }
       const mapped = dtos.map((dto) => mapServerView(dto, widgetsRef.current));
       setViews(mapped);
       reconcileAfterLoad(mapped);
@@ -233,7 +314,7 @@ export const useDashboardLayout = (
     } finally {
       if (seq === loadSeqRef.current) setViewsLoading(false);
     }
-  }, [currentUserId, scopeKey, reconcileAfterLoad]);
+  }, [currentUserId, scopeKey, reconcileAfterLoad, migrateLegacyDashboardViews]);
 
   // Initial load + reload whenever the scope or viewer changes. The list is
   // intentionally NOT a function of `widgets`: the permission-filtered def set

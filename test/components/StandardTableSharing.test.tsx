@@ -215,6 +215,42 @@ describe('<StandardTable /> server-backed sharing', () => {
     expect(localStorage.getItem('praetor_table_customviews_people')).toContain('Legacy View');
   });
 
+  test('re-points the active view to the new server id when migrating the active legacy view', async () => {
+    localStorage.setItem(
+      'praetor_table_customviews_people',
+      JSON.stringify([
+        {
+          id: 'old-1',
+          name: 'Legacy View',
+          hiddenColIds: ['age'],
+          sortState: null,
+          filterState: {},
+        },
+      ]),
+    );
+    // The user had that legacy view active before the upgrade.
+    localStorage.setItem('praetor_table_activeview_people', 'old-1');
+
+    let listCalls = 0;
+    listMock.mockImplementation(async () => {
+      listCalls += 1;
+      return listCalls === 1 ? [] : [{ ...OWNED_VIEW, id: 'sv-mig', name: 'Legacy View' }];
+    });
+    createMock.mockImplementationOnce(async (body) => ({
+      ...OWNED_VIEW,
+      id: 'sv-mig',
+      name: body.name,
+    }));
+
+    renderTable({ viewKey: 'people.directory' });
+    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
+
+    // The active marker now points at the new server id, so the preset stays applied after upgrade.
+    await waitFor(() =>
+      expect(localStorage.getItem('praetor_table_activeview_people')).toBe('sv-mig'),
+    );
+  });
+
   test('does not migrate when the server already has views (no duplication)', async () => {
     localStorage.setItem(
       'praetor_table_customviews_people',

@@ -285,6 +285,41 @@ describe('useDashboardLayout — local tiers (global default + per-project overr
     expect(result.current.activeViewId).toBeNull();
     expect(find(result.current.layout, 'hoursByUser')?.h).toBe(6);
   });
+
+  test('migrates legacy localStorage dashboard views and re-points the active marker', async () => {
+    localStorage.setItem(
+      'praetor_dashboard_v2_views_project-analytics-test',
+      JSON.stringify([
+        {
+          id: 'old-d1',
+          name: 'Legacy Dash',
+          layout: [{ id: 'hoursByUser', x: 0, y: 0, w: 6, h: 5, hidden: false }],
+        },
+      ]),
+    );
+    // The project had that legacy view active before the upgrade.
+    localStorage.setItem('praetor_dashboard_v2_activeview_projA', 'old-d1');
+
+    let listCalls = 0;
+    backing.list = async () => {
+      listCalls += 1;
+      return listCalls === 1 ? [] : [makeDto({ id: 'sv-d', name: 'Legacy Dash' })];
+    };
+    let created: CreateViewBody | undefined;
+    backing.create = async (body) => {
+      created = body;
+      return makeDto({ id: 'sv-d', name: body.name, config: body.config });
+    };
+
+    const { result } = await renderAReady();
+
+    expect(created?.kind).toBe('dashboard');
+    expect(created?.scopeKey).toBe('project-analytics-test');
+    expect(created?.name).toBe('Legacy Dash');
+    expect(result.current.views.map((v) => v.name)).toContain('Legacy Dash');
+    // The per-project active marker is re-pointed at the new server id so the preset stays applied.
+    expect(result.current.activeViewId).toBe('sv-d');
+  });
 });
 
 describe('useDashboardLayout — server-backed view library', () => {

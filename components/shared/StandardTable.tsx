@@ -369,6 +369,10 @@ const StandardTable = <T extends object>({
     if (typeof window === 'undefined') return null;
     return localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.activeView));
   });
+  // Read by the legacy-view migration so it can re-point a persisted active-view id (an old local
+  // UUID) at the new server id after upload, without becoming a load-effect dependency.
+  const activeViewIdRef = useRef(activeViewId);
+  activeViewIdRef.current = activeViewId;
   const [viewsSubmenuOpen, setViewsSubmenuOpen] = useState(false);
   const [modalState, setModalState] = useState<ViewModalState>(null);
   const [draggingViewId, setDraggingViewId] = useState<string | null>(null);
@@ -471,6 +475,7 @@ const StandardTable = <T extends object>({
         } catch {}
       }
 
+      const activeId = activeViewIdRef.current;
       const remaining: CustomView[] = [];
       let uploaded = false;
       for (const view of legacy) {
@@ -479,13 +484,16 @@ const StandardTable = <T extends object>({
           continue;
         }
         try {
-          await viewsApi.create({
+          const dto = await viewsApi.create({
             kind: 'table',
             scopeKey: key,
             name: view.name,
             config: customViewToConfig(view),
           });
           uploaded = true;
+          // Keep the user's active preset applied after upgrade: re-point the persisted active
+          // marker (an old local id) at the new server id so the post-relist guard matches it.
+          if (view.id === activeId) updateActiveViewId(dto.id);
         } catch (err) {
           console.error('Failed to migrate a legacy table view', err);
           remaining.push(view);
@@ -505,7 +513,7 @@ const StandardTable = <T extends object>({
 
       return uploaded;
     },
-    [title],
+    [title, updateActiveViewId],
   );
 
   // Server-backed mode: load own + shared views on mount (and on viewKey change / retry).
