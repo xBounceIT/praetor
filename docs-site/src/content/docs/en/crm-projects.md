@@ -48,6 +48,10 @@ Praetor assigns a unique color automatically when you create a project. You can 
 
 When a project ends, check that tasks are consistent and that no pending entries remain.
 
+### Project rules
+
+The **Project rules** section on the detail page lets you create automatic controls for a project. A rule compares one or more project fields (revenue, logged hours, days until deadline, billing, or status; cost fields require the **Cost reports** permission) against thresholds, values, or compatible fields and can combine conditions with **AND** or **OR**. When the rule becomes true, it sends a notification to selected assigned users or to users with selected roles. The section is shown and edited through the **Project Rules** permission (`projects.rules`), granted to Managers and Top Managers by default. Notifications fire only on the transition from not met to met, so they are not duplicated while the rule remains true. Re-enabling a rule or changing its condition prepares it to notify again on the next scheduled check.
+
 ### Assigning users
 
 The **Assign Users** command manages who is assigned to a project or one of its activities. Access to this dialog is governed by the **Project Assignments** permission: the **View** action lets a role open the assignments of any project or activity regardless of its own membership, while **Update** lets it edit them. Managers and Top Managers hold both by default, so they can manage assignments even when they are not members of the project or activity.

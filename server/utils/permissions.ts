@@ -53,6 +53,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'projects.manage_all', actions: CRUD, isScope: true },
   { id: 'projects.tasks', actions: CRUD },
   { id: 'projects.tasks_all', actions: CRUD, isScope: true },
+  { id: 'projects.rules', actions: CRUD },
   // `view` lets a role load any project/activity's assignment dialog regardless of
   // per-entity membership (role-agnostic); `update` additionally permits editing.
   { id: 'projects.assignments', actions: VIEW_UPDATE },

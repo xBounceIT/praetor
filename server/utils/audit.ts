@@ -25,6 +25,7 @@ export const AUDIT_ENTITY_TYPES = [
   'product_subcategory',
   'product_type',
   'project',
+  'project_rule',
   'reports_ai',
   'reports_ai_message',
   'reports_ai_session',

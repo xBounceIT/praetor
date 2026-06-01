@@ -50,6 +50,7 @@ const schemaReadinessTables = [
   ['product_subcategories', schema.productSubcategories],
   ['products', schema.products],
   ['product_types', schema.productTypes],
+  ['project_rules', schema.projectRules],
   ['projects', schema.projects],
   ['quote_items', schema.quoteItems],
   ['quotes', schema.quotes],

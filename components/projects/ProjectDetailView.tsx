@@ -62,6 +62,7 @@ import UserAssignmentModal from '../shared/UserAssignmentModal';
 import DashboardControls from './DashboardControls';
 import DashboardGrid, { DashboardItem } from './DashboardGrid';
 import type { DashboardWidgetDef } from './dashboardLayout';
+import ProjectRules from './ProjectRules';
 import ProjectTasksTable from './ProjectTasksTable';
 import type { RecurringConfig } from './TaskFormModal';
 import { useDashboardLayout } from './useDashboardLayout';
@@ -1281,7 +1282,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           </div>
         </div>
 
-        <ProjectRulesMockup className="xl:col-span-3" />
+        <ProjectRules projectId={project.id} permissions={permissions} className="xl:col-span-3" />
       </div>
 
       {/* Project tasks — full-width row so the table scales with many tasks */}
@@ -2383,56 +2384,6 @@ const ChartEmpty: React.FC<{ variant?: 'no-data' | 'forbidden' | 'failed' }> = (
         </EmptyDescription>
       </EmptyHeader>
     </Empty>
-  );
-};
-
-// Mockup — automatic controls for the project (budget alerts, deadline reminders,
-// stale-task pings). Rendered as a static, read-only preview so we can pin down the
-// shape with the user before wiring rule storage, evaluation, and notifications.
-const ProjectRulesMockup: React.FC<{ className?: string }> = ({ className }) => {
-  const { t } = useTranslation(['projects']);
-  const rules: Array<{ id: string; icon: string; enabled: boolean }> = [
-    { id: 'budgetThreshold', icon: 'fa-piggy-bank', enabled: true },
-    { id: 'deadlineApproaching', icon: 'fa-calendar-day', enabled: true },
-    { id: 'staleTask', icon: 'fa-hourglass-half', enabled: false },
-    { id: 'unassignedTask', icon: 'fa-user-slash', enabled: false },
-  ];
-  return (
-    <div className={`space-y-3 ${className ?? ''}`}>
-      <div className="space-y-1.5">
-        <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold leading-none">
-            {t('projects:detail.rules.title')}
-          </h2>
-          <span className="inline-flex items-center rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            {t('projects:detail.rules.comingSoonBadge')}
-          </span>
-        </div>
-        <p className="text-sm text-muted-foreground">{t('projects:detail.rules.description')}</p>
-      </div>
-      <div className="rounded-lg border border-dashed border-border bg-background/40 p-1">
-        <ul className="divide-y divide-border">
-          {rules.map((rule) => (
-            <li key={rule.id} className="flex items-start justify-between gap-3 px-3 py-3">
-              <div className="flex items-start gap-3">
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                  <i className={`fa-solid ${rule.icon}`} aria-hidden="true"></i>
-                </div>
-                <div className="space-y-0.5">
-                  <p className="text-sm font-medium text-foreground">
-                    {t(`projects:detail.rules.items.${rule.id}.name`)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {t(`projects:detail.rules.items.${rule.id}.description`)}
-                  </p>
-                </div>
-              </div>
-              <Toggle checked={rule.enabled} onChange={() => {}} disabled />
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
   );
 };
 

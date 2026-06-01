@@ -1,0 +1,2 @@
+ALTER TABLE "project_rules" ADD COLUMN "condition_logic" varchar(10) DEFAULT 'and' NOT NULL;--> statement-breakpoint
+ALTER TABLE "project_rules" ADD COLUMN "conditions" jsonb DEFAULT '[]'::jsonb NOT NULL;
