@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import type { User } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
@@ -25,6 +25,12 @@ const employee: User = {
   username: 'mrossi',
   employeeType: 'internal',
   costPerHour: 25,
+  email: 'mario@example.com',
+  phone: '+39 02 1234',
+  jobTitle: 'Consultant',
+  department: 'Delivery',
+  employeeCode: 'EMP-001',
+  employmentStatus: 'active',
 };
 
 const renderView = (overrides: Partial<ComponentProps<typeof InternalEmployeesView>> = {}) => {
@@ -34,7 +40,7 @@ const renderView = (overrides: Partial<ComponentProps<typeof InternalEmployeesVi
     projects: [],
     tasks: [],
     onAddEmployee: mock(async () => ({ success: true })),
-    onUpdateEmployee: mock(() => {}),
+    onUpdateEmployee: mock<(id: string, updates: Partial<User>) => void>(() => {}),
     onDeleteEmployee: mock(() => {}),
     currency: '€',
     permissions: ['hr.internal.view', 'hr.internal.update'],
@@ -57,6 +63,9 @@ describe('<InternalEmployeesView /> row click', () => {
     fireEvent.click(row);
 
     expect(screen.getByDisplayValue('Mario Rossi')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('mario@example.com')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('+39 02 1234')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('EMP-001')).toBeInTheDocument();
   });
 
   test('row is not clickable without update permission', () => {
@@ -70,5 +79,103 @@ describe('<InternalEmployeesView /> row click', () => {
     fireEvent.click(row);
 
     expect(screen.queryByDisplayValue('Mario Rossi')).not.toBeInTheDocument();
+  });
+
+  test('does not synthesize table values for unset HR profile fields', () => {
+    renderView({
+      users: [
+        {
+          ...employee,
+          employeeType: 'app_user',
+          role: 'manager',
+          email: undefined,
+          phone: null,
+          jobTitle: null,
+          department: null,
+          employeeCode: null,
+          employmentStatus: null,
+        },
+      ],
+    });
+
+    const row = screen.getByText('Mario Rossi').closest('tr');
+    if (!row) throw new Error('employee row not found');
+
+    expect(within(row).queryByText('manager')).not.toBeInTheDocument();
+    expect(
+      within(row).queryByText('employeeProfile.employmentStatuses.active'),
+    ).not.toBeInTheDocument();
+    expect(within(row).getAllByText('employeeProfile.notSet').length).toBeGreaterThanOrEqual(4);
+
+    fireEvent.click(row);
+
+    expect(screen.getByLabelText('employeeProfile.email')).toHaveValue('');
+    expect(screen.getByLabelText('employeeProfile.jobTitle')).toHaveValue('');
+    expect(screen.getByLabelText('employeeProfile.department')).toHaveValue('');
+    expect(screen.getByLabelText('employeeProfile.employeeCode')).toHaveValue('');
+  });
+
+  test('submits HR profile fields when creating an internal employee', async () => {
+    const onAddEmployee = mock(async () => ({ success: true }));
+    renderView({
+      users: [],
+      onAddEmployee,
+      permissions: ['hr.internal.view', 'hr.internal.create', 'hr.internal.update'],
+    });
+
+    fireEvent.click(screen.getByText('internalEmployees.addEmployee'));
+    fireEvent.change(screen.getByLabelText('internalEmployees.name *'), {
+      target: { value: 'Luisa Bianchi' },
+    });
+    fireEvent.change(screen.getByLabelText('employeeProfile.email'), {
+      target: { value: 'luisa@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('employeeProfile.phone'), {
+      target: { value: '+39 02 5555' },
+    });
+    fireEvent.change(screen.getByLabelText('employeeProfile.jobTitle'), {
+      target: { value: 'HR Specialist' },
+    });
+    fireEvent.change(screen.getByLabelText('employeeProfile.employeeCode'), {
+      target: { value: 'EMP-222' },
+    });
+
+    fireEvent.click(screen.getByText('internalEmployees.saveChanges'));
+
+    await waitFor(() => expect(onAddEmployee).toHaveBeenCalledTimes(1));
+    expect(onAddEmployee).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Luisa Bianchi',
+        email: 'luisa@example.com',
+        phone: '+39 02 5555',
+        jobTitle: 'HR Specialist',
+        employeeCode: 'EMP-222',
+      }),
+    );
+  });
+
+  test('keeps provider-managed name and email read-only on edit', async () => {
+    const onUpdateEmployee = mock<(id: string, updates: Partial<User>) => void>(() => {});
+    renderView({
+      users: [{ ...employee, employeeType: 'app_user', authMethod: 'ldap' }],
+      onUpdateEmployee,
+    });
+
+    const row = screen.getByText('Mario Rossi').closest('tr');
+    if (!row) throw new Error('employee row not found');
+    fireEvent.click(row);
+
+    expect(screen.getByLabelText('internalEmployees.name *')).toBeDisabled();
+    expect(screen.getByLabelText('employeeProfile.email')).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('employeeProfile.phone'), {
+      target: { value: '+39 02 9999' },
+    });
+    fireEvent.click(screen.getByText('internalEmployees.saveChanges'));
+
+    await waitFor(() => expect(onUpdateEmployee).toHaveBeenCalledTimes(1));
+    const updates = onUpdateEmployee.mock.calls[0][1] as Partial<User>;
+    expect(updates).toEqual(expect.objectContaining({ phone: '+39 02 9999' }));
+    expect(updates).not.toHaveProperty('name');
+    expect(updates).not.toHaveProperty('email');
   });
 });

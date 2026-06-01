@@ -1,6 +1,8 @@
 import fs from 'fs';
 import ldap from 'ldapjs';
+import { type DbExecutor, withDbTransaction } from '../db/drizzle.ts';
 import * as ldapRepo from '../repositories/ldapRepo.ts';
+import * as settingsRepo from '../repositories/settingsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { computeAvatarInitials } from '../utils/initials.ts';
 import {
@@ -29,6 +31,7 @@ interface LdapEntry {
   sAMAccountName?: string | string[];
   cn?: string | string[];
   displayName?: string | string[];
+  mail?: string | string[];
   [key: string]: unknown;
 }
 
@@ -97,6 +100,7 @@ export type LdapAuthResult = {
   roleMappings: ExternalRoleMapping[];
   canonicalUsername?: string;
   displayName?: string;
+  email?: string;
 };
 
 export type LdapUserEntry = {
@@ -181,8 +185,39 @@ const deriveCanonicalUsername = (
   typedUsername: string,
 ): string => getFirstAttributeValue(attributes, 'uid', 'sAMAccountName') ?? typedUsername;
 
-const deriveDisplayName = (attributes: Record<string, unknown>, fallback: string): string =>
-  getFirstAttributeValue(attributes, 'cn', 'displayName') ?? fallback;
+const deriveDisplayName = (attributes: Record<string, unknown>): string | undefined =>
+  getFirstAttributeValue(attributes, 'cn', 'displayName');
+
+const deriveEmail = (attributes: Record<string, unknown>): string | undefined =>
+  getFirstAttributeValue(attributes, 'mail', 'email');
+
+const syncDirectoryProfileTx = async (
+  userId: string,
+  profile: { name?: string; email?: string },
+  tx: DbExecutor,
+): Promise<void> => {
+  const name = profile.name?.trim();
+  const email = profile.email?.trim();
+  if (!name && !email) return;
+
+  if (name) {
+    await usersRepo.updateDirectoryProfile(
+      userId,
+      { name, avatarInitials: computeAvatarInitials(name) },
+      tx,
+    );
+  }
+  await settingsRepo.upsertForUser(
+    userId,
+    { fullName: name || null, email: email || null, language: null },
+    tx,
+  );
+};
+
+const syncDirectoryProfile = (
+  userId: string,
+  profile: { name?: string; email?: string },
+): Promise<void> => withDbTransaction((tx) => syncDirectoryProfileTx(userId, profile, tx));
 
 const isUniqueViolationError = (err: unknown): boolean => {
   if (!err || typeof err !== 'object') return false;
@@ -348,7 +383,8 @@ class LDAPService {
         matchedRoleIds: mapExternalGroupsToMatchedRoleIds(groups, roleMappings),
         roleMappings,
         canonicalUsername,
-        displayName: deriveDisplayName(userEntry.attributes, canonicalUsername),
+        displayName: deriveDisplayName(userEntry.attributes),
+        email: deriveEmail(userEntry.attributes),
       };
     } finally {
       if (client) {
@@ -406,6 +442,10 @@ class LDAPService {
           result.groups,
         );
       }
+      await syncDirectoryProfile(existingByCanonical.id, {
+        name: result.displayName,
+        email: result.email,
+      });
       return {
         authenticated: true,
         userId: existingByCanonical.id,
@@ -464,6 +504,10 @@ class LDAPService {
           // is acceptable; the bootstrap-only invariant only forbids re-applying mapping
           // for users that already existed BEFORE this provisioning request started.
           await applyExternalRolesForUserIfMatched(racedUser.id, result.groups, roleMappings);
+          await syncDirectoryProfile(racedUser.id, {
+            name: result.displayName,
+            email: result.email,
+          });
           return {
             authenticated: true,
             userId: racedUser.id,
@@ -480,6 +524,11 @@ class LDAPService {
       throw err;
     }
 
+    await settingsRepo.upsertForUser(id, {
+      fullName: name,
+      email: result.email?.trim() || '',
+      language: null,
+    });
     await applyExternalRolesForUser(id, result.groups, roleMappings);
     return { authenticated: true, userId: id, created: true, canonicalUsername };
   }
@@ -549,7 +598,7 @@ class LDAPService {
     const searchOptions = {
       scope: 'sub',
       filter: buildUserLookupFilter(config.userFilter, username),
-      attributes: ['uid', 'sAMAccountName', 'cn', 'displayName'],
+      attributes: ['uid', 'sAMAccountName', 'cn', 'displayName', 'mail'],
       sizeLimit: 1,
     };
 
@@ -738,7 +787,9 @@ class LDAPService {
         }
 
         const username = normalizeExternalUsername(candidate);
-        const name = getFirstAttributeValue(entry, 'cn', 'displayName') ?? username;
+        const directoryName = getFirstAttributeValue(entry, 'cn', 'displayName');
+        const name = directoryName ?? username;
+        const email = getFirstAttributeValue(entry, 'mail', 'email');
 
         const existing = await usersRepo.findLoginUserByNormalizedUsername(username);
 
@@ -772,13 +823,13 @@ class LDAPService {
               'LDAP sync skipped role-mapping diagnostic for user: group search failed',
             );
             // Still refresh the display name — that bit doesn't depend on group state.
-            await usersRepo.updateNameByUsername(existing.username, name);
+            await syncDirectoryProfile(existing.id, { name: directoryName, email });
             syncedCount++;
             continue;
           }
-          // Update by the row's stored username so a pre-migration mixed-case row still
-          // matches via LOWER() instead of a raw-bytes WHERE that wouldn't.
-          await usersRepo.updateNameByUsername(existing.username, name);
+          // Refresh by id so pre-migration mixed-case usernames and provider email claims
+          // both land on the already matched row.
+          await syncDirectoryProfile(existing.id, { name: directoryName, email });
           // Role mapping is bootstrap-only: sync refreshes display data but never rewrites
           // an existing user's roles from LDAP groups. Still warn when the user's groups
           // stop yielding any known role (no match or matched role was deleted), so admins
@@ -821,6 +872,11 @@ class LDAPService {
             avatarInitials: computeAvatarInitials(name),
             authMethod: 'ldap',
             authProviderId: null,
+          });
+          await settingsRepo.upsertForUser(id, {
+            fullName: name,
+            email: email?.trim() || '',
+            language: null,
           });
           await applyExternalRolesForUser(id, groups, roleMappings);
           createdCount++;

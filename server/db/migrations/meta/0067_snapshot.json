@@ -1,5 +1,5 @@
 {
-  "id": "140290d4-6190-4f1c-ad69-1166efe2865b",
+  "id": "e9194ce4-cc9a-43fa-a45b-a38d737903de",
   "prevId": "f4746e8c-b20e-4928-9210-402b49c0ff79",
   "version": "7",
   "dialect": "postgresql",
@@ -2736,6 +2736,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "color": {
+          "name": "color",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'#3b82f6'"
+        },
         "description": {
           "name": "description",
           "type": "text",
@@ -2813,6 +2820,21 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_projects_color_unique": {
+          "name": "idx_projects_color_unique",
+          "columns": [
+            {
+              "expression": "color",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -6848,6 +6870,78 @@
           "primaryKey": false,
           "notNull": true,
           "default": 1
+        },
+        "phone": {
+          "name": "phone",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "job_title": {
+          "name": "job_title",
+          "type": "varchar(150)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "department": {
+          "name": "department",
+          "type": "varchar(150)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "employee_code": {
+          "name": "employee_code",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hire_date": {
+          "name": "hire_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "termination_date": {
+          "name": "termination_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "contract_type": {
+          "name": "contract_type",
+          "type": "varchar(30)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "employment_status": {
+          "name": "employment_status",
+          "type": "varchar(30)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "work_location": {
+          "name": "work_location",
+          "type": "varchar(30)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "emergency_contact_name": {
+          "name": "emergency_contact_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "emergency_contact_phone": {
+          "name": "emergency_contact_phone",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -6862,6 +6956,21 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_users_employee_code_unique": {
+          "name": "idx_users_employee_code_unique",
+          "columns": [
+            {
+              "expression": "employee_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -6904,6 +7013,22 @@
         "users_auth_method_check": {
           "name": "users_auth_method_check",
           "value": "\"users\".\"auth_method\" IN ('local', 'ldap', 'oidc', 'saml')"
+        },
+        "users_contract_type_check": {
+          "name": "users_contract_type_check",
+          "value": "\"users\".\"contract_type\" IS NULL OR \"users\".\"contract_type\" IN ('permanent', 'fixed_term', 'contractor', 'internship', 'consultant', 'other')"
+        },
+        "users_employment_status_check": {
+          "name": "users_employment_status_check",
+          "value": "\"users\".\"employment_status\" IS NULL OR \"users\".\"employment_status\" IN ('active', 'onboarding', 'on_leave', 'terminated')"
+        },
+        "users_work_location_check": {
+          "name": "users_work_location_check",
+          "value": "\"users\".\"work_location\" IS NULL OR \"users\".\"work_location\" IN ('office', 'remote', 'hybrid', 'customer_site', 'other')"
+        },
+        "users_hr_date_range_check": {
+          "name": "users_hr_date_range_check",
+          "value": "\"users\".\"hire_date\" IS NULL OR \"users\".\"termination_date\" IS NULL OR \"users\".\"hire_date\" <= \"users\".\"termination_date\""
         }
       },
       "isRLSEnabled": false

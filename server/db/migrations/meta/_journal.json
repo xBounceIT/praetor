@@ -474,8 +474,8 @@
     {
       "idx": 67,
       "version": "7",
-      "when": 1780346136332,
-      "tag": "0067_remove_project_color",
+      "when": 1780341356660,
+      "tag": "0067_add_user_hr_details",
       "breakpoints": true
     }
   ]

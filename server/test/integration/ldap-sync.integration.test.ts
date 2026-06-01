@@ -1,6 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import * as realDrizzle from '../../db/drizzle.ts';
 import * as realLdapRepo from '../../repositories/ldapRepo.ts';
+import * as realSettingsRepo from '../../repositories/settingsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 import { buildTestConfig, SHOULD_SKIP } from './helpers/ldapTestEnv.ts';
 
 type LdapServiceShape = {
@@ -15,12 +18,17 @@ type LdapServiceShape = {
 
 describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
   const ldapRepoSnap = { ...realLdapRepo };
+  const drizzleSnap = { ...realDrizzle };
+  const settingsRepoSnap = { ...realSettingsRepo };
   const usersRepoSnap = { ...realUsersRepo };
 
   const ldapRepoGetMock = mock();
   const findLoginUserByNormalizedUsernameMock = mock();
   const updateNameByUsernameMock = mock();
+  const updateDirectoryProfileMock = mock();
+  const settingsUpsertForUserMock = mock();
   const createUserMock = mock();
+  const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
   let ldapService: LdapServiceShape;
 
@@ -29,24 +37,38 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
       ...ldapRepoSnap,
       get: ldapRepoGetMock,
     }));
+    mock.module('../../db/drizzle.ts', () => ({
+      ...drizzleSnap,
+      withDbTransaction: withDbTransactionMock,
+    }));
+    mock.module('../../repositories/settingsRepo.ts', () => ({
+      ...settingsRepoSnap,
+      upsertForUser: settingsUpsertForUserMock,
+    }));
     mock.module('../../repositories/usersRepo.ts', () => ({
       ...usersRepoSnap,
       findLoginUserByNormalizedUsername: findLoginUserByNormalizedUsernameMock,
       updateNameByUsername: updateNameByUsernameMock,
+      updateDirectoryProfile: updateDirectoryProfileMock,
       createUser: createUserMock,
     }));
     ldapService = (await import('../../services/ldap.ts')).default as unknown as LdapServiceShape;
   });
 
   afterAll(() => {
+    mock.module('../../db/drizzle.ts', () => drizzleSnap);
     mock.module('../../repositories/ldapRepo.ts', () => ldapRepoSnap);
+    mock.module('../../repositories/settingsRepo.ts', () => settingsRepoSnap);
     mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
   });
 
   beforeEach(() => {
     ldapRepoGetMock.mockReset();
+    resetWithDbTransactionMock();
     findLoginUserByNormalizedUsernameMock.mockReset();
     updateNameByUsernameMock.mockReset();
+    updateDirectoryProfileMock.mockReset();
+    settingsUpsertForUserMock.mockReset();
     createUserMock.mockReset();
 
     ldapRepoGetMock.mockResolvedValue(buildTestConfig({ autoProvisionAll: true }));
@@ -59,7 +81,7 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
 
     expect(result).toEqual({ synced: 0, created: 2 });
     expect(createUserMock).toHaveBeenCalledTimes(2);
-    expect(updateNameByUsernameMock).not.toHaveBeenCalled();
+    expect(updateDirectoryProfileMock).not.toHaveBeenCalled();
 
     const usernames = createUserMock.mock.calls
       .map((args) => (args[0] as { username: string }).username)
@@ -79,7 +101,7 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
     }
   });
 
-  test('existing user: calls updateNameByUsername instead of createUser', async () => {
+  test('existing user: refreshes provider profile instead of createUser', async () => {
     findLoginUserByNormalizedUsernameMock.mockImplementation(async (username: string) =>
       username === 'alice' ? { id: 'u1', username, name: 'Old Name' } : null,
     );
@@ -87,8 +109,12 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
     const result = await ldapService.syncUsers();
 
     expect(result).toEqual({ synced: 1, created: 1 });
-    expect(updateNameByUsernameMock).toHaveBeenCalledTimes(1);
-    expect(updateNameByUsernameMock).toHaveBeenCalledWith('alice', 'Alice Example');
+    expect(updateDirectoryProfileMock).toHaveBeenCalledTimes(1);
+    expect(updateDirectoryProfileMock).toHaveBeenCalledWith(
+      'u1',
+      { name: 'Alice Example', avatarInitials: 'AE' },
+      expect.anything(),
+    );
     expect(createUserMock).toHaveBeenCalledTimes(1);
     expect((createUserMock.mock.calls[0][0] as { username: string }).username).toBe('bob');
   });
@@ -121,8 +147,12 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
     const result = await ldapService.syncUsers();
 
     expect(result).toEqual({ synced: 1, created: 0 });
-    expect(updateNameByUsernameMock).toHaveBeenCalledTimes(1);
-    expect(updateNameByUsernameMock).toHaveBeenCalledWith('alice', 'Alice Example');
+    expect(updateDirectoryProfileMock).toHaveBeenCalledTimes(1);
+    expect(updateDirectoryProfileMock).toHaveBeenCalledWith(
+      'u1',
+      { name: 'Alice Example', avatarInitials: 'AE' },
+      expect.anything(),
+    );
     expect(createUserMock).not.toHaveBeenCalled();
   });
 
@@ -134,7 +164,7 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
 
     expect(result.skipped).toBe(true);
     expect(createUserMock).not.toHaveBeenCalled();
-    expect(updateNameByUsernameMock).not.toHaveBeenCalled();
+    expect(updateDirectoryProfileMock).not.toHaveBeenCalled();
   });
 
   test('returned counts match mock invocations exactly', async () => {
@@ -146,7 +176,7 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
 
     const result = await ldapService.syncUsers();
 
-    expect(result.synced).toBe(updateNameByUsernameMock.mock.calls.length);
+    expect(result.synced).toBe(updateDirectoryProfileMock.mock.calls.length);
     expect(result.created).toBe(createUserMock.mock.calls.length);
     expect((result.synced ?? 0) + (result.created ?? 0)).toBe(2);
   });

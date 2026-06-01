@@ -2,7 +2,7 @@
 title: AI reporting
 description: Come consultare report assistiti dall'intelligenza artificiale e interpretare le risposte.
 sidebar:
-  order: 5
+  order: 6
 ---
 
 ## Disponibilità

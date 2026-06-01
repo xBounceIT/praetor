@@ -23,7 +23,8 @@ The guides are written for operators, managers, and administrators. Each section
 
 - **Get started**: sign-in, navigation, and personal settings.
 - **Time tracking**: daily tracker, weekly view, and recurring tasks.
-- **CRM and projects**: records, catalog, tasks, and competence centers.
+- **CRM and projects**: records, catalog, tasks, and assignments.
+- **HR**: employee profiles, operational details, competence centers, and HR permissions.
 - **Sales and accounting**: quotes, offers, orders, and invoices.
 - **AI reporting**: reading reports and using the assistant responsibly.
 - **Administration**: users, roles, authentication, email, settings, and logs.

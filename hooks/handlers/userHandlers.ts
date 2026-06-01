@@ -14,6 +14,8 @@ export type UserHandlersDeps = {
   setViewingUserId: React.Dispatch<React.SetStateAction<string>>;
 };
 
+type EmployeeCreatePayload = Partial<User> & { name: string; costPerHour?: number };
+
 export const makeUserHandlers = (deps: UserHandlersDeps) => {
   const { currentUser, setUsers, setRoles, setWorkUnits, setViewingUserId } = deps;
 
@@ -98,12 +100,11 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
   };
 
   const addEmployee = async (
-    name: string,
+    data: EmployeeCreatePayload,
     employeeType: 'internal' | 'external',
-    costPerHour?: number,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      const employee = await api.employees.create({ name, employeeType, costPerHour });
+      const employee = await api.employees.create({ ...data, employeeType });
       setUsers((prev) => [...prev, employee]);
       return { success: true };
     } catch (err) {
@@ -115,11 +116,9 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
     }
   };
 
-  const addInternalEmployee = (name: string, costPerHour?: number) =>
-    addEmployee(name, 'internal', costPerHour);
+  const addInternalEmployee = (data: EmployeeCreatePayload) => addEmployee(data, 'internal');
 
-  const addExternalEmployee = (name: string, costPerHour?: number) =>
-    addEmployee(name, 'external', costPerHour);
+  const addExternalEmployee = (data: EmployeeCreatePayload) => addEmployee(data, 'external');
 
   const updateEmployee = async (id: string, updates: Partial<User>) => {
     try {

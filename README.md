@@ -67,6 +67,7 @@ data volume.
 The compose setup defaults backend `TRUST_PROXY=1` for the bundled Caddy -> API hop.
 Set `DEMO_SEEDING=true` in `.env` when you want the stack to provision the canonical demo users and demo business data.
 That refresh flow is intended for demo and test stacks, owns the canonical demo namespace, and supports reused Docker volumes.
+The demo users include HR profile data such as employee codes, departments, contract status, work locations, emergency contacts, and sample internal/external employee records.
 
 To rerun the same refresh manually against an existing backend database:
 

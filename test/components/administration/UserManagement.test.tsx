@@ -211,6 +211,52 @@ describe('<UserManagement />', () => {
     expect(usersApiMock.getRoles).not.toHaveBeenCalled();
   });
 
+  test('locks synced identity fields for non-local users and omits them from account updates', async () => {
+    const ldapUser: User = {
+      id: 'u-ldap',
+      name: 'Lara LDAP',
+      role: 'user',
+      avatarInitials: 'LL',
+      username: 'lara.ldap',
+      email: 'lara.ldap@example.com',
+      employeeType: 'app_user',
+      authMethod: 'ldap',
+    };
+    const onUpdateUser = mock(() => {});
+    renderUserManagement({
+      users: [users[0], ldapUser],
+      onUpdateUser,
+    });
+
+    fireEvent.click(screen.getByText('Lara LDAP'));
+    await screen.findByText('hr:workforce.editUser');
+
+    const firstNameInput = screen.getByLabelText('hr:workforce.name') as HTMLInputElement;
+    const surnameInput = screen.getByLabelText('hr:workforce.surname') as HTMLInputElement;
+    const emailInput = screen.getByLabelText('common:labels.email') as HTMLInputElement;
+    expect(firstNameInput).toBeDisabled();
+    expect(surnameInput).toBeDisabled();
+    expect(emailInput).toBeDisabled();
+    expect(firstNameInput.value).toBe('Lara');
+    expect(surnameInput.value).toBe('LDAP');
+    expect(emailInput.value).toBe('lara.ldap@example.com');
+    expect(screen.getByText('hr:workforce.identityManagedByProvider')).toBeInTheDocument();
+
+    const saveButton = screen.getByRole('button', { name: 'hr:workforce.saveChanges' });
+    expect(saveButton).toBeDisabled();
+    const disabledToggle = document.body.querySelector<HTMLElement>('[role="switch"]');
+    if (!disabledToggle) throw new Error('Disabled switch not rendered');
+    fireEvent.click(disabledToggle);
+    await waitFor(() => expect(saveButton).not.toBeDisabled());
+
+    fireEvent.click(saveButton);
+
+    expect(onUpdateUser).toHaveBeenCalledWith('u-ldap', { isDisabled: true });
+    const [, updates] = onUpdateUser.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(updates).not.toHaveProperty('name');
+    expect(updates).not.toHaveProperty('email');
+  });
+
   const openAuthMethodDialog = async (
     rowName = 'Bob Brown',
     overrides: Partial<ComponentProps<typeof UserManagement>> = {},

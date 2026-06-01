@@ -19,6 +19,7 @@ import {
   restoreAuthMiddlewareMock,
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
+import { makeDbError } from '../helpers/dbErrors.ts';
 import { signToken } from '../helpers/jwt.ts';
 import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
@@ -280,6 +281,18 @@ const SAMPLE_USER_ROW = {
   costPerHour: 50,
   isDisabled: false,
   employeeType: 'app_user' as const,
+  phone: '+39 02 1234',
+  jobTitle: 'Consultant',
+  department: 'Delivery',
+  employeeCode: 'EMP-001',
+  hireDate: '2024-01-15',
+  terminationDate: null,
+  contractType: 'permanent' as const,
+  employmentStatus: 'active' as const,
+  workLocation: 'hybrid' as const,
+  emergencyContactName: 'Maria',
+  emergencyContactPhone: '+39 02 5678',
+  notes: 'Prefers morning shifts',
   authMethod: 'local' as const,
   authProviderId: null,
   authProviderName: null,
@@ -293,6 +306,8 @@ const SAMPLE_USER_CORE = {
   username: 'target',
   role: 'user',
   employeeType: 'app_user' as const,
+  hireDate: '2024-01-15',
+  terminationDate: null,
   authMethod: 'local' as const,
   authProviderId: null,
 };
@@ -472,6 +487,47 @@ describe('GET /api/users', () => {
     expect(body[0].email).toBe('');
   });
 
+  test('200 HR internal view reveals matching HR fields and email', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue(['hr.internal.view']);
+    listScopedForManagerMock.mockResolvedValue([SAMPLE_USER_ROW]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users',
+      headers: managerAuth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body[0]).toEqual(
+      expect.objectContaining({
+        email: 'target@example.com',
+        phone: '+39 02 1234',
+        employeeCode: 'EMP-001',
+        employmentStatus: 'active',
+      }),
+    );
+  });
+
+  test('200 non-HR viewer omits HR detail fields', async () => {
+    findAuthUserByIdMock.mockResolvedValue(REGULAR_USER);
+    getRolePermissionsMock.mockResolvedValue(USER_ONLY_PERMS);
+    listScopedForManagerMock.mockResolvedValue([SAMPLE_USER_ROW]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users',
+      headers: userAuth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body[0]).not.toHaveProperty('phone');
+    expect(body[0]).not.toHaveProperty('employeeCode');
+    expect(body[0]).not.toHaveProperty('employmentStatus');
+  });
+
   test('200 with ONLY hr.costs.view → caller sees own cost, other rows masked to 0', async () => {
     // Personal-scope hr.costs.view is the read-only counterpart of
     // hr.costs.update: it grants visibility of the caller's *own* costPerHour
@@ -596,6 +652,79 @@ describe('POST /api/users', () => {
     expect(rolesFindByIdMock).not.toHaveBeenCalled();
   });
 
+  test('201 creates internal employee with HR profile fields', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'hr.internal.create',
+      'hr.internal.update',
+      'hr.internal.view',
+      'hr.costs_all.view',
+      'hr.costs_all.update',
+    ]);
+    insertUserMock.mockResolvedValue(undefined);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: adminAuth(),
+      payload: {
+        name: 'Internal Bob',
+        employeeType: 'internal',
+        email: 'bob@example.com',
+        phone: '+39 02 1234',
+        jobTitle: 'Consultant',
+        department: 'Delivery',
+        employeeCode: 'EMP-123',
+        hireDate: '2024-01-15',
+        contractType: 'permanent',
+        employmentStatus: 'onboarding',
+        workLocation: 'hybrid',
+        emergencyContactName: 'Maria',
+        emergencyContactPhone: '+39 02 5678',
+        notes: 'Starts next week',
+        costPerHour: 70,
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const [insertedRow] = insertUserMock.mock.calls[0] as [Record<string, unknown>];
+    expect(insertedRow).toEqual(
+      expect.objectContaining({
+        employeeType: 'internal',
+        phone: '+39 02 1234',
+        jobTitle: 'Consultant',
+        department: 'Delivery',
+        employeeCode: 'EMP-123',
+        hireDate: '2024-01-15',
+        contractType: 'permanent',
+        employmentStatus: 'onboarding',
+        workLocation: 'hybrid',
+        costPerHour: 70,
+      }),
+    );
+    expect(JSON.parse(res.body)).toEqual(
+      expect.objectContaining({
+        email: 'bob@example.com',
+        employeeCode: 'EMP-123',
+        employmentStatus: 'onboarding',
+      }),
+    );
+  });
+
+  test('400 maps duplicate employee code on create', async () => {
+    getRolePermissionsMock.mockResolvedValue(['hr.internal.create', 'hr.internal.update']);
+    insertUserMock.mockRejectedValue(makeDbError('23505', 'idx_users_employee_code_unique'));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: adminAuth(),
+      payload: { name: 'Internal Bob', employeeType: 'internal', employeeCode: 'EMP-123' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('Employee code already exists');
+  });
+
   test('201 top-manager triggers syncTopManagerAssignmentsForUser', async () => {
     rolesFindByIdMock.mockResolvedValue({
       id: 'top_manager',
@@ -687,6 +816,34 @@ describe('POST /api/users', () => {
     });
     // Caught by Fastify's schema enum
     expect(res.statusCode).toBe(400);
+  });
+
+  test('400 invalid HR enum', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: adminAuth(),
+      payload: { name: 'X', employeeType: 'internal', contractType: 'invalid' },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  test('400 invalid HR date range', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: adminAuth(),
+      payload: {
+        name: 'X',
+        employeeType: 'internal',
+        hireDate: '2024-02-01',
+        terminationDate: '2024-01-01',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('hireDate must be on or before terminationDate');
   });
 
   test('403 without create permission for app_user', async () => {
@@ -868,6 +1025,200 @@ describe('PUT /api/users/:id', () => {
       TX_SENTINEL,
     );
     expect(logAuditMock).toHaveBeenCalledWith(expect.objectContaining({ action: 'user.updated' }));
+  });
+
+  test('200 HR internal update edits app-user profile fields and email without manager scope', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue(['hr.internal.update', 'hr.internal.view']);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    canManageUserMock.mockResolvedValue(false);
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      phone: '+39 02 1234',
+      jobTitle: 'Consultant',
+      department: 'Delivery',
+      employeeCode: 'EMP-123',
+      hireDate: '2024-01-15',
+      contractType: 'permanent',
+      employmentStatus: 'active',
+      workLocation: 'hybrid',
+      avatarInitials: 'T',
+      costPerHour: 50,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({
+      ...SAMPLE_USER_ROW,
+      email: 'target.hr@example.com',
+      phone: '+39 02 1234',
+      employeeCode: 'EMP-123',
+      employmentStatus: 'active',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: managerAuth(),
+      payload: {
+        email: 'target.hr@example.com',
+        phone: '+39 02 1234',
+        jobTitle: 'Consultant',
+        department: 'Delivery',
+        employeeCode: 'EMP-123',
+        hireDate: '2024-01-15',
+        contractType: 'permanent',
+        employmentStatus: 'active',
+        workLocation: 'hybrid',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(canManageUserMock).not.toHaveBeenCalled();
+    expect(updateUserDynamicMock).toHaveBeenCalledWith(
+      'u-target',
+      expect.objectContaining({
+        phone: '+39 02 1234',
+        jobTitle: 'Consultant',
+        department: 'Delivery',
+        employeeCode: 'EMP-123',
+        hireDate: '2024-01-15',
+        contractType: 'permanent',
+        employmentStatus: 'active',
+        workLocation: 'hybrid',
+      }),
+      TX_SENTINEL,
+    );
+    expect(settingsUpsertForUserMock).toHaveBeenCalledWith(
+      'u-target',
+      expect.objectContaining({ email: 'target.hr@example.com' }),
+      TX_SENTINEL,
+    );
+    expect(JSON.parse(res.body)).toEqual(
+      expect.objectContaining({ email: 'target.hr@example.com', employeeCode: 'EMP-123' }),
+    );
+  });
+
+  test('403 standard user-management update cannot edit HR details without HR update permission', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.view',
+      'administration.user_management.update',
+      'administration.user_management_all.view',
+    ]);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { phone: '+39 02 9999' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(updateUserDynamicMock).not.toHaveBeenCalled();
+    expect(settingsUpsertForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('409 rejects manual name or email changes for external-auth users', async () => {
+    findCoreByIdMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      authMethod: 'oidc',
+      authProviderId: 'sso-1',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { email: 'manual@example.com' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(updateUserDynamicMock).not.toHaveBeenCalled();
+    expect(settingsUpsertForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('200 external-auth user account update succeeds when synced identity is omitted', async () => {
+    findCoreByIdMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      authMethod: 'ldap',
+    });
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      authMethod: 'ldap',
+      avatarInitials: 'T',
+      costPerHour: 50,
+      isDisabled: true,
+    });
+    findByIdMock.mockResolvedValue({
+      ...SAMPLE_USER_ROW,
+      authMethod: 'ldap',
+      isDisabled: true,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { isDisabled: true },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateUserDynamicMock).toHaveBeenCalledWith(
+      'u-target',
+      expect.objectContaining({ isDisabled: true }),
+      TX_SENTINEL,
+    );
+    const [, fields] = updateUserDynamicMock.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+      unknown,
+    ];
+    expect(fields).not.toHaveProperty('name');
+    expect(settingsUpsertForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('400 rejects invalid HR update enum and date range', async () => {
+    let res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { employmentStatus: 'invalid' },
+    });
+    expect(res.statusCode).toBe(400);
+
+    res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { hireDate: '2024-02-01', terminationDate: '2024-01-01' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  test('400 rejects HR date patches that conflict with the stored range', async () => {
+    findCoreByIdMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      hireDate: '2024-01-15',
+      terminationDate: '2024-02-15',
+    });
+
+    let res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { hireDate: '2024-03-01' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('hireDate must be on or before terminationDate');
+
+    res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { terminationDate: '2024-01-01' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('hireDate must be on or before terminationDate');
+    expect(updateUserDynamicMock).not.toHaveBeenCalled();
   });
 
   test('200 isDisabled=true → user.disabled audit action', async () => {
@@ -1085,6 +1436,27 @@ describe('PUT /api/users/:id', () => {
       TX_SENTINEL,
     );
     // No dynamic field update needed → updateUserDynamic not called
+    expect(updateUserDynamicMock).not.toHaveBeenCalled();
+  });
+
+  test('200 blank email explicitly clears the settings-backed email', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, email: '' });
+    settingsUpsertForUserMock.mockResolvedValue({});
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { email: '' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(settingsUpsertForUserMock).toHaveBeenCalledWith(
+      'u-target',
+      expect.objectContaining({ email: '' }),
+      TX_SENTINEL,
+    );
     expect(updateUserDynamicMock).not.toHaveBeenCalled();
   });
 

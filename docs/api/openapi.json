@@ -1714,6 +1714,149 @@
                           "external"
                         ]
                       },
+                      "phone": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "jobTitle": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "department": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "employeeCode": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "hireDate": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "terminationDate": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "contractType": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "permanent",
+                              "fixed_term",
+                              "contractor",
+                              "internship",
+                              "consultant",
+                              "other"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "employmentStatus": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "onboarding",
+                              "on_leave",
+                              "terminated"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "workLocation": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "office",
+                              "remote",
+                              "hybrid",
+                              "customer_site",
+                              "other"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "emergencyContactName": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "emergencyContactPhone": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "notes": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "authMethod": {
                         "type": "string",
                         "enum": [
@@ -1957,6 +2100,149 @@
                       "internal",
                       "external"
                     ]
+                  },
+                  "phone": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "jobTitle": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "department": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "employeeCode": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "hireDate": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "terminationDate": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "contractType": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "permanent",
+                          "fixed_term",
+                          "contractor",
+                          "internship",
+                          "consultant",
+                          "other"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "employmentStatus": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "active",
+                          "onboarding",
+                          "on_leave",
+                          "terminated"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "workLocation": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "office",
+                          "remote",
+                          "hybrid",
+                          "customer_site",
+                          "other"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "emergencyContactName": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "emergencyContactPhone": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "notes": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -2004,6 +2290,149 @@
                         "app_user",
                         "internal",
                         "external"
+                      ]
+                    },
+                    "phone": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "jobTitle": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "department": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "employeeCode": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "hireDate": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "terminationDate": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "contractType": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "permanent",
+                            "fixed_term",
+                            "contractor",
+                            "internship",
+                            "consultant",
+                            "other"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "employmentStatus": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "onboarding",
+                            "on_leave",
+                            "terminated"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "workLocation": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "office",
+                            "remote",
+                            "hybrid",
+                            "customer_site",
+                            "other"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "emergencyContactName": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "emergencyContactPhone": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "notes": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
                       ]
                     },
                     "authMethod": {
@@ -2365,6 +2794,149 @@
                   },
                   "email": {
                     "type": "string"
+                  },
+                  "phone": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "jobTitle": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "department": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "employeeCode": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "hireDate": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "terminationDate": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "contractType": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "permanent",
+                          "fixed_term",
+                          "contractor",
+                          "internship",
+                          "consultant",
+                          "other"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "employmentStatus": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "active",
+                          "onboarding",
+                          "on_leave",
+                          "terminated"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "workLocation": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "office",
+                          "remote",
+                          "hybrid",
+                          "customer_site",
+                          "other"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "emergencyContactName": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "emergencyContactPhone": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "notes": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               }
@@ -2419,6 +2991,149 @@
                         "app_user",
                         "internal",
                         "external"
+                      ]
+                    },
+                    "phone": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "jobTitle": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "department": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "employeeCode": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "hireDate": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "terminationDate": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "contractType": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "permanent",
+                            "fixed_term",
+                            "contractor",
+                            "internship",
+                            "consultant",
+                            "other"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "employmentStatus": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "onboarding",
+                            "on_leave",
+                            "terminated"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "workLocation": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "office",
+                            "remote",
+                            "hybrid",
+                            "customer_site",
+                            "other"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "emergencyContactName": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "emergencyContactPhone": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "notes": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
                       ]
                     },
                     "authMethod": {
@@ -2694,6 +3409,149 @@
                         "app_user",
                         "internal",
                         "external"
+                      ]
+                    },
+                    "phone": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "jobTitle": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "department": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "employeeCode": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "hireDate": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "terminationDate": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "contractType": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "permanent",
+                            "fixed_term",
+                            "contractor",
+                            "internship",
+                            "consultant",
+                            "other"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "employmentStatus": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "onboarding",
+                            "on_leave",
+                            "terminated"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "workLocation": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "office",
+                            "remote",
+                            "hybrid",
+                            "customer_site",
+                            "other"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "emergencyContactName": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "emergencyContactPhone": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "notes": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
                       ]
                     },
                     "authMethod": {

@@ -37,8 +37,10 @@ import {
   badRequest,
   ensureArrayOfStrings,
   optionalArrayOfStrings,
+  optionalDateString,
   optionalEmail,
   optionalLocalizedNonNegativeNumber,
+  optionalNonEmptyString,
   requireNonEmptyString,
   validateEnum,
 } from '../utils/validation.ts';
@@ -49,6 +51,30 @@ const idParamSchema = {
     id: { type: 'string' },
   },
   required: ['id'],
+} as const;
+
+const CONTRACT_TYPES = [
+  'permanent',
+  'fixed_term',
+  'contractor',
+  'internship',
+  'consultant',
+  'other',
+] as const;
+const EMPLOYMENT_STATUSES = ['active', 'onboarding', 'on_leave', 'terminated'] as const;
+const WORK_LOCATIONS = ['office', 'remote', 'hybrid', 'customer_site', 'other'] as const;
+const nullableStringSchema = { anyOf: [{ type: 'string' }, { type: 'null' }] } as const;
+const nullableDateSchema = {
+  anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+} as const;
+const nullableContractTypeSchema = {
+  anyOf: [{ type: 'string', enum: CONTRACT_TYPES }, { type: 'null' }],
+} as const;
+const nullableEmploymentStatusSchema = {
+  anyOf: [{ type: 'string', enum: EMPLOYMENT_STATUSES }, { type: 'null' }],
+} as const;
+const nullableWorkLocationSchema = {
+  anyOf: [{ type: 'string', enum: WORK_LOCATIONS }, { type: 'null' }],
 } as const;
 
 const userSchema = {
@@ -63,6 +89,18 @@ const userSchema = {
     costPerHour: { type: 'number' },
     isDisabled: { type: 'boolean' },
     employeeType: { type: 'string', enum: ['app_user', 'internal', 'external'] },
+    phone: nullableStringSchema,
+    jobTitle: nullableStringSchema,
+    department: nullableStringSchema,
+    employeeCode: nullableStringSchema,
+    hireDate: nullableDateSchema,
+    terminationDate: nullableDateSchema,
+    contractType: nullableContractTypeSchema,
+    employmentStatus: nullableEmploymentStatusSchema,
+    workLocation: nullableWorkLocationSchema,
+    emergencyContactName: nullableStringSchema,
+    emergencyContactPhone: nullableStringSchema,
+    notes: nullableStringSchema,
     authMethod: { type: 'string', enum: ['local', 'ldap', 'oidc', 'saml'] },
     authProviderId: { anyOf: [{ type: 'string' }, { type: 'null' }] },
     authProviderName: { anyOf: [{ type: 'string' }, { type: 'null' }] },
@@ -97,6 +135,18 @@ const userCreateBodySchema = {
     email: { type: 'string' },
     costPerHour: { type: 'number' },
     employeeType: { type: 'string', enum: ['app_user', 'internal', 'external'] },
+    phone: nullableStringSchema,
+    jobTitle: nullableStringSchema,
+    department: nullableStringSchema,
+    employeeCode: nullableStringSchema,
+    hireDate: nullableDateSchema,
+    terminationDate: nullableDateSchema,
+    contractType: nullableContractTypeSchema,
+    employmentStatus: nullableEmploymentStatusSchema,
+    workLocation: nullableWorkLocationSchema,
+    emergencyContactName: nullableStringSchema,
+    emergencyContactPhone: nullableStringSchema,
+    notes: nullableStringSchema,
   },
   required: ['name'],
 } as const;
@@ -109,6 +159,18 @@ const userUpdateBodySchema = {
     costPerHour: { type: 'number' },
     role: { type: 'string' },
     email: { type: 'string' },
+    phone: nullableStringSchema,
+    jobTitle: nullableStringSchema,
+    department: nullableStringSchema,
+    employeeCode: nullableStringSchema,
+    hireDate: nullableDateSchema,
+    terminationDate: nullableDateSchema,
+    contractType: nullableContractTypeSchema,
+    employmentStatus: nullableEmploymentStatusSchema,
+    workLocation: nullableWorkLocationSchema,
+    emergencyContactName: nullableStringSchema,
+    emergencyContactPhone: nullableStringSchema,
+    notes: nullableStringSchema,
   },
 } as const;
 
@@ -265,15 +327,70 @@ const DELETE_PERM_BY_EMPLOYEE_TYPE: Record<usersRepo.EmployeeType, string> = {
   external: 'hr.external.delete',
 };
 
+const HR_UPDATE_PERM_BY_EMPLOYEE_TYPE: Record<usersRepo.EmployeeType, string> = {
+  app_user: 'hr.internal.update',
+  internal: 'hr.internal.update',
+  external: 'hr.external.update',
+};
+
+const HR_VIEW_PERM_BY_EMPLOYEE_TYPE: Record<usersRepo.EmployeeType, string> = {
+  app_user: 'hr.internal.view',
+  internal: 'hr.internal.view',
+  external: 'hr.external.view',
+};
+
+const HR_DETAIL_FIELDS = [
+  'phone',
+  'jobTitle',
+  'department',
+  'employeeCode',
+  'hireDate',
+  'terminationDate',
+  'contractType',
+  'employmentStatus',
+  'workLocation',
+  'emergencyContactName',
+  'emergencyContactPhone',
+  'notes',
+] as const;
+
+const canViewHrDetailsFor = (request: FastifyRequest, employeeType: usersRepo.EmployeeType) =>
+  hasPermission(request, HR_VIEW_PERM_BY_EMPLOYEE_TYPE[employeeType]);
+
+const canUpdateHrDetailsFor = (request: FastifyRequest, employeeType: usersRepo.EmployeeType) =>
+  hasPermission(request, HR_UPDATE_PERM_BY_EMPLOYEE_TYPE[employeeType]);
+
+const canViewEmailFor = (request: FastifyRequest, user: usersRepo.UserListRow) =>
+  canViewUserEmails(request) || canViewHrDetailsFor(request, user.employeeType);
+
 const maskUserResponse = (
   user: usersRepo.UserListRow,
   canViewCosts: boolean,
   canRevealUserEmails: boolean,
-) => ({
-  ...user,
-  email: canRevealUserEmails ? user.email : '',
-  costPerHour: canViewCosts ? user.costPerHour : 0,
-});
+  canRevealHrDetails: boolean,
+) => {
+  const response: Partial<usersRepo.UserListRow> = {
+    ...user,
+    email: canRevealUserEmails ? user.email : '',
+    costPerHour: canViewCosts ? user.costPerHour : 0,
+  };
+
+  if (!canRevealHrDetails) {
+    for (const field of HR_DETAIL_FIELDS) {
+      delete response[field];
+    }
+  }
+
+  return response;
+};
+
+const maskUserForRequest = (request: FastifyRequest, user: usersRepo.UserListRow) =>
+  maskUserResponse(
+    user,
+    canViewCostFor(request, user.id),
+    canViewEmailFor(request, user),
+    canViewHrDetailsFor(request, user.employeeType),
+  );
 
 // Cost visibility per row — the two scopes are strictly independent:
 //   - own row    → hr.costs.view       (personal-scope, read-only counterpart of hr.costs.update)
@@ -284,6 +401,125 @@ const canViewCostFor = (request: FastifyRequest, targetUserId: string | null | u
   if (!targetUserId) return false;
   if (targetUserId === request.user?.id) return hasPermission(request, 'hr.costs.view');
   return hasPermission(request, 'hr.costs_all.view');
+};
+
+const parseNullableHrEnum = <T extends string>(
+  value: unknown,
+  allowedValues: readonly T[],
+  fieldName: string,
+): { ok: true; value: T | null } | { ok: false; message: string } => {
+  if (value === null || value === '') return { ok: true, value: null };
+  const result = validateEnum(value, allowedValues, fieldName);
+  if (!result.ok) return result;
+  return { ok: true, value: result.value };
+};
+
+const parseHrDetails = (
+  body: Record<string, unknown>,
+): { ok: true; fields: usersRepo.UserHrFields } | { ok: false; message: string } => {
+  const fields: usersRepo.UserHrFields = {};
+  const stringFields = [
+    'phone',
+    'jobTitle',
+    'department',
+    'employeeCode',
+    'emergencyContactName',
+    'emergencyContactPhone',
+    'notes',
+  ] as const;
+
+  for (const field of stringFields) {
+    if (!Object.hasOwn(body, field)) continue;
+    const result = optionalNonEmptyString(body[field], field);
+    if (!result.ok) return { ok: false, message: result.message };
+    fields[field] = result.value;
+  }
+
+  if (Object.hasOwn(body, 'hireDate')) {
+    const result = optionalDateString(body.hireDate, 'hireDate');
+    if (!result.ok) return { ok: false, message: result.message };
+    fields.hireDate = result.value;
+  }
+
+  if (Object.hasOwn(body, 'terminationDate')) {
+    const result = optionalDateString(body.terminationDate, 'terminationDate');
+    if (!result.ok) return { ok: false, message: result.message };
+    fields.terminationDate = result.value;
+  }
+
+  if (
+    fields.hireDate !== undefined &&
+    fields.terminationDate !== undefined &&
+    fields.hireDate &&
+    fields.terminationDate &&
+    fields.hireDate > fields.terminationDate
+  ) {
+    return { ok: false, message: 'hireDate must be on or before terminationDate' };
+  }
+
+  if (Object.hasOwn(body, 'contractType')) {
+    const result = parseNullableHrEnum(body.contractType, CONTRACT_TYPES, 'contractType');
+    if (!result.ok) return { ok: false, message: result.message };
+    fields.contractType = result.value;
+  }
+
+  if (Object.hasOwn(body, 'employmentStatus')) {
+    const result = parseNullableHrEnum(
+      body.employmentStatus,
+      EMPLOYMENT_STATUSES,
+      'employmentStatus',
+    );
+    if (!result.ok) return { ok: false, message: result.message };
+    fields.employmentStatus = result.value;
+  }
+
+  if (Object.hasOwn(body, 'workLocation')) {
+    const result = parseNullableHrEnum(body.workLocation, WORK_LOCATIONS, 'workLocation');
+    if (!result.ok) return { ok: false, message: result.message };
+    fields.workLocation = result.value;
+  }
+
+  return { ok: true, fields };
+};
+
+const hasHrDetailPatch = (fields: usersRepo.UserHrFields) =>
+  HR_DETAIL_FIELDS.some((field) => fields[field] !== undefined);
+
+const getHrDateRangeError = (
+  fields: usersRepo.UserHrFields,
+  current?: Pick<usersRepo.UserCore, 'hireDate' | 'terminationDate'>,
+): string | null => {
+  const hireDate = fields.hireDate !== undefined ? fields.hireDate : (current?.hireDate ?? null);
+  const terminationDate =
+    fields.terminationDate !== undefined
+      ? fields.terminationDate
+      : (current?.terminationDate ?? null);
+
+  if (hireDate && terminationDate && hireDate > terminationDate) {
+    return 'hireDate must be on or before terminationDate';
+  }
+  return null;
+};
+
+const getUserUniqueViolationMessage = (err: unknown) => {
+  const violation = getUniqueViolation(err);
+  if (!violation) return null;
+  if (
+    violation.constraint === 'idx_users_employee_code_unique' ||
+    violation.detail?.includes('employee_code')
+  ) {
+    return 'Employee code already exists';
+  }
+  if (
+    violation.constraint === 'users_username_unique' ||
+    violation.constraint === 'users_username_key' ||
+    violation.constraint === 'idx_users_username_lower_unique' ||
+    violation.detail?.includes('(username)') ||
+    violation.detail?.includes('(lower(username))')
+  ) {
+    return 'Username already exists';
+  }
+  return null;
 };
 
 const ensureSubmittedAssignmentsInScope = async (
@@ -369,8 +605,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const canViewInternal = hasPermission(request, 'hr.internal.view');
       const canViewExternal = hasPermission(request, 'hr.external.view');
 
-      const canRevealUserEmails = canViewUserEmails(request);
-
       const users = canViewAllUsers(request)
         ? await usersRepo.listAllForAdmin()
         : await usersRepo.listScopedForManager(request.user.id, {
@@ -379,9 +613,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             canViewExternal,
           });
 
-      return users.map((u) =>
-        maskUserResponse(u, canViewCostFor(request, u.id), canRevealUserEmails),
-      );
+      return users.map((u) => maskUserForRequest(request, u));
     },
   );
 
@@ -408,7 +640,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const { name, username, password, role, email, costPerHour, employeeType } = request.body as {
+      const body = request.body as Record<string, unknown>;
+      const { name, username, password, role, email, costPerHour, employeeType } = body as {
         name: string;
         username?: string;
         password?: string;
@@ -449,6 +682,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const costPerHourResult = optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour');
       if (!costPerHourResult.ok) return badRequest(reply, costPerHourResult.message);
       const canApplyCost = hasPermission(request, 'hr.costs_all.update');
+      const hrDetailsResult = parseHrDetails(body);
+      if (!hrDetailsResult.ok) return badRequest(reply, hrDetailsResult.message);
+      const canApplyHrDetails =
+        effectiveEmployeeType === 'app_user'
+          ? canUpdateHrDetailsFor(request, effectiveEmployeeType)
+          : true;
+      const hrDetails = canApplyHrDetails ? hrDetailsResult.fields : {};
+      const dateRangeError = getHrDateRangeError(hrDetailsResult.fields);
+      if (dateRangeError) return badRequest(reply, dateRangeError);
 
       let usernameValue: string;
       let passwordHash: string;
@@ -501,6 +743,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               costPerHour: canApplyCost ? costPerHourResult.value || 0 : 0,
               isDisabled: false,
               employeeType: effectiveEmployeeType,
+              ...hrDetails,
             },
             tx,
           );
@@ -533,11 +776,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             secondaryLabel: usernameValue,
           },
         });
-        return reply.code(201).send({
+        const createdUser: usersRepo.UserListRow = {
           id,
           name: nameResult.value,
           username: usernameValue,
-          email: canViewUserEmails(request) ? emailResult.value || '' : '',
+          email: emailResult.value || '',
           role: roleValue,
           avatarInitials,
           // Mirror maskUserResponse's view-based mask used by GET / and PUT:
@@ -552,16 +795,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               : 0,
           isDisabled: false,
           employeeType: effectiveEmployeeType,
+          ...hrDetails,
           authMethod: 'local',
           authProviderId: null,
           authProviderName: null,
           hasTopManagerRole: roleValue === TOP_MANAGER_ROLE_ID,
           isAdminOnly: roleValue === ADMIN_ROLE_ID,
-        });
+        };
+
+        return reply.code(201).send(maskUserForRequest(request, createdUser));
       } catch (err) {
-        if (getUniqueViolation(err)) {
-          return badRequest(reply, 'Username already exists');
-        }
+        const uniqueMessage = getUserUniqueViolationMessage(err);
+        if (uniqueMessage) return badRequest(reply, uniqueMessage);
         throw err;
       }
     },
@@ -677,7 +922,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const { name, email, isDisabled, costPerHour, role } = request.body as {
+      const body = request.body as Record<string, unknown>;
+      const { name, email, isDisabled, costPerHour, role } = body as {
         name?: string;
         email?: string;
         isDisabled?: boolean;
@@ -718,6 +964,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         validatedEmail = emailResult.value;
       }
 
+      const hrDetailsResult = parseHrDetails(body);
+      if (!hrDetailsResult.ok) return badRequest(reply, hrDetailsResult.message);
+      const hrDetails = hrDetailsResult.fields;
+      const hasHrDetails = hasHrDetailPatch(hrDetails);
+
       const targetUser = await usersRepo.findCoreById(idResult.value);
       if (!targetUser) {
         return replyError(request, reply, {
@@ -733,6 +984,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const currentRole = targetUser.role;
       const currentName = targetUser.name;
       const currentUsername = targetUser.username;
+      const dateRangeError = getHrDateRangeError(hrDetails, targetUser);
+      if (dateRangeError) return badRequest(reply, dateRangeError);
+
+      if (targetUser.authMethod !== 'local' && (name !== undefined || email !== undefined)) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Name and email are managed by the external authentication provider',
+          action: 'user.update.conflict',
+          entityType: 'user',
+          entityId: idResult.value,
+          details: { secondaryLabel: `auth_method_${targetUser.authMethod}` },
+        });
+      }
 
       // Cost-only edit bypass: a role granted just a cost-edit permission
       // (personal `hr.costs.update` for self-edit, or all-scope
@@ -746,16 +1010,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         name === undefined &&
         email === undefined &&
         isDisabled === undefined &&
-        role === undefined;
+        role === undefined &&
+        !hasHrDetails;
       const hasCostEditGrant = isSelf
         ? hasPermission(request, 'hr.costs.update')
         : hasPermission(request, 'hr.costs_all.update');
       const isCostOnlyEdit = onlyEditingCost && hasCostEditGrant;
+      const hasStandardUpdatePermission = hasPermission(
+        request,
+        UPDATE_PERM_BY_EMPLOYEE_TYPE[targetEmployeeType],
+      );
+      const hasHrUpdatePermission = canUpdateHrDetailsFor(request, targetEmployeeType);
+      const hasIdentityFields = name !== undefined || email !== undefined;
+      const hasIdentityUpdatePermission = hasStandardUpdatePermission || hasHrUpdatePermission;
+      const hasAccountFields = isDisabled !== undefined || role !== undefined;
 
-      if (
-        !isCostOnlyEdit &&
-        !hasPermission(request, UPDATE_PERM_BY_EMPLOYEE_TYPE[targetEmployeeType])
-      ) {
+      if (!isCostOnlyEdit && hasAccountFields && !hasStandardUpdatePermission) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',
@@ -766,13 +1036,45 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
+      if (!isCostOnlyEdit && hasIdentityFields && !hasIdentityUpdatePermission) {
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'user.update.denied',
+          entityType: 'user',
+          entityId: idResult.value,
+          details: { secondaryLabel: `employee_type_${targetEmployeeType}` },
+        });
+      }
+
+      if (!isCostOnlyEdit && hasHrDetails && !hasHrUpdatePermission) {
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'user.update.denied',
+          entityType: 'user',
+          entityId: idResult.value,
+          details: { secondaryLabel: `employee_type_${targetEmployeeType}` },
+        });
+      }
+
+      if (hasHrDetails) {
+        Object.assign(fields, hrDetails);
+      }
+
       // Cost-only edits also skip the manager-scoping check: the all-scope
       // `hr.costs_all.update` grant is explicitly cross-user by design, so
       // gating it through canManageUser would make the permission half-useful
       // (works for internal/external employees, fails for app_users).
+      const appUserHrProfileEdit =
+        targetEmployeeType === 'app_user' &&
+        !hasAccountFields &&
+        (hasIdentityFields || hasHrDetails) &&
+        hasHrUpdatePermission;
       if (
         !isCostOnlyEdit &&
         targetEmployeeType === 'app_user' &&
+        !appUserHrProfileEdit &&
         !hasPermission(request, 'administration.user_management_all.view') &&
         idResult.value !== request.user?.id &&
         !(await usersRepo.canManageUser(idResult.value, request.user?.id ?? ''))
@@ -823,34 +1125,42 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const needsSettingsUpsert = fields.name !== undefined || validatedEmail !== undefined;
+      const settingsEmailPatch = email !== undefined ? (validatedEmail ?? '') : null;
 
       if (hasFieldUpdates || needsSettingsUpsert) {
         // Single transaction so users.name/email and the mirrored settings row commit (or
         // roll back) together. Previously the settings upsert ran after the users-update
         // transaction had already committed, so a failed upsert left users updated while
         // settings stayed stale, and findById's LEFT JOIN returned an inconsistent row.
-        const txResult = await withDbTransaction(async (tx) => {
-          if (hasFieldUpdates) {
-            const row = await usersRepo.updateUserDynamic(idResult.value, fields, tx);
-            if (!row) return { userExists: false };
-            if (roleValue !== null) {
-              await usersRepo.replaceUserRoles(idResult.value, [roleValue], tx);
-              await userAssignmentsRepo.syncTopManagerAssignmentsForUser(idResult.value, tx);
+        let txResult: { userExists: boolean };
+        try {
+          txResult = await withDbTransaction(async (tx) => {
+            if (hasFieldUpdates) {
+              const row = await usersRepo.updateUserDynamic(idResult.value, fields, tx);
+              if (!row) return { userExists: false };
+              if (roleValue !== null) {
+                await usersRepo.replaceUserRoles(idResult.value, [roleValue], tx);
+                await userAssignmentsRepo.syncTopManagerAssignmentsForUser(idResult.value, tx);
+              }
             }
-          }
-          if (needsSettingsUpsert) {
-            await settingsRepo.upsertForUser(
-              idResult.value,
-              {
-                fullName: fields.name ?? null,
-                email: validatedEmail ?? null,
-                language: null,
-              },
-              tx,
-            );
-          }
-          return { userExists: true };
-        });
+            if (needsSettingsUpsert) {
+              await settingsRepo.upsertForUser(
+                idResult.value,
+                {
+                  fullName: fields.name ?? null,
+                  email: settingsEmailPatch,
+                  language: null,
+                },
+                tx,
+              );
+            }
+            return { userExists: true };
+          });
+        } catch (err) {
+          const uniqueMessage = getUserUniqueViolationMessage(err);
+          if (uniqueMessage) return badRequest(reply, uniqueMessage);
+          throw err;
+        }
 
         if (!txResult.userExists) {
           return replyError(request, reply, {
@@ -864,15 +1174,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const changedFields = getAuditChangedFields({
-        name,
-        email,
-        isDisabled,
+        name: fields.name,
+        email: email !== undefined ? (validatedEmail ?? '') : undefined,
+        isDisabled: fields.isDisabled,
         // Mirror the write-side gate: `fields.costPerHour` is set only when the
         // caller had permission to apply it (self + personal/all scope, or other
         // user + all scope). Anything else was silently dropped above, so it must
         // not appear in the audit diff either.
         costPerHour: fields.costPerHour,
-        role,
+        role: fields.role,
+        phone: fields.phone,
+        jobTitle: fields.jobTitle,
+        department: fields.department,
+        employeeCode: fields.employeeCode,
+        hireDate: fields.hireDate,
+        terminationDate: fields.terminationDate,
+        contractType: fields.contractType,
+        employmentStatus: fields.employmentStatus,
+        workLocation: fields.workLocation,
+        emergencyContactName: fields.emergencyContactName,
+        emergencyContactPhone: fields.emergencyContactPhone,
+        notes: fields.notes,
       });
 
       let action = 'user.updated';
@@ -895,8 +1217,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const canRevealUserEmails = canViewUserEmails(request);
-
       await logAudit({
         request,
         action,
@@ -910,7 +1230,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           toValue: role !== undefined ? fullUser.role : undefined,
         },
       });
-      return maskUserResponse(fullUser, canViewCostFor(request, fullUser.id), canRevealUserEmails);
+      return maskUserForRequest(request, fullUser);
     },
   );
 
@@ -1089,11 +1409,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
 
-      return maskUserResponse(
-        updated,
-        canViewCostFor(request, updated.id),
-        canViewUserEmails(request),
-      );
+      return maskUserForRequest(request, updated);
     },
   );
 

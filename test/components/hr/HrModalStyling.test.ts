@@ -14,15 +14,38 @@ describe('HR employee modal styling', () => {
 
     expectSourceContainsAll(source, [
       "import { Button } from '@/components/ui/button';",
-      "import { Field, FieldError, FieldLabel } from '@/components/ui/field';",
-      "import { Input } from '@/components/ui/input';",
-      '<ModalContent size="md"',
+      "import EmployeeHrFields from './EmployeeHrFields';",
+      "from './employeeHrProfile';",
+      '<ModalContent size="2xl"',
       '<ModalHeader>',
-      '<ModalBody className="space-y-4">',
+      '<ModalBody className="space-y-6">',
+      '<EmployeeHrFields',
       '<ModalFooter>',
       '<DeleteConfirmModal',
     ]);
     expectSourceOmitsAll(source, ['rounded-2xl shadow-2xl']);
+  });
+
+  test('shared HR profile fields use shadcn form primitives', async () => {
+    const source = await readComponentSource('HR/EmployeeHrFields.tsx');
+
+    expectSourceContainsAll(source, [
+      "import { Field, FieldError, FieldLabel } from '@/components/ui/field';",
+      "import { Input } from '@/components/ui/input';",
+      'import {',
+      'Select,',
+      "import { Textarea } from '@/components/ui/textarea';",
+    ]);
+    expectSourceOmitsAll(source, ['rounded-2xl shadow-2xl']);
+  });
+
+  test.each([
+    ['internal employees', 'HR/InternalEmployeesView.tsx'],
+    ['external employees', 'HR/ExternalEmployeesView.tsx'],
+  ])('%s table accessor columns use stable ids', async (_name, path) => {
+    const source = await readComponentSource(path);
+
+    expectSourceContainsAll(source, ["id: 'contact'", "id: 'roleTitle'", "id: 'hrStatus'"]);
   });
 });
 

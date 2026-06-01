@@ -24,6 +24,9 @@ import type {
   TimeEntry,
   User,
   UserAuthMethod,
+  UserContractType,
+  UserEmploymentStatus,
+  UserWorkLocation,
 } from '../../types';
 import { normalizeDateOnlyString } from '../../utils/date';
 import {
@@ -127,6 +130,45 @@ const normalizeUserAuthMethod = (value: unknown): UserAuthMethod => {
   return 'local';
 };
 
+const normalizeUserContractType = (value: unknown): UserContractType | null => {
+  if (
+    value === 'permanent' ||
+    value === 'fixed_term' ||
+    value === 'contractor' ||
+    value === 'internship' ||
+    value === 'consultant' ||
+    value === 'other'
+  ) {
+    return value;
+  }
+  return null;
+};
+
+const normalizeUserEmploymentStatus = (value: unknown): UserEmploymentStatus | null => {
+  if (
+    value === 'active' ||
+    value === 'onboarding' ||
+    value === 'on_leave' ||
+    value === 'terminated'
+  ) {
+    return value;
+  }
+  return null;
+};
+
+const normalizeUserWorkLocation = (value: unknown): UserWorkLocation | null => {
+  if (
+    value === 'office' ||
+    value === 'remote' ||
+    value === 'hybrid' ||
+    value === 'customer_site' ||
+    value === 'other'
+  ) {
+    return value;
+  }
+  return null;
+};
+
 const normalizeAvailableRoles = (value: unknown): RoleSummary[] | undefined => {
   if (value === undefined) return undefined;
   if (!Array.isArray(value)) return [];
@@ -173,6 +215,13 @@ const normalizeOptionalString = (raw: unknown): string | undefined =>
 const normalizeNullableTrimmedString = (raw: unknown): string | null =>
   normalizeTrimmedString(raw) || null;
 
+const normalizeNullableDateOnlyString = (raw: unknown): string | null => {
+  const normalized = normalizeTrimmedString(raw);
+  if (!normalized) return null;
+  const dateOnly = normalizeDateOnlyString(normalized);
+  return /^\d{4}-\d{2}-\d{2}$/.test(dateOnly) ? dateOnly : null;
+};
+
 export const normalizeUser = (u: User): User => {
   // /auth/login and /auth/me only return id, name, username, role,
   // avatarInitials, permissions, availableRoles. Fabricating defaults for the
@@ -194,6 +243,18 @@ export const normalizeUser = (u: User): User => {
   assignIfPresent(raw, result, 'email', normalizeOptionalString);
   assignIfPresent(raw, result, 'costPerHour', normalizeCostPerHour);
   assignIfPresent(raw, result, 'employeeType', normalizeEmployeeType);
+  assignIfPresent(raw, result, 'phone', normalizeOptionalString);
+  assignIfPresent(raw, result, 'jobTitle', normalizeOptionalString);
+  assignIfPresent(raw, result, 'department', normalizeOptionalString);
+  assignIfPresent(raw, result, 'employeeCode', normalizeOptionalString);
+  assignIfPresent(raw, result, 'hireDate', normalizeNullableDateOnlyString);
+  assignIfPresent(raw, result, 'terminationDate', normalizeNullableDateOnlyString);
+  assignIfPresent(raw, result, 'contractType', normalizeUserContractType);
+  assignIfPresent(raw, result, 'employmentStatus', normalizeUserEmploymentStatus);
+  assignIfPresent(raw, result, 'workLocation', normalizeUserWorkLocation);
+  assignIfPresent(raw, result, 'emergencyContactName', normalizeOptionalString);
+  assignIfPresent(raw, result, 'emergencyContactPhone', normalizeOptionalString);
+  assignIfPresent(raw, result, 'notes', normalizeOptionalString);
   assignIfPresent(raw, result, 'authMethod', normalizeUserAuthMethod);
   assignIfPresent(raw, result, 'authProviderId', normalizeNullableTrimmedString);
   assignIfPresent(raw, result, 'authProviderName', normalizeNullableTrimmedString);

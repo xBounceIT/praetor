@@ -1,8 +1,10 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import * as realBcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import * as realDrizzle from '../../db/drizzle.ts';
 import * as realPersonalAccessTokensRepo from '../../repositories/personalAccessTokensRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
+import * as realSettingsRepo from '../../repositories/settingsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realExternalAuth from '../../services/external-auth.ts';
 import * as realLdapService from '../../services/ldap.ts';
@@ -16,6 +18,7 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { decodeForAssertion, signToken } from '../helpers/jwt.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 // hashPersonalAccessToken (HMAC-keyed) requires ENCRYPTION_KEY at call time.
 process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'test-encryption-key-32-bytes-long!!';
@@ -23,7 +26,9 @@ process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'test-encryption-key-
 // Snapshot real exports so afterAll can restore them. Snapshot must run BEFORE mock.module
 // fires (i.e., before beforeAll executes) - see comment in middleware/auth.test.ts.
 const usersRepoSnap = { ...realUsersRepo };
+const drizzleSnap = { ...realDrizzle };
 const rolesRepoSnap = { ...realRolesRepo };
+const settingsRepoSnap = { ...realSettingsRepo };
 const permissionsSnap = { ...realPermissions };
 const personalAccessTokensRepoSnap = { ...realPersonalAccessTokensRepo };
 const auditSnap = { ...realAudit };
@@ -43,9 +48,12 @@ const markPersonalAccessTokenUsedMock = mock();
 // Auth route deps
 const findLoginUserByNormalizedUsernameMock = mock();
 const findLoginUserByIdMock = mock();
+const updateDirectoryProfileMock = mock();
 const bumpSessionVersionMock = mock();
 const listAvailableRolesForUserMock = mock();
 const logAuditMock = mock(async () => undefined);
+const settingsUpsertForUserMock = mock();
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 // External: bcryptjs.compare and the LDAP service (dynamically imported by /login)
 const bcryptCompareMock = mock();
@@ -64,7 +72,16 @@ beforeAll(async () => {
     findAuthUserById: findAuthUserByIdMock,
     findLoginUserByNormalizedUsername: findLoginUserByNormalizedUsernameMock,
     findLoginUserById: findLoginUserByIdMock,
+    updateDirectoryProfile: updateDirectoryProfileMock,
     bumpSessionVersion: bumpSessionVersionMock,
+  }));
+  mock.module('../../db/drizzle.ts', () => ({
+    ...drizzleSnap,
+    withDbTransaction: withDbTransactionMock,
+  }));
+  mock.module('../../repositories/settingsRepo.ts', () => ({
+    ...settingsRepoSnap,
+    upsertForUser: settingsUpsertForUserMock,
   }));
   mock.module('../../repositories/rolesRepo.ts', () => ({
     ...rolesRepoSnap,
@@ -109,7 +126,9 @@ beforeAll(async () => {
 
 afterAll(() => {
   restoreAuthMiddlewareMock();
+  mock.module('../../db/drizzle.ts', () => drizzleSnap);
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
+  mock.module('../../repositories/settingsRepo.ts', () => settingsRepoSnap);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../repositories/personalAccessTokensRepo.ts', () => personalAccessTokensRepoSnap);
@@ -153,9 +172,12 @@ const allMocks = [
   markPersonalAccessTokenUsedMock,
   findLoginUserByNormalizedUsernameMock,
   findLoginUserByIdMock,
+  updateDirectoryProfileMock,
   bumpSessionVersionMock,
   listAvailableRolesForUserMock,
   logAuditMock,
+  settingsUpsertForUserMock,
+  withDbTransactionMock,
   bcryptCompareMock,
   ldapAuthenticateMock,
   ldapAuthenticateWithProfileMock,
@@ -168,6 +190,7 @@ let testApp: FastifyInstance;
 
 beforeEach(async () => {
   for (const m of allMocks) m.mockReset();
+  resetWithDbTransactionMock();
 
   // Defaults: happy auth path for /me and /switch-role
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
@@ -298,6 +321,44 @@ describe('POST /api/auth/login', () => {
     expect(bcryptCompareMock).not.toHaveBeenCalled();
     const body = JSON.parse(res.body);
     expect(body.user.role).toBe('manager');
+  });
+
+  test('200: LDAP success refreshes provider-managed name and email', async () => {
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
+      ...LOGIN_USER,
+      authMethod: 'ldap',
+      name: 'Old Name',
+      avatarInitials: 'ON',
+    });
+    ldapAuthenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      groups: [],
+      matchedRoleIds: [],
+      roleMappings: [],
+      displayName: 'Alice Provider',
+      email: 'alice.provider@example.com',
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'alice', password: 'secret' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateDirectoryProfileMock).toHaveBeenCalledWith(
+      'u1',
+      { name: 'Alice Provider', avatarInitials: 'AP' },
+      expect.anything(),
+    );
+    expect(settingsUpsertForUserMock).toHaveBeenCalledWith(
+      'u1',
+      { fullName: 'Alice Provider', email: 'alice.provider@example.com', language: null },
+      expect.anything(),
+    );
+    const body = JSON.parse(res.body);
+    expect(body.user.name).toBe('Alice Provider');
+    expect(body.user.avatarInitials).toBe('AP');
   });
 
   test('200: LDAP login sends the untrimmed password to the directory bind (#697)', async () => {
