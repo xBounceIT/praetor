@@ -470,6 +470,13 @@
       "when": 1780339668437,
       "tag": "0066_add_saved_views_and_shares",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1780346136332,
+      "tag": "0067_remove_project_color",
+      "breakpoints": true
     }
   ]
 }
