@@ -45,6 +45,9 @@ import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 const isSsoAuthMethod = (authMethod: UserAuthMethod): authMethod is 'oidc' | 'saml' =>
   authMethod === 'oidc' || authMethod === 'saml';
 
+const isProviderManagedIdentity = (user: Pick<User, 'authMethod'> | null | undefined) =>
+  (user?.authMethod || 'local') !== 'local';
+
 const sanitizeUsernamePart = (s: string) =>
   s
     .normalize('NFD')
@@ -561,14 +564,17 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const saveEdit = async () => {
     if (editingUser) {
+      const identityReadOnly = isProviderManagedIdentity(editingUser);
       const newErrors: Record<string, string> = {};
       const originalHasSurname = !!splitFullName(editingUser.name).surname.trim();
-      if (!editFirstName.trim()) newErrors.firstName = t('common:validation.nameRequired');
-      if (originalHasSurname && !editSurname.trim()) {
-        newErrors.surname = t('common:validation.surnameRequired');
-      }
-      if (editEmail.trim() && !isValidEmail(editEmail)) {
-        newErrors.email = t('common:validation.invalidEmail');
+      if (!identityReadOnly) {
+        if (!editFirstName.trim()) newErrors.firstName = t('common:validation.nameRequired');
+        if (originalHasSurname && !editSurname.trim()) {
+          newErrors.surname = t('common:validation.surnameRequired');
+        }
+        if (editEmail.trim() && !isValidEmail(editEmail)) {
+          newErrors.email = t('common:validation.invalidEmail');
+        }
       }
 
       if (Object.keys(newErrors).length > 0) {
@@ -576,11 +582,22 @@ const UserManagement: React.FC<UserManagementProps> = ({
         return;
       }
 
-      const updates: Partial<User> = {
-        name: buildFullName(editFirstName, editSurname),
-        email: editEmail.trim(),
-        isDisabled: editIsDisabled,
-      };
+      const updates: Partial<User> = {};
+
+      if (!identityReadOnly) {
+        const name = buildFullName(editFirstName, editSurname);
+        const email = editEmail.trim();
+        if (name !== editingUser.name) {
+          updates.name = name;
+        }
+        if (email !== (editingUser.email || '')) {
+          updates.email = email;
+        }
+      }
+
+      if (editIsDisabled !== !!editingUser.isDisabled) {
+        updates.isDisabled = editIsDisabled;
+      }
 
       const isEditingSelf = editingUser.id === currentUserId;
       const canEditAssignedRoles = canUpdateUsers && !isEditingSelf && roles.length > 0;
@@ -623,10 +640,15 @@ const UserManagement: React.FC<UserManagementProps> = ({
       // caller; otherwise the value comes from the masked GET response (0) and
       // would silently overwrite the real DB cost on an unrelated edit.
       if (canViewCosts && canEditCostFor(editingUser.id)) {
-        updates.costPerHour = parseFloat(editCostPerHour) || 0;
+        const costPerHour = parseFloat(editCostPerHour) || 0;
+        if (costPerHour !== (editingUser.costPerHour || 0)) {
+          updates.costPerHour = costPerHour;
+        }
       }
 
-      onUpdateUser(editingUser?.id, updates);
+      if (Object.keys(updates).length > 0) {
+        onUpdateUser(editingUser.id, updates);
+      }
       closeEditModal();
     }
   };
@@ -635,6 +657,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
   const isEditingSelf = editingUser?.id === currentUserId;
   const canEditRole = canUpdateUsers && !isEditingSelf;
   const canEditAssignedRoles = canUpdateUsers && !isEditingSelf && roles.length > 0;
+  const editIdentityReadOnly = isProviderManagedIdentity(editingUser);
+  const hasIdentityChanges =
+    !!editingUser &&
+    !editIdentityReadOnly &&
+    (buildFullName(editFirstName, editSurname) !== editingUser.name ||
+      editEmail.trim() !== (editingUser.email || ''));
   const hasAssignedRoleChanges =
     !!editingUser &&
     canEditAssignedRoles &&
@@ -642,8 +670,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
       editPrimaryRoleId !== initialEditPrimaryRoleId);
   const hasEditChanges =
     !!editingUser &&
-    (buildFullName(editFirstName, editSurname) !== editingUser.name ||
-      editEmail.trim() !== (editingUser.email || '') ||
+    (hasIdentityChanges ||
       editIsDisabled !== !!editingUser.isDisabled ||
       (canViewCosts &&
         canEditCostFor(editingUser.id) &&
@@ -1163,6 +1190,14 @@ const UserManagement: React.FC<UserManagementProps> = ({
             </div>
 
             <div className="space-y-4">
+              {editIdentityReadOnly && editingUser && (
+                <p className="text-xs text-zinc-500">
+                  {t('hr:workforce.identityManagedByProvider', {
+                    provider: getAuthMethodLabel(editingUser),
+                  })}
+                </p>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
@@ -1178,9 +1213,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
                       }
                     }}
                     aria-label={t('hr:workforce.name')}
+                    readOnly={editIdentityReadOnly}
+                    disabled={editIdentityReadOnly}
                     className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
                       editFormErrors.firstName ? 'border-red-400' : 'border-zinc-200'
-                    }`}
+                    } disabled:cursor-not-allowed disabled:opacity-70`}
                   />
                   {editFormErrors.firstName && (
                     <p className="text-xs text-red-500 mt-1">{editFormErrors.firstName}</p>
@@ -1200,9 +1237,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
                       }
                     }}
                     aria-label={t('hr:workforce.surname')}
+                    readOnly={editIdentityReadOnly}
+                    disabled={editIdentityReadOnly}
                     className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
                       editFormErrors.surname ? 'border-red-400' : 'border-zinc-200'
-                    }`}
+                    } disabled:cursor-not-allowed disabled:opacity-70`}
                   />
                   {editFormErrors.surname && (
                     <p className="text-xs text-red-500 mt-1">{editFormErrors.surname}</p>
@@ -1225,9 +1264,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   }}
                   placeholder="e.g. alice.smith@example.com"
                   aria-label={t('common:labels.email')}
+                  readOnly={editIdentityReadOnly}
+                  disabled={editIdentityReadOnly}
                   className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
                     editFormErrors.email ? 'border-red-400' : 'border-zinc-200'
-                  }`}
+                  } disabled:cursor-not-allowed disabled:opacity-70`}
                 />
                 {editFormErrors.email && (
                   <p className="text-xs text-red-500 mt-1">{editFormErrors.email}</p>

@@ -2,7 +2,7 @@
 title: FAQ e risoluzione problemi
 description: Risposte rapide ai problemi piu comuni durante l'uso di Praetor.
 sidebar:
-  order: 7
+  order: 8
 ---
 
 ## Non vedo un modulo

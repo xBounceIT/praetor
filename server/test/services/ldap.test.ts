@@ -10,17 +10,22 @@ import {
   test,
 } from 'bun:test';
 import realLdap from 'ldapjs';
+import * as realDrizzle from '../../db/drizzle.ts';
 import * as realLdapRepo from '../../repositories/ldapRepo.ts';
+import * as realSettingsRepo from '../../repositories/settingsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realExternalAuth from '../../services/external-auth.ts';
 import ldapService from '../../services/ldap.ts';
 import * as realInitials from '../../utils/initials.ts';
 import * as realLogger from '../../utils/logger.ts';
 import * as realOrderIds from '../../utils/order-ids.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 // Snapshot real exports BEFORE the beforeAll fires (mock.module inside beforeAll is not hoisted).
 const ldapjsSnapshot = realLdap;
+const drizzleSnapshot = { ...realDrizzle };
 const ldapRepoSnapshot = { ...realLdapRepo };
+const settingsRepoSnapshot = { ...realSettingsRepo };
 const usersRepoSnapshot = { ...realUsersRepo };
 const externalAuthSnapshot = { ...realExternalAuth };
 const initialsSnapshot = { ...realInitials };
@@ -30,11 +35,14 @@ const orderIdsSnapshot = { ...realOrderIds };
 const ldapRepoGetMock = mock();
 const findLoginUserByNormalizedUsernameMock = mock();
 const updateNameByUsernameMock = mock();
+const updateDirectoryProfileMock = mock();
+const settingsUpsertForUserMock = mock();
 const createUserMock = mock();
 const applyExternalRolesForUserMock = mock();
 const applyExternalRolesForUserIfMatchedMock = mock();
 const externalGroupsYieldNoKnownRoleMock = mock();
 const filterExistingRoleIdsMock = mock();
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 // ─── ldapjs harness ───────────────────────────────────────────────────────────
 type SearchResponse = {
@@ -142,10 +150,19 @@ beforeAll(() => {
     ...ldapRepoSnapshot,
     get: ldapRepoGetMock,
   }));
+  mock.module('../../db/drizzle.ts', () => ({
+    ...drizzleSnapshot,
+    withDbTransaction: withDbTransactionMock,
+  }));
+  mock.module('../../repositories/settingsRepo.ts', () => ({
+    ...settingsRepoSnapshot,
+    upsertForUser: settingsUpsertForUserMock,
+  }));
   mock.module('../../repositories/usersRepo.ts', () => ({
     ...usersRepoSnapshot,
     findLoginUserByNormalizedUsername: findLoginUserByNormalizedUsernameMock,
     updateNameByUsername: updateNameByUsernameMock,
+    updateDirectoryProfile: updateDirectoryProfileMock,
     createUser: createUserMock,
   }));
   mock.module('../../services/external-auth.ts', () => ({
@@ -173,7 +190,9 @@ beforeAll(() => {
 
 afterAll(() => {
   mock.module('ldapjs', () => ({ default: ldapjsSnapshot }));
+  mock.module('../../db/drizzle.ts', () => drizzleSnapshot);
   mock.module('../../repositories/ldapRepo.ts', () => ldapRepoSnapshot);
+  mock.module('../../repositories/settingsRepo.ts', () => settingsRepoSnapshot);
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnapshot);
   mock.module('../../services/external-auth.ts', () => externalAuthSnapshot);
   mock.module('../../utils/initials.ts', () => initialsSnapshot);
@@ -226,8 +245,11 @@ beforeEach(() => {
   }
 
   ldapRepoGetMock.mockReset();
+  resetWithDbTransactionMock();
   findLoginUserByNormalizedUsernameMock.mockReset();
   updateNameByUsernameMock.mockReset();
+  updateDirectoryProfileMock.mockReset();
+  settingsUpsertForUserMock.mockReset();
   createUserMock.mockReset();
   applyExternalRolesForUserMock.mockReset();
   applyExternalRolesForUserIfMatchedMock.mockReset();
@@ -687,6 +709,33 @@ describe('authenticate', () => {
     ]);
   });
 
+  test('returns provider email from LDAP mail attributes without requiring it', async () => {
+    nextFixture = {
+      bindResponses: [null, null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: 'uid=alice,dc=test,dc=com',
+              object: { uid: 'alice', cn: 'Alice Provider', mail: 'alice@example.com' },
+            },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+
+    const result = await ldapService.authenticateWithProfile('alice', 'pw');
+
+    expect(result.authenticated).toBe(true);
+    expect(result.displayName).toBe('Alice Provider');
+    expect(result.email).toBe('alice@example.com');
+    expect(lastClientStats?.searchCalls[0]?.options).toEqual(
+      expect.objectContaining({ attributes: expect.arrayContaining(['mail']) }),
+    );
+  });
+
   test('rejects when any parallel group search fails (strict auth path, #637)', async () => {
     // Auth uses strict findUserGroups so a transient subtree failure surfaces as a 503
     // instead of returning [] and demoting new admins to the default role.
@@ -761,7 +810,13 @@ describe('findUserEntry (direct, with config preloaded)', () => {
     });
     await ldapService.findUserEntry(client as never, 'alice');
     const search = lastClientStats?.searchCalls[0];
-    expect(search?.options.attributes).toEqual(['uid', 'sAMAccountName', 'cn', 'displayName']);
+    expect(search?.options.attributes).toEqual([
+      'uid',
+      'sAMAccountName',
+      'cn',
+      'displayName',
+      'mail',
+    ]);
     expect(search?.options.sizeLimit).toBe(1);
   });
 
@@ -985,7 +1040,11 @@ describe('syncUsers', () => {
     const result = await ldapService.syncUsers();
     expect(findLoginUserByNormalizedUsernameMock).toHaveBeenCalledWith('jdoe');
     // Updates the existing row (matched by lower-cased lookup) rather than creating a new one.
-    expect(updateNameByUsernameMock).toHaveBeenCalledWith('jdoe', 'John Doe Updated');
+    expect(updateDirectoryProfileMock).toHaveBeenCalledWith(
+      'u-jdoe',
+      { name: 'John Doe Updated', avatarInitials: 'JO' },
+      expect.anything(),
+    );
     expect(createUserMock).not.toHaveBeenCalled();
     expect(result).toEqual({ synced: 1, created: 0 });
 
@@ -1019,7 +1078,7 @@ describe('syncUsers', () => {
     expect(created.name).toBe('Flat CN');
   });
 
-  test('updates existing user via updateNameByUsername instead of creating', async () => {
+  test('updates existing user profile instead of creating', async () => {
     nextFixture = {
       bindResponses: [null],
       searchResponses: [
@@ -1031,7 +1090,11 @@ describe('syncUsers', () => {
     };
     findLoginUserByNormalizedUsernameMock.mockResolvedValue(LDAP_LOGIN_USER);
     const result = await ldapService.syncUsers();
-    expect(updateNameByUsernameMock).toHaveBeenCalledWith('alice', 'Alice New');
+    expect(updateDirectoryProfileMock).toHaveBeenCalledWith(
+      LDAP_LOGIN_USER.id,
+      { name: 'Alice New', avatarInitials: 'AL' },
+      expect.anything(),
+    );
     expect(createUserMock).not.toHaveBeenCalled();
     expect(result).toEqual({ synced: 1, created: 0 });
   });
@@ -1080,7 +1143,11 @@ describe('syncUsers', () => {
     expect(result).toEqual({ synced: 1, created: 0 });
     // Display name still refreshed from the directory, but roles are NEVER rewritten
     // for an existing user — they're owned by the app post-provisioning.
-    expect(updateNameByUsernameMock).toHaveBeenCalledWith('daniel.dangeli', "Daniel D'Angeli");
+    expect(updateDirectoryProfileMock).toHaveBeenCalledWith(
+      LDAP_LOGIN_USER.id,
+      { name: "Daniel D'Angeli", avatarInitials: 'DA' },
+      expect.anything(),
+    );
     expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
   });
 
@@ -1102,7 +1169,11 @@ describe('syncUsers', () => {
       username === 'alice' ? LDAP_LOGIN_USER : null,
     );
     const result = await ldapService.syncUsers();
-    expect(updateNameByUsernameMock).toHaveBeenCalledWith('alice', 'Alice New');
+    expect(updateDirectoryProfileMock).toHaveBeenCalledWith(
+      LDAP_LOGIN_USER.id,
+      { name: 'Alice New', avatarInitials: 'AL' },
+      expect.anything(),
+    );
     expect(createUserMock).not.toHaveBeenCalled();
     expect(result).toEqual({ synced: 1, created: 0 });
   });
@@ -1125,7 +1196,7 @@ describe('syncUsers', () => {
 
     const result = await ldapService.syncUsers();
 
-    expect(updateNameByUsernameMock).not.toHaveBeenCalled();
+    expect(updateDirectoryProfileMock).not.toHaveBeenCalled();
     expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
     expect(createUserMock).not.toHaveBeenCalled();
     expect(result).toEqual({ synced: 0, created: 0 });
@@ -1148,7 +1219,7 @@ describe('syncUsers', () => {
 
     const result = await ldapService.syncUsers();
 
-    expect(updateNameByUsernameMock).not.toHaveBeenCalled();
+    expect(updateDirectoryProfileMock).not.toHaveBeenCalled();
     expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
     expect(createUserMock).not.toHaveBeenCalled();
     expect(result).toEqual({ synced: 0, created: 0 });
@@ -1221,7 +1292,7 @@ describe('syncUsers', () => {
     await expect(ldapService.syncUsers()).rejects.toThrow('search aborted by server');
     expect(lastClientStats?.unbindCalls).toBe(1);
     expect(createUserMock).not.toHaveBeenCalled();
-    expect(updateNameByUsernameMock).not.toHaveBeenCalled();
+    expect(updateDirectoryProfileMock).not.toHaveBeenCalled();
   });
 
   test('rejects when search end yields a non-zero status', async () => {
@@ -1648,6 +1719,63 @@ describe('authenticateAndProvision', () => {
     expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
   });
 
+  test('refreshes existing LDAP user name and email from provider claims', async () => {
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: 'uid=alice,dc=test,dc=com',
+              object: { uid: 'alice', cn: 'Alice Provider', mail: 'alice@example.com' },
+            },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(LDAP_LOGIN_USER);
+
+    const result = await ldapService.authenticateAndProvision('alice', 'pw');
+
+    expect(result).toEqual({
+      authenticated: true,
+      userId: LDAP_LOGIN_USER.id,
+      created: false,
+      canonicalUsername: 'alice',
+    });
+    expect(updateDirectoryProfileMock).toHaveBeenCalledWith(
+      LDAP_LOGIN_USER.id,
+      { name: 'Alice Provider', avatarInitials: 'AL' },
+      expect.anything(),
+    );
+    expect(settingsUpsertForUserMock).toHaveBeenCalledWith(
+      LDAP_LOGIN_USER.id,
+      { fullName: 'Alice Provider', email: 'alice@example.com', language: null },
+      expect.anything(),
+    );
+  });
+
+  test('does not clear profile values when LDAP omits name and email', async () => {
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice' } }],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(LDAP_LOGIN_USER);
+
+    await ldapService.authenticateAndProvision('alice', 'pw');
+
+    expect(updateDirectoryProfileMock).not.toHaveBeenCalled();
+    expect(settingsUpsertForUserMock).not.toHaveBeenCalled();
+  });
+
   test('existing-user login with no matching group preserves current role (regression #318)', async () => {
     nextFixture = {
       bindResponses: [null, null],
@@ -1885,6 +2013,29 @@ describe('authenticateAndProvision', () => {
     // genuinely map to a role.
     expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
     expect(applyExternalRolesForUserIfMatchedMock).toHaveBeenCalledWith(LDAP_LOGIN_USER.id, [], []);
+  });
+
+  test('race recovery does not overwrite provider-managed names when LDAP omits display name', async () => {
+    nextFixture = {
+      bindResponses: [null, null],
+      searchResponses: [
+        {
+          entries: [{ objectName: 'uid=alice,dc=test,dc=com', object: { uid: 'alice' } }],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+    findLoginUserByNormalizedUsernameMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(LDAP_LOGIN_USER);
+    const uniqueErr = Object.assign(new Error('duplicate key'), { code: '23505' });
+    createUserMock.mockRejectedValueOnce(uniqueErr);
+
+    await ldapService.authenticateAndProvision('alice', 'pw');
+
+    expect(updateDirectoryProfileMock).not.toHaveBeenCalled();
+    expect(settingsUpsertForUserMock).not.toHaveBeenCalled();
   });
 
   test('uses displayName when cn is absent', async () => {

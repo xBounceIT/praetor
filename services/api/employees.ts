@@ -3,11 +3,13 @@ import { fetchApi } from './client';
 import { normalizeUser } from './normalizers';
 
 export const employeesApi = {
-  create: (data: {
-    name: string;
-    employeeType: EmployeeType;
-    costPerHour?: number;
-  }): Promise<User> =>
+  create: (
+    data: {
+      name: string;
+      employeeType: EmployeeType;
+      costPerHour?: number;
+    } & Partial<User>,
+  ): Promise<User> =>
     fetchApi<User>('/users', {
       method: 'POST',
       body: JSON.stringify(data),

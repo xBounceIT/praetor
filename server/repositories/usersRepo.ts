@@ -1,6 +1,11 @@
 import { eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
-import type { UserAuthMethod } from '../db/schema/users.ts';
+import type {
+  UserAuthMethod,
+  UserContractType,
+  UserEmploymentStatus,
+  UserWorkLocation,
+} from '../db/schema/users.ts';
 import { users } from '../db/schema/users.ts';
 import { NotFoundError } from '../utils/http-errors.ts';
 import { parseDbNumber } from '../utils/parse.ts';
@@ -8,6 +13,24 @@ import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 
 export type EmployeeType = 'app_user' | 'internal' | 'external';
 export type AuthMethod = UserAuthMethod;
+export type ContractType = UserContractType;
+export type EmploymentStatus = UserEmploymentStatus;
+export type WorkLocation = UserWorkLocation;
+
+export type UserHrFields = {
+  phone?: string | null;
+  jobTitle?: string | null;
+  department?: string | null;
+  employeeCode?: string | null;
+  hireDate?: string | null;
+  terminationDate?: string | null;
+  contractType?: ContractType | null;
+  employmentStatus?: EmploymentStatus | null;
+  workLocation?: WorkLocation | null;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
+  notes?: string | null;
+};
 
 export type AuthUser = {
   id: string;
@@ -191,6 +214,18 @@ export const updateNameByUsername = async (
   await exec.update(users).set({ name }).where(eq(users.username, username));
 };
 
+export const updateDirectoryProfile = async (
+  userId: string,
+  fields: { name?: string; avatarInitials?: string },
+  exec: DbExecutor = db,
+): Promise<void> => {
+  const set: Record<string, unknown> = {};
+  if (fields.name !== undefined) set.name = fields.name;
+  if (fields.avatarInitials !== undefined) set.avatarInitials = fields.avatarInitials;
+  if (Object.keys(set).length === 0) return;
+  await exec.update(users).set(set).where(eq(users.id, userId));
+};
+
 // For users that authenticate externally (e.g. LDAP) and must never log in locally. Satisfies
 // the `password_hash NOT NULL` column with a malformed bcrypt that no plaintext can match.
 export const LDAP_PLACEHOLDER_PASSWORD_HASH = '$2a$10$invalidpasswordhashforldapuser00000000000000';
@@ -234,6 +269,18 @@ export type UserListRow = {
   costPerHour: number;
   isDisabled: boolean;
   employeeType: EmployeeType;
+  phone?: string | null;
+  jobTitle?: string | null;
+  department?: string | null;
+  employeeCode?: string | null;
+  hireDate?: string | null;
+  terminationDate?: string | null;
+  contractType?: ContractType | null;
+  employmentStatus?: EmploymentStatus | null;
+  workLocation?: WorkLocation | null;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
+  notes?: string | null;
   hasTopManagerRole: boolean;
   isAdminOnly: boolean;
   authMethod: AuthMethod;
@@ -247,6 +294,8 @@ export type UserCore = {
   username: string;
   role: string;
   employeeType: EmployeeType;
+  hireDate: string | null;
+  terminationDate: string | null;
   authMethod: AuthMethod;
   authProviderId: string | null;
 };
@@ -260,14 +309,14 @@ export type UpdatedUserRow = {
   costPerHour: number;
   isDisabled: boolean;
   employeeType: EmployeeType;
-};
+} & UserHrFields;
 
 export type UserUpdateFields = {
   name?: string;
   isDisabled?: boolean;
   costPerHour?: number | null;
   role?: string;
-};
+} & UserHrFields;
 
 export type UserAssignments = {
   clientIds: string[];
@@ -293,7 +342,7 @@ export type NewFullUser = {
   employeeType: EmployeeType;
   authMethod?: AuthMethod;
   authProviderId?: string | null;
-};
+} & UserHrFields;
 
 type UserListRowDb = {
   id: string;
@@ -305,6 +354,18 @@ type UserListRowDb = {
   costPerHour: string | number | null;
   isDisabled: boolean | null;
   employeeType: string | null;
+  phone: string | null;
+  jobTitle: string | null;
+  department: string | null;
+  employeeCode: string | null;
+  hireDate: string | null;
+  terminationDate: string | null;
+  contractType: string | null;
+  employmentStatus: string | null;
+  workLocation: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
+  notes: string | null;
   hasTopManagerRole: boolean | null;
   isAdminOnly: boolean | null;
   authMethod: string | null;
@@ -322,6 +383,18 @@ const mapUserListRow = (row: UserListRowDb): UserListRow => ({
   costPerHour: parseDbNumber(row.costPerHour, 0),
   isDisabled: !!row.isDisabled,
   employeeType: (row.employeeType as EmployeeType | null) ?? 'app_user',
+  phone: row.phone ?? undefined,
+  jobTitle: row.jobTitle ?? undefined,
+  department: row.department ?? undefined,
+  employeeCode: row.employeeCode ?? undefined,
+  hireDate: row.hireDate ?? null,
+  terminationDate: row.terminationDate ?? null,
+  contractType: (row.contractType as ContractType | null) ?? null,
+  employmentStatus: (row.employmentStatus as EmploymentStatus | null) ?? null,
+  workLocation: (row.workLocation as WorkLocation | null) ?? null,
+  emergencyContactName: row.emergencyContactName ?? undefined,
+  emergencyContactPhone: row.emergencyContactPhone ?? undefined,
+  notes: row.notes ?? undefined,
   hasTopManagerRole: !!row.hasTopManagerRole,
   isAdminOnly: !!row.isAdminOnly,
   authMethod: (row.authMethod as AuthMethod | null) ?? 'local',
@@ -338,6 +411,18 @@ type UpdatedUserRowDb = {
   costPerHour: string | number | null;
   isDisabled: boolean | null;
   employeeType: string | null;
+  phone: string | null;
+  jobTitle: string | null;
+  department: string | null;
+  employeeCode: string | null;
+  hireDate: string | null;
+  terminationDate: string | null;
+  contractType: string | null;
+  employmentStatus: string | null;
+  workLocation: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
+  notes: string | null;
 };
 
 const mapUpdatedUserRow = (row: UpdatedUserRowDb): UpdatedUserRow => ({
@@ -349,7 +434,53 @@ const mapUpdatedUserRow = (row: UpdatedUserRowDb): UpdatedUserRow => ({
   costPerHour: parseDbNumber(row.costPerHour, 0),
   isDisabled: !!row.isDisabled,
   employeeType: (row.employeeType as EmployeeType | null) ?? 'app_user',
+  phone: row.phone ?? null,
+  jobTitle: row.jobTitle ?? null,
+  department: row.department ?? null,
+  employeeCode: row.employeeCode ?? null,
+  hireDate: row.hireDate ?? null,
+  terminationDate: row.terminationDate ?? null,
+  contractType: (row.contractType as ContractType | null) ?? null,
+  employmentStatus: (row.employmentStatus as EmploymentStatus | null) ?? null,
+  workLocation: (row.workLocation as WorkLocation | null) ?? null,
+  emergencyContactName: row.emergencyContactName ?? null,
+  emergencyContactPhone: row.emergencyContactPhone ?? null,
+  notes: row.notes ?? null,
 });
+
+const setHrFields = (set: Record<string, unknown>, fields: UserHrFields): void => {
+  if (fields.phone !== undefined) set.phone = fields.phone;
+  if (fields.jobTitle !== undefined) set.jobTitle = fields.jobTitle;
+  if (fields.department !== undefined) set.department = fields.department;
+  if (fields.employeeCode !== undefined) set.employeeCode = fields.employeeCode;
+  if (fields.hireDate !== undefined) set.hireDate = fields.hireDate;
+  if (fields.terminationDate !== undefined) set.terminationDate = fields.terminationDate;
+  if (fields.contractType !== undefined) set.contractType = fields.contractType;
+  if (fields.employmentStatus !== undefined) set.employmentStatus = fields.employmentStatus;
+  if (fields.workLocation !== undefined) set.workLocation = fields.workLocation;
+  if (fields.emergencyContactName !== undefined) {
+    set.emergencyContactName = fields.emergencyContactName;
+  }
+  if (fields.emergencyContactPhone !== undefined) {
+    set.emergencyContactPhone = fields.emergencyContactPhone;
+  }
+  if (fields.notes !== undefined) set.notes = fields.notes;
+};
+
+const USER_HR_SELECT_COLUMNS = sql`
+            u.phone,
+            u.job_title AS "jobTitle",
+            u.department,
+            u.employee_code AS "employeeCode",
+            u.hire_date AS "hireDate",
+            u.termination_date AS "terminationDate",
+            u.contract_type AS "contractType",
+            u.employment_status AS "employmentStatus",
+            u.work_location AS "workLocation",
+            u.emergency_contact_name AS "emergencyContactName",
+            u.emergency_contact_phone AS "emergencyContactPhone",
+            u.notes,
+`;
 
 const USER_LIST_FLAG_COLUMNS = sql`
   EXISTS (
@@ -379,6 +510,7 @@ export const listAllForAdmin = async (exec: DbExecutor = db): Promise<UserListRo
             u.cost_per_hour AS "costPerHour",
             u.is_disabled AS "isDisabled",
             u.employee_type AS "employeeType",
+            ${USER_HR_SELECT_COLUMNS}
             u.auth_method AS "authMethod",
             u.auth_provider_id AS "authProviderId",
             sp.name AS "authProviderName",
@@ -398,7 +530,9 @@ export const listScopedForManager = async (
 ): Promise<UserListRow[]> => {
   const conditions = [sql`u.id = ${viewerId}`];
   if (options.canViewManagedUsers) conditions.push(sql`wum.user_id = ${viewerId}`);
-  if (options.canViewInternal) conditions.push(sql`u.employee_type = 'internal'`);
+  if (options.canViewInternal) {
+    conditions.push(sql`u.employee_type IN ('app_user', 'internal')`);
+  }
   if (options.canViewExternal) conditions.push(sql`u.employee_type = 'external'`);
 
   const whereClause = sql.join(conditions, sql` OR `);
@@ -430,6 +564,7 @@ export const listScopedForManager = async (
                      u.cost_per_hour AS "costPerHour",
                      u.is_disabled AS "isDisabled",
                      u.employee_type AS "employeeType",
+                     ${USER_HR_SELECT_COLUMNS}
                      u.auth_method AS "authMethod",
                      u.auth_provider_id AS "authProviderId",
                      sp.name AS "authProviderName",
@@ -458,6 +593,7 @@ export const findById = async (id: string, exec: DbExecutor = db): Promise<UserL
             u.cost_per_hour AS "costPerHour",
             u.is_disabled AS "isDisabled",
             u.employee_type AS "employeeType",
+            ${USER_HR_SELECT_COLUMNS}
             u.auth_method AS "authMethod",
             u.auth_provider_id AS "authProviderId",
             sp.name AS "authProviderName",
@@ -478,6 +614,8 @@ export const findCoreById = async (id: string, exec: DbExecutor = db): Promise<U
       username: users.username,
       role: users.role,
       employeeType: users.employeeType,
+      hireDate: users.hireDate,
+      terminationDate: users.terminationDate,
       authMethod: users.authMethod,
       authProviderId: users.authProviderId,
     })
@@ -490,6 +628,8 @@ export const findCoreById = async (id: string, exec: DbExecutor = db): Promise<U
     username: rows[0].username,
     role: rows[0].role,
     employeeType: (rows[0].employeeType as EmployeeType | null) ?? 'app_user',
+    hireDate: rows[0].hireDate ?? null,
+    terminationDate: rows[0].terminationDate ?? null,
     authMethod: rows[0].authMethod ?? 'local',
     authProviderId: rows[0].authProviderId ?? null,
   };
@@ -548,6 +688,18 @@ export const insertUser = async (user: NewFullUser, exec: DbExecutor = db): Prom
     costPerHour: String(user.costPerHour),
     isDisabled: user.isDisabled,
     employeeType: user.employeeType,
+    phone: user.phone ?? null,
+    jobTitle: user.jobTitle ?? null,
+    department: user.department ?? null,
+    employeeCode: user.employeeCode ?? null,
+    hireDate: user.hireDate ?? null,
+    terminationDate: user.terminationDate ?? null,
+    contractType: user.contractType ?? null,
+    employmentStatus: user.employmentStatus ?? null,
+    workLocation: user.workLocation ?? null,
+    emergencyContactName: user.emergencyContactName ?? null,
+    emergencyContactPhone: user.emergencyContactPhone ?? null,
+    notes: user.notes ?? null,
     authMethod: user.authMethod ?? 'local',
     authProviderId: user.authProviderId ?? null,
   });
@@ -580,6 +732,7 @@ export const updateUserDynamic = async (
     set.costPerHour = fields.costPerHour === null ? null : String(fields.costPerHour);
   }
   if (fields.role !== undefined) set.role = fields.role;
+  setHrFields(set, fields);
 
   if (Object.keys(set).length === 0) return null;
 
@@ -592,6 +745,18 @@ export const updateUserDynamic = async (
     costPerHour: users.costPerHour,
     isDisabled: users.isDisabled,
     employeeType: users.employeeType,
+    phone: users.phone,
+    jobTitle: users.jobTitle,
+    department: users.department,
+    employeeCode: users.employeeCode,
+    hireDate: users.hireDate,
+    terminationDate: users.terminationDate,
+    contractType: users.contractType,
+    employmentStatus: users.employmentStatus,
+    workLocation: users.workLocation,
+    emergencyContactName: users.emergencyContactName,
+    emergencyContactPhone: users.emergencyContactPhone,
+    notes: users.notes,
   });
   return rows[0] ? mapUpdatedUserRow(rows[0]) : null;
 };

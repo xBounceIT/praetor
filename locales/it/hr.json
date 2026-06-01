@@ -36,6 +36,7 @@
     "disabled": "Disabilitato",
     "name": "Nome",
     "surname": "Cognome",
+    "identityManagedByProvider": "Nome, cognome ed email sono gestiti da {{provider}}.",
     "saveChanges": "Salva Modifiche",
     "yesDelete": "Sì, Elimina",
     "disableUser": "Disabilita Utente",
@@ -136,6 +137,50 @@
     "top_manager": "Top Manager",
     "manager": "Manager",
     "user": "Utente"
+  },
+  "employeeProfile": {
+    "contactSection": "Contatti",
+    "employmentSection": "Rapporto di lavoro",
+    "emergencySection": "Emergenza e note",
+    "notSet": "Non impostato",
+    "email": "Indirizzo email",
+    "phone": "Numero di telefono",
+    "jobTitle": "Mansione",
+    "department": "Dipartimento",
+    "employeeCode": "Codice dipendente",
+    "hireDate": "Data assunzione",
+    "terminationDate": "Data cessazione",
+    "contractType": "Tipo contratto",
+    "employmentStatus": "Stato HR",
+    "workLocation": "Sede di lavoro",
+    "emergencyContactName": "Contatto emergenza",
+    "emergencyContactPhone": "Telefono emergenza",
+    "notes": "Note",
+    "contact": "Contatto",
+    "roleTitle": "Ruolo / Mansione",
+    "hrStatus": "Stato HR",
+    "dateRangeInvalid": "La data di cessazione deve essere successiva o uguale alla data di assunzione",
+    "contractTypes": {
+      "permanent": "Tempo indeterminato",
+      "fixed_term": "Tempo determinato",
+      "contractor": "Appaltatore",
+      "internship": "Stage",
+      "consultant": "Consulente",
+      "other": "Altro"
+    },
+    "employmentStatuses": {
+      "active": "Attivo",
+      "onboarding": "In inserimento",
+      "on_leave": "Assente",
+      "terminated": "Cessato"
+    },
+    "workLocations": {
+      "office": "Ufficio",
+      "remote": "Remoto",
+      "hybrid": "Ibrido",
+      "customer_site": "Sede cliente",
+      "other": "Altro"
+    }
   },
   "internalEmployees": {
     "title": "Dipendenti Interni",

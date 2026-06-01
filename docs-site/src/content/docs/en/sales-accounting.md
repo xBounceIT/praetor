@@ -2,7 +2,7 @@
 title: Sales and accounting
 description: Workflows for quotes, offers, orders, customer invoices, and supplier documents.
 sidebar:
-  order: 4
+  order: 5
 ---
 
 ## Customer quotes and offers

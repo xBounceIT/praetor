@@ -309,7 +309,7 @@ describe('makeUserHandlers - employees', () => {
       Promise.resolve({ id: 'e-new', ...(data as object) }),
     );
     const ctx = buildHandlers();
-    const result = await ctx.handlers.addInternalEmployee('Bob', 75);
+    const result = await ctx.handlers.addInternalEmployee({ name: 'Bob', costPerHour: 75 });
     expect(result).toEqual({ success: true });
     expect(apiMocks.employeesCreate).toHaveBeenCalledWith({
       name: 'Bob',
@@ -324,11 +324,10 @@ describe('makeUserHandlers - employees', () => {
       Promise.resolve({ id: 'e-new', ...(data as object) }),
     );
     const ctx = buildHandlers();
-    await ctx.handlers.addExternalEmployee('Eve');
+    await ctx.handlers.addExternalEmployee({ name: 'Eve' });
     expect(apiMocks.employeesCreate).toHaveBeenCalledWith({
       name: 'Eve',
       employeeType: 'external',
-      costPerHour: undefined,
     });
   });
 
@@ -337,7 +336,7 @@ describe('makeUserHandlers - employees', () => {
     const ctx = buildHandlers();
     const restore = silenceConsole();
     try {
-      const result = await ctx.handlers.addInternalEmployee('Bob');
+      const result = await ctx.handlers.addInternalEmployee({ name: 'Bob' });
       expect(result).toEqual({ success: false, error: 'dup' });
     } finally {
       restore();
@@ -349,7 +348,7 @@ describe('makeUserHandlers - employees', () => {
     const ctx = buildHandlers();
     const restore = silenceConsole();
     try {
-      const result = await ctx.handlers.addInternalEmployee('Bob');
+      const result = await ctx.handlers.addInternalEmployee({ name: 'Bob' });
       expect(result).toEqual({ success: false, error: 'Failed to create employee' });
     } finally {
       restore();

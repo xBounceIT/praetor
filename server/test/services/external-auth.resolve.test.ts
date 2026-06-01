@@ -25,6 +25,7 @@ const syncTopManagerAssignmentsForUserMock = mock();
 const findLoginUserByIdMock = mock();
 const findLoginUserByNormalizedUsernameMock = mock();
 const insertUserMock = mock();
+const updateDirectoryProfileMock = mock();
 const replaceUserRolesMock = mock();
 const setPrimaryRoleMock = mock();
 
@@ -58,6 +59,7 @@ beforeAll(async () => {
     findLoginUserById: findLoginUserByIdMock,
     findLoginUserByNormalizedUsername: findLoginUserByNormalizedUsernameMock,
     insertUser: insertUserMock,
+    updateDirectoryProfile: updateDirectoryProfileMock,
     replaceUserRoles: replaceUserRolesMock,
     setPrimaryRole: setPrimaryRoleMock,
   }));
@@ -86,6 +88,7 @@ beforeEach(() => {
     findLoginUserByIdMock,
     findLoginUserByNormalizedUsernameMock,
     insertUserMock,
+    updateDirectoryProfileMock,
     replaceUserRolesMock,
     setPrimaryRoleMock,
   ]) {
@@ -125,6 +128,63 @@ const matchingSsoUser = {
 };
 
 describe('resolveExternalIdentity auth method enforcement', () => {
+  test('refreshes provider-managed name and email for existing bound users', async () => {
+    findByIdentityMock.mockResolvedValue({
+      id: 'eid-1',
+      providerId: 'sso-1',
+      protocol: 'oidc',
+      issuer: input.issuer,
+      subject: input.subject,
+      userId: 'u1',
+    });
+    findLoginUserByIdMock.mockResolvedValue({
+      ...matchingSsoUser,
+      name: 'Old Name',
+      avatarInitials: 'ON',
+    });
+
+    const result = await resolveExternalIdentity({
+      ...input,
+      name: 'Alice Provider',
+      email: 'alice.provider@example.com',
+    });
+
+    expect(updateDirectoryProfileMock).toHaveBeenCalledWith(
+      'u1',
+      { name: 'Alice Provider', avatarInitials: 'AP' },
+      expect.anything(),
+    );
+    expect(upsertForUserMock).toHaveBeenCalledWith(
+      'u1',
+      { fullName: 'Alice Provider', email: 'alice.provider@example.com', language: null },
+      expect.anything(),
+    );
+    expect(result.name).toBe('Alice Provider');
+    expect(result.avatarInitials).toBe('AP');
+  });
+
+  test('does not clear existing profile values when provider omits name and email', async () => {
+    findByIdentityMock.mockResolvedValue({
+      id: 'eid-1',
+      providerId: 'sso-1',
+      protocol: 'oidc',
+      issuer: input.issuer,
+      subject: input.subject,
+      userId: 'u1',
+    });
+    findLoginUserByIdMock.mockResolvedValue(matchingSsoUser);
+
+    const result = await resolveExternalIdentity({
+      ...input,
+      name: undefined,
+      email: undefined,
+    });
+
+    expect(updateDirectoryProfileMock).not.toHaveBeenCalled();
+    expect(upsertForUserMock).not.toHaveBeenCalled();
+    expect(result.name).toBe('Alice');
+  });
+
   test('binds existing username only when method and provider match', async () => {
     findByIdentityMock.mockResolvedValueOnce(null).mockResolvedValueOnce({
       id: 'eid-1',
@@ -166,7 +226,11 @@ describe('resolveExternalIdentity auth method enforcement', () => {
     expect(result.wasCreated).toBe(false);
     expect(result.wasBound).toBe(true);
     expect(insertUserMock).toHaveBeenCalledTimes(1);
-    expect(upsertForUserMock).not.toHaveBeenCalled();
+    expect(upsertForUserMock).toHaveBeenCalledWith(
+      'u1',
+      expect.objectContaining({ fullName: 'Alice', email: 'alice@example.com' }),
+      expect.anything(),
+    );
     expect(insertIdentityMock).toHaveBeenCalledTimes(1);
   });
 

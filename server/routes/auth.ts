@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { withDbTransaction } from '../db/drizzle.ts';
 import {
   authenticateToken,
   generateToken,
@@ -7,6 +8,7 @@ import {
   requireSessionAuth,
 } from '../middleware/auth.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
+import * as settingsRepo from '../repositories/settingsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
@@ -15,6 +17,7 @@ import {
 } from '../services/external-auth.ts';
 import * as ssoService from '../services/sso.ts';
 import { logAudit } from '../utils/audit.ts';
+import { computeAvatarInitials } from '../utils/initials.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
 import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -80,6 +83,29 @@ const LDAP_UNAVAILABLE_BODY = {
   error: 'Authentication service temporarily unavailable',
   errorCode: 'ldap_unavailable',
 } as const;
+
+const syncLdapLoginProfile = async (
+  userId: string,
+  profile: { name?: string; email?: string },
+): Promise<{ name?: string; avatarInitials?: string }> => {
+  const name = profile.name?.trim();
+  const email = profile.email?.trim();
+  if (!name && !email) return {};
+
+  const avatarInitials = name ? computeAvatarInitials(name) : undefined;
+  await withDbTransaction(async (tx) => {
+    if (name) {
+      await usersRepo.updateDirectoryProfile(userId, { name, avatarInitials }, tx);
+    }
+    await settingsRepo.upsertForUser(
+      userId,
+      { fullName: name || null, email: email || null, language: null },
+      tx,
+    );
+  });
+
+  return name ? { name, avatarInitials } : {};
+};
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // POST /login
@@ -159,6 +185,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ldapAuthSuccess = ldapAuthResult.authenticated;
           ldapGroups = ldapAuthResult.groups;
           ldapRoleMappings = ldapAuthResult.roleMappings;
+          if (ldapAuthSuccess) {
+            const syncedProfile = await syncLdapLoginProfile(user.id, {
+              name: ldapAuthResult.displayName,
+              email: ldapAuthResult.email,
+            });
+            user = {
+              ...user,
+              name: syncedProfile.name ?? user.name,
+              avatarInitials: syncedProfile.avatarInitials ?? user.avatarInitials,
+            };
+          }
         } catch (err) {
           fastify.log.error({ err, username: usernameResult.value }, 'LDAP auth attempt failed');
           return reply.code(503).send(LDAP_UNAVAILABLE_BODY);

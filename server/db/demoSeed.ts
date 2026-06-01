@@ -180,6 +180,7 @@ const insertCompatibilityDefaults = async (client: PoolClient, counts: Record<st
 const insertDemoUsersAndSettings = async (client: PoolClient, counts: Record<string, number>) => {
   const userValues: unknown[] = [];
   const userTuples = DEMO_USERS.map((user) => {
+    const index = userValues.length + 1;
     userValues.push(
       user.id,
       user.name,
@@ -188,14 +189,46 @@ const insertDemoUsersAndSettings = async (client: PoolClient, counts: Record<str
       user.role,
       user.avatarInitials,
       user.costPerHour,
-      'app_user',
+      user.employeeType,
+      user.phone,
+      user.jobTitle,
+      user.department,
+      user.employeeCode,
+      user.hireDate,
+      user.terminationDate,
+      user.contractType,
+      user.employmentStatus,
+      user.workLocation,
+      user.emergencyContactName,
+      user.emergencyContactPhone,
+      user.notes,
     );
-    const index = userValues.length - 7;
-    return `($${index}, $${index + 1}, $${index + 2}, $${index + 3}, $${index + 4}, $${index + 5}, $${index + 6}, $${index + 7})`;
+    return `(${Array.from({ length: 20 }, (_, offset) => `$${index + offset}`).join(', ')})`;
   });
   const usersResult = await executeStatement(
     client,
-    `INSERT INTO users (id, name, username, password_hash, role, avatar_initials, cost_per_hour, employee_type)
+    `INSERT INTO users (
+       id,
+       name,
+       username,
+       password_hash,
+       role,
+       avatar_initials,
+       cost_per_hour,
+       employee_type,
+       phone,
+       job_title,
+       department,
+       employee_code,
+       hire_date,
+       termination_date,
+       contract_type,
+       employment_status,
+       work_location,
+       emergency_contact_name,
+       emergency_contact_phone,
+       notes
+     )
      VALUES ${userTuples.join(', ')}
      ON CONFLICT (id) DO UPDATE SET
        name = EXCLUDED.name,
@@ -205,6 +238,18 @@ const insertDemoUsersAndSettings = async (client: PoolClient, counts: Record<str
        avatar_initials = EXCLUDED.avatar_initials,
        cost_per_hour = EXCLUDED.cost_per_hour,
        employee_type = EXCLUDED.employee_type,
+       phone = EXCLUDED.phone,
+       job_title = EXCLUDED.job_title,
+       department = EXCLUDED.department,
+       employee_code = EXCLUDED.employee_code,
+       hire_date = EXCLUDED.hire_date,
+       termination_date = EXCLUDED.termination_date,
+       contract_type = EXCLUDED.contract_type,
+       employment_status = EXCLUDED.employment_status,
+       work_location = EXCLUDED.work_location,
+       emergency_contact_name = EXCLUDED.emergency_contact_name,
+       emergency_contact_phone = EXCLUDED.emergency_contact_phone,
+       notes = EXCLUDED.notes,
        is_disabled = FALSE`,
     userValues,
   );

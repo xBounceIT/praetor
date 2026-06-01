@@ -1,9 +1,37 @@
+import type { UserContractType, UserEmploymentStatus, UserWorkLocation } from './schema/users.ts';
+
 const rangeIds = (prefix: string, count: number, pad = 2) =>
   Array.from({ length: count }, (_, index) => `${prefix}${String(index + 1).padStart(pad, '0')}`);
 
 const currentYear = new Date().getFullYear();
 
 export const DEMO_PASSWORD_HASH = '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy';
+
+type DemoEmployeeType = 'app_user' | 'internal' | 'external';
+
+type DemoUser = {
+  id: string;
+  name: string;
+  username: string;
+  role: 'manager' | 'top_manager' | 'user';
+  avatarInitials: string;
+  fullName: string;
+  email: string;
+  costPerHour: number;
+  employeeType: DemoEmployeeType;
+  phone: string;
+  jobTitle: string;
+  department: string;
+  employeeCode: string;
+  hireDate: string;
+  terminationDate: string | null;
+  contractType: UserContractType;
+  employmentStatus: UserEmploymentStatus;
+  workLocation: UserWorkLocation;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  notes: string;
+};
 
 export const DEMO_USERS = [
   {
@@ -15,6 +43,19 @@ export const DEMO_USERS = [
     fullName: 'Manager User',
     email: 'manager@example.com',
     costPerHour: 65.0,
+    employeeType: 'app_user',
+    phone: '+39 02 555 0101',
+    jobTitle: 'Delivery Manager',
+    department: 'Operations',
+    employeeCode: 'EMP-100',
+    hireDate: '2021-02-15',
+    terminationDate: null,
+    contractType: 'permanent',
+    employmentStatus: 'active',
+    workLocation: 'hybrid',
+    emergencyContactName: 'Laura Manager',
+    emergencyContactPhone: '+39 02 555 0901',
+    notes: 'Coordinates delivery teams and customer escalations.',
   },
   {
     id: 'u3',
@@ -25,6 +66,19 @@ export const DEMO_USERS = [
     fullName: 'Standard User',
     email: 'user@example.com',
     costPerHour: 45.0,
+    employeeType: 'app_user',
+    phone: '+39 02 555 0102',
+    jobTitle: 'Software Engineer',
+    department: 'Engineering',
+    employeeCode: 'EMP-101',
+    hireDate: '2023-05-08',
+    terminationDate: null,
+    contractType: 'permanent',
+    employmentStatus: 'active',
+    workLocation: 'remote',
+    emergencyContactName: 'Pat User',
+    emergencyContactPhone: '+39 02 555 0902',
+    notes: 'Focuses on product delivery and support automation.',
   },
   {
     id: 'u4',
@@ -35,6 +89,19 @@ export const DEMO_USERS = [
     fullName: 'Sales Manager',
     email: 'salesmanager@example.com',
     costPerHour: 60.0,
+    employeeType: 'app_user',
+    phone: '+39 02 555 0103',
+    jobTitle: 'Sales Manager',
+    department: 'Sales',
+    employeeCode: 'EMP-102',
+    hireDate: '2020-09-01',
+    terminationDate: null,
+    contractType: 'permanent',
+    employmentStatus: 'active',
+    workLocation: 'office',
+    emergencyContactName: 'Morgan Sales',
+    emergencyContactPhone: '+39 02 555 0903',
+    notes: 'Owns commercial pipeline and key account coordination.',
   },
   {
     id: 'u5',
@@ -45,6 +112,19 @@ export const DEMO_USERS = [
     fullName: 'Elena Rossi',
     email: 'erossi@example.com',
     costPerHour: 50.0,
+    employeeType: 'app_user',
+    phone: '+39 02 555 0104',
+    jobTitle: 'ERP Consultant',
+    department: 'Delivery',
+    employeeCode: 'EMP-103',
+    hireDate: '2022-03-14',
+    terminationDate: null,
+    contractType: 'permanent',
+    employmentStatus: 'active',
+    workLocation: 'customer_site',
+    emergencyContactName: 'Andrea Rossi',
+    emergencyContactPhone: '+39 02 555 0904',
+    notes: 'Assigned to implementation workshops and customer training.',
   },
   {
     id: 'u6',
@@ -55,6 +135,19 @@ export const DEMO_USERS = [
     fullName: 'Marco Bianchi',
     email: 'mbianchi@example.com',
     costPerHour: 40.0,
+    employeeType: 'app_user',
+    phone: '+39 02 555 0105',
+    jobTitle: 'Backend Engineer',
+    department: 'Engineering',
+    employeeCode: 'EMP-104',
+    hireDate: `${currentYear}-01-15`,
+    terminationDate: null,
+    contractType: 'fixed_term',
+    employmentStatus: 'onboarding',
+    workLocation: 'hybrid',
+    emergencyContactName: 'Sara Bianchi',
+    emergencyContactPhone: '+39 02 555 0905',
+    notes: 'Onboarding plan includes API ownership and release workflow training.',
   },
   {
     id: 'u7',
@@ -65,6 +158,19 @@ export const DEMO_USERS = [
     fullName: 'Sofia Conti',
     email: 'sconti@example.com',
     costPerHour: 55.0,
+    employeeType: 'app_user',
+    phone: '+39 02 555 0106',
+    jobTitle: 'Account Executive',
+    department: 'Sales',
+    employeeCode: 'EMP-105',
+    hireDate: '2021-11-22',
+    terminationDate: null,
+    contractType: 'permanent',
+    employmentStatus: 'on_leave',
+    workLocation: 'remote',
+    emergencyContactName: 'Luca Conti',
+    emergencyContactPhone: '+39 02 555 0906',
+    notes: 'Temporary leave; opportunities are delegated to the sales manager.',
   },
   {
     id: 'u8',
@@ -75,6 +181,19 @@ export const DEMO_USERS = [
     fullName: 'Luca Moretti',
     email: 'lmoretti@example.com',
     costPerHour: 35.0,
+    employeeType: 'app_user',
+    phone: '+39 02 555 0107',
+    jobTitle: 'Support Specialist',
+    department: 'Operations',
+    employeeCode: 'EMP-106',
+    hireDate: '2024-06-03',
+    terminationDate: null,
+    contractType: 'permanent',
+    employmentStatus: 'active',
+    workLocation: 'office',
+    emergencyContactName: 'Marta Moretti',
+    emergencyContactPhone: '+39 02 555 0907',
+    notes: 'Covers service desk triage and managed support retainers.',
   },
   {
     id: 'u9',
@@ -85,8 +204,90 @@ export const DEMO_USERS = [
     fullName: 'Top Manager',
     email: 'topmanager@example.com',
     costPerHour: 75.0,
+    employeeType: 'app_user',
+    phone: '+39 02 555 0108',
+    jobTitle: 'Managing Director',
+    department: 'Executive',
+    employeeCode: 'EMP-107',
+    hireDate: '2019-01-07',
+    terminationDate: null,
+    contractType: 'permanent',
+    employmentStatus: 'active',
+    workLocation: 'office',
+    emergencyContactName: 'Alex Director',
+    emergencyContactPhone: '+39 02 555 0908',
+    notes: 'Approves portfolio priorities and cross-unit staffing decisions.',
   },
-] as const;
+  {
+    id: 'u10',
+    name: 'Giulia Verdi',
+    username: 'gverdi.internal',
+    role: 'user',
+    avatarInitials: 'GV',
+    fullName: 'Giulia Verdi',
+    email: 'gverdi@example.com',
+    costPerHour: 48.0,
+    employeeType: 'internal',
+    phone: '+39 02 555 0109',
+    jobTitle: 'HR Generalist',
+    department: 'People Operations',
+    employeeCode: 'EMP-108',
+    hireDate: '2022-11-01',
+    terminationDate: null,
+    contractType: 'permanent',
+    employmentStatus: 'active',
+    workLocation: 'office',
+    emergencyContactName: 'Paolo Verdi',
+    emergencyContactPhone: '+39 02 555 0909',
+    notes: 'Maintains employee records and onboarding checklists.',
+  },
+  {
+    id: 'u11',
+    name: 'Paolo Ferri',
+    username: 'pferri.external',
+    role: 'user',
+    avatarInitials: 'PF',
+    fullName: 'Paolo Ferri',
+    email: 'pferri@example.com',
+    costPerHour: 70.0,
+    employeeType: 'external',
+    phone: '+39 02 555 0110',
+    jobTitle: 'Security Consultant',
+    department: 'External Delivery',
+    employeeCode: 'EXT-201',
+    hireDate: `${currentYear}-02-01`,
+    terminationDate: `${currentYear}-12-31`,
+    contractType: 'consultant',
+    employmentStatus: 'active',
+    workLocation: 'customer_site',
+    emergencyContactName: 'Irene Ferri',
+    emergencyContactPhone: '+39 02 555 0910',
+    notes: 'Fixed-term consulting engagement for customer security reviews.',
+  },
+  {
+    id: 'u12',
+    name: 'Nadia Costa',
+    username: 'ncosta.external',
+    role: 'user',
+    avatarInitials: 'NC',
+    fullName: 'Nadia Costa',
+    email: 'ncosta@example.com',
+    costPerHour: 62.0,
+    employeeType: 'external',
+    phone: '+39 02 555 0111',
+    jobTitle: 'Implementation Partner',
+    department: 'Partner Network',
+    employeeCode: 'EXT-202',
+    hireDate: `${currentYear}-05-15`,
+    terminationDate: null,
+    contractType: 'contractor',
+    employmentStatus: 'onboarding',
+    workLocation: 'remote',
+    emergencyContactName: 'Roberto Costa',
+    emergencyContactPhone: '+39 02 555 0911',
+    notes: 'Partner onboarding for remote implementation capacity.',
+  },
+] as const satisfies readonly DemoUser[];
 
 export const DEMO_USER_IDS = DEMO_USERS.map((user) => user.id);
 export const DEMO_USERNAMES = DEMO_USERS.map((user) => user.username);

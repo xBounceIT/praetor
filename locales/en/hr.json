@@ -36,6 +36,7 @@
     "disabled": "Disabled",
     "name": "Name",
     "surname": "Surname",
+    "identityManagedByProvider": "Name, surname, and email are managed by {{provider}}.",
     "saveChanges": "Save Changes",
     "yesDelete": "Yes, Delete",
     "disableUser": "Disable User",
@@ -136,6 +137,50 @@
     "top_manager": "Top Manager",
     "manager": "Manager",
     "user": "User"
+  },
+  "employeeProfile": {
+    "contactSection": "Contact",
+    "employmentSection": "Employment",
+    "emergencySection": "Emergency and Notes",
+    "notSet": "Not set",
+    "email": "Email Address",
+    "phone": "Phone Number",
+    "jobTitle": "Job Title",
+    "department": "Department",
+    "employeeCode": "Employee Code",
+    "hireDate": "Hire Date",
+    "terminationDate": "Termination Date",
+    "contractType": "Contract Type",
+    "employmentStatus": "HR Status",
+    "workLocation": "Work Location",
+    "emergencyContactName": "Emergency Contact",
+    "emergencyContactPhone": "Emergency Phone",
+    "notes": "Notes",
+    "contact": "Contact",
+    "roleTitle": "Role / Title",
+    "hrStatus": "HR Status",
+    "dateRangeInvalid": "Termination date must be on or after hire date",
+    "contractTypes": {
+      "permanent": "Permanent",
+      "fixed_term": "Fixed-term",
+      "contractor": "Contractor",
+      "internship": "Internship",
+      "consultant": "Consultant",
+      "other": "Other"
+    },
+    "employmentStatuses": {
+      "active": "Active",
+      "onboarding": "Onboarding",
+      "on_leave": "On Leave",
+      "terminated": "Terminated"
+    },
+    "workLocations": {
+      "office": "Office",
+      "remote": "Remote",
+      "hybrid": "Hybrid",
+      "customer_site": "Customer Site",
+      "other": "Other"
+    }
   },
   "internalEmployees": {
     "title": "Internal Employees",
