@@ -44,7 +44,7 @@ clearSpyStateAfterAll();
 
 const { makeProjectHandlers } = await import('../../hooks/handlers/projectHandlers');
 
-type ProjectLike = { id: string; clientId: string; color?: string };
+type ProjectLike = { id: string; clientId: string; name?: string };
 type TaskLike = { id: string; projectId: string };
 type EntryLike = { id: string; projectId: string };
 
@@ -96,7 +96,6 @@ describe('makeProjectHandlers', () => {
     expect(callArg.clientId).toBe('client-A');
     expect(callArg.orderId).toBe('order-1');
     expect(callArg.offerId).toBe('of-1');
-    expect(callArg.color).toBeUndefined();
     expect(projects.get()).toHaveLength(1);
   });
 
@@ -234,8 +233,8 @@ describe('makeProjectHandlers', () => {
       Promise.resolve({ id, ...(updates as object) }),
     );
     const projects = makeStubSetter<ProjectLike>([
-      { id: 'p1', clientId: 'c1', color: 'red' },
-      { id: 'p2', clientId: 'c2', color: 'blue' },
+      { id: 'p1', clientId: 'c1', name: 'red' },
+      { id: 'p2', clientId: 'c2', name: 'blue' },
     ]);
     const handlers = makeProjectHandlers({
       setProjects: projects.setter,
@@ -243,9 +242,9 @@ describe('makeProjectHandlers', () => {
       setEntries: makeStubSetter<EntryLike>([]).setter,
     });
 
-    await handlers.update('p1', { color: 'green' });
-    expect(projects.get()[0].color).toBe('green');
-    expect(projects.get()[1].color).toBe('blue');
+    await handlers.update('p1', { name: 'green' });
+    expect(projects.get()[0].name).toBe('green');
+    expect(projects.get()[1].name).toBe('blue');
   });
 
   test('delete cascades to tasks and entries', async () => {

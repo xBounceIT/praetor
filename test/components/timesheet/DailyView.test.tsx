@@ -11,7 +11,7 @@ const DailyView = (await import('../../../components/timesheet/DailyView')).defa
 const alphaCatalog = {
   clients: [{ id: 'client-alpha', name: 'Alpha Client' }] satisfies Client[],
   projects: [
-    { id: 'project-alpha', name: 'Alpha Project', clientId: 'client-alpha', color: '#111111' },
+    { id: 'project-alpha', name: 'Alpha Project', clientId: 'client-alpha' },
   ] satisfies Project[],
   projectTasks: [
     { id: 'task-alpha', name: 'Alpha Task', projectId: 'project-alpha' },
@@ -21,7 +21,7 @@ const alphaCatalog = {
 const betaCatalog = {
   clients: [{ id: 'client-beta', name: 'Beta Client' }] satisfies Client[],
   projects: [
-    { id: 'project-beta', name: 'Beta Project', clientId: 'client-beta', color: '#222222' },
+    { id: 'project-beta', name: 'Beta Project', clientId: 'client-beta' },
   ] satisfies Project[],
   projectTasks: [
     { id: 'task-beta', name: 'Beta Task', projectId: 'project-beta' },

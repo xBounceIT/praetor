@@ -477,6 +477,13 @@
       "when": 1780341356660,
       "tag": "0067_add_user_hr_details",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1780346533996,
+      "tag": "0068_remove_project_color",
+      "breakpoints": true
     }
   ]
 }

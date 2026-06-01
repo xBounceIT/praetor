@@ -3,7 +3,6 @@ import * as settingsRepo from '../../repositories/settingsRepo.ts';
 import {
   badRequest,
   ensureArrayOfStrings,
-  isHexColor,
   isNonEmptyString,
   isValidEmail,
   isWeekendDate,
@@ -37,7 +36,6 @@ import {
   validateClientIdentifier,
   validateEmail,
   validateEnum,
-  validateHexColor,
 } from '../../utils/validation.ts';
 
 describe('isNonEmptyString', () => {
@@ -915,43 +913,6 @@ describe('optionalEmail', () => {
     const result = optionalEmail('bad', 'contactEmail');
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toContain('contactEmail');
-  });
-});
-
-describe('isHexColor', () => {
-  test('accepts 6-digit hex', () => {
-    expect(isHexColor('#3b82f6')).toBe(true);
-    expect(isHexColor('#ABCDEF')).toBe(true);
-  });
-
-  test('accepts 3-digit hex', () => {
-    expect(isHexColor('#abc')).toBe(true);
-    expect(isHexColor('#FFF')).toBe(true);
-  });
-
-  test('rejects bad hex', () => {
-    expect(isHexColor('3b82f6')).toBe(false);
-    expect(isHexColor('#xyz')).toBe(false);
-    expect(isHexColor('#1234')).toBe(false);
-    expect(isHexColor('')).toBe(false);
-  });
-});
-
-describe('validateHexColor', () => {
-  test('accepts a valid hex color', () => {
-    expect(validateHexColor('#3b82f6')).toEqual({ ok: true, value: '#3b82f6' });
-  });
-
-  test('rejects non-string with default field name', () => {
-    const result = validateHexColor(0xff0000);
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.message).toContain('color');
-  });
-
-  test('rejects bad hex with custom field name', () => {
-    const result = validateHexColor('blue', 'tagColor');
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.message).toContain('tagColor');
   });
 });
 

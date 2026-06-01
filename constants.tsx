@@ -37,21 +37,18 @@ export const DEFAULT_PROJECTS: Project[] = [
     id: 'p1',
     name: 'Website Redesign',
     clientId: 'c1',
-    color: '#3b82f6',
     description: 'Complete overhaul of the main marketing site.',
   },
   {
     id: 'p2',
     name: 'Mobile App',
     clientId: 'c1',
-    color: '#10b981',
     description: 'Native iOS and Android application development.',
   },
   {
     id: 'p3',
     name: 'Internal Research',
     clientId: 'c2',
-    color: '#8b5cf6',
     description: 'Ongoing research into new market trends.',
   },
 ];
@@ -81,15 +78,4 @@ export const DEFAULT_TASKS: ProjectTask[] = [
     projectId: 'p3',
     description: 'Misc administrative tasks and support.',
   },
-];
-
-export const COLORS = [
-  '#ef4444',
-  '#f59e0b',
-  '#10b981',
-  '#3b82f6',
-  '#6366f1',
-  '#8b5cf6',
-  '#d946ef',
-  '#64748b',
 ];

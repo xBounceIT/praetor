@@ -58,7 +58,6 @@ const PROJECT: Project = {
   id: 'project-1',
   name: 'Project Alpha',
   clientId: 'client-1',
-  color: '#000000',
 } as unknown as Project;
 
 const CLIENT: Client = {

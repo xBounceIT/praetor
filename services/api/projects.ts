@@ -16,7 +16,6 @@ export const projectsApi = {
     name: string;
     clientId: string;
     description?: string;
-    color?: string;
     orderId?: string;
     offerId: string;
     startDate?: string | null;

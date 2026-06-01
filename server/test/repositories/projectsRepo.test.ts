@@ -25,13 +25,12 @@ beforeEach(() => {
 // query builder (rowMode: 'array' positional rows in schema declaration order). listForUser
 // and the user_projects/user_clients-touching helpers use executeRows (named-key rows).
 //
-// Schema column order: id, name, client_id, color, description, is_disabled, created_at, order_id,
+// Schema column order: id, name, client_id, description, is_disabled, created_at, order_id,
 // offer_id, start_date, end_date, revenue, billing_type, billing_frequency
 const PROJECT_ROW: readonly unknown[] = [
   'p-1',
   'Alpha',
   'c-1',
-  '#3b82f6',
   'desc',
   false,
   new Date('2026-04-30T12:00:00Z'),
@@ -48,7 +47,6 @@ const mappedRow: projectsRepo.Project = {
   id: 'p-1',
   name: 'Alpha',
   clientId: 'c-1',
-  color: '#3b82f6',
   description: 'desc',
   isDisabled: false,
   createdAt: new Date('2026-04-30T12:00:00Z').getTime(),
@@ -65,7 +63,6 @@ const rawProjectRow = {
   id: 'p-1',
   name: 'Alpha',
   client_id: 'c-1',
-  color: '#3b82f6',
   description: 'desc',
   is_disabled: false,
   created_at: new Date('2026-04-30T12:00:00Z'),
@@ -193,41 +190,6 @@ describe('lockNameAndClientById', () => {
   });
 });
 
-describe('lockColorAllocation', () => {
-  test('uses a transaction-scoped advisory lock', async () => {
-    exec.enqueue({ rows: [] });
-
-    await projectsRepo.lockColorAllocation(testDb);
-
-    expect(exec.calls[0].sql).toContain('pg_advisory_xact_lock');
-    expect(exec.calls[0].sql).toContain('praetor.projects.color');
-  });
-});
-
-describe('listColorsForAllocation', () => {
-  test('returns existing project colors in stable order', async () => {
-    exec.enqueue({ rows: [{ color: '#ef4444' }, { color: '#f59e0b' }] });
-
-    const result = await projectsRepo.listColorsForAllocation(testDb);
-
-    expect(result).toEqual(['#ef4444', '#f59e0b']);
-    expect(exec.calls[0].sql).toContain('SELECT color FROM projects');
-    expect(exec.calls[0].sql).toContain('ORDER BY created_at, id');
-  });
-});
-
-describe('isColorUniqueViolation', () => {
-  test('detects the project color unique index', () => {
-    expect(
-      projectsRepo.isColorUniqueViolation(makeDbError('23505', 'idx_projects_color_unique')),
-    ).toBe(true);
-  });
-
-  test('ignores unrelated unique violations', () => {
-    expect(projectsRepo.isColorUniqueViolation(makeDbError('23505', 'projects_pkey'))).toBe(false);
-  });
-});
-
 describe('findBillingById', () => {
   test('returns stored billing fields without deriving mixed', async () => {
     exec.enqueue({ rows: [makeRow(['retainer', 'one_time'])] });
@@ -249,7 +211,6 @@ describe('create', () => {
         id: 'p-1',
         name: 'Alpha',
         clientId: 'c-1',
-        color: '#3b82f6',
         description: 'desc',
         isDisabled: false,
       },
@@ -263,14 +224,13 @@ describe('create', () => {
   });
 
   test('forwards orderId when provided', async () => {
-    exec.enqueue({ rows: [makeRow(PROJECT_ROW, { 7: 'so-7' })] });
+    exec.enqueue({ rows: [makeRow(PROJECT_ROW, { 6: 'so-7' })] });
     exec.enqueue({ rows: [{ ...rawProjectRow, order_id: 'so-7' }] });
     const created = await projectsRepo.create(
       {
         id: 'p-1',
         name: 'Alpha',
         clientId: 'c-1',
-        color: '#3b82f6',
         description: 'desc',
         isDisabled: false,
         orderId: 'so-7',
@@ -288,7 +248,6 @@ describe('create', () => {
     id: 'p-1',
     name: 'Alpha',
     clientId: 'c-1',
-    color: '#3b82f6',
     description: 'desc',
     isDisabled: false,
     orderId: 'so-bad',
@@ -373,7 +332,7 @@ describe('update', () => {
   });
 
   test('sets orderId when provided', async () => {
-    exec.enqueue({ rows: [makeRow(PROJECT_ROW, { 7: 'co-9' })] });
+    exec.enqueue({ rows: [makeRow(PROJECT_ROW, { 6: 'co-9' })] });
     exec.enqueue({ rows: [{ ...rawProjectRow, order_id: 'co-9' }] });
     await projectsRepo.update('p-1', { orderId: 'co-9' }, testDb);
     expect(exec.calls[0].sql.toLowerCase()).toContain('"order_id" = $1');

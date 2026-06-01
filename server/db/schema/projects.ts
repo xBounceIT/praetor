@@ -8,7 +8,6 @@ import {
   pgTable,
   text,
   timestamp,
-  uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
 import { defineUserAssignmentTable } from './_userAssignmentTable.ts';
@@ -24,7 +23,6 @@ export const projects = pgTable(
     clientId: varchar('client_id', { length: 50 })
       .notNull()
       .references(() => clients.id, { onDelete: 'cascade' }),
-    color: varchar('color', { length: 20 }).notNull().default('#3b82f6'),
     description: text('description'),
     isDisabled: boolean('is_disabled').default(false),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
@@ -57,7 +55,6 @@ export const projects = pgTable(
   },
   (table) => [
     index('idx_projects_client_id').on(table.clientId),
-    uniqueIndex('idx_projects_color_unique').on(table.color),
     check(
       'projects_billing_type_check',
       sql`${table.billingType} IN ('retainer', 'time_and_materials')`,

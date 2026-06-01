@@ -67,7 +67,8 @@ official PG18 container layout. Do not point this compose file at an existing Po
 data volume.</p>
 <p>The compose setup defaults backend <code>TRUST_PROXY=1</code> for the bundled Caddy -&gt; API hop.
 Set <code>DEMO_SEEDING=true</code> in <code>.env</code> when you want the stack to provision the canonical demo users and demo business data.
-That refresh flow is intended for demo and test stacks, owns the canonical demo namespace, and supports reused Docker volumes.</p>
+That refresh flow is intended for demo and test stacks, owns the canonical demo namespace, and supports reused Docker volumes.
+The demo users include HR profile data such as employee codes, departments, contract status, work locations, emergency contacts, and sample internal/external employee records.</p>
 <p>To rerun the same refresh manually against an existing backend database:</p>
 <pre><code class="bash"><span class="hl-0">cd</span><span class="hl-1"> </span><span class="hl-2">server</span><br/><span class="hl-0">bun</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-2">seed:demo</span>
 </code><button type="button">Copy</button></pre>

@@ -205,21 +205,15 @@ const TasksView: React.FC<TasksViewProps> = ({
           const project = projects.find((p) => p.id === row.projectId);
           const isProjectDisabled = project?.isDisabled || false;
           return (
-            <div className="flex items-center gap-2">
-              <div
-                className="size-2.5 rounded-full shrink-0"
-                style={{ backgroundColor: project?.color || '#ccc' }}
-              ></div>
-              <span
-                className={`text-sm font-bold ${
-                  isProjectDisabled
-                    ? 'text-zinc-600 line-through decoration-zinc-300'
-                    : 'text-zinc-800'
-                }`}
-              >
-                {project?.name || t('projects.unknown')}
-              </span>
-            </div>
+            <span
+              className={`text-sm font-bold ${
+                isProjectDisabled
+                  ? 'text-zinc-600 line-through decoration-zinc-300'
+                  : 'text-zinc-800'
+              }`}
+            >
+              {project?.name || t('projects.unknown')}
+            </span>
           );
         },
       },

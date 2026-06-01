@@ -4537,10 +4537,6 @@
                           "clientId": {
                             "type": "string"
                           },
-                          "color": {
-                            "type": "string",
-                            "description": "Unique project display color as a hex value."
-                          },
                           "isDisabled": {
                             "type": "boolean"
                           },
@@ -4555,7 +4551,6 @@
                           "id",
                           "name",
                           "clientId",
-                          "color",
                           "isDisabled",
                           "billingType",
                           "billingFrequency"
@@ -8531,10 +8526,6 @@
                       "clientId": {
                         "type": "string"
                       },
-                      "color": {
-                        "type": "string",
-                        "description": "Unique project display color as a hex value."
-                      },
                       "description": {
                         "type": [
                           "null",
@@ -8597,7 +8588,6 @@
                       "id",
                       "name",
                       "clientId",
-                      "color",
                       "isDisabled",
                       "billingType",
                       "billingFrequency"
@@ -8777,10 +8767,6 @@
                   "description": {
                     "type": "string"
                   },
-                  "color": {
-                    "type": "string",
-                    "description": "Optional hex color. If omitted, the server assigns the next available unique color."
-                  },
                   "orderId": {
                     "type": "string"
                   },
@@ -8841,10 +8827,6 @@
                     },
                     "clientId": {
                       "type": "string"
-                    },
-                    "color": {
-                      "type": "string",
-                      "description": "Unique project display color as a hex value."
                     },
                     "description": {
                       "type": [
@@ -8908,7 +8890,6 @@
                     "id",
                     "name",
                     "clientId",
-                    "color",
                     "isDisabled",
                     "billingType",
                     "billingFrequency"
@@ -9215,10 +9196,6 @@
                   "description": {
                     "type": "string"
                   },
-                  "color": {
-                    "type": "string",
-                    "description": "Unique project display color as a hex value."
-                  },
                   "isDisabled": {
                     "type": "boolean"
                   },
@@ -9298,10 +9275,6 @@
                     "clientId": {
                       "type": "string"
                     },
-                    "color": {
-                      "type": "string",
-                      "description": "Unique project display color as a hex value."
-                    },
                     "description": {
                       "type": [
                         "null",
@@ -9364,7 +9337,6 @@
                     "id",
                     "name",
                     "clientId",
-                    "color",
                     "isDisabled",
                     "billingType",
                     "billingFrequency"

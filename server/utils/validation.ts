@@ -576,27 +576,6 @@ export function optionalEmail(
 }
 
 /**
- * Validate hex color string (e.g., #3b82f6)
- */
-export function isHexColor(value: string): boolean {
-  return /^#[0-9A-Fa-f]{6}$/.test(value) || /^#[0-9A-Fa-f]{3}$/.test(value);
-}
-
-export function validateHexColor(
-  value: unknown,
-  fieldName: string = 'color',
-): { ok: true; value: string } | { ok: false; message: string } {
-  const result = isNonEmptyString(value);
-  if (!result.ok) {
-    return { ok: false, message: `${fieldName} must be a non-empty string` };
-  }
-  if (!isHexColor(result.value)) {
-    return { ok: false, message: `${fieldName} must be a valid hex color (e.g., #3b82f6)` };
-  }
-  return result;
-}
-
-/**
  * Validate client identifier (alphanumeric, -, _ only)
  */
 export function validateClientIdentifier(

@@ -9,20 +9,18 @@ const clients: Client[] = [
 ];
 
 const projects: Project[] = [
-  { id: 'project-a', name: 'Project A', clientId: 'client-a', color: '#111111' },
-  { id: 'project-b', name: 'Project B', clientId: 'client-b', color: '#222222' },
+  { id: 'project-a', name: 'Project A', clientId: 'client-a' },
+  { id: 'project-b', name: 'Project B', clientId: 'client-b' },
   {
     id: 'project-disabled',
     name: 'Disabled Project',
     clientId: 'client-a',
-    color: '#333333',
     isDisabled: true,
   },
   {
     id: 'project-disabled-client',
     name: 'Project Disabled Client',
     clientId: 'client-disabled',
-    color: '#444444',
   },
 ];
 

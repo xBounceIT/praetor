@@ -33,7 +33,7 @@ The **Add Project** action opens a focused dialog with only what's needed to cre
 
 Click any row in the projects list to open the **project detail page**. The detail page replaces the legacy edit dialog and is laid out in two areas:
 
-- The top section lays out the project fields horizontally (client, name, description, dates, offer, billing, revenue, color, disabled toggle) next to the inline-editable project tasks table.
+- The top section lays out the project fields horizontally (client, name, description, dates, offer, billing, revenue, disabled toggle) next to the inline-editable project tasks table.
 - Below, the **project dashboard** shows KPIs (total hours, total cost, team size, budget used %) and four charts: hours by user (broken down by task), hours by task (logged hours against the available effort), cost vs revenue, and monthly activity. Charts populate as time is logged against the project; before any entries exist, each chart shows an empty state. The page also surfaces a notice when (a) the project has more than 5,000 entries (only the most recent are loaded), (b) your role limits which users' entries you can see (totals reflect just your scope), or (c) you don't have permission to view time entries at all.
 
 Next to the project dashboard heading are two buttons, **Edit** and **Views**. **Edit** turns the whole dashboard — every KPI stat card, the project timeline, and all four charts — into a free-form layout you can rearrange. Drag a card by its header to move it anywhere on the 12-column grid, drag its right edge, bottom edge, or corner to resize it, and use the eye button on a card to hide it (or restore a hidden one). You can also move the focused card with the arrow keys, and resize it by holding **Shift** with the arrow keys. Cards float up to fill the gaps left behind. When you're done, keep the arrangement for this project or save it as a reusable view. Editing a project's dashboard creates a **per-project layout** that affects only that project. The **Views** menu lets you apply one of your saved views, choose **Use global default** (drop this project's custom layout so it follows the shared default again), or choose **Set as global default** (make the current arrangement the baseline for every project that doesn't have its own layout).
@@ -45,8 +45,6 @@ When creating or editing a project you can fill in:
 - **Project start date** and **Project end date** — define the planned window. Both are required (at creation and on every subsequent save from the detail page) so projects always carry a planning window; the end date must not precede the start date.
 - **Offer reference** — links the project to an accepted offer. This field is required.
 - **Project revenue** — resolved with this precedence: (1) if the activities have a per-row revenue, the project revenue is the sum of those values shown read-only; (2) otherwise, if an order is linked, the revenue is inherited read-only from the order total; (3) otherwise you can enter it manually.
-
-Praetor assigns a unique color automatically when you create a project. You can change it later from the detail page; duplicate colors are blocked, and new colors are generated when the initial palette is exhausted.
 
 When a project ends, check that tasks are consistent and that no pending entries remain.
 
