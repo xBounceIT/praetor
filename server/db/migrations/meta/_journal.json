@@ -439,8 +439,15 @@
     {
       "idx": 62,
       "version": "7",
-      "when": 1780245338082,
-      "tag": "0062_add_saved_views_and_shares",
+      "when": 1780318818676,
+      "tag": "0062_grant_top_manager_work_units_all_rights",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1780318818677,
+      "tag": "0063_add_saved_views_and_shares",
       "breakpoints": true
     }
   ]
