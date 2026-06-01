@@ -37,6 +37,30 @@ export type DashboardView = {
   layout: DashboardLayout;
 };
 
+// Per-viewer access to a server-backed named view: the granted share permission
+// (`read` = apply-only, `write` = can edit/rename/re-save) or `owner` for views
+// the caller created. Mirrors `SavedViewAccess` from `services/api/views`.
+export type DashboardViewPermission = 'read' | 'write';
+
+// A named dashboard view loaded from the server (own + shared-with-me, already
+// merged server-side). The raw author `layout` is normalized per-viewer against
+// the live widget set on load/apply, so a recipient missing a permitted widget
+// still renders the shared layout. `permission` is the granted share level;
+// `isOwner` gates owner-only actions (delete / manage sharing); `ownerName`
+// drives the "Shared by {ownerName}" badge on non-owned rows.
+export type ServerDashboardView = {
+  id: string;
+  name: string;
+  // `layout` is normalized for the current viewer; `rawLayout` is the author's stored widget
+  // states verbatim (including cards this viewer can't render). Re-saving / duplicating uses
+  // `rawLayout` to preserve placements outside the viewer's permitted widget set.
+  layout: DashboardLayout;
+  rawLayout: DashboardLayout;
+  isOwner: boolean;
+  permission: DashboardViewPermission;
+  ownerName: string;
+};
+
 // Canonical definition of a widget: its stable id, the default rectangle it
 // occupies in a fresh layout, and the minimum size it may be resized to.
 export type DashboardWidgetDef = {
@@ -319,6 +343,28 @@ export const parseStoredDashboardViews = (
     // Normalize so a view authored before a widget existed still renders it.
     layout: normalizeLayout(v.layout, widgets),
   }));
+};
+
+// Normalize the opaque `config` payload of a server-backed dashboard view into a
+// renderable layout. The dashboard `config` is `{ layout: DashboardWidgetState[] }`
+// (the raw author snapshot); we run it through `normalizeLayout` against the live
+// widget set so unknown widget ids are dropped and missing ones appended — i.e. a
+// shared view always renders against the viewer's permitted widgets. A missing /
+// malformed `layout` degrades to the default layout rather than throwing.
+export const parseServerViewConfig = (
+  config: Record<string, unknown> | null | undefined,
+  widgets: readonly DashboardWidgetDef[],
+): DashboardLayout => normalizeLayout(config?.layout, widgets);
+
+// The author's stored widget states verbatim — VALIDATED but NOT normalized against the live
+// widget set, so cards the current viewer can't render are kept. Used when re-saving / duplicating
+// a shared view to preserve placements outside the viewer's permitted widget set.
+export const parseServerViewRawLayout = (
+  config: Record<string, unknown> | null | undefined,
+): DashboardLayout => {
+  const raw = config?.layout;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(isValidWidgetState).map((w) => ({ ...w }));
 };
 
 export const parseStoredLayout = (

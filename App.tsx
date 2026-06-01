@@ -64,6 +64,7 @@ import WeeklyView from './components/timesheet/WeeklyView';
 import UserSettings from './components/UserSettings';
 import { Toaster } from './components/ui/sonner';
 import WorkUnitsView from './components/WorkUnitsView';
+import { CurrentUserIdProvider } from './contexts/CurrentUserContext';
 import { makeClientHandlers } from './hooks/handlers/clientHandlers';
 import { makeEntryHandlers } from './hooks/handlers/entryHandlers';
 import { makeInvoiceHandlers } from './hooks/handlers/invoiceHandlers';
@@ -2511,7 +2512,7 @@ const AppContent: React.FC = () => {
     );
 
   return (
-    <>
+    <CurrentUserIdProvider userId={currentUser.id}>
       <SessionTimeoutHandler onLogout={() => handleLogout('inactivity')} />
       <Layout
         activeView={!isRouteAccessible ? 'timesheets/tracker' : (activeView as View)}
@@ -3123,7 +3124,7 @@ const AppContent: React.FC = () => {
           </>
         )}
       </Layout>
-    </>
+    </CurrentUserIdProvider>
   );
 };
 

@@ -1832,6 +1832,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
       <StandardTable<ClientOffer>
         title={t('sales:clientOffers.activeOffers', { defaultValue: 'Customer offers' })}
+        viewKey="sales.client_offers"
         data={offers}
         columns={columns}
         defaultRowsPerPage={5}

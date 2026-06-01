@@ -954,6 +954,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
       <StandardTable<Project>
         title={t('projects:projects.projectsDirectory')}
+        viewKey="projects.directory"
         defaultRowsPerPage={5}
         data={projects}
         onRowClick={onNavigateToProject ? (row) => onNavigateToProject(row.id) : undefined}

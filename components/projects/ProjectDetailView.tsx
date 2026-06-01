@@ -37,6 +37,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { COLORS } from '../../constants';
+import { useCurrentUserId } from '../../contexts/CurrentUserContext';
 import { entriesApi, projectsApi } from '../../services/api';
 import type {
   BillingFrequency,
@@ -209,6 +210,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   onViewOrder,
 }) => {
   const { t, i18n } = useTranslation(['projects', 'common', 'form']);
+  // Identifies the viewer for the server-backed dashboard view library (ownership
+  // is computed server-side; this is threaded for parity with the table surface).
+  const currentUserId = useCurrentUserId();
 
   const canUpdateProjects = hasScopedActionPermission(permissions, 'projects.manage', 'update');
   const canDeleteProjects = hasScopedActionPermission(permissions, 'projects.manage', 'delete');
@@ -279,10 +283,13 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const [isAssignmentsOpen, setIsAssignmentsOpen] = useState(false);
 
   // Dashboard layout: position / size / visibility of the analytics cards on a
-  // free-form grid, plus saved named views. Two-tier + localStorage: a shared
-  // global default and view library (keyed by DASHBOARD_ID) with an optional
-  // per-project override (keyed by project.id). Permission-gated cards are
-  // dropped from the active def set so they never reserve an empty slot.
+  // free-form grid, plus saved named views. The named-view library is now
+  // server-backed and shareable (own + shared-with-me, keyed by DASHBOARD_ID as
+  // the server scope), owned by its creator and grantable to other users as read
+  // (apply-only) or write (edit/rename/re-save). The personal baseline (global
+  // default) and the per-project override + active-view marker stay in
+  // localStorage, per-user. Permission-gated cards are dropped from the active
+  // def set so they never reserve an empty slot.
   // Single source of truth for which cards the viewer may see — used both to
   // filter the layout def set and to gate the matching JSX below, so the two
   // can't drift apart.
@@ -298,7 +305,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     () => DASHBOARD_WIDGETS.filter((d) => widgetPermitted(d.id)),
     [widgetPermitted],
   );
-  const dashboard = useDashboardLayout(DASHBOARD_ID, project.id, activeWidgetDefs);
+  const dashboard = useDashboardLayout(DASHBOARD_ID, project.id, activeWidgetDefs, currentUserId);
 
   useEffect(() => {
     // Short-circuit when the caller lacks the tracker view permission — the route

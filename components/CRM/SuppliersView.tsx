@@ -628,6 +628,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
 
       <StandardTable<Supplier>
         title={t('crm:suppliers.suppliersDirectory')}
+        viewKey="suppliers.directory"
         data={suppliers}
         columns={columns}
         defaultRowsPerPage={10}

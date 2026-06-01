@@ -24,6 +24,7 @@ export * from './reportChatMessages.ts';
 export * from './reportChatSessions.ts';
 export * from './roles.ts';
 export * from './sales.ts';
+export * from './savedViews.ts';
 export * from './settings.ts';
 export * from './sso.ts';
 export * from './supplierInvoices.ts';

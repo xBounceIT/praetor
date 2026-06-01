@@ -30,6 +30,8 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ApiError } from '../../services/api/client';
+import { type SavedViewAccess, type SavedViewDto, viewsApi } from '../../services/api/views';
 import { readTextFromClipboard, writeTextToClipboard } from '../../utils/clipboard';
 import { downloadCsv } from '../../utils/csv';
 import { getLocalDateString } from '../../utils/date';
@@ -79,7 +81,9 @@ import {
   ModalHeader,
   ModalTitle,
 } from './ModalLayout';
+import ShareViewModal from './ShareViewModal';
 import { TABLE_CONTROL_BUTTON_CLASSNAME } from './tableControlStyles';
+import ViewOwnerAvatar from './ViewOwnerAvatar';
 
 const STORAGE_SUFFIX = {
   rows: 'rows',
@@ -97,6 +101,80 @@ const BODY_ROW_HEIGHT_PX = 44;
 const slugify = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
 
 const getStorageKey = (t: string, suffix: StorageSuffix) => `praetor_table_${suffix}_${slugify(t)}`;
+
+// Client-local view ordering for server-backed mode. The server has no `sort_order`
+// column (v1), so the user's preferred ordering is persisted per `viewKey` on this device.
+const getViewOrderStorageKey = (viewKey: string) => `praetor_table_vieworder_${slugify(viewKey)}`;
+
+// Schema version stamped onto the server `config` payload. Mirrors the backend's
+// table-config validator so a future migration can detect and upgrade old payloads.
+const SERVER_VIEW_SCHEMA_VERSION = 1;
+
+// Per-view server metadata kept alongside the `CustomView[]` list so the shared
+// apply/dirty helpers stay untouched (they only read the `CustomView` fields) while
+// the submenu can still gate UI by ownership/permission.
+type ServerViewMeta = { access: SavedViewAccess; ownerId: string; ownerName: string };
+
+// `config` maps 1:1 onto `CustomView` minus id/name. Map the server DTO into the
+// in-memory `CustomView` shape the apply/dirty logic already understands, reusing the
+// same lenient parsers as the localStorage path so junk in `jsonb` can't crash a render.
+const serverViewToCustomView = (dto: SavedViewDto): CustomView => {
+  const config = dto.config ?? {};
+  const hiddenColIds = Array.isArray(config.hiddenColIds)
+    ? (config.hiddenColIds.filter((id) => typeof id === 'string') as string[])
+    : [];
+  return {
+    id: dto.id,
+    name: dto.name,
+    hiddenColIds,
+    sortState: parseSortState(config.sortState),
+    filterState: parseFilterState(config.filterState),
+  };
+};
+
+// Build the opaque `config` payload persisted to the server from a `CustomView`.
+const customViewToConfig = (view: {
+  hiddenColIds: string[];
+  sortState: SortState;
+  filterState: FilterState;
+}): Record<string, unknown> => ({
+  schemaVersion: SERVER_VIEW_SCHEMA_VERSION,
+  hiddenColIds: view.hiddenColIds,
+  sortState: view.sortState,
+  filterState: view.filterState,
+});
+
+const readViewOrder = (viewKey: string): string[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(getViewOrderStorageKey(viewKey)) ?? '[]');
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeViewOrder = (viewKey: string, order: string[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(getViewOrderStorageKey(viewKey), JSON.stringify(order));
+  } catch {}
+};
+
+// Apply the device-local ordering to a freshly fetched list: known ids keep their
+// saved order, anything new (or shared after the order was saved) is appended.
+const applyViewOrder = (views: CustomView[], order: string[]): CustomView[] => {
+  if (order.length === 0) return views;
+  const orderIndex = new Map(order.map((id, idx) => [id, idx]));
+  return [...views].sort((a, b) => {
+    const ai = orderIndex.get(a.id);
+    const bi = orderIndex.get(b.id);
+    if (ai == null && bi == null) return 0;
+    if (ai == null) return 1;
+    if (bi == null) return -1;
+    return ai - bi;
+  });
+};
 
 const sanitizeColumnWidths = (
   value: unknown,
@@ -187,6 +265,13 @@ export type StandardTableProps<T extends object = object> = {
   disabledRow?: (row: T) => boolean;
   onRowClick?: (row: T) => void;
   initialFilterState?: Record<string, string[]>;
+  /**
+   * Stable scope key (e.g. `projects.directory`). When set, the table switches to
+   * SERVER-BACKED mode: custom views are loaded from / persisted to the shared
+   * `viewsApi` store (own + shared, owner/read/write gating) instead of localStorage.
+   * When absent, the table keeps its legacy per-device localStorage view behavior.
+   */
+  viewKey?: string;
 };
 
 const StandardTable = <T extends object>({
@@ -211,8 +296,10 @@ const StandardTable = <T extends object>({
   disabledRow,
   onRowClick,
   initialFilterState,
+  viewKey,
 }: StandardTableProps<T>) => {
   const { t } = useTranslation('common');
+  const isServerBacked = viewKey != null;
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [sortState, setSortState] = useState<SortState>(null);
@@ -259,14 +346,34 @@ const StandardTable = <T extends object>({
     return {};
   });
 
+  // Server-backed mode loads views async (starts empty); legacy mode hydrates from localStorage.
   const [customViews, setCustomViews] = useState<CustomView[]>(() => {
-    if (typeof window === 'undefined') return [];
+    if (typeof window === 'undefined' || isServerBacked) return [];
     return parseStoredViews(localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.customViews)));
   });
+  // Per-view ownership/permission metadata, keyed by view id. Server-backed only.
+  const [serverViewMeta, setServerViewMeta] = useState<Map<string, ServerViewMeta>>(new Map());
+  const [viewsLoading, setViewsLoading] = useState(isServerBacked);
+  const [viewsLoadFailed, setViewsLoadFailed] = useState(false);
+  const [viewBusy, setViewBusy] = useState(false);
+  const [shareModalView, setShareModalView] = useState<CustomView | null>(null);
+
+  // Upsert a view's ownership/permission metadata from a server response (server-backed only).
+  const rememberServerViewMeta = useCallback((dto: SavedViewDto) => {
+    setServerViewMeta((prev) => {
+      const next = new Map(prev);
+      next.set(dto.id, { access: dto.access, ownerId: dto.ownerId, ownerName: dto.ownerName });
+      return next;
+    });
+  }, []);
   const [activeViewId, setActiveViewId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     return localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.activeView));
   });
+  // Read by the legacy-view migration so it can re-point a persisted active-view id (an old local
+  // UUID) at the new server id after upload, without becoming a load-effect dependency.
+  const activeViewIdRef = useRef(activeViewId);
+  activeViewIdRef.current = activeViewId;
   const [viewsSubmenuOpen, setViewsSubmenuOpen] = useState(false);
   const [modalState, setModalState] = useState<ViewModalState>(null);
   const [draggingViewId, setDraggingViewId] = useState<string | null>(null);
@@ -287,7 +394,9 @@ const StandardTable = <T extends object>({
     (updater: (prev: CustomView[]) => CustomView[]) => {
       setCustomViews((prev) => {
         const next = updater(prev);
-        if (next !== prev && typeof window !== 'undefined') {
+        // Server-backed mode persists views to the API, not localStorage; only the
+        // device-local *ordering* is mirrored to localStorage (handled separately).
+        if (next !== prev && !isServerBacked && typeof window !== 'undefined') {
           try {
             localStorage.setItem(
               getStorageKey(title, STORAGE_SUFFIX.customViews),
@@ -295,10 +404,16 @@ const StandardTable = <T extends object>({
             );
           } catch {}
         }
+        if (next !== prev && isServerBacked && viewKey) {
+          writeViewOrder(
+            viewKey,
+            next.map((v) => v.id),
+          );
+        }
         return next;
       });
     },
-    [title],
+    [title, isServerBacked, viewKey],
   );
 
   const updateActiveViewId = useCallback(
@@ -312,6 +427,156 @@ const StandardTable = <T extends object>({
       } catch {}
     },
     [title],
+  );
+
+  // Tracks the in-flight list request so a remount / viewKey change aborts the old one
+  // and a stale response can't overwrite fresh state.
+  const loadAbortRef = useRef<AbortController | null>(null);
+  // Bumped each time the user retries; re-runs the load effect.
+  const [viewsReloadToken, setViewsReloadToken] = useState(0);
+
+  // One-time, best-effort migration of legacy localStorage views into the server store the first
+  // time a table gains a `viewKey`. Without it, existing users would lose the custom views they
+  // created before the upgrade (server mode ignores the legacy title-slug key and hides clipboard
+  // import). A per-`viewKey` sentinel tracks progress ('pending' → 'done'): a view is removed from
+  // localStorage only once uploaded, and the sentinel reaches 'done' only after EVERY view is
+  // uploaded — so a transient create failure retries the leftovers on a later load instead of
+  // stranding the data behind a set sentinel. Returns true when it uploaded anything (re-list).
+  const migrateLegacyViews = useCallback(
+    async (key: string, noOwnViews: boolean, signal: AbortSignal): Promise<boolean> => {
+      if (typeof window === 'undefined') return false;
+      const sentinelKey = `praetor_table_viewsmigrated_${slugify(key)}`;
+      const legacyKey = getStorageKey(title, STORAGE_SUFFIX.customViews);
+      let state: string | null = null;
+      try {
+        state = localStorage.getItem(sentinelKey);
+      } catch {
+        return false;
+      }
+      if (state === 'done') return false;
+
+      let legacy: CustomView[] = [];
+      try {
+        legacy = parseStoredViews(localStorage.getItem(legacyKey));
+      } catch {}
+
+      if (state !== 'pending') {
+        // First attempt for this device + viewKey. Nothing to migrate, or the user already has
+        // OWN views on the server (migrated on another device) → mark done. Shared-with-me views
+        // don't count, so another user's shared view can't suppress migrating local presets.
+        if (legacy.length === 0 || !noOwnViews) {
+          try {
+            localStorage.setItem(sentinelKey, 'done');
+          } catch {}
+          return false;
+        }
+        // Commit to migrating: mark 'pending' so a transient upload failure resumes on a later
+        // load (ignoring noOwnViews, since we already own this migration) rather than being lost.
+        try {
+          localStorage.setItem(sentinelKey, 'pending');
+        } catch {}
+      }
+
+      const activeId = activeViewIdRef.current;
+      const remaining: CustomView[] = [];
+      let uploaded = false;
+      for (const view of legacy) {
+        if (signal.aborted) {
+          remaining.push(view);
+          continue;
+        }
+        try {
+          const dto = await viewsApi.create({
+            kind: 'table',
+            scopeKey: key,
+            name: view.name,
+            config: customViewToConfig(view),
+          });
+          uploaded = true;
+          // Keep the user's active preset applied after upgrade: re-point the persisted active
+          // marker (an old local id) at the new server id so the post-relist guard matches it.
+          if (view.id === activeId) updateActiveViewId(dto.id);
+        } catch (err) {
+          console.error('Failed to migrate a legacy table view', err);
+          remaining.push(view);
+        }
+      }
+
+      try {
+        if (remaining.length === 0) {
+          localStorage.setItem(sentinelKey, 'done');
+          localStorage.removeItem(legacyKey);
+        } else {
+          // Keep only the not-yet-uploaded views; the 'pending' sentinel stays so a later load
+          // retries exactly those.
+          localStorage.setItem(legacyKey, JSON.stringify(remaining));
+        }
+      } catch {}
+
+      return uploaded;
+    },
+    [title, updateActiveViewId],
+  );
+
+  // Server-backed mode: load own + shared views on mount (and on viewKey change / retry).
+  // Views are applied client-local ordering and the dangling-active-view guard re-runs once
+  // the list resolves. Legacy mode is a no-op here (localStorage hydration happened in state init).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: viewsReloadToken is the intended retry trigger
+  useEffect(() => {
+    if (!isServerBacked || !viewKey) return;
+    const controller = new AbortController();
+    loadAbortRef.current?.abort();
+    loadAbortRef.current = controller;
+    setViewsLoading(true);
+    setViewsLoadFailed(false);
+    (async () => {
+      try {
+        let dtos = await viewsApi.list('table', viewKey, controller.signal);
+        if (controller.signal.aborted) return;
+        // One-time migration of pre-upgrade localStorage views (claimed on the first
+        // server-backed load); re-list so any uploaded rows show up.
+        if (
+          await migrateLegacyViews(
+            viewKey,
+            !dtos.some((d) => d.access === 'owner'),
+            controller.signal,
+          )
+        ) {
+          if (controller.signal.aborted) return;
+          dtos = await viewsApi.list('table', viewKey, controller.signal);
+          if (controller.signal.aborted) return;
+        }
+        const views = applyViewOrder(dtos.map(serverViewToCustomView), readViewOrder(viewKey));
+        setServerViewMeta(
+          new Map(
+            dtos.map((dto) => [
+              dto.id,
+              { access: dto.access, ownerId: dto.ownerId, ownerName: dto.ownerName },
+            ]),
+          ),
+        );
+        setCustomViews(views);
+        setViewsLoading(false);
+        // Re-run the dangling-active-view guard: drop a persisted activeViewId that no
+        // longer resolves (deleted server-side or no longer shared with this user).
+        viewsAppliedOnceRef.current = false;
+      } catch (err) {
+        if (controller.signal.aborted || (err instanceof Error && err.name === 'AbortError')) {
+          return;
+        }
+        console.error('Failed to load saved views', err);
+        setViewsLoading(false);
+        setViewsLoadFailed(true);
+      }
+    })();
+    return () => controller.abort();
+  }, [isServerBacked, viewKey, viewsReloadToken]);
+
+  useEffect(
+    () => () => {
+      loadAbortRef.current?.abort();
+    },
+    [],
   );
 
   useEffect(() => {
@@ -420,6 +685,19 @@ const StandardTable = <T extends object>({
     [activeViewId, customViews],
   );
 
+  // Access resolution for the views submenu. In legacy mode every view is fully owned
+  // (no server concept of sharing), so gating is permissive. Per-row the submenu derives
+  // `owned` (delete/share) and `editable` (rename/re-save) from this.
+  const getViewAccess = useCallback(
+    (id: string): SavedViewAccess => {
+      if (!isServerBacked) return 'owner';
+      // Fail closed to least privilege if a server view's metadata isn't resolved yet:
+      // never surface owner-only controls (delete/share) for a view we can't vouch for.
+      return serverViewMeta.get(id)?.access ?? 'read';
+    },
+    [isServerBacked, serverViewMeta],
+  );
+
   const applyViewState = useCallback(
     (view: CustomView) => {
       const gearIds = new Set(gearColumns.map((c) => getColId(c)));
@@ -435,6 +713,11 @@ const StandardTable = <T extends object>({
   useEffect(() => {
     if (viewsAppliedOnceRef.current) return;
     if (!gearColumns.length) return;
+    // Server-backed mode: wait for the async list to resolve before resolving the persisted
+    // activeViewId, otherwise the still-empty list would clear a valid id. Also wait while the load
+    // FAILED — resolving against an empty failed list would drop a valid selection that a later
+    // retry could still satisfy.
+    if (isServerBacked && (viewsLoading || viewsLoadFailed)) return;
     viewsAppliedOnceRef.current = true;
     if (!activeViewId) return;
     const view = customViews.find((v) => v.id === activeViewId);
@@ -443,7 +726,16 @@ const StandardTable = <T extends object>({
       return;
     }
     applyViewState(view);
-  }, [gearColumns, activeViewId, customViews, applyViewState, updateActiveViewId]);
+  }, [
+    gearColumns,
+    activeViewId,
+    customViews,
+    applyViewState,
+    updateActiveViewId,
+    isServerBacked,
+    viewsLoading,
+    viewsLoadFailed,
+  ]);
 
   useEffect(() => {
     if (!gearOpen) setViewsSubmenuOpen(false);
@@ -1011,35 +1303,153 @@ const StandardTable = <T extends object>({
     setCurrentPage(1);
   };
 
-  const saveView = ({ name, hiddenColIds: hidden }: { name: string; hiddenColIds: string[] }) => {
-    if (modalState?.kind === 'edit') {
-      const editingId = modalState.view.id;
-      updateCustomViews((prev) =>
-        prev.map((v) =>
-          v.id === editingId ? { ...v, name, hiddenColIds: hidden, sortState, filterState } : v,
-        ),
-      );
-      if (activeViewId === editingId) {
-        setHiddenColIds(new Set(hidden));
-      }
-    } else {
-      const newView: CustomView = {
-        id: generateViewId(),
-        name,
-        hiddenColIds: hidden,
-        sortState,
-        filterState,
-      };
-      updateCustomViews((prev) => [...prev, newView]);
-      updateActiveViewId(newView.id);
-      setHiddenColIds(new Set(hidden));
-    }
-    setModalState(null);
+  const reloadServerViews = () => {
+    viewsAppliedOnceRef.current = false;
+    setViewsReloadToken((token) => token + 1);
   };
 
-  const deleteView = (id: string) => {
+  // A 403 means the caller's permission was downgraded mid-session; reload so the row
+  // self-corrects (the helper still surfaces the inline error for this attempt).
+  const handleViewCrudError = (err: unknown, messageKey: string) => {
+    console.error('View operation failed', err);
+    showViewError(t(messageKey));
+    if (err instanceof ApiError && err.status === 403) reloadServerViews();
+  };
+
+  // Legacy mode is synchronous (localStorage). Server mode persists optimistically and
+  // reverts on failure. Returns a promise so the modal can stay closed only after success.
+  const saveView = async ({
+    name,
+    hiddenColIds: hidden,
+  }: {
+    name: string;
+    hiddenColIds: string[];
+  }) => {
+    const editingView = modalState?.kind === 'edit' ? modalState.view : null;
+    const editingId = editingView?.id ?? null;
+    // The modal only edits name + visible columns. When editing an existing view, keep THAT view's
+    // own sort/filter rather than snapshotting the live table state — otherwise a rename or column
+    // tweak (reachable by shared write recipients) would silently overwrite the saved preset's
+    // sort/filter for everyone. A brand-new view still snapshots the current table state.
+    const savedSortState = editingView ? editingView.sortState : sortState;
+    const savedFilterState = editingView ? editingView.filterState : filterState;
+
+    if (!isServerBacked) {
+      if (editingId) {
+        updateCustomViews((prev) =>
+          prev.map((v) =>
+            v.id === editingId
+              ? {
+                  ...v,
+                  name,
+                  hiddenColIds: hidden,
+                  sortState: savedSortState,
+                  filterState: savedFilterState,
+                }
+              : v,
+          ),
+        );
+        if (activeViewId === editingId) setHiddenColIds(new Set(hidden));
+      } else {
+        const newView: CustomView = {
+          id: generateViewId(),
+          name,
+          hiddenColIds: hidden,
+          sortState,
+          filterState,
+        };
+        updateCustomViews((prev) => [...prev, newView]);
+        updateActiveViewId(newView.id);
+        setHiddenColIds(new Set(hidden));
+      }
+      setModalState(null);
+      return;
+    }
+
+    if (!viewKey || viewBusy) return;
+    const config = customViewToConfig({
+      hiddenColIds: hidden,
+      sortState: savedSortState,
+      filterState: savedFilterState,
+    });
+    setViewBusy(true);
+    try {
+      if (editingId) {
+        const dto = await viewsApi.update(editingId, { name, config });
+        const updated = serverViewToCustomView(dto);
+        updateCustomViews((prev) => prev.map((v) => (v.id === editingId ? updated : v)));
+        rememberServerViewMeta(dto);
+        if (activeViewId === editingId) setHiddenColIds(new Set(hidden));
+      } else {
+        const dto = await viewsApi.create({ kind: 'table', scopeKey: viewKey, name, config });
+        const created = serverViewToCustomView(dto);
+        updateCustomViews((prev) => [...prev, created]);
+        rememberServerViewMeta(dto);
+        updateActiveViewId(created.id);
+        setHiddenColIds(new Set(hidden));
+      }
+      setModalState(null);
+    } catch (err) {
+      // Modal stays open on failure so the user can retry without losing input.
+      handleViewCrudError(err, 'views.saveFailed');
+    } finally {
+      setViewBusy(false);
+    }
+  };
+
+  const deleteView = async (id: string) => {
+    if (!isServerBacked) {
+      updateCustomViews((prev) => prev.filter((v) => v.id !== id));
+      if (activeViewId === id) updateActiveViewId(null);
+      return;
+    }
+
+    if (viewBusy) return;
+    // Optimistic removal; restore the snapshot if the request rejects.
+    const snapshot = customViews;
+    const wasActive = activeViewId === id;
     updateCustomViews((prev) => prev.filter((v) => v.id !== id));
-    if (activeViewId === id) updateActiveViewId(null);
+    if (wasActive) updateActiveViewId(null);
+    setViewBusy(true);
+    try {
+      await viewsApi.remove(id);
+      setServerViewMeta((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Map(prev);
+        next.delete(id);
+        return next;
+      });
+    } catch (err) {
+      // Restore through updateCustomViews so the device-local ordering is rewritten too.
+      updateCustomViews(() => snapshot);
+      if (wasActive) updateActiveViewId(id);
+      handleViewCrudError(err, 'views.deleteFailed');
+    } finally {
+      setViewBusy(false);
+    }
+  };
+
+  // Fork the current view into a brand-new owned copy. The escape hatch that lets a
+  // read recipient get an editable view of their own.
+  const duplicateView = async (view: CustomView) => {
+    if (!isServerBacked || !viewKey || viewBusy) return;
+    const config = customViewToConfig(view);
+    setViewBusy(true);
+    try {
+      const dto = await viewsApi.create({
+        kind: 'table',
+        scopeKey: viewKey,
+        name: view.name,
+        config,
+      });
+      const created = serverViewToCustomView(dto);
+      updateCustomViews((prev) => [...prev, created]);
+      rememberServerViewMeta(dto);
+    } catch (err) {
+      handleViewCrudError(err, 'views.saveFailed');
+    } finally {
+      setViewBusy(false);
+    }
   };
 
   const moveViewByDelta = (id: string, delta: number) => {
@@ -1473,155 +1883,256 @@ const StandardTable = <T extends object>({
                         {t('table.customViews')}
                       </DropdownMenuLabel>
                       <DropdownMenuSeparator />
-                      {customViews.length > 0 && (
-                        <div className="max-h-64 overflow-y-auto p-1">
-                          {customViews.map((view) => {
-                            const isActive = view.id === activeViewId;
-                            const isCopied = copiedViewId === view.id;
-                            const isDragOver =
-                              dragOverViewId === view.id && draggingViewId !== view.id;
-                            return (
-                              <div
-                                key={view.id}
-                                draggable
-                                onDragStart={(e) => {
-                                  e.stopPropagation();
-                                  e.dataTransfer.effectAllowed = 'move';
-                                  // Firefox aborts the drag unless setData is called.
-                                  e.dataTransfer.setData('text/plain', view.name);
-                                  setDraggingViewId(view.id);
-                                }}
-                                onDragOver={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  e.dataTransfer.dropEffect = 'move';
-                                  if (
-                                    draggingViewId &&
-                                    draggingViewId !== view.id &&
-                                    dragOverViewId !== view.id
-                                  ) {
-                                    setDragOverViewId(view.id);
-                                  }
-                                }}
-                                onDragLeave={(e) => {
-                                  e.stopPropagation();
-                                  if (dragOverViewId === view.id) setDragOverViewId(null);
-                                }}
-                                onDrop={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  if (draggingViewId) {
-                                    reorderViews(draggingViewId, view.id);
-                                  }
-                                  setDraggingViewId(null);
-                                  setDragOverViewId(null);
-                                }}
-                                onDragEnd={() => {
-                                  setDraggingViewId(null);
-                                  setDragOverViewId(null);
-                                }}
-                                className={`group flex items-center gap-1 rounded-sm border-t-2 px-1 py-1 text-sm outline-hidden transition-colors ${
-                                  isActive
-                                    ? 'bg-accent text-accent-foreground'
-                                    : 'hover:bg-accent hover:text-accent-foreground'
-                                } ${isDragOver ? 'border-primary' : 'border-transparent'} ${
-                                  draggingViewId === view.id ? 'opacity-40' : ''
-                                }`}
-                              >
-                                <button
-                                  type="button"
-                                  title={t('table.reorderViewHandle')}
-                                  aria-label={t('table.reorderViewHandle')}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'ArrowUp') {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      moveViewByDelta(view.id, -1);
-                                    } else if (e.key === 'ArrowDown') {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      moveViewByDelta(view.id, 1);
-                                    }
-                                  }}
-                                  className="flex size-6 shrink-0 cursor-move items-center justify-center rounded-sm text-muted-foreground outline-none hover:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                                >
-                                  <i
-                                    className="fa-solid fa-grip-vertical text-[10px]"
-                                    aria-hidden="true"
-                                  ></i>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    applyView(view);
-                                    setGearOpen(false);
-                                  }}
-                                  className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-                                  title={view.name}
-                                >
-                                  {isActive && (
-                                    <i
-                                      className="fa-solid fa-check shrink-0 text-[10px]"
-                                      aria-hidden="true"
-                                    ></i>
-                                  )}
-                                  <span className="truncate text-xs font-medium">{view.name}</span>
-                                </button>
-                                <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                                  <DropdownMenuItem
-                                    aria-label={t('table.renameView')}
-                                    onSelect={(e) => {
-                                      e.preventDefault();
-                                      setModalState({ kind: 'edit', view });
-                                      setGearOpen(false);
-                                    }}
-                                    className="size-7 justify-center p-0"
-                                  >
-                                    <i
-                                      className="fa-solid fa-pen text-[10px]"
-                                      aria-hidden="true"
-                                    ></i>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    aria-label={
-                                      isCopied ? t('table.viewCopied') : t('table.exportView')
-                                    }
-                                    onSelect={(e) => {
-                                      e.preventDefault();
-                                      void exportView(view);
-                                    }}
-                                    className="size-7 justify-center p-0"
-                                  >
-                                    <i
-                                      className={`fa-solid ${isCopied ? 'fa-check' : 'fa-copy'} text-[10px]`}
-                                      aria-hidden="true"
-                                    ></i>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    aria-label={t('table.deleteView')}
-                                    variant="destructive"
-                                    onSelect={(e) => {
-                                      e.preventDefault();
-                                      deleteView(view.id);
-                                    }}
-                                    className="size-7 justify-center p-0"
-                                  >
-                                    <i
-                                      className="fa-solid fa-trash text-[10px]"
-                                      aria-hidden="true"
-                                    ></i>
-                                  </DropdownMenuItem>
-                                </div>
-                              </div>
-                            );
-                          })}
+                      {isServerBacked && viewsLoading && (
+                        <div
+                          role="status"
+                          className="flex items-center justify-center gap-2 px-2 py-3 text-xs text-muted-foreground"
+                        >
+                          <i
+                            className="fa-solid fa-circle-notch fa-spin text-[10px]"
+                            aria-hidden="true"
+                          ></i>
+                          <span>{t('views.loadingViews')}</span>
                         </div>
                       )}
+                      {isServerBacked && viewsLoadFailed && !viewsLoading && (
+                        <div className="flex flex-col items-center gap-2 px-2 py-3 text-center">
+                          <span role="alert" className="text-xs text-destructive">
+                            {t('views.loadViewsFailed')}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              reloadServerViews();
+                            }}
+                          >
+                            <i
+                              className="fa-solid fa-rotate-right text-[10px]"
+                              aria-hidden="true"
+                            ></i>
+                            {t('views.retry')}
+                          </Button>
+                        </div>
+                      )}
+                      {!(isServerBacked && (viewsLoading || viewsLoadFailed)) &&
+                        customViews.length > 0 && (
+                          <div className="max-h-64 overflow-y-auto p-1">
+                            {customViews.map((view) => {
+                              const isActive = view.id === activeViewId;
+                              const isCopied = copiedViewId === view.id;
+                              const isDragOver =
+                                dragOverViewId === view.id && draggingViewId !== view.id;
+                              const access = getViewAccess(view.id);
+                              const owned = access === 'owner';
+                              const editable = access === 'owner' || access === 'write';
+                              const ownerName = serverViewMeta.get(view.id)?.ownerName;
+                              return (
+                                <div
+                                  key={view.id}
+                                  draggable
+                                  onDragStart={(e) => {
+                                    e.stopPropagation();
+                                    e.dataTransfer.effectAllowed = 'move';
+                                    // Firefox aborts the drag unless setData is called.
+                                    e.dataTransfer.setData('text/plain', view.name);
+                                    setDraggingViewId(view.id);
+                                  }}
+                                  onDragOver={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    e.dataTransfer.dropEffect = 'move';
+                                    if (
+                                      draggingViewId &&
+                                      draggingViewId !== view.id &&
+                                      dragOverViewId !== view.id
+                                    ) {
+                                      setDragOverViewId(view.id);
+                                    }
+                                  }}
+                                  onDragLeave={(e) => {
+                                    e.stopPropagation();
+                                    if (dragOverViewId === view.id) setDragOverViewId(null);
+                                  }}
+                                  onDrop={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (draggingViewId) {
+                                      reorderViews(draggingViewId, view.id);
+                                    }
+                                    setDraggingViewId(null);
+                                    setDragOverViewId(null);
+                                  }}
+                                  onDragEnd={() => {
+                                    setDraggingViewId(null);
+                                    setDragOverViewId(null);
+                                  }}
+                                  className={`group flex items-center gap-1 rounded-sm border-t-2 px-1 py-1 text-sm outline-hidden transition-colors ${
+                                    isActive
+                                      ? 'bg-accent text-accent-foreground'
+                                      : 'hover:bg-accent hover:text-accent-foreground'
+                                  } ${isDragOver ? 'border-primary' : 'border-transparent'} ${
+                                    draggingViewId === view.id ? 'opacity-40' : ''
+                                  }`}
+                                >
+                                  <button
+                                    type="button"
+                                    title={t('table.reorderViewHandle')}
+                                    aria-label={t('table.reorderViewHandle')}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'ArrowUp') {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        moveViewByDelta(view.id, -1);
+                                      } else if (e.key === 'ArrowDown') {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        moveViewByDelta(view.id, 1);
+                                      }
+                                    }}
+                                    className="flex size-6 shrink-0 cursor-move items-center justify-center rounded-sm text-muted-foreground outline-none hover:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                  >
+                                    <i
+                                      className="fa-solid fa-grip-vertical text-[10px]"
+                                      aria-hidden="true"
+                                    ></i>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      applyView(view);
+                                      setGearOpen(false);
+                                    }}
+                                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                                    title={view.name}
+                                  >
+                                    {isActive && (
+                                      <i
+                                        className="fa-solid fa-check shrink-0 text-[10px]"
+                                        aria-hidden="true"
+                                      ></i>
+                                    )}
+                                    <span className="flex min-w-0 flex-col">
+                                      <span className="truncate text-xs font-medium">
+                                        {view.name}
+                                      </span>
+                                      {isServerBacked && !owned && (
+                                        <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                          <ViewOwnerAvatar ownerName={ownerName ?? ''} />
+                                          <span className="shrink-0 rounded-sm border border-border bg-muted px-1 leading-tight font-medium uppercase">
+                                            {access === 'write'
+                                              ? t('views.permissionWrite')
+                                              : t('views.permissionRead')}
+                                          </span>
+                                        </span>
+                                      )}
+                                    </span>
+                                  </button>
+                                  <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                                    {editable && (
+                                      <DropdownMenuItem
+                                        aria-label={t('table.renameView')}
+                                        disabled={viewBusy}
+                                        onSelect={(e) => {
+                                          e.preventDefault();
+                                          setModalState({ kind: 'edit', view });
+                                          setGearOpen(false);
+                                        }}
+                                        className="size-7 justify-center p-0"
+                                      >
+                                        <i
+                                          className="fa-solid fa-pen text-[10px]"
+                                          aria-hidden="true"
+                                        ></i>
+                                      </DropdownMenuItem>
+                                    )}
+                                    {isServerBacked ? (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <DropdownMenuItem
+                                            aria-label={t('views.duplicateView')}
+                                            disabled={viewBusy}
+                                            onSelect={(e) => {
+                                              e.preventDefault();
+                                              void duplicateView(view);
+                                            }}
+                                            className="size-7 justify-center p-0"
+                                          >
+                                            <i
+                                              className="fa-solid fa-clone text-[10px]"
+                                              aria-hidden="true"
+                                            ></i>
+                                          </DropdownMenuItem>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="bottom">
+                                          {t('views.duplicateView')}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    ) : (
+                                      <DropdownMenuItem
+                                        aria-label={
+                                          isCopied ? t('table.viewCopied') : t('table.exportView')
+                                        }
+                                        onSelect={(e) => {
+                                          e.preventDefault();
+                                          void exportView(view);
+                                        }}
+                                        className="size-7 justify-center p-0"
+                                      >
+                                        <i
+                                          className={`fa-solid ${isCopied ? 'fa-check' : 'fa-copy'} text-[10px]`}
+                                          aria-hidden="true"
+                                        ></i>
+                                      </DropdownMenuItem>
+                                    )}
+                                    {isServerBacked && owned && (
+                                      <DropdownMenuItem
+                                        aria-label={t('views.shareView')}
+                                        disabled={viewBusy}
+                                        onSelect={(e) => {
+                                          e.preventDefault();
+                                          setShareModalView(view);
+                                          setGearOpen(false);
+                                        }}
+                                        className="size-7 justify-center p-0"
+                                      >
+                                        <i
+                                          className="fa-solid fa-share-nodes text-[10px]"
+                                          aria-hidden="true"
+                                        ></i>
+                                      </DropdownMenuItem>
+                                    )}
+                                    {owned && (
+                                      <DropdownMenuItem
+                                        aria-label={t('table.deleteView')}
+                                        variant="destructive"
+                                        disabled={viewBusy}
+                                        onSelect={(e) => {
+                                          e.preventDefault();
+                                          void deleteView(view.id);
+                                        }}
+                                        className="size-7 justify-center p-0"
+                                      >
+                                        <i
+                                          className="fa-solid fa-trash text-[10px]"
+                                          aria-hidden="true"
+                                        ></i>
+                                      </DropdownMenuItem>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       <DropdownMenuSeparator />
                       <div className="flex gap-1 p-1">
                         <DropdownMenuItem
+                          disabled={isServerBacked && (viewsLoading || viewBusy)}
                           onSelect={(e) => {
                             e.preventDefault();
                             setModalState({ kind: 'create' });
@@ -1632,16 +2143,23 @@ const StandardTable = <T extends object>({
                           <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
                           <span>{t('buttons.add')}</span>
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onSelect={(e) => {
-                            e.preventDefault();
-                            void importView();
-                          }}
-                          className="flex-1 justify-center text-xs"
-                        >
-                          <i className="fa-solid fa-file-import text-[10px]" aria-hidden="true"></i>
-                          <span>{t('buttons.import')}</span>
-                        </DropdownMenuItem>
+                        {/* Clipboard import is a localStorage-era escape hatch; server mode
+                            uses Duplicate instead, so the button is legacy-only. */}
+                        {!isServerBacked && (
+                          <DropdownMenuItem
+                            onSelect={(e) => {
+                              e.preventDefault();
+                              void importView();
+                            }}
+                            className="flex-1 justify-center text-xs"
+                          >
+                            <i
+                              className="fa-solid fa-file-import text-[10px]"
+                              aria-hidden="true"
+                            ></i>
+                            <span>{t('buttons.import')}</span>
+                          </DropdownMenuItem>
+                        )}
                       </div>
                       {viewError && (
                         <div
@@ -2065,10 +2583,21 @@ const StandardTable = <T extends object>({
           }
           isOpen={modalState !== null}
           onClose={() => setModalState(null)}
-          onSave={saveView}
+          onSave={(view) => {
+            void saveView(view);
+          }}
           columns={modalColumns}
           initialHiddenColIds={hiddenColIds}
           editingView={modalState?.kind === 'edit' ? modalState.view : undefined}
+        />
+      )}
+
+      {isServerBacked && (
+        <ShareViewModal
+          isOpen={shareModalView !== null}
+          onClose={() => setShareModalView(null)}
+          viewId={shareModalView?.id ?? ''}
+          viewName={shareModalView?.name ?? ''}
         />
       )}
 
