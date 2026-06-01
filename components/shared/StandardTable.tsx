@@ -83,6 +83,7 @@ import {
 } from './ModalLayout';
 import ShareViewModal from './ShareViewModal';
 import { TABLE_CONTROL_BUTTON_CLASSNAME } from './tableControlStyles';
+import ViewOwnerAvatar from './ViewOwnerAvatar';
 
 const STORAGE_SUFFIX = {
   rows: 'rows',
@@ -2020,10 +2021,8 @@ const StandardTable = <T extends object>({
                                         {view.name}
                                       </span>
                                       {isServerBacked && !owned && (
-                                        <span className="flex items-center gap-1 truncate text-[10px] text-muted-foreground">
-                                          <span className="truncate">
-                                            {t('views.sharedBy', { owner: ownerName ?? '' })}
-                                          </span>
+                                        <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                          <ViewOwnerAvatar ownerName={ownerName ?? ''} />
                                           <span className="shrink-0 rounded-sm border border-border bg-muted px-1 leading-tight font-medium uppercase">
                                             {access === 'write'
                                               ? t('views.permissionWrite')
@@ -2052,20 +2051,27 @@ const StandardTable = <T extends object>({
                                       </DropdownMenuItem>
                                     )}
                                     {isServerBacked ? (
-                                      <DropdownMenuItem
-                                        aria-label={t('views.duplicateView')}
-                                        disabled={viewBusy}
-                                        onSelect={(e) => {
-                                          e.preventDefault();
-                                          void duplicateView(view);
-                                        }}
-                                        className="size-7 justify-center p-0"
-                                      >
-                                        <i
-                                          className="fa-solid fa-clone text-[10px]"
-                                          aria-hidden="true"
-                                        ></i>
-                                      </DropdownMenuItem>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <DropdownMenuItem
+                                            aria-label={t('views.duplicateView')}
+                                            disabled={viewBusy}
+                                            onSelect={(e) => {
+                                              e.preventDefault();
+                                              void duplicateView(view);
+                                            }}
+                                            className="size-7 justify-center p-0"
+                                          >
+                                            <i
+                                              className="fa-solid fa-clone text-[10px]"
+                                              aria-hidden="true"
+                                            ></i>
+                                          </DropdownMenuItem>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="bottom">
+                                          {t('views.duplicateView')}
+                                        </TooltipContent>
+                                      </Tooltip>
                                     ) : (
                                       <DropdownMenuItem
                                         aria-label={

@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import Modal from '../shared/Modal';
 import {
   ModalBody,
@@ -23,6 +24,7 @@ import {
   ModalTitle,
 } from '../shared/ModalLayout';
 import ShareViewModal from '../shared/ShareViewModal';
+import ViewOwnerAvatar from '../shared/ViewOwnerAvatar';
 import type { ServerDashboardView } from './dashboardLayout';
 import type { UseDashboardLayout } from './useDashboardLayout';
 
@@ -218,9 +220,7 @@ const DashboardControls: React.FC<DashboardControlsProps> = ({ controls }) => {
                     <span className="truncate">{view.name}</span>
                     {!view.isOwner && (
                       <span className="flex items-center gap-1">
-                        <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-normal">
-                          {t('common:views.sharedBy', { owner: view.ownerName })}
-                        </Badge>
+                        <ViewOwnerAvatar ownerName={view.ownerName} />
                         <Badge variant="outline" className="px-1.5 py-0 text-[10px] font-normal">
                           {view.permission === 'write'
                             ? t('common:views.permissionWrite')
@@ -231,25 +231,33 @@ const DashboardControls: React.FC<DashboardControlsProps> = ({ controls }) => {
                   </span>
                 </DropdownMenuItem>
                 {/* Duplicate — available to everyone (read recipients fork an
-                    editable owned copy). Keep the menu open so the rename prompt
-                    can take over. */}
-                <DropdownMenuItem
-                  aria-label={t('common:views.duplicateView')}
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    setNameModal({ kind: 'duplicate', view });
-                  }}
-                  className="size-7 shrink-0 justify-center p-0"
-                >
-                  <i className="fa-solid fa-copy text-xs" aria-hidden="true"></i>
-                </DropdownMenuItem>
-                {/* Rename — owner or write. Overwrites the shared name for everyone. */}
+                    editable owned copy). Close the menu so the name dialog takes
+                    over cleanly instead of stacking behind the open dropdown. */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuItem
+                      aria-label={t('common:views.duplicateView')}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        setNameModal({ kind: 'duplicate', view });
+                        setViewsOpen(false);
+                      }}
+                      className="size-7 shrink-0 justify-center p-0"
+                    >
+                      <i className="fa-solid fa-copy text-xs" aria-hidden="true"></i>
+                    </DropdownMenuItem>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{t('common:views.duplicateView')}</TooltipContent>
+                </Tooltip>
+                {/* Rename — owner or write. Overwrites the shared name for everyone.
+                    Close the menu so the name dialog takes over cleanly. */}
                 {view.permission === 'write' && (
                   <DropdownMenuItem
                     aria-label={t('common:views.rename')}
                     onSelect={(e) => {
                       e.preventDefault();
                       setNameModal({ kind: 'rename', view });
+                      setViewsOpen(false);
                     }}
                     className="size-7 shrink-0 justify-center p-0"
                   >

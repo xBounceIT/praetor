@@ -121,8 +121,8 @@ describe('<DashboardControls /> — per-row action gating', () => {
     await openViewsMenu();
     await screen.findByText('Write Shared View');
 
-    // "Shared by" + write chip render for a non-owned view.
-    expect(screen.getByText('common:views.sharedBy')).toBeInTheDocument();
+    // Owner avatar (labelled "Shared by …") + write chip render for a non-owned view.
+    expect(screen.getByLabelText('views.sharedBy')).toBeInTheDocument();
     expect(screen.getByText('common:views.permissionWrite')).toBeInTheDocument();
 
     expect(screen.getByLabelText('common:views.duplicateView')).toBeInTheDocument();
@@ -136,7 +136,7 @@ describe('<DashboardControls /> — per-row action gating', () => {
     await openViewsMenu();
     await screen.findByText('Read Shared View');
 
-    expect(screen.getByText('common:views.sharedBy')).toBeInTheDocument();
+    expect(screen.getByLabelText('views.sharedBy')).toBeInTheDocument();
     expect(screen.getByText('common:views.permissionRead')).toBeInTheDocument();
 
     expect(screen.getByLabelText('common:views.duplicateView')).toBeInTheDocument();
@@ -253,5 +253,23 @@ describe('<DashboardControls /> — share entry point', () => {
     const lastOpen = shareModalProps.filter((p) => p.isOpen).at(-1);
     expect(lastOpen?.viewId).toBe('sv-owned');
     expect(lastOpen?.viewName).toBe('My Owned View');
+  });
+});
+
+describe('<DashboardControls /> — duplicate redirects to the name dialog', () => {
+  test('clicking Duplicate closes the views menu so the dialog is not stacked behind it', async () => {
+    render(<DashboardControls controls={buildControls({ views: [ownedView()] })} />);
+    await openViewsMenu();
+    await screen.findByText('My Owned View');
+
+    act(() => {
+      fireEvent.click(screen.getByLabelText('common:views.duplicateView'));
+    });
+
+    // The dropdown closes (its rows unmount) so the name dialog takes over cleanly
+    // instead of rendering behind the still-open menu.
+    await waitFor(() => expect(screen.queryByText('My Owned View')).not.toBeInTheDocument());
+    // The duplicate name-prompt dialog is now open.
+    expect(screen.getByLabelText('projects:detail.dashboard.viewName')).toBeInTheDocument();
   });
 });
