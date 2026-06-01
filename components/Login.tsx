@@ -64,6 +64,10 @@ const Login: React.FC<LoginProps> = ({
   // The login screen follows the OS/browser color scheme rather than any saved
   // user preference — the signed-in user isn't known yet at this point.
   const browserTheme = useBrowserTheme();
+  // In dark mode the page sits on pure black and the multi-color logo is flattened
+  // to solid white (`brightness-0` blacks every pixel, `invert` flips it to white)
+  // so it reads cleanly on the dark card. Light mode keeps the original artwork.
+  const isDark = browserTheme === 'dark';
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -177,7 +181,8 @@ const Login: React.FC<LoginProps> = ({
       data-shadcn-theme-scope
       data-shadcn-theme={browserTheme}
       className={cn(
-        'shadcn-theme-bridge flex min-h-screen items-center justify-center bg-muted/70 p-4',
+        'shadcn-theme-bridge flex min-h-screen items-center justify-center p-4',
+        isDark ? 'bg-black' : 'bg-muted/70',
         getShadcnThemeClassName(browserTheme),
       )}
     >
@@ -185,7 +190,11 @@ const Login: React.FC<LoginProps> = ({
         <div className="absolute inset-0 -top-px -left-px z-0" style={gridOverlayStyle} />
 
         <div className="relative isolate flex w-full flex-col items-center">
-          <img src="/praetor-logo.png" alt="Praetor Logo" className="h-24 object-contain" />
+          <img
+            src="/praetor-logo.png"
+            alt="Praetor Logo"
+            className={cn('h-24 object-contain', isDark && 'brightness-0 invert')}
+          />
           <p className="mt-2 text-sm text-muted-foreground">{t('auth:login.title')}</p>
 
           {logoutReason === 'inactivity' && (

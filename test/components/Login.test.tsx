@@ -378,4 +378,33 @@ describe('<Login />', () => {
       await waitFor(() => expect(scope?.classList.contains('dark')).toBe(true));
     });
   });
+
+  describe('dark-mode appearance', () => {
+    test('uses a black page background and a flattened-white logo in dark mode', () => {
+      setPrefersDarkScheme(true);
+
+      const { container } = render(<Login onLogin={() => {}} />);
+      const scope = container.querySelector('[data-shadcn-theme-scope]');
+      const logo = screen.getByAltText('Praetor Logo');
+
+      expect(scope?.classList.contains('bg-black')).toBe(true);
+      expect(scope?.classList.contains('bg-muted/70')).toBe(false);
+      // brightness-0 + invert renders the multi-color logo as solid white.
+      expect(logo.classList.contains('brightness-0')).toBe(true);
+      expect(logo.classList.contains('invert')).toBe(true);
+    });
+
+    test('keeps the muted background and original logo colors in light mode', () => {
+      setPrefersDarkScheme(false);
+
+      const { container } = render(<Login onLogin={() => {}} />);
+      const scope = container.querySelector('[data-shadcn-theme-scope]');
+      const logo = screen.getByAltText('Praetor Logo');
+
+      expect(scope?.classList.contains('bg-muted/70')).toBe(true);
+      expect(scope?.classList.contains('bg-black')).toBe(false);
+      expect(logo.classList.contains('brightness-0')).toBe(false);
+      expect(logo.classList.contains('invert')).toBe(false);
+    });
+  });
 });
