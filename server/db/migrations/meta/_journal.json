@@ -435,6 +435,13 @@
       "when": 1780230332141,
       "tag": "0061_add_ril_default_exit_time",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1780318818676,
+      "tag": "0062_grant_top_manager_work_units_all_rights",
+      "breakpoints": true
     }
   ]
 }
