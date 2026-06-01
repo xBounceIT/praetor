@@ -442,7 +442,7 @@ const StandardTable = <T extends object>({
   // uploaded — so a transient create failure retries the leftovers on a later load instead of
   // stranding the data behind a set sentinel. Returns true when it uploaded anything (re-list).
   const migrateLegacyViews = useCallback(
-    async (key: string, serverEmpty: boolean, signal: AbortSignal): Promise<boolean> => {
+    async (key: string, noOwnViews: boolean, signal: AbortSignal): Promise<boolean> => {
       if (typeof window === 'undefined') return false;
       const sentinelKey = `praetor_table_viewsmigrated_${slugify(key)}`;
       const legacyKey = getStorageKey(title, STORAGE_SUFFIX.customViews);
@@ -460,16 +460,17 @@ const StandardTable = <T extends object>({
       } catch {}
 
       if (state !== 'pending') {
-        // First attempt for this device + viewKey. Nothing to migrate, or the server already has
-        // views (migrated on another device) → mark done so we never touch localStorage again.
-        if (legacy.length === 0 || !serverEmpty) {
+        // First attempt for this device + viewKey. Nothing to migrate, or the user already has
+        // OWN views on the server (migrated on another device) → mark done. Shared-with-me views
+        // don't count, so another user's shared view can't suppress migrating local presets.
+        if (legacy.length === 0 || !noOwnViews) {
           try {
             localStorage.setItem(sentinelKey, 'done');
           } catch {}
           return false;
         }
         // Commit to migrating: mark 'pending' so a transient upload failure resumes on a later
-        // load (ignoring serverEmpty, since we already own this migration) rather than being lost.
+        // load (ignoring noOwnViews, since we already own this migration) rather than being lost.
         try {
           localStorage.setItem(sentinelKey, 'pending');
         } catch {}
@@ -533,7 +534,13 @@ const StandardTable = <T extends object>({
         if (controller.signal.aborted) return;
         // One-time migration of pre-upgrade localStorage views (claimed on the first
         // server-backed load); re-list so any uploaded rows show up.
-        if (await migrateLegacyViews(viewKey, dtos.length === 0, controller.signal)) {
+        if (
+          await migrateLegacyViews(
+            viewKey,
+            !dtos.some((d) => d.access === 'owner'),
+            controller.signal,
+          )
+        ) {
           if (controller.signal.aborted) return;
           dtos = await viewsApi.list('table', viewKey, controller.signal);
           if (controller.signal.aborted) return;

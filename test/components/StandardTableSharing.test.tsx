@@ -251,6 +251,28 @@ describe('<StandardTable /> server-backed sharing', () => {
     );
   });
 
+  test('still migrates when the only server rows are shared (not owned) views', async () => {
+    localStorage.setItem(
+      'praetor_table_customviews_people',
+      JSON.stringify([
+        { id: 'old-1', name: 'Legacy View', hiddenColIds: [], sortState: null, filterState: {} },
+      ]),
+    );
+    // The list is non-empty but holds ONLY a shared view — the user has no OWN views, so a
+    // shared-with-me row must not suppress migrating their local presets.
+    let listCalls = 0;
+    listMock.mockImplementation(async () => {
+      listCalls += 1;
+      return listCalls === 1
+        ? [READ_SHARED_VIEW]
+        : [READ_SHARED_VIEW, { ...OWNED_VIEW, id: 'sv-mig', name: 'Legacy View' }];
+    });
+
+    renderTable({ viewKey: 'people.directory' });
+    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
+    expect(createMock.mock.calls[0][0].name).toBe('Legacy View');
+  });
+
   test('does not migrate when the server already has views (no duplication)', async () => {
     localStorage.setItem(
       'praetor_table_customviews_people',

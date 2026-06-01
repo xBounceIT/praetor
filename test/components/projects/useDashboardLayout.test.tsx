@@ -320,6 +320,29 @@ describe('useDashboardLayout — local tiers (global default + per-project overr
     // The per-project active marker is re-pointed at the new server id so the preset stays applied.
     expect(result.current.activeViewId).toBe('sv-d');
   });
+
+  test('still migrates legacy dashboard views when the only server row is shared (not owned)', async () => {
+    localStorage.setItem(
+      'praetor_dashboard_v2_views_project-analytics-test',
+      JSON.stringify([{ id: 'old-d1', name: 'Legacy Dash', layout: [] }]),
+    );
+    // The list is non-empty but holds ONLY a shared view — migration must still run.
+    let listCalls = 0;
+    backing.list = async () => {
+      listCalls += 1;
+      const shared = makeDto({ id: 'sv-shared', name: 'Shared', access: 'read' });
+      return listCalls === 1 ? [shared] : [shared, makeDto({ id: 'sv-d', name: 'Legacy Dash' })];
+    };
+    let created: CreateViewBody | undefined;
+    backing.create = async (body) => {
+      created = body;
+      return makeDto({ id: 'sv-d', name: body.name, config: body.config });
+    };
+
+    const { result } = await renderAReady();
+    expect(created?.name).toBe('Legacy Dash');
+    expect(result.current.views.map((v) => v.name)).toContain('Legacy Dash');
+  });
 });
 
 describe('useDashboardLayout — server-backed view library', () => {

@@ -213,7 +213,7 @@ export const useDashboardLayout = (
   // upload, so a transient failure retries the leftovers. If THIS project had a legacy view active,
   // its marker is re-pointed at the new server id so the preset stays applied after upgrade.
   const migrateLegacyDashboardViews = useCallback(
-    async (key: string, serverEmpty: boolean, isCurrent: () => boolean): Promise<boolean> => {
+    async (key: string, noOwnViews: boolean, isCurrent: () => boolean): Promise<boolean> => {
       const sentinelKey = `praetor_dashboard_v2_viewsmigrated_${key}`;
       const legacyViewsKey = getDashboardStorageKey(key, 'views');
       const state = readLS(sentinelKey);
@@ -222,9 +222,10 @@ export const useDashboardLayout = (
       const legacy = parseStoredDashboardViews(readLS(legacyViewsKey), widgetsRef.current);
 
       if (state !== 'pending') {
-        // First attempt: nothing to migrate, or the server already has views (migrated on another
-        // device) → mark done so we never touch localStorage again.
-        if (legacy.length === 0 || !serverEmpty) {
+        // First attempt: nothing to migrate, or the user already has OWN views on the server
+        // (migrated on another device) → mark done. Shared-with-me views don't count, so another
+        // user's shared view can't suppress migrating this user's local presets.
+        if (legacy.length === 0 || !noOwnViews) {
           writeLS(sentinelKey, 'done');
           return false;
         }
@@ -296,7 +297,7 @@ export const useDashboardLayout = (
       if (
         await migrateLegacyDashboardViews(
           scopeKey,
-          dtos.length === 0,
+          !dtos.some((d) => d.access === 'owner'),
           () => seq === loadSeqRef.current,
         )
       ) {
