@@ -1,13 +1,22 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
+import type { FC } from 'react';
+import type { ProjectRuleFormModalProps } from '../../../components/projects/ProjectRuleFormModal';
 import type { ProjectRule, ProjectRuleRecipientOptions } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
 
 installI18nMock();
 
-const ProjectRuleFormModal = (await import('../../../components/projects/ProjectRuleFormModal'))
-  .default;
+// ProjectRules.test.tsx replaces this module with a stub via `mock.module`. Bun's module
+// registry is shared process-wide and keyed by resolved path, so when that file loads first
+// this SUT would otherwise resolve to the stub — a failure that depends on test-file load
+// order (which differs between local and CI). A `?real` query suffix resolves to a fresh,
+// unmocked instance, so we always exercise the real component regardless of load order.
+// tsc cannot resolve a query-suffixed specifier, which is intentional here.
+// @ts-expect-error -- query-suffixed specifier is unresolvable to tsc by design (see note above)
+const realModalModule = await import('../../../components/projects/ProjectRuleFormModal.tsx?real');
+const ProjectRuleFormModal = realModalModule.default as FC<ProjectRuleFormModalProps>;
 
 const recipients: ProjectRuleRecipientOptions = {
   users: [{ id: 'u1', name: 'Alice', username: 'alice', avatarInitials: 'AL' }],
