@@ -430,6 +430,53 @@ const StandardTable = <T extends object>({
   // Bumped each time the user retries; re-runs the load effect.
   const [viewsReloadToken, setViewsReloadToken] = useState(0);
 
+  // One-time, best-effort migration of legacy localStorage views into the server store the
+  // first time a table gains a `viewKey`. Without it, existing users would lose the custom
+  // views they created before the upgrade (server mode ignores the legacy title-slug key and
+  // hides clipboard import). Guarded by a per-`viewKey` sentinel so it never runs twice, and
+  // claimed up front so a remount can't double-upload. Returns true when it uploaded anything.
+  const migrateLegacyViews = useCallback(
+    async (key: string, serverEmpty: boolean, signal: AbortSignal): Promise<boolean> => {
+      if (typeof window === 'undefined') return false;
+      const sentinelKey = `praetor_table_viewsmigrated_${slugify(key)}`;
+      try {
+        if (localStorage.getItem(sentinelKey) === '1') return false;
+        // Claim the one-time migration up front (even when nothing is uploaded) so it can never
+        // run again — e.g. if the user later deletes all their server views, the stale
+        // localStorage entries must not get re-uploaded.
+        localStorage.setItem(sentinelKey, '1');
+      } catch {
+        return false;
+      }
+      // Only seed from localStorage when the server has no views yet, so views already migrated
+      // on another device aren't duplicated here.
+      if (!serverEmpty) return false;
+      let legacy: CustomView[] = [];
+      try {
+        legacy = parseStoredViews(
+          localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.customViews)),
+        );
+      } catch {}
+      let uploaded = false;
+      for (const view of legacy) {
+        if (signal.aborted) break;
+        try {
+          await viewsApi.create({
+            kind: 'table',
+            scopeKey: key,
+            name: view.name,
+            config: customViewToConfig(view),
+          });
+          uploaded = true;
+        } catch (err) {
+          console.error('Failed to migrate a legacy table view', err);
+        }
+      }
+      return uploaded;
+    },
+    [title],
+  );
+
   // Server-backed mode: load own + shared views on mount (and on viewKey change / retry).
   // Views are applied client-local ordering and the dangling-active-view guard re-runs once
   // the list resolves. Legacy mode is a no-op here (localStorage hydration happened in state init).
@@ -441,10 +488,17 @@ const StandardTable = <T extends object>({
     loadAbortRef.current = controller;
     setViewsLoading(true);
     setViewsLoadFailed(false);
-    viewsApi
-      .list('table', viewKey, controller.signal)
-      .then((dtos) => {
+    (async () => {
+      try {
+        let dtos = await viewsApi.list('table', viewKey, controller.signal);
         if (controller.signal.aborted) return;
+        // One-time migration of pre-upgrade localStorage views (claimed on the first
+        // server-backed load); re-list so any uploaded rows show up.
+        if (await migrateLegacyViews(viewKey, dtos.length === 0, controller.signal)) {
+          if (controller.signal.aborted) return;
+          dtos = await viewsApi.list('table', viewKey, controller.signal);
+          if (controller.signal.aborted) return;
+        }
         const views = applyViewOrder(dtos.map(serverViewToCustomView), readViewOrder(viewKey));
         setServerViewMeta(
           new Map(
@@ -459,15 +513,15 @@ const StandardTable = <T extends object>({
         // Re-run the dangling-active-view guard: drop a persisted activeViewId that no
         // longer resolves (deleted server-side or no longer shared with this user).
         viewsAppliedOnceRef.current = false;
-      })
-      .catch((err) => {
+      } catch (err) {
         if (controller.signal.aborted || (err instanceof Error && err.name === 'AbortError')) {
           return;
         }
         console.error('Failed to load saved views', err);
         setViewsLoading(false);
         setViewsLoadFailed(true);
-      });
+      }
+    })();
     return () => controller.abort();
   }, [isServerBacked, viewKey, viewsReloadToken]);
 

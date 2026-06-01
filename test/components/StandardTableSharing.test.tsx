@@ -157,6 +157,56 @@ describe('<StandardTable /> server-backed sharing', () => {
     expect(await screen.findByText('My Owned View')).toBeInTheDocument();
   });
 
+  test('migrates legacy localStorage views to the server on the first server-backed load', async () => {
+    // A view the user created before the upgrade, under the legacy title-slug key.
+    localStorage.setItem(
+      'praetor_table_customviews_people',
+      JSON.stringify([
+        {
+          id: 'old-1',
+          name: 'Legacy View',
+          hiddenColIds: ['age'],
+          sortState: null,
+          filterState: {},
+        },
+      ]),
+    );
+    // Server starts empty, then returns the uploaded row on the post-migration re-list.
+    let listCalls = 0;
+    listMock.mockImplementation(async () => {
+      listCalls += 1;
+      return listCalls === 1 ? [] : [{ ...OWNED_VIEW, id: 'sv-mig', name: 'Legacy View' }];
+    });
+
+    renderTable({ viewKey: 'people.directory' });
+
+    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
+    const body = createMock.mock.calls[0][0];
+    expect(body.kind).toBe('table');
+    expect(body.scopeKey).toBe('people.directory');
+    expect(body.name).toBe('Legacy View');
+    expect(body.config.hiddenColIds).toEqual(['age']);
+
+    await openCustomViews();
+    expect(await screen.findByText('Legacy View')).toBeInTheDocument();
+  });
+
+  test('does not migrate when the server already has views (no duplication)', async () => {
+    localStorage.setItem(
+      'praetor_table_customviews_people',
+      JSON.stringify([
+        { id: 'old-1', name: 'Legacy View', hiddenColIds: [], sortState: null, filterState: {} },
+      ]),
+    );
+    // Server is non-empty → migration claims the sentinel but uploads nothing.
+    listMock.mockImplementation(async () => [OWNED_VIEW]);
+
+    renderTable({ viewKey: 'people.directory' });
+    await openCustomViews();
+    await screen.findByText('My Owned View');
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
   test('owner sees edit, delete and share actions on an owned view', async () => {
     listMock.mockImplementation(async () => [OWNED_VIEW]);
     renderTable({ viewKey: 'people.directory' });
