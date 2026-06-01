@@ -54,6 +54,28 @@ const PERMISSIONS = [
 ];
 
 describe('<WorkUnitsView /> member assignments', () => {
+  test('renders the manage-members action as a native shadcn primary button', () => {
+    render(
+      <WorkUnitsView
+        workUnits={[UNIT]}
+        users={USERS}
+        permissions={PERMISSIONS}
+        onAddWorkUnit={mock(() => Promise.resolve()) as unknown as never}
+        onUpdateWorkUnit={mock(() => Promise.resolve()) as unknown as never}
+        onDeleteWorkUnit={mock(() => Promise.resolve()) as unknown as never}
+        refreshWorkUnits={mock(() => Promise.resolve()) as unknown as never}
+      />,
+    );
+
+    const trigger = screen.getByRole('button', {
+      name: 'hr:competenceCenters.manageMembers',
+    });
+    // Native shadcn Button carries these data attributes; the old bespoke
+    // <button> did not, so this fails on the pre-fix markup.
+    expect(trigger).toHaveAttribute('data-slot', 'button');
+    expect(trigger).toHaveAttribute('data-variant', 'default');
+  });
+
   test('uses the shared user assignment modal for competence-center members', async () => {
     const refresh = mock(() => Promise.resolve());
 
