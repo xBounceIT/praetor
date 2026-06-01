@@ -167,6 +167,23 @@ describe('<ShareViewModal />', () => {
     expect(screen.queryByText('Dave Jones')).not.toBeInTheDocument();
   });
 
+  test('keeps a share for a directory-omitted user (e.g. disabled) visible and removable', async () => {
+    // u9 has a grant but is NOT in the directory (e.g. a now-disabled account).
+    getSharesMock.mockImplementation(async () => [{ userId: 'u9', permission: 'read' }]);
+    renderModal();
+
+    // The orphan grant is surfaced in the shared column (labelled by id), not silently hidden.
+    await screen.findByText('u9');
+
+    // Select and remove it, then save → the persisted set drops the ghost grant.
+    fireEvent.click(screen.getByText('u9'));
+    fireEvent.click(screen.getByRole('button', { name: /views.unshareSelected/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'buttons.save' }));
+
+    await waitFor(() => expect(replaceSharesMock).toHaveBeenCalledTimes(1));
+    expect(replaceSharesMock.mock.calls[0][1]).toEqual([]);
+  });
+
   test('surfaces a toast when loading shares fails', async () => {
     getSharesMock.mockImplementation(async () => {
       throw new Error('boom');

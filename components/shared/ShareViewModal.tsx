@@ -256,10 +256,28 @@ const ShareViewModal: React.FC<ShareViewModalProps> = ({
     [candidates, shares, matchesSearch],
   );
 
-  const sharedUsers = useMemo(
-    () => candidates.filter((u) => shares.has(u.id) && matchesSearch(u)),
-    [candidates, shares, matchesSearch],
-  );
+  const candidateIds = useMemo(() => new Set(candidates.map((u) => u.id)), [candidates]);
+
+  // Shared recipients = directory users with a grant, plus any grant whose user the directory
+  // omits (e.g. a now-disabled account, which `/views/directory` excludes). Without surfacing the
+  // latter, an existing share would be invisible yet still serialized on save — a ghost grant that
+  // silently reactivates if the account is re-enabled. We render orphans labelled by id so the
+  // owner can still remove them.
+  const sharedUsers = useMemo(() => {
+    const known = candidates.filter((u) => shares.has(u.id) && matchesSearch(u));
+    const orphans: ViewDirectoryUser[] = [];
+    for (const userId of shares.keys()) {
+      if (userId === currentUserId || candidateIds.has(userId)) continue;
+      const fallback: ViewDirectoryUser = {
+        id: userId,
+        name: userId,
+        username: '',
+        avatarInitials: userId.slice(0, 2).toUpperCase() || '?',
+      };
+      if (matchesSearch(fallback)) orphans.push(fallback);
+    }
+    return [...known, ...orphans];
+  }, [candidates, candidateIds, shares, currentUserId, matchesSearch]);
 
   const renderAvailableRow = (user: ViewDirectoryUser) => {
     const isSelected = selectedAvailableIds.has(user.id);
