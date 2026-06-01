@@ -157,6 +157,22 @@ describe('<StandardTable /> server-backed sharing', () => {
     expect(await screen.findByText('My Owned View')).toBeInTheDocument();
   });
 
+  test('keeps the persisted active view when the initial load fails (does not clear it)', async () => {
+    localStorage.setItem('praetor_table_activeview_people', 'sv-keep');
+    // The initial list fails (transient outage / 500).
+    listMock.mockImplementationOnce(async () => {
+      throw new Error('boom');
+    });
+
+    renderTable({ viewKey: 'people.directory' });
+    await waitFor(() => expect(listMock).toHaveBeenCalledTimes(1));
+    await openCustomViews();
+    // The failed load surfaces the error/retry row (so the apply guard has run)...
+    await screen.findByText('views.loadViewsFailed');
+    // ...and the persisted active marker is NOT cleared — a later retry could still resolve it.
+    expect(localStorage.getItem('praetor_table_activeview_people')).toBe('sv-keep');
+  });
+
   test('migrates legacy localStorage views to the server on the first server-backed load', async () => {
     // A view the user created before the upgrade, under the legacy title-slug key.
     localStorage.setItem(

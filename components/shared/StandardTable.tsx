@@ -712,9 +712,11 @@ const StandardTable = <T extends object>({
   useEffect(() => {
     if (viewsAppliedOnceRef.current) return;
     if (!gearColumns.length) return;
-    // Server-backed mode: wait for the async list to resolve before resolving the
-    // persisted activeViewId, otherwise the still-empty list would clear a valid id.
-    if (isServerBacked && viewsLoading) return;
+    // Server-backed mode: wait for the async list to resolve before resolving the persisted
+    // activeViewId, otherwise the still-empty list would clear a valid id. Also wait while the load
+    // FAILED — resolving against an empty failed list would drop a valid selection that a later
+    // retry could still satisfy.
+    if (isServerBacked && (viewsLoading || viewsLoadFailed)) return;
     viewsAppliedOnceRef.current = true;
     if (!activeViewId) return;
     const view = customViews.find((v) => v.id === activeViewId);
@@ -731,6 +733,7 @@ const StandardTable = <T extends object>({
     updateActiveViewId,
     isServerBacked,
     viewsLoading,
+    viewsLoadFailed,
   ]);
 
   useEffect(() => {
