@@ -186,7 +186,7 @@ const Login: React.FC<LoginProps> = ({
         getShadcnThemeClassName(browserTheme),
       )}
     >
-      <div className="relative w-full max-w-md overflow-hidden rounded-xl border bg-card px-8 py-8 shadow-lg">
+      <div className="relative w-full max-w-md overflow-hidden rounded-xl border bg-card text-card-foreground px-8 py-8 shadow-lg">
         <div className="absolute inset-0 -top-px -left-px z-0" style={gridOverlayStyle} />
 
         <div className="relative isolate flex w-full flex-col items-center">

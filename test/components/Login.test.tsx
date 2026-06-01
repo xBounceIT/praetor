@@ -394,6 +394,20 @@ describe('<Login />', () => {
       expect(logo.classList.contains('invert')).toBe(true);
     });
 
+    // Regression: the card paired `bg-card` with no foreground token, so input
+    // text fell back to the browser default (black) and was unreadable on the
+    // dark card. The `text-card-foreground` token must travel with `bg-card` so
+    // typed text adapts to the theme.
+    test('card carries the card-foreground token alongside bg-card', () => {
+      setPrefersDarkScheme(true);
+
+      const { container } = render(<Login onLogin={() => {}} />);
+      const card = container.querySelector('.bg-card');
+
+      expect(card).not.toBeNull();
+      expect(card?.classList.contains('text-card-foreground')).toBe(true);
+    });
+
     test('keeps the muted background and original logo colors in light mode', () => {
       setPrefersDarkScheme(false);
 
