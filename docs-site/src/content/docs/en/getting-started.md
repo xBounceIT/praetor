@@ -21,7 +21,7 @@ The sidebar groups the main modules. Available items depend on your role:
 - **Sales** for quotes and offers.
 - **Accounting** for orders and invoices.
 - **Projects** for tasks, customers, and progress.
-- **HR** for employees and competence centers.
+- **HR** for employee profiles, operational details, and competence centers.
 - **Reports** for analysis and AI reporting.
 - **Administration** for configuration and audit.
 

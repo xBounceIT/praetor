@@ -394,6 +394,18 @@ describe('normalizeUser', () => {
       hasTopManagerRole: true,
       isAdminOnly: false,
       employeeType: 'internal',
+      phone: '  +39 02 1234  ',
+      jobTitle: '  Consultant  ',
+      department: '  Delivery  ',
+      employeeCode: '  EMP-001  ',
+      hireDate: '2024-01-15T10:30:00Z',
+      terminationDate: '',
+      contractType: 'permanent',
+      employmentStatus: 'onboarding',
+      workLocation: 'hybrid',
+      emergencyContactName: '  Maria  ',
+      emergencyContactPhone: '  +39 02 5678  ',
+      notes: '  Starts next week  ',
       permissions: ['read', '  write  ', ''],
     });
     const result = normalizeUser(input);
@@ -407,6 +419,18 @@ describe('normalizeUser', () => {
     expect(result.hasTopManagerRole).toBe(true);
     expect(result.isAdminOnly).toBe(false);
     expect(result.employeeType).toBe('internal');
+    expect(result.phone).toBe('+39 02 1234');
+    expect(result.jobTitle).toBe('Consultant');
+    expect(result.department).toBe('Delivery');
+    expect(result.employeeCode).toBe('EMP-001');
+    expect(result.hireDate).toBe('2024-01-15');
+    expect(result.terminationDate).toBeNull();
+    expect(result.contractType).toBe('permanent');
+    expect(result.employmentStatus).toBe('onboarding');
+    expect(result.workLocation).toBe('hybrid');
+    expect(result.emergencyContactName).toBe('Maria');
+    expect(result.emergencyContactPhone).toBe('+39 02 5678');
+    expect(result.notes).toBe('Starts next week');
     expect(result.permissions).toEqual(['read', 'write']);
   });
 
@@ -427,6 +451,27 @@ describe('normalizeUser', () => {
     expect(result.hasTopManagerRole).toBeUndefined();
     expect(result.isAdminOnly).toBeUndefined();
     expect(result.employeeType).toBeUndefined();
+    expect(result.phone).toBeUndefined();
+    expect(result.employeeCode).toBeUndefined();
+    expect(result.employmentStatus).toBeUndefined();
+  });
+
+  test('normalizes invalid optional HR enums and dates to null', () => {
+    const input = make<User>(baseUser, {
+      hireDate: 'not-a-date',
+      terminationDate: null,
+      contractType: 'bad-contract',
+      employmentStatus: 'bad-status',
+      workLocation: 'bad-location',
+    });
+
+    const result = normalizeUser(input);
+
+    expect(result.hireDate).toBeNull();
+    expect(result.terminationDate).toBeNull();
+    expect(result.contractType).toBeNull();
+    expect(result.employmentStatus).toBeNull();
+    expect(result.workLocation).toBeNull();
   });
 
   test('returns 0 for non-finite costPerHour input', () => {

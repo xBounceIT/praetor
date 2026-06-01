@@ -2,7 +2,7 @@
 title: FAQ and troubleshooting
 description: Quick answers to common issues while using Praetor.
 sidebar:
-  order: 7
+  order: 8
 ---
 
 ## I cannot see a module

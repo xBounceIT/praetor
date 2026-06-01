@@ -2,7 +2,7 @@
 title: Vendite e contabilità
 description: Flussi per preventivi, offerte, ordini, fatture clienti e documenti fornitori.
 sidebar:
-  order: 4
+  order: 5
 ---
 
 ## Preventivi e offerte clienti

@@ -216,6 +216,18 @@ const sampleListRow = {
   costPerHour: '42.5',
   isDisabled: false,
   employeeType: 'app_user',
+  phone: '+39 02 1234',
+  jobTitle: 'Consultant',
+  department: 'Delivery',
+  employeeCode: 'EMP-001',
+  hireDate: '2024-01-15',
+  terminationDate: null,
+  contractType: 'permanent',
+  employmentStatus: 'active',
+  workLocation: 'hybrid',
+  emergencyContactName: 'Maria',
+  emergencyContactPhone: '+39 02 5678',
+  notes: 'Prefers morning shifts',
   hasTopManagerRole: false,
   isAdminOnly: false,
   authMethod: 'local',
@@ -239,6 +251,18 @@ describe('listAllForAdmin', () => {
         costPerHour: 42.5,
         isDisabled: false,
         employeeType: 'app_user',
+        phone: '+39 02 1234',
+        jobTitle: 'Consultant',
+        department: 'Delivery',
+        employeeCode: 'EMP-001',
+        hireDate: '2024-01-15',
+        terminationDate: null,
+        contractType: 'permanent',
+        employmentStatus: 'active',
+        workLocation: 'hybrid',
+        emergencyContactName: 'Maria',
+        emergencyContactPhone: '+39 02 5678',
+        notes: 'Prefers morning shifts',
         hasTopManagerRole: false,
         isAdminOnly: false,
         authMethod: 'local',
@@ -270,7 +294,7 @@ describe('listScopedForManager', () => {
     const sql = exec.calls[0].sql;
     expect(sql).toContain('u.id =');
     expect(sql).toContain('wum.user_id =');
-    expect(sql).toContain("u.employee_type = 'internal'");
+    expect(sql).toContain("u.employee_type IN ('app_user', 'internal')");
     expect(sql).not.toContain("u.employee_type = 'external'");
     expect(exec.calls[0].params).toContain('viewer-1');
   });
@@ -318,8 +342,12 @@ describe('findById', () => {
 
 describe('findCoreById', () => {
   test('returns the mapped core user when the row exists', async () => {
-    // Projection: id, name, username, role, employeeType, authMethod, authProviderId
-    exec.enqueue({ rows: [['user-1', 'Alice', 'alice', 'manager', 'internal', 'local', null]] });
+    // Projection: id, name, username, role, employeeType, hireDate, terminationDate, authMethod, authProviderId
+    exec.enqueue({
+      rows: [
+        ['user-1', 'Alice', 'alice', 'manager', 'internal', '2024-01-15', null, 'local', null],
+      ],
+    });
     const result = await usersRepo.findCoreById('user-1', testDb);
     expect(result).toEqual({
       id: 'user-1',
@@ -327,6 +355,8 @@ describe('findCoreById', () => {
       username: 'alice',
       role: 'manager',
       employeeType: 'internal',
+      hireDate: '2024-01-15',
+      terminationDate: null,
       authMethod: 'local',
       authProviderId: null,
     });
@@ -334,7 +364,7 @@ describe('findCoreById', () => {
   });
 
   test('defaults employeeType to app_user when null', async () => {
-    exec.enqueue({ rows: [['user-1', 'Alice', 'alice', 'manager', null, null, null]] });
+    exec.enqueue({ rows: [['user-1', 'Alice', 'alice', 'manager', null, null, null, null, null]] });
     const result = await usersRepo.findCoreById('user-1', testDb);
     expect(result?.employeeType).toBe('app_user');
   });
@@ -357,7 +387,7 @@ describe('existsByUsername', () => {
 });
 
 describe('insertUser', () => {
-  test('passes all 9 columns', async () => {
+  test('passes account and HR columns', async () => {
     exec.enqueue({ rows: [], rowCount: 1 });
     await usersRepo.insertUser(
       {
@@ -370,6 +400,18 @@ describe('insertUser', () => {
         costPerHour: 42,
         isDisabled: false,
         employeeType: 'internal',
+        phone: '+39 02 1234',
+        jobTitle: 'Consultant',
+        department: 'Delivery',
+        employeeCode: 'EMP-001',
+        hireDate: '2024-01-15',
+        terminationDate: null,
+        contractType: 'permanent',
+        employmentStatus: 'active',
+        workLocation: 'hybrid',
+        emergencyContactName: 'Maria',
+        emergencyContactPhone: '+39 02 5678',
+        notes: 'Prefers morning shifts',
       },
       testDb,
     );
@@ -383,6 +425,17 @@ describe('insertUser', () => {
     expect(exec.calls[0].params).toContain('42');
     expect(exec.calls[0].params).toContain(false);
     expect(exec.calls[0].params).toContain('internal');
+    expect(exec.calls[0].params).toContain('+39 02 1234');
+    expect(exec.calls[0].params).toContain('Consultant');
+    expect(exec.calls[0].params).toContain('Delivery');
+    expect(exec.calls[0].params).toContain('EMP-001');
+    expect(exec.calls[0].params).toContain('2024-01-15');
+    expect(exec.calls[0].params).toContain('permanent');
+    expect(exec.calls[0].params).toContain('active');
+    expect(exec.calls[0].params).toContain('hybrid');
+    expect(exec.calls[0].params).toContain('Maria');
+    expect(exec.calls[0].params).toContain('+39 02 5678');
+    expect(exec.calls[0].params).toContain('Prefers morning shifts');
   });
 });
 
@@ -415,7 +468,30 @@ describe('updateUserDynamic', () => {
     // RETURNING projection: id, name, username, role, avatarInitials, costPerHour, isDisabled,
     // employeeType
     exec.enqueue({
-      rows: [['user-1', 'Alice', 'alice', 'user', 'AL', '50', true, 'app_user']],
+      rows: [
+        [
+          'user-1',
+          'Alice',
+          'alice',
+          'user',
+          'AL',
+          '50',
+          true,
+          'app_user',
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+        ],
+      ],
       rowCount: 1,
     });
     await usersRepo.updateUserDynamic(
@@ -445,11 +521,102 @@ describe('updateUserDynamic', () => {
 
   test('parses cost_per_hour from string into number on the returned row', async () => {
     exec.enqueue({
-      rows: [['user-1', 'Alice', 'alice', 'user', 'AL', '17.25', false, 'app_user']],
+      rows: [
+        [
+          'user-1',
+          'Alice',
+          'alice',
+          'user',
+          'AL',
+          '17.25',
+          false,
+          'app_user',
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+        ],
+      ],
       rowCount: 1,
     });
     const result = await usersRepo.updateUserDynamic('user-1', { name: 'Alice' }, testDb);
     expect(result?.costPerHour).toBe(17.25);
+  });
+
+  test('updates and maps HR profile fields', async () => {
+    exec.enqueue({
+      rows: [
+        [
+          'user-1',
+          'Alice',
+          'alice',
+          'user',
+          'AL',
+          '17.25',
+          false,
+          'app_user',
+          '+39 02 1234',
+          'Consultant',
+          'Delivery',
+          'EMP-001',
+          '2024-01-15',
+          null,
+          'permanent',
+          'active',
+          'hybrid',
+          'Maria',
+          '+39 02 5678',
+          'Prefers morning shifts',
+        ],
+      ],
+      rowCount: 1,
+    });
+
+    const result = await usersRepo.updateUserDynamic(
+      'user-1',
+      {
+        phone: '+39 02 1234',
+        jobTitle: 'Consultant',
+        department: 'Delivery',
+        employeeCode: 'EMP-001',
+        hireDate: '2024-01-15',
+        contractType: 'permanent',
+        employmentStatus: 'active',
+        workLocation: 'hybrid',
+        emergencyContactName: 'Maria',
+        emergencyContactPhone: '+39 02 5678',
+        notes: 'Prefers morning shifts',
+      },
+      testDb,
+    );
+
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('"phone"');
+    expect(sql).toContain('"job_title"');
+    expect(sql).toContain('"employee_code"');
+    expect(result).toEqual(
+      expect.objectContaining({
+        phone: '+39 02 1234',
+        jobTitle: 'Consultant',
+        department: 'Delivery',
+        employeeCode: 'EMP-001',
+        hireDate: '2024-01-15',
+        contractType: 'permanent',
+        employmentStatus: 'active',
+        workLocation: 'hybrid',
+        emergencyContactName: 'Maria',
+        emergencyContactPhone: '+39 02 5678',
+        notes: 'Prefers morning shifts',
+      }),
+    );
   });
 });
 

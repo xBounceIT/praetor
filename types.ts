@@ -57,6 +57,15 @@ export type KnownPermission = `${KnownPermissionResource}.${KnownPermissionActio
 export type Permission = KnownPermission | (string & {});
 export type EmployeeType = 'app_user' | 'internal' | 'external';
 export type UserAuthMethod = 'local' | 'ldap' | 'oidc' | 'saml';
+export type UserContractType =
+  | 'permanent'
+  | 'fixed_term'
+  | 'contractor'
+  | 'internship'
+  | 'consultant'
+  | 'other';
+export type UserEmploymentStatus = 'active' | 'onboarding' | 'on_leave' | 'terminated';
+export type UserWorkLocation = 'office' | 'remote' | 'hybrid' | 'customer_site' | 'other';
 export type DiscountType = 'percentage' | 'currency';
 export type TimeEntryLocation = 'office' | 'customer_premise' | 'remote' | 'transfer';
 export type StoredBillingType = 'retainer' | 'time_and_materials';
@@ -90,6 +99,18 @@ export interface User {
   costPerHour?: number;
   isDisabled?: boolean;
   employeeType?: EmployeeType;
+  phone?: string | null;
+  jobTitle?: string | null;
+  department?: string | null;
+  employeeCode?: string | null;
+  hireDate?: string | null;
+  terminationDate?: string | null;
+  contractType?: UserContractType | null;
+  employmentStatus?: UserEmploymentStatus | null;
+  workLocation?: UserWorkLocation | null;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
+  notes?: string | null;
   authMethod?: UserAuthMethod;
   authProviderId?: string | null;
   authProviderName?: string | null;

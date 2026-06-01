@@ -150,6 +150,27 @@ const writeExternalRoleIdsTx = async (
 const writeExternalRoleIds = (userId: string, roleIds: string[]): Promise<void> =>
   withDbTransaction((tx) => writeExternalRoleIdsTx(userId, roleIds, tx));
 
+const syncExternalProfileTx = async (
+  userId: string,
+  input: Pick<ResolveExternalIdentityInput, 'name' | 'email'>,
+  tx: DbExecutor,
+): Promise<{ name?: string; avatarInitials?: string }> => {
+  const name = input.name?.trim();
+  const email = input.email?.trim();
+  if (!name && !email) return {};
+
+  const avatarInitials = name ? computeAvatarInitials(name) : undefined;
+  if (name) {
+    await usersRepo.updateDirectoryProfile(userId, { name, avatarInitials }, tx);
+  }
+  await settingsRepo.upsertForUser(
+    userId,
+    { fullName: name || null, email: email || null, language: null },
+    tx,
+  );
+  return name ? { name, avatarInitials } : {};
+};
+
 const applyExternalRoleIdsForUser = async (
   userId: string,
   roleIds: string[],
@@ -346,6 +367,15 @@ export const resolveExternalIdentity = async (
 
       if (user.isDisabled) {
         throw new ExternalAuthError('User is disabled', 'user_disabled');
+      }
+
+      if (!wasCreated) {
+        const syncedProfile = await syncExternalProfileTx(user.id, input, tx);
+        user = {
+          ...user,
+          name: syncedProfile.name ?? user.name,
+          avatarInitials: syncedProfile.avatarInitials ?? user.avatarInitials,
+        };
       }
 
       // Role mapping is bootstrap-only: it seeds user_roles when this request is the one

@@ -21,7 +21,7 @@ La barra laterale raggruppa i moduli principali. Le voci disponibili dipendono d
 - **Vendite** per preventivi e offerte.
 - **Contabilità** per ordini e fatture.
 - **Progetti** per attività, clienti e avanzamento.
-- **HR** per dipendenti e Competence Center.
+- **HR** per profili dipendente, dati operativi e Competence Center.
 - **Report** per analisi e AI reporting.
 - **Amministrazione** per configurazioni e audit.
 

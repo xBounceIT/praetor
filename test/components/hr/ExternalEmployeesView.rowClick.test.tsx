@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import type { User } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
@@ -70,5 +70,37 @@ describe('<ExternalEmployeesView /> row click', () => {
     fireEvent.click(row);
 
     expect(screen.queryByDisplayValue('Mario Rossi')).not.toBeInTheDocument();
+  });
+
+  test('does not synthesize table values for unset HR profile fields', () => {
+    renderView({
+      users: [
+        {
+          ...employee,
+          email: undefined,
+          phone: null,
+          jobTitle: null,
+          department: null,
+          employeeCode: null,
+          employmentStatus: null,
+          contractType: 'contractor',
+        },
+      ],
+    });
+
+    const row = screen.getByText('Mario Rossi').closest('tr');
+    if (!row) throw new Error('employee row not found');
+
+    expect(
+      within(row).queryByText('employeeProfile.employmentStatuses.active'),
+    ).not.toBeInTheDocument();
+    expect(within(row).getAllByText('employeeProfile.notSet').length).toBeGreaterThanOrEqual(4);
+
+    fireEvent.click(row);
+
+    expect(screen.getByLabelText('employeeProfile.email')).toHaveValue('');
+    expect(screen.getByLabelText('employeeProfile.jobTitle')).toHaveValue('');
+    expect(screen.getByLabelText('employeeProfile.department')).toHaveValue('');
+    expect(screen.getByLabelText('employeeProfile.employeeCode')).toHaveValue('');
   });
 });

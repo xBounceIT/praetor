@@ -2,8 +2,6 @@ import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { Field, FieldError, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Client, Project, ProjectTask, User } from '../../types';
 import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
@@ -21,16 +19,24 @@ import {
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import EmployeeAssignmentsModal from './EmployeeAssignmentsModal';
+import EmployeeHrFields from './EmployeeHrFields';
+import {
+  buildEmployeeCreatePayload,
+  buildEmployeeHrPayload,
+  createEmployeeHrForm,
+  createEmptyEmployeeHrForm,
+  type EmployeeCreatePayload,
+  type EmployeeHrFormData,
+  getEmployeeHrStatusBadgeType,
+  validateEmployeeHrForm,
+} from './employeeHrProfile';
 
 export interface InternalEmployeesViewProps {
   users: User[];
   clients: Client[];
   projects: Project[];
   tasks: ProjectTask[];
-  onAddEmployee: (
-    name: string,
-    costPerHour?: number,
-  ) => Promise<{ success: boolean; error?: string }>;
+  onAddEmployee: (employee: EmployeeCreatePayload) => Promise<{ success: boolean; error?: string }>;
   onUpdateEmployee: (id: string, updates: Partial<User>) => void;
   onDeleteEmployee: (id: string) => void;
   currency: string;
@@ -49,9 +55,9 @@ interface EmptyStateProps {
 
 const EmptyState: React.FC<EmptyStateProps> = ({ title, description }) => (
   <div className="p-8 text-center">
-    <i className="fa-solid fa-users text-4xl mb-3 text-zinc-300"></i>
-    <p className="text-zinc-500 font-medium">{title}</p>
-    <p className="text-sm text-zinc-400 mt-1">{description}</p>
+    <i className="fa-solid fa-users text-4xl mb-3 text-muted-foreground/50"></i>
+    <p className="text-muted-foreground font-medium">{title}</p>
+    <p className="text-sm text-muted-foreground mt-1">{description}</p>
   </div>
 );
 
@@ -76,6 +82,18 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     permissions,
     buildPermission('hr.employee_assignments', 'update'),
   );
+  const notSetLabel = t('employeeProfile.notSet');
+  const formatOptionalText = (value: unknown): string => {
+    if (typeof value === 'string') return value.trim();
+    if (value === null || value === undefined) return '';
+    return String(value).trim();
+  };
+  const renderOptionalText = (value: unknown, className = 'text-muted-foreground') => {
+    const text = formatOptionalText(value);
+    return (
+      <span className={text ? className : 'text-muted-foreground'}>{text || notSetLabel}</span>
+    );
+  };
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<User | null>(null);
   const [managingEmployee, setManagingEmployee] = useState<User | null>(null);
@@ -100,18 +118,12 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     });
   }, [users]);
 
-  const [formData, setFormData] = useState<{ name: string; costPerHour: string }>({
-    name: '',
-    costPerHour: '',
-  });
+  const [formData, setFormData] = useState<EmployeeHrFormData>(createEmptyEmployeeHrForm);
 
   const openAddModal = () => {
     if (!canCreateEmployees) return;
     setEditingEmployee(null);
-    setFormData({
-      name: '',
-      costPerHour: '',
-    });
+    setFormData(createEmptyEmployeeHrForm());
     setErrors({});
     setIsModalOpen(true);
   };
@@ -119,10 +131,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
   const openEditModal = (employee: User) => {
     if (!canUpdateEmployees) return;
     setEditingEmployee(employee);
-    setFormData({
-      name: employee.name || '',
-      costPerHour: employee.costPerHour?.toString() || '',
-    });
+    setFormData(createEmployeeHrForm(employee));
     setErrors({});
     setIsModalOpen(true);
   };
@@ -133,10 +142,13 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     if (editingEmployee && !canUpdateEmployees) return;
     if (!editingEmployee && !canCreateEmployees) return;
 
-    const newErrors: Record<string, string> = {};
-    if (!formData.name?.trim()) {
-      newErrors.name = t('common:validation.required');
-    }
+    const identityReadOnly = Boolean(editingEmployee && editingEmployee.authMethod !== 'local');
+    const newErrors = validateEmployeeHrForm(formData, {
+      identityReadOnly,
+      requiredMessage: t('common:validation.required'),
+      invalidEmailMessage: t('common:validation.invalidEmail'),
+      dateRangeMessage: t('employeeProfile.dateRangeInvalid'),
+    });
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -147,24 +159,17 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
 
     try {
       if (editingEmployee) {
-        const updates: Partial<User> = {
-          name: formData.name.trim(),
-        };
-
-        // Only submit costPerHour when the input was actually rendered. Without
-        // canViewCosts the GET response masked the field to 0, so including it
-        // here on an unrelated edit (e.g. name) would silently clobber the real
-        // DB value.
-        if (canViewCosts && canUpdateCosts) {
-          updates.costPerHour = formData.costPerHour ? parseFloat(formData.costPerHour) : 0;
-        }
-
+        const updates = buildEmployeeHrPayload(formData, {
+          includeIdentity: !identityReadOnly,
+          includeCost: canViewCosts && canUpdateCosts,
+        });
         onUpdateEmployee(editingEmployee.id, updates);
         setIsModalOpen(false);
       } else {
         const result = await onAddEmployee(
-          formData.name.trim(),
-          canUpdateCosts && formData.costPerHour ? parseFloat(formData.costPerHour) : undefined,
+          buildEmployeeCreatePayload(formData, {
+            includeCost: canViewCosts && canUpdateCosts,
+          }),
         );
         if (result.success) {
           setIsModalOpen(false);
@@ -200,9 +205,42 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
           <div className="size-9 rounded-full bg-praetor/10 text-praetor flex items-center justify-center font-bold text-xs">
             {row.avatarInitials}
           </div>
-          <span className="font-semibold text-zinc-800">{row.name}</span>
+          <span className="font-semibold text-foreground">{row.name}</span>
         </div>
       ),
+    },
+    {
+      header: t('employeeProfile.employeeCode'),
+      accessorKey: 'employeeCode',
+      cell: ({ value }: { value: unknown }) =>
+        renderOptionalText(value, 'font-medium text-muted-foreground'),
+    },
+    {
+      header: t('employeeProfile.contact'),
+      id: 'contact',
+      accessorFn: (row) => [row.email, row.phone].filter(Boolean).join(' '),
+      cell: ({ row }) => {
+        const email = row.email?.trim();
+        const phone = row.phone?.trim();
+        return (
+          <div className="flex min-w-40 flex-col gap-0.5 text-sm">
+            {email && <span className="text-foreground">{email}</span>}
+            {phone && <span className="text-muted-foreground">{phone}</span>}
+            {!email && !phone && <span className="text-muted-foreground">{notSetLabel}</span>}
+          </div>
+        );
+      },
+    },
+    {
+      header: t('employeeProfile.jobTitle'),
+      id: 'roleTitle',
+      accessorFn: (row) => row.jobTitle || '',
+      cell: ({ row }) => renderOptionalText(row.jobTitle, 'font-medium text-foreground'),
+    },
+    {
+      header: t('employeeProfile.department'),
+      accessorKey: 'department',
+      cell: ({ value }: { value: unknown }) => renderOptionalText(value),
     },
     {
       header: t('internalEmployees.type'),
@@ -229,7 +267,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
             accessorKey: 'costPerHour' as keyof User,
             align: 'right' as const,
             cell: ({ value }: { value: unknown }) => (
-              <span className="font-medium text-zinc-600">
+              <span className="font-medium text-muted-foreground">
                 {currency}
                 {Number(value ?? 0).toFixed(2)}
               </span>
@@ -238,10 +276,23 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
         ]
       : []),
     {
-      header: t('internalEmployees.status'),
-      accessorFn: () => 'active',
-      cell: () => <StatusBadge type="active" label={t('internalEmployees.active')} />,
-      disableSorting: true,
+      header: t('employeeProfile.hrStatus'),
+      id: 'hrStatus',
+      accessorFn: (row) => row.employmentStatus || '',
+      filterFormat: (value) =>
+        value ? t(`employeeProfile.employmentStatuses.${String(value)}`) : notSetLabel,
+      cell: ({ row }) => {
+        const status = row.employmentStatus;
+        if (!status) {
+          return <span className="text-muted-foreground">{notSetLabel}</span>;
+        }
+        return (
+          <StatusBadge
+            type={getEmployeeHrStatusBadgeType(status)}
+            label={t(`employeeProfile.employmentStatuses.${status}`)}
+          />
+        );
+      },
     },
     {
       header: t('internalEmployees.actions'),
@@ -259,7 +310,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
                       type="button"
                       onClick={() => setManagingEmployee(row)}
                       aria-label={t('workforce.manageAssignments')}
-                      className="p-2 text-zinc-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
+                      className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
                     >
                       <i className="fa-solid fa-link"></i>
                     </button>
@@ -276,7 +327,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
                     type="button"
                     onClick={() => openEditModal(row)}
                     aria-label={t('internalEmployees.editEmployee')}
-                    className="p-2 text-zinc-400 hover:text-praetor hover:bg-praetor/5 rounded-lg transition-colors"
+                    className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
                   >
                     <i className="fa-solid fa-pen-to-square"></i>
                   </button>
@@ -307,7 +358,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
-                      <span className="p-2 text-zinc-300 cursor-not-allowed">
+                      <span className="p-2 text-muted-foreground/50 cursor-not-allowed">
                         <i className="fa-solid fa-lock"></i>
                       </span>
                     </span>
@@ -326,7 +377,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <ModalContent size="md">
+        <ModalContent size="2xl">
           <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
             <ModalHeader>
               <ModalTitle className="gap-3">
@@ -343,53 +394,26 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
               <ModalCloseButton onClick={() => setIsModalOpen(false)} />
             </ModalHeader>
 
-            <ModalBody className="space-y-4">
+            <ModalBody className="space-y-6">
               {errors.submit && (
                 <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
                   {errors.submit}
                 </div>
               )}
 
-              <Field data-invalid={Boolean(errors.name)}>
-                <FieldLabel htmlFor="internal-employee-name">
-                  {t('internalEmployees.name')} *
-                </FieldLabel>
-                <Input
-                  id="internal-employee-name"
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                  aria-invalid={Boolean(errors.name)}
-                  placeholder={t('internalEmployees.name')}
-                />
-                <FieldError className="text-xs">{errors.name}</FieldError>
-              </Field>
-
-              {canViewCosts && (
-                <Field>
-                  <FieldLabel htmlFor="internal-employee-cost">
-                    {t('internalEmployees.costPerHour')}
-                  </FieldLabel>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">
-                      {currency}
-                    </span>
-                    <Input
-                      id="internal-employee-cost"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.costPerHour}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, costPerHour: e.target.value }))
-                      }
-                      className="pl-8"
-                      placeholder="0.00"
-                      disabled={!canUpdateCosts}
-                    />
-                  </div>
-                </Field>
-              )}
+              <EmployeeHrFields
+                section="internalEmployees"
+                prefix="internal-employee"
+                formData={formData}
+                errors={errors}
+                setFormData={setFormData}
+                currency={currency}
+                canViewCosts={canViewCosts}
+                canUpdateCosts={canUpdateCosts}
+                identityReadOnly={Boolean(
+                  editingEmployee && editingEmployee.authMethod !== 'local',
+                )}
+              />
             </ModalBody>
 
             <ModalFooter>
@@ -420,8 +444,8 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-semibold text-zinc-800">{t('internalEmployees.title')}</h2>
-          <p className="text-zinc-500">{t('internalEmployees.subtitle')}</p>
+          <h2 className="text-2xl font-semibold text-foreground">{t('internalEmployees.title')}</h2>
+          <p className="text-muted-foreground">{t('internalEmployees.subtitle')}</p>
         </div>
         {canCreateEmployees && (
           <HeaderAddButton actionSize="tall" onClick={openAddModal}>

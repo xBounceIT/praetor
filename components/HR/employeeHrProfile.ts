@@ -1,0 +1,166 @@
+import type { User, UserContractType, UserEmploymentStatus, UserWorkLocation } from '../../types';
+import type { StatusType } from '../shared/StatusBadge';
+
+export type EmployeeHrFormData = {
+  name: string;
+  email: string;
+  phone: string;
+  jobTitle: string;
+  department: string;
+  employeeCode: string;
+  hireDate: string;
+  terminationDate: string;
+  contractType: UserContractType | '';
+  employmentStatus: UserEmploymentStatus | '';
+  workLocation: UserWorkLocation | '';
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  notes: string;
+  costPerHour: string;
+};
+
+export type EmployeeHrSubmitPayload = Partial<User> & { costPerHour?: number };
+export type EmployeeCreatePayload = EmployeeHrSubmitPayload & { name: string };
+
+export type EmployeeSectionKey = 'internalEmployees' | 'externalEmployees';
+
+export const CONTRACT_TYPE_OPTIONS: UserContractType[] = [
+  'permanent',
+  'fixed_term',
+  'contractor',
+  'internship',
+  'consultant',
+  'other',
+];
+
+export const EMPLOYMENT_STATUS_OPTIONS: UserEmploymentStatus[] = [
+  'active',
+  'onboarding',
+  'on_leave',
+  'terminated',
+];
+
+export const WORK_LOCATION_OPTIONS: UserWorkLocation[] = [
+  'office',
+  'remote',
+  'hybrid',
+  'customer_site',
+  'other',
+];
+
+export const createEmptyEmployeeHrForm = (): EmployeeHrFormData => ({
+  name: '',
+  email: '',
+  phone: '',
+  jobTitle: '',
+  department: '',
+  employeeCode: '',
+  hireDate: '',
+  terminationDate: '',
+  contractType: '',
+  employmentStatus: '',
+  workLocation: '',
+  emergencyContactName: '',
+  emergencyContactPhone: '',
+  notes: '',
+  costPerHour: '',
+});
+
+export const createEmployeeHrForm = (employee: User): EmployeeHrFormData => ({
+  name: employee.name || '',
+  email: employee.email || '',
+  phone: employee.phone || '',
+  jobTitle: employee.jobTitle || '',
+  department: employee.department || '',
+  employeeCode: employee.employeeCode || '',
+  hireDate: employee.hireDate || '',
+  terminationDate: employee.terminationDate || '',
+  contractType: employee.contractType || '',
+  employmentStatus: employee.employmentStatus || '',
+  workLocation: employee.workLocation || '',
+  emergencyContactName: employee.emergencyContactName || '',
+  emergencyContactPhone: employee.emergencyContactPhone || '',
+  notes: employee.notes || '',
+  costPerHour: employee.costPerHour?.toString() || '',
+});
+
+const nullableText = (value: string): string | null => {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+};
+
+export const buildEmployeeHrPayload = (
+  formData: EmployeeHrFormData,
+  options: { includeIdentity: boolean; includeCost: boolean },
+): EmployeeHrSubmitPayload => {
+  const payload: EmployeeHrSubmitPayload = {
+    phone: nullableText(formData.phone),
+    jobTitle: nullableText(formData.jobTitle),
+    department: nullableText(formData.department),
+    employeeCode: nullableText(formData.employeeCode),
+    hireDate: formData.hireDate || null,
+    terminationDate: formData.terminationDate || null,
+    contractType: formData.contractType || null,
+    employmentStatus: formData.employmentStatus || null,
+    workLocation: formData.workLocation || null,
+    emergencyContactName: nullableText(formData.emergencyContactName),
+    emergencyContactPhone: nullableText(formData.emergencyContactPhone),
+    notes: nullableText(formData.notes),
+  };
+
+  if (options.includeIdentity) {
+    payload.name = formData.name.trim();
+    payload.email = formData.email.trim();
+  }
+
+  if (options.includeCost) {
+    payload.costPerHour = formData.costPerHour ? parseFloat(formData.costPerHour) : 0;
+  }
+
+  return payload;
+};
+
+export const buildEmployeeCreatePayload = (
+  formData: EmployeeHrFormData,
+  options: { includeCost: boolean },
+): EmployeeCreatePayload => ({
+  ...buildEmployeeHrPayload(formData, { includeIdentity: false, includeCost: options.includeCost }),
+  name: formData.name.trim(),
+  email: formData.email.trim(),
+});
+
+export const getEmployeeHrStatusBadgeType = (
+  status: UserEmploymentStatus | null | undefined,
+): StatusType => {
+  if (status === 'terminated') return 'disabled';
+  if (status === 'onboarding' || status === 'on_leave') return 'pending';
+  return 'active';
+};
+
+const isValidEmail = (value: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+export const validateEmployeeHrForm = (
+  formData: EmployeeHrFormData,
+  options: {
+    identityReadOnly: boolean;
+    requiredMessage: string;
+    invalidEmailMessage: string;
+    dateRangeMessage: string;
+  },
+): Record<string, string> => {
+  const errors: Record<string, string> = {};
+  if (!formData.name?.trim()) {
+    errors.name = options.requiredMessage;
+  }
+  if (!options.identityReadOnly && formData.email.trim() && !isValidEmail(formData.email.trim())) {
+    errors.email = options.invalidEmailMessage;
+  }
+  if (
+    formData.hireDate &&
+    formData.terminationDate &&
+    formData.hireDate > formData.terminationDate
+  ) {
+    errors.terminationDate = options.dateRangeMessage;
+  }
+  return errors;
+};

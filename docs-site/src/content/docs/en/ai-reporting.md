@@ -2,7 +2,7 @@
 title: AI reporting
 description: How to read AI-assisted reports and interpret answers.
 sidebar:
-  order: 5
+  order: 6
 ---
 
 ## Availability
