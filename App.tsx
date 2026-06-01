@@ -142,7 +142,7 @@ import {
   normalizeRilNoteOptions,
   normalizeRilTransferOptions,
 } from './utils/ril';
-import { applyTheme, getTheme } from './utils/theme';
+import { applyBrowserTheme, applyTheme, getTheme } from './utils/theme';
 import { toastError } from './utils/toast';
 import {
   filterTrackerCatalogs,
@@ -701,9 +701,6 @@ const TrackerView: React.FC<{
 
 const AppContent: React.FC = () => {
   const { t: tApp } = useTranslation(['common', 'reports']);
-  useLayoutEffect(() => {
-    applyTheme(getTheme());
-  }, []);
 
   const [users, setUsers] = useState<User[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -976,6 +973,7 @@ const AppContent: React.FC = () => {
 
   const {
     currentUser,
+    isAuthenticated,
     isLoading,
     logoutReason,
     clearLogoutReason,
@@ -1007,6 +1005,22 @@ const AppContent: React.FC = () => {
   // without the effect resubscribing — events fired during teardown are lost.
   const currentUserRef = useRef(currentUser);
   currentUserRef.current = currentUser;
+
+  // The login screen always follows the OS/browser color scheme; the signed-in
+  // app honors the user's saved theme. applyBrowserTheme() never persists, so a
+  // logged-out screen can't clobber the stored preference. useLayoutEffect runs
+  // before paint so the correct theme is in place without a flash on toggle.
+  // Login additionally self-themes its own scope via useBrowserTheme so it's
+  // correct even on a cold, token-less load where this effect runs before Login
+  // mounts; the call here keeps the global theme state and any portaled overlays
+  // in sync with the OS while logged out — both are intentional, not redundant.
+  useLayoutEffect(() => {
+    if (isAuthenticated) {
+      applyTheme(getTheme());
+    } else {
+      applyBrowserTheme();
+    }
+  }, [isAuthenticated]);
 
   const handleLogin = login;
   const handleLogout = logout;

@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
+  getBrowserTheme,
   getResolvedTheme,
   type ResolvedTheme,
+  subscribeBrowserTheme,
   THEME_CHANGE_EVENT,
   THEME_SCOPE_SELECTOR,
 } from '@/utils/theme';
@@ -40,4 +42,20 @@ export const useResolvedShadcnTheme = () => {
   }, []);
 
   return resolvedTheme;
+};
+
+/**
+ * Track the OS/browser color scheme, ignoring any saved theme preference. Used
+ * by the login screen so it follows the OS/browser theme rather than the
+ * signed-in user's stored choice.
+ */
+export const useBrowserTheme = (): ResolvedTheme => {
+  const [browserTheme, setBrowserTheme] = useState<ResolvedTheme>(() => getBrowserTheme());
+
+  useEffect(() => {
+    setBrowserTheme(getBrowserTheme());
+    return subscribeBrowserTheme(setBrowserTheme);
+  }, []);
+
+  return browserTheme;
 };

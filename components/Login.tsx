@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
+import { getShadcnThemeClassName, useBrowserTheme } from '@/components/ui/use-shadcn-theme';
+import { cn } from '@/lib/utils';
 import api, { ApiError } from '../services/api';
 import { type PublicSsoProvider, SSO_LOGIN_ERROR_CODES, type User } from '../types';
 
@@ -59,6 +61,13 @@ const Login: React.FC<LoginProps> = ({
   onDismissServerUnreachable,
 }) => {
   const { t } = useTranslation(['auth', 'common', 'notifications']);
+  // The login screen follows the OS/browser color scheme rather than any saved
+  // user preference — the signed-in user isn't known yet at this point.
+  const browserTheme = useBrowserTheme();
+  // In dark mode the page sits on pure black and the multi-color logo is flattened
+  // to solid white (`brightness-0` blacks every pixel, `invert` flips it to white)
+  // so it reads cleanly on the dark card. Light mode keeps the original artwork.
+  const isDark = browserTheme === 'dark';
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -168,12 +177,24 @@ const Login: React.FC<LoginProps> = ({
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/70 p-4">
+    <div
+      data-shadcn-theme-scope
+      data-shadcn-theme={browserTheme}
+      className={cn(
+        'shadcn-theme-bridge flex min-h-screen items-center justify-center p-4',
+        isDark ? 'bg-black' : 'bg-muted/70',
+        getShadcnThemeClassName(browserTheme),
+      )}
+    >
       <div className="relative w-full max-w-md overflow-hidden rounded-xl border bg-card px-8 py-8 shadow-lg">
         <div className="absolute inset-0 -top-px -left-px z-0" style={gridOverlayStyle} />
 
         <div className="relative isolate flex w-full flex-col items-center">
-          <img src="/praetor-logo.png" alt="Praetor Logo" className="h-24 object-contain" />
+          <img
+            src="/praetor-logo.png"
+            alt="Praetor Logo"
+            className={cn('h-24 object-contain', isDark && 'brightness-0 invert')}
+          />
           <p className="mt-2 text-sm text-muted-foreground">{t('auth:login.title')}</p>
 
           {logoutReason === 'inactivity' && (

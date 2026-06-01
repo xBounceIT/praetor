@@ -35,6 +35,29 @@ const todayDateOnly = () => {
   ).padStart(2, '0')}`;
 };
 
+// Local-time date arithmetic on a YYYY-MM-DD string. Mirrors how WeeklyView
+// parses dates (local midnight), so the result lands in the same rendered week
+// regardless of the runner's timezone.
+const addDaysLocal = (dateOnly: string, delta: number): string => {
+  const [year, month, day] = dateOnly.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + delta);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate(),
+  ).padStart(2, '0')}`;
+};
+
+// A day adjacent to `today` that is guaranteed to fall inside the same
+// Monday-started week. Every weekday's previous day stays in-week except
+// Monday's (its previous day is the prior week's Sunday), so on Monday we step
+// forward instead. Prevents the mixed-batch test from flaking on Mondays, when
+// `today - 1` would render outside the current week and never appear in the grid.
+const sameWeekSiblingDay = (today: string): string => {
+  const [year, month, day] = today.split('-').map(Number);
+  const isMonday = new Date(year, month - 1, day).getDay() === 1;
+  return addDaysLocal(today, isMonday ? 1 : -1);
+};
+
 const sharedProps = {
   permissions: [] as string[],
   currency: '€',
@@ -260,11 +283,7 @@ describe('<WeeklyView /> submit mutations', () => {
     // change the other (update), and fill an empty day (add). All three batches
     // must fire from the same submit and resolve before success flashes.
     const today = todayDateOnly();
-    const previousDay = (() => {
-      const d = new Date(today);
-      d.setDate(d.getDate() - 1);
-      return d.toISOString().slice(0, 10);
-    })();
+    const previousDay = sameWeekSiblingDay(today);
     const addCalls: unknown[][] = [];
     const updateCalls: Array<{ id: string; updates: unknown }> = [];
     const deleteCalls: string[] = [];
