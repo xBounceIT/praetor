@@ -141,7 +141,11 @@ const isValidSortState = (v: unknown): boolean => {
 const isValidFilterState = (v: unknown): boolean => {
   if (v === undefined || v === null) return true;
   if (typeof v !== 'object' || Array.isArray(v)) return false;
-  return Object.values(v as Record<string, unknown>).every((value) => isStringArray(value));
+  // Mirror the frontend's parseFilterState, which drops empty arrays: a `{ col: [] }` entry is
+  // junk the UI would silently discard on read, so reject it rather than persist a confusing diff.
+  return Object.values(v as Record<string, unknown>).every(
+    (value) => isStringArray(value) && value.length > 0,
+  );
 };
 
 const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);

@@ -232,6 +232,22 @@ describe('POST /api/views', () => {
     expect(createMock).not.toHaveBeenCalled();
   });
 
+  test('400 when filterState has an empty array (mirrors the frontend, which drops them)', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/views',
+      headers: authHeader(),
+      payload: {
+        kind: 'table',
+        scopeKey: 'projects.directory',
+        name: 'EmptyFilter',
+        config: { hiddenColIds: [], sortState: null, filterState: { status: [] } },
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
   test('401 without a token', async () => {
     const res = await testApp.inject({
       method: 'POST',

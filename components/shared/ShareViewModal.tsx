@@ -333,7 +333,7 @@ const ShareViewModal: React.FC<ShareViewModalProps> = ({
   const renderEmpty = (message: string) => (
     <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
       <div className="size-12 bg-muted rounded-full flex items-center justify-center mb-2 text-muted-foreground">
-        <i className="fa-solid fa-user-slash text-lg"></i>
+        <i className="fa-solid fa-user-slash text-lg" aria-hidden="true"></i>
       </div>
       <span className="text-xs italic">{message}</span>
     </div>
@@ -355,7 +355,10 @@ const ShareViewModal: React.FC<ShareViewModalProps> = ({
 
           <div className="p-4 border-b border-border bg-background">
             <div className="relative">
-              <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"></i>
+              <i
+                className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              ></i>
               <Input
                 type="text"
                 placeholder={t('views.searchUsers')}
@@ -370,13 +373,16 @@ const ShareViewModal: React.FC<ShareViewModalProps> = ({
           <ModalBody className="flex-1 overflow-hidden flex flex-col bg-muted/30 p-0">
             {loadState === 'loading' ? (
               <div className="flex items-center justify-center py-16 flex-1">
-                <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
+                <i
+                  className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"
+                  aria-hidden="true"
+                ></i>
               </div>
             ) : loadState === 'error' ? (
               <div className="flex items-center justify-center py-16 flex-1">
                 <div className="max-w-sm text-center space-y-4">
                   <div className="size-16 bg-destructive/10 text-destructive rounded-full flex items-center justify-center mx-auto">
-                    <i className="fa-solid fa-triangle-exclamation text-2xl"></i>
+                    <i className="fa-solid fa-triangle-exclamation text-2xl" aria-hidden="true"></i>
                   </div>
                   <div className="space-y-2">
                     <p className="text-sm font-bold text-foreground">
@@ -384,7 +390,7 @@ const ShareViewModal: React.FC<ShareViewModalProps> = ({
                     </p>
                   </div>
                   <Button type="button" onClick={load} variant="outline">
-                    <i className="fa-solid fa-rotate-right"></i>
+                    <i className="fa-solid fa-rotate-right" aria-hidden="true"></i>
                     {t('buttons.refresh')}
                   </Button>
                 </div>
@@ -413,7 +419,7 @@ const ShareViewModal: React.FC<ShareViewModalProps> = ({
                       className="w-full"
                     >
                       {t('views.shareSelected')}
-                      <i className="fa-solid fa-angles-right text-xs"></i>
+                      <i className="fa-solid fa-angles-right text-xs" aria-hidden="true"></i>
                       {selectedAvailableIds.size > 0 && (
                         <span className="bg-primary-foreground/20 px-1.5 py-0.5 rounded text-xs">
                           {selectedAvailableIds.size}
@@ -425,7 +431,7 @@ const ShareViewModal: React.FC<ShareViewModalProps> = ({
 
                 <div className="flex items-center justify-center px-3 shrink-0">
                   <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                    <i className="fa-solid fa-right-left text-lg"></i>
+                    <i className="fa-solid fa-right-left text-lg" aria-hidden="true"></i>
                   </div>
                 </div>
 
@@ -450,7 +456,7 @@ const ShareViewModal: React.FC<ShareViewModalProps> = ({
                       disabled={selectedSharedIds.size === 0}
                       className="w-full"
                     >
-                      <i className="fa-solid fa-angles-left text-xs"></i>
+                      <i className="fa-solid fa-angles-left text-xs" aria-hidden="true"></i>
                       {t('views.unshareSelected')}
                       {selectedSharedIds.size > 0 && (
                         <span className="bg-primary-foreground/20 px-1.5 py-0.5 rounded text-xs">
