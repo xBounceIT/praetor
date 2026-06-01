@@ -1321,13 +1321,28 @@ const StandardTable = <T extends object>({
     name: string;
     hiddenColIds: string[];
   }) => {
-    const editingId = modalState?.kind === 'edit' ? modalState.view.id : null;
+    const editingView = modalState?.kind === 'edit' ? modalState.view : null;
+    const editingId = editingView?.id ?? null;
+    // The modal only edits name + visible columns. When editing an existing view, keep THAT view's
+    // own sort/filter rather than snapshotting the live table state — otherwise a rename or column
+    // tweak (reachable by shared write recipients) would silently overwrite the saved preset's
+    // sort/filter for everyone. A brand-new view still snapshots the current table state.
+    const savedSortState = editingView ? editingView.sortState : sortState;
+    const savedFilterState = editingView ? editingView.filterState : filterState;
 
     if (!isServerBacked) {
       if (editingId) {
         updateCustomViews((prev) =>
           prev.map((v) =>
-            v.id === editingId ? { ...v, name, hiddenColIds: hidden, sortState, filterState } : v,
+            v.id === editingId
+              ? {
+                  ...v,
+                  name,
+                  hiddenColIds: hidden,
+                  sortState: savedSortState,
+                  filterState: savedFilterState,
+                }
+              : v,
           ),
         );
         if (activeViewId === editingId) setHiddenColIds(new Set(hidden));
@@ -1348,7 +1363,11 @@ const StandardTable = <T extends object>({
     }
 
     if (!viewKey || viewBusy) return;
-    const config = customViewToConfig({ hiddenColIds: hidden, sortState, filterState });
+    const config = customViewToConfig({
+      hiddenColIds: hidden,
+      sortState: savedSortState,
+      filterState: savedFilterState,
+    });
     setViewBusy(true);
     try {
       if (editingId) {

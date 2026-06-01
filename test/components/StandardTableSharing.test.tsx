@@ -303,6 +303,44 @@ describe('<StandardTable /> server-backed sharing', () => {
     expect(screen.getByLabelText('views.duplicateView')).toBeInTheDocument();
   });
 
+  test('editing a view keeps its saved sort/filter (does not snapshot the live table)', async () => {
+    const sortedView: SavedViewDto = {
+      ...OWNED_VIEW,
+      id: 'sv-sorted',
+      name: 'Sorted View',
+      config: {
+        schemaVersion: 1,
+        hiddenColIds: [],
+        sortState: { colId: 'name', px: 'asc' },
+        filterState: {},
+      },
+    };
+    listMock.mockImplementation(async () => [sortedView]);
+    updateMock.mockImplementation(async (id) => ({ ...sortedView, id }));
+
+    renderTable({ viewKey: 'people.directory' });
+    await waitFor(() => expect(listMock).toHaveBeenCalledTimes(1));
+    await openCustomViews();
+    await screen.findByText('Sorted View');
+
+    // Open the edit modal (the live table is unsorted), change ONLY the name, and save.
+    act(() => fireEvent.click(screen.getByLabelText('table.renameView')));
+    const nameInput = (await screen.findByPlaceholderText(
+      'table.viewNamePlaceholder',
+    )) as HTMLInputElement;
+    act(() => fireEvent.change(nameInput, { target: { value: 'Renamed' } }));
+    act(() => fireEvent.click(screen.getByText('table.save')));
+
+    await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
+    const [, patch] = updateMock.mock.calls.at(-1) as unknown as [
+      string,
+      { name: string; config: { sortState: unknown } },
+    ];
+    expect(patch.name).toBe('Renamed');
+    // The view's own sort is preserved — NOT overwritten with the live table's (unsorted) state.
+    expect(patch.config.sortState).toEqual({ colId: 'name', px: 'asc' });
+  });
+
   test('read recipient sees apply + duplicate but no edit/delete/share', async () => {
     listMock.mockImplementation(async () => [READ_SHARED_VIEW]);
     renderTable({ viewKey: 'people.directory' });
