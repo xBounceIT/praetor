@@ -243,14 +243,18 @@ const SearchableSelectControl = ({
             variant="outline"
             disabled={disabled}
             aria-expanded={open}
-            className={cn(baseTriggerClassName, buttonClassName)}
+            className={cn(
+              baseTriggerClassName,
+              isMulti && 'h-auto min-h-9 items-start whitespace-normal py-1.5',
+              buttonClassName,
+            )}
           >
             {isMulti && selectedOptions.length > 0 && !displayValue ? (
               <span className="flex min-w-0 flex-1 flex-wrap gap-1.5">
                 {selectedOptions.map((option) => (
                   <span
                     key={option.id}
-                    className="inline-flex min-w-0 items-center gap-1.5 rounded border border-border bg-muted px-2 py-0.5 font-bold text-[10px] text-praetor uppercase tracking-wider"
+                    className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded border border-border bg-muted px-2 py-0.5 font-bold text-[10px] text-foreground uppercase tracking-wider"
                     onClick={(event) => event.stopPropagation()}
                   >
                     <span className="truncate">{option.name}</span>

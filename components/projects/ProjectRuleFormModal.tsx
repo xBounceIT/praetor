@@ -261,7 +261,7 @@ const ProjectRuleFormModal: React.FC<ProjectRuleFormModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={submitting ? undefined : onOpenChange}>
-      <DialogContent className="sm:max-w-4xl">
+      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>
             {rule

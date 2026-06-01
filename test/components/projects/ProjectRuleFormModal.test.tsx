@@ -43,6 +43,24 @@ const rule: ProjectRule = {
 };
 
 describe('<ProjectRuleFormModal />', () => {
+  test('keeps tall recipient selections inside a scrollable modal', () => {
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={rule}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={() => Promise.resolve()}
+      />,
+    );
+
+    expect(document.querySelector('[data-slot="dialog-content"]')).toHaveClass(
+      'max-h-[calc(100vh-2rem)]',
+      'overflow-y-auto',
+    );
+  });
+
   test('submits chained conditions with OR logic', async () => {
     const onSubmit = mock(() => Promise.resolve());
 

@@ -99,6 +99,8 @@ describe('<SelectControl />', () => {
     );
 
     expect(screen.getByText('Apple')).toBeInTheDocument();
+    expect(screen.getByRole('button')).toHaveClass('h-auto', 'min-h-9', 'whitespace-normal');
+    expect(screen.getByText('Apple').parentElement).toHaveClass('text-foreground');
 
     fireEvent.click(screen.getByRole('button'));
     fireEvent.click(within(screen.getByRole('dialog')).getByText('Banana'));
