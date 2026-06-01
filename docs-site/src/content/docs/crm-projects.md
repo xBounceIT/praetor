@@ -48,6 +48,10 @@ Praetor assegna automaticamente un colore univoco quando crei un progetto. Puoi 
 
 Quando un progetto termina, verifica che le attività siano coerenti e che non rimangano registrazioni pendenti.
 
+### Assegnazione utenti
+
+Dal comando **Assegna Utenti** gestisci chi è assegnato a un progetto o a una sua attività. L'accesso a questa finestra è governato dal permesso **Assegnazioni Progetto**: l'azione **View** consente di aprire le assegnazioni di qualsiasi progetto o attività indipendentemente dalla propria appartenenza, mentre **Update** consente di modificarle. Manager e Top Manager dispongono di entrambe per impostazione predefinita, quindi possono gestire le assegnazioni anche quando non sono membri del progetto o dell'attività.
+
 ## Competence Center
 
 I Competence Center collegano risorse, costi e assegnazioni. Sono utili per analisi HR e controllo economico dei progetti.

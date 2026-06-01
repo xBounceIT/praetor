@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { DbExecutor } from '../../db/drizzle.ts';
 import * as tasksRepo from '../../repositories/tasksRepo.ts';
+import * as userAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
 import { type FakeExecutor, makeRow, setupTestDb } from '../helpers/fakeExecutor.ts';
 import { extractTasksJoinOn } from '../helpers/sqlAssertions.ts';
+
+const { MANUAL_ASSIGNMENT_SOURCE, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE } = userAssignmentsRepo;
 
 let exec: FakeExecutor;
 let testDb: DbExecutor;
@@ -242,25 +245,27 @@ describe('findNameAndProjectId', () => {
   });
 });
 
-describe('clearUserAssignments / addUserAssignments', () => {
-  test('clearUserAssignments deletes by taskId', async () => {
+describe('clearNonTopManagerAssignments / addManualAssignments', () => {
+  test('clearNonTopManagerAssignments preserves top_manager_auto rows', async () => {
     exec.enqueue({ rows: [] });
-    await tasksRepo.clearUserAssignments('t-1', testDb);
+    await tasksRepo.clearNonTopManagerAssignments('t-1', testDb);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('delete from user_tasks');
+    expect(exec.calls[0].sql).toContain('assignment_source !=');
     expect(exec.calls[0].params).toContain('t-1');
-    expect(exec.calls[0].sql.toLowerCase()).toContain('delete from "user_tasks"');
+    expect(exec.calls[0].params).toContain(TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE);
   });
 
-  test('addUserAssignments skips query when userIds is empty', async () => {
-    await tasksRepo.addUserAssignments('t-1', [], testDb);
+  test('addManualAssignments skips query when userIds is empty', async () => {
+    await tasksRepo.addManualAssignments('t-1', [], testDb);
     expect(exec.calls).toHaveLength(0);
   });
 
-  test('addUserAssignments uses ON CONFLICT DO NOTHING and includes all ids in params', async () => {
+  test('addManualAssignments uses MANUAL source and ON CONFLICT DO NOTHING with batch', async () => {
     exec.enqueue({ rows: [] });
-    await tasksRepo.addUserAssignments('t-1', ['u-1', 'u-2'], testDb);
+    await tasksRepo.addManualAssignments('t-1', ['u-1', 'u-2'], testDb);
+    expect(exec.calls[0].params).toContainEqual(['u-1', 'u-2']);
     expect(exec.calls[0].params).toContain('t-1');
-    expect(exec.calls[0].params).toContain('u-1');
-    expect(exec.calls[0].params).toContain('u-2');
+    expect(exec.calls[0].params).toContain(MANUAL_ASSIGNMENT_SOURCE);
     expect(exec.calls[0].sql.toLowerCase()).toContain('on conflict do nothing');
   });
 });

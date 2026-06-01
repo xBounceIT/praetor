@@ -74,12 +74,8 @@ const renderWorkUnitsView = (
 };
 
 const findFormByHeading = (heading: string) => {
-  // Prefer the heading rendered as an h3 (the modal title) to disambiguate
-  // from any HeaderAddButton text that may share the same translation key.
-  const headings = screen.getAllByText(heading);
-  const headingEl = headings.find((el) => el.tagName === 'H3') ?? headings[0];
-  if (!headingEl) throw new Error(`heading "${heading}" not found`);
-  const form = headingEl.parentElement?.parentElement?.querySelector('form');
+  const headingEl = screen.getByRole('heading', { name: heading });
+  const form = headingEl.closest('[data-slot="modal-content"]')?.querySelector('form');
   if (!form) throw new Error(`form for "${heading}" not found`);
   return form as HTMLFormElement;
 };

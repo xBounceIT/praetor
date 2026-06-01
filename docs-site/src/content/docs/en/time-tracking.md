@@ -23,6 +23,18 @@ The weekly view helps you quickly review hours across days. Use it to find missi
 
 Each existing entry occupies its own row, so any historical duplicate data stays visible and can be edited independently. The "New entry" row at the top is for creating new entries only and follows the duplicate-entry guard.
 
+## RIL
+
+The **RIL** page in Timesheets generates a monthly attendance statement from the selected user's time entries. It is available to users with **timesheets.ril.view**; the migration automatically grants that permission to roles that already had Time Tracker access. You can choose the month and year and, for managed users, the collaborator to review.
+
+Praetor retrieves entries with `GET /api/entries?purpose=ril` using inclusive `fromDate` and `toDate` filters for the full month, then builds an editable draft. Edits made in the RIL table stay local to the page and Excel export; they do not update the underlying time entries. Automatically marked holiday rows are highlighted and read-only; weekend rows are highlighted for quick scanning.
+
+For every valid weekday, Praetor starts the draft with the configured default entrance and exit times, **09:00** and **18:00** by default, even when that day has no tracked entries. **Hours** and **PICAP** are recalculated from the editable entrance and exit values, subtracting the portion of the span that overlaps the configured lunch break starting at **13:00**. Italian holidays that fall Monday through Friday are marked with the configured holiday note code, `F` by default; weekend holidays are not marked. If any entry for the day is not `remote`, the row uses the first Location option configured in RIL global settings; otherwise it uses the second.
+
+In the statement, **Notes** and **Location** use the option lists configured by administrators in RIL global settings. **Code** can be selected from `TR` business trip and `SD` hardship office.
+
+Before export, every valid weekday must have **Start**, **End**, and **Location** filled in. The **Export Excel** button creates a one-sheet `.xlsx` workbook named **Prospetto Presenze** with the RIL columns: Giorno, Entrata, Uscita, Ore, PICAP, Reperib. Telef., Note, Trasferta, Cod, and Commessa.
+
 ## Recurring tasks
 
 Recurring tasks generate repeated entries, such as weekly meetings or periodic administrative work.

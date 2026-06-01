@@ -27,6 +27,7 @@ export const ROLE_EDITOR_EXCLUDED_MODULES = [...ALWAYS_GRANTED_MODULES, ADMINIST
 export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   // Timesheets
   { id: 'timesheets.tracker', actions: CRUD, module: 'timesheets' },
+  { id: 'timesheets.ril', actions: VIEW_ONLY, module: 'timesheets' },
   { id: 'timesheets.recurring', actions: CRUD, module: 'timesheets' },
   { id: 'timesheets.tracker_all', actions: CRUD, isScope: true, module: 'timesheets' },
 
@@ -55,7 +56,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'projects.manage_all', actions: CRUD, isScope: true, module: 'projects' },
   { id: 'projects.tasks', actions: CRUD, module: 'projects' },
   { id: 'projects.tasks_all', actions: CRUD, isScope: true, module: 'projects' },
-  { id: 'projects.assignments', actions: ['update'], module: 'projects' },
+  { id: 'projects.assignments', actions: VIEW_UPDATE, module: 'projects' },
 
   // HR
   { id: 'hr.internal', actions: CRUD, module: 'hr' },
@@ -118,7 +119,9 @@ export const formatPermissionLabel = (resource: string) => {
     const base = resourceName.replace('_all', '');
     return `${toTitleCase(base)} (All)`;
   }
-  return toTitleCase(resourceName).replace(/\bApi\b/, 'API');
+  return toTitleCase(resourceName)
+    .replace(/\bApi\b/, 'API')
+    .replace(/\bRil\b/, 'RIL');
 };
 
 export const toTitleCase = (value: string) =>
@@ -156,6 +159,7 @@ export const hasScopedActionPermission = (
 
 export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'timesheets/tracker': buildPermission('timesheets.tracker', 'view'),
+  'timesheets/ril': buildPermission('timesheets.ril', 'view'),
   'timesheets/recurring': buildPermission('timesheets.recurring', 'view'),
   'administration/authentication': buildPermission('administration.authentication', 'view'),
   'administration/general': buildPermission('administration.general', 'view'),

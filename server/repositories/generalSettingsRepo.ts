@@ -1,5 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
+import type { StoredRilNoteOption } from '../db/schema/generalSettings.ts';
 import { generalSettings } from '../db/schema/generalSettings.ts';
 
 export type GeneralSettings = {
@@ -15,6 +16,12 @@ export type GeneralSettings = {
   openrouterModelId: string | null;
   allowWeekendSelection: boolean | null;
   defaultLocation: string | null;
+  rilCompanyName: string | null;
+  rilDefaultStartTime: string | null;
+  rilDefaultExitTime: string | null;
+  rilLunchBreakMinutes: number | null;
+  rilNoteOptions: StoredRilNoteOption[] | null;
+  rilTransferOptions: string[] | null;
 };
 
 export type GeneralSettingsPatch = {
@@ -30,6 +37,12 @@ export type GeneralSettingsPatch = {
   openrouterModelId?: string | null;
   allowWeekendSelection?: boolean | null;
   defaultLocation?: string | null;
+  rilCompanyName?: string | null;
+  rilDefaultStartTime?: string | null;
+  rilDefaultExitTime?: string | null;
+  rilLunchBreakMinutes?: number | null;
+  rilNoteOptions?: StoredRilNoteOption[] | null;
+  rilTransferOptions?: string[] | null;
 };
 
 const GENERAL_SETTINGS_PROJECTION = {
@@ -45,6 +58,12 @@ const GENERAL_SETTINGS_PROJECTION = {
   openrouterModelId: generalSettings.openrouterModelId,
   allowWeekendSelection: generalSettings.allowWeekendSelection,
   defaultLocation: generalSettings.defaultLocation,
+  rilCompanyName: generalSettings.rilCompanyName,
+  rilDefaultStartTime: generalSettings.rilDefaultStartTime,
+  rilDefaultExitTime: generalSettings.rilDefaultExitTime,
+  rilLunchBreakMinutes: generalSettings.rilLunchBreakMinutes,
+  rilNoteOptions: generalSettings.rilNoteOptions,
+  rilTransferOptions: generalSettings.rilTransferOptions,
 } as const;
 
 type GeneralSettingsRow = {
@@ -60,6 +79,12 @@ type GeneralSettingsRow = {
   openrouterModelId: string | null;
   allowWeekendSelection: boolean | null;
   defaultLocation: string | null;
+  rilCompanyName: string | null;
+  rilDefaultStartTime: string | null;
+  rilDefaultExitTime: string | null;
+  rilLunchBreakMinutes: number | null;
+  rilNoteOptions: StoredRilNoteOption[] | null;
+  rilTransferOptions: string[] | null;
 };
 
 // Centralized fallbacks for the four non-nullable `GeneralSettings` fields. The schema
@@ -95,6 +120,12 @@ const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
   openrouterModelId: row.openrouterModelId,
   allowWeekendSelection: row.allowWeekendSelection,
   defaultLocation: row.defaultLocation,
+  rilCompanyName: row.rilCompanyName,
+  rilDefaultStartTime: row.rilDefaultStartTime,
+  rilDefaultExitTime: row.rilDefaultExitTime,
+  rilLunchBreakMinutes: row.rilLunchBreakMinutes,
+  rilNoteOptions: row.rilNoteOptions,
+  rilTransferOptions: row.rilTransferOptions,
 });
 
 export const get = async (exec: DbExecutor = db): Promise<GeneralSettings | null> => {
@@ -109,9 +140,14 @@ export const update = async (
   patch: GeneralSettingsPatch,
   exec: DbExecutor = db,
 ): Promise<GeneralSettings> => {
-  // COALESCE preserves the existing column when the patch value is undefined (legacy
-  // "undefined leaves column unchanged" semantic). Same pattern as ldapRepo.update /
+  // COALESCE preserves the existing column when the patch value is nullish (legacy
+  // "undefined/null leaves column unchanged" semantic). Same pattern as ldapRepo.update /
   // emailRepo.update / settingsRepo.upsertForUser.
+  const rilNoteOptionsParam =
+    patch.rilNoteOptions == null ? null : JSON.stringify(patch.rilNoteOptions);
+  const rilTransferOptionsParam =
+    patch.rilTransferOptions == null ? null : JSON.stringify(patch.rilTransferOptions);
+
   const result = await exec
     .update(generalSettings)
     .set({
@@ -127,6 +163,12 @@ export const update = async (
       openrouterModelId: sql`COALESCE(${patch.openrouterModelId ?? null}, ${generalSettings.openrouterModelId})`,
       allowWeekendSelection: sql`COALESCE(${patch.allowWeekendSelection ?? null}, ${generalSettings.allowWeekendSelection})`,
       defaultLocation: sql`COALESCE(${patch.defaultLocation ?? null}, ${generalSettings.defaultLocation})`,
+      rilCompanyName: sql`COALESCE(${patch.rilCompanyName ?? null}, ${generalSettings.rilCompanyName})`,
+      rilDefaultStartTime: sql`COALESCE(${patch.rilDefaultStartTime ?? null}, ${generalSettings.rilDefaultStartTime})`,
+      rilDefaultExitTime: sql`COALESCE(${patch.rilDefaultExitTime ?? null}, ${generalSettings.rilDefaultExitTime})`,
+      rilLunchBreakMinutes: sql`COALESCE(${patch.rilLunchBreakMinutes ?? null}, ${generalSettings.rilLunchBreakMinutes})`,
+      rilNoteOptions: sql`COALESCE(${rilNoteOptionsParam}::jsonb, ${generalSettings.rilNoteOptions})`,
+      rilTransferOptions: sql`COALESCE(${rilTransferOptionsParam}::jsonb, ${generalSettings.rilTransferOptions})`,
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })
     .where(eq(generalSettings.id, 1))

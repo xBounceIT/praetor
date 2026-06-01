@@ -23,6 +23,18 @@ La vista settimanale aiuta a controllare rapidamente le ore distribuite sui gior
 
 Ogni registrazione esistente occupa una propria riga, così eventuali dati storici duplicati restano visibili e modificabili in modo indipendente. La riga "Nuova voce" in alto serve esclusivamente a creare nuove registrazioni e rispetta il controllo anti-duplicato.
 
+## RIL
+
+La pagina **RIL** nel modulo Presenze genera un prospetto mensile partendo dalle registrazioni dell'utente selezionato. È disponibile agli utenti con il permesso **timesheets.ril.view**; la migrazione assegna automaticamente questo permesso ai ruoli che già avevano accesso alla vista Time Tracker. È possibile scegliere mese e anno e, per gli utenti gestiti, anche il collaboratore da consultare.
+
+Praetor recupera le registrazioni con `GET /api/entries?purpose=ril` usando i filtri inclusivi `fromDate` e `toDate` sul mese intero, quindi costruisce una bozza modificabile: le modifiche fatte nel prospetto restano locali alla pagina e all'esportazione Excel, senza aggiornare le registrazioni originali. Le righe festive marcate automaticamente restano evidenziate e non modificabili; le righe del weekend sono evidenziate per riconoscerle rapidamente.
+
+Per ogni giorno feriale valido, Praetor prepara la bozza con gli orari di entrata e uscita configurati, di default **09:00** e **18:00**, anche quando non ci sono registrazioni tracciate. **Ore** e **PICAP** vengono ricalcolati dai valori modificabili di entrata e uscita, sottraendo la parte dell'intervallo che si sovrappone alla pausa pranzo configurata, a partire dalle **13:00**. Le festività italiane che cadono tra lunedì e venerdì vengono marcate con il codice nota festivo configurato, di default `F`; le festività nel weekend non vengono marcate. Se almeno una registrazione del giorno non è `remote`, la riga usa la prima opzione Trasferta configurata nelle impostazioni RIL, altrimenti usa la seconda.
+
+Nel prospetto, **Note** e **Trasferta** usano le opzioni configurate dagli amministratori nelle impostazioni globali RIL. **Cod** è selezionabile tra `TR` trasferta e `SD` sede disagiata.
+
+Prima dell'esportazione, ogni giorno feriale valido deve avere **Entrata**, **Uscita** e **Trasferta** compilati. Il pulsante **Esporta Excel** crea un file `.xlsx` con un solo foglio, **Prospetto Presenze**, e colonne compatibili con il modello RIL: Giorno, Entrata, Uscita, Ore, PICAP, Reperib. Telef., Note, Trasferta, Cod e Commessa.
+
 ## Attività ricorrenti
 
 Le attività ricorrenti permettono di generare registrazioni ripetitive, per esempio riunioni settimanali o attività amministrative periodiche.

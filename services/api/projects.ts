@@ -3,8 +3,14 @@ import { fetchApi } from './client';
 import { normalizeProject } from './normalizers';
 
 export const projectsApi = {
-  list: (): Promise<Project[]> =>
-    fetchApi<Project[]>('/projects').then((projects) => projects.map(normalizeProject)),
+  list: (filters: { userId?: string } = {}): Promise<Project[]> => {
+    const params = new URLSearchParams();
+    if (filters.userId) params.set('userId', filters.userId);
+    const query = params.toString();
+    return fetchApi<Project[]>(`/projects${query ? `?${query}` : ''}`).then((projects) =>
+      projects.map(normalizeProject),
+    );
+  },
 
   create: (data: {
     name: string;

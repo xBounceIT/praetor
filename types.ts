@@ -11,6 +11,7 @@ export type UserRole = KnownUserRole | (string & {});
 // `string & {}` escape hatch.
 export type KnownPermissionResource =
   | 'timesheets.tracker'
+  | 'timesheets.ril'
   | 'timesheets.recurring'
   | 'timesheets.tracker_all'
   | 'crm.clients'
@@ -59,6 +60,11 @@ export type TimeEntryLocation = 'office' | 'customer_premise' | 'remote' | 'tran
 export type StoredBillingType = 'retainer' | 'time_and_materials';
 export type BillingType = StoredBillingType | 'mixed';
 export type BillingFrequency = 'monthly' | 'one_time';
+
+export interface RilNoteOption {
+  value: string;
+  label: string;
+}
 
 export interface RoleSummary {
   id: string;
@@ -130,6 +136,12 @@ export interface GeneralSettings {
   openrouterModelId?: string;
   allowWeekendSelection: boolean;
   defaultLocation?: TimeEntryLocation;
+  rilCompanyName?: string;
+  rilDefaultStartTime?: string;
+  rilDefaultExitTime?: string;
+  rilLunchBreakMinutes?: number;
+  rilNoteOptions?: RilNoteOption[];
+  rilTransferOptions?: string[];
 }
 
 export interface Client {
@@ -585,6 +597,7 @@ export interface OrderVersion extends OrderVersionRow {
 export type View =
   // Timesheets module
   | 'timesheets/tracker'
+  | 'timesheets/ril'
   | 'timesheets/recurring'
   // Administration module
   | 'administration/authentication'

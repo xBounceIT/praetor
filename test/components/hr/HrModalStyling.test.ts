@@ -25,3 +25,22 @@ describe('HR employee modal styling', () => {
     expectSourceOmitsAll(source, ['rounded-2xl shadow-2xl']);
   });
 });
+
+describe('HR competence center modal styling', () => {
+  test('create/edit dialogs use shared shadcn layout and primitives', async () => {
+    const source = await readComponentSource('WorkUnitsView.tsx');
+
+    expectSourceContainsAll(source, [
+      "import { Button } from '@/components/ui/button';",
+      "import { Field, FieldError, FieldLabel } from '@/components/ui/field';",
+      "import { Input } from '@/components/ui/input';",
+      "import { Textarea } from '@/components/ui/textarea';",
+      '<ModalContent size="lg">',
+      '<ModalHeader>',
+      '<ModalBody className="space-y-4">',
+      '<ModalFooter>',
+      '<ModalContent size="sm">',
+    ]);
+    expectSourceOmitsAll(source, ['rounded-2xl shadow-2xl']);
+  });
+});

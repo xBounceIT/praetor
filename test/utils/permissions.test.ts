@@ -46,6 +46,7 @@ describe('PERMISSION_DEFINITIONS / ALL_PERMISSIONS', () => {
     expect(ALL_PERMISSIONS).toContain('crm.clients.view');
     expect(ALL_PERMISSIONS).toContain('crm.clients_all.create');
     expect(ALL_PERMISSIONS).toContain('projects.tasks_all.update');
+    expect(ALL_PERMISSIONS).toContain('timesheets.ril.view');
     expect(ALL_PERMISSIONS).toContain('timesheets.tracker_all.delete');
     expect(ALL_PERMISSIONS).toContain('hr.work_units.delete');
     expect(ALL_PERMISSIONS).toContain('hr.work_units_all.delete');
@@ -63,6 +64,13 @@ describe('PERMISSION_DEFINITIONS / ALL_PERMISSIONS', () => {
     expect(ALL_PERMISSIONS).not.toContain('hr.costs.delete');
     expect(ALL_PERMISSIONS).not.toContain('hr.costs_all.create');
     expect(ALL_PERMISSIONS).not.toContain('hr.costs_all.delete');
+  });
+
+  test('timesheets.ril is view-only', () => {
+    expect(ALL_PERMISSIONS).toContain('timesheets.ril.view');
+    expect(ALL_PERMISSIONS).not.toContain('timesheets.ril.create');
+    expect(ALL_PERMISSIONS).not.toContain('timesheets.ril.update');
+    expect(ALL_PERMISSIONS).not.toContain('timesheets.ril.delete');
   });
 });
 
@@ -135,6 +143,10 @@ describe('formatPermissionLabel', () => {
   test('renders the literal string "API" instead of "Api" (acronym fix)', () => {
     expect(formatPermissionLabel('docs.api')).toBe('API');
   });
+
+  test('renders the literal string "RIL" instead of "Ril" (acronym fix)', () => {
+    expect(formatPermissionLabel('timesheets.ril')).toBe('RIL');
+  });
 });
 
 describe('hasPermission', () => {
@@ -203,6 +215,11 @@ describe('hasViewAccess', () => {
 
   test('does not allow a scoped view with write permission only', () => {
     expect(hasViewAccess(['crm.clients_all.update'], 'crm/clients')).toBe(false);
+  });
+
+  test('gates the RIL page behind the dedicated RIL view permission', () => {
+    expect(hasViewAccess(['timesheets.ril.view'], 'timesheets/ril')).toBe(true);
+    expect(hasViewAccess(['timesheets.tracker.view'], 'timesheets/ril')).toBe(false);
   });
 
   test('allows administration/user-management with either base or all-scope view', () => {

@@ -62,25 +62,43 @@ const unsubscribeAutoTheme = () => {
   removeAutoThemeListener = undefined;
 };
 
-const subscribeAutoTheme = () => {
-  if (typeof window.matchMedia !== 'function') return;
+/**
+ * Subscribe to OS/browser color-scheme changes. The listener fires with the
+ * resolved browser theme ('light' | 'dark') whenever the OS preference flips.
+ * Returns an unsubscribe function (a no-op where matchMedia is unavailable).
+ */
+export const subscribeBrowserTheme = (listener: (theme: ResolvedTheme) => void): (() => void) => {
+  if (typeof window.matchMedia !== 'function') return () => {};
 
   const mediaQuery = window.matchMedia(DARK_MODE_QUERY);
-  const handleChange = () => applyResolvedTheme(resolveTheme('auto'));
+  const handleChange = () => listener(mediaQuery.matches ? 'dark' : 'light');
 
   if (typeof mediaQuery.addEventListener === 'function') {
     mediaQuery.addEventListener('change', handleChange);
-    removeAutoThemeListener = () => mediaQuery.removeEventListener('change', handleChange);
-    return;
+    return () => mediaQuery.removeEventListener('change', handleChange);
   }
 
   mediaQuery.addListener(handleChange);
-  removeAutoThemeListener = () => mediaQuery.removeListener(handleChange);
+  return () => mediaQuery.removeListener(handleChange);
 };
 
-export const applyTheme = (theme: Theme) => {
+const subscribeAutoTheme = () => {
+  removeAutoThemeListener = subscribeBrowserTheme((theme) => applyResolvedTheme(theme));
+};
+
+export const applyTheme = (theme: Theme, { persist = true }: { persist?: boolean } = {}) => {
   unsubscribeAutoTheme();
   applyResolvedTheme(resolveTheme(theme));
   if (theme === 'auto') subscribeAutoTheme();
-  localStorage.setItem(STORAGE_KEY, theme);
+  if (persist) localStorage.setItem(STORAGE_KEY, theme);
+};
+
+/**
+ * Apply the OS/browser color scheme and keep following it as the OS preference
+ * changes, WITHOUT persisting anything to storage. Used for the login screen so
+ * it always respects the OS/browser theme while leaving the signed-in user's
+ * saved preference untouched in localStorage.
+ */
+export const applyBrowserTheme = () => {
+  applyTheme('auto', { persist: false });
 };

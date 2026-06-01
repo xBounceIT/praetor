@@ -254,6 +254,17 @@ const baseGeneralSettings: GeneralSettings = {
   treatSaturdayAsHoliday: false,
   enableAiReporting: false,
   allowWeekendSelection: false,
+  rilCompanyName: '',
+  rilDefaultStartTime: '09:00',
+  rilDefaultExitTime: '18:00',
+  rilLunchBreakMinutes: 60,
+  rilNoteOptions: [
+    { value: 'P', label: 'Ferie' },
+    { value: 'P2', label: 'Permesso' },
+    { value: 'M', label: 'Malattia' },
+    { value: 'F', label: 'Festivita' },
+  ],
+  rilTransferOptions: ['In sede', 'Telelavoro'],
 };
 
 describe('normalizeClient', () => {
@@ -778,6 +789,44 @@ describe('normalizeGeneralSettings', () => {
   test('falls back to 0 for missing dailyLimit', () => {
     const settings = make<GeneralSettings>(baseGeneralSettings, { dailyLimit: undefined });
     expect(normalizeGeneralSettings(settings).dailyLimit).toBe(0);
+  });
+
+  test('normalizes RIL settings defaults', () => {
+    const settings = make<GeneralSettings>(baseGeneralSettings, {
+      rilCompanyName: undefined,
+      rilDefaultStartTime: '',
+      rilDefaultExitTime: '',
+      rilLunchBreakMinutes: undefined,
+      rilNoteOptions: undefined,
+      rilTransferOptions: undefined,
+    });
+    expect(normalizeGeneralSettings(settings)).toMatchObject({
+      rilCompanyName: '',
+      rilDefaultStartTime: '09:00',
+      rilDefaultExitTime: '18:00',
+      rilLunchBreakMinutes: 60,
+      rilNoteOptions: [
+        { value: 'P', label: 'Ferie' },
+        { value: 'P2', label: 'Permesso' },
+        { value: 'M', label: 'Malattia' },
+        { value: 'F', label: 'Festivita' },
+      ],
+      rilTransferOptions: ['In sede', 'Telelavoro'],
+    });
+  });
+
+  test('normalizes custom RIL option settings', () => {
+    const settings = make<GeneralSettings>(baseGeneralSettings, {
+      rilNoteOptions: [
+        { value: ' P ', label: ' Paid leave ' },
+        { value: 'P', label: 'Duplicate' },
+      ],
+      rilTransferOptions: [' Office ', 'Office', ' Remote '],
+    });
+    expect(normalizeGeneralSettings(settings)).toMatchObject({
+      rilNoteOptions: [{ value: 'P', label: 'Paid leave' }],
+      rilTransferOptions: ['Office', 'Remote'],
+    });
   });
 });
 

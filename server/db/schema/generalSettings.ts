@@ -1,5 +1,19 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, integer, numeric, pgTable, timestamp, varchar } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  integer,
+  jsonb,
+  numeric,
+  pgTable,
+  timestamp,
+  varchar,
+} from 'drizzle-orm/pg-core';
+
+export type StoredRilNoteOption = {
+  value: string;
+  label: string;
+};
 
 // Single-row config table - `id` is pinned to 1 by both the column default and a CHECK.
 // `daily_limit` is `numeric`: pg returns it as a string, the repo `parseFloat`s it in
@@ -24,6 +38,18 @@ export const generalSettings = pgTable(
     openrouterModelId: varchar('openrouter_model_id', { length: 255 }),
     allowWeekendSelection: boolean('allow_weekend_selection').default(true),
     defaultLocation: varchar('default_location', { length: 20 }).default('remote'),
+    rilCompanyName: varchar('ril_company_name', { length: 255 }).default(''),
+    rilDefaultStartTime: varchar('ril_default_start_time', { length: 5 }).default('09:00'),
+    rilDefaultExitTime: varchar('ril_default_exit_time', { length: 5 }).default('18:00'),
+    rilLunchBreakMinutes: integer('ril_lunch_break_minutes').default(60),
+    rilNoteOptions: jsonb('ril_note_options')
+      .$type<StoredRilNoteOption[]>()
+      .default(
+        sql`'[{"value":"P","label":"Ferie"},{"value":"P2","label":"Permesso"},{"value":"M","label":"Malattia"},{"value":"F","label":"Festivita"}]'::jsonb`,
+      ),
+    rilTransferOptions: jsonb('ril_transfer_options')
+      .$type<string[]>()
+      .default(sql`'["In sede","Telelavoro"]'::jsonb`),
     updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
@@ -35,6 +61,26 @@ export const generalSettings = pgTable(
     check(
       'general_settings_ai_provider_check',
       sql`${table.aiProvider} IN ('gemini', 'openrouter')`,
+    ),
+    check(
+      'general_settings_ril_default_start_time_check',
+      sql`${table.rilDefaultStartTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'`,
+    ),
+    check(
+      'general_settings_ril_default_exit_time_check',
+      sql`${table.rilDefaultExitTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'`,
+    ),
+    check(
+      'general_settings_ril_lunch_break_minutes_check',
+      sql`${table.rilLunchBreakMinutes} >= 0 AND ${table.rilLunchBreakMinutes} <= 240`,
+    ),
+    check(
+      'general_settings_ril_note_options_array_check',
+      sql`jsonb_typeof(${table.rilNoteOptions}) = 'array'`,
+    ),
+    check(
+      'general_settings_ril_transfer_options_array_check',
+      sql`jsonb_typeof(${table.rilTransferOptions}) = 'array'`,
     ),
   ],
 );

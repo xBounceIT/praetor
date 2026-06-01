@@ -10,6 +10,7 @@ import * as clientOffersRepo from '../repositories/clientOffersRepo.ts';
 import * as clientsOrdersRepo from '../repositories/clientsOrdersRepo.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
+import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import {
   messageResponseSchema,
   standardErrorResponses,
@@ -57,6 +58,13 @@ const idParamSchema = {
     id: { type: 'string' },
   },
   required: ['id'],
+} as const;
+
+const projectsListQuerySchema = {
+  type: 'object',
+  properties: {
+    userId: { type: 'string' },
+  },
 } as const;
 
 const projectSchema = {
@@ -157,12 +165,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           'projects.tasks_all.view',
           'timesheets.tracker.view',
           'timesheets.tracker_all.view',
+          'timesheets.ril.view',
           'timesheets.recurring.view',
         ),
       ],
       schema: {
         tags: ['projects'],
         summary: 'List projects',
+        querystring: projectsListQuerySchema,
         response: {
           200: { type: 'array', items: projectSchema },
           ...standardRateLimitedErrorResponses,
@@ -173,6 +183,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!assertAuthenticated(request, reply)) return;
 
       const canViewAll = hasPermission(request, 'projects.manage_all.view');
+      const query = request.query as { userId?: unknown };
+      const targetUserIdResult = optionalNonEmptyString(query.userId, 'userId');
+      if (!targetUserIdResult.ok) return badRequest(reply, targetUserIdResult.message);
+
+      const targetUserId = targetUserIdResult.value;
+      if (targetUserId) {
+        const canViewAllTimesheets = hasPermission(request, 'timesheets.tracker_all.view');
+        if (!canViewAll && !canViewAllTimesheets && targetUserId !== request.user.id) {
+          const allowed = await workUnitsRepo.isUserManagedBy(request.user.id, targetUserId);
+          if (!allowed) {
+            return reply.code(403).send({ message: 'Insufficient permissions' });
+          }
+        }
+        return projectsRepo.listForUser(targetUserId);
+      }
+
       return canViewAll ? projectsRepo.listAll() : projectsRepo.listForUser(request.user.id);
     },
   );
@@ -760,7 +786,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/:id/users',
     {
-      onRequest: [authenticateToken, requirePermission('projects.assignments.update')],
+      onRequest: [
+        authenticateToken,
+        requireAnyPermission('projects.assignments.view', 'projects.assignments.update'),
+      ],
       schema: {
         tags: ['projects'],
         summary: 'Get project user assignments',
@@ -775,7 +804,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      if (!(await canAccessProject(request, idResult.value))) {
+      // `projects.assignments.view` is the "view all assignments" marker; without it, access stays
+      // scoped to membership / manage_all.view exactly as before.
+      const canViewAssignments =
+        hasPermission(request, 'projects.assignments.view') ||
+        (await canAccessProject(request, idResult.value));
+      if (!canViewAssignments) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',
@@ -810,7 +844,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { userIds } = request.body as { userIds: string[] };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      if (!(await canAccessProject(request, idResult.value))) {
+      // `projects.assignments.view` is the "manages all assignments" marker; without it, editing
+      // stays scoped to membership / manage_all.view exactly as before.
+      const canEditAssignments =
+        hasPermission(request, 'projects.assignments.view') ||
+        (await canAccessProject(request, idResult.value));
+      if (!canEditAssignments) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',

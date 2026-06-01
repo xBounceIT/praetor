@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readMigrationFile } from '../helpers/schemaFiles.ts';
 
-// Migration 0057 completes the default Top Manager grants for Competence
+// Migration 0062 completes the default Top Manager grants for Competence
 // Centers. It intentionally writes every hr.work_units and hr.work_units_all
 // permission so old installs missing any single grant converge to the default.
 
@@ -22,8 +22,8 @@ const readPermissionTuples = (migration: string) =>
     permission: match[2],
   }));
 
-describe('migration 0057: grants all competence-center rights to top_manager', () => {
-  const MIGRATION = readMigrationFile('0057_grant_top_manager_work_units_all_rights.sql');
+describe('migration 0062: grants all competence-center rights to top_manager', () => {
+  const MIGRATION = readMigrationFile('0062_grant_top_manager_work_units_all_rights.sql');
 
   test('grants both base and all-scope work-unit CRUD to top_manager', () => {
     for (const permission of EXPECTED_PERMISSIONS) {

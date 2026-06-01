@@ -41,8 +41,8 @@ const updateMock = mock();
 const deleteByIdMock = mock();
 const findAssignedUserIdsMock = mock();
 const findNameAndProjectIdMock = mock();
-const clearUserAssignmentsMock = mock();
-const addUserAssignmentsMock = mock();
+const clearNonTopManagerAssignmentsMock = mock();
+const addManualAssignmentsMock = mock();
 const sumHoursByProjectsMock = mock();
 
 // projectsRepo
@@ -89,8 +89,8 @@ beforeAll(async () => {
     deleteById: deleteByIdMock,
     findAssignedUserIds: findAssignedUserIdsMock,
     findNameAndProjectId: findNameAndProjectIdMock,
-    clearUserAssignments: clearUserAssignmentsMock,
-    addUserAssignments: addUserAssignmentsMock,
+    clearNonTopManagerAssignments: clearNonTopManagerAssignmentsMock,
+    addManualAssignments: addManualAssignmentsMock,
     sumHoursByProjects: sumHoursByProjectsMock,
   }));
   mock.module('../../repositories/projectsRepo.ts', () => ({
@@ -185,8 +185,8 @@ const allMocks = [
   deleteByIdMock,
   findAssignedUserIdsMock,
   findNameAndProjectIdMock,
-  clearUserAssignmentsMock,
-  addUserAssignmentsMock,
+  clearNonTopManagerAssignmentsMock,
+  addManualAssignmentsMock,
   sumHoursByProjectsMock,
   findClientIdMock,
   findBillingByIdMock,
@@ -1023,13 +1023,29 @@ describe('GET /api/tasks/:id/users', () => {
 
     expect(res.statusCode).toBe(403);
   });
+
+  // Issue #720: projects.assignments.view grants access regardless of membership (role-agnostic).
+  test('200: projects.assignments.view loads assignments even when not a member', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.assignments.view']);
+    isTaskAssignedToUserMock.mockResolvedValue(false);
+    findAssignedUserIdsMock.mockResolvedValue(['u2']);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/tasks/t-1/users',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual(['u2']);
+  });
 });
 
 describe('POST /api/tasks/:id/users', () => {
-  test('200: clear+add flow with audit', async () => {
+  test('200: clear+add flow with audit, preserving top-manager auto-assignments', async () => {
     findNameAndProjectIdMock.mockResolvedValue({ name: 'Implement feature', projectId: 'p-1' });
-    clearUserAssignmentsMock.mockResolvedValue(undefined);
-    addUserAssignmentsMock.mockResolvedValue(undefined);
+    clearNonTopManagerAssignmentsMock.mockResolvedValue(undefined);
+    addManualAssignmentsMock.mockResolvedValue(undefined);
 
     const res = await testApp.inject({
       method: 'POST',
@@ -1040,8 +1056,10 @@ describe('POST /api/tasks/:id/users', () => {
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ message: 'Task assignments updated' });
-    expect(clearUserAssignmentsMock).toHaveBeenCalledWith('t-1', TX_SENTINEL);
-    expect(addUserAssignmentsMock).toHaveBeenCalledWith('t-1', ['u1', 'u2'], TX_SENTINEL);
+    // Must use the non-top-manager clear so a top manager removing themselves can't wipe
+    // their own auto-assignment and lock themselves out (issue #720).
+    expect(clearNonTopManagerAssignmentsMock).toHaveBeenCalledWith('t-1', TX_SENTINEL);
+    expect(addManualAssignmentsMock).toHaveBeenCalledWith('t-1', ['u1', 'u2'], TX_SENTINEL);
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'task.users_assigned', entityId: 't-1' }),
     );
@@ -1093,5 +1111,45 @@ describe('POST /api/tasks/:id/users', () => {
     });
 
     expect(res.statusCode).toBe(403);
+  });
+
+  // Issue #720: the assignments view+update grants (seeded to manager/top_manager) permit editing
+  // any activity's assignments regardless of membership.
+  test('200: assignments view+update saves even when not a member', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'projects.assignments.view',
+      'projects.assignments.update',
+    ]);
+    isTaskAssignedToUserMock.mockResolvedValue(false);
+    findNameAndProjectIdMock.mockResolvedValue({ name: 'Implement feature', projectId: 'p-1' });
+    clearNonTopManagerAssignmentsMock.mockResolvedValue(undefined);
+    addManualAssignmentsMock.mockResolvedValue(undefined);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/tasks/t-1/users',
+      headers: authHeader(),
+      payload: { userIds: ['u2'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(clearNonTopManagerAssignmentsMock).toHaveBeenCalledWith('t-1', TX_SENTINEL);
+    expect(addManualAssignmentsMock).toHaveBeenCalledWith('t-1', ['u2'], TX_SENTINEL);
+  });
+
+  // A role with only `projects.assignments.update` (no view marker) stays scoped to membership.
+  test('403: assignments.update without view marker cannot save an unassigned activity', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.assignments.update']);
+    isTaskAssignedToUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/tasks/t-1/users',
+      headers: authHeader(),
+      payload: { userIds: ['u2'] },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(clearNonTopManagerAssignmentsMock).not.toHaveBeenCalled();
   });
 });
