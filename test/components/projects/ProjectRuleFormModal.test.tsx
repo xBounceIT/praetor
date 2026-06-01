@@ -61,6 +61,31 @@ describe('<ProjectRuleFormModal />', () => {
     );
   });
 
+  test('renders chained conditions as compact rows in one grouped list', () => {
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={rule}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={() => Promise.resolve()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'projects:detail.rules.actions.addCondition' }),
+    );
+
+    const rowContainer = document.querySelector('.divide-y.divide-border');
+    expect(rowContainer?.children).toHaveLength(2);
+    expect(rowContainer?.parentElement).toHaveClass('rounded-md', 'border', 'border-border');
+    expect(rowContainer?.previousElementSibling).toHaveClass('hidden', 'md:grid');
+    for (const label of document.querySelectorAll('[for^="project-rule-field-"]')) {
+      expect(label).toHaveClass('md:sr-only');
+    }
+  });
+
   test('submits chained conditions with OR logic', async () => {
     const onSubmit = mock(() => Promise.resolve());
 
