@@ -8,6 +8,7 @@ import {
   layoutsEqual,
   moveWidgetTo,
   parseServerViewConfig,
+  parseServerViewRawLayout,
   parseStoredLayout,
   parseStoredOverride,
   resizeWidgetTo,
@@ -51,6 +52,7 @@ const mapServerView = (
   id: dto.id,
   name: dto.name,
   layout: parseServerViewConfig(dto.config, widgets),
+  rawLayout: parseServerViewRawLayout(dto.config),
   isOwner: dto.access === 'owner',
   permission: dto.access === 'owner' ? 'write' : dto.access,
   ownerName: dto.ownerName,
@@ -399,11 +401,18 @@ export const useDashboardLayout = (
       const target = views.find((v) => v.id === viewId);
       if (!target) return false;
       const snapshot = cloneLayout(editing ? draft : effectiveLayout);
+      // Preserve widget states the current viewer can't render (filtered out of their
+      // permission-scoped widget set) from the view's raw stored layout, so re-saving doesn't
+      // overwrite the shared view for everyone by dropping cards this user can't see.
+      const visibleIds = new Set(widgetsRef.current.map((w) => w.id));
+      const merged = [...snapshot, ...target.rawLayout.filter((w) => !visibleIds.has(w.id))];
       try {
-        await viewsApi.update(viewId, { config: { layout: snapshot } });
+        await viewsApi.update(viewId, { config: { layout: merged } });
         // Commit only after the server confirms, so a failed save never leaves the
         // library, the editing flag, and the override in a half-applied state.
-        setViews((prev) => prev.map((v) => (v.id === viewId ? { ...v, layout: snapshot } : v)));
+        setViews((prev) =>
+          prev.map((v) => (v.id === viewId ? { ...v, layout: snapshot, rawLayout: merged } : v)),
+        );
         setEditing(false);
         applyOverride(cloneLayout(snapshot), viewId);
         return true;
@@ -425,7 +434,9 @@ export const useDashboardLayout = (
       if (!trimmed) return false;
       const source = views.find((v) => v.id === viewId);
       if (!source) return false;
-      const snapshot = cloneLayout(source.layout);
+      // Copy the author's raw layout (not this viewer's permission-filtered one) so the duplicate
+      // is a faithful copy that keeps cards the duplicator can't render.
+      const snapshot = cloneLayout(source.rawLayout.length > 0 ? source.rawLayout : source.layout);
       setSavingView(true);
       try {
         const dto = await viewsApi.create({

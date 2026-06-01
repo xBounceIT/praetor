@@ -51,7 +51,11 @@ export type DashboardViewPermission = 'read' | 'write';
 export type ServerDashboardView = {
   id: string;
   name: string;
+  // `layout` is normalized for the current viewer; `rawLayout` is the author's stored widget
+  // states verbatim (including cards this viewer can't render). Re-saving / duplicating uses
+  // `rawLayout` to preserve placements outside the viewer's permitted widget set.
   layout: DashboardLayout;
+  rawLayout: DashboardLayout;
   isOwner: boolean;
   permission: DashboardViewPermission;
   ownerName: string;
@@ -351,6 +355,17 @@ export const parseServerViewConfig = (
   config: Record<string, unknown> | null | undefined,
   widgets: readonly DashboardWidgetDef[],
 ): DashboardLayout => normalizeLayout(config?.layout, widgets);
+
+// The author's stored widget states verbatim — VALIDATED but NOT normalized against the live
+// widget set, so cards the current viewer can't render are kept. Used when re-saving / duplicating
+// a shared view to preserve placements outside the viewer's permitted widget set.
+export const parseServerViewRawLayout = (
+  config: Record<string, unknown> | null | undefined,
+): DashboardLayout => {
+  const raw = config?.layout;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(isValidWidgetState).map((w) => ({ ...w }));
+};
 
 export const parseStoredLayout = (
   raw: string | null,

@@ -191,6 +191,30 @@ describe('<StandardTable /> server-backed sharing', () => {
     expect(await screen.findByText('Legacy View')).toBeInTheDocument();
   });
 
+  test('leaves migration retryable (pending) when an upload fails, preserving legacy views', async () => {
+    localStorage.setItem(
+      'praetor_table_customviews_people',
+      JSON.stringify([
+        { id: 'old-1', name: 'Legacy View', hiddenColIds: [], sortState: null, filterState: {} },
+      ]),
+    );
+    listMock.mockImplementation(async () => []);
+    // The (only) upload fails transiently.
+    createMock.mockImplementationOnce(async () => {
+      throw new Error('network');
+    });
+
+    renderTable({ viewKey: 'people.directory' });
+    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
+
+    // The sentinel stays 'pending' (not 'done') and the legacy view is preserved, so a later
+    // load retries it instead of stranding the user's pre-upgrade views.
+    await waitFor(() =>
+      expect(localStorage.getItem('praetor_table_viewsmigrated_people_directory')).toBe('pending'),
+    );
+    expect(localStorage.getItem('praetor_table_customviews_people')).toContain('Legacy View');
+  });
+
   test('does not migrate when the server already has views (no duplication)', async () => {
     localStorage.setItem(
       'praetor_table_customviews_people',

@@ -592,6 +592,39 @@ describe('useDashboardLayout — renameView / resaveView (owner or write, optimi
     expect(ok).toBe(false);
     expect(updateSpy).not.toHaveBeenCalled();
   });
+
+  test('resaveView preserves widget states the re-saver cannot render', async () => {
+    // The stored view positions costVsRevenue — a card the re-saver's widget set excludes.
+    backing.list = async () => [
+      makeDto({
+        id: 'sv-rs',
+        name: 'Full',
+        config: {
+          layout: [
+            { id: 'hoursByUser', x: 0, y: 0, w: 6, h: 4, hidden: false },
+            { id: 'costVsRevenue', x: 6, y: 0, w: 6, h: 5, hidden: false },
+          ],
+        },
+      }),
+    ];
+    // Render with a reduced widget set (e.g. the re-saver lacks the cost-card permission).
+    const reduced = WIDGETS.filter((w) => w.id !== 'costVsRevenue');
+    const { result } = await renderAReady(reduced);
+    act(() => result.current.applyView('sv-rs'));
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.resaveView('sv-rs');
+    });
+    expect(ok).toBe(true);
+
+    // The saved payload still includes costVsRevenue at its stored size — the permission-filtered
+    // snapshot did not strip the card this user can't see.
+    const [, patch] = updateSpy.mock.calls.at(-1) as [string, UpdateViewPatch];
+    const layout = (patch.config?.layout ?? []) as Array<{ id: string; h: number }>;
+    expect(layout.map((w) => w.id)).toContain('costVsRevenue');
+    expect(layout.find((w) => w.id === 'costVsRevenue')?.h).toBe(5);
+  });
 });
 
 describe('useDashboardLayout — duplicateView (any access → owned copy)', () => {

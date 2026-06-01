@@ -430,36 +430,54 @@ const StandardTable = <T extends object>({
   // Bumped each time the user retries; re-runs the load effect.
   const [viewsReloadToken, setViewsReloadToken] = useState(0);
 
-  // One-time, best-effort migration of legacy localStorage views into the server store the
-  // first time a table gains a `viewKey`. Without it, existing users would lose the custom
-  // views they created before the upgrade (server mode ignores the legacy title-slug key and
-  // hides clipboard import). Guarded by a per-`viewKey` sentinel so it never runs twice, and
-  // claimed up front so a remount can't double-upload. Returns true when it uploaded anything.
+  // One-time, best-effort migration of legacy localStorage views into the server store the first
+  // time a table gains a `viewKey`. Without it, existing users would lose the custom views they
+  // created before the upgrade (server mode ignores the legacy title-slug key and hides clipboard
+  // import). A per-`viewKey` sentinel tracks progress ('pending' → 'done'): a view is removed from
+  // localStorage only once uploaded, and the sentinel reaches 'done' only after EVERY view is
+  // uploaded — so a transient create failure retries the leftovers on a later load instead of
+  // stranding the data behind a set sentinel. Returns true when it uploaded anything (re-list).
   const migrateLegacyViews = useCallback(
     async (key: string, serverEmpty: boolean, signal: AbortSignal): Promise<boolean> => {
       if (typeof window === 'undefined') return false;
       const sentinelKey = `praetor_table_viewsmigrated_${slugify(key)}`;
+      const legacyKey = getStorageKey(title, STORAGE_SUFFIX.customViews);
+      let state: string | null = null;
       try {
-        if (localStorage.getItem(sentinelKey) === '1') return false;
-        // Claim the one-time migration up front (even when nothing is uploaded) so it can never
-        // run again — e.g. if the user later deletes all their server views, the stale
-        // localStorage entries must not get re-uploaded.
-        localStorage.setItem(sentinelKey, '1');
+        state = localStorage.getItem(sentinelKey);
       } catch {
         return false;
       }
-      // Only seed from localStorage when the server has no views yet, so views already migrated
-      // on another device aren't duplicated here.
-      if (!serverEmpty) return false;
+      if (state === 'done') return false;
+
       let legacy: CustomView[] = [];
       try {
-        legacy = parseStoredViews(
-          localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.customViews)),
-        );
+        legacy = parseStoredViews(localStorage.getItem(legacyKey));
       } catch {}
+
+      if (state !== 'pending') {
+        // First attempt for this device + viewKey. Nothing to migrate, or the server already has
+        // views (migrated on another device) → mark done so we never touch localStorage again.
+        if (legacy.length === 0 || !serverEmpty) {
+          try {
+            localStorage.setItem(sentinelKey, 'done');
+          } catch {}
+          return false;
+        }
+        // Commit to migrating: mark 'pending' so a transient upload failure resumes on a later
+        // load (ignoring serverEmpty, since we already own this migration) rather than being lost.
+        try {
+          localStorage.setItem(sentinelKey, 'pending');
+        } catch {}
+      }
+
+      const remaining: CustomView[] = [];
       let uploaded = false;
       for (const view of legacy) {
-        if (signal.aborted) break;
+        if (signal.aborted) {
+          remaining.push(view);
+          continue;
+        }
         try {
           await viewsApi.create({
             kind: 'table',
@@ -470,8 +488,21 @@ const StandardTable = <T extends object>({
           uploaded = true;
         } catch (err) {
           console.error('Failed to migrate a legacy table view', err);
+          remaining.push(view);
         }
       }
+
+      try {
+        if (remaining.length === 0) {
+          localStorage.setItem(sentinelKey, 'done');
+          localStorage.removeItem(legacyKey);
+        } else {
+          // Keep only the not-yet-uploaded views; the 'pending' sentinel stays so a later load
+          // retries exactly those.
+          localStorage.setItem(legacyKey, JSON.stringify(remaining));
+        }
+      } catch {}
+
       return uploaded;
     },
     [title],
