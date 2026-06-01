@@ -7,6 +7,8 @@ export const PROJECT_RULES_SCHEDULER_INTERVAL_MS = 15 * 60 * 1000;
 export interface ProjectRulesSchedulerOptions {
   logger: Logger;
   intervalMs?: number;
+  // Injectable for testing; defaults to the real evaluator.
+  evaluate?: typeof evaluateProjectRulesOnce;
 }
 
 export interface ProjectRulesSchedulerHandle {
@@ -16,6 +18,7 @@ export interface ProjectRulesSchedulerHandle {
 export const startProjectRulesScheduler = ({
   logger,
   intervalMs = PROJECT_RULES_SCHEDULER_INTERVAL_MS,
+  evaluate = evaluateProjectRulesOnce,
 }: ProjectRulesSchedulerOptions): ProjectRulesSchedulerHandle => {
   let stopped = false;
   let inFlight = false;
@@ -24,7 +27,7 @@ export const startProjectRulesScheduler = ({
     if (inFlight) return;
     inFlight = true;
     try {
-      await evaluateProjectRulesOnce({ logger });
+      await evaluate({ logger });
     } catch (err) {
       if (!stopped) {
         logger.error({ err: serializeError(err) }, 'Project rules scheduler error');

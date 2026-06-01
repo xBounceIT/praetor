@@ -120,4 +120,87 @@ describe('<ProjectRuleFormModal />', () => {
       }),
     );
   });
+
+  test('does not submit and shows an error when no recipients are selected', async () => {
+    const onSubmit = mock(() => Promise.resolve());
+
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={{ ...rule, actionConfig: { recipientUserIds: [], recipientRoleIds: [] } }}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    expect(
+      await screen.findByText('projects:detail.rules.errors.recipientsRequired'),
+    ).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  test('does not submit and shows an error when a literal value is invalid', async () => {
+    const onSubmit = mock(() => Promise.resolve());
+
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={rule}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    expect(
+      await screen.findByText('projects:detail.rules.errors.valueInvalid'),
+    ).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  test('hides the "compare against another field" option for enum fields without a peer', async () => {
+    const enumRule: ProjectRule = {
+      ...rule,
+      field: 'billing_type',
+      operator: 'eq',
+      value: 'time_and_materials',
+      conditions: [
+        {
+          field: 'billing_type',
+          operator: 'eq',
+          value: 'time_and_materials',
+          valueType: 'literal',
+        },
+      ],
+    };
+
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={enumRule}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={mock(() => Promise.resolve())}
+      />,
+    );
+
+    // The "Compare against" select is the 4th combobox (after logic, field, operator).
+    fireEvent.click(screen.getAllByRole('combobox')[3]);
+
+    expect(
+      await screen.findByRole('option', { name: 'projects:detail.rules.valueTypes.literal' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('option', { name: 'projects:detail.rules.valueTypes.field' }),
+    ).not.toBeInTheDocument();
+  });
 });

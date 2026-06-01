@@ -344,6 +344,13 @@ const ProjectRuleFormModal: React.FC<ProjectRuleFormModalProps> = ({
                 id: definition.id,
                 name: t(`projects:detail.rules.fields.${definition.id}`),
               }));
+              // Only offer "compare against another field" when a comparable peer field
+              // actually exists. Enum fields (e.g. billing_type, status) have no comparable
+              // peer, so showing that option would lead to an unresolvable validation error.
+              const valueTypeChoices: readonly ProjectRuleConditionValueType[] =
+                valueFieldOptions.length > 0
+                  ? (['literal', 'field'] as const)
+                  : (['literal'] as const);
               const fieldError = errors[`field-${index}`];
               const operatorError = errors[`operator-${index}`];
               const valueError = errors[`value-${index}`];
@@ -426,7 +433,7 @@ const ProjectRuleFormModal: React.FC<ProjectRuleFormModalProps> = ({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
-                          {(['literal', 'field'] as const).map((nextValueType) => (
+                          {valueTypeChoices.map((nextValueType) => (
                             <SelectItem key={nextValueType} value={nextValueType}>
                               {t(`projects:detail.rules.valueTypes.${nextValueType}`)}
                             </SelectItem>

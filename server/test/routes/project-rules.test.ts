@@ -349,6 +349,25 @@ describe('project rule routes', () => {
     expect(createRuleMock).not.toHaveBeenCalled();
   });
 
+  test('POST rejects an empty conditions array', async () => {
+    currentPermissions = ['projects.rules.create'];
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/rules',
+      headers: authHeaders(),
+      payload: {
+        name: 'No conditions',
+        conditions: [],
+        actionConfig: { recipientUserIds: ['u2'], recipientRoleIds: [] },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('At least one condition is required');
+    expect(createRuleMock).not.toHaveBeenCalled();
+  });
+
   test('POST rejects invalid recipients', async () => {
     currentPermissions = ['projects.rules.create'];
     findInvalidRecipientIdsMock.mockResolvedValue({ userIds: ['u-missing'], roleIds: [] });

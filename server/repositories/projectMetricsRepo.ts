@@ -82,7 +82,13 @@ export const listForProjects = async (
   const rows = await executeRows<ProjectMetricsRow>(
     exec,
     sql`
-      WITH task_metrics AS (
+      WITH target_orders AS (
+        SELECT p.order_id AS id
+        FROM projects p
+        WHERE p.id = ANY(${sql.param(uniqueProjectIds)}::text[])
+          AND p.order_id IS NOT NULL
+      ),
+      task_metrics AS (
         SELECT
           t.project_id,
           COALESCE(SUM(COALESCE(t.revenue, 0)), 0) AS task_revenue
@@ -108,6 +114,7 @@ export const listForProjects = async (
             * (1 - COALESCE(si.discount, 0) / 100)
           ), 0) AS subtotal
         FROM sale_items si
+        WHERE si.sale_id IN (SELECT id FROM target_orders)
         GROUP BY si.sale_id
       ),
       order_totals AS (
@@ -126,6 +133,7 @@ export const listForProjects = async (
           ) AS order_total
         FROM sales s
         LEFT JOIN order_subtotals os ON os.sale_id = s.id
+        WHERE s.id IN (SELECT id FROM target_orders)
       )
       SELECT
         p.id AS "projectId",
