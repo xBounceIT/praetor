@@ -30,6 +30,7 @@ export type KnownPermissionResource =
   | 'projects.manage_all'
   | 'projects.tasks'
   | 'projects.tasks_all'
+  | 'projects.rules'
   | 'projects.assignments'
   | 'hr.internal'
   | 'hr.external'
@@ -39,6 +40,7 @@ export type KnownPermissionResource =
   | 'hr.work_units'
   | 'hr.work_units_all'
   | 'reports.ai_reporting'
+  | 'reports.cost'
   | 'administration.authentication'
   | 'administration.general'
   | 'administration.user_management'
@@ -110,13 +112,17 @@ export interface UserSettings {
 export interface Notification {
   id: string;
   userId: string;
-  type: 'new_projects' | string;
+  type: 'new_projects' | 'project_rule_triggered' | string;
   title: string;
   message?: string;
   data?: {
     projectNames?: string[];
     orderId?: string;
     clientName?: string;
+    projectId?: string;
+    projectName?: string;
+    ruleId?: string;
+    ruleName?: string;
     [key: string]: unknown;
   };
   isRead: boolean;
@@ -222,6 +228,54 @@ export interface Project {
   revenue?: number | null;
   billingType?: BillingType;
   billingFrequency?: BillingFrequency;
+}
+
+export type ProjectRuleActionType = 'notify';
+
+export interface ProjectRuleActionConfig {
+  recipientUserIds: string[];
+  recipientRoleIds: string[];
+}
+
+export type ProjectRuleConditionLogic = 'and' | 'or';
+export type ProjectRuleConditionValueType = 'literal' | 'field';
+
+export interface ProjectRuleCondition {
+  field: string;
+  operator: string;
+  value: string;
+  valueType: ProjectRuleConditionValueType;
+}
+
+export interface ProjectRule {
+  id: string;
+  projectId: string;
+  name: string;
+  field: string;
+  operator: string;
+  value: string;
+  conditionLogic: ProjectRuleConditionLogic;
+  conditions: ProjectRuleCondition[];
+  actionType: ProjectRuleActionType;
+  actionConfig: ProjectRuleActionConfig;
+  isEnabled: boolean;
+  conditionMet: boolean;
+  lastTriggeredAt: number | null;
+  createdBy: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ProjectRuleRecipientUser {
+  id: string;
+  name: string;
+  username: string;
+  avatarInitials: string;
+}
+
+export interface ProjectRuleRecipientOptions {
+  users: ProjectRuleRecipientUser[];
+  roles: RoleSummary[];
 }
 
 export interface ProjectTask {
@@ -907,6 +961,7 @@ export const AUDIT_ENTITY_TYPES = [
   'product_subcategory',
   'product_type',
   'project',
+  'project_rule',
   'reports_ai',
   'reports_ai_message',
   'reports_ai_session',

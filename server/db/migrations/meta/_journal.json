@@ -446,8 +446,29 @@
     {
       "idx": 63,
       "version": "7",
-      "when": 1780318818677,
-      "tag": "0063_add_saved_views_and_shares",
+      "when": 1780319171124,
+      "tag": "0063_add_project_rules",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1780319175389,
+      "tag": "0064_grant_projects_rules_permission",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1780323489128,
+      "tag": "0065_add_project_rule_condition_chains",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1780339668437,
+      "tag": "0066_add_saved_views_and_shares",
       "breakpoints": true
     }
   ]

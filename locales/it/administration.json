@@ -49,6 +49,7 @@
       "manage_all": "Progetti (Tutti)",
       "tasks": "Attività",
       "tasks_all": "Attività (Tutte)",
+      "rules": "Regole Progetto",
       "assignments": "Assegnazioni Progetto"
     },
     "suppliers": {
@@ -152,6 +153,7 @@
         "ldap_config": "configurazione LDAP",
         "product": "prodotto",
         "project": "progetto",
+        "project_rule": "regola progetto",
         "role": "ruolo",
         "settings": "impostazioni",
         "supplier": "fornitore",

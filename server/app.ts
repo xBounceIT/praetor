@@ -19,6 +19,7 @@ import logsRoutes from './routes/logs.ts';
 import mcpRoutes from './routes/mcp.ts';
 import notificationsRoutes from './routes/notifications.ts';
 import productsRoutes from './routes/products.ts';
+import projectRulesRoutes from './routes/project-rules.ts';
 import projectsRoutes from './routes/projects.ts';
 import reportsRoutes from './routes/reports.ts';
 import rolesRoutes from './routes/roles.ts';
@@ -166,6 +167,7 @@ export const buildApp = async () => {
   await fastify.register(viewsRoutes, { prefix: '/api/views' });
   await fastify.register(clientsRoutes, { prefix: '/api/clients' });
   await fastify.register(projectsRoutes, { prefix: '/api/projects' });
+  await fastify.register(projectRulesRoutes, { prefix: '/api/projects' });
   await fastify.register(tasksRoutes, { prefix: '/api/tasks' });
   await fastify.register(entriesRoutes, { prefix: '/api/entries' });
   await fastify.register(settingsRoutes, { prefix: '/api/settings' });

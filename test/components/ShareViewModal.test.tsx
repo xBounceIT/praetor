@@ -38,8 +38,13 @@ mock.module('../../contexts/CurrentUserContext', () => ({
 }));
 
 const toastErrorMock = mock(() => {});
+const toastSuccessMock = mock(() => {});
+// Mock the full toast surface (not just toastError): Bun's mock.module is global and
+// persists across files, so an incomplete mock here leaks a `utils/toast` missing
+// `toastSuccess` into other suites that import it (e.g. ProjectRules), breaking them.
 mock.module('../../utils/toast', () => ({
   toastError: toastErrorMock,
+  toastSuccess: toastSuccessMock,
 }));
 
 clearSpyStateAfterAll();

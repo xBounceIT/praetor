@@ -1,6 +1,7 @@
 import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import { notifications } from '../db/schema/notifications.ts';
+import { generatePrefixedId } from '../utils/order-ids.ts';
 
 // Matches the predicate of the partial index `idx_notifications_user_unread`
 // (`WHERE is_read = false`) so countUnreadForUser / markAllReadForUser can
@@ -17,6 +18,13 @@ export type Notification = {
   data: Record<string, unknown> | null;
   isRead: boolean;
   createdAt: number;
+};
+
+export type NewNotificationForUsers = {
+  type: string;
+  title: string;
+  message?: string | null;
+  data?: Record<string, unknown> | null;
 };
 
 // Sweep rows written under the pre-#612 global id; can be removed once no
@@ -99,6 +107,28 @@ export const deleteForUser = async (
     .delete(notifications)
     .where(and(eq(notifications.id, id), eq(notifications.userId, userId)));
   return (result.rowCount ?? 0) > 0;
+};
+
+export const createForUsers = async (
+  userIds: string[],
+  notification: NewNotificationForUsers,
+  exec: DbExecutor = db,
+): Promise<number> => {
+  const uniqueUserIds = Array.from(new Set(userIds.map((userId) => userId.trim()).filter(Boolean)));
+  if (uniqueUserIds.length === 0) return 0;
+
+  await exec.insert(notifications).values(
+    uniqueUserIds.map((userId) => ({
+      id: generatePrefixedId('n'),
+      userId,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message ?? null,
+      data: notification.data ?? null,
+      isRead: false,
+    })),
+  );
+  return uniqueUserIds.length;
 };
 
 export const upsertAdminPasswordWarning = async (

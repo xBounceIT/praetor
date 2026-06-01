@@ -50,6 +50,10 @@ Praetor assegna automaticamente un colore univoco quando crei un progetto. Puoi 
 
 Quando un progetto termina, verifica che le attività siano coerenti e che non rimangano registrazioni pendenti.
 
+### Regole progetto
+
+La sezione **Regole del progetto** nella pagina di dettaglio permette di creare controlli automatici sul progetto. Una regola confronta uno o più campi del progetto (ricavo, ore consuntive, giorni alla scadenza, consuntivazione o stato; i campi di costo richiedono il permesso **Report costi**) con soglie, valori o altri campi compatibili e può combinare le condizioni con **AND** oppure **OR**. Quando la regola diventa vera, invia una notifica agli utenti assegnati selezionati o agli utenti che hanno uno dei ruoli scelti. La sezione è visibile e modificabile tramite il permesso **Regole Progetto** (`projects.rules`), assegnato per impostazione predefinita a Manager e Top Manager. Le notifiche sono inviate solo sul passaggio da condizione non verificata a verificata, quindi non vengono duplicate mentre la regola resta vera. Riabilitare una regola o modificarne la condizione la prepara a generare una nuova notifica al prossimo controllo pianificato.
+
 ### Assegnazione utenti
 
 Dal comando **Assegna Utenti** gestisci chi è assegnato a un progetto o a una sua attività. L'accesso a questa finestra è governato dal permesso **Assegnazioni Progetto**: l'azione **View** consente di aprire le assegnazioni di qualsiasi progetto o attività indipendentemente dalla propria appartenenza, mentre **Update** consente di modificarle. Manager e Top Manager dispongono di entrambe per impostazione predefinita, quindi possono gestire le assegnazioni anche quando non sono membri del progetto o dell'attività.

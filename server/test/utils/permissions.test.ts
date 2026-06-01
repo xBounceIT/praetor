@@ -46,6 +46,10 @@ describe('PERMISSION_DEFINITIONS / ALL_PERMISSIONS', () => {
     expect(ALL_PERMISSIONS).toContain('projects.manage_all.delete');
     expect(ALL_PERMISSIONS).toContain('projects.tasks_all.create');
     expect(ALL_PERMISSIONS).toContain('timesheets.ril.view');
+    expect(ALL_PERMISSIONS).toContain('projects.rules.view');
+    expect(ALL_PERMISSIONS).toContain('projects.rules.create');
+    expect(ALL_PERMISSIONS).toContain('projects.rules.update');
+    expect(ALL_PERMISSIONS).toContain('projects.rules.delete');
     expect(ALL_PERMISSIONS).toContain('timesheets.tracker_all.update');
     expect(ALL_PERMISSIONS).toContain('hr.work_units.delete');
     expect(ALL_PERMISSIONS).toContain('hr.work_units_all.delete');

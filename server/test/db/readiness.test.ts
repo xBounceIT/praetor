@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import type { DbReadinessProbe } from '../../db/readiness.ts';
-import { verifyDbReadiness } from '../../db/readiness.ts';
+import { schemaReadinessProbes, verifyDbReadiness } from '../../db/readiness.ts';
 import { setupTestDb } from '../helpers/fakeExecutor.ts';
 
 const makeMigrationsDir = (count: number): string => {
@@ -20,6 +20,10 @@ const removeMigrationsDir = (dir: string) => {
 };
 
 describe('verifyDbReadiness', () => {
+  test('default schema probes include project_rules', () => {
+    expect(schemaReadinessProbes.some((probe) => probe.name === 'project_rules')).toBe(true);
+  });
+
   test('succeeds when migrations are complete and probes pass', async () => {
     const { exec, testDb } = setupTestDb();
     const probe: DbReadinessProbe = {

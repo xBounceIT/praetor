@@ -1,6 +1,6 @@
 {
-  "id": "617f3a74-277b-4a4b-8d91-1193c42f3ebe",
-  "prevId": "beee745b-3bf3-42ea-80b8-35d4c9637c4d",
+  "id": "9bc227eb-08b8-44fa-b126-b522f6c4e5fd",
+  "prevId": "cf9f7bac-17fe-4a8d-a9c6-c9d03b30a94f",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2571,6 +2571,20 @@
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
+        },
+        "condition_logic": {
+          "name": "condition_logic",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'and'"
+        },
+        "conditions": {
+          "name": "conditions",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         },
         "action_type": {
           "name": "action_type",

@@ -100,6 +100,7 @@
     "markAllAsRead": "Mark all as read",
     "newProjects": "{{count}} new projects available",
     "newProject": "1 new project available",
+    "projectRuleTriggered": "{{rule}} triggered for {{project}}",
     "justNow": "Just now",
     "minutesAgo": "{{count}} min ago",
     "hoursAgo": "{{count}}h ago",
