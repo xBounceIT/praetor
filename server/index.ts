@@ -7,6 +7,10 @@ import {
   type LdapSyncSchedulerHandle,
   startLdapSyncScheduler,
 } from './services/ldapSyncScheduler.ts';
+import {
+  type ProjectRulesSchedulerHandle,
+  startProjectRulesScheduler,
+} from './services/projectRulesScheduler.ts';
 import { performShutdown } from './shutdown.ts';
 import { createChildLogger, serializeError } from './utils/logger.ts';
 import {
@@ -39,9 +43,11 @@ const assertSecureRuntimeConfig = () => {
 };
 
 let ldapSyncScheduler: LdapSyncSchedulerHandle | null = null;
+let projectRulesScheduler: ProjectRulesSchedulerHandle | null = null;
 
 const shutdown = async (signal: string) => {
   ldapSyncScheduler?.stop();
+  projectRulesScheduler?.stop();
   const code = await performShutdown(fastify, signal, logger);
   process.exit(code);
 };
@@ -107,6 +113,8 @@ try {
   } catch (err) {
     logger.error({ err: serializeError(err) }, 'Failed to initialize LDAP sync task');
   }
+
+  projectRulesScheduler = startProjectRulesScheduler({ logger });
 } catch (err) {
   logger.error({ err: serializeError(err) }, 'Failed to start server');
   process.exit(1);

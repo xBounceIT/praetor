@@ -20,6 +20,7 @@ export { ldapApi } from './api/ldap';
 export { logsApi } from './api/logs';
 export { notificationsApi } from './api/notifications';
 export { productsApi } from './api/products';
+export { projectRulesApi } from './api/projectRules';
 export { projectsApi } from './api/projects';
 export { reportsApi } from './api/reports';
 export { rolesApi } from './api/roles';
@@ -50,6 +51,7 @@ import { ldapApi } from './api/ldap';
 import { logsApi } from './api/logs';
 import { notificationsApi } from './api/notifications';
 import { productsApi } from './api/products';
+import { projectRulesApi } from './api/projectRules';
 import { projectsApi } from './api/projects';
 import { reportsApi } from './api/reports';
 import { rolesApi } from './api/roles';
@@ -74,6 +76,7 @@ export default {
   tasks: tasksApi,
   entries: entriesApi,
   products: productsApi,
+  projectRules: projectRulesApi,
   quotes: clientQuotesApi,
   clientOffers: clientOffersApi,
   clientsOrders: clientsOrdersApi,

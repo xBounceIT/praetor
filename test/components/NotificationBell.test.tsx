@@ -139,6 +139,32 @@ describe('<NotificationBell />', () => {
     expect(container.querySelector('i.fa-folder-tree')).toBeNull();
   });
 
+  test('project rule notifications use localized title and bell icon', () => {
+    const notification: Notification = {
+      id: 'n-rule',
+      userId: 'u1',
+      type: 'project_rule_triggered',
+      title: 'Project rule triggered',
+      isRead: false,
+      createdAt: NOW,
+      data: {
+        projectId: 'p1',
+        projectName: 'Project A',
+        ruleId: 'pr1',
+        ruleName: 'Budget warning',
+      },
+    };
+
+    const { container } = render(
+      <NotificationBell {...baseProps} notifications={[notification]} />,
+    );
+
+    openDropdown();
+
+    expect(screen.getByText('notifications.projectRuleTriggered')).toBeInTheDocument();
+    expect(container.querySelector('i.fa-bell')).not.toBeNull();
+  });
+
   test('clicking a single-project notification uses the singular translation key', () => {
     const single: Notification = {
       id: 'n3',

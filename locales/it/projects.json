@@ -198,24 +198,98 @@
     "rules": {
       "title": "Regole del progetto",
       "description": "Controlli automatici che monitorano questo progetto e ti avvisano quando qualcosa richiede attenzione.",
-      "comingSoonBadge": "In arrivo",
-      "items": {
-        "budgetThreshold": {
-          "name": "Avviso al superamento della soglia di budget",
-          "description": "Notifica i project manager quando il costo registrato supera l'80% del ricavo del progetto."
+      "conditionMet": "Verificata",
+      "costPermissionRequired": "I campi derivati dai costi richiedono il permesso sui report costi.",
+      "actions": {
+        "add": "Aggiungi regola",
+        "edit": "Modifica regola",
+        "delete": "Elimina regola",
+        "toggle": "Abilita regola",
+        "addCondition": "Aggiungi condizione",
+        "removeCondition": "Rimuovi condizione"
+      },
+      "empty": {
+        "title": "Nessuna regola configurata",
+        "description": "Crea una regola per notificare utenti o ruoli quando le metriche del progetto superano una soglia."
+      },
+      "delete": {
+        "title": "Elimina regola progetto",
+        "description": "Eliminare \"{{name}}\"? Questa azione non può essere annullata."
+      },
+      "form": {
+        "createTitle": "Crea regola progetto",
+        "editTitle": "Modifica regola progetto",
+        "description": "Scegli la condizione da monitorare e chi riceve la notifica.",
+        "name": "Nome regola",
+        "namePlaceholder": "es. Budget oltre 80%",
+        "field": "Campo",
+        "operator": "Operatore",
+        "value": "Valore",
+        "valuePlaceholder": "Soglia",
+        "compareAgainst": "Confronta",
+        "targetField": "Altro campo",
+        "conditionLogic": "Combinazione",
+        "users": "Utenti",
+        "usersPlaceholder": "Seleziona utenti assegnati",
+        "roles": "Ruoli",
+        "rolesPlaceholder": "Seleziona ruoli",
+        "enabled": "Abilitata",
+        "enabledDescription": "Le regole abilitate vengono controllate dal valutatore pianificato."
+      },
+      "conditionLogic": {
+        "and": "Tutte le condizioni (AND)",
+        "or": "Almeno una condizione (OR)"
+      },
+      "joiners": {
+        "and": "AND",
+        "or": "OR"
+      },
+      "valueTypes": {
+        "literal": "Valore",
+        "field": "Campo"
+      },
+      "fields": {
+        "revenue": "Ricavo",
+        "cost_to_date": "Costo consuntivo",
+        "budget_used_pct": "Budget usato %",
+        "hours_to_date": "Ore consuntive",
+        "days_until_deadline": "Giorni alla scadenza",
+        "billing_type": "Consuntivazione",
+        "status": "Stato"
+      },
+      "operators": {
+        "gt": "Maggiore di",
+        "gte": "Maggiore o uguale a",
+        "lt": "Minore di",
+        "lte": "Minore o uguale a",
+        "eq": "Uguale a",
+        "neq": "Diverso da"
+      },
+      "values": {
+        "billing_type": {
+          "time_and_materials": "A misura",
+          "retainer": "Canone"
         },
-        "deadlineApproaching": {
-          "name": "Avviso prima della data di fine",
-          "description": "Mostra un avviso 7 giorni prima della data di fine progetto se ci sono attività aperte."
-        },
-        "staleTask": {
-          "name": "Segnala attività inattive",
-          "description": "Evidenzia le attività senza ore registrate negli ultimi 14 giorni."
-        },
-        "unassignedTask": {
-          "name": "Intercetta attività non assegnate",
-          "description": "Notifica quando un'attività viene creata senza un assegnatario o senza un impegno previsto."
+        "status": {
+          "active": "Attivo",
+          "disabled": "Disabilitato"
         }
+      },
+      "errors": {
+        "loadFailed": "Impossibile caricare le regole del progetto.",
+        "nameRequired": "Il nome della regola è obbligatorio.",
+        "fieldRequired": "Il campo è obbligatorio.",
+        "operatorRequired": "L'operatore è obbligatorio.",
+        "valueInvalid": "Inserisci un valore valido per il campo selezionato.",
+        "conditionsRequired": "Aggiungi almeno una condizione.",
+        "recipientsRequired": "Seleziona almeno un utente o un ruolo destinatario."
+      },
+      "toasts": {
+        "created": "Regola progetto creata.",
+        "updated": "Regola progetto aggiornata.",
+        "deleted": "Regola progetto eliminata.",
+        "saveFailed": "Impossibile salvare la regola progetto.",
+        "deleteFailed": "Impossibile eliminare la regola progetto."
       }
     }
   },

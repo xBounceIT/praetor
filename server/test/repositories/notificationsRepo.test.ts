@@ -119,6 +119,36 @@ describe('markAllReadForUser', () => {
   });
 });
 
+describe('createForUsers', () => {
+  test('deduplicates users and inserts unread notifications', async () => {
+    exec.enqueue({ rows: [], rowCount: 1 });
+
+    const result = await notificationsRepo.createForUsers(
+      ['u1', 'u1', 'u2'],
+      {
+        type: 'project_rule_triggered',
+        title: 'Project rule triggered',
+        message: 'Rule triggered',
+        data: { projectId: 'p1', projectName: 'Project', ruleId: 'pr1', ruleName: 'Rule' },
+      },
+      testDb,
+    );
+
+    expect(result).toBe(2);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('insert into "notifications"');
+    expect(exec.calls[0].params).toContain('u1');
+    expect(exec.calls[0].params).toContain('u2');
+    expect(exec.calls[0].params).toContain('project_rule_triggered');
+    expect(exec.calls[0].params).toContain(false);
+  });
+
+  test('skips insert for empty user list', async () => {
+    const result = await notificationsRepo.createForUsers([], { type: 'x', title: 'x' }, testDb);
+    expect(result).toBe(0);
+    expect(exec.calls).toHaveLength(0);
+  });
+});
+
 const LEGACY_ADMIN_WARNING_ID = 'admin-default-password-warning';
 
 describe('admin password warning helpers', () => {

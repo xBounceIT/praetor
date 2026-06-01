@@ -198,24 +198,98 @@
     "rules": {
       "title": "Project rules",
       "description": "Automatic controls that watch this project and notify you when something needs attention.",
-      "comingSoonBadge": "Coming soon",
-      "items": {
-        "budgetThreshold": {
-          "name": "Alert when budget exceeds threshold",
-          "description": "Notify project managers when logged cost crosses 80% of the project revenue."
+      "conditionMet": "Met",
+      "costPermissionRequired": "Cost-derived rule fields require cost report permission.",
+      "actions": {
+        "add": "Add rule",
+        "edit": "Edit rule",
+        "delete": "Delete rule",
+        "toggle": "Enable rule",
+        "addCondition": "Add condition",
+        "removeCondition": "Remove condition"
+      },
+      "empty": {
+        "title": "No rules configured",
+        "description": "Create a rule to notify users or roles when project metrics cross a threshold."
+      },
+      "delete": {
+        "title": "Delete project rule",
+        "description": "Delete \"{{name}}\"? This action cannot be undone."
+      },
+      "form": {
+        "createTitle": "Create project rule",
+        "editTitle": "Edit project rule",
+        "description": "Choose the condition to watch and who receives the notification.",
+        "name": "Rule name",
+        "namePlaceholder": "e.g. Budget above 80%",
+        "field": "Field",
+        "operator": "Operator",
+        "value": "Value",
+        "valuePlaceholder": "Threshold",
+        "compareAgainst": "Compare",
+        "targetField": "Other field",
+        "conditionLogic": "Combination",
+        "users": "Users",
+        "usersPlaceholder": "Select assigned users",
+        "roles": "Roles",
+        "rolesPlaceholder": "Select roles",
+        "enabled": "Enabled",
+        "enabledDescription": "Enabled rules are checked by the scheduled evaluator."
+      },
+      "conditionLogic": {
+        "and": "All conditions (AND)",
+        "or": "Any condition (OR)"
+      },
+      "joiners": {
+        "and": "AND",
+        "or": "OR"
+      },
+      "valueTypes": {
+        "literal": "Value",
+        "field": "Field"
+      },
+      "fields": {
+        "revenue": "Revenue",
+        "cost_to_date": "Cost to date",
+        "budget_used_pct": "Budget used %",
+        "hours_to_date": "Hours to date",
+        "days_until_deadline": "Days until deadline",
+        "billing_type": "Billing",
+        "status": "Status"
+      },
+      "operators": {
+        "gt": "Greater than",
+        "gte": "Greater than or equal to",
+        "lt": "Less than",
+        "lte": "Less than or equal to",
+        "eq": "Equal to",
+        "neq": "Not equal to"
+      },
+      "values": {
+        "billing_type": {
+          "time_and_materials": "Time and materials",
+          "retainer": "Retainer"
         },
-        "deadlineApproaching": {
-          "name": "Warn before the end date",
-          "description": "Surface a warning 7 days before the project end date if open tasks remain."
-        },
-        "staleTask": {
-          "name": "Flag stale tasks",
-          "description": "Highlight tasks with no time logged in the last 14 days."
-        },
-        "unassignedTask": {
-          "name": "Catch unassigned tasks",
-          "description": "Notify when a task is created without an assignee or with no expected effort."
+        "status": {
+          "active": "Active",
+          "disabled": "Disabled"
         }
+      },
+      "errors": {
+        "loadFailed": "Unable to load project rules.",
+        "nameRequired": "Rule name is required.",
+        "fieldRequired": "Field is required.",
+        "operatorRequired": "Operator is required.",
+        "valueInvalid": "Enter a valid value for the selected field.",
+        "conditionsRequired": "Add at least one condition.",
+        "recipientsRequired": "Select at least one user or role recipient."
+      },
+      "toasts": {
+        "created": "Project rule created.",
+        "updated": "Project rule updated.",
+        "deleted": "Project rule deleted.",
+        "saveFailed": "Unable to save project rule.",
+        "deleteFailed": "Unable to delete project rule."
       }
     }
   },

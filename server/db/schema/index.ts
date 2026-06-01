@@ -16,6 +16,7 @@ export * from './productCategories.ts';
 export * from './productSubcategories.ts';
 export * from './products.ts';
 export * from './productTypes.ts';
+export * from './projectRules.ts';
 export * from './projects.ts';
 export * from './quotes.ts';
 export * from './quoteVersions.ts';

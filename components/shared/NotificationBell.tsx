@@ -12,8 +12,11 @@ export interface NotificationBellProps {
   onDelete: (id: string) => void;
 }
 
-const getNotificationIconClass = (type: string) =>
-  type === 'admin_password_warning' ? 'fa-triangle-exclamation' : 'fa-folder-tree';
+const getNotificationIconClass = (type: string) => {
+  if (type === 'admin_password_warning') return 'fa-triangle-exclamation';
+  if (type === 'project_rule_triggered') return 'fa-bell';
+  return 'fa-folder-tree';
+};
 
 const NotificationBell: React.FC<NotificationBellProps> = ({
   notifications,
@@ -92,6 +95,12 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
       }
       return t('notifications.newProjects', '{{count}} new projects available', {
         count: projectCount,
+      });
+    }
+    if (notification.type === 'project_rule_triggered') {
+      return t('notifications.projectRuleTriggered', '{{rule}} triggered for {{project}}', {
+        rule: notification.data?.ruleName ?? notification.title,
+        project: notification.data?.projectName ?? '',
       });
     }
     // Fallback to the original title for unknown types
@@ -201,6 +210,10 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                         {notification.data?.clientName && (
                           <span> · {notification.data.clientName}</span>
                         )}
+                        {notification.type === 'project_rule_triggered' &&
+                          notification.data?.projectName && (
+                            <span> · {notification.data.projectName}</span>
+                          )}
                       </p>
 
                       {/* Expandable project list */}
