@@ -22,12 +22,20 @@ const DAY_COUNT = 31;
 const HEADER_ROW = 6;
 const FIRST_DAY_ROW = 7;
 const LAST_DAY_ROW = FIRST_DAY_ROW + DAY_COUNT - 1;
-// The legend (cols A–C) and the summary boxes (cols E–F) sit side by side from this row down;
-// their differing lengths never collide because they occupy non-overlapping columns.
+// The legend and the summary boxes sit side by side from this row down (see the column
+// constants below); their lengths never collide because they occupy non-overlapping columns.
 const SUMMARY_START_ROW = LAST_DAY_ROW + 2;
 const ORDER_COLUMN_INDEX = RIL_VISIBLE_HEADERS.indexOf('Commessa');
-const SUMMARY_LABEL_COLUMN = 5;
-const SUMMARY_VALUE_COLUMN = 6;
+// Legend: cols A–D (label merged across C–D). Summary: cols F–H (label merged across F–G,
+// value in H), col E left as a gap. Labels are merged so long Italian terms stay on one line
+// instead of wrapping and clipping inside a single narrow day-grid column.
+const LEGEND_MARKER_COLUMN = 1;
+const LEGEND_CODE_COLUMN = 2;
+const LEGEND_LABEL_COLUMN = 3;
+const LEGEND_LABEL_COLUMN_END = 4;
+const SUMMARY_LABEL_COLUMN = 6;
+const SUMMARY_LABEL_COLUMN_END = 7;
+const SUMMARY_VALUE_COLUMN = 8;
 
 const YELLOW_FILL = 'FFFFF200';
 const HEADER_FILL = 'FFF2F2F2';
@@ -141,7 +149,7 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
     const cell = worksheet.getCell(rowNumber, 2);
     cell.value = value;
     cell.font = { bold: true, color: { argb: 'FF1F2937' } };
-    cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+    cell.alignment = { vertical: 'middle', horizontal: 'left' };
     if (fillArgb) setFill(cell, fillArgb);
   };
 
@@ -193,22 +201,48 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
     });
   });
 
+  // Writes a styled, optionally merged cell. Merging lets long legend/summary labels stay on a
+  // single line instead of wrapping and clipping inside a narrow day-grid column.
+  const writeBoxCell = (
+    rowNumber: number,
+    startColumn: number,
+    endColumn: number,
+    value: string | number,
+    options: {
+      bold?: boolean;
+      color?: string;
+      align?: 'left' | 'center' | 'right';
+      fill?: string;
+    } = {},
+  ) => {
+    if (endColumn > startColumn) {
+      worksheet.mergeCells(rowNumber, startColumn, rowNumber, endColumn);
+    }
+    for (let column = startColumn; column <= endColumn; column += 1) {
+      const cell = worksheet.getCell(rowNumber, column);
+      if (options.fill) setFill(cell, options.fill);
+      setThinBorder(cell);
+    }
+    const master = worksheet.getCell(rowNumber, startColumn);
+    master.value = value;
+    master.font = {
+      bold: options.bold ?? false,
+      ...(options.color ? { color: { argb: options.color } } : {}),
+    };
+    master.alignment = { vertical: 'middle', horizontal: options.align ?? 'left' };
+  };
+
   LEGEND_ROWS.forEach(([marker, code, label], index) => {
     const rowNumber = SUMMARY_START_ROW + index;
-    const markerCell = worksheet.getCell(rowNumber, 1);
-    markerCell.value = marker;
-    markerCell.font = { bold: true };
-    markerCell.alignment = { vertical: 'middle', horizontal: 'center' };
-    setThinBorder(markerCell);
-    const codeCell = worksheet.getCell(rowNumber, 2);
-    codeCell.value = code;
-    codeCell.font = { bold: true };
-    codeCell.alignment = { vertical: 'middle', horizontal: 'center' };
-    setThinBorder(codeCell);
-    const labelCell = worksheet.getCell(rowNumber, 3);
-    labelCell.value = label;
-    labelCell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
-    setThinBorder(labelCell);
+    writeBoxCell(rowNumber, LEGEND_MARKER_COLUMN, LEGEND_MARKER_COLUMN, marker, {
+      bold: true,
+      align: 'center',
+    });
+    writeBoxCell(rowNumber, LEGEND_CODE_COLUMN, LEGEND_CODE_COLUMN, code, {
+      bold: true,
+      align: 'center',
+    });
+    writeBoxCell(rowNumber, LEGEND_LABEL_COLUMN, LEGEND_LABEL_COLUMN_END, label);
   });
 
   const totals = calculateRilTotals(rows);
@@ -222,18 +256,18 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
   ];
   summaryRows.forEach(([label, value, fillArgb], index) => {
     const rowNumber = SUMMARY_START_ROW + index;
-    const labelCell = worksheet.getCell(rowNumber, SUMMARY_LABEL_COLUMN);
-    labelCell.value = label;
-    labelCell.font = { bold: true, color: { argb: SUMMARY_TEXT } };
-    labelCell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
-    setFill(labelCell, fillArgb);
-    setThinBorder(labelCell);
-    const valueCell = worksheet.getCell(rowNumber, SUMMARY_VALUE_COLUMN);
-    valueCell.value = value;
-    valueCell.font = { bold: true, color: { argb: SUMMARY_TEXT } };
-    valueCell.alignment = { vertical: 'middle', horizontal: 'right', wrapText: true };
-    setFill(valueCell, fillArgb);
-    setThinBorder(valueCell);
+    writeBoxCell(rowNumber, SUMMARY_LABEL_COLUMN, SUMMARY_LABEL_COLUMN_END, label, {
+      bold: true,
+      color: SUMMARY_TEXT,
+      align: 'left',
+      fill: fillArgb,
+    });
+    writeBoxCell(rowNumber, SUMMARY_VALUE_COLUMN, SUMMARY_VALUE_COLUMN, value, {
+      bold: true,
+      color: SUMMARY_TEXT,
+      align: 'right',
+      fill: fillArgb,
+    });
   });
 
   return workbook;

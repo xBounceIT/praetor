@@ -88,17 +88,17 @@ describe('RIL Excel export', () => {
     expect(worksheet?.getCell('B43').value).toBe('TR');
     expect(worksheet?.getCell('B44').value).toBe('SD');
 
-    // Summary boxes beside the legend.
-    expect(worksheet?.getCell('E39').value).toBe('Giorni Lavorati');
-    expect(worksheet?.getCell('F39').value).toBe(20);
-    expect(worksheet?.getCell('E40').value).toBe('Ore Extra');
-    expect(worksheet?.getCell('F40').value).toBe('0:00');
-    expect(worksheet?.getCell('E41').value).toBe('Totale Ore');
-    expect(worksheet?.getCell('F41').value).toBe('160:00');
-    expect(worksheet?.getCell('E42').value).toBe('Totale PICAP');
-    expect(worksheet?.getCell('F42').value).toBe('160,00');
-    expect(worksheet?.getCell('E43').value).toBe('Pausa Pranzo');
-    expect(worksheet?.getCell('F43').value).toBe('1:00');
+    // Summary boxes beside the legend: label merged across F–G, value in H.
+    expect(worksheet?.getCell('F39').value).toBe('Giorni Lavorati');
+    expect(worksheet?.getCell('H39').value).toBe(20);
+    expect(worksheet?.getCell('F40').value).toBe('Ore Extra');
+    expect(worksheet?.getCell('H40').value).toBe('0:00');
+    expect(worksheet?.getCell('F41').value).toBe('Totale Ore');
+    expect(worksheet?.getCell('H41').value).toBe('160:00');
+    expect(worksheet?.getCell('F42').value).toBe('Totale PICAP');
+    expect(worksheet?.getCell('H42').value).toBe('160,00');
+    expect(worksheet?.getCell('F43').value).toBe('Pausa Pranzo');
+    expect(worksheet?.getCell('H43').value).toBe('1:00');
   });
 
   test('does not export values from non-month placeholder rows', () => {
@@ -137,9 +137,9 @@ describe('RIL Excel export', () => {
     expect(worksheet?.getCell('D36').value).toBe('');
 
     // Totals only reflect the 20 real February workdays.
-    expect(worksheet?.getCell('F39').value).toBe(20);
-    expect(worksheet?.getCell('F41').value).toBe('160:00');
-    expect(worksheet?.getCell('F42').value).toBe('160,00');
+    expect(worksheet?.getCell('H39').value).toBe(20);
+    expect(worksheet?.getCell('H41').value).toBe('160:00');
+    expect(worksheet?.getCell('H42').value).toBe('160,00');
   });
 
   test('exports absence-note rows without worked time', () => {
@@ -176,8 +176,8 @@ describe('RIL Excel export', () => {
     expect(worksheet?.getCell('H10').value).toBe('');
 
     // One absence drops the worked-day count and total hours.
-    expect(worksheet?.getCell('F39').value).toBe(19);
-    expect(worksheet?.getCell('F41').value).toBe('152:00');
-    expect(worksheet?.getCell('F42').value).toBe('152,00');
+    expect(worksheet?.getCell('H39').value).toBe(19);
+    expect(worksheet?.getCell('H41').value).toBe('152:00');
+    expect(worksheet?.getCell('H42').value).toBe('152,00');
   });
 });
