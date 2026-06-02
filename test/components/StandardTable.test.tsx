@@ -844,7 +844,7 @@ describe('<StandardTable />', () => {
       .getByTestId('action-1')
       .closest('[data-standard-table-action-menu="true"]') as HTMLElement;
     expect(actionMenu).toHaveAttribute('data-slot', 'dropdown-menu-content');
-    expect(actionMenu.className).toContain('z-[70]');
+    expect(actionMenu.className).toContain('z-[90]');
     expect(actionMenu.className).toContain('w-max');
     expect(actionMenu.className).toContain('min-w-[9rem]');
     expect(screen.getByTestId('action-1').className).toContain('text-popover-foreground');
@@ -1095,7 +1095,7 @@ describe('<StandardTable />', () => {
     const action = await screen.findByTestId('context-action-2');
     const actionMenu = action.closest('[data-standard-table-action-menu="true"]') as HTMLElement;
     expect(actionMenu).toHaveAttribute('data-slot', 'context-menu-content');
-    expect(actionMenu.className).toContain('z-[70]');
+    expect(actionMenu.className).toContain('z-[90]');
     expect(actionMenu.className).toContain('w-max');
     expect(actionMenu.className).toContain('min-w-[9rem]');
     expect(action.className).toContain('text-popover-foreground');

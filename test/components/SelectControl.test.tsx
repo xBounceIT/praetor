@@ -41,7 +41,7 @@ describe('<SelectControl />', () => {
     fireEvent.click(screen.getByRole('combobox'));
 
     const selectContent = document.querySelector('[data-slot="select-content"]');
-    expect(selectContent?.className).toContain('z-[70]');
+    expect(selectContent?.className).toContain('z-[90]');
   });
 
   test('plain select option with a badge renders the badge inside a flex wrapper that truncates', () => {
@@ -89,7 +89,7 @@ describe('<SelectControl />', () => {
     fireEvent.click(screen.getByRole('button'));
 
     const popoverContent = document.querySelector('[data-slot="popover-content"]');
-    expect(popoverContent?.className).toContain('z-[70]');
+    expect(popoverContent?.className).toContain('z-[90]');
   });
 
   test('multi combobox toggles selected values and renders chips', () => {

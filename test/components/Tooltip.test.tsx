@@ -58,7 +58,7 @@ describe('<Tooltip />', () => {
     await userEvent.hover(screen.getByRole('button', { name: 'trigger' }));
 
     const tooltip = await findTooltipContent();
-    expect(tooltip.className).toContain('z-[70]');
+    expect(tooltip.className).toContain('z-[90]');
   });
 
   test('applies shared width and wrapping constraints', async () => {
