@@ -750,7 +750,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
           // Keep user_roles in sync with users.role (primary/default role).
           await usersRepo.addUserRole(id, roleValue, tx);
-
           await settingsRepo.upsertForUser(
             id,
             {

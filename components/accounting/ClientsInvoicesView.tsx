@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
@@ -49,6 +49,81 @@ const normalizeUnitOfMeasure = (
   unitOfMeasure?: InvoiceItem['unitOfMeasure'],
 ): InvoiceItem['unitOfMeasure'] => (unitOfMeasure === 'hours' ? 'hours' : 'unit');
 
+const buildDefaultInvoice = (): Partial<Invoice> => {
+  const issueDate = getLocalDateString();
+  return {
+    clientId: '',
+    clientName: '',
+    id: '',
+    items: [],
+    issueDate,
+    dueDate: addDaysToDateOnly(issueDate, 30),
+    status: 'draft',
+    notes: '',
+    amountPaid: 0,
+    subtotal: 0,
+    taxTotal: 0,
+    total: 0,
+  };
+};
+
+type ClientsInvoicesState = {
+  isModalOpen: boolean;
+  editingInvoice: Invoice | null;
+  isDeleteConfirmOpen: boolean;
+  invoiceToDelete: Invoice | null;
+  errors: Record<string, string>;
+  formData: Partial<Invoice>;
+};
+
+type StateUpdate<T> = T | ((prev: T) => T);
+
+type ClientsInvoicesAction =
+  | { type: 'openAdd'; formData: Partial<Invoice> }
+  | { type: 'openEdit'; invoice: Invoice; formData: Partial<Invoice> }
+  | { type: 'closeModal' }
+  | { type: 'requestDelete'; invoice: Invoice }
+  | { type: 'closeDeleteConfirm' }
+  | { type: 'setFormData'; update: StateUpdate<Partial<Invoice>> }
+  | { type: 'setErrors'; update: StateUpdate<Record<string, string>> };
+
+const resolveStateUpdate = <T,>(current: T, update: StateUpdate<T>): T =>
+  typeof update === 'function' ? (update as (prev: T) => T)(current) : update;
+
+const clientsInvoicesReducer = (
+  state: ClientsInvoicesState,
+  action: ClientsInvoicesAction,
+): ClientsInvoicesState => {
+  switch (action.type) {
+    case 'openAdd':
+      return {
+        ...state,
+        isModalOpen: true,
+        editingInvoice: null,
+        formData: action.formData,
+        errors: {},
+      };
+    case 'openEdit':
+      return {
+        ...state,
+        isModalOpen: true,
+        editingInvoice: action.invoice,
+        formData: action.formData,
+        errors: {},
+      };
+    case 'closeModal':
+      return { ...state, isModalOpen: false };
+    case 'requestDelete':
+      return { ...state, isDeleteConfirmOpen: true, invoiceToDelete: action.invoice };
+    case 'closeDeleteConfirm':
+      return { ...state, isDeleteConfirmOpen: false, invoiceToDelete: null };
+    case 'setFormData':
+      return { ...state, formData: resolveStateUpdate(state.formData, action.update) };
+    case 'setErrors':
+      return { ...state, errors: resolveStateUpdate(state.errors, action.update) };
+  }
+};
+
 const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   invoices,
   clients,
@@ -59,11 +134,32 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   currency,
 }) => {
   const { t } = useTranslation(['accounting', 'sales', 'common']);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [invoiceState, dispatchInvoiceState] = useReducer(
+    clientsInvoicesReducer,
+    undefined,
+    () => ({
+      isModalOpen: false,
+      editingInvoice: null,
+      isDeleteConfirmOpen: false,
+      invoiceToDelete: null,
+      errors: {},
+      formData: buildDefaultInvoice(),
+    }),
+  );
+  const { isModalOpen, editingInvoice, isDeleteConfirmOpen, invoiceToDelete, errors, formData } =
+    invoiceState;
+  const setFormData = useCallback((update: StateUpdate<Partial<Invoice>>) => {
+    dispatchInvoiceState({ type: 'setFormData', update });
+  }, []);
+  const setErrors = useCallback((update: StateUpdate<Record<string, string>>) => {
+    dispatchInvoiceState({ type: 'setErrors', update });
+  }, []);
+  const closeModal = useCallback(() => {
+    dispatchInvoiceState({ type: 'closeModal' });
+  }, []);
+  const closeDeleteConfirm = useCallback(() => {
+    dispatchInvoiceState({ type: 'closeDeleteConfirm' });
+  }, []);
 
   const statusOptions = useMemo(
     () => [
@@ -83,26 +179,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     ],
     [t],
   );
-
-  const defaultInvoice = useMemo(() => {
-    const issueDate = getLocalDateString();
-    return {
-      clientId: '',
-      clientName: '',
-      id: '',
-      items: [],
-      issueDate,
-      dueDate: addDaysToDateOnly(issueDate, 30),
-      status: 'draft' as const,
-      notes: '',
-      amountPaid: 0,
-      subtotal: 0,
-      taxTotal: 0,
-      total: 0,
-    };
-  }, []);
-
-  const [formData, setFormData] = useState<Partial<Invoice>>(defaultInvoice);
 
   const activeClients = useMemo(() => clients.filter((client) => !client.isDisabled), [clients]);
   const activeProducts = useMemo(
@@ -124,7 +200,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         return nextErrors;
       });
     }
-  }, [errors.items]);
+  }, [errors.items, setErrors]);
 
   const applyProductPricing = useCallback(
     (
@@ -148,36 +224,37 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
   const openAddModal = () => {
     const issueDate = getLocalDateString();
-    setEditingInvoice(null);
-    setFormData({
-      clientId: '',
-      clientName: '',
-      id: generateInvoiceId(),
-      items: [],
-      issueDate,
-      dueDate: addDaysToDateOnly(issueDate, 30),
-      status: 'draft',
-      notes: '',
-      amountPaid: 0,
-      subtotal: 0,
-      taxTotal: 0,
-      total: 0,
+    dispatchInvoiceState({
+      type: 'openAdd',
+      formData: {
+        clientId: '',
+        clientName: '',
+        id: generateInvoiceId(),
+        items: [],
+        issueDate,
+        dueDate: addDaysToDateOnly(issueDate, 30),
+        status: 'draft',
+        notes: '',
+        amountPaid: 0,
+        subtotal: 0,
+        taxTotal: 0,
+        total: 0,
+      },
     });
-    setErrors({});
-    setIsModalOpen(true);
   };
 
   const openEditModal = useCallback((invoice: Invoice) => {
-    setEditingInvoice(invoice);
-    setFormData({
-      ...invoice,
-      items: invoice.items.map((item) => ({
-        ...item,
-        unitOfMeasure: normalizeUnitOfMeasure(item.unitOfMeasure),
-      })),
+    dispatchInvoiceState({
+      type: 'openEdit',
+      invoice,
+      formData: {
+        ...invoice,
+        items: invoice.items.map((item) => ({
+          ...item,
+          unitOfMeasure: normalizeUnitOfMeasure(item.unitOfMeasure),
+        })),
+      },
     });
-    setErrors({});
-    setIsModalOpen(true);
   }, []);
 
   const calculateTotals = useCallback((items: InvoiceItem[]) => {
@@ -320,19 +397,17 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     } else {
       onAddInvoice(payload);
     }
-    setIsModalOpen(false);
+    closeModal();
   };
 
   const confirmDelete = useCallback((invoice: Invoice) => {
-    setInvoiceToDelete(invoice);
-    setIsDeleteConfirmOpen(true);
+    dispatchInvoiceState({ type: 'requestDelete', invoice });
   }, []);
 
   const handleDelete = () => {
     if (invoiceToDelete) {
       onDeleteInvoice(invoiceToDelete.id);
-      setIsDeleteConfirmOpen(false);
-      setInvoiceToDelete(null);
+      closeDeleteConfirm();
     }
   };
 
@@ -490,7 +565,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+      <Modal isOpen={isModalOpen} onClose={closeModal}>
         <ModalContent size="full" className="max-h-[90vh]">
           <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
             <ModalHeader>
@@ -505,7 +580,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                   ? t('accounting:clientsInvoices.editInvoice')
                   : t('accounting:clientsInvoices.addInvoice')}
               </ModalTitle>
-              <ModalCloseButton onClick={() => setIsModalOpen(false)} />
+              <ModalCloseButton onClick={closeModal} />
             </ModalHeader>
 
             <ModalBody className="flex-1 space-y-5">
@@ -883,7 +958,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
             </ModalBody>
 
             <ModalFooter>
-              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
+              <Button type="button" variant="outline" onClick={closeModal}>
                 {t('common:buttons.cancel')}
               </Button>
               <Button type="submit">{t('common:buttons.save')}</Button>
@@ -894,7 +969,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
       <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen}
-        onClose={() => setIsDeleteConfirmOpen(false)}
+        onClose={closeDeleteConfirm}
         onConfirm={handleDelete}
         title={t('accounting:clientsInvoices.deleteTitle')}
         description={t('accounting:clientsInvoices.deleteMessage', {

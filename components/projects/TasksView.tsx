@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { tasksApi } from '../../services/api/tasks';
@@ -22,6 +22,86 @@ const billingFrequencyOptions = [
   { id: 'monthly', name: 'projects:projects.billingFrequencies.monthly' },
   { id: 'one_time', name: 'projects:projects.billingFrequencies.oneTime' },
 ];
+
+type TaskHoursLoadState = 'idle' | 'loading' | 'error';
+
+type TasksViewState = {
+  editingTask: ProjectTask | null;
+  isModalOpen: boolean;
+  isDeleteConfirmOpen: boolean;
+  isDeleting: boolean;
+  managingTaskId: string | null;
+  taskHours: Record<string, Record<string, number>> | null;
+  hoursLoadState: TaskHoursLoadState;
+};
+
+type TasksViewAction =
+  | { type: 'resetHours'; hasProjects: boolean }
+  | { type: 'hoursSuccess'; taskHours: Record<string, Record<string, number>> }
+  | { type: 'hoursError' }
+  | { type: 'openAdd' }
+  | { type: 'openEdit'; task: ProjectTask }
+  | { type: 'confirmDelete'; task?: ProjectTask }
+  | { type: 'closeAll' }
+  | { type: 'closeForm' }
+  | { type: 'cancelDelete' }
+  | { type: 'deleteStart' }
+  | { type: 'deleteDone' }
+  | { type: 'manageTask'; taskId: string | null };
+
+const createTasksViewState = (): TasksViewState => ({
+  editingTask: null,
+  isModalOpen: false,
+  isDeleteConfirmOpen: false,
+  isDeleting: false,
+  managingTaskId: null,
+  taskHours: null,
+  hoursLoadState: 'idle',
+});
+
+const tasksViewReducer = (state: TasksViewState, action: TasksViewAction): TasksViewState => {
+  switch (action.type) {
+    case 'resetHours':
+      return {
+        ...state,
+        taskHours: action.hasProjects ? null : {},
+        hoursLoadState: action.hasProjects ? 'loading' : 'idle',
+      };
+    case 'hoursSuccess':
+      return { ...state, taskHours: action.taskHours, hoursLoadState: 'idle' };
+    case 'hoursError':
+      return { ...state, taskHours: {}, hoursLoadState: 'error' };
+    case 'openAdd':
+      return { ...state, editingTask: null, isModalOpen: true };
+    case 'openEdit':
+      return { ...state, editingTask: action.task, isModalOpen: true };
+    case 'confirmDelete':
+      return {
+        ...state,
+        editingTask: action.task ?? state.editingTask,
+        isDeleteConfirmOpen: true,
+      };
+    case 'closeAll':
+      return {
+        ...state,
+        editingTask: null,
+        isModalOpen: false,
+        isDeleteConfirmOpen: false,
+      };
+    case 'closeForm':
+      return { ...state, editingTask: null, isModalOpen: false };
+    case 'cancelDelete':
+      return { ...state, isDeleteConfirmOpen: false };
+    case 'deleteStart':
+      return { ...state, isDeleting: true };
+    case 'deleteDone':
+      return { ...state, isDeleting: false };
+    case 'manageTask':
+      return { ...state, managingTaskId: action.taskId };
+    default:
+      return state;
+  }
+};
 
 export interface TasksViewProps {
   tasks: ProjectTask[];
@@ -63,18 +143,25 @@ const TasksView: React.FC<TasksViewProps> = ({
   const canCreateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
   const canUpdateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'update');
   const canDeleteTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'delete');
-  const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  const [managingTaskId, setManagingTaskId] = useState<string | null>(null);
-
-  const [taskHours, setTaskHours] = useState<Record<string, Record<string, number>> | null>(null);
-  const [hoursLoadState, setHoursLoadState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [state, dispatch] = useReducer(tasksViewReducer, undefined, createTasksViewState);
+  const {
+    editingTask,
+    isModalOpen,
+    isDeleteConfirmOpen,
+    isDeleting,
+    managingTaskId,
+    taskHours,
+    hoursLoadState,
+  } = state;
   const fetchHoursGenRef = useRef(0);
 
   const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
+  const projectIdsKey = useMemo(() => projectIds.join('\u0000'), [projectIds]);
+  const loadedProjectIdsKeyRef = useRef(projectIdsKey);
+  if (loadedProjectIdsKeyRef.current !== projectIdsKey) {
+    loadedProjectIdsKeyRef.current = projectIdsKey;
+    dispatch({ type: 'resetHours', hasProjects: projectIds.length > 0 });
+  }
   const translatedBillingTypeOptions = useMemo(
     () => billingTypeOptions.map((option) => ({ id: option.id, name: t(option.name) })),
     [t],
@@ -95,33 +182,29 @@ const TasksView: React.FC<TasksViewProps> = ({
   );
 
   useEffect(() => {
-    if (projectIds.length === 0) {
-      setTaskHours({});
-      setHoursLoadState('idle');
-      return;
-    }
+    if (!projectIdsKey) return;
+    const requestProjectIds = projectIdsKey.split('\u0000');
     const gen = ++fetchHoursGenRef.current;
     const abortController = new AbortController();
-    setTaskHours(null);
-    setHoursLoadState('loading');
     (async () => {
       try {
-        const map = await tasksApi.getHoursForProjects(projectIds, abortController.signal);
-        if (fetchHoursGenRef.current !== gen) return;
-        setTaskHours(map);
-        setHoursLoadState('idle');
+        const map = await tasksApi.getHoursForProjects(requestProjectIds, abortController.signal);
+        if (fetchHoursGenRef.current === gen) {
+          dispatch({ type: 'hoursSuccess', taskHours: map });
+        }
       } catch (e) {
-        if (abortController.signal.aborted) return;
-        console.error('Failed to load task hours', e);
-        if (fetchHoursGenRef.current !== gen) return;
-        setTaskHours({});
-        setHoursLoadState('error');
+        if (!abortController.signal.aborted) {
+          console.error('Failed to load task hours', e);
+          if (fetchHoursGenRef.current === gen) {
+            dispatch({ type: 'hoursError' });
+          }
+        }
       }
     })();
     return () => {
       abortController.abort();
     };
-  }, [projectIds]);
+  }, [projectIdsKey]);
 
   const checkInheritedDisabled = useCallback(
     (task: ProjectTask) => {
@@ -134,28 +217,29 @@ const TasksView: React.FC<TasksViewProps> = ({
 
   const openAddModal = useCallback(() => {
     if (!canCreateTasks) return;
-    setEditingTask(null);
-    setIsModalOpen(true);
+    dispatch({ type: 'openAdd' });
   }, [canCreateTasks]);
 
   const openEditModal = useCallback(
     (task: ProjectTask) => {
       if (!canUpdateTasks) return;
-      setEditingTask(task);
-      setIsModalOpen(true);
+      dispatch({ type: 'openEdit', task });
     },
     [canUpdateTasks],
   );
 
-  const confirmDelete = useCallback(() => {
-    if (!canDeleteTasks) return;
-    setIsDeleteConfirmOpen(true);
-  }, [canDeleteTasks]);
+  const confirmDelete = useCallback(
+    (task?: ProjectTask) => {
+      if (!canDeleteTasks) return;
+      dispatch({ type: 'confirmDelete', task });
+    },
+    [canDeleteTasks],
+  );
 
   const openAssignments = useCallback(
     (taskId: string) => {
       if (!canUpdateTasks) return;
-      setManagingTaskId(taskId);
+      dispatch({ type: 'manageTask', taskId });
     },
     [canUpdateTasks],
   );
@@ -465,8 +549,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setEditingTask(row);
-                          confirmDelete();
+                          confirmDelete(row);
                         }}
                         aria-label={t('common:buttons.delete')}
                         className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
@@ -504,37 +587,34 @@ const TasksView: React.FC<TasksViewProps> = ({
   );
 
   const closeModal = () => {
-    setIsModalOpen(false);
-    setIsDeleteConfirmOpen(false);
-    setEditingTask(null);
+    dispatch({ type: 'closeAll' });
   };
 
   const requestCloseFormModal = () => {
     if (isDeleting) return;
-    setIsModalOpen(false);
-    setEditingTask(null);
+    dispatch({ type: 'closeForm' });
   };
 
   const cancelDelete = () => {
     if (isDeleting) return;
-    setIsDeleteConfirmOpen(false);
+    dispatch({ type: 'cancelDelete' });
   };
 
   const handleDelete = async () => {
     if (!canDeleteTasks) return;
     if (isDeleting) return;
     if (!editingTask) return;
-    setIsDeleting(true);
+    dispatch({ type: 'deleteStart' });
     try {
       await onDeleteTask(editingTask.id);
       closeModal();
     } finally {
-      setIsDeleting(false);
+      dispatch({ type: 'deleteDone' });
     }
   };
 
   const closeAssignments = () => {
-    setManagingTaskId(null);
+    dispatch({ type: 'manageTask', taskId: null });
   };
 
   const managingTask = tasks.find((t) => t.id === managingTaskId);
@@ -581,12 +661,14 @@ const TasksView: React.FC<TasksViewProps> = ({
         projects={projects}
         clients={clients}
         currency={currency}
-        canCreate={canCreateTasks}
-        canUpdate={canUpdateTasks}
-        canDelete={canDeleteTasks}
+        permissions={{
+          canCreate: canCreateTasks,
+          canUpdate: canUpdateTasks,
+          canDelete: canDeleteTasks,
+        }}
         onAdd={onAddTask}
         onUpdate={onUpdateTask}
-        onDelete={confirmDelete}
+        onDelete={() => confirmDelete()}
         onViewOrder={onViewOrder}
       />
 

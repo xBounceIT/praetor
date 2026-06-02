@@ -52,6 +52,15 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
     }, logoutAfterMs);
   }, [onLogout, warnAfterMs, logoutAfterMs]);
 
+  const clearTimers = useCallback(() => {
+    const warningTimer = warningTimerRef.current;
+    const logoutTimer = logoutTimerRef.current;
+    if (warningTimer) clearTimeout(warningTimer);
+    if (logoutTimer) clearTimeout(logoutTimer);
+    warningTimerRef.current = null;
+    logoutTimerRef.current = null;
+  }, []);
+
   useEffect(() => {
     resetTimersRef.current = resetTimers;
   }, [resetTimers]);
@@ -75,10 +84,9 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
       events.forEach((event) => {
         window.removeEventListener(event, handleActivity);
       });
-      if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
-      if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+      clearTimers();
     };
-  }, []);
+  }, [clearTimers]);
 
   const handleStayLoggedIn = async () => {
     setIsRefreshing(true);

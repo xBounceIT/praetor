@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,12 @@ export type TaskFormDetails = Pick<
   'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
 >;
 
+export type TaskFormPermissions = {
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+};
+
 export interface TaskFormModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -52,9 +58,7 @@ export interface TaskFormModalProps {
   projects: Project[];
   clients: Client[];
   currency: string;
-  canCreate: boolean;
-  canUpdate: boolean;
-  canDelete: boolean;
+  permissions: TaskFormPermissions;
   onAdd: (
     name: string,
     projectId: string,
@@ -69,6 +73,40 @@ export interface TaskFormModalProps {
   projectLocked?: boolean;
 }
 
+type TaskFormState = {
+  name: string;
+  projectId: string;
+  description: string;
+  billingType: StoredBillingType;
+  billingFrequency: BillingFrequency;
+  monthlyEffort: string;
+  expectedEffort: string;
+  revenue: string;
+  notes: string;
+  tempIsDisabled: boolean;
+  isSubmitting: boolean;
+};
+
+type TaskFormTextField =
+  | 'name'
+  | 'description'
+  | 'monthlyEffort'
+  | 'expectedEffort'
+  | 'revenue'
+  | 'notes';
+
+type TaskFormAction =
+  | { type: 'setTextField'; field: TaskFormTextField; value: string }
+  | {
+      type: 'selectProject';
+      projectId: string;
+      billing?: ReturnType<typeof deriveBillingFromProject>;
+    }
+  | { type: 'setBillingType'; billingType: StoredBillingType }
+  | { type: 'setBillingFrequency'; billingFrequency: BillingFrequency }
+  | { type: 'toggleDisabled' }
+  | { type: 'setSubmitting'; isSubmitting: boolean };
+
 const deriveBillingFromProject = (project: Project | undefined) => {
   const billingType: StoredBillingType =
     project?.billingType === 'retainer' ? 'retainer' : 'time_and_materials';
@@ -77,17 +115,205 @@ const deriveBillingFromProject = (project: Project | undefined) => {
   return { billingType, billingFrequency };
 };
 
-const TaskFormModal: React.FC<TaskFormModalProps> = ({
+const getTaskFormSessionKey = (
+  isOpen: boolean,
+  mode: TaskFormModalProps['mode'],
+  editingTask: ProjectTask | null,
+  initialProjectId?: string,
+) => (isOpen ? `${mode}|${editingTask?.id ?? ''}|${initialProjectId ?? ''}` : 'closed');
+
+const createTaskFormState = (
+  mode: TaskFormModalProps['mode'],
+  editingTask: ProjectTask | null,
+  initialProjectId: string | undefined,
+  projects: Project[],
+): TaskFormState => {
+  if (mode === 'edit' && editingTask) {
+    return {
+      name: editingTask.name,
+      projectId: editingTask.projectId,
+      description: editingTask.description || '',
+      billingType: editingTask.billingType ?? 'time_and_materials',
+      billingFrequency:
+        editingTask.billingType === 'time_and_materials'
+          ? 'monthly'
+          : (editingTask.billingFrequency ?? 'monthly'),
+      monthlyEffort:
+        editingTask.monthlyEffort !== undefined ? String(editingTask.monthlyEffort) : '',
+      expectedEffort:
+        editingTask.expectedEffort !== undefined ? String(editingTask.expectedEffort) : '',
+      revenue: editingTask.revenue !== undefined ? String(editingTask.revenue) : '',
+      notes: editingTask.notes ?? '',
+      tempIsDisabled: editingTask.isDisabled || false,
+      isSubmitting: false,
+    };
+  }
+
+  const seedProject = initialProjectId
+    ? projects.find((p) => p.id === initialProjectId)
+    : undefined;
+  const seeded = deriveBillingFromProject(seedProject);
+  return {
+    name: '',
+    projectId: initialProjectId ?? '',
+    description: '',
+    billingType: seeded.billingType,
+    billingFrequency: seeded.billingFrequency,
+    monthlyEffort: '',
+    expectedEffort: '',
+    revenue: '',
+    notes: '',
+    tempIsDisabled: false,
+    isSubmitting: false,
+  };
+};
+
+const taskFormReducer = (state: TaskFormState, action: TaskFormAction): TaskFormState => {
+  switch (action.type) {
+    case 'setTextField':
+      return { ...state, [action.field]: action.value };
+    case 'selectProject':
+      return {
+        ...state,
+        projectId: action.projectId,
+        ...(action.billing ?? {}),
+      };
+    case 'setBillingType':
+      return {
+        ...state,
+        billingType: action.billingType,
+        billingFrequency:
+          action.billingType === 'time_and_materials' ? 'monthly' : state.billingFrequency,
+      };
+    case 'setBillingFrequency':
+      return { ...state, billingFrequency: action.billingFrequency };
+    case 'toggleDisabled':
+      return { ...state, tempIsDisabled: !state.tempIsDisabled };
+    case 'setSubmitting':
+      return { ...state, isSubmitting: action.isSubmitting };
+  }
+};
+
+type TaskFormModalSessionProps = Omit<TaskFormModalProps, 'editingTask'> & {
+  editingTask: ProjectTask | null;
+};
+
+const TaskDisabledToggleField: React.FC<{
+  checked: boolean;
+  disabled: boolean;
+  inheritedFromClient: boolean;
+  clientName?: string;
+  projectName?: string;
+  onToggle: () => void;
+}> = ({ checked, disabled, inheritedFromClient, clientName, projectName, onToggle }) => {
+  const { t } = useTranslation(['projects']);
+
+  return (
+    <Field>
+      <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
+        <div>
+          <p
+            className={`text-sm font-medium ${
+              disabled ? 'text-muted-foreground' : 'text-foreground'
+            }`}
+          >
+            {t('tasks.isDisabled')}
+          </p>
+          {disabled && (
+            <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-600">
+              <i className="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+              {inheritedFromClient
+                ? t('projects.inheritedFromDisabledClient', { clientName })
+                : t('tasks.inheritedFromDisabledProject', { projectName })}
+            </p>
+          )}
+        </div>
+        <Toggle checked={checked} onChange={onToggle} disabled={disabled} />
+      </div>
+    </Field>
+  );
+};
+
+const TaskFormHeader: React.FC<{
+  isEditing: boolean;
+  isSubmitting: boolean;
+  onClose: () => void;
+}> = ({ isEditing, isSubmitting, onClose }) => {
+  const { t } = useTranslation(['projects']);
+
+  return (
+    <ModalHeader>
+      <ModalTitle className="gap-3">
+        <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+          <i
+            className={`fa-solid ${isEditing ? 'fa-pen-to-square' : 'fa-list-check'}`}
+            aria-hidden="true"
+          ></i>
+        </span>
+        {isEditing ? t('tasks.editTask') : t('tasks.createNewTask')}
+      </ModalTitle>
+      <ModalCloseButton onClick={onClose} disabled={isSubmitting} />
+    </ModalHeader>
+  );
+};
+
+type TaskFormFooterState = {
+  isEditing: boolean;
+  canDelete: boolean;
+  canSubmit: boolean;
+  isSubmitting: boolean;
+};
+
+const TaskFormFooter: React.FC<{
+  state: TaskFormFooterState;
+  onDelete?: () => void;
+  onCancel: () => void;
+}> = ({ state, onDelete, onCancel }) => {
+  const { t } = useTranslation(['projects', 'common']);
+  const { isEditing, canDelete, canSubmit, isSubmitting } = state;
+
+  return (
+    <ModalFooter className="sm:justify-between">
+      {isEditing && canDelete && onDelete ? (
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={onDelete}
+          disabled={isSubmitting}
+          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+        >
+          <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+          {t('common:buttons.delete')}
+        </Button>
+      ) : (
+        <span />
+      )}
+
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
+          {t('common:buttons.cancel')}
+        </Button>
+        <Button type="submit" disabled={!canSubmit || isSubmitting}>
+          {isSubmitting
+            ? t('common:buttons.saving')
+            : isEditing
+              ? t('projects.saveChanges')
+              : t('tasks.addTask')}
+        </Button>
+      </div>
+    </ModalFooter>
+  );
+};
+
+const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
   isOpen,
   onClose,
   mode,
-  editingTask = null,
+  editingTask,
   projects,
   clients,
   currency,
-  canCreate,
-  canUpdate,
-  canDelete,
+  permissions,
   onAdd,
   onUpdate,
   onDelete,
@@ -96,68 +322,23 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({
   projectLocked = false,
 }) => {
   const { t } = useTranslation(['projects', 'common']);
-
-  const [name, setName] = useState('');
-  const [projectId, setProjectId] = useState('');
-  const [description, setDescription] = useState('');
-  const [billingType, setBillingType] = useState<StoredBillingType>('time_and_materials');
-  const [billingFrequency, setBillingFrequency] = useState<BillingFrequency>('monthly');
-  const [monthlyEffort, setMonthlyEffort] = useState('');
-  const [expectedEffort, setExpectedEffort] = useState('');
-  const [revenue, setRevenue] = useState('');
-  const [notes, setNotes] = useState('');
-  const [tempIsDisabled, setTempIsDisabled] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  // Track the (mode, editingTask, initialProjectId) tuple we last initialized for. The init effect
-  // runs once per distinct session and skips re-runs caused by unrelated dep changes (e.g. a new
-  // `projects` array reference from the parent) that would otherwise clobber in-progress user
-  // input. Resetting to null on close lets the next open trigger a fresh init.
-  const initializedForRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!isOpen) {
-      initializedForRef.current = null;
-      return;
-    }
-    const sessionKey = `${mode}|${editingTask?.id ?? ''}|${initialProjectId ?? ''}`;
-    if (initializedForRef.current === sessionKey) return;
-    initializedForRef.current = sessionKey;
-    if (mode === 'edit' && editingTask) {
-      setName(editingTask.name);
-      setProjectId(editingTask.projectId);
-      setDescription(editingTask.description || '');
-      setBillingType(editingTask.billingType ?? 'time_and_materials');
-      setBillingFrequency(
-        editingTask.billingType === 'time_and_materials'
-          ? 'monthly'
-          : (editingTask.billingFrequency ?? 'monthly'),
-      );
-      setMonthlyEffort(
-        editingTask.monthlyEffort !== undefined ? String(editingTask.monthlyEffort) : '',
-      );
-      setExpectedEffort(
-        editingTask.expectedEffort !== undefined ? String(editingTask.expectedEffort) : '',
-      );
-      setRevenue(editingTask.revenue !== undefined ? String(editingTask.revenue) : '');
-      setNotes(editingTask.notes ?? '');
-      setTempIsDisabled(editingTask.isDisabled || false);
-    } else {
-      setName('');
-      setProjectId(initialProjectId ?? '');
-      setDescription('');
-      const seedProject = initialProjectId
-        ? projects.find((p) => p.id === initialProjectId)
-        : undefined;
-      const seeded = deriveBillingFromProject(seedProject);
-      setBillingType(seeded.billingType);
-      setBillingFrequency(seeded.billingFrequency);
-      setMonthlyEffort('');
-      setExpectedEffort('');
-      setRevenue('');
-      setNotes('');
-      setTempIsDisabled(false);
-    }
-  }, [isOpen, mode, editingTask, initialProjectId, projects]);
+  const [formState, dispatch] = useReducer(taskFormReducer, undefined, () =>
+    createTaskFormState(mode, editingTask, initialProjectId, projects),
+  );
+  const { canCreate, canUpdate, canDelete } = permissions;
+  const {
+    name,
+    projectId,
+    description,
+    billingType,
+    billingFrequency,
+    monthlyEffort,
+    expectedEffort,
+    revenue,
+    notes,
+    tempIsDisabled,
+    isSubmitting,
+  } = formState;
 
   const translatedBillingTypeOptions = useMemo(
     () => billingTypeOptions.map((option) => ({ id: option.id, name: t(option.name) })),
@@ -174,7 +355,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({
   );
 
   const canSubmit = mode === 'edit' ? canUpdate : canCreate;
-  const isEditing = mode === 'edit' && editingTask;
+  const isEditing = mode === 'edit' && Boolean(editingTask);
 
   const requestClose = useCallback(() => {
     if (isSubmitting) return;
@@ -195,7 +376,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({
       revenue: revenue ? parseFloat(revenue) : undefined,
       notes: notes.trim() || undefined,
     };
-    setIsSubmitting(true);
+    dispatch({ type: 'setSubmitting', isSubmitting: true });
     try {
       if (isEditing && editingTask) {
         await onUpdate(editingTask.id, {
@@ -210,7 +391,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({
       }
       onClose();
     } finally {
-      setIsSubmitting(false);
+      dispatch({ type: 'setSubmitting', isSubmitting: false });
     }
   };
 
@@ -226,18 +407,11 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({
     <Modal isOpen={isOpen} onClose={requestClose}>
       <ModalContent size="2xl">
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
-          <ModalHeader>
-            <ModalTitle className="gap-3">
-              <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-                <i
-                  className={`fa-solid ${isEditing ? 'fa-pen-to-square' : 'fa-list-check'}`}
-                  aria-hidden="true"
-                ></i>
-              </span>
-              {isEditing ? t('tasks.editTask') : t('tasks.createNewTask')}
-            </ModalTitle>
-            <ModalCloseButton onClick={requestClose} disabled={isSubmitting} />
-          </ModalHeader>
+          <TaskFormHeader
+            isEditing={isEditing}
+            isSubmitting={isSubmitting}
+            onClose={requestClose}
+          />
 
           <ModalBody className="space-y-6">
             {isEditing && orderId ? (
@@ -264,13 +438,12 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({
                   onChange={(val) => {
                     if (projectLocked) return;
                     const nextProjectId = val as string;
-                    setProjectId(nextProjectId);
-                    if (!isEditing) {
-                      const nextProject = projects.find((item) => item.id === nextProjectId);
-                      const next = deriveBillingFromProject(nextProject);
-                      setBillingType(next.billingType);
-                      setBillingFrequency(next.billingFrequency);
-                    }
+                    const nextProject = projects.find((item) => item.id === nextProjectId);
+                    dispatch({
+                      type: 'selectProject',
+                      projectId: nextProjectId,
+                      billing: isEditing ? undefined : deriveBillingFromProject(nextProject),
+                    });
                   }}
                   label={t('tasks.project')}
                   placeholder={t('common:labels.selectOption')}
@@ -285,7 +458,9 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({
                     id="task-name"
                     type="text"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) =>
+                      dispatch({ type: 'setTextField', field: 'name', value: e.target.value })
+                    }
                     placeholder={t('tasks.taskNamePlaceholder')}
                   />
                 </Field>
@@ -296,7 +471,9 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({
                 <Textarea
                   id="task-description"
                   value={description}
-                  onChange={(e) => setDescription(e.target.value)}
+                  onChange={(e) =>
+                    dispatch({ type: 'setTextField', field: 'description', value: e.target.value })
+                  }
                   placeholder={t('tasks.taskDescriptionPlaceholder')}
                   rows={3}
                   className="min-h-20 resize-none"
@@ -310,8 +487,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({
                   value={billingType}
                   onChange={(val) => {
                     const nextBillingType = val as StoredBillingType;
-                    setBillingType(nextBillingType);
-                    if (nextBillingType === 'time_and_materials') setBillingFrequency('monthly');
+                    dispatch({ type: 'setBillingType', billingType: nextBillingType });
                   }}
                   label={t('projects:projects.billingType')}
                   searchable={false}
@@ -327,7 +503,12 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({
                         )
                   }
                   value={billingType === 'time_and_materials' ? 'monthly' : billingFrequency}
-                  onChange={(val) => setBillingFrequency(val as BillingFrequency)}
+                  onChange={(val) =>
+                    dispatch({
+                      type: 'setBillingFrequency',
+                      billingFrequency: val as BillingFrequency,
+                    })
+                  }
                   label={t('projects:projects.billingFrequency')}
                   disabled={billingType === 'time_and_materials'}
                   searchable={false}
@@ -343,7 +524,13 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({
                     min="0"
                     step="1"
                     value={monthlyEffort}
-                    onChange={(e) => setMonthlyEffort(e.target.value)}
+                    onChange={(e) =>
+                      dispatch({
+                        type: 'setTextField',
+                        field: 'monthlyEffort',
+                        value: e.target.value,
+                      })
+                    }
                     placeholder="0"
                   />
                 </Field>
@@ -357,7 +544,13 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({
                     min="0"
                     step="1"
                     value={expectedEffort}
-                    onChange={(e) => setExpectedEffort(e.target.value)}
+                    onChange={(e) =>
+                      dispatch({
+                        type: 'setTextField',
+                        field: 'expectedEffort',
+                        value: e.target.value,
+                      })
+                    }
                     placeholder="0"
                   />
                 </Field>
@@ -371,7 +564,9 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({
                     min="0"
                     step="0.01"
                     value={revenue}
-                    onChange={(e) => setRevenue(e.target.value)}
+                    onChange={(e) =>
+                      dispatch({ type: 'setTextField', field: 'revenue', value: e.target.value })
+                    }
                     placeholder="0.00"
                   />
                 </Field>
@@ -382,7 +577,9 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({
                 <Textarea
                   id="task-notes"
                   value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
+                  onChange={(e) =>
+                    dispatch({ type: 'setTextField', field: 'notes', value: e.target.value })
+                  }
                   placeholder={t('common:form.placeholderNotes')}
                   rows={3}
                   className="min-h-20 resize-none"
@@ -390,82 +587,42 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({
               </Field>
 
               {isEditing && (
-                <Field>
-                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
-                    <div>
-                      <p
-                        className={`text-sm font-medium ${
-                          isInheritedDisabled ? 'text-muted-foreground' : 'text-foreground'
-                        }`}
-                      >
-                        {t('tasks.isDisabled')}
-                      </p>
-                      {isInheritedDisabled && (
-                        <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-600">
-                          <i className="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
-                          {isClientDisabled
-                            ? t('projects.inheritedFromDisabledClient', {
-                                clientName: client?.name,
-                              })
-                            : t('tasks.inheritedFromDisabledProject', {
-                                projectName: project?.name,
-                              })}
-                        </p>
-                      )}
-                    </div>
-                    <Toggle
-                      checked={isCurrentlyDisabled}
-                      onChange={() => {
-                        if (!isInheritedDisabled) {
-                          setTempIsDisabled(!tempIsDisabled);
-                        }
-                      }}
-                      disabled={isInheritedDisabled}
-                    />
-                  </div>
-                </Field>
+                <TaskDisabledToggleField
+                  checked={isCurrentlyDisabled}
+                  disabled={isInheritedDisabled}
+                  inheritedFromClient={isClientDisabled}
+                  clientName={client?.name}
+                  projectName={project?.name}
+                  onToggle={() => {
+                    if (!isInheritedDisabled) {
+                      dispatch({ type: 'toggleDisabled' });
+                    }
+                  }}
+                />
               )}
             </div>
           </ModalBody>
 
-          <ModalFooter className="sm:justify-between">
-            {isEditing && canDelete && onDelete ? (
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={onDelete}
-                disabled={isSubmitting}
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              >
-                <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-                {t('common:buttons.delete')}
-              </Button>
-            ) : (
-              <span />
-            )}
-
-            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={requestClose}
-                disabled={isSubmitting}
-              >
-                {t('common:buttons.cancel')}
-              </Button>
-              <Button type="submit" disabled={!canSubmit || isSubmitting}>
-                {isSubmitting
-                  ? t('common:buttons.saving')
-                  : isEditing
-                    ? t('projects.saveChanges')
-                    : t('tasks.addTask')}
-              </Button>
-            </div>
-          </ModalFooter>
+          <TaskFormFooter
+            state={{ isEditing, canDelete, canSubmit, isSubmitting }}
+            onDelete={onDelete}
+            onCancel={requestClose}
+          />
         </form>
       </ModalContent>
     </Modal>
   );
+};
+
+const TaskFormModal: React.FC<TaskFormModalProps> = ({ editingTask = null, ...props }) => {
+  const sessionKey = getTaskFormSessionKey(
+    props.isOpen,
+    props.mode,
+    editingTask,
+    props.initialProjectId,
+  );
+
+  return <TaskFormModalSession key={sessionKey} {...props} editingTask={editingTask} />;
 };
 
 export default TaskFormModal;

@@ -110,7 +110,10 @@ describe('ProjectDetailView wiring', () => {
     // GET /projects/:id/users is server-gated on `projects.assignments.update`. Without
     // that permission the fetch 403s and the KPI would show a misleading "0".
     const source = await readSource();
-    expect(source).toMatch(/if \(!canManageAssignments\)[\s\S]{0,200}setAssignedUserIds\(\[\]\)/);
+    expect(source).toMatch(
+      /loadedAssignedKeyRef\.current !== assignedLoadKey[\s\S]{0,160}setAssignedUserIds\(\[\]\)/,
+    );
+    expect(source).toMatch(/if \(!canManageAssignments\) \{\s*return;\s*\}/);
     // The team-size card is gated via the predicate and placed via its grid item.
     expect(source).toMatch(/widgetPermitted\('teamSize'\) && \(\s*<DashboardItem id="teamSize"/);
     expect(source).toMatch(/id === 'teamSize'\) return canManageAssignments/);
@@ -154,7 +157,7 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     // Custom tooltip lists only non-zero tasks (+ total), not a row per series.
     expect(source).toContain('const UserTaskTooltip');
     expect(source).toMatch(/<UserTaskTooltip\s+series=\{hoursByUserTask\.series\}/);
-    expect(source).toMatch(/\.filter\(\(p\) => typeof p\.value === 'number' && p\.value > 0\)/);
+    expect(source).toMatch(/if \(typeof p\.value !== 'number' \|\| p\.value <= 0\) return acc/);
     expect(source).toContain("t('projects:detail.charts.totalLabel')");
   });
 
@@ -427,17 +430,17 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
     // EmptyDescription. ChartLocked initially only rendered the title chip
     // — sighted and SR users lost the "why" context. The chip now shows
     // title + description as a two-line callout, and the wrapper is
-    // role=status/aria-live=polite so SR users hear it when it appears.
+    // <output>/aria-live=polite so SR users hear it when it appears.
     const source = await readSource();
     expect(source).toContain('detail.notices.forbiddenDescription');
     expect(source).toContain('detail.notices.loadFailedDescription');
-    // ChartLocked block exposes both pieces of copy + the live-region role.
+    // ChartLocked block exposes both pieces of copy + the live region.
     const lockedStart = source.indexOf('const ChartLocked');
     const lockedEnd = source.indexOf('const ChartEmpty');
     const lockedRegion = source.slice(lockedStart, lockedEnd);
     expect(lockedRegion).toContain('detail.notices.forbiddenDescription');
     expect(lockedRegion).toContain('detail.notices.loadFailedDescription');
-    expect(lockedRegion).toMatch(/role="status" aria-live="polite"/);
+    expect(lockedRegion).toMatch(/<output className="relative block" aria-live="polite"/);
   });
 
   test('hours-by-task is a planned-vs-actual utilization stack (logged + remaining + over)', async () => {
@@ -541,9 +544,7 @@ describe('ProjectDetailView dashboard customization', () => {
     // currentUserId flows from the CurrentUserId context — the same source the
     // DashboardControls views menu (and the ShareViewModal it opens) reads to gate
     // owner-only actions — rather than being prop-drilled through the page.
-    expect(source).toContain(
-      "import { useCurrentUserId } from '../../contexts/CurrentUserContext'",
-    );
+    expect(source).toContain("import { useCurrentUserId } from '../../contexts/useCurrentUserId'");
     expect(source).toContain('const currentUserId = useCurrentUserId();');
   });
 

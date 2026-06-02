@@ -112,13 +112,18 @@ export const parseStoredViews = (raw: string | null): CustomView[] => {
     return [];
   }
   if (!Array.isArray(parsed)) return [];
-  return parsed.filter(isValidStoredView).map((v) => ({
-    id: v.id,
-    name: v.name,
-    hiddenColIds: v.hiddenColIds,
-    sortState: parseSortState(v.sortState),
-    filterState: parseFilterState(v.filterState),
-  }));
+  const views: CustomView[] = [];
+  for (const value of parsed) {
+    if (!isValidStoredView(value)) continue;
+    views.push({
+      id: value.id,
+      name: value.name,
+      hiddenColIds: value.hiddenColIds,
+      sortState: parseSortState(value.sortState),
+      filterState: parseFilterState(value.filterState),
+    });
+  }
+  return views;
 };
 
 // `gearColIds` gates hidden-column toggles (only gear-visible columns can be

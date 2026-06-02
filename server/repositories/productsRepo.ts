@@ -649,6 +649,17 @@ export const deleteInternalCategoryById = async (
   return (result.rowCount ?? 0) > 0;
 };
 
+export const clearProductsCategoryAndDeleteInternalCategory = (
+  name: string,
+  type: string,
+  id: string,
+  exec: DbExecutor = db,
+): Promise<boolean> =>
+  runAtomically(exec, async (tx) => {
+    await clearProductsCategoryByName(name, type, tx);
+    return deleteInternalCategoryById(id, tx);
+  });
+
 export const countProductsForCategory = async (
   name: string,
   type: string,

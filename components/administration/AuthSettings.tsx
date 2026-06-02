@@ -110,12 +110,37 @@ const OpenIdIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
-const renderProviderIcon = (protocol: SsoProtocol, className?: string) =>
+const ProviderIcon: React.FC<{ protocol: SsoProtocol; className?: string }> = ({
+  protocol,
+  className,
+}) =>
   protocol === 'oidc' ? (
     <OpenIdIcon className={className} />
   ) : (
     <ShieldCheck aria-hidden="true" className={className} />
   );
+
+const AuthTabButton: React.FC<{
+  tab: 'ldap' | SsoProtocol;
+  activeTab: 'ldap' | SsoProtocol;
+  icon: React.ReactNode;
+  label: string;
+  onSelect: (tab: 'ldap' | SsoProtocol) => void;
+}> = ({ tab, activeTab, icon, label, onSelect }) => (
+  <Button
+    type="button"
+    variant="ghost"
+    size="sm"
+    onClick={() => onSelect(tab)}
+    className={`relative pb-4 font-bold rounded-none bg-transparent hover:bg-transparent dark:hover:bg-transparent ${activeTab === tab ? 'text-primary hover:text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+  >
+    {icon}
+    {label}
+    {activeTab === tab && (
+      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full"></div>
+    )}
+  </Button>
+);
 
 // The backend builds the SAML callback URL from SSO_CALLBACK_BASE_URL/FRONTEND_URL, not from
 // the frontend's API base. In split-host deployments those origins differ, so we ask the server
@@ -152,7 +177,9 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
 }) => {
   const { t } = useTranslation('auth');
   const [activeTab, setActiveTab] = useState<'ldap' | SsoProtocol>('ldap');
-  const [ldapForm, setLdapForm] = useState<LdapConfig>(config || DEFAULT_LDAP_CONFIG);
+  const [ldapForm, setLdapForm] = useState<LdapConfig>(DEFAULT_LDAP_CONFIG);
+  const loadedLdapConfigRef = useRef<LdapConfig | null | undefined>(null);
+  const hasLoadedLdapConfigRef = useRef(false);
   const bindPasswordReplace = useSecretReplaceState(
     ldapForm.bindPassword,
     (bindPassword) => setLdapForm((prev) => ({ ...prev, bindPassword })),
@@ -184,17 +211,21 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   const [acsUrlState, setAcsUrlState] = useState<AcsUrlState>({ status: 'loading' });
   const tlsCaFileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  if (!hasLoadedLdapConfigRef.current || loadedLdapConfigRef.current !== config) {
+    hasLoadedLdapConfigRef.current = true;
+    loadedLdapConfigRef.current = config;
     setLdapForm(config || DEFAULT_LDAP_CONFIG);
-  }, [config]);
+  }
 
-  // Re-entering the SAML tab after a transient failure resets the state to 'loading' so the
-  // fetch effect below retries. Without this, a one-off 503/network error would permanently
-  // disable the preview until a full page reload.
-  useEffect(() => {
-    if (activeTab !== 'saml') return;
-    setAcsUrlState((prev) => (prev.status === 'error' ? { status: 'loading' } : prev));
-  }, [activeTab]);
+  const handleActiveTabSelect = (tab: 'ldap' | SsoProtocol) => {
+    setActiveTab(tab);
+    // Re-entering the SAML tab after a transient failure resets the state to 'loading' so the
+    // fetch effect below retries. Without this, a one-off 503/network error would permanently
+    // disable the preview until a full page reload.
+    if (tab === 'saml') {
+      setAcsUrlState((prev) => (prev.status === 'error' ? { status: 'loading' } : prev));
+    }
+  };
 
   // Status-gated rather than ref-gated: if the user leaves the SAML tab mid-flight, the
   // cleanup discards the result and the state stays 'loading', so re-entering the tab kicks
@@ -535,35 +566,11 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     }
   };
 
-  const renderTabButton = (tab: 'ldap' | SsoProtocol, icon: React.ReactNode, label: string) => (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      onClick={() => setActiveTab(tab)}
-      className={`relative pb-4 font-bold rounded-none bg-transparent hover:bg-transparent dark:hover:bg-transparent ${activeTab === tab ? 'text-primary hover:text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-    >
-      {icon}
-      {label}
-      {activeTab === tab && (
-        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full"></div>
-      )}
-    </Button>
-  );
-
-  const renderRoleSelect = (value: string, onChange: (value: string) => void) => (
-    <SelectControl
-      options={roleOptions}
-      value={value}
-      onChange={(val) => onChange(val as string)}
-    />
-  );
-
   const renderProviderList = (protocol: SsoProtocol) => (
     <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
       <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
         <CardTitle className="flex items-center gap-3 text-base">
-          {renderProviderIcon(protocol, 'size-4 text-praetor')}
+          <ProviderIcon protocol={protocol} className="size-4 text-praetor" />
           {protocol === 'oidc'
             ? t('admin.sso.oidcProviders', 'OpenID Connect Providers')
             : t('admin.sso.samlProviders', 'SAML Providers')}
@@ -932,7 +939,6 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
               onChange={(index, field, value) =>
                 updateProviderMapping(protocol, index, field, value)
               }
-              renderRoleSelect={renderRoleSelect}
             />
           </CardContent>
 
@@ -975,21 +981,27 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
       </div>
 
       <div className="flex border-b border-border gap-8">
-        {renderTabButton(
-          'ldap',
-          <FolderTree aria-hidden="true" className="size-4" />,
-          t('admin.tabs.ldap', 'LDAP / Active Directory'),
-        )}
-        {renderTabButton(
-          'oidc',
-          <OpenIdIcon className="size-4" />,
-          t('admin.tabs.oidc', 'OpenID Connect'),
-        )}
-        {renderTabButton(
-          'saml',
-          <ShieldCheck aria-hidden="true" className="size-4" />,
-          t('admin.tabs.saml', 'SAML'),
-        )}
+        <AuthTabButton
+          tab="ldap"
+          activeTab={activeTab}
+          icon={<FolderTree aria-hidden="true" className="size-4" />}
+          label={t('admin.tabs.ldap', 'LDAP / Active Directory')}
+          onSelect={handleActiveTabSelect}
+        />
+        <AuthTabButton
+          tab="oidc"
+          activeTab={activeTab}
+          icon={<OpenIdIcon className="size-4" />}
+          label={t('admin.tabs.oidc', 'OpenID Connect')}
+          onSelect={handleActiveTabSelect}
+        />
+        <AuthTabButton
+          tab="saml"
+          activeTab={activeTab}
+          icon={<ShieldCheck aria-hidden="true" className="size-4" />}
+          label={t('admin.tabs.saml', 'SAML')}
+          onSelect={handleActiveTabSelect}
+        />
       </div>
 
       {activeTab === 'ldap' && (
@@ -1159,7 +1171,6 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                       value,
                     )
                   }
-                  renderRoleSelect={renderRoleSelect}
                 />
               </div>
             </Card>
@@ -1504,7 +1515,6 @@ type RoleMappingsProps = {
   onAdd: () => void;
   onRemove: (index: number) => void;
   onChange: (index: number, field: keyof SsoRoleMapping, value: string) => void;
-  renderRoleSelect: (value: string, onChange: (value: string) => void) => React.ReactNode;
 };
 
 const RoleMappings: React.FC<RoleMappingsProps> = ({
@@ -1519,7 +1529,6 @@ const RoleMappings: React.FC<RoleMappingsProps> = ({
   onAdd,
   onRemove,
   onChange,
-  renderRoleSelect,
 }) => (
   <div>
     <div className="flex justify-between items-center mb-4">
@@ -1540,7 +1549,10 @@ const RoleMappings: React.FC<RoleMappingsProps> = ({
         <p className="text-xs text-muted-foreground italic">{noMappingsLabel}</p>
       ) : (
         mappings.map((mapping, index) => (
-          <div key={index} className="flex gap-4 items-start">
+          <div
+            key={`${mapping.externalGroup || 'external-group'}:${mapping.role || roleOptions[0]?.id || 'user'}`}
+            className="flex gap-4 items-start"
+          >
             <div className="flex-1">
               <Input
                 type="text"
@@ -1560,9 +1572,11 @@ const RoleMappings: React.FC<RoleMappingsProps> = ({
             </div>
             <ArrowRight aria-hidden="true" className="size-3 text-muted-foreground mt-3 shrink-0" />
             <div className="w-44">
-              {renderRoleSelect(mapping.role || roleOptions[0]?.id || 'user', (role) =>
-                onChange(index, 'role', role),
-              )}
+              <SelectControl
+                options={roleOptions}
+                value={mapping.role || roleOptions[0]?.id || 'user'}
+                onChange={(role) => onChange(index, 'role', role as string)}
+              />
             </div>
             <Button
               type="button"

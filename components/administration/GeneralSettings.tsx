@@ -10,7 +10,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import type React from 'react';
-import { useEffect, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -72,6 +72,33 @@ const TABS = [
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
+type EditableRilNoteOption = RilNoteOption & { draftId: string };
+type EditableRilTransferOption = { draftId: string; value: string };
+
+let rilDraftIdSequence = 0;
+
+const createRilDraftId = (prefix: string) => {
+  rilDraftIdSequence += 1;
+  return `${prefix}-${rilDraftIdSequence}`;
+};
+
+const toEditableRilNoteOptions = (value: unknown): EditableRilNoteOption[] =>
+  normalizeRilNoteOptions(value).map((option) => ({
+    ...option,
+    draftId: `note-${option.value}`,
+  }));
+
+const toPersistedRilNoteOptions = (options: EditableRilNoteOption[]): RilNoteOption[] =>
+  options.map(({ value, label }) => ({ value, label }));
+
+const toEditableRilTransferOptions = (value: unknown): EditableRilTransferOption[] =>
+  normalizeRilTransferOptions(value).map((option) => ({
+    value: option,
+    draftId: `transfer-${option}`,
+  }));
+
+const toPersistedRilTransferOptions = (options: EditableRilTransferOption[]): string[] =>
+  options.map((option) => option.value);
 
 const areRilNoteOptionsEqual = (left: RilNoteOption[], right: unknown): boolean =>
   JSON.stringify(normalizeRilNoteOptions(left)) === JSON.stringify(normalizeRilNoteOptions(right));
@@ -110,40 +137,28 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     { id: 'gemini', name: t('general.aiProviders.gemini') },
     { id: 'openrouter', name: t('general.aiProviders.openrouter') },
   ];
-  const [currency, setCurrency] = useState(settings.currency);
-  const [dailyLimit, setDailyLimit] = useState(settings.dailyLimit);
-  const [startOfWeek, setStartOfWeek] = useState(settings.startOfWeek);
-  const [treatSaturdayAsHoliday, setTreatSaturdayAsHoliday] = useState(
-    settings.treatSaturdayAsHoliday,
+  const [currency, setCurrency] = useState('');
+  const [dailyLimit, setDailyLimit] = useState(8);
+  const [startOfWeek, setStartOfWeek] = useState<IGeneralSettings['startOfWeek']>('Monday');
+  const [treatSaturdayAsHoliday, setTreatSaturdayAsHoliday] = useState(false);
+  const [allowWeekendSelection, setAllowWeekendSelection] = useState(true);
+  const [defaultLocation, setDefaultLocation] = useState<TimeEntryLocation>('remote');
+  const [rilCompanyName, setRilCompanyName] = useState('');
+  const [rilDefaultStartTime, setRilDefaultStartTime] = useState(DEFAULT_RIL_START_TIME);
+  const [rilDefaultExitTime, setRilDefaultExitTime] = useState(DEFAULT_RIL_EXIT_TIME);
+  const [rilLunchBreakMinutes, setRilLunchBreakMinutes] = useState(60);
+  const [rilNoteOptions, setRilNoteOptions] = useState<EditableRilNoteOption[]>(() =>
+    toEditableRilNoteOptions(undefined),
   );
-  const [allowWeekendSelection, setAllowWeekendSelection] = useState(
-    settings.allowWeekendSelection ?? true,
+  const [rilTransferOptions, setRilTransferOptions] = useState<EditableRilTransferOption[]>(() =>
+    toEditableRilTransferOptions(undefined),
   );
-  const [defaultLocation, setDefaultLocation] = useState<TimeEntryLocation>(
-    settings.defaultLocation || 'remote',
-  );
-  const [rilCompanyName, setRilCompanyName] = useState(settings.rilCompanyName || '');
-  const [rilDefaultStartTime, setRilDefaultStartTime] = useState(
-    settings.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
-  );
-  const [rilDefaultExitTime, setRilDefaultExitTime] = useState(
-    settings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,
-  );
-  const [rilLunchBreakMinutes, setRilLunchBreakMinutes] = useState(
-    settings.rilLunchBreakMinutes ?? 60,
-  );
-  const [rilNoteOptions, setRilNoteOptions] = useState<RilNoteOption[]>(() =>
-    normalizeRilNoteOptions(settings.rilNoteOptions),
-  );
-  const [rilTransferOptions, setRilTransferOptions] = useState<string[]>(() =>
-    normalizeRilTransferOptions(settings.rilTransferOptions),
-  );
-  const [enableAiReporting, setEnableAiReporting] = useState(settings.enableAiReporting);
-  const [geminiApiKey, setGeminiApiKey] = useState(settings.geminiApiKey || '');
-  const [aiProvider, setAiProvider] = useState<AiProvider>(settings.aiProvider || 'gemini');
-  const [openrouterApiKey, setOpenrouterApiKey] = useState(settings.openrouterApiKey || '');
-  const [geminiModelId, setGeminiModelId] = useState(settings.geminiModelId || '');
-  const [openrouterModelId, setOpenrouterModelId] = useState(settings.openrouterModelId || '');
+  const [enableAiReporting, setEnableAiReporting] = useState(false);
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [aiProvider, setAiProvider] = useState<AiProvider>('gemini');
+  const [openrouterApiKey, setOpenrouterApiKey] = useState('');
+  const [geminiModelId, setGeminiModelId] = useState('');
+  const [openrouterModelId, setOpenrouterModelId] = useState('');
   const [modelCheck, setModelCheck] = useState<{ state: ModelCheckState; message?: string }>({
     state: 'idle',
   });
@@ -151,6 +166,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
   const [tabDirection, setTabDirection] = useState<'left' | 'right'>('right');
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const loadedSettingsRef = useRef<IGeneralSettings | null>(null);
 
   const handleTabChange = (id: TabId) => {
     if (id === activeTab) return;
@@ -165,7 +181,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
       ? 'animate-in fade-in slide-in-from-right-4 duration-300'
       : 'animate-in fade-in slide-in-from-left-4 duration-300';
 
-  useEffect(() => {
+  if (loadedSettingsRef.current !== settings) {
+    loadedSettingsRef.current = settings;
     setCurrency(settings.currency);
     setDailyLimit(settings.dailyLimit);
     setStartOfWeek(settings.startOfWeek);
@@ -176,8 +193,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     setRilDefaultStartTime(settings.rilDefaultStartTime || DEFAULT_RIL_START_TIME);
     setRilDefaultExitTime(settings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME);
     setRilLunchBreakMinutes(settings.rilLunchBreakMinutes ?? 60);
-    setRilNoteOptions(normalizeRilNoteOptions(settings.rilNoteOptions));
-    setRilTransferOptions(normalizeRilTransferOptions(settings.rilTransferOptions));
+    setRilNoteOptions(toEditableRilNoteOptions(settings.rilNoteOptions));
+    setRilTransferOptions(toEditableRilTransferOptions(settings.rilTransferOptions));
     setEnableAiReporting(settings.enableAiReporting);
     setGeminiApiKey(settings.geminiApiKey || '');
     setAiProvider(settings.aiProvider || 'gemini');
@@ -185,7 +202,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     setGeminiModelId(settings.geminiModelId || '');
     setOpenrouterModelId(settings.openrouterModelId || '');
     setModelCheck({ state: 'idle' });
-  }, [settings]);
+  }
 
   const currentApiKey = aiProvider === 'gemini' ? geminiApiKey : openrouterApiKey;
   const currentModelId = aiProvider === 'gemini' ? geminiModelId : openrouterModelId;
@@ -242,8 +259,10 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
         rilDefaultStartTime,
         rilDefaultExitTime,
         rilLunchBreakMinutes,
-        rilNoteOptions: normalizeRilNoteOptions(rilNoteOptions),
-        rilTransferOptions: normalizeRilTransferOptions(rilTransferOptions),
+        rilNoteOptions: normalizeRilNoteOptions(toPersistedRilNoteOptions(rilNoteOptions)),
+        rilTransferOptions: normalizeRilTransferOptions(
+          toPersistedRilTransferOptions(rilTransferOptions),
+        ),
         enableAiReporting,
         geminiApiKey,
         aiProvider,
@@ -271,8 +290,11 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
     rilDefaultStartTime !== (settings.rilDefaultStartTime || DEFAULT_RIL_START_TIME) ||
     rilDefaultExitTime !== (settings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME) ||
     rilLunchBreakMinutes !== (settings.rilLunchBreakMinutes ?? 60) ||
-    !areRilNoteOptionsEqual(rilNoteOptions, settings.rilNoteOptions) ||
-    !areRilTransferOptionsEqual(rilTransferOptions, settings.rilTransferOptions) ||
+    !areRilNoteOptionsEqual(toPersistedRilNoteOptions(rilNoteOptions), settings.rilNoteOptions) ||
+    !areRilTransferOptionsEqual(
+      toPersistedRilTransferOptions(rilTransferOptions),
+      settings.rilTransferOptions,
+    ) ||
     enableAiReporting !== settings.enableAiReporting ||
     geminiApiKey !== (settings.geminiApiKey || '') ||
     aiProvider !== (settings.aiProvider || 'gemini') ||
@@ -296,7 +318,10 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
   };
 
   const addRilNoteOption = () => {
-    setRilNoteOptions((prev) => [...prev, { value: '', label: '' }]);
+    setRilNoteOptions((prev) => [
+      ...prev,
+      { value: '', label: '', draftId: createRilDraftId('note') },
+    ]);
   };
 
   const removeRilNoteOption = (index: number) => {
@@ -307,12 +332,15 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
 
   const updateRilTransferOption = (index: number, value: string) => {
     setRilTransferOptions((prev) =>
-      prev.map((option, optionIndex) => (optionIndex === index ? value : option)),
+      prev.map((option, optionIndex) => (optionIndex === index ? { ...option, value } : option)),
     );
   };
 
   const addRilTransferOption = () => {
-    setRilTransferOptions((prev) => [...prev, '']);
+    setRilTransferOptions((prev) => [
+      ...prev,
+      { value: '', draftId: createRilDraftId('transfer') },
+    ]);
   };
 
   const removeRilTransferOption = (index: number) => {
@@ -570,7 +598,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                       </div>
                       {rilNoteOptions.map((option, index) => (
                         <div
-                          key={`note-${index}`}
+                          key={option.draftId}
                           className="grid grid-cols-[5rem_minmax(0,1fr)_2rem] items-center gap-2"
                         >
                           <Input
@@ -629,12 +657,12 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
                       </div>
                       {rilTransferOptions.map((option, index) => (
                         <div
-                          key={`transfer-${index}`}
+                          key={option.draftId}
                           className="grid grid-cols-[minmax(0,1fr)_2rem] items-center gap-2"
                         >
                           <Input
                             aria-label={`${t('general.rilTransferOptionNameLabel')} ${index + 1}`}
-                            value={option}
+                            value={option.value}
                             onChange={(event) => updateRilTransferOption(index, event.target.value)}
                             className="h-8 text-xs"
                           />

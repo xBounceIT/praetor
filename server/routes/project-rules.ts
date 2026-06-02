@@ -399,6 +399,7 @@ const validateFinalRule = async ({
   if (rule.conditions.length === 0) {
     throw new RecipientValidationError('At least one condition is required');
   }
+  const permissionSet = new Set(permissions);
   for (const conditionInput of rule.conditions) {
     const definition = getProjectRuleFieldDefinition(conditionInput.field);
     const condition = validateProjectRuleCondition({
@@ -409,7 +410,7 @@ const validateFinalRule = async ({
       permissions,
     });
     if (!condition.ok) throw new RecipientValidationError(condition.message);
-    if (definition?.requiresPermission && !permissions.includes(definition.requiresPermission)) {
+    if (definition?.requiresPermission && !permissionSet.has(definition.requiresPermission)) {
       throw new RecipientValidationError(
         `${conditionInput.field} requires ${definition.requiresPermission}`,
       );

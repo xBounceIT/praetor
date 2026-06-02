@@ -22,6 +22,8 @@ const parseSseEventBlock = (rawBlock: string): { event: string; data: string } |
   return { event, data: dataLines.join('\n') };
 };
 
+const findSseBoundary = (buffer: string) => buffer.search(/\n\n/);
+
 const iterateSseEvents = async function* (body: ReadableStream<Uint8Array>) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -33,14 +35,14 @@ const iterateSseEvents = async function* (body: ReadableStream<Uint8Array>) {
       if (done) break;
 
       buffer += decoder.decode(value || new Uint8Array(), { stream: true });
-      let boundary = buffer.indexOf('\n\n');
+      let boundary = findSseBoundary(buffer);
 
       while (boundary !== -1) {
         const rawBlock = buffer.slice(0, boundary);
         buffer = buffer.slice(boundary + 2);
         const parsed = parseSseEventBlock(rawBlock);
         if (parsed) yield parsed;
-        boundary = buffer.indexOf('\n\n');
+        boundary = findSseBoundary(buffer);
       }
     }
 

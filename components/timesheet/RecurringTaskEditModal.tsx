@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useState } from 'react';
+import { useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
@@ -33,6 +33,50 @@ export interface RecurringTaskEditModalProps {
   ) => void;
 }
 
+type RecurringTaskEditState = {
+  pattern: string;
+  startDate: string;
+  endDate: string;
+  duration: string;
+  isCustomRepeatOpen: boolean;
+};
+
+type RecurringTaskEditAction =
+  | { type: 'setPattern'; pattern: string }
+  | { type: 'setStartDate'; startDate: string }
+  | { type: 'setEndDate'; endDate: string }
+  | { type: 'setDuration'; duration: string }
+  | { type: 'setCustomRepeatOpen'; isOpen: boolean }
+  | { type: 'saveCustomPattern'; pattern: string };
+
+const recurringTaskEditReducer = (
+  state: RecurringTaskEditState,
+  action: RecurringTaskEditAction,
+): RecurringTaskEditState => {
+  switch (action.type) {
+    case 'setPattern':
+      return { ...state, pattern: action.pattern };
+    case 'setStartDate':
+      return { ...state, startDate: action.startDate };
+    case 'setEndDate':
+      return { ...state, endDate: action.endDate };
+    case 'setDuration':
+      return { ...state, duration: action.duration };
+    case 'setCustomRepeatOpen':
+      return { ...state, isCustomRepeatOpen: action.isOpen };
+    case 'saveCustomPattern':
+      return { ...state, pattern: action.pattern, isCustomRepeatOpen: false };
+  }
+};
+
+const getInitialRecurringTaskEditState = (task: ProjectTask | null): RecurringTaskEditState => ({
+  pattern: task?.recurrencePattern || 'weekly',
+  startDate: task?.recurrenceStart || getLocalDateString(),
+  endDate: task?.recurrenceEnd || '',
+  duration: task?.recurrenceDuration != null ? String(task.recurrenceDuration) : '0',
+  isCustomRepeatOpen: false,
+});
+
 // Caller is expected to pass `key={task?.id}` so this component remounts
 // (and re-initializes form state) whenever a different task is opened.
 const RecurringTaskEditModal: React.FC<RecurringTaskEditModalProps> = ({
@@ -43,13 +87,12 @@ const RecurringTaskEditModal: React.FC<RecurringTaskEditModalProps> = ({
 }) => {
   const { t } = useTranslation('timesheets');
 
-  const [pattern, setPattern] = useState<string>(task?.recurrencePattern || 'weekly');
-  const [startDate, setStartDate] = useState<string>(task?.recurrenceStart || getLocalDateString());
-  const [endDate, setEndDate] = useState<string>(task?.recurrenceEnd || '');
-  const [duration, setDuration] = useState<string>(
-    task?.recurrenceDuration != null ? String(task.recurrenceDuration) : '0',
+  const [state, dispatch] = useReducer(
+    recurringTaskEditReducer,
+    task,
+    getInitialRecurringTaskEditState,
   );
-  const [isCustomRepeatOpen, setIsCustomRepeatOpen] = useState(false);
+  const { pattern, startDate, endDate, duration, isCustomRepeatOpen } = state;
 
   const isCustomPattern = pattern.startsWith('monthly:');
   const customLabel = isCustomPattern ? formatRecurrencePattern(pattern, t) : null;
@@ -60,9 +103,9 @@ const RecurringTaskEditModal: React.FC<RecurringTaskEditModalProps> = ({
 
   const handlePatternChange = (val: string) => {
     if (val === 'custom') {
-      setIsCustomRepeatOpen(true);
+      dispatch({ type: 'setCustomRepeatOpen', isOpen: true });
     } else {
-      setPattern(val);
+      dispatch({ type: 'setPattern', pattern: val });
     }
   };
 
@@ -128,7 +171,7 @@ const RecurringTaskEditModal: React.FC<RecurringTaskEditModalProps> = ({
                     id="recurring-start-date"
                     type="date"
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    onChange={(e) => dispatch({ type: 'setStartDate', startDate: e.target.value })}
                   />
                 </Field>
                 <Field data-invalid={Boolean(dateError)}>
@@ -138,7 +181,7 @@ const RecurringTaskEditModal: React.FC<RecurringTaskEditModalProps> = ({
                     type="date"
                     value={endDate}
                     aria-invalid={Boolean(dateError)}
-                    onChange={(e) => setEndDate(e.target.value)}
+                    onChange={(e) => dispatch({ type: 'setEndDate', endDate: e.target.value })}
                   />
                 </Field>
               </FieldGroup>
@@ -149,7 +192,9 @@ const RecurringTaskEditModal: React.FC<RecurringTaskEditModalProps> = ({
                 <ValidatedNumberInput
                   id="recurring-duration"
                   value={duration}
-                  onValueChange={setDuration}
+                  onValueChange={(nextDuration) =>
+                    dispatch({ type: 'setDuration', duration: nextDuration })
+                  }
                   placeholder="0.0"
                 />
               </Field>
@@ -167,10 +212,9 @@ const RecurringTaskEditModal: React.FC<RecurringTaskEditModalProps> = ({
 
           <CustomRepeatModal
             isOpen={isCustomRepeatOpen}
-            onClose={() => setIsCustomRepeatOpen(false)}
+            onClose={() => dispatch({ type: 'setCustomRepeatOpen', isOpen: false })}
             onSave={(p) => {
-              setPattern(p);
-              setIsCustomRepeatOpen(false);
+              dispatch({ type: 'saveCustomPattern', pattern: p });
             }}
           />
         </>

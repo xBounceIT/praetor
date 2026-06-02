@@ -121,7 +121,9 @@ const THEME_OPTION_META: Record<
   },
 };
 
-const renderThemeSwatchContent = (option: (typeof THEME_OPTION_META)[Theme]) => {
+const ThemeSwatchContent: React.FC<{ option: (typeof THEME_OPTION_META)[Theme] }> = ({
+  option,
+}) => {
   if (option.swatchVariant === 'praetor') {
     return <img src={praetorFaviconUrl} alt="" className="size-12 max-w-none object-cover" />;
   }
@@ -129,6 +131,13 @@ const renderThemeSwatchContent = (option: (typeof THEME_OPTION_META)[Theme]) => 
   const Icon = option.Icon;
   return Icon ? <Icon aria-hidden="true" className="size-4" strokeWidth={2.25} /> : null;
 };
+
+const McpRevokeIcon: React.FC<{ isRevoking: boolean }> = ({ isRevoking }) =>
+  isRevoking ? (
+    <i className="fa-solid fa-circle-notch fa-spin"></i>
+  ) : (
+    <Trash2 aria-hidden="true" className="size-3.5" />
+  );
 
 const mcpTokenDateFormatter = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
@@ -211,8 +220,9 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   // settings object on unrelated re-renders, and re-syncing would clobber the
   // user's in-progress edits. When the form should be reset (e.g. after a logout
   // or user switch), the parent unmounts/remounts this component.
-  const [fullName, setFullName] = useState(settings.fullName);
-  const [email, setEmail] = useState(settings.email);
+  const hasLoadedInitialSettingsRef = useRef(false);
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
   const [language, setLanguage] = useState(settings.language || 'auto');
   const [currentTheme, setCurrentTheme] = useState<Theme>(() => getTheme());
 
@@ -221,6 +231,12 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   >('profile');
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+
+  if (!hasLoadedInitialSettingsRef.current) {
+    hasLoadedInitialSettingsRef.current = true;
+    setFullName(settings.fullName);
+    setEmail(settings.email);
+  }
 
   // Password state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -390,9 +406,13 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     }
   }, [onListMcpTokens]);
 
-  useEffect(() => {
-    if (activeTab === 'mcp') void loadMcpTokens();
-  }, [activeTab, loadMcpTokens]);
+  const handleTabChange = useCallback(
+    (tab: 'profile' | 'appearance' | 'language' | 'security' | 'mcp') => {
+      setActiveTab(tab);
+      if (tab === 'mcp') void loadMcpTokens();
+    },
+    [loadMcpTokens],
+  );
 
   const handleCreateMcpToken = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -479,7 +499,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       <div className="flex border-b border-zinc-200 gap-8">
         <button
           type="button"
-          onClick={() => setActiveTab('profile')}
+          onClick={() => handleTabChange('profile')}
           className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'profile' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >
           <i className="fa-solid fa-user mr-2"></i>
@@ -490,7 +510,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('appearance')}
+          onClick={() => handleTabChange('appearance')}
           className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'appearance' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >
           <i className="fa-solid fa-palette mr-2"></i>
@@ -501,7 +521,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('language')}
+          onClick={() => handleTabChange('language')}
           className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'language' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >
           <i className="fa-solid fa-language mr-2"></i>
@@ -512,7 +532,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('security')}
+          onClick={() => handleTabChange('security')}
           className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'security' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >
           <i className="fa-solid fa-lock mr-2"></i>
@@ -523,7 +543,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('mcp')}
+          onClick={() => handleTabChange('mcp')}
           className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'mcp' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
         >
           <McpIcon className="inline size-4 mr-2 align-[-2px]" />
@@ -546,14 +566,13 @@ const UserSettings: React.FC<UserSettingsProps> = ({
           <form onSubmit={handleSave}>
             <CardContent className="space-y-6 p-6">
               {!isLocalAuth && (
-                <div
-                  role="status"
+                <output
                   aria-live="polite"
                   className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-4 text-sm font-medium text-muted-foreground"
                 >
                   <Lock aria-hidden="true" className="size-4" />
                   {t('userProfile.lockedBanner', { provider: identityProviderLabel })}
-                </div>
+                </output>
               )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Field>
@@ -645,7 +664,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                           option.swatchClassName,
                         )}
                       >
-                        {renderThemeSwatchContent(option)}
+                        <ThemeSwatchContent option={option} />
                       </div>
                       {isSelected && (
                         <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground">
@@ -815,14 +834,13 @@ const UserSettings: React.FC<UserSettingsProps> = ({
               </form>
             ) : (
               <CardContent className="p-6">
-                <div
-                  role="status"
+                <output
                   aria-live="polite"
                   className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-4 text-sm font-medium text-muted-foreground"
                 >
                   <Lock aria-hidden="true" className="size-4" />
                   {t('password.lockedBanner', { provider: identityProviderLabel })}
-                </div>
+                </output>
               </CardContent>
             )}
           </Card>
@@ -1045,12 +1063,6 @@ const UserSettings: React.FC<UserSettingsProps> = ({
               ) : (
                 mcpTokens.map((token) => {
                   const isRevoking = revokingMcpTokenId === token.id;
-                  const renderRevokeIcon = () =>
-                    isRevoking ? (
-                      <i className="fa-solid fa-circle-notch fa-spin"></i>
-                    ) : (
-                      <Trash2 aria-hidden="true" className="size-3.5" />
-                    );
 
                   return (
                     <div
@@ -1083,7 +1095,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                             size="sm"
                             disabled={isRevoking}
                           >
-                            {renderRevokeIcon()}
+                            <McpRevokeIcon isRevoking={isRevoking} />
                             {t('mcp.revoke')}
                           </Button>
                         </DialogTrigger>
@@ -1106,7 +1118,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                               onClick={() => void handleRevokeMcpToken(token.id)}
                               disabled={isRevoking}
                             >
-                              {renderRevokeIcon()}
+                              <McpRevokeIcon isRevoking={isRevoking} />
                               {t('mcp.revokeConfirm')}
                             </Button>
                           </DialogFooter>

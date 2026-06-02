@@ -1,8 +1,9 @@
 import type React from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { clientQuotesApi } from '../../services/api/clientQuotes';
 import type { Quote, QuoteVersion, QuoteVersionRow } from '../../types';
+import { asyncRowsReducer, createInitialAsyncRowsState } from '../shared/asyncRowsState';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import { VersionHistoryPanel } from '../shared/VersionHistoryPanel';
 
@@ -24,22 +25,20 @@ const QuoteVersionsPanel: React.FC<QuoteVersionsPanelProps> = ({
   disabled,
 }) => {
   const { t, i18n } = useTranslation('sales');
-  const [rows, setRows] = useState<QuoteVersionRow[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [historyState, dispatchHistory] = useReducer(
+    asyncRowsReducer<QuoteVersionRow>,
+    createInitialAsyncRowsState<QuoteVersionRow>(),
+  );
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [restoreInFlight, setRestoreInFlight] = useState(false);
 
   const reload = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
+    dispatchHistory({ type: 'loading' });
     try {
       const versions = await clientQuotesApi.listVersions(quoteId);
-      setRows(versions);
+      dispatchHistory({ type: 'loaded', rows: versions });
     } catch {
-      setError(t('clientQuotes.versionHistory.loadFailed'));
-    } finally {
-      setIsLoading(false);
+      dispatchHistory({ type: 'failed', error: t('clientQuotes.versionHistory.loadFailed') });
     }
   }, [quoteId, t]);
 
@@ -52,10 +51,10 @@ const QuoteVersionsPanel: React.FC<QuoteVersionsPanelProps> = ({
       if (row.id === selectedVersionId) return;
       try {
         const version = await clientQuotesApi.getVersion(quoteId, row.id);
-        setError(null);
+        dispatchHistory({ type: 'setError', error: null });
         onPreview(version);
       } catch {
-        setError(t('clientQuotes.versionHistory.loadFailed'));
+        dispatchHistory({ type: 'setError', error: t('clientQuotes.versionHistory.loadFailed') });
       }
     },
     [quoteId, onPreview, selectedVersionId, t],
@@ -66,16 +65,18 @@ const QuoteVersionsPanel: React.FC<QuoteVersionsPanelProps> = ({
     setRestoreInFlight(true);
     try {
       const updated = await clientQuotesApi.restoreVersion(quoteId, selectedVersionId);
-      setError(null);
+      dispatchHistory({ type: 'setError', error: null });
       onRestored(updated);
       setConfirmOpen(false);
       await reload();
     } catch (e) {
       // Restore failures (409 linked-offer / 409 confirmed / 409 non-draft sale / 404)
       // carry actionable server messages - surface them instead of a generic load error.
-      setError(
-        e instanceof Error && e.message ? e.message : t('clientQuotes.versionHistory.loadFailed'),
-      );
+      dispatchHistory({
+        type: 'setError',
+        error:
+          e instanceof Error && e.message ? e.message : t('clientQuotes.versionHistory.loadFailed'),
+      });
     } finally {
       setRestoreInFlight(false);
     }
@@ -84,10 +85,10 @@ const QuoteVersionsPanel: React.FC<QuoteVersionsPanelProps> = ({
   return (
     <>
       <VersionHistoryPanel
-        rows={rows}
+        rows={historyState.rows}
         selectedVersionId={selectedVersionId}
-        isLoading={isLoading}
-        error={error}
+        isLoading={historyState.isLoading}
+        error={historyState.error}
         locale={i18n.language}
         disabled={disabled}
         restoreInFlight={restoreInFlight}

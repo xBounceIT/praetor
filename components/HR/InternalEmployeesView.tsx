@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -23,13 +23,11 @@ import EmployeeHrFields from './EmployeeHrFields';
 import {
   buildEmployeeCreatePayload,
   buildEmployeeHrPayload,
-  createEmployeeHrForm,
-  createEmptyEmployeeHrForm,
   type EmployeeCreatePayload,
-  type EmployeeHrFormData,
   getEmployeeHrStatusBadgeType,
   validateEmployeeHrForm,
 } from './employeeHrProfile';
+import { useEmployeeViewState } from './useEmployeeViewState';
 
 export interface InternalEmployeesViewProps {
   users: User[];
@@ -61,6 +59,21 @@ const EmptyState: React.FC<EmptyStateProps> = ({ title, description }) => (
   </div>
 );
 
+const formatOptionalText = (value: unknown): string => {
+  if (typeof value === 'string') return value.trim();
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+};
+
+const OptionalText: React.FC<{
+  value: unknown;
+  fallback: string;
+  className?: string;
+}> = ({ value, fallback, className = 'text-muted-foreground' }) => {
+  const text = formatOptionalText(value);
+  return <span className={text ? className : 'text-muted-foreground'}>{text || fallback}</span>;
+};
+
 const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
   users,
   clients,
@@ -83,24 +96,30 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     buildPermission('hr.employee_assignments', 'update'),
   );
   const notSetLabel = t('employeeProfile.notSet');
-  const formatOptionalText = (value: unknown): string => {
-    if (typeof value === 'string') return value.trim();
-    if (value === null || value === undefined) return '';
-    return String(value).trim();
-  };
-  const renderOptionalText = (value: unknown, className = 'text-muted-foreground') => {
-    const text = formatOptionalText(value);
-    return (
-      <span className={text ? className : 'text-muted-foreground'}>{text || notSetLabel}</span>
-    );
-  };
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState<User | null>(null);
-  const [managingEmployee, setManagingEmployee] = useState<User | null>(null);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [employeeToDelete, setEmployeeToDelete] = useState<User | null>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const {
+    state,
+    setFormData,
+    openAddEmployeeModal,
+    openEditEmployeeModal,
+    closeEmployeeModal,
+    setManagingEmployee,
+    confirmEmployeeDelete,
+    completeEmployeeDelete,
+    setEmployeeErrors,
+    startEmployeeSubmit,
+    finishEmployeeSubmit,
+    completeEmployeeSubmit,
+  } = useEmployeeViewState();
+  const {
+    isModalOpen,
+    editingEmployee,
+    managingEmployee,
+    isDeleteConfirmOpen,
+    employeeToDelete,
+    errors,
+    isSubmitting,
+    formData,
+  } = state;
 
   // Combine and sort all employees by surname ascending
   const allEmployees = useMemo(() => {
@@ -118,22 +137,14 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     });
   }, [users]);
 
-  const [formData, setFormData] = useState<EmployeeHrFormData>(createEmptyEmployeeHrForm);
-
   const openAddModal = () => {
     if (!canCreateEmployees) return;
-    setEditingEmployee(null);
-    setFormData(createEmptyEmployeeHrForm());
-    setErrors({});
-    setIsModalOpen(true);
+    openAddEmployeeModal();
   };
 
   const openEditModal = (employee: User) => {
     if (!canUpdateEmployees) return;
-    setEditingEmployee(employee);
-    setFormData(createEmployeeHrForm(employee));
-    setErrors({});
-    setIsModalOpen(true);
+    openEditEmployeeModal(employee);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -151,11 +162,11 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     });
 
     if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+      setEmployeeErrors(newErrors);
       return;
     }
 
-    setIsSubmitting(true);
+    startEmployeeSubmit();
 
     try {
       if (editingEmployee) {
@@ -164,7 +175,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
           includeCost: canViewCosts && canUpdateCosts,
         });
         onUpdateEmployee(editingEmployee.id, updates);
-        setIsModalOpen(false);
+        completeEmployeeSubmit();
       } else {
         const result = await onAddEmployee(
           buildEmployeeCreatePayload(formData, {
@@ -172,26 +183,24 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
           }),
         );
         if (result.success) {
-          setIsModalOpen(false);
+          completeEmployeeSubmit();
         } else {
-          setErrors({ submit: result.error || 'Failed to create employee' });
+          setEmployeeErrors({ submit: result.error || 'Failed to create employee' });
         }
       }
     } finally {
-      setIsSubmitting(false);
+      finishEmployeeSubmit();
     }
   };
 
   const confirmDelete = (employee: User) => {
-    setEmployeeToDelete(employee);
-    setIsDeleteConfirmOpen(true);
+    confirmEmployeeDelete(employee);
   };
 
   const handleDelete = () => {
     if (employeeToDelete) {
       onDeleteEmployee(employeeToDelete.id);
-      setIsDeleteConfirmOpen(false);
-      setEmployeeToDelete(null);
+      completeEmployeeDelete();
     }
   };
 
@@ -212,8 +221,13 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     {
       header: t('employeeProfile.employeeCode'),
       accessorKey: 'employeeCode',
-      cell: ({ value }: { value: unknown }) =>
-        renderOptionalText(value, 'font-medium text-muted-foreground'),
+      cell: ({ value }: { value: unknown }) => (
+        <OptionalText
+          value={value}
+          fallback={notSetLabel}
+          className="font-medium text-muted-foreground"
+        />
+      ),
     },
     {
       header: t('employeeProfile.contact'),
@@ -235,12 +249,20 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
       header: t('employeeProfile.jobTitle'),
       id: 'roleTitle',
       accessorFn: (row) => row.jobTitle || '',
-      cell: ({ row }) => renderOptionalText(row.jobTitle, 'font-medium text-foreground'),
+      cell: ({ row }) => (
+        <OptionalText
+          value={row.jobTitle}
+          fallback={notSetLabel}
+          className="font-medium text-foreground"
+        />
+      ),
     },
     {
       header: t('employeeProfile.department'),
       accessorKey: 'department',
-      cell: ({ value }: { value: unknown }) => renderOptionalText(value),
+      cell: ({ value }: { value: unknown }) => (
+        <OptionalText value={value} fallback={notSetLabel} />
+      ),
     },
     {
       header: t('internalEmployees.type'),
@@ -376,7 +398,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add/Edit Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+      <Modal isOpen={isModalOpen} onClose={closeEmployeeModal}>
         <ModalContent size="2xl">
           <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
             <ModalHeader>
@@ -391,7 +413,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
                   ? t('internalEmployees.editEmployee')
                   : t('internalEmployees.addEmployee')}
               </ModalTitle>
-              <ModalCloseButton onClick={() => setIsModalOpen(false)} />
+              <ModalCloseButton onClick={closeEmployeeModal} />
             </ModalHeader>
 
             <ModalBody className="space-y-6">
@@ -417,7 +439,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
             </ModalBody>
 
             <ModalFooter>
-              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
+              <Button type="button" variant="outline" onClick={closeEmployeeModal}>
                 {t('common:buttons.cancel')}
               </Button>
               <Button type="submit" disabled={isSubmitting}>
@@ -435,7 +457,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
       {/* Delete Confirmation Modal */}
       <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen}
-        onClose={() => setIsDeleteConfirmOpen(false)}
+        onClose={completeEmployeeDelete}
         onConfirm={handleDelete}
         title={t('internalEmployees.deleteEmployee')}
         description={t('internalEmployees.deleteConfirmMessage', { name: employeeToDelete?.name })}
