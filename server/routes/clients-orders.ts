@@ -925,10 +925,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const isSourceLinkedOrder = Boolean(
         existingOrder.linkedQuoteId || existingOrder.linkedOfferId,
       );
+      // A draft order created from an offer/quote is the live downstream document and stays
+      // fully editable. Non-draft orders are already fully locked by the status gate above
+      // (903-923), so relaxing the source-linked lock only ever opens up drafts.
+      const allowSourceLinkedEdit = existingOrder.status === 'draft';
 
       let existingItems: clientsOrdersRepo.ClientOrderItem[] | null = null;
 
-      if (isSourceLinkedOrder) {
+      if (isSourceLinkedOrder && !allowSourceLinkedEdit) {
         const lockedFields: string[] = [];
 
         if (
@@ -1058,10 +1062,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         linkedQuoteIdValue = offer.linkedQuoteId || null;
       }
 
-      const willReplaceItems = !isSourceLinkedOrder && items !== undefined;
+      const willReplaceItems =
+        (!isSourceLinkedOrder || allowSourceLinkedEdit) && items !== undefined;
 
       let hasContentChanges = false;
-      if (!isSourceLinkedOrder && hasLockedFieldUpdates) {
+      if ((!isSourceLinkedOrder || allowSourceLinkedEdit) && hasLockedFieldUpdates) {
         if (
           (linkedOfferIdValue !== undefined &&
             linkedOfferIdValue !== existingOrder.linkedOfferId) ||
@@ -1133,7 +1138,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (!order) return { order: null, items: [] };
 
           let nextItems: clientsOrdersRepo.ClientOrderItem[];
-          if (isSourceLinkedOrder) {
+          if (isSourceLinkedOrder && !allowSourceLinkedEdit) {
             nextItems = existingItems ?? (await clientsOrdersRepo.findItemsForOrder(order.id, tx));
           } else if (willReplaceItems && normalizedItems) {
             nextItems = await clientsOrdersRepo.replaceItems(

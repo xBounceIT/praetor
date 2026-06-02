@@ -920,3 +920,89 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
     expect(logAuditMock).not.toHaveBeenCalled();
   });
 });
+
+describe('PUT /api/clients-orders/:id source-linked draft editability', () => {
+  test('200 allows editing a DRAFT order linked to an offer (content + items)', async () => {
+    coFindExistingMock.mockResolvedValue({
+      id: 'o-1',
+      linkedQuoteId: null,
+      linkedOfferId: 'off-1',
+      clientId: 'c1',
+      clientName: 'Client',
+      paymentTerms: 'immediate',
+      discount: 0,
+      discountType: 'percentage' as const,
+      status: 'draft',
+      notes: null,
+    });
+    coFindItemsForOrderMock.mockResolvedValue([SAMPLE_ITEM]);
+    coFindFullForSnapshotMock.mockResolvedValue({
+      order: { ...SAMPLE_ORDER, linkedOfferId: 'off-1' },
+      items: [SAMPLE_ITEM],
+    });
+    coUpdateMock.mockResolvedValue({ ...SAMPLE_ORDER, linkedOfferId: 'off-1', notes: 'edited' });
+    coReplaceItemsMock.mockResolvedValue([{ ...SAMPLE_ITEM, quantity: 5 }]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: {
+        notes: 'edited',
+        items: [
+          {
+            id: SAMPLE_ITEM.id,
+            productId: SAMPLE_ITEM.productId,
+            productName: SAMPLE_ITEM.productName,
+            quantity: 5,
+            unitPrice: SAMPLE_ITEM.unitPrice,
+            productCost: SAMPLE_ITEM.productCost,
+            discount: SAMPLE_ITEM.discount,
+          },
+        ],
+      },
+    });
+
+    // Before the fix this returned 409 'Quote-linked order details are read-only'.
+    expect(res.statusCode).toBe(200);
+    expect(coUpdateMock).toHaveBeenCalledWith(
+      'o-1',
+      expect.objectContaining({ notes: 'edited' }),
+      TX_SENTINEL,
+    );
+    // Items are now actually replaced for a draft source-linked order.
+    expect(coReplaceItemsMock).toHaveBeenCalled();
+    // The content change is captured in version history.
+    expect(ovInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'o-1', reason: 'update' }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('409 still rejects editing a CONFIRMED order linked to an offer', async () => {
+    coFindExistingMock.mockResolvedValue({
+      id: 'o-1',
+      linkedQuoteId: null,
+      linkedOfferId: 'off-2',
+      clientId: 'c1',
+      clientName: 'Client',
+      paymentTerms: 'immediate',
+      discount: 0,
+      discountType: 'percentage' as const,
+      status: 'confirmed',
+      notes: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: { notes: 'edited' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Non-draft');
+    expect(coUpdateMock).not.toHaveBeenCalled();
+    expect(ovInsertMock).not.toHaveBeenCalled();
+  });
+});

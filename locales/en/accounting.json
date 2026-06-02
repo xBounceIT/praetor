@@ -14,6 +14,7 @@
     "linkedOffer": "Linked Offer",
     "linkedOfferInfo": "This order was created from offer #{{number}}",
     "offerDetailsReadOnly": "(Offer details are read-only)",
+    "offerDetailsEditable": "(Order details are editable)",
     "convertFromQuote": "Convert to Client's Order",
     "statusDraft": "Draft",
     "statusConfirmed": "Confirmed",

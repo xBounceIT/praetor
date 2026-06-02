@@ -1,5 +1,5 @@
-import { describe, expect, mock, test } from 'bun:test';
-import { screen } from '@testing-library/react';
+import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { Client, ClientsOrder } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
@@ -21,6 +21,21 @@ mock.module('sonner', () => ({
   },
   Toaster: () => null,
 }));
+
+// Opening the edit modal mounts OrderVersionsPanel, which fetches version history on mount.
+// Stub the API so the modal renders without a real network call.
+mock.module('../../../services/api/clientsOrders', () => ({
+  clientsOrdersApi: {
+    listVersions: () => Promise.resolve([]),
+    getVersion: () => Promise.reject(new Error('not used')),
+    restoreVersion: () => Promise.reject(new Error('not used')),
+  },
+}));
+
+// Modal locks body scroll while open; reset it between tests.
+afterEach(() => {
+  document.body.style.overflow = '';
+});
 
 const ClientsOrdersView = (await import('../../../components/accounting/ClientsOrdersView'))
   .default;
@@ -163,5 +178,87 @@ describe('<ClientsOrdersView />', () => {
       "void handleStatusUpdate(row.id, { status: 'confirmed' });",
       "void handleStatusUpdate(row.id, { status: 'denied' });",
     ]);
+  });
+});
+
+describe('<ClientsOrdersView /> draft-from-offer editability', () => {
+  const draftLinkedOrder: ClientsOrder = { ...orders[0], id: 'dm_so_02', linkedOfferId: 'off-1' };
+  const confirmedLinkedOrder: ClientsOrder = {
+    ...orders[0],
+    id: 'dm_so_03',
+    status: 'confirmed',
+    linkedOfferId: 'off-2',
+  };
+
+  const openModal = async (
+    order: ClientsOrder,
+    onUpdate = mock((_id: string, _updates: Partial<ClientsOrder>) => Promise.resolve()),
+  ) => {
+    render(
+      <ClientsOrdersView
+        orders={[order]}
+        clients={clients}
+        products={[]}
+        currency="EUR"
+        onUpdateClientsOrder={onUpdate}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+      />,
+    );
+    fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
+    const dialog = await screen.findByRole('dialog');
+    return { dialog, onUpdate };
+  };
+
+  const isDisabled = (el: Element | null) =>
+    (el as HTMLButtonElement | HTMLTextAreaElement).disabled;
+
+  test('a draft order linked to an offer renders all fields editable', async () => {
+    const { dialog } = await openModal(draftLinkedOrder);
+
+    expect(isDisabled(dialog.querySelector('#client-order-client'))).toBe(false);
+    expect(isDisabled(dialog.querySelector('#client-order-notes'))).toBe(false);
+    expect(
+      isDisabled(within(dialog).getByRole('button', { name: /clientQuotes\.addProduct/ })),
+    ).toBe(false);
+    expect(
+      isDisabled(
+        within(dialog).getByRole('button', { name: 'accounting:clientsOrders.updateOrder' }),
+      ),
+    ).toBe(false);
+    // The linked-offer note now says details are editable, not read-only.
+    expect(
+      within(dialog).getByText('accounting:clientsOrders.offerDetailsEditable'),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByText('accounting:clientsOrders.offerDetailsReadOnly')).toBeNull();
+  });
+
+  test('a confirmed order linked to an offer stays read-only', async () => {
+    const { dialog } = await openModal(confirmedLinkedOrder);
+
+    expect(isDisabled(dialog.querySelector('#client-order-client'))).toBe(true);
+    expect(isDisabled(dialog.querySelector('#client-order-notes'))).toBe(true);
+    expect(
+      isDisabled(within(dialog).getByRole('button', { name: /clientQuotes\.addProduct/ })),
+    ).toBe(true);
+    expect(
+      isDisabled(
+        within(dialog).getByRole('button', { name: 'accounting:clientsOrders.updateOrder' }),
+      ),
+    ).toBe(true);
+    expect(within(dialog).getByText('accounting:clientsOrders.readOnlyStatus')).toBeInTheDocument();
+  });
+
+  test('submitting an edited draft-from-offer order calls onUpdateClientsOrder', async () => {
+    const { dialog, onUpdate } = await openModal(draftLinkedOrder);
+
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'accounting:clientsOrders.updateOrder' }),
+    );
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1));
+    expect(onUpdate.mock.calls[0][0]).toBe('dm_so_02');
+    const payload = onUpdate.mock.calls[0][1];
+    expect(payload.linkedOfferId).toBe('off-1');
+    expect(payload.items).toHaveLength(1);
   });
 });

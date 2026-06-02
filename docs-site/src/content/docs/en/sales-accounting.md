@@ -27,6 +27,8 @@ Supplier quotes help compare purchase costs and conditions. Link rows to the cor
 
 Customer and supplier orders consolidate operational information. Before confirming, check the record, rows, discounts, payment terms, and links to previous documents.
 
+A sale order created from an accepted offer starts as a **Draft** and stays fully editable (client, rows, discounts, notes, and payment terms) while it is a draft. It becomes read-only only after it is **Confirmed** or **Denied**.
+
 ## Invoices
 
 Customer and supplier invoices should match actual orders and deliveries. Check taxable amounts, VAT, totals, and references to the linked document.

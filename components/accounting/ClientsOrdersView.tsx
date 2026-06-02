@@ -393,8 +393,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   const activeClients = useMemo(() => clients.filter((c) => !c.isDisabled), [clients]);
   const activeProducts = useMemo(() => products.filter((p) => !p.isDisabled), [products]);
 
-  const isLinkedOffer = Boolean(formData.linkedOfferId);
-  const baseReadOnly = Boolean(isLinkedOffer || (editingOrder && editingOrder.status !== 'draft'));
+  // A draft order is always editable — including one created from an offer. The order is the
+  // live downstream document, so an upstream offer link must not lock it (mirrors the offers
+  // view, which keys read-only off status alone). Read-only kicks in once the order is
+  // confirmed/denied, or while previewing a historical version.
+  const baseReadOnly = Boolean(editingOrder && editingOrder.status !== 'draft');
   const isReadOnly = baseReadOnly || previewVersion !== null;
 
   const tableInitialFilterState = useMemo(() => {
@@ -805,9 +808,13 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                           })}
                         </div>
                         <div className="mt-0.5 text-[10px] text-muted-foreground">
-                          {t('accounting:clientsOrders.offerDetailsReadOnly', {
-                            defaultValue: '(Order details are read-only)',
-                          })}
+                          {isReadOnly
+                            ? t('accounting:clientsOrders.offerDetailsReadOnly', {
+                                defaultValue: '(Order details are read-only)',
+                              })
+                            : t('accounting:clientsOrders.offerDetailsEditable', {
+                                defaultValue: '(Order details are editable)',
+                              })}
                         </div>
                       </div>
                     </div>
