@@ -32,6 +32,10 @@ const BrandingSettings: React.FC<BrandingSettingsProps> = ({
   const [isSavingName, setIsSavingName] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
+  // Fall back to the ImageOff placeholder if the current logo fails to load (the server 404s a
+  // logo whose file is gone on disk). Tracking the failed URL (vs a boolean + reset effect) retries
+  // automatically when a new upload changes branding.logoUrl.
+  const [failedLogoUrl, setFailedLogoUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Keep the local field in sync when branding is (re)loaded or changed elsewhere.
@@ -148,11 +152,12 @@ const BrandingSettings: React.FC<BrandingSettingsProps> = ({
           <FieldLabel>{t('branding.logoLabel')}</FieldLabel>
           <div className="flex items-center gap-4">
             <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted/40">
-              {branding.logoUrl ? (
+              {branding.logoUrl && branding.logoUrl !== failedLogoUrl ? (
                 <img
                   src={branding.logoUrl}
                   alt={t('branding.currentLogoAlt')}
                   className="size-full object-contain p-1"
+                  onError={() => setFailedLogoUrl(branding.logoUrl)}
                 />
               ) : (
                 <ImageOff aria-hidden="true" className="size-6 text-muted-foreground" />

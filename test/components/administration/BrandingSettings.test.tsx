@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { AppBranding } from '../../../types';
+import { ApiErrorStub } from '../../helpers/apiErrorStub';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
 import { render } from '../../helpers/render';
@@ -20,6 +21,11 @@ const deleteLogoMock = mock(
   async (): Promise<AppBranding> => ({ companyName: null, logoUrl: null }),
 );
 
+// `ApiError` must be on the mock even though this component never uses it: Bun's
+// `mock.module` overrides are process-global and leak across files (see helpers/mockCleanup.ts),
+// so a consumer that statically imports `{ ApiError }` from services/api (e.g. Login.tsx) would
+// fail to link if this factory — when it happens to be the last one registered — omitted it.
+// Every other services/api mock in the suite follows the same convention.
 mock.module('../../../services/api', () => ({
   default: {
     branding: {
@@ -28,6 +34,7 @@ mock.module('../../../services/api', () => ({
       deleteLogo: () => deleteLogoMock(),
     },
   },
+  ApiError: ApiErrorStub,
 }));
 
 const toastSuccessMock = mock((_message: string) => {});
@@ -113,6 +120,20 @@ describe('<BrandingSettings />', () => {
       expect(onChange).toHaveBeenCalledWith({ companyName: null, logoUrl: null }),
     );
     expect(toastSuccessMock).toHaveBeenCalledWith('branding.logoRemoved');
+  });
+
+  test('shows the ImageOff placeholder when the current logo fails to load', () => {
+    render(
+      <BrandingSettings
+        branding={{ companyName: 'Acme', logoUrl: '/api/branding/logo?v=1' }}
+        onChange={() => {}}
+      />,
+    );
+
+    fireEvent.error(screen.getByAltText('branding.currentLogoAlt'));
+
+    // A logo whose file is gone on disk 404s; the broken preview is replaced by the placeholder.
+    expect(screen.queryByAltText('branding.currentLogoAlt')).toBeNull();
   });
 
   test('hides the Remove button when no logo is set', () => {

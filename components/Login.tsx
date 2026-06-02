@@ -76,6 +76,12 @@ const Login: React.FC<LoginProps> = ({
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [ssoProviders, setSsoProviders] = useState<PublicSsoProvider[]>([]);
+  // Fall back to the bundled logo if a custom logoUrl fails to load (the server returns 404 for a
+  // logo whose file is missing on disk). Tracking the failed URL (vs a boolean + reset effect)
+  // retries automatically when logoUrl changes and can't loop on a failing fallback.
+  const [failedLogoUrl, setFailedLogoUrl] = useState<string | null>(null);
+  const usingCustomLogo = Boolean(logoUrl) && logoUrl !== failedLogoUrl;
+  const resolvedLogoUrl = logoUrl && logoUrl !== failedLogoUrl ? logoUrl : '/praetor-logo.png';
 
   const formSchema = useMemo(
     () =>
@@ -195,11 +201,18 @@ const Login: React.FC<LoginProps> = ({
 
         <div className="relative isolate flex w-full flex-col items-center">
           <img
-            src={logoUrl ?? '/praetor-logo.png'}
+            src={resolvedLogoUrl}
             alt={companyName ? `${companyName} logo` : 'Praetor Logo'}
-            // Only the bundled multi-color Praetor logo is flattened to white in dark mode;
-            // a custom uploaded logo is shown as-is so its own colors are preserved.
-            className={cn('h-24 object-contain', isDark && !logoUrl && 'brightness-0 invert')}
+            onError={() => {
+              if (logoUrl) setFailedLogoUrl(logoUrl);
+            }}
+            // Only the bundled multi-color Praetor logo is flattened to white in dark mode; a
+            // custom uploaded logo is shown as-is so its own colors are preserved. If a custom logo
+            // fails to load we fall back to the bundled logo, which again gets the dark treatment.
+            className={cn(
+              'h-24 object-contain',
+              isDark && !usingCustomLogo && 'brightness-0 invert',
+            )}
           />
           <p className="mt-2 text-sm text-muted-foreground">{t('auth:login.title')}</p>
 

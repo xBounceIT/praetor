@@ -340,6 +340,26 @@ describe('POST /api/branding/logo', () => {
     expect(saveBrandingLogoMock).not.toHaveBeenCalled();
   });
 
+  test('400 when the multipart body carries no file part', async () => {
+    // A multipart body with zero parts (just the closing boundary): request.file() resolves
+    // undefined, exercising the `!part` guard at the top of the handler. A non-file *field* part
+    // would instead trip the fields:0 limit, so the body must be genuinely empty of parts.
+    const boundary = '----brandingtestboundary';
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/branding/logo',
+      headers: {
+        ...authHeader(),
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      payload: `--${boundary}--\r\n`,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('A file is required');
+    expect(saveBrandingLogoMock).not.toHaveBeenCalled();
+  });
+
   test('400 for a disallowed image type', async () => {
     isAllowedBrandingImageMock.mockReturnValue(false);
     const { body, headers } = multipartBody('malware.exe', 'application/octet-stream', 'data');

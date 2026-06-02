@@ -44,7 +44,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/',
     {
       onRequest: [fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT)],
-      schema: { tags: ['branding'], summary: 'Get public app branding' },
+      // `security: []` overrides the global bearerAuth requirement so the OpenAPI docs
+      // correctly show this endpoint as public (matches the /sso/providers/public route).
+      schema: { tags: ['branding'], summary: 'Get public app branding', security: [] },
     },
     async (_request: FastifyRequest, _reply: FastifyReply) => {
       return toResponse(await brandingRepo.get());
@@ -59,7 +61,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     '/logo',
     {
       onRequest: [fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT)],
-      schema: { tags: ['branding'], summary: 'Get the uploaded company logo image' },
+      // Public (see GET / above): override the global bearerAuth requirement in the docs.
+      schema: { tags: ['branding'], summary: 'Get the uploaded company logo image', security: [] },
     },
     async (_request: FastifyRequest, reply: FastifyReply) => {
       const record = await brandingRepo.get();
