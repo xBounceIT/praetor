@@ -1354,16 +1354,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
         });
       }
-      if (current.linkedOfferId || current.linkedQuoteId) {
-        return replyError(request, reply, {
-          statusCode: 409,
-          message: 'Source-linked orders cannot be restored',
-          action: 'client_order.restore.conflict',
-          entityType: 'client_order',
-          entityId: idResult.value,
-          details: { secondaryLabel: 'source_linked' },
-        });
-      }
+      // Draft orders are restorable regardless of an offer/quote link — they are editable, so
+      // their version history must be reversible too (the restore preserves the link IDs and
+      // the snapshot/replaceItems path below carries supplier references). Non-draft orders stay
+      // read-only via the status check below; for them the version panel is disabled in the UI.
       if (current.status !== 'draft') {
         return replyError(request, reply, {
           statusCode: 409,

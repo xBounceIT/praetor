@@ -401,7 +401,8 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     expect(ovInsertMock).not.toHaveBeenCalled();
   });
 
-  test('409 when order has linkedOfferId', async () => {
+  test('200 restores a DRAFT order linked to an offer', async () => {
+    setupHappyPath();
     coFindExistingMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: null,
@@ -414,7 +415,11 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
       status: 'draft',
       notes: null,
     });
-    ovFindByIdMock.mockResolvedValue(SAMPLE_VERSION);
+    ovFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: { ...SAMPLE_SNAPSHOT, order: { ...SAMPLE_ORDER, linkedOfferId: 'off-1' } },
+    });
+    coRestoreSnapshotOrderMock.mockResolvedValue({ ...SAMPLE_ORDER, linkedOfferId: 'off-1' });
 
     const res = await testApp.inject({
       method: 'POST',
@@ -422,12 +427,17 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
       headers: authHeader(),
     });
 
-    expect(res.statusCode).toBe(409);
-    expect(JSON.parse(res.body).error).toContain('Source-linked');
-    expect(coRestoreSnapshotOrderMock).not.toHaveBeenCalled();
+    // Draft source-linked orders are editable, so their versions are restorable too. The
+    // restore preserves the offer link (snapshot carries linkedOfferId).
+    expect(res.statusCode).toBe(200);
+    expect(coRestoreSnapshotOrderMock).toHaveBeenCalled();
+    expect(ovInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'o-1', reason: 'restore' }),
+      TX_SENTINEL,
+    );
   });
 
-  test('409 when order has linkedQuoteId', async () => {
+  test('409 when a CONFIRMED source-linked order cannot be restored', async () => {
     coFindExistingMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: 'q-1',
@@ -437,7 +447,7 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
       paymentTerms: 'immediate',
       discount: 0,
       discountType: 'percentage' as const,
-      status: 'draft',
+      status: 'confirmed',
       notes: null,
     });
     ovFindByIdMock.mockResolvedValue(SAMPLE_VERSION);
@@ -449,7 +459,6 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     });
 
     expect(res.statusCode).toBe(409);
-    expect(JSON.parse(res.body).error).toContain('Source-linked');
     expect(coRestoreSnapshotOrderMock).not.toHaveBeenCalled();
   });
 
