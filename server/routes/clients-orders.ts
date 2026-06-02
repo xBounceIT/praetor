@@ -927,7 +927,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
       // A draft order created from an offer/quote is the live downstream document and stays
       // fully editable. Non-draft orders are already fully locked by the status gate above
-      // (903-923), so relaxing the source-linked lock only ever opens up drafts.
+      // (hasLockedFieldUpdates), so relaxing the source-linked lock only ever opens up drafts.
       const allowSourceLinkedEdit = existingOrder.status === 'draft';
 
       let existingItems: clientsOrdersRepo.ClientOrderItem[] | null = null;
