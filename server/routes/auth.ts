@@ -6,52 +6,37 @@ import {
   generateToken,
   getSessionAuth,
   requireSessionAuth,
+  signPurposeToken,
+  verifyPurposeToken,
 } from '../middleware/auth.ts';
+import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as settingsRepo from '../repositories/settingsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { redeemBackupCode } from '../services/backupCodes.ts';
 import {
   type ExternalRoleMapping,
   externalGroupsYieldNoKnownRole,
 } from '../services/external-auth.ts';
+import {
+  authUserSchema,
+  buildSessionSuccess,
+  sessionSuccessResponseSchema,
+} from '../services/sessionResponse.ts';
 import * as ssoService from '../services/sso.ts';
 import { logAudit } from '../utils/audit.ts';
+import { decrypt } from '../utils/crypto.ts';
 import { computeAvatarInitials } from '../utils/initials.ts';
-import { getRolePermissions } from '../utils/permissions.ts';
+import { ADMIN_ROLE_ID, getRolePermissions, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
+import { verifyTotpCode } from '../utils/totp.ts';
 import {
   badRequest,
   requireNonEmptyString,
   requireNonEmptyStringRaw,
 } from '../utils/validation.ts';
-
-const authUserSchema = {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    name: { type: 'string' },
-    username: { type: 'string' },
-    role: { type: 'string' },
-    avatarInitials: { type: 'string' },
-    permissions: { type: 'array', items: { type: 'string' } },
-    availableRoles: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          id: { type: 'string' },
-          name: { type: 'string' },
-          isSystem: { type: 'boolean' },
-          isAdmin: { type: 'boolean' },
-        },
-        required: ['id', 'name', 'isSystem', 'isAdmin'],
-      },
-    },
-  },
-  required: ['id', 'name', 'username', 'role', 'avatarInitials', 'permissions', 'availableRoles'],
-} as const;
 
 const loginBodySchema = {
   type: 'object',
@@ -70,13 +55,30 @@ const switchRoleBodySchema = {
   required: ['roleId'],
 } as const;
 
+const totpChallengeBodySchema = {
+  type: 'object',
+  properties: {
+    challengeToken: { type: 'string' },
+    code: { type: 'string' },
+  },
+  required: ['challengeToken', 'code'],
+} as const;
+
+// POST /login may resolve three different ways: a full session (token + user), a TOTP challenge
+// for a 2FA-enabled user (totpRequired + challengeToken), or a mandatory-enrollment redirect for
+// an admin without 2FA (totpEnrollmentRequired + enrollToken). Fastify strips any response field
+// absent from this schema, so every possible field is enumerated here and `token`/`user` are no
+// longer required.
 const loginResponseSchema = {
   type: 'object',
   properties: {
     token: { type: 'string' },
     user: authUserSchema,
+    totpRequired: { type: 'boolean' },
+    challengeToken: { type: 'string' },
+    totpEnrollmentRequired: { type: 'boolean' },
+    enrollToken: { type: 'string' },
   },
-  required: ['token', 'user'],
 } as const;
 
 const LDAP_UNAVAILABLE_BODY = {
@@ -105,6 +107,14 @@ const syncLdapLoginProfile = async (
   });
 
   return name ? { name, avatarInitials } : {};
+};
+
+// Whether the user's primary role grants admin privileges. The built-in admin/top-manager role
+// ids are always treated as admin; any custom role is resolved through its `isAdmin` flag.
+const isAdminRole = async (roleId: string): Promise<boolean> => {
+  if (roleId === ADMIN_ROLE_ID || roleId === TOP_MANAGER_ROLE_ID) return true;
+  const role = await rolesRepo.findById(roleId);
+  return role?.isAdmin ?? false;
 };
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -249,8 +259,136 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const token = generateToken(user.id, Date.now(), user.role, user.sessionVersion);
-      const permissions = await getRolePermissions(user.role);
+      // 2FA gate. Password is now confirmed and the account is enabled. Before issuing a session
+      // we branch: (a) a user with 2FA already enabled must clear a TOTP challenge; (b) an admin
+      // for whom enrollment is mandated but not yet completed is redirected into enrollment;
+      // (c) otherwise the legacy session is issued. `user.login` is logged ONLY when an actual
+      // session is granted (path c here, or the totp-challenge endpoint) — never on a 2FA detour.
+      const totpApplies = usersRepo.isTotpApplicable(authMethod);
+
+      // (a) TOTP challenge — the user has confirmed 2FA and must present a code to finish login.
+      if (user.totpEnabled && totpApplies) {
+        await logAudit({
+          request,
+          action: 'user.totp_challenge_issued',
+          entityType: 'user',
+          entityId: user.id,
+          details: {
+            targetLabel: user.name,
+            secondaryLabel: user.role,
+          },
+          userId: user.id,
+        });
+        return {
+          totpRequired: true,
+          challengeToken: signPurposeToken({ userId: user.id, purpose: 'totp_challenge' }, '5m'),
+        };
+      }
+
+      // (b) Mandatory enrollment — only reached when the admin has NO TOTP configured yet.
+      if (totpApplies && !user.totpEnabled) {
+        const settings = await generalSettingsRepo.get();
+        const enforce = settings?.enforceTotpForAdmins ?? false;
+        if (enforce && (await isAdminRole(user.role))) {
+          await logAudit({
+            request,
+            action: 'user.totp_enrollment_required',
+            entityType: 'user',
+            entityId: user.id,
+            details: {
+              targetLabel: user.name,
+              secondaryLabel: user.role,
+            },
+            userId: user.id,
+          });
+          return {
+            totpEnrollmentRequired: true,
+            enrollToken: signPurposeToken({ userId: user.id, purpose: 'totp_enroll' }, '15m'),
+          };
+        }
+      }
+
+      // (c) No 2FA in play — issue the session exactly as the legacy flow did, logging user.login.
+      await logAudit({
+        request,
+        action: 'user.login',
+        entityType: 'user',
+        entityId: user.id,
+        details: {
+          targetLabel: user.name,
+          secondaryLabel: user.role,
+        },
+        userId: user.id,
+      });
+
+      return buildSessionSuccess(user);
+    },
+  );
+
+  // POST /totp-challenge - second factor for a 2FA-enabled user mid-login. Exchanges the
+  // short-lived challenge token (issued by /login) plus a TOTP or backup code for a session.
+  fastify.post(
+    '/totp-challenge',
+    {
+      onRequest: fastify.rateLimit(LOGIN_RATE_LIMIT),
+      schema: {
+        tags: ['auth'],
+        summary: 'Complete TOTP two-factor challenge',
+        body: totpChallengeBodySchema,
+        security: [],
+        response: {
+          200: sessionSuccessResponseSchema,
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { challengeToken, code } = request.body as {
+        challengeToken: unknown;
+        code: unknown;
+      };
+
+      const challengeTokenResult = requireNonEmptyString(challengeToken, 'challengeToken');
+      if (!challengeTokenResult.ok) return badRequest(reply, challengeTokenResult.message);
+      const codeResult = requireNonEmptyStringRaw(code, 'code');
+      if (!codeResult.ok) return badRequest(reply, codeResult.message);
+
+      // Expired or tampered challenge tokens are reported distinctly so the client can prompt the
+      // user to log in again rather than re-enter a code against a dead token.
+      let userId: string;
+      try {
+        ({ userId } = verifyPurposeToken(challengeTokenResult.value, 'totp_challenge'));
+      } catch {
+        return reply
+          .code(401)
+          .send({ error: 'Two-factor challenge expired', errorCode: 'totp_challenge_expired' });
+      }
+
+      // Every other failure below — unknown/disabled user, 2FA turned off since the token was
+      // issued, missing secret, or a code that matches neither the TOTP nor any unused backup
+      // code — collapses to the SAME generic 400 so the response never reveals which condition
+      // failed (no account enumeration, no oracle on code validity vs. account state).
+      const invalidCode = () =>
+        reply.code(400).send({ error: 'Invalid code', errorCode: 'invalid_totp_code' });
+
+      const user = await usersRepo.findLoginUserById(userId);
+      if (!user || user.isDisabled || !user.totpEnabled || user.employeeType !== 'app_user') {
+        return invalidCode();
+      }
+
+      // Read the secret + backup codes and (on a backup-code hit) burn that code inside a single
+      // transaction, so two concurrent submissions of the same backup code cannot both succeed.
+      const verified = await withDbTransaction(async (tx) => {
+        const state = await usersRepo.getTotpState(userId, tx);
+        if (!state?.totpEnabled || !state.totpSecret) return false;
+
+        const secret = decrypt(state.totpSecret);
+        if (verifyTotpCode(secret, codeResult.value)) return true;
+
+        return redeemBackupCode(userId, codeResult.value, tx);
+      });
+
+      if (!verified) return invalidCode();
 
       await logAudit({
         request,
@@ -263,31 +401,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
         userId: user.id,
       });
-      const availableRoles = await rolesRepo.listAvailableRolesForUser(user.id);
-      const effectiveAvailableRoles =
-        availableRoles.length > 0
-          ? availableRoles
-          : [
-              {
-                id: user.role,
-                name: user.role,
-                isSystem: false,
-                isAdmin: user.role === 'admin',
-              },
-            ];
 
-      return {
-        token,
-        user: {
-          id: user.id,
-          name: user.name,
-          username: user.username,
-          role: user.role,
-          avatarInitials: user.avatarInitials,
-          permissions,
-          availableRoles: effectiveAvailableRoles,
-        },
-      };
+      return buildSessionSuccess(user);
     },
   );
 

@@ -371,6 +371,7 @@ export const normalizeGeneralSettings = (s: GeneralSettings): GeneralSettings =>
   rilLunchBreakMinutes: Number(s.rilLunchBreakMinutes ?? 60),
   rilNoteOptions: normalizeRilNoteOptions(s.rilNoteOptions),
   rilTransferOptions: normalizeRilTransferOptions(s.rilTransferOptions),
+  enforceTotpForAdmins: s.enforceTotpForAdmins ?? false,
 });
 
 // Allowlist mirroring the server's UNIT_OF_MEASURE_VALUES (server/routes/invoices.ts).

@@ -169,6 +169,7 @@ export interface GeneralSettings {
   rilLunchBreakMinutes?: number;
   rilNoteOptions?: RilNoteOption[];
   rilTransferOptions?: string[];
+  enforceTotpForAdmins: boolean;
 }
 
 export interface Client {

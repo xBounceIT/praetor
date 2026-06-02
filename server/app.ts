@@ -31,6 +31,7 @@ import supplierOrdersRoutes from './routes/supplier-orders.ts';
 import supplierQuotesRoutes from './routes/supplier-quotes.ts';
 import suppliersRoutes from './routes/suppliers.ts';
 import tasksRoutes from './routes/tasks.ts';
+import twoFactorRoutes from './routes/two-factor.ts';
 import usersRoutes from './routes/users.ts';
 import viewsRoutes from './routes/views.ts';
 import workUnitsRoutes from './routes/work-units.ts';
@@ -162,6 +163,7 @@ export const buildApp = async () => {
 
   await fastify.register(authRoutes, { prefix: '/api/auth' });
   await fastify.register(ssoAuthRoutes, { prefix: '/api/auth/sso' });
+  await fastify.register(twoFactorRoutes, { prefix: '/api/auth/2fa' });
   await fastify.register(aiRoutes, { prefix: '/api/ai' });
   await fastify.register(usersRoutes, { prefix: '/api/users' });
   await fastify.register(viewsRoutes, { prefix: '/api/views' });

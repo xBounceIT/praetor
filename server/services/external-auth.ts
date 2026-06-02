@@ -314,6 +314,7 @@ export const resolveExternalIdentity = async (
             employeeType: 'app_user',
             authMethod: input.protocol,
             authProviderId: input.providerId,
+            totpEnabled: false,
           };
           wasCreated = true;
         } else {

@@ -64,6 +64,18 @@ I due interruttori sono indipendenti: disattivando entrambi (e creando manualmen
 
 Se un utente non riesce ad accedere, controlla credenziali, stato dell'utente, ruolo assegnato e log di autenticazione.
 
+### Autenticazione a due fattori (2FA)
+
+Praetor supporta l'autenticazione a due fattori basata su TOTP (app authenticator come Google Authenticator, Authy o 1Password) per gli account con credenziali locali o LDAP. Ogni utente abilita la 2FA dalle proprie **Impostazioni → Sicurezza**: Praetor mostra un codice QR (e una chiave da inserire manualmente) da scansionare con l'app authenticator, chiede un codice a sei cifre per confermare e quindi mostra una serie di **codici di backup** monouso da conservare al sicuro. I codici di backup vengono mostrati una sola volta; puoi rigenerarli in qualsiasi momento — invalidando i precedenti — inserendo un codice valido.
+
+Quando la 2FA è attiva, dopo username e password l'accesso richiede un codice dell'app authenticator (oppure uno dei codici di backup, ciascuno utilizzabile una sola volta). Per disattivarla è richiesta una nuova autenticazione: gli utenti locali inseriscono la password attuale **e** un codice valido, gli utenti LDAP un codice valido. La disattivazione revoca le altre sessioni attive dell'utente.
+
+**Imporre la 2FA agli amministratori.** Nella sezione **Autenticazione** puoi attivare **Richiedi l'autenticazione a due fattori per gli amministratori**. Quando è attiva, un amministratore con credenziali locali o LDAP che non ha ancora configurato la 2FA viene indirizzato alla procedura di attivazione al successivo accesso e ottiene una sessione solo dopo averla completata.
+
+**Provider OIDC/SAML.** Gli utenti che accedono tramite un provider esterno (OIDC o SAML) non usano la 2FA di Praetor: il secondo fattore è gestito dal loro identity provider. Per questi utenti l'attivazione non è disponibile e il criterio di imposizione per gli amministratori non si applica.
+
+**Ripristino.** Se un utente perde l'accesso al proprio authenticator, un amministratore può azzerarne la 2FA dal menu azioni nella lista utenti (**Reimposta 2FA**). L'operazione disattiva la 2FA dell'utente e revoca le sue sessioni attive; al successivo accesso l'utente userà solo la password (e, se l'imposizione è attiva e l'utente è amministratore, gli verrà richiesto di riconfigurarla).
+
 ## Impostazioni generali ed email
 
 Le impostazioni generali controllano funzioni trasversali come AI reporting e preferenze applicative. Le impostazioni email servono per invii e notifiche.

@@ -3005,6 +3005,7 @@ const AppContent: React.FC = () => {
                   onUpdateUser={handleUpdateUser}
                   onUpdateUserRoles={handleUpdateUserRoles}
                   onUpdateUserAuthMethod={handleUpdateUserAuthMethod}
+                  onResetUserTotp={(userId) => api.users.resetTotp(userId).then(() => undefined)}
                   currentUserId={currentUser.id}
                   permissions={currentUser.permissions || []}
                   roles={roles}
@@ -3049,6 +3050,10 @@ const AppContent: React.FC = () => {
                   ssoProviders={ssoProviders}
                   onSaveSsoProvider={handleSaveSsoProvider}
                   onDeleteSsoProvider={handleDeleteSsoProvider}
+                  enforceTotpForAdmins={generalSettings.enforceTotpForAdmins}
+                  onSetEnforceTotpForAdmins={(value) =>
+                    handleUpdateGeneralSettings({ enforceTotpForAdmins: value })
+                  }
                 />
               )}
 
@@ -3097,6 +3102,11 @@ const AppContent: React.FC = () => {
                 authProviderName={currentUser.authProviderName ?? null}
                 onUpdate={handleUpdateUserSettings}
                 onUpdatePassword={handleUpdateUserPassword}
+                onTotpSetup={() => api.auth.totpSetup()}
+                onTotpConfirm={(code) => api.auth.totpConfirm(code).then(() => undefined)}
+                onTotpDisable={(payload) => api.auth.totpDisable(payload).then(() => undefined)}
+                onRegenerateTotpBackupCodes={(code) => api.auth.regenerateTotpBackupCodes(code)}
+                onGetTotpStatus={() => api.auth.getTotpStatus()}
                 onListMcpTokens={handleListMcpTokens}
                 onCreateMcpToken={handleCreateMcpToken}
                 onRevokeMcpToken={handleRevokeMcpToken}

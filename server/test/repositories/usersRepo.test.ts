@@ -63,7 +63,7 @@ describe('findAuthUserById', () => {
 describe('findLoginUserByNormalizedUsername', () => {
   test('returns the mapped login user when the row exists', async () => {
     // Projection: id, name, username, role, passwordHash, avatarInitials, isDisabled,
-    // employeeType, authMethod, authProviderId, sessionVersion, tokenVersion
+    // employeeType, authMethod, authProviderId, sessionVersion, tokenVersion, totpEnabled
     exec.enqueue({
       rows: [
         [
@@ -79,6 +79,7 @@ describe('findLoginUserByNormalizedUsername', () => {
           null,
           1,
           1,
+          false,
         ],
       ],
     });
@@ -96,6 +97,7 @@ describe('findLoginUserByNormalizedUsername', () => {
       authProviderId: null,
       sessionVersion: 1,
       tokenVersion: 1,
+      totpEnabled: false,
     });
     expect(exec.calls[0].params).toContain('alice');
   });

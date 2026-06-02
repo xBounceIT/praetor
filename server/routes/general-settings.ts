@@ -71,6 +71,7 @@ const generalSettingsSchema = {
     rilLunchBreakMinutes: { type: 'integer' },
     rilNoteOptions: rilNoteOptionsSchema,
     rilTransferOptions: rilTransferOptionsSchema,
+    enforceTotpForAdmins: { type: 'boolean' },
   },
   required: [
     'currency',
@@ -91,6 +92,7 @@ const generalSettingsSchema = {
     'rilLunchBreakMinutes',
     'rilNoteOptions',
     'rilTransferOptions',
+    'enforceTotpForAdmins',
   ],
 } as const;
 
@@ -115,6 +117,7 @@ const generalSettingsUpdateBodySchema = {
     rilLunchBreakMinutes: { type: 'integer' },
     rilNoteOptions: rilNoteOptionsSchema,
     rilTransferOptions: rilTransferOptionsSchema,
+    enforceTotpForAdmins: { type: 'boolean' },
   },
 } as const;
 
@@ -137,6 +140,7 @@ const DEFAULT_SETTINGS: generalSettingsRepo.GeneralSettings = {
   rilLunchBreakMinutes: 60,
   rilNoteOptions: DEFAULT_RIL_NOTE_OPTIONS.map((option) => ({ ...option })),
   rilTransferOptions: [...DEFAULT_RIL_TRANSFER_OPTIONS],
+  enforceTotpForAdmins: false,
 };
 
 const maskApiKey = (value: string | null, reveal: boolean) =>
@@ -313,6 +317,7 @@ const toResponse = (settings: generalSettingsRepo.GeneralSettings, revealApiKeys
   rilLunchBreakMinutes: settings.rilLunchBreakMinutes ?? 60,
   rilNoteOptions: normalizeRilNoteOptions(settings.rilNoteOptions),
   rilTransferOptions: normalizeRilTransferOptions(settings.rilTransferOptions),
+  enforceTotpForAdmins: settings.enforceTotpForAdmins ?? false,
 });
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -376,6 +381,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         rilLunchBreakMinutes?: number;
         rilNoteOptions?: RilNoteOption[];
         rilTransferOptions?: string[];
+        enforceTotpForAdmins?: boolean;
       };
       const {
         currency,
@@ -476,6 +482,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!allowWeekendSelectionResult.ok) {
         return badRequest(reply, allowWeekendSelectionResult.message);
       }
+      const enforceTotpForAdminsResult = parseBooleanField(body, 'enforceTotpForAdmins');
+      if (!enforceTotpForAdminsResult.ok) {
+        return badRequest(reply, enforceTotpForAdminsResult.message);
+      }
 
       const settings = await generalSettingsRepo.update({
         currency: currencyResult.value,
@@ -496,6 +506,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         rilLunchBreakMinutes: rilLunchBreakMinutesResult.value,
         rilNoteOptions: rilNoteOptionsResult.value,
         rilTransferOptions: rilTransferOptionsResult.value,
+        enforceTotpForAdmins: enforceTotpForAdminsResult.value,
       });
 
       await logAudit({

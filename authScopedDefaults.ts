@@ -59,6 +59,7 @@ export const INITIAL_GENERAL_SETTINGS = deepFreeze<GeneralSettingsState>({
   rilLunchBreakMinutes: 60,
   rilNoteOptions: DEFAULT_RIL_NOTE_OPTIONS.map((option) => ({ ...option })),
   rilTransferOptions: [...DEFAULT_RIL_TRANSFER_OPTIONS],
+  enforceTotpForAdmins: false,
 });
 
 export const INITIAL_EMAIL_CONFIG = deepFreeze<EmailConfig>({

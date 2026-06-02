@@ -15,6 +15,7 @@ const settings: IGeneralSettings = {
   startOfWeek: 'Monday',
   treatSaturdayAsHoliday: true,
   enableAiReporting: false,
+  enforceTotpForAdmins: false,
   allowWeekendSelection: true,
   defaultLocation: 'remote',
   rilCompanyName: '',

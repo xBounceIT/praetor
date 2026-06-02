@@ -106,6 +106,8 @@ const renderAuthSettings = (overrides: Partial<ComponentProps<typeof AuthSetting
     ssoProviders: [],
     onSaveSsoProvider: defaultOnSaveSsoProvider,
     onDeleteSsoProvider: mock(async () => {}),
+    enforceTotpForAdmins: false,
+    onSetEnforceTotpForAdmins: mock((_value: boolean) => {}),
     ...overrides,
   };
 
@@ -195,6 +197,39 @@ describe('<AuthSettings />', () => {
     const submitted = onSave.mock.calls[0]?.[0] as LdapConfig;
     expect(submitted.provisionOnLogin).toBe(false);
     expect(submitted.autoProvisionAll).toBe(true);
+  });
+
+  describe('admin 2FA enforcement toggle', () => {
+    test('renders the enforcement card on the LDAP tab with the auth enforceTotp.* keys', () => {
+      renderAuthSettings();
+
+      // The LDAP tab is the default, so the enforcement card is visible without navigating.
+      expect(screen.getByText('enforceTotp.label')).toBeInTheDocument();
+      expect(screen.getByText('enforceTotp.description')).toBeInTheDocument();
+      expect(screen.getByText('enforceTotp.ssoNote')).toBeInTheDocument();
+
+      const enforceSwitch = document.getElementById('enforce-totp-for-admins') as HTMLInputElement;
+      expect(enforceSwitch).toBeTruthy();
+      expect(enforceSwitch.getAttribute('aria-checked')).toBe('false');
+    });
+
+    test('reflects enforceTotpForAdmins=true on the Switch', () => {
+      renderAuthSettings({ enforceTotpForAdmins: true });
+
+      const enforceSwitch = document.getElementById('enforce-totp-for-admins') as HTMLInputElement;
+      expect(enforceSwitch.getAttribute('aria-checked')).toBe('true');
+    });
+
+    test('toggling the Switch calls onSetEnforceTotpForAdmins(true)', () => {
+      const onSetEnforceTotpForAdmins = mock((_value: boolean) => {});
+      renderAuthSettings({ enforceTotpForAdmins: false, onSetEnforceTotpForAdmins });
+
+      const enforceSwitch = document.getElementById('enforce-totp-for-admins') as HTMLInputElement;
+      fireEvent.click(enforceSwitch);
+
+      expect(onSetEnforceTotpForAdmins).toHaveBeenCalledTimes(1);
+      expect(onSetEnforceTotpForAdmins).toHaveBeenCalledWith(true);
+    });
   });
 
   // #638: the tester previously lied about every existing user — claiming they would be

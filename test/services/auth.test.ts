@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import type { LoginResponse } from '../../services/api/contracts';
 import { buildResponse } from '../helpers/fetchMock';
 
 // Stub fetch globally; the real client.ts will call it under the hood.
@@ -26,6 +27,16 @@ const canonicalUser = {
   costPerHour: 0,
   hasTopManagerRole: false,
   isAdminOnly: false,
+};
+
+// `authApi.login` now returns a `LoginResult` union: the canonical { token, user }
+// or one of the TOTP short-circuit branches. Narrow to the canonical branch (and
+// assert we actually got it) so the token/user assertions type-check.
+const assertLoginResponse = (result: unknown): LoginResponse => {
+  expect(result).toBeTruthy();
+  expect(typeof result).toBe('object');
+  expect('token' in (result as object)).toBe(true);
+  return result as LoginResponse;
 };
 
 // Routes fetch by URL substring so each test can program just the responses it cares about.
@@ -58,7 +69,7 @@ describe('authApi', () => {
         '/auth/login': { token: 'login-token', user: { ...canonicalUser } },
       });
 
-      const result = await authApi.login('alice', 'secret');
+      const result = assertLoginResponse(await authApi.login('alice', 'secret'));
 
       // Exactly one network call — /auth/me must not be invoked when the
       // login response already carries a canonical user (issue #616).
@@ -83,7 +94,7 @@ describe('authApi', () => {
         '/auth/me': { ...canonicalUser },
       });
 
-      const result = await authApi.login('alice', 'secret');
+      const result = assertLoginResponse(await authApi.login('alice', 'secret'));
 
       expect(fetchMock.mock.calls).toHaveLength(2);
       expect(String(fetchMock.mock.calls[1][0])).toContain('/auth/me');
@@ -132,6 +143,177 @@ describe('authApi', () => {
       });
 
       await expect(authApi.login('a', 'b')).rejects.toThrow('Invalid authentication response');
+    });
+
+    test('returns the TOTP challenge branch without persisting a token', async () => {
+      setAuthToken('old-token');
+      programRoutes({
+        '/auth/login': { totpRequired: true, challengeToken: 'challenge-123' },
+      });
+
+      const result = await authApi.login('alice', 'secret');
+
+      expect(result).toEqual({ totpRequired: true, challengeToken: 'challenge-123' });
+      // No session token issued yet — the challenge must be solved first. The
+      // pre-existing token is left untouched (login did not clear it).
+      expect(getAuthToken()).toBe('old-token');
+      // Only the /auth/login probe ran; no /auth/me finalize.
+      expect(fetchMock.mock.calls).toHaveLength(1);
+      expect(String(fetchMock.mock.calls[0][0])).toContain('/auth/login');
+    });
+
+    test('returns the forced-enrollment branch without persisting a token', async () => {
+      programRoutes({
+        '/auth/login': { totpEnrollmentRequired: true, enrollToken: 'enroll-456' },
+      });
+
+      const result = await authApi.login('alice', 'secret');
+
+      expect(result).toEqual({ totpEnrollmentRequired: true, enrollToken: 'enroll-456' });
+      expect(getAuthToken()).toBeNull();
+      expect(fetchMock.mock.calls).toHaveLength(1);
+      expect(String(fetchMock.mock.calls[0][0])).toContain('/auth/login');
+    });
+
+    test('finalizes normally when neither TOTP branch is signalled', async () => {
+      // A response carrying a challengeToken but `totpRequired` falsy must not
+      // be mistaken for the challenge branch — it falls through to finalize.
+      programRoutes({
+        '/auth/login': { token: 'login-token', user: { ...canonicalUser }, totpRequired: false },
+      });
+
+      const result = assertLoginResponse(await authApi.login('alice', 'secret'));
+
+      expect(result.token).toBe('login-token');
+      expect(result.user.id).toBe('u-1');
+      expect(getAuthToken()).toBe('login-token');
+    });
+  });
+
+  describe('totpChallenge', () => {
+    test('POSTs the challenge token + code, persists the issued token, returns the canonical user', async () => {
+      programRoutes({
+        '/auth/totp-challenge': { token: 'challenge-token', user: { ...canonicalUser } },
+      });
+
+      const result = await authApi.totpChallenge('challenge-123', '123456');
+
+      expect(fetchMock.mock.calls).toHaveLength(1);
+      const call = fetchMock.mock.calls[0];
+      expect(String(call[0])).toContain('/auth/totp-challenge');
+      expect((call[1] as { method: string }).method).toBe('POST');
+      expect((call[1] as { body: string }).body).toBe(
+        JSON.stringify({ challengeToken: 'challenge-123', code: '123456' }),
+      );
+
+      expect(getAuthToken()).toBe('challenge-token');
+      expect(result.token).toBe('challenge-token');
+      expect(result.user.id).toBe('u-1');
+      expect(result.user.username).toBe('canonical');
+    });
+
+    test('falls back to /auth/me when the challenge response user fails normalization', async () => {
+      programRoutes({
+        '/auth/totp-challenge': { token: 'challenge-token', user: {} },
+        '/auth/me': { ...canonicalUser },
+      });
+
+      const result = await authApi.totpChallenge('challenge-123', '123456');
+
+      expect(fetchMock.mock.calls).toHaveLength(2);
+      expect(String(fetchMock.mock.calls[1][0])).toContain('/auth/me');
+      expect(result.user.id).toBe('u-1');
+    });
+
+    test('restores the previous token when the challenge fails', async () => {
+      setAuthToken('prev');
+      fetchMock.mockImplementation(async () => respondWith({ message: 'bad code' }, 401));
+
+      await expect(authApi.totpChallenge('challenge-123', '000000')).rejects.toThrow('bad code');
+      expect(getAuthToken()).toBe('prev');
+    });
+  });
+
+  describe('totpSetup', () => {
+    const setupBody = {
+      secret: 'JBSWY3DPEHPK3PXP',
+      otpauthUri: 'otpauth://totp/Praetor:alice?secret=JBSWY3DPEHPK3PXP',
+      qrDataUri: 'data:image/png;base64,abc',
+      backupCodes: ['code-1', 'code-2'],
+    };
+
+    test('POSTs to /auth/2fa/setup and returns the setup payload', async () => {
+      programRoutes({ '/auth/2fa/setup': { ...setupBody } });
+
+      const result = await authApi.totpSetup();
+
+      expect(fetchMock.mock.calls).toHaveLength(1);
+      const call = fetchMock.mock.calls[0];
+      expect(String(call[0])).toContain('/auth/2fa/setup');
+      expect((call[1] as { method: string }).method).toBe('POST');
+      expect(result).toEqual(setupBody);
+    });
+
+    test('sends Authorization: Bearer <bearerToken> when an enroll token is supplied', async () => {
+      // During forced enrollment there is no persisted session token yet, so the
+      // caller passes the enroll token explicitly for this one request.
+      programRoutes({ '/auth/2fa/setup': { ...setupBody } });
+
+      await authApi.totpSetup('enroll-456');
+
+      const call = fetchMock.mock.calls[0];
+      const headers = (call[1] as { headers: Record<string, string> }).headers;
+      expect(headers.Authorization).toBe('Bearer enroll-456');
+    });
+  });
+
+  describe('totpConfirm', () => {
+    test('persists the issued token + returns the canonical user when confirm completes enrollment', async () => {
+      programRoutes({
+        '/auth/2fa/confirm': { enabled: true, token: 'enroll-session', user: { ...canonicalUser } },
+      });
+
+      const result = await authApi.totpConfirm('123456', 'enroll-456');
+
+      const call = fetchMock.mock.calls[0];
+      expect(String(call[0])).toContain('/auth/2fa/confirm');
+      expect((call[1] as { method: string }).method).toBe('POST');
+      expect((call[1] as { body: string }).body).toBe(JSON.stringify({ code: '123456' }));
+      // Enroll token forwarded as the bearer for this confirm request.
+      expect((call[1] as { headers: Record<string, string> }).headers.Authorization).toBe(
+        'Bearer enroll-456',
+      );
+
+      expect(getAuthToken()).toBe('enroll-session');
+      expect(result.enabled).toBe(true);
+      expect(result.token).toBe('enroll-session');
+      expect(result.user?.id).toBe('u-1');
+    });
+
+    test('returns { enabled: true } without touching the token when no session is issued', async () => {
+      programRoutes({ '/auth/2fa/confirm': { enabled: true } });
+
+      const result = await authApi.totpConfirm('123456');
+
+      expect(result).toEqual({ enabled: true });
+      expect(result.token).toBeUndefined();
+      expect(result.user).toBeUndefined();
+      // Already-authenticated confirm path leaves the existing token unchanged.
+      expect(getAuthToken()).toBeNull();
+    });
+  });
+
+  describe('getTotpStatus', () => {
+    test('GETs /auth/2fa/status and returns the body', async () => {
+      programRoutes({ '/auth/2fa/status': { enabled: true, applicable: true } });
+
+      const result = await authApi.getTotpStatus();
+
+      const call = fetchMock.mock.calls[0];
+      expect(String(call[0])).toContain('/auth/2fa/status');
+      // GET has no explicit method override in the client call.
+      expect((call[1] as { method?: string }).method).toBeUndefined();
+      expect(result).toEqual({ enabled: true, applicable: true });
     });
   });
 

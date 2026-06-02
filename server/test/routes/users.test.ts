@@ -60,6 +60,8 @@ const setPrimaryRoleMock = mock();
 const getUserRoleIdsMock = mock();
 const canManageUserMock = mock();
 const getAssignmentsMock = mock();
+const disableTotpMock = mock();
+const bumpSessionVersionMock = mock();
 
 // tracker catalog repos
 const listClientsMock = mock();
@@ -125,6 +127,8 @@ beforeAll(async () => {
     getUserRoleIds: getUserRoleIdsMock,
     canManageUser: canManageUserMock,
     getAssignments: getAssignmentsMock,
+    disableTotp: disableTotpMock,
+    bumpSessionVersion: bumpSessionVersionMock,
   }));
   mock.module('../../repositories/clientsRepo.ts', () => ({
     ...clientsRepoSnap,
@@ -331,6 +335,8 @@ const allMocks = [
   getUserRoleIdsMock,
   canManageUserMock,
   getAssignmentsMock,
+  disableTotpMock,
+  bumpSessionVersionMock,
   listClientsMock,
   listClientsByIdsMock,
   listProjectsForUserMock,
@@ -2408,6 +2414,156 @@ describe('PUT /api/users/:id/auth-method', () => {
       expect(res.statusCode).toBe(200);
       expect(deleteAllForUserMock).not.toHaveBeenCalled();
     });
+  });
+});
+
+// =========================================================================
+// POST /api/users/:id/2fa/reset
+// =========================================================================
+
+describe('POST /api/users/:id/2fa/reset', () => {
+  test('200 admin with all-scope resets TOTP: disables + bumps session version atomically', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    disableTotpMock.mockResolvedValue(undefined);
+    bumpSessionVersionMock.mockResolvedValue(undefined);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users/u-target/2fa/reset',
+      headers: adminAuth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ ok: true });
+
+    // Recovery clears the target's enrollment AND invalidates every live session
+    // (the bumped sessionVersion no longer matches the tokens they hold). Both run
+    // inside the same withDbTransaction, so both land with the shared TX sentinel.
+    expect(disableTotpMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+    expect(bumpSessionVersionMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+
+    // Caller already holds administration.user_management_all.view, so the
+    // manager-scope fallback is short-circuited.
+    expect(canManageUserMock).not.toHaveBeenCalled();
+
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'user.totp_reset',
+        entityType: 'user',
+        entityId: 'u-target',
+        details: expect.objectContaining({ secondaryLabel: 'admin_reset' }),
+      }),
+    );
+  });
+
+  test('200 manager with scope over the target can reset (canManageUser consulted)', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    // No administration.user_management_all.view → falls through to canManageUser.
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management.view',
+    ]);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    canManageUserMock.mockResolvedValue(true);
+    disableTotpMock.mockResolvedValue(undefined);
+    bumpSessionVersionMock.mockResolvedValue(undefined);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users/u-target/2fa/reset',
+      headers: managerAuth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ ok: true });
+    expect(canManageUserMock).toHaveBeenCalledWith('u-target', MANAGER_USER.id);
+    expect(disableTotpMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+    expect(bumpSessionVersionMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+  });
+
+  test('404 when the target user does not exist', async () => {
+    findCoreByIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users/missing/2fa/reset',
+      headers: adminAuth(),
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(disableTotpMock).not.toHaveBeenCalled();
+    expect(bumpSessionVersionMock).not.toHaveBeenCalled();
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'user.totp_reset.not_found',
+        entityType: 'user',
+        entityId: 'missing',
+      }),
+    );
+  });
+
+  test('403 caller lacking administration.user_management.update permission', async () => {
+    getRolePermissionsMock.mockResolvedValue(['administration.user_management.view']);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users/u-target/2fa/reset',
+      headers: adminAuth(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    // Permission gate (requirePermission) rejects before the handler body runs.
+    expect(findCoreByIdMock).not.toHaveBeenCalled();
+    expect(disableTotpMock).not.toHaveBeenCalled();
+    expect(bumpSessionVersionMock).not.toHaveBeenCalled();
+  });
+
+  test('403 non-all-scope caller without canManageUser over the target', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management.view',
+    ]);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    canManageUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users/u-target/2fa/reset',
+      headers: managerAuth(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(disableTotpMock).not.toHaveBeenCalled();
+    expect(bumpSessionVersionMock).not.toHaveBeenCalled();
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'user.totp_reset.denied',
+        entityType: 'user',
+        entityId: 'u-target',
+        details: expect.objectContaining({ secondaryLabel: 'cannot_manage_user' }),
+      }),
+    );
+  });
+
+  test('400 cannot reset your own two-factor authentication', async () => {
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, id: ADMIN_USER.id });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: `/api/users/${ADMIN_USER.id}/2fa/reset`,
+      headers: adminAuth(),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('Cannot reset your own two-factor authentication');
+    expect(disableTotpMock).not.toHaveBeenCalled();
+    expect(bumpSessionVersionMock).not.toHaveBeenCalled();
+  });
+
+  test('401 missing token', async () => {
+    const res = await testApp.inject({ method: 'POST', url: '/api/users/u-target/2fa/reset' });
+    expect(res.statusCode).toBe(401);
   });
 });
 

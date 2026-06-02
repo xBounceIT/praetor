@@ -1413,6 +1413,79 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
+  // POST /:id/2fa/reset - Admin recovery: clear another user's two-factor enrollment.
+  // Recovery implies the account may be compromised, so we also bump the target's
+  // session version to invalidate every live session (the rotated sessionVersion no
+  // longer matches the tokens they hold).
+  fastify.post(
+    '/:id/2fa/reset',
+    {
+      onRequest: [authenticateToken, requirePermission('administration.user_management.update')],
+      schema: {
+        tags: ['users'],
+        summary: "Reset another user's two-factor authentication",
+        params: idParamSchema,
+        response: {
+          200: {
+            type: 'object',
+            properties: { ok: { type: 'boolean' } },
+            required: ['ok'],
+          },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const targetUser = await usersRepo.findCoreById(idResult.value);
+      if (!targetUser) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'User not found',
+          action: 'user.totp_reset.not_found',
+          entityType: 'user',
+          entityId: idResult.value,
+        });
+      }
+      if (
+        !hasPermission(request, 'administration.user_management_all.view') &&
+        idResult.value !== request.user?.id &&
+        !(await usersRepo.canManageUser(idResult.value, request.user?.id ?? ''))
+      ) {
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'user.totp_reset.denied',
+          entityType: 'user',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'cannot_manage_user' },
+        });
+      }
+      if (idResult.value === request.user?.id) {
+        return badRequest(reply, 'Cannot reset your own two-factor authentication');
+      }
+
+      await withDbTransaction(async (tx) => {
+        await usersRepo.disableTotp(idResult.value, tx);
+        await usersRepo.bumpSessionVersion(idResult.value, tx);
+      });
+
+      await logAudit({
+        request,
+        action: 'user.totp_reset',
+        entityType: 'user',
+        entityId: idResult.value,
+        details: { targetLabel: targetUser.name, secondaryLabel: 'admin_reset' },
+      });
+
+      return { ok: true };
+    },
+  );
+
   // GET /:id/roles - Get assigned roles for a user
   fastify.get(
     '/:id/roles',

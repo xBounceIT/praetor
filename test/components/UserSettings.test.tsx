@@ -58,6 +58,31 @@ const onRenewPersonalAccessToken = mock(() =>
   Promise.resolve({ ...tokenMetadata, token: 'praetor_pat_new-secret' }),
 );
 
+const totpSetupResult = {
+  secret: 'JBSWY3DPEHPK3PXP',
+  otpauthUri: 'otpauth://totp/Praetor:alice?secret=JBSWY3DPEHPK3PXP&issuer=Praetor',
+  qrDataUri: 'data:image/png;base64,QR',
+  backupCodes: ['11112222', '33334444'],
+};
+const onTotpSetup = mock(() => Promise.resolve(totpSetupResult));
+const onTotpConfirm = mock((_code: string) => Promise.resolve());
+const onTotpDisable = mock((_payload: { password?: string; code?: string }) => Promise.resolve());
+const onRegenerateTotpBackupCodes = mock((_code: string) =>
+  Promise.resolve({ backupCodes: ['55556666', '77778888'] }),
+);
+const onGetTotpStatus = mock(() => Promise.resolve({ enabled: false, applicable: true }));
+
+// The five 2FA handler props are required, so every render must supply them.
+// `onGetTotpStatus` defaults to a disabled-but-applicable status; individual
+// tests pass an override to exercise the enabled / IdP-managed branches.
+const totpProps = {
+  onTotpSetup,
+  onTotpConfirm,
+  onTotpDisable,
+  onRegenerateTotpBackupCodes,
+  onGetTotpStatus,
+};
+
 const renderSettings = (
   overrides: {
     authMethod?: UserAuthMethod;
@@ -65,6 +90,7 @@ const renderSettings = (
     onUpdate?: (updates: Partial<Settings>) => Promise<void>;
     onGetPersonalAccessToken?: () => Promise<PersonalAccessToken>;
     onRenewPersonalAccessToken?: () => Promise<PersonalAccessToken>;
+    onGetTotpStatus?: () => Promise<{ enabled: boolean; applicable: boolean }>;
   } = {},
 ) =>
   render(
@@ -81,6 +107,8 @@ const renderSettings = (
       onRenewPersonalAccessToken={
         overrides.onRenewPersonalAccessToken ?? onRenewPersonalAccessToken
       }
+      {...totpProps}
+      onGetTotpStatus={overrides.onGetTotpStatus ?? onGetTotpStatus}
     />,
   );
 
@@ -104,6 +132,7 @@ describe('<UserSettings /> profile form', () => {
         onRevokeMcpToken={onRevokeMcpToken}
         onGetPersonalAccessToken={onGetPersonalAccessToken}
         onRenewPersonalAccessToken={onRenewPersonalAccessToken}
+        {...totpProps}
       />,
     );
 
@@ -139,6 +168,7 @@ describe('<UserSettings /> profile form', () => {
         onRevokeMcpToken={onRevokeMcpToken}
         onGetPersonalAccessToken={onGetPersonalAccessToken}
         onRenewPersonalAccessToken={onRenewPersonalAccessToken}
+        {...totpProps}
       />,
     );
 
@@ -158,6 +188,7 @@ describe('<UserSettings /> profile form', () => {
         onRevokeMcpToken={onRevokeMcpToken}
         onGetPersonalAccessToken={onGetPersonalAccessToken}
         onRenewPersonalAccessToken={onRenewPersonalAccessToken}
+        {...totpProps}
       />,
     );
 
@@ -466,5 +497,108 @@ describe('<UserSettings /> non-local auth', () => {
 
     await waitFor(() => expect(onUpdate).toHaveBeenCalled());
     expect(onUpdate).toHaveBeenCalledWith({ language: 'it' });
+  });
+});
+
+describe('<UserSettings /> Two-Factor Authentication card', () => {
+  beforeEach(() => {
+    for (const m of [
+      onUpdate,
+      onUpdatePassword,
+      onListMcpTokens,
+      onCreateMcpToken,
+      onRevokeMcpToken,
+      onGetPersonalAccessToken,
+      onRenewPersonalAccessToken,
+      onTotpSetup,
+      onTotpConfirm,
+      onTotpDisable,
+      onRegenerateTotpBackupCodes,
+      onGetTotpStatus,
+    ]) {
+      m.mockClear();
+    }
+  });
+
+  test('lazily loads the 2FA status when the Security tab opens and renders the disabled badge', async () => {
+    const getStatus = mock(() => Promise.resolve({ enabled: false, applicable: true }));
+    renderSettings({ onGetTotpStatus: getStatus });
+
+    // Not loaded until the Security tab is opened.
+    expect(getStatus).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText('security.title'));
+
+    await waitFor(() => expect(getStatus).toHaveBeenCalledTimes(1));
+
+    // The 2FA card and its disabled-state status badge render once the status resolves.
+    expect(screen.getByText('twoFactor.title')).toBeInTheDocument();
+    expect(await screen.findByText('twoFactor.statusDisabled')).toBeInTheDocument();
+    // Disabled status offers a Set-up affordance, not the manage actions.
+    expect(screen.getByRole('button', { name: /twoFactor.setUp/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /twoFactor.disable/ })).not.toBeInTheDocument();
+  });
+
+  test('renders the enabled badge plus Disable and Regenerate actions when 2FA is enabled', async () => {
+    const getStatus = mock(() => Promise.resolve({ enabled: true, applicable: true }));
+    renderSettings({ onGetTotpStatus: getStatus });
+
+    fireEvent.click(screen.getByText('security.title'));
+
+    await waitFor(() => expect(getStatus).toHaveBeenCalledTimes(1));
+
+    expect(await screen.findByText('twoFactor.statusEnabled')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /twoFactor.disable/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /twoFactor.regenerateBackupCodes/ }),
+    ).toBeInTheDocument();
+    // The enabled state replaces the Set-up button with the manage actions.
+    expect(screen.queryByRole('button', { name: /twoFactor.setUp/ })).not.toBeInTheDocument();
+  });
+
+  test('shows the IdP-managed banner and no Set-up button for OIDC users', async () => {
+    // For SSO users the card is IdP-managed regardless of the (irrelevant) status payload.
+    renderSettings({ authMethod: 'oidc', authProviderName: 'Acme SSO' });
+
+    fireEvent.click(screen.getByText('security.title'));
+
+    expect(await screen.findByText('twoFactor.idpManagedTitle')).toBeInTheDocument();
+    expect(screen.getByText('twoFactor.idpManagedDescription')).toBeInTheDocument();
+    // No enroll/manage affordances are offered when the IdP owns 2FA.
+    expect(screen.queryByRole('button', { name: /twoFactor.setUp/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /twoFactor.disable/ })).not.toBeInTheDocument();
+    // The status badge is suppressed for the IdP-managed branch.
+    expect(screen.queryByText('twoFactor.statusDisabled')).not.toBeInTheDocument();
+    expect(screen.queryByText('twoFactor.statusEnabled')).not.toBeInTheDocument();
+  });
+
+  test('shows the IdP-managed banner when the status reports it is not applicable', async () => {
+    const getStatus = mock(() => Promise.resolve({ enabled: false, applicable: false }));
+    renderSettings({ onGetTotpStatus: getStatus });
+
+    fireEvent.click(screen.getByText('security.title'));
+
+    await waitFor(() => expect(getStatus).toHaveBeenCalledTimes(1));
+
+    expect(await screen.findByText('twoFactor.idpManagedTitle')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /twoFactor.setUp/ })).not.toBeInTheDocument();
+  });
+
+  test('clicking Set up opens the wizard dialog and kicks off the setup call', async () => {
+    const getStatus = mock(() => Promise.resolve({ enabled: false, applicable: true }));
+    renderSettings({ onGetTotpStatus: getStatus });
+
+    fireEvent.click(screen.getByText('security.title'));
+    await waitFor(() => expect(getStatus).toHaveBeenCalledTimes(1));
+
+    const setUpButton = await screen.findByRole('button', { name: /twoFactor.setUp/ });
+    fireEvent.click(setUpButton);
+
+    // The wizard dialog mounts and runs onSetup once on activation.
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    await waitFor(() => expect(onTotpSetup).toHaveBeenCalledTimes(1));
+    // The scan step (wizard-only content) renders the manual key once setup resolves.
+    expect(await screen.findByText('twoFactor.manualKeyLabel')).toBeInTheDocument();
+    expect(screen.getByText(totpSetupResult.secret)).toBeInTheDocument();
   });
 });

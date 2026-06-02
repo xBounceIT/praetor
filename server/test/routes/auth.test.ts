@@ -1,7 +1,10 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { authenticator } from '@otplib/preset-v11';
 import * as realBcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
+import { signPurposeToken, verifyPurposeToken } from '../../middleware/auth.ts';
+import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
 import * as realPersonalAccessTokensRepo from '../../repositories/personalAccessTokensRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSettingsRepo from '../../repositories/settingsRepo.ts';
@@ -10,6 +13,7 @@ import * as realExternalAuth from '../../services/external-auth.ts';
 import * as realLdapService from '../../services/ldap.ts';
 import * as realSsoService from '../../services/sso.ts';
 import * as realAudit from '../../utils/audit.ts';
+import { encrypt } from '../../utils/crypto.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import { hashPersonalAccessToken } from '../../utils/personal-access-token.ts';
 import {
@@ -27,6 +31,7 @@ process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'test-encryption-key-
 // fires (i.e., before beforeAll executes) - see comment in middleware/auth.test.ts.
 const usersRepoSnap = { ...realUsersRepo };
 const drizzleSnap = { ...realDrizzle };
+const generalSettingsRepoSnap = { ...realGeneralSettingsRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const settingsRepoSnap = { ...realSettingsRepo };
 const permissionsSnap = { ...realPermissions };
@@ -41,6 +46,7 @@ const ssoServiceSnap = { ...realSsoService };
 // so we mock its three downstream calls.
 const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
+const rolesFindByIdMock = mock();
 const getRolePermissionsMock = mock();
 const findPersonalAccessTokenByHashMock = mock();
 const markPersonalAccessTokenUsedMock = mock();
@@ -48,6 +54,13 @@ const markPersonalAccessTokenUsedMock = mock();
 // Auth route deps
 const findLoginUserByNormalizedUsernameMock = mock();
 const findLoginUserByIdMock = mock();
+const getTotpStateMock = mock();
+const markBackupCodeUsedMock = mock();
+// Resolves null by default (no settings row). The TOTP-enforcement /login tests point it at an
+// enforcing config; the union return type keeps both the null default and that override valid.
+const generalSettingsGetMock = mock<() => Promise<{ enforceTotpForAdmins: boolean } | null>>(
+  async () => null,
+);
 const updateDirectoryProfileMock = mock();
 const bumpSessionVersionMock = mock();
 const listAvailableRolesForUserMock = mock();
@@ -72,12 +85,18 @@ beforeAll(async () => {
     findAuthUserById: findAuthUserByIdMock,
     findLoginUserByNormalizedUsername: findLoginUserByNormalizedUsernameMock,
     findLoginUserById: findLoginUserByIdMock,
+    getTotpState: getTotpStateMock,
+    markBackupCodeUsed: markBackupCodeUsedMock,
     updateDirectoryProfile: updateDirectoryProfileMock,
     bumpSessionVersion: bumpSessionVersionMock,
   }));
   mock.module('../../db/drizzle.ts', () => ({
     ...drizzleSnap,
     withDbTransaction: withDbTransactionMock,
+  }));
+  mock.module('../../repositories/generalSettingsRepo.ts', () => ({
+    ...generalSettingsRepoSnap,
+    get: generalSettingsGetMock,
   }));
   mock.module('../../repositories/settingsRepo.ts', () => ({
     ...settingsRepoSnap,
@@ -86,6 +105,7 @@ beforeAll(async () => {
   mock.module('../../repositories/rolesRepo.ts', () => ({
     ...rolesRepoSnap,
     userHasRole: userHasRoleMock,
+    findById: rolesFindByIdMock,
     listAvailableRolesForUser: listAvailableRolesForUserMock,
   }));
   mock.module('../../utils/permissions.ts', () => ({
@@ -127,6 +147,7 @@ beforeAll(async () => {
 afterAll(() => {
   restoreAuthMiddlewareMock();
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
+  mock.module('../../repositories/generalSettingsRepo.ts', () => generalSettingsRepoSnap);
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
   mock.module('../../repositories/settingsRepo.ts', () => settingsRepoSnap);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
@@ -167,11 +188,14 @@ const HAPPY_ROLES = [
 const allMocks = [
   findAuthUserByIdMock,
   userHasRoleMock,
+  rolesFindByIdMock,
   getRolePermissionsMock,
   findPersonalAccessTokenByHashMock,
   markPersonalAccessTokenUsedMock,
   findLoginUserByNormalizedUsernameMock,
   findLoginUserByIdMock,
+  getTotpStateMock,
+  markBackupCodeUsedMock,
   updateDirectoryProfileMock,
   bumpSessionVersionMock,
   listAvailableRolesForUserMock,
@@ -195,6 +219,9 @@ beforeEach(async () => {
   // Defaults: happy auth path for /me and /switch-role
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
+  // Default: custom roles resolve to a non-admin role record (admin/top_manager short-circuit
+  // before findById is consulted). The enforcement tests rely on this baseline.
+  rolesFindByIdMock.mockResolvedValue(null);
   getRolePermissionsMock.mockResolvedValue(HAPPY_PERMISSIONS);
   findPersonalAccessTokenByHashMock.mockResolvedValue({
     userId: 'u1',
@@ -235,6 +262,9 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await testApp.close();
+  // The TOTP enforcement tests point generalSettingsGetMock at an enforcing config; reset it to
+  // the file-wide default (no settings row) so the pre-existing /login cases keep their behavior.
+  generalSettingsGetMock.mockResolvedValue(null);
 });
 
 const authHeader = (userId = 'u1', activeRole?: string, sessionStart?: number) => ({
@@ -752,6 +782,175 @@ describe('POST /api/auth/login', () => {
 
     expect(res.statusCode).toBe(400);
   });
+
+  // ── 2FA gate (login path a/b) ──────────────────────────────────────────────────────────────
+  // Once the password is confirmed and the account is enabled, /login branches before issuing a
+  // session: (a) a TOTP-enabled local/ldap user gets a challenge instead of a token; (b) an admin
+  // for whom enrollment is mandated but not yet done is redirected into enrollment. In both
+  // detours `user.login` MUST NOT fire — only the dedicated detour audit does.
+
+  test('200: local TOTP-enabled user receives a challenge token, not a session', async () => {
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({ ...LOGIN_USER, totpEnabled: true });
+    bcryptCompareMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'alice', password: 'secret' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    // The challenge response carries ONLY the 2FA fields — Fastify strips token/user.
+    expect(body).toEqual({ totpRequired: true, challengeToken: expect.any(String) });
+    expect(body.token).toBeUndefined();
+    expect(body.user).toBeUndefined();
+
+    // The challenge token is a single-purpose 'totp_challenge' token for this user — it must NOT
+    // be usable as a session (authenticateToken rejects any 'purpose' claim).
+    expect(verifyPurposeToken(body.challengeToken, 'totp_challenge')).toEqual({ userId: 'u1' });
+
+    // Audit: the challenge was issued; a real session was NOT granted.
+    expect(logAuditMock).toHaveBeenCalledTimes(1);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'user.totp_challenge_issued',
+        entityType: 'user',
+        entityId: 'u1',
+        userId: 'u1',
+      }),
+    );
+    const actions = logAuditMock.mock.calls.map(
+      (call) => (call as unknown as [{ action: string }])[0].action,
+    );
+    expect(actions).not.toContain('user.login');
+  });
+
+  test('200: LDAP TOTP-enabled user receives a challenge token after a successful bind', async () => {
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
+      ...LOGIN_USER,
+      authMethod: 'ldap',
+      totpEnabled: true,
+    });
+    ldapAuthenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      groups: [],
+      matchedRoleIds: [],
+      roleMappings: [],
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'alice', password: 'secret' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body).toEqual({ totpRequired: true, challengeToken: expect.any(String) });
+    expect(verifyPurposeToken(body.challengeToken, 'totp_challenge')).toEqual({ userId: 'u1' });
+    // LDAP bind ran; bcrypt did not.
+    expect(ldapAuthenticateWithProfileMock).toHaveBeenCalledWith('alice', 'secret');
+    expect(bcryptCompareMock).not.toHaveBeenCalled();
+    const actions = logAuditMock.mock.calls.map(
+      (call) => (call as unknown as [{ action: string }])[0].action,
+    );
+    expect(actions).toEqual(['user.totp_challenge_issued']);
+  });
+
+  test('200: enforcement on + admin without TOTP is redirected into mandatory enrollment', async () => {
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
+      ...LOGIN_USER,
+      role: 'admin',
+      totpEnabled: false,
+    });
+    bcryptCompareMock.mockResolvedValue(true);
+    generalSettingsGetMock.mockResolvedValue({ enforceTotpForAdmins: true });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'alice', password: 'secret' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body).toEqual({ totpEnrollmentRequired: true, enrollToken: expect.any(String) });
+    expect(body.token).toBeUndefined();
+    expect(body.user).toBeUndefined();
+
+    // The enroll token is a single-purpose 'totp_enroll' token for this admin.
+    expect(verifyPurposeToken(body.enrollToken, 'totp_enroll')).toEqual({ userId: 'u1' });
+
+    expect(logAuditMock).toHaveBeenCalledTimes(1);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'user.totp_enrollment_required',
+        entityType: 'user',
+        entityId: 'u1',
+        userId: 'u1',
+      }),
+    );
+    const actions = logAuditMock.mock.calls.map(
+      (call) => (call as unknown as [{ action: string }])[0].action,
+    );
+    expect(actions).not.toContain('user.login');
+  });
+
+  test('200: enforcement off (no settings row) + admin without TOTP gets a normal session (regression)', async () => {
+    // generalSettingsGetMock resolves null by default (file-wide), so enforceTotpForAdmins is
+    // falsey and the admin logs in normally — the enrollment detour must NOT trigger.
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
+      ...LOGIN_USER,
+      role: 'admin',
+      totpEnabled: false,
+    });
+    bcryptCompareMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'alice', password: 'secret' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.token).toEqual(expect.any(String));
+    expect(body.user).toEqual(
+      expect.objectContaining({ id: 'u1', role: 'admin', permissions: HAPPY_PERMISSIONS }),
+    );
+    expect(body.totpEnrollmentRequired).toBeUndefined();
+    expect(body.totpRequired).toBeUndefined();
+
+    // Normal login → user.login, no detour audit.
+    expect(logAuditMock).toHaveBeenCalledTimes(1);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'user.login', entityId: 'u1' }),
+    );
+  });
+
+  test('200: enforcement on but a non-admin without TOTP logs in normally', async () => {
+    // The mandate only applies to admin roles — a manager with enforcement enabled still gets a
+    // session, never an enrollment redirect.
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({ ...LOGIN_USER, totpEnabled: false });
+    bcryptCompareMock.mockResolvedValue(true);
+    generalSettingsGetMock.mockResolvedValue({ enforceTotpForAdmins: true });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'alice', password: 'secret' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.token).toEqual(expect.any(String));
+    expect(body.totpEnrollmentRequired).toBeUndefined();
+    const actions = logAuditMock.mock.calls.map(
+      (call) => (call as unknown as [{ action: string }])[0].action,
+    );
+    expect(actions).toEqual(['user.login']);
+  });
 });
 
 describe('GET /api/auth/me', () => {
@@ -1008,5 +1207,278 @@ describe('POST /api/auth/logout', () => {
     expect(res.statusCode).toBe(403);
     expect(JSON.parse(res.body)).toEqual({ error: 'Session authentication required' });
     expect(bumpSessionVersionMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/auth/totp-challenge', () => {
+  // A real base32 TOTP secret; codes are produced with the same otplib preset the server uses, so
+  // verifyTotpCode (which is NOT mocked — only bcryptjs is) accepts them. The stored secret is the
+  // AES-256-GCM ciphertext, exactly as the route reads it before decrypt().
+  const TOTP_SECRET = authenticator.generateSecret();
+
+  // findLoginUserById must re-confirm an enabled, 2FA-on, app_user account when redeeming the
+  // challenge — mirror LOGIN_USER but with totp on.
+  const TOTP_LOGIN_USER = { ...LOGIN_USER, totpEnabled: true };
+
+  // The bcrypt hash here is opaque: bcryptjs is mocked in this suite, so a backup-code match is
+  // driven by bcryptCompareMock rather than a real hash comparison.
+  const backupState = (overrides: Partial<Record<string, unknown>> = {}) => ({
+    totpSecret: encrypt(TOTP_SECRET),
+    totpEnabled: true,
+    totpConfirmedAt: new Date('2026-01-01T00:00:00.000Z'),
+    totpBackupCodes: [{ hash: '$2a$backup-code-hash', usedAt: null }],
+    ...overrides,
+  });
+
+  const challengeTokenFor = (
+    userId = 'u1',
+    expiresIn: Parameters<typeof signPurposeToken>[1] = '5m',
+  ) => signPurposeToken({ userId, purpose: 'totp_challenge' }, expiresIn);
+
+  test('200 happy path: a valid TOTP code exchanges the challenge for a session', async () => {
+    findLoginUserByIdMock.mockResolvedValue(TOTP_LOGIN_USER);
+    getTotpStateMock.mockResolvedValue(backupState());
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/totp-challenge',
+      payload: {
+        challengeToken: challengeTokenFor('u1'),
+        code: authenticator.generate(TOTP_SECRET),
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.token).toEqual(expect.any(String));
+    expect(body.user).toEqual({
+      id: 'u1',
+      name: 'Alice',
+      username: 'alice',
+      role: 'manager',
+      avatarInitials: 'AL',
+      permissions: HAPPY_PERMISSIONS,
+      availableRoles: HAPPY_ROLES,
+    });
+    // The issued session token is a real session JWT (no purpose claim), anchored at "now".
+    const decoded = decodeForAssertion(body.token);
+    expect(decoded.userId).toBe('u1');
+    expect(decoded.activeRole).toBe('manager');
+
+    // getTotpState was read inside the transaction (TX_SENTINEL passed through).
+    expect(getTotpStateMock).toHaveBeenCalledTimes(1);
+    // A TOTP match never burns a backup code.
+    expect(markBackupCodeUsedMock).not.toHaveBeenCalled();
+
+    // Only a successful challenge logs user.login.
+    expect(logAuditMock).toHaveBeenCalledTimes(1);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'user.login',
+        entityType: 'user',
+        entityId: 'u1',
+        userId: 'u1',
+      }),
+    );
+  });
+
+  test('200: a valid unused backup code succeeds and is burned via markBackupCodeUsed', async () => {
+    findLoginUserByIdMock.mockResolvedValue(TOTP_LOGIN_USER);
+    getTotpStateMock.mockResolvedValue(backupState());
+    // verifyTotpCode rejects the backup-shaped code; verifyBackupCode (→ mocked bcrypt.compare)
+    // then accepts the stored unused code.
+    bcryptCompareMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/totp-challenge',
+      payload: { challengeToken: challengeTokenFor('u1'), code: 'abcde-fghij' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.token).toEqual(expect.any(String));
+    expect(body.user.id).toBe('u1');
+
+    // The matched code is marked used inside the same transaction, with its usedAt stamped.
+    expect(markBackupCodeUsedMock).toHaveBeenCalledTimes(1);
+    const [userIdArg, updatedCodes] = markBackupCodeUsedMock.mock.calls[0] as unknown as [
+      string,
+      Array<{ hash: string; usedAt: string | null }>,
+    ];
+    expect(userIdArg).toBe('u1');
+    expect(updatedCodes).toHaveLength(1);
+    expect(updatedCodes[0].hash).toBe('$2a$backup-code-hash');
+    expect(typeof updatedCodes[0].usedAt).toBe('string');
+
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'user.login', entityId: 'u1' }),
+    );
+  });
+
+  test('400 invalid_totp_code: a wrong code is rejected generically', async () => {
+    findLoginUserByIdMock.mockResolvedValue(TOTP_LOGIN_USER);
+    getTotpStateMock.mockResolvedValue(backupState());
+    // bcryptCompareMock defaults to false (no backup match), and 000000 is not the live TOTP.
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/totp-challenge',
+      payload: { challengeToken: challengeTokenFor('u1'), code: '000000' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Invalid code', errorCode: 'invalid_totp_code' });
+    expect(markBackupCodeUsedMock).not.toHaveBeenCalled();
+    // A failed challenge does NOT log user.login.
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
+  test('400 invalid_totp_code: an already-used backup code is not redeemable', async () => {
+    findLoginUserByIdMock.mockResolvedValue(TOTP_LOGIN_USER);
+    // The only stored backup code was already redeemed — the route skips used entries, so even a
+    // bcrypt "match" can never fire (and the loop short-circuits before verifyBackupCode).
+    getTotpStateMock.mockResolvedValue(
+      backupState({
+        totpBackupCodes: [{ hash: '$2a$backup-code-hash', usedAt: '2026-01-02T00:00:00.000Z' }],
+      }),
+    );
+    bcryptCompareMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/totp-challenge',
+      payload: { challengeToken: challengeTokenFor('u1'), code: 'abcde-fghij' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Invalid code', errorCode: 'invalid_totp_code' });
+    expect(markBackupCodeUsedMock).not.toHaveBeenCalled();
+  });
+
+  test('400 invalid_totp_code: 2FA was disabled (in the user row) since the token was issued', async () => {
+    // The login row no longer has TOTP on — the re-assert collapses to the generic 400 without
+    // reading any TOTP state.
+    findLoginUserByIdMock.mockResolvedValue({ ...TOTP_LOGIN_USER, totpEnabled: false });
+    getTotpStateMock.mockResolvedValue(backupState());
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/totp-challenge',
+      payload: {
+        challengeToken: challengeTokenFor('u1'),
+        code: authenticator.generate(TOTP_SECRET),
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Invalid code', errorCode: 'invalid_totp_code' });
+    expect(getTotpStateMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
+  test('400 invalid_totp_code: getTotpState reports 2FA off inside the transaction', async () => {
+    // The user row still says totpEnabled, but the transactional read finds it off (or no secret) —
+    // same generic 400, no oracle on which condition failed.
+    findLoginUserByIdMock.mockResolvedValue(TOTP_LOGIN_USER);
+    getTotpStateMock.mockResolvedValue(backupState({ totpEnabled: false }));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/totp-challenge',
+      payload: {
+        challengeToken: challengeTokenFor('u1'),
+        code: authenticator.generate(TOTP_SECRET),
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Invalid code', errorCode: 'invalid_totp_code' });
+    expect(getTotpStateMock).toHaveBeenCalledTimes(1);
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
+  test('400 invalid_totp_code: unknown user behind the challenge token', async () => {
+    findLoginUserByIdMock.mockResolvedValue(null);
+    getTotpStateMock.mockResolvedValue(backupState());
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/totp-challenge',
+      payload: {
+        challengeToken: challengeTokenFor('ghost'),
+        code: authenticator.generate(TOTP_SECRET),
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Invalid code', errorCode: 'invalid_totp_code' });
+    expect(getTotpStateMock).not.toHaveBeenCalled();
+  });
+
+  test('401 totp_challenge_expired: an expired challenge token is reported distinctly', async () => {
+    findLoginUserByIdMock.mockResolvedValue(TOTP_LOGIN_USER);
+    getTotpStateMock.mockResolvedValue(backupState());
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/totp-challenge',
+      payload: {
+        challengeToken: challengeTokenFor('u1', '-1s'),
+        code: authenticator.generate(TOTP_SECRET),
+      },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Two-factor challenge expired',
+      errorCode: 'totp_challenge_expired',
+    });
+    // We never reach the user/state reads when the token is dead.
+    expect(findLoginUserByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('401 totp_challenge_expired: a garbage challenge token is rejected the same way', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/totp-challenge',
+      payload: { challengeToken: 'not-a-jwt', code: '123456' },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Two-factor challenge expired',
+      errorCode: 'totp_challenge_expired',
+    });
+    expect(findLoginUserByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('401 totp_challenge_expired: a wrong-purpose (totp_enroll) token cannot complete the challenge', async () => {
+    // An enroll token must not be replayable against the challenge endpoint.
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/totp-challenge',
+      payload: {
+        challengeToken: signPurposeToken({ userId: 'u1', purpose: 'totp_enroll' }, '15m'),
+        code: '123456',
+      },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Two-factor challenge expired',
+      errorCode: 'totp_challenge_expired',
+    });
+    expect(findLoginUserByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('400 missing code (Fastify schema rejection)', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/totp-challenge',
+      payload: { challengeToken: challengeTokenFor('u1') },
+    });
+
+    expect(res.statusCode).toBe(400);
   });
 });

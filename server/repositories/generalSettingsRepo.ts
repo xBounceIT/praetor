@@ -9,6 +9,7 @@ export type GeneralSettings = {
   startOfWeek: string;
   treatSaturdayAsHoliday: boolean;
   enableAiReporting: boolean | null;
+  enforceTotpForAdmins: boolean | null;
   geminiApiKey: string | null;
   aiProvider: string | null;
   openrouterApiKey: string | null;
@@ -30,6 +31,7 @@ export type GeneralSettingsPatch = {
   startOfWeek?: string | null;
   treatSaturdayAsHoliday?: boolean | null;
   enableAiReporting?: boolean | null;
+  enforceTotpForAdmins?: boolean | null;
   geminiApiKey?: string | null;
   aiProvider?: string | null;
   openrouterApiKey?: string | null;
@@ -51,6 +53,7 @@ const GENERAL_SETTINGS_PROJECTION = {
   startOfWeek: generalSettings.startOfWeek,
   treatSaturdayAsHoliday: generalSettings.treatSaturdayAsHoliday,
   enableAiReporting: generalSettings.enableAiReporting,
+  enforceTotpForAdmins: generalSettings.enforceTotpForAdmins,
   geminiApiKey: generalSettings.geminiApiKey,
   aiProvider: generalSettings.aiProvider,
   openrouterApiKey: generalSettings.openrouterApiKey,
@@ -72,6 +75,7 @@ type GeneralSettingsRow = {
   startOfWeek: string | null;
   treatSaturdayAsHoliday: boolean | null;
   enableAiReporting: boolean | null;
+  enforceTotpForAdmins: boolean | null;
   geminiApiKey: string | null;
   aiProvider: string | null;
   openrouterApiKey: string | null;
@@ -113,6 +117,7 @@ const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
   startOfWeek: row.startOfWeek ?? DEFAULT_FALLBACKS.startOfWeek,
   treatSaturdayAsHoliday: row.treatSaturdayAsHoliday ?? DEFAULT_FALLBACKS.treatSaturdayAsHoliday,
   enableAiReporting: row.enableAiReporting,
+  enforceTotpForAdmins: row.enforceTotpForAdmins,
   geminiApiKey: row.geminiApiKey,
   aiProvider: row.aiProvider,
   openrouterApiKey: row.openrouterApiKey,
@@ -156,6 +161,7 @@ export const update = async (
       startOfWeek: sql`COALESCE(${patch.startOfWeek ?? null}, ${generalSettings.startOfWeek})`,
       treatSaturdayAsHoliday: sql`COALESCE(${patch.treatSaturdayAsHoliday ?? null}, ${generalSettings.treatSaturdayAsHoliday})`,
       enableAiReporting: sql`COALESCE(${patch.enableAiReporting ?? null}, ${generalSettings.enableAiReporting})`,
+      enforceTotpForAdmins: sql`COALESCE(${patch.enforceTotpForAdmins ?? null}, ${generalSettings.enforceTotpForAdmins})`,
       geminiApiKey: sql`COALESCE(${patch.geminiApiKey ?? null}, ${generalSettings.geminiApiKey})`,
       aiProvider: sql`COALESCE(${patch.aiProvider ?? null}, ${generalSettings.aiProvider})`,
       openrouterApiKey: sql`COALESCE(${patch.openrouterApiKey ?? null}, ${generalSettings.openrouterApiKey})`,

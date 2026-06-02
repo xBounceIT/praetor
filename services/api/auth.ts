@@ -1,7 +1,28 @@
 import type { User } from '../../types';
 import { fetchApi, getApiBase, getAuthToken, setAuthToken } from './client';
-import type { LoginResponse } from './contracts';
+import type {
+  LoginResponse,
+  LoginResult,
+  TotpBackupCodesResponse,
+  TotpConfirmResponse,
+  TotpSetupResponse,
+  TotpStatusResponse,
+} from './contracts';
 import { normalizeUser } from './normalizers';
+
+// Raw, unvalidated /auth/login payload. The endpoint can short-circuit into a
+// TOTP challenge / forced-enrollment branch (no token yet) instead of returning
+// the canonical { token, user }, so we must inspect the response before running
+// the token-requiring finalize in runCanonicalAuthFlow.
+type RawLoginResponse = Partial<LoginResponse> & {
+  totpRequired?: boolean;
+  challengeToken?: string;
+  totpEnrollmentRequired?: boolean;
+  enrollToken?: string;
+};
+
+const bearerHeaders = (bearerToken?: string): { headers: Record<string, string> } | undefined =>
+  bearerToken ? { headers: { Authorization: `Bearer ${bearerToken}` } } : undefined;
 
 const INVALID_AUTH_RESPONSE_ERROR = 'Invalid authentication response';
 
@@ -44,6 +65,29 @@ const fetchCanonicalAuthUser = async (): Promise<User> => {
   return normalizeAuthUser(authUser);
 };
 
+// Shared finalize step: persist the issued token and resolve the canonical user.
+// Login/switch-role/sso-consume responses already carry the canonical user
+// (server enforces loginResponseSchema). Fall back to /auth/me only if the
+// payload fails our guards — i.e. on contract drift.
+const finalizeAuthResponse = async (response: {
+  token?: unknown;
+  user: User;
+}): Promise<LoginResponse> => {
+  const token = ensureToken(response.token);
+  setAuthToken(token);
+
+  let user: User;
+  try {
+    user = normalizeAuthUser(response.user);
+  } catch {
+    user = await fetchCanonicalAuthUser();
+  }
+  return {
+    token: getAuthToken() || token,
+    user,
+  };
+};
+
 const runCanonicalAuthFlow = async (
   operation: () => Promise<LoginResponse>,
 ): Promise<LoginResponse> => {
@@ -51,22 +95,7 @@ const runCanonicalAuthFlow = async (
 
   try {
     const response = await operation();
-    const token = ensureToken(response.token);
-    setAuthToken(token);
-
-    // Login/switch-role/sso-consume responses already carry the canonical user
-    // (server enforces loginResponseSchema). Fall back to /auth/me only if the
-    // payload fails our guards — i.e. on contract drift.
-    let user: User;
-    try {
-      user = normalizeAuthUser(response.user);
-    } catch {
-      user = await fetchCanonicalAuthUser();
-    }
-    return {
-      token: getAuthToken() || token,
-      user,
-    };
+    return await finalizeAuthResponse(response);
   } catch (err) {
     setAuthToken(previousToken);
     throw err;
@@ -74,13 +103,78 @@ const runCanonicalAuthFlow = async (
 };
 
 export const authApi = {
-  login: (username: string, password: string): Promise<LoginResponse> =>
-    runCanonicalAuthFlow(() =>
-      fetchApi('/auth/login', {
+  login: async (username: string, password: string): Promise<LoginResult> => {
+    const previousToken = getAuthToken();
+
+    try {
+      // Fetch the raw response first: /auth/login may branch into a TOTP
+      // challenge or forced-enrollment path that carries no token. Wrapping it
+      // in runCanonicalAuthFlow would throw on the missing token before we get
+      // a chance to surface those branches to the caller.
+      const raw = await fetchApi<RawLoginResponse>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ username, password }),
+      });
+
+      if (raw.totpRequired && raw.challengeToken) {
+        return { totpRequired: true, challengeToken: raw.challengeToken };
+      }
+      if (raw.totpEnrollmentRequired && raw.enrollToken) {
+        return { totpEnrollmentRequired: true, enrollToken: raw.enrollToken };
+      }
+
+      return await finalizeAuthResponse(raw as { token?: unknown; user: User });
+    } catch (err) {
+      setAuthToken(previousToken);
+      throw err;
+    }
+  },
+
+  totpChallenge: (challengeToken: string, code: string): Promise<LoginResponse> =>
+    runCanonicalAuthFlow(() =>
+      fetchApi('/auth/totp-challenge', {
+        method: 'POST',
+        body: JSON.stringify({ challengeToken, code }),
       }),
     ),
+
+  totpSetup: (bearerToken?: string): Promise<TotpSetupResponse> =>
+    fetchApi<TotpSetupResponse>('/auth/2fa/setup', {
+      method: 'POST',
+      ...bearerHeaders(bearerToken),
+    }),
+
+  totpConfirm: async (code: string, bearerToken?: string): Promise<TotpConfirmResponse> => {
+    const response = await fetchApi<TotpConfirmResponse>('/auth/2fa/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+      ...bearerHeaders(bearerToken),
+    });
+
+    // Enroll-token path: confirm also issues a session token + canonical user.
+    // Persist the token and normalize the user so the caller can complete login.
+    if (response.token && response.user) {
+      setAuthToken(response.token);
+      const user = normalizeAuthUser(response.user);
+      return { enabled: true, token: response.token, user };
+    }
+    return { enabled: true };
+  },
+
+  totpDisable: (payload: { password?: string; code?: string }): Promise<{ enabled: false }> =>
+    fetchApi('/auth/2fa/disable', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  regenerateTotpBackupCodes: (code: string): Promise<TotpBackupCodesResponse> =>
+    fetchApi<TotpBackupCodesResponse>('/auth/2fa/backup-codes/regenerate', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    }),
+
+  getTotpStatus: (): Promise<TotpStatusResponse> =>
+    fetchApi<TotpStatusResponse>('/auth/2fa/status'),
 
   consumeSsoTicket: (ticket: string): Promise<LoginResponse> =>
     runCanonicalAuthFlow(() =>

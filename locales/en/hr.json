@@ -90,6 +90,14 @@
     },
     "failedToLoadAssignments": "Failed to load assignments. Saving now could overwrite existing data — please close and retry."
   },
+  "totpReset": {
+    "action": "Reset 2FA",
+    "confirmTitle": "Reset two-factor authentication?",
+    "confirmDescription": "This turns off two-factor authentication for {{name}}. They will need to set it up again on their next sign-in.",
+    "confirm": "Reset 2FA",
+    "success": "Two-factor authentication has been reset.",
+    "cannotSelf": "You cannot reset your own two-factor authentication here."
+  },
   "competenceCenters": {
     "title": "Competence Centers",
     "subtitle": "Manage implementation teams and their managers",

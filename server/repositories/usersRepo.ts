@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
 import type {
+  TotpBackupCode,
   UserAuthMethod,
   UserContractType,
   UserEmploymentStatus,
@@ -13,6 +14,13 @@ import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 
 export type EmployeeType = 'app_user' | 'internal' | 'external';
 export type AuthMethod = UserAuthMethod;
+
+// Whether app-level TOTP 2FA applies to a given auth method. OIDC/SAML users authenticate at their
+// identity provider (which owns MFA) and never reach the local password gate, so app TOTP governs
+// only local and LDAP logins. Single source of truth for the login gate, the enrollment endpoints,
+// and the status check — keep the 2FA predicate from drifting across those call sites.
+export const isTotpApplicable = (authMethod: AuthMethod): boolean =>
+  authMethod === 'local' || authMethod === 'ldap';
 export type ContractType = UserContractType;
 export type EmploymentStatus = UserEmploymentStatus;
 export type WorkLocation = UserWorkLocation;
@@ -50,6 +58,7 @@ export type LoginUser = AuthUser & {
 export type LoginUserWithAuth = LoginUser & {
   authMethod: AuthMethod;
   authProviderId: string | null;
+  totpEnabled: boolean;
 };
 
 const LOGIN_USER_PROJECTION = {
@@ -65,6 +74,7 @@ const LOGIN_USER_PROJECTION = {
   authProviderId: users.authProviderId,
   sessionVersion: users.sessionVersion,
   tokenVersion: users.tokenVersion,
+  totpEnabled: users.totpEnabled,
 } as const;
 
 type LoginUserRow = {
@@ -80,6 +90,7 @@ type LoginUserRow = {
   authProviderId: string | null;
   sessionVersion: number;
   tokenVersion: number;
+  totpEnabled: boolean | null;
 };
 
 const mapLoginUserRow = (row: LoginUserRow): LoginUserWithAuth => ({
@@ -95,6 +106,7 @@ const mapLoginUserRow = (row: LoginUserRow): LoginUserWithAuth => ({
   authProviderId: row.authProviderId ?? null,
   sessionVersion: row.sessionVersion,
   tokenVersion: row.tokenVersion,
+  totpEnabled: row.totpEnabled ?? false,
 });
 
 export const findAuthUserById = async (
@@ -132,6 +144,111 @@ export const bumpSessionVersion = async (userId: string, exec: DbExecutor = db):
     .update(users)
     .set({ sessionVersion: sql`${users.sessionVersion} + 1` })
     .where(eq(users.id, userId));
+};
+
+// ===========================================================================
+// TOTP two-factor authentication state
+// ===========================================================================
+
+// Raw enrollment state for the 2FA verification/setup flows. `totpSecret` is the AES-256-GCM
+// ciphertext exactly as stored (callers decrypt via crypto.ts only to verify a code); the
+// backup codes carry their bcrypt hashes and redemption timestamps. A read-verify-write
+// (e.g. redeeming a backup code) wraps getTotpState + markBackupCodeUsed in one transaction.
+export type UserTotpState = {
+  totpSecret: string | null;
+  totpEnabled: boolean;
+  totpConfirmedAt: Date | null;
+  totpBackupCodes: TotpBackupCode[] | null;
+};
+
+export const getTotpState = async (
+  userId: string,
+  exec: DbExecutor = db,
+): Promise<UserTotpState | null> => {
+  const rows = await exec
+    .select({
+      totpSecret: users.totpSecret,
+      totpEnabled: users.totpEnabled,
+      totpConfirmedAt: users.totpConfirmedAt,
+      totpBackupCodes: users.totpBackupCodes,
+    })
+    .from(users)
+    .where(eq(users.id, userId));
+  if (!rows[0]) return null;
+  return {
+    totpSecret: rows[0].totpSecret ?? null,
+    totpEnabled: rows[0].totpEnabled,
+    totpConfirmedAt: rows[0].totpConfirmedAt ?? null,
+    totpBackupCodes: rows[0].totpBackupCodes ?? null,
+  };
+};
+
+// Stores a fresh (unconfirmed) enrollment: the encrypted secret plus the freshly-hashed backup
+// codes. `totpEnabled` stays false and `totpConfirmedAt` stays null until the user proves
+// possession by confirming a code (see enableTotp). Overwrites any prior pending enrollment.
+export const setTotpEnrollment = async (
+  userId: string,
+  args: { encryptedSecret: string; backupCodeHashes: string[] },
+  exec: DbExecutor = db,
+): Promise<void> => {
+  const backupCodes: TotpBackupCode[] = args.backupCodeHashes.map((hash) => ({
+    hash,
+    usedAt: null,
+  }));
+  await exec
+    .update(users)
+    .set({
+      totpSecret: args.encryptedSecret,
+      totpBackupCodes: backupCodes,
+      totpEnabled: false,
+      totpConfirmedAt: null,
+    })
+    .where(eq(users.id, userId));
+};
+
+// Flips a pending enrollment live. The `totp_secret IS NOT NULL` guard means a stray confirm
+// for a user who never ran setup is a no-op; the boolean return lets the route distinguish a
+// genuine activation from that case.
+export const enableTotp = async (userId: string, exec: DbExecutor = db): Promise<boolean> => {
+  const rows = await exec
+    .update(users)
+    .set({ totpEnabled: true, totpConfirmedAt: sql`CURRENT_TIMESTAMP` })
+    .where(sql`${users.id} = ${userId} AND ${users.totpSecret} IS NOT NULL`)
+    .returning({ id: users.id });
+  return rows.length > 0;
+};
+
+// Full teardown: clears the secret, backup codes and confirmation stamp and turns 2FA off.
+// Used by self-service disable and the admin reset endpoint.
+export const disableTotp = async (userId: string, exec: DbExecutor = db): Promise<void> => {
+  await exec
+    .update(users)
+    .set({
+      totpSecret: null,
+      totpBackupCodes: null,
+      totpEnabled: false,
+      totpConfirmedAt: null,
+    })
+    .where(eq(users.id, userId));
+};
+
+// Overwrites the backup-codes jsonb after a code is redeemed (the caller stamps `usedAt` on the
+// matching entry). Paired with getTotpState inside a transaction so the read-verify-write is atomic.
+export const markBackupCodeUsed = async (
+  userId: string,
+  codes: TotpBackupCode[],
+  exec: DbExecutor = db,
+): Promise<void> => {
+  await exec.update(users).set({ totpBackupCodes: codes }).where(eq(users.id, userId));
+};
+
+// Overwrites the backup-codes jsonb wholesale, e.g. when the user regenerates their codes.
+export const setBackupCodes = async (
+  userId: string,
+  codes: TotpBackupCode[],
+  exec: DbExecutor = db,
+): Promise<void> => {
+  await exec.update(users).set({ totpBackupCodes: codes }).where(eq(users.id, userId));
 };
 
 // Subquery resolving the user's current token_version inside an INSERT, so the

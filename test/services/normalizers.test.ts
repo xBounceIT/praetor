@@ -253,6 +253,7 @@ const baseGeneralSettings: GeneralSettings = {
   startOfWeek: 'Monday',
   treatSaturdayAsHoliday: false,
   enableAiReporting: false,
+  enforceTotpForAdmins: false,
   allowWeekendSelection: false,
   rilCompanyName: '',
   rilDefaultStartTime: '09:00',

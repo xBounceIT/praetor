@@ -100,6 +100,19 @@ type SessionAuthContext = {
   sessionVersion: number;
 };
 
+// Short-lived, single-purpose tokens used by the two-factor flows. They are signed with the
+// same JWT secret/algorithm as session tokens but DELIBERATELY omit sessionStart/sessionVersion,
+// and authenticateToken refuses any token carrying a `purpose` claim — so a purpose token can
+// never stand in for a full session.
+//   - totp_challenge: issued by login when a user with 2FA enabled must still enter a code.
+//   - totp_enroll:    issued by login when enrollment is mandatory but not yet completed.
+export type PurposeTokenPurpose = 'totp_challenge' | 'totp_enroll';
+
+type PurposeJwtPayload = JwtPayload & {
+  userId: string;
+  purpose: PurposeTokenPurpose;
+};
+
 type NonEmptyGuardArgs = [string, ...string[]];
 
 const hasSessionAuthContext = (
@@ -209,6 +222,15 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
       algorithms: [JWT_ALGORITHM],
     }) as SessionJwtPayload;
 
+    // Purpose tokens (totp_challenge / totp_enroll) are signed with the same secret but
+    // deliberately omit sessionStart/sessionVersion. Reject any token carrying a `purpose`
+    // claim here so a single-step 2FA token can never be replayed as a full session.
+    if ((decoded as { purpose?: unknown }).purpose !== undefined) {
+      return reply
+        .code(401)
+        .send({ error: 'Invalid or expired token', errorCode: 'invalid_token_purpose' });
+    }
+
     // Fail closed: tokens without sessionStart would compare `now - now ≈ 0` and trivially
     // pass the max-duration check below. Reject them so the 8h cap cannot be bypassed.
     if (typeof decoded.sessionStart !== 'number') {
@@ -298,6 +320,30 @@ const authenticatePersonalAccessToken = async (
     }
   } catch {
     return reply.code(403).send({ error: 'Invalid or expired token' });
+  }
+};
+
+// Fastify onRequest guard for the 2FA setup/confirm endpoints, which must be reachable both by a
+// fully authenticated user (managing their own 2FA) and by a user mid-enrollment who only holds a
+// `totp_enroll` purpose token (no session yet). On a valid enroll token we record
+// `request.enrollUserId` and stop WITHOUT populating `request.user`; otherwise we fall through to
+// the normal session path. The missing-token case is handled exactly as authenticateToken does.
+export const requireEnrollOrSession = async (request: FastifyRequest, reply: FastifyReply) => {
+  const authHeader = request.headers.authorization;
+  const token = authHeader?.split(' ')[1];
+
+  if (!token) {
+    return reply.code(401).send({ error: 'Access token required' });
+  }
+
+  try {
+    const { userId } = verifyPurposeToken(token, 'totp_enroll');
+    request.enrollUserId = userId;
+    return;
+  } catch {
+    // Not a valid enroll token (wrong purpose, expired, session token, PAT, …) — defer to the
+    // standard session authentication, which will set request.user or send its own 401/403.
+    return authenticateToken(request, reply);
   }
 };
 
@@ -408,6 +454,36 @@ export const generateToken = (
     algorithm: JWT_ALGORITHM,
   });
 
+// Signs a single-purpose 2FA token. No sessionStart/sessionVersion claims — these tokens grant
+// only the narrow step they name and are rejected by authenticateToken on the strength of their
+// `purpose` claim, so they cannot be replayed as a session.
+export const signPurposeToken = (
+  payload: { userId: string; purpose: PurposeTokenPurpose },
+  expiresIn: import('jsonwebtoken').SignOptions['expiresIn'],
+) =>
+  jwt.sign({ userId: payload.userId, purpose: payload.purpose }, getJwtSecret(), {
+    expiresIn,
+    algorithm: JWT_ALGORITHM,
+  });
+
+// Verifies a purpose token and asserts it is the exact purpose the caller expects. Throws on a
+// bad signature, expiry, missing/non-string userId, or a purpose mismatch — callers translate
+// the throw into a 401.
+export const verifyPurposeToken = (
+  token: string,
+  expectedPurpose: PurposeTokenPurpose,
+): { userId: string } => {
+  const decoded = jwt.verify(token, getJwtSecret(), {
+    algorithms: [JWT_ALGORITHM],
+  }) as PurposeJwtPayload;
+
+  if (decoded.purpose !== expectedPurpose || typeof decoded.userId !== 'string') {
+    throw new Error('Invalid token purpose');
+  }
+
+  return { userId: decoded.userId };
+};
+
 export default {
   authenticateToken,
   requireRole,
@@ -415,6 +491,9 @@ export default {
   requireAnyPermission,
   requireScopedPermission,
   requireSessionAuth,
+  requireEnrollOrSession,
   getSessionAuth,
   generateToken,
+  signPurposeToken,
+  verifyPurposeToken,
 };

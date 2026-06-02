@@ -29,6 +29,7 @@ export const generalSettings = pgTable(
       .default('Monday'),
     treatSaturdayAsHoliday: boolean('treat_saturday_as_holiday').default(true),
     enableAiReporting: boolean('enable_ai_reporting').default(false),
+    enforceTotpForAdmins: boolean('enforce_totp_for_admins').notNull().default(false),
     geminiApiKey: varchar('gemini_api_key', { length: 255 }),
     aiProvider: varchar('ai_provider', { length: 20 })
       .$type<'gemini' | 'openrouter'>()

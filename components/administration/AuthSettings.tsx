@@ -62,6 +62,8 @@ export interface AuthSettingsProps {
   ssoProviders: SsoProvider[];
   onSaveSsoProvider: (provider: Partial<SsoProvider>) => Promise<SsoProvider>;
   onDeleteSsoProvider: (id: string) => Promise<void>;
+  enforceTotpForAdmins: boolean;
+  onSetEnforceTotpForAdmins: (value: boolean) => void | Promise<void>;
 }
 
 const DEFAULT_LDAP_CONFIG: LdapConfig = {
@@ -149,6 +151,8 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   ssoProviders,
   onSaveSsoProvider,
   onDeleteSsoProvider,
+  enforceTotpForAdmins,
+  onSetEnforceTotpForAdmins,
 }) => {
   const { t } = useTranslation('auth');
   const [activeTab, setActiveTab] = useState<'ldap' | SsoProtocol>('ldap');
@@ -994,6 +998,27 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
 
       {activeTab === 'ldap' && (
         <div className="space-y-8">
+          <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+            <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+              <CardTitle className="flex items-center gap-3 text-base">
+                <ShieldCheck aria-hidden="true" className="size-4 text-praetor" />
+                {t('enforceTotp.label')}
+              </CardTitle>
+              <CardDescription>{t('enforceTotp.description')}</CardDescription>
+              <CardAction>
+                <Switch
+                  id="enforce-totp-for-admins"
+                  checked={enforceTotpForAdmins}
+                  onCheckedChange={onSetEnforceTotpForAdmins}
+                  aria-label={t('enforceTotp.label')}
+                />
+              </CardAction>
+            </CardHeader>
+            <CardContent className="p-6">
+              <p className="text-xs text-muted-foreground">{t('enforceTotp.ssoNote')}</p>
+            </CardContent>
+          </Card>
+
           <form onSubmit={handleSaveLdap} className="space-y-8">
             <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
               <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
