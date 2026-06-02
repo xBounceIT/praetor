@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -544,41 +545,25 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 
                 {/* Linked Quote Info */}
                 {formData.linkedQuoteId && (
-                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
-                        <i className="fa-solid fa-link" aria-hidden="true"></i>
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-foreground">
-                          {t('accounting:supplierOrders.linkedQuote')}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {t('accounting:supplierOrders.linkedQuoteInfo', {
-                            number: formData.linkedQuoteId,
-                          })}
-                        </div>
-                        <div className="mt-0.5 text-[10px] text-muted-foreground">
-                          {t('accounting:supplierOrders.quoteDetailsReadOnly')}
-                        </div>
-                      </div>
-                    </div>
-                    {onViewQuote && (
-                      <Button
-                        type="button"
-                        variant="link"
-                        size="sm"
-                        onClick={() => {
-                          const linkedQuoteId = formData.linkedQuoteId;
-                          if (!linkedQuoteId) return;
-                          onViewQuote(linkedQuoteId);
-                        }}
-                        className="px-0"
-                      >
-                        {t('accounting:supplierOrders.viewQuote')}
-                      </Button>
-                    )}
-                  </div>
+                  <LinkedRecordBanner
+                    label={t('accounting:supplierOrders.linkedQuote')}
+                    value={t('accounting:supplierOrders.linkedQuoteInfo', {
+                      number: formData.linkedQuoteId,
+                    })}
+                    note={t('accounting:supplierOrders.quoteDetailsReadOnly')}
+                    action={
+                      onViewQuote
+                        ? {
+                            label: t('accounting:supplierOrders.viewQuote'),
+                            onClick: () => {
+                              const linkedQuoteId = formData.linkedQuoteId;
+                              if (!linkedQuoteId) return;
+                              onViewQuote(linkedQuoteId);
+                            },
+                          }
+                        : undefined
+                    }
+                  />
                 )}
 
                 <div className="space-y-2">

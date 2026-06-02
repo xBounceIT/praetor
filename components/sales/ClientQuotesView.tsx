@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -1372,39 +1373,26 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   </div>
                 )}
                 {editingQuote?.linkedOfferId && (
-                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-8 items-center justify-center rounded-md border border-border bg-background text-primary">
-                        <i className="fa-solid fa-link" aria-hidden="true"></i>
-                      </div>
-                      <div>
-                        <div className="text-sm font-semibold text-foreground">
-                          {t('sales:clientQuotes.linkedOffer', { defaultValue: 'Linked Offer' })}
-                        </div>
-                        <div className="text-xs text-primary">
-                          {t('sales:clientQuotes.linkedOfferInfo', {
-                            number: editingQuote.linkedOfferId,
-                            defaultValue: 'Offer #{{number}}',
-                          })}
-                        </div>
-                        <div className="mt-0.5 text-[10px] text-muted-foreground">
-                          {t('sales:clientQuotes.offerDetailsReadOnly', {
-                            defaultValue: '(Quote details are read-only)',
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                    {onViewOffers && (
-                      <Button
-                        type="button"
-                        variant="link"
-                        onClick={() => onViewOffers(editingQuote.id)}
-                        className="h-auto px-0 text-xs font-semibold"
-                      >
-                        {t('sales:clientQuotes.viewOffer', { defaultValue: 'View Offer' })}
-                      </Button>
-                    )}
-                  </div>
+                  <LinkedRecordBanner
+                    label={t('sales:clientQuotes.linkedOffer', { defaultValue: 'Linked Offer' })}
+                    value={t('sales:clientQuotes.linkedOfferInfo', {
+                      number: editingQuote.linkedOfferId,
+                      defaultValue: 'Offer #{{number}}',
+                    })}
+                    note={t('sales:clientQuotes.offerDetailsReadOnly', {
+                      defaultValue: '(Quote details are read-only)',
+                    })}
+                    action={
+                      onViewOffers
+                        ? {
+                            label: t('sales:clientQuotes.viewOffer', {
+                              defaultValue: 'View Offer',
+                            }),
+                            onClick: () => onViewOffers(editingQuote.id),
+                          }
+                        : undefined
+                    }
+                  />
                 )}
                 {/* Client Selection */}
                 <div className="space-y-2">
