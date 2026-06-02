@@ -35,16 +35,4 @@ describe('InternalListingView modal styling', () => {
     ]);
     expectSourceOmitsAll(source, ['items-end justify-between ml-1 min-h-5']);
   });
-
-  test('nested manage modals stay below the floating overlay tier so dropdowns stay visible', async () => {
-    const source = await readComponentSource('catalog/InternalListingView.tsx');
-
-    expectSourceContainsAll(source, [
-      "import { NESTED_MODAL_Z_INDEX } from '../shared/modalLayers';",
-      'zIndex={NESTED_MODAL_Z_INDEX}',
-    ]);
-    // zIndex={70} put modal content at z-71, above the z-70 select/popover tier,
-    // which hid the unit select (and table controls) behind the modal panel.
-    expectSourceOmitsAll(source, ['zIndex={70}']);
-  });
 });

@@ -27,7 +27,6 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
-import { NESTED_MODAL_Z_INDEX } from '../shared/modalLayers';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
@@ -972,7 +971,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       <Modal
         isOpen={isManageProfileOptionModalOpen}
         onClose={() => setIsManageProfileOptionModalOpen(false)}
-        zIndex={NESTED_MODAL_Z_INDEX}
+        zIndex={70}
       >
         <ModalContent size="2xl">
           <ModalHeader>

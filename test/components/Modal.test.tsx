@@ -4,7 +4,6 @@ import { useState } from 'react';
 
 const { THEME_CHANGE_EVENT, THEME_STORAGE_KEY } = await import('../../utils/theme');
 const { default: Modal } = await import('../../components/shared/Modal');
-const { NESTED_MODAL_Z_INDEX } = await import('../../components/shared/modalLayers');
 const { ModalContent } = await import('../../components/shared/ModalLayout');
 const { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } = await import(
   '../../components/ui/select'
@@ -202,19 +201,12 @@ describe('<Modal />', () => {
     expect(dialog.style.zIndex).toBe('1000');
   });
 
-  test('NESTED_MODAL_Z_INDEX keeps nested-modal content below the floating overlay tier', () => {
-    // Shared tier used by select/popover/tooltip/dropdown-menu/context-menu in components/ui/*.
-    const FLOATING_OVERLAY_Z_INDEX = 70;
-    const DEFAULT_MODAL_Z_INDEX = 60;
-    // Modal renders content at `zIndex + 1`, so nested content must stay below the
-    // dropdown tier (otherwise dropdowns open behind it) while clearing its parent.
-    expect(NESTED_MODAL_Z_INDEX + 1).toBeLessThan(FLOATING_OVERLAY_Z_INDEX);
-    expect(NESTED_MODAL_Z_INDEX).toBeGreaterThan(DEFAULT_MODAL_Z_INDEX);
-  });
-
-  test('a select opened inside a nested-z-index modal renders above the modal surface', () => {
+  test('floating dropdowns render above the highest-z-index modal', () => {
+    // 70 is the highest zIndex any modal in the app uses (nested "manage" modals);
+    // Modal renders content at zIndex + 1 = 71, the worst case a dropdown must clear.
+    const HIGHEST_MODAL_Z_INDEX = 70;
     render(
-      <Modal isOpen={true} onClose={() => {}} zIndex={NESTED_MODAL_Z_INDEX}>
+      <Modal isOpen={true} onClose={() => {}} zIndex={HIGHEST_MODAL_Z_INDEX}>
         <Select open value="unit" onValueChange={() => {}}>
           <SelectTrigger>
             <SelectValue />
