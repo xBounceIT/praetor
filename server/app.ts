@@ -6,6 +6,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import rateLimit, { type errorResponseBuilderContext } from 'fastify-rate-limit';
 import aiRoutes from './routes/ai.ts';
 import authRoutes from './routes/auth.ts';
+import brandingRoutes from './routes/branding.ts';
 import clientOffersRoutes from './routes/client-offers.ts';
 import clientQuotesRoutes from './routes/client-quotes.ts';
 import clientsRoutes from './routes/clients.ts';
@@ -174,6 +175,7 @@ export const buildApp = async () => {
   await fastify.register(ssoRoutes, { prefix: '/api/sso' });
   await fastify.register(ldapRoutes, { prefix: '/api/ldap' });
   await fastify.register(generalSettingsRoutes, { prefix: '/api/general-settings' });
+  await fastify.register(brandingRoutes, { prefix: '/api/branding' });
   await fastify.register(productsRoutes, { prefix: '/api/products' });
   await fastify.register(clientQuotesRoutes, { prefix: '/api/sales/client-quotes' });
   await fastify.register(clientOffersRoutes, { prefix: '/api/sales/client-offers' });

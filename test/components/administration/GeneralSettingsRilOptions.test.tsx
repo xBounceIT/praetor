@@ -35,7 +35,14 @@ describe('<GeneralSettings /> RIL option settings', () => {
 
   test('edits RIL note and transfer values through global settings', async () => {
     const onUpdate = mock(async () => undefined);
-    render(<GeneralSettings settings={settings} onUpdate={onUpdate} />);
+    render(
+      <GeneralSettings
+        settings={settings}
+        onUpdate={onUpdate}
+        branding={{ companyName: null, logoUrl: null }}
+        onBrandingChange={() => {}}
+      />,
+    );
 
     fireEvent.click(screen.getByText('general.tabs.tracking'));
     fireEvent.click(screen.getByRole('button', { name: 'general.rilAddNoteOption' }));

@@ -82,6 +82,7 @@ import { listRequest, useModuleLoader } from './hooks/useModuleLoader';
 import api, { type McpTokenScope, type PersonalAccessToken, type Settings } from './services/api';
 import { decodeEntriesCursor } from './services/api/entries';
 import type {
+  AppBranding,
   Client,
   ClientOffer,
   ClientsOrder,
@@ -730,6 +731,9 @@ const AppContent: React.FC = () => {
   const [ldapConfig, setLdapConfig] = useState<LdapConfig>(INITIAL_LDAP_CONFIG);
   const [generalSettings, setGeneralSettings] =
     useState<GeneralSettingsState>(INITIAL_GENERAL_SETTINGS);
+  // Not auth-scoped: branding is public and must persist across login/logout so the login
+  // screen and sidebar stay consistent. Hence it lives outside clearAuthScopedAppState.
+  const [branding, setBranding] = useState<AppBranding>({ companyName: null, logoUrl: null });
   const {
     loadedModules,
     moduleLoadErrors,
@@ -1022,6 +1026,22 @@ const AppContent: React.FC = () => {
       applyBrowserTheme();
     }
   }, [isAuthenticated]);
+
+  // App-wide branding (company name + logo) is public so the login screen can render it
+  // before any user authenticates. Fetched once on mount; failures fall back to the
+  // bundled Praetor defaults already held in state.
+  useEffect(() => {
+    let cancelled = false;
+    api.branding
+      .getPublic()
+      .then((next) => {
+        if (!cancelled) setBranding(next);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleLogin = login;
   const handleLogout = logout;
@@ -2321,6 +2341,10 @@ const AppContent: React.FC = () => {
   const handleUpdateUserRoles = userHandlers.updateUserRoles;
   const handleUpdateUserAuthMethod = userHandlers.updateUserAuthMethod;
 
+  const handleBrandingChange = (next: AppBranding) => {
+    setBranding(next);
+  };
+
   const handleUpdateGeneralSettings = async (updates: Partial<IGeneralSettings>) => {
     try {
       const updated = await api.generalSettings.update(updates);
@@ -2508,6 +2532,8 @@ const AppContent: React.FC = () => {
         onClearLogoutReason={clearLogoutReason}
         serverUnreachable={serverUnreachable}
         onDismissServerUnreachable={dismissServerUnreachable}
+        companyName={branding.companyName}
+        logoUrl={branding.logoUrl}
       />
     );
 
@@ -2523,6 +2549,8 @@ const AppContent: React.FC = () => {
         roles={roles}
         isNotFound={!isRouteAccessible}
         isAiReportingEnabled={hasLoadedGeneralSettings && generalSettings.enableAiReporting}
+        companyName={branding.companyName}
+        logoUrl={branding.logoUrl}
         notifications={notifications}
         unreadNotificationCount={unreadNotificationCount}
         onMarkNotificationAsRead={handleMarkNotificationAsRead}
@@ -3034,6 +3062,8 @@ const AppContent: React.FC = () => {
                 <GeneralSettings
                   settings={generalSettings}
                   onUpdate={handleUpdateGeneralSettings}
+                  branding={branding}
+                  onBrandingChange={handleBrandingChange}
                 />
               )}
 

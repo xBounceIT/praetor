@@ -19,6 +19,8 @@ export interface LoginProps {
   onClearLogoutReason?: () => void;
   serverUnreachable?: boolean;
   onDismissServerUnreachable?: () => void;
+  companyName?: string | null;
+  logoUrl?: string | null;
 }
 
 interface LoginFormValues {
@@ -59,6 +61,8 @@ const Login: React.FC<LoginProps> = ({
   onClearLogoutReason,
   serverUnreachable,
   onDismissServerUnreachable,
+  companyName,
+  logoUrl,
 }) => {
   const { t } = useTranslation(['auth', 'common', 'notifications']);
   // The login screen follows the OS/browser color scheme rather than any saved
@@ -191,9 +195,11 @@ const Login: React.FC<LoginProps> = ({
 
         <div className="relative isolate flex w-full flex-col items-center">
           <img
-            src="/praetor-logo.png"
-            alt="Praetor Logo"
-            className={cn('h-24 object-contain', isDark && 'brightness-0 invert')}
+            src={logoUrl ?? '/praetor-logo.png'}
+            alt={companyName ? `${companyName} logo` : 'Praetor Logo'}
+            // Only the bundled multi-color Praetor logo is flattened to white in dark mode;
+            // a custom uploaded logo is shown as-is so its own colors are preserved.
+            className={cn('h-24 object-contain', isDark && !logoUrl && 'brightness-0 invert')}
           />
           <p className="mt-2 text-sm text-muted-foreground">{t('auth:login.title')}</p>
 

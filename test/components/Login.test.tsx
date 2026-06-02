@@ -421,4 +421,25 @@ describe('<Login />', () => {
       expect(logo.classList.contains('invert')).toBe(false);
     });
   });
+
+  describe('custom branding', () => {
+    test('renders the uploaded logo and skips the dark-mode invert', () => {
+      // Even in dark mode a custom logo keeps its own colors — only the bundled
+      // multi-color Praetor logo is flattened to white via brightness-0 + invert.
+      setPrefersDarkScheme(true);
+
+      render(<Login onLogin={() => {}} companyName="Acme" logoUrl="/api/branding/logo?v=1" />);
+      const logo = screen.getByAltText('Acme logo');
+
+      expect(logo.getAttribute('src')).toBe('/api/branding/logo?v=1');
+      expect(logo.classList.contains('brightness-0')).toBe(false);
+      expect(logo.classList.contains('invert')).toBe(false);
+    });
+
+    test('falls back to the bundled Praetor logo when no custom logo is set', () => {
+      render(<Login onLogin={() => {}} />);
+      const logo = screen.getByAltText('Praetor Logo');
+      expect(logo.getAttribute('src')).toBe('/praetor-logo.png');
+    });
+  });
 });

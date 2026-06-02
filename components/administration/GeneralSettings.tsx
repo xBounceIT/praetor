@@ -3,6 +3,7 @@ import {
   Clock,
   Globe,
   Loader2,
+  Palette,
   Plus,
   Save,
   Sparkles,
@@ -19,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import api from '../../services/api';
 import type {
+  AppBranding,
   GeneralSettings as IGeneralSettings,
   RilNoteOption,
   TimeEntryLocation,
@@ -32,10 +34,13 @@ import {
 import SelectControl, { type Option } from '../shared/SelectControl';
 import Toggle from '../shared/Toggle';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import BrandingSettings from './BrandingSettings';
 
 export interface GeneralSettingsProps {
   settings: IGeneralSettings;
   onUpdate: (updates: Partial<IGeneralSettings>) => void;
+  branding: AppBranding;
+  onBrandingChange: (branding: AppBranding) => void;
 }
 
 const CURRENCY_OPTIONS: Option[] = [
@@ -69,6 +74,7 @@ const TABS = [
   { id: 'localization', Icon: Globe, labelKey: 'general.tabs.localization' },
   { id: 'tracking', Icon: Clock, labelKey: 'general.tabs.tracking' },
   { id: 'ai', Icon: Sparkles, labelKey: 'general.tabs.ai' },
+  { id: 'branding', Icon: Palette, labelKey: 'general.tabs.branding' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -104,7 +110,12 @@ const ToggleSettingRow: React.FC<ToggleSettingRowProps> = ({
   </div>
 );
 
-const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate }) => {
+const GeneralSettings: React.FC<GeneralSettingsProps> = ({
+  settings,
+  onUpdate,
+  branding,
+  onBrandingChange,
+}) => {
   const { t } = useTranslation('settings');
   const AI_PROVIDER_OPTIONS: Option[] = [
     { id: 'gemini', name: t('general.aiProviders.gemini') },
@@ -833,13 +844,23 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate })
           </Card>
         )}
 
-        <div className="flex justify-end pt-4">
-          <Button type="submit" disabled={submitDisabled}>
-            <SubmitIcon aria-hidden="true" className={submitIconClass} />
-            {submitLabel}
-          </Button>
-        </div>
+        {activeTab !== 'branding' && (
+          <div className="flex justify-end pt-4">
+            <Button type="submit" disabled={submitDisabled}>
+              <SubmitIcon aria-hidden="true" className={submitIconClass} />
+              {submitLabel}
+            </Button>
+          </div>
+        )}
       </form>
+
+      {activeTab === 'branding' && (
+        <BrandingSettings
+          branding={branding}
+          onChange={onBrandingChange}
+          animationClass={sectionAnimationClass}
+        />
+      )}
     </div>
   );
 };
