@@ -159,12 +159,16 @@ export const deleteRole = async (id: string, exec: DbExecutor = db): Promise<voi
   await exec.delete(roles).where(eq(roles.id, id));
 };
 
-export const insertPermission = async (
+export const insertPermissions = async (
   roleId: string,
-  permission: string,
+  permissions: string[],
   exec: DbExecutor = db,
 ): Promise<void> => {
-  await exec.insert(rolePermissions).values({ roleId, permission }).onConflictDoNothing();
+  if (permissions.length === 0) return;
+  await exec
+    .insert(rolePermissions)
+    .values(permissions.map((permission) => ({ roleId, permission })))
+    .onConflictDoNothing();
 };
 
 export const clearPermissions = async (roleId: string, exec: DbExecutor = db): Promise<void> => {

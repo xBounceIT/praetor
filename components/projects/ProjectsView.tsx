@@ -183,36 +183,42 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const [draftTasks, setDraftTasks] = useState<DraftTask[]>([]);
 
   const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
+  const projectIdsKey = useMemo(() => projectIds.join('\u0000'), [projectIds]);
   const fetchAllHoursGenRef = useRef(0);
   const [allProjectHours, setAllProjectHours] = useState<Record<
     string,
     Record<string, number>
   > | null>(null);
+  const loadedProjectIdsKeyRef = useRef(projectIdsKey);
+  if (loadedProjectIdsKeyRef.current !== projectIdsKey) {
+    loadedProjectIdsKeyRef.current = projectIdsKey;
+    setAllProjectHours(projectIds.length === 0 ? {} : null);
+  }
 
   useEffect(() => {
-    if (projectIds.length === 0) {
-      setAllProjectHours({});
-      return;
-    }
+    if (!projectIdsKey) return;
+    const requestProjectIds = projectIdsKey.split('\u0000');
     const gen = ++fetchAllHoursGenRef.current;
     const abortController = new AbortController();
-    setAllProjectHours(null);
     (async () => {
       try {
-        const map = await tasksApi.getHoursForProjects(projectIds, abortController.signal);
-        if (fetchAllHoursGenRef.current !== gen) return;
-        setAllProjectHours(map);
+        const map = await tasksApi.getHoursForProjects(requestProjectIds, abortController.signal);
+        if (fetchAllHoursGenRef.current === gen) {
+          setAllProjectHours(map);
+        }
       } catch (e) {
-        if (abortController.signal.aborted) return;
-        console.error('Failed to load project hours', e);
-        if (fetchAllHoursGenRef.current !== gen) return;
-        setAllProjectHours({});
+        if (!abortController.signal.aborted) {
+          console.error('Failed to load project hours', e);
+          if (fetchAllHoursGenRef.current === gen) {
+            setAllProjectHours({});
+          }
+        }
       }
     })();
     return () => {
       abortController.abort();
     };
-  }, [projectIds]);
+  }, [projectIdsKey]);
 
   const projectMedianProgress = useMemo(() => {
     if (!allProjectHours) return {};
@@ -230,13 +236,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         map[project.id] = null;
         continue;
       }
-      const progressValues = projectTasks
-        .filter((t) => (t.expectedEffort ?? 0) > 0)
-        .map((t) => {
-          const logged = hours[t.name] ?? 0;
-          const effort = t.expectedEffort as number;
-          return (logged / effort) * 100;
-        });
+      const progressValues = projectTasks.reduce<number[]>((values, task) => {
+        const effort = task.expectedEffort ?? 0;
+        if (effort <= 0) return values;
+        const logged = hours[task.name] ?? 0;
+        values.push((logged / effort) * 100);
+        return values;
+      }, []);
       if (progressValues.length === 0) {
         map[project.id] = null;
         continue;
@@ -322,17 +328,21 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       return;
     }
 
-    const taskInputs: DraftTaskInput[] = draftTasks
-      .filter((t) => t.name.trim())
-      .map((t) => ({
-        name: t.name.trim(),
-        billingType: t.billingType,
-        billingFrequency: t.billingType === 'time_and_materials' ? 'monthly' : t.billingFrequency,
-        monthlyEffort: t.monthlyEffort ? parseFloat(t.monthlyEffort) : undefined,
-        expectedEffort: t.expectedEffort ? parseFloat(t.expectedEffort) : undefined,
-        revenue: t.revenue ? parseFloat(t.revenue) : undefined,
-        notes: t.notes.trim() || undefined,
-      }));
+    const taskInputs: DraftTaskInput[] = [];
+    for (const task of draftTasks) {
+      const taskName = task.name.trim();
+      if (!taskName) continue;
+      taskInputs.push({
+        name: taskName,
+        billingType: task.billingType,
+        billingFrequency:
+          task.billingType === 'time_and_materials' ? 'monthly' : task.billingFrequency,
+        monthlyEffort: task.monthlyEffort ? parseFloat(task.monthlyEffort) : undefined,
+        expectedEffort: task.expectedEffort ? parseFloat(task.expectedEffort) : undefined,
+        revenue: task.revenue ? parseFloat(task.revenue) : undefined,
+        notes: task.notes.trim() || undefined,
+      });
+    }
     const result = await onAddProject({
       name,
       clientId,
@@ -416,11 +426,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const getDerivedProjectBillingType = (project: Project): BillingType => {
     if (project.billingType === 'mixed') return 'mixed';
     const storedProjectBillingType = toStoredBillingType(project.billingType);
-    const taskBillingTypes = new Set(
-      tasks
-        .filter((task) => task.projectId === project.id)
-        .map((task) => task.billingType ?? 'time_and_materials'),
-    );
+    const taskBillingTypes = new Set<StoredBillingType>();
+    for (const task of tasks) {
+      if (task.projectId === project.id) {
+        taskBillingTypes.add(task.billingType ?? 'time_and_materials');
+      }
+    }
     if (taskBillingTypes.size === 0) return storedProjectBillingType;
     if (taskBillingTypes.size > 1) return 'mixed';
     return taskBillingTypes.has(storedProjectBillingType) ? storedProjectBillingType : 'mixed';
@@ -443,19 +454,24 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
   const clientOptions = clients.map((c: Client) => ({ id: c.id, name: c.name }));
 
-  const orderOptions = orders
-    .filter((o) => o.status === 'confirmed')
-    .map((o) => ({
-      id: o.id,
-      name: `${o.clientName} - ${formatOrderId(o.id)}`,
-    }));
+  const orderOptions = orders.reduce<Array<{ id: string; name: string }>>((options, order) => {
+    if (order.status === 'confirmed') {
+      options.push({
+        id: order.id,
+        name: `${order.clientName} - ${formatOrderId(order.id)}`,
+      });
+    }
+    return options;
+  }, []);
 
   const selectedOrder = orderId ? orders.find((o) => o.id === orderId) : undefined;
 
-  const offerOptions = offers
-    .filter((o) => o.status === 'sent' || o.status === 'accepted')
-    .filter((o) => !clientId || o.clientId === clientId)
-    .map((o) => ({ id: o.id, name: `${o.clientName} - ${o.id}` }));
+  const offerOptions = offers.reduce<Array<{ id: string; name: string }>>((options, offer) => {
+    if (offer.status !== 'sent' && offer.status !== 'accepted') return options;
+    if (clientId && offer.clientId !== clientId) return options;
+    options.push({ id: offer.id, name: `${offer.clientName} - ${offer.id}` });
+    return options;
+  }, []);
   if (offerId && !offerOptions.some((o) => o.id === offerId)) {
     const fallback = offers.find((o) => o.id === offerId);
     if (fallback) {

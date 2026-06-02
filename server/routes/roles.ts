@@ -182,31 +182,30 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       await withDbTransaction(async (tx) => {
         await rolesRepo.insertRole(id, nameResult.value, tx);
-
-        for (const permission of normalizedPermissions) {
-          await rolesRepo.insertPermission(id, permission, tx);
-        }
+        await rolesRepo.insertPermissions(id, normalizedPermissions, tx);
       });
 
-      const role = await mapRoleRow({
-        id,
-        name: nameResult.value,
-        isSystem: false,
-        isAdmin: false,
-      });
-      await logAudit({
-        request,
-        action: 'role.created',
-        entityType: 'role',
-        entityId: id,
-        details: {
-          targetLabel: role.name,
-          counts:
-            permissionsResult.value.length > 0
-              ? { permissions: permissionsResult.value.length }
-              : undefined,
-        },
-      });
+      const [role] = await Promise.all([
+        mapRoleRow({
+          id,
+          name: nameResult.value,
+          isSystem: false,
+          isAdmin: false,
+        }),
+        logAudit({
+          request,
+          action: 'role.created',
+          entityType: 'role',
+          entityId: id,
+          details: {
+            targetLabel: nameResult.value,
+            counts:
+              permissionsResult.value.length > 0
+                ? { permissions: permissionsResult.value.length }
+                : undefined,
+          },
+        }),
+      ]);
       return reply.code(201).send(role);
     },
   );
@@ -260,19 +259,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await rolesRepo.updateRoleName(idResult.value, nameResult.value);
-      await logAudit({
-        request,
-        action: 'role.updated',
-        entityType: 'role',
-        entityId: idResult.value,
-        details: {
-          targetLabel: nameResult.value,
-          fromValue: roleRow.name,
-          toValue: nameResult.value,
-        },
-      });
-
-      const updatedRole = await mapRoleRow({ ...roleRow, name: nameResult.value });
+      const [updatedRole] = await Promise.all([
+        mapRoleRow({ ...roleRow, name: nameResult.value }),
+        logAudit({
+          request,
+          action: 'role.updated',
+          entityType: 'role',
+          entityId: idResult.value,
+          details: {
+            targetLabel: nameResult.value,
+            fromValue: roleRow.name,
+            toValue: nameResult.value,
+          },
+        }),
+      ]);
       return reply.send(updatedRole);
     },
   );
@@ -419,22 +419,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       await withDbTransaction(async (tx) => {
         await rolesRepo.clearPermissions(idResult.value, tx);
-        for (const permission of normalizedPermissions) {
-          await rolesRepo.insertPermission(idResult.value, permission, tx);
-        }
+        await rolesRepo.insertPermissions(idResult.value, normalizedPermissions, tx);
       });
 
-      const updatedRole = await mapRoleRow(roleRow);
-      await logAudit({
-        request,
-        action: 'role.permissions_updated',
-        entityType: 'role',
-        entityId: idResult.value,
-        details: {
-          targetLabel: updatedRole.name,
-          counts: { permissions: normalizedPermissions.length },
-        },
-      });
+      const [updatedRole] = await Promise.all([
+        mapRoleRow(roleRow),
+        logAudit({
+          request,
+          action: 'role.permissions_updated',
+          entityType: 'role',
+          entityId: idResult.value,
+          details: {
+            targetLabel: roleRow.name,
+            counts: { permissions: normalizedPermissions.length },
+          },
+        }),
+      ]);
       return reply.send(updatedRole);
     },
   );

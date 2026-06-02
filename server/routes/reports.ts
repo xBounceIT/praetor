@@ -1,9 +1,8 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { type DbExecutor, withDbTransaction } from '../db/drizzle.ts';
+import { type DbExecutor, schema, withDbTransaction } from '../db/drizzle.ts';
 import pool from '../db/index.ts';
-import * as schema from '../db/schema/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import * as reportsAiChatRepo from '../repositories/reportsAiChatRepo.ts';
@@ -117,6 +116,7 @@ type StreamReader = {
   releaseLock?: () => void;
 };
 type ReadableSseBody = { getReader?: () => StreamReader };
+const findSseBoundary = (buffer: string) => buffer.search(/\n\n/);
 
 const googleTextFromGenerateContent = (payload: unknown): AiTextResult => {
   const p = payload as {
@@ -127,16 +127,17 @@ const googleTextFromGenerateContent = (payload: unknown): AiTextResult => {
     }>;
   };
   const parts = p.candidates?.[0]?.content?.parts || [];
-  const text = parts
-    .filter((x) => !x.thought && x.type !== 'thought')
-    .map((x) => x.text || '')
-    .join('')
-    .trim();
-  const thoughtContent = parts
-    .filter((x) => x.thought || x.type === 'thought')
-    .map((x) => x.text || '')
-    .join('')
-    .trim();
+  const textParts: string[] = [];
+  const thoughtParts: string[] = [];
+  for (const part of parts) {
+    if (part.thought || part.type === 'thought') {
+      thoughtParts.push(part.text || '');
+    } else {
+      textParts.push(part.text || '');
+    }
+  }
+  const text = textParts.join('').trim();
+  const thoughtContent = thoughtParts.join('').trim();
   return { text, thoughtContent: thoughtContent || undefined };
 };
 
@@ -192,13 +193,13 @@ const iterateSseEvents = async function* (responseBody: unknown): AsyncGenerator
       if (done) break;
 
       buffer += decoder.decode(value || new Uint8Array(), { stream: true });
-      let boundary = buffer.indexOf('\n\n');
+      let boundary = findSseBoundary(buffer);
       while (boundary !== -1) {
         const rawBlock = buffer.slice(0, boundary);
         buffer = buffer.slice(boundary + 2);
         const parsed = parseSseEventBlock(rawBlock);
         if (parsed) yield parsed;
-        boundary = buffer.indexOf('\n\n');
+        boundary = findSseBoundary(buffer);
       }
     }
 
@@ -377,14 +378,17 @@ const geminiGenerateTextStream = async (
     };
     const parts = p.candidates?.[0]?.content?.parts || [];
 
-    const nextThought = parts
-      .filter((x) => x.thought || x.type === 'thought')
-      .map((x) => x.text || '')
-      .join('');
-    const nextText = parts
-      .filter((x) => !x.thought && x.type !== 'thought')
-      .map((x) => x.text || '')
-      .join('');
+    const nextThoughtParts: string[] = [];
+    const nextTextParts: string[] = [];
+    for (const part of parts) {
+      if (part.thought || part.type === 'thought') {
+        nextThoughtParts.push(part.text || '');
+      } else {
+        nextTextParts.push(part.text || '');
+      }
+    }
+    const nextThought = nextThoughtParts.join('');
+    const nextText = nextTextParts.join('');
 
     const thoughtDelta = resolveStreamDelta(thoughtContent, nextThought);
     if (thoughtDelta) {
@@ -1735,6 +1739,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           datasetJson,
           convo,
         });
+        if (streamAbortController.signal.aborted) return;
         const generated: AiTextResult =
           payload.provider === 'openrouter'
             ? await openrouterGenerateTextStream(
@@ -1752,58 +1757,65 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 streamAbortController.signal,
               );
 
-        if (streamAbortController.signal.aborted) return;
-        await emitThoughtDone();
+        if (!streamAbortController.signal.aborted) {
+          await emitThoughtDone();
 
-        const generatedText = String(generated.text || '').trim();
-        const generatedThought = String(generated.thoughtContent || '').trim();
-        const assistantText =
-          generatedText || streamHandlers.accumulated.text.trim() || 'No response.';
-        const assistantThoughtContent =
-          generatedThought || streamHandlers.accumulated.thoughtContent.trim();
-        if (streamAbortController.signal.aborted) return;
+          if (!streamAbortController.signal.aborted) {
+            const generatedText = String(generated.text || '').trim();
+            const generatedThought = String(generated.thoughtContent || '').trim();
+            const assistantText =
+              generatedText || streamHandlers.accumulated.text.trim() || 'No response.';
+            const assistantThoughtContent =
+              generatedThought || streamHandlers.accumulated.thoughtContent.trim();
 
-        await reportsAiChatRepo.insertAssistantMessage({
-          id: assistantMessageId,
-          sessionId: resolvedSessionId,
-          content: assistantText,
-          thoughtContent: assistantThoughtContent || null,
-        });
+            await reportsAiChatRepo.insertAssistantMessage({
+              id: assistantMessageId,
+              sessionId: resolvedSessionId,
+              content: assistantText,
+              thoughtContent: assistantThoughtContent || null,
+            });
 
-        let titleToSet = '';
-        if (shouldAutoTitle) {
-          const firstUserMessage = (
-            await reportsAiChatRepo.getFirstUserMessageContent(resolvedSessionId)
-          ).trim();
+            let titleToSet = '';
+            if (shouldAutoTitle) {
+              const firstUserMessage = (
+                await reportsAiChatRepo.getFirstUserMessageContent(resolvedSessionId)
+              ).trim();
 
-          try {
-            titleToSet = await generateSessionTitle(providerKeyModel, firstUserMessage, uiLanguage);
-          } catch {
-            titleToSet = '';
-          }
+              try {
+                titleToSet = await generateSessionTitle(
+                  providerKeyModel,
+                  firstUserMessage,
+                  uiLanguage,
+                );
+              } catch {
+                titleToSet = '';
+              }
 
-          if (!titleToSet) {
-            titleToSet = cleanSessionTitle(firstUserMessage);
+              if (!titleToSet) {
+                titleToSet = cleanSessionTitle(firstUserMessage);
+              }
+            }
+
+            if (!streamAbortController.signal.aborted) {
+              await reportsAiChatRepo.updateSessionTitleAndTouch(
+                resolvedSessionId,
+                userId,
+                titleToSet || cleanSessionTitle(messageResult.value),
+              );
+
+              if (
+                !(await writeSseEvent(reply, 'done', {
+                  sessionId: resolvedSessionId,
+                  text: assistantText,
+                  thoughtContent: assistantThoughtContent || undefined,
+                }))
+              ) {
+                streamAbortController.abort();
+              }
+              endSseResponse(reply);
+            }
           }
         }
-        if (streamAbortController.signal.aborted) return;
-
-        await reportsAiChatRepo.updateSessionTitleAndTouch(
-          resolvedSessionId,
-          userId,
-          titleToSet || cleanSessionTitle(messageResult.value),
-        );
-
-        if (
-          !(await writeSseEvent(reply, 'done', {
-            sessionId: resolvedSessionId,
-            text: assistantText,
-            thoughtContent: assistantThoughtContent || undefined,
-          }))
-        ) {
-          streamAbortController.abort();
-        }
-        endSseResponse(reply);
       } catch (err) {
         if (isAbortError(err) || streamAbortController.signal.aborted || reply.raw.destroyed) {
           endSseResponse(reply);
@@ -1978,6 +1990,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           datasetJson,
           convo,
         });
+        if (streamAbortController.signal.aborted) return;
         const generated: AiTextResult =
           payload.provider === 'openrouter'
             ? await openrouterGenerateTextStream(
@@ -1995,48 +2008,50 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 streamAbortController.signal,
               );
 
-        if (streamAbortController.signal.aborted) return;
-        await emitThoughtDone();
+        if (!streamAbortController.signal.aborted) {
+          await emitThoughtDone();
 
-        const generatedText = String(generated.text || '').trim();
-        const generatedThought = String(generated.thoughtContent || '').trim();
-        const assistantText =
-          generatedText || streamHandlers.accumulated.text.trim() || 'No response.';
-        const assistantThoughtContent =
-          generatedThought || streamHandlers.accumulated.thoughtContent.trim();
-        if (streamAbortController.signal.aborted) return;
+          if (!streamAbortController.signal.aborted) {
+            const generatedText = String(generated.text || '').trim();
+            const generatedThought = String(generated.thoughtContent || '').trim();
+            const assistantText =
+              generatedText || streamHandlers.accumulated.text.trim() || 'No response.';
+            const assistantThoughtContent =
+              generatedThought || streamHandlers.accumulated.thoughtContent.trim();
 
-        // Atomic swap: delete the old paired assistant (if any) and insert the new one in
-        // a single transaction. Deferring the delete until here means a mid-stream failure
-        // leaves the previous assistant response intact (the swap simply never runs).
-        await withDbTransaction(async (tx) => {
-          if (pairedAssistant) {
-            await reportsAiChatRepo.deleteMessage(pairedAssistant.id, tx);
+            // Atomic swap: delete the old paired assistant (if any) and insert the new one in
+            // a single transaction. Deferring the delete until here means a mid-stream failure
+            // leaves the previous assistant response intact (the swap simply never runs).
+            await withDbTransaction(async (tx) => {
+              if (pairedAssistant) {
+                await reportsAiChatRepo.deleteMessage(pairedAssistant.id, tx);
+              }
+              await reportsAiChatRepo.insertAssistantMessage(
+                {
+                  id: assistantMessageId,
+                  sessionId: sessionIdResult.value,
+                  content: assistantText,
+                  thoughtContent: assistantThoughtContent || null,
+                  createdAt: savedAssistantCreatedAt.toISOString(),
+                },
+                tx,
+              );
+            });
+
+            await reportsAiChatRepo.touchSession(sessionIdResult.value, userId);
+
+            if (
+              !(await writeSseEvent(reply, 'done', {
+                sessionId: sessionIdResult.value,
+                text: assistantText,
+                thoughtContent: assistantThoughtContent || undefined,
+              }))
+            ) {
+              streamAbortController.abort();
+            }
+            endSseResponse(reply);
           }
-          await reportsAiChatRepo.insertAssistantMessage(
-            {
-              id: assistantMessageId,
-              sessionId: sessionIdResult.value,
-              content: assistantText,
-              thoughtContent: assistantThoughtContent || null,
-              createdAt: savedAssistantCreatedAt.toISOString(),
-            },
-            tx,
-          );
-        });
-
-        await reportsAiChatRepo.touchSession(sessionIdResult.value, userId);
-
-        if (
-          !(await writeSseEvent(reply, 'done', {
-            sessionId: sessionIdResult.value,
-            text: assistantText,
-            thoughtContent: assistantThoughtContent || undefined,
-          }))
-        ) {
-          streamAbortController.abort();
         }
-        endSseResponse(reply);
       } catch (err) {
         if (isAbortError(err) || streamAbortController.signal.aborted || reply.raw.destroyed) {
           endSseResponse(reply);

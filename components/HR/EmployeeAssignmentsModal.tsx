@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usersApi } from '../../services/api';
 import type { Client, Project, ProjectTask, User } from '../../types';
@@ -28,6 +28,198 @@ const EMPTY_ASSIGNMENTS: AssignmentsState = {
   taskIds: [],
 };
 
+type AssignmentKind = 'client' | 'project' | 'task';
+
+type EmployeeAssignmentsState = {
+  assignments: AssignmentsState;
+  initialAssignments: AssignmentsState;
+  clientSearch: string;
+  projectSearch: string;
+  taskSearch: string;
+  filterClientId: string;
+  filterProjectId: string;
+  isLoadingAssignments: boolean;
+  loadFailed: boolean;
+};
+
+type EmployeeAssignmentsAction =
+  | { type: 'resetSession'; isLoadingAssignments: boolean }
+  | { type: 'loadSuccess'; assignments: AssignmentsState }
+  | { type: 'loadFailed' }
+  | { type: 'setClientSearch'; value: string }
+  | { type: 'setProjectSearch'; value: string }
+  | { type: 'setTaskSearch'; value: string }
+  | { type: 'setFilterClient'; value: string }
+  | { type: 'setFilterProject'; value: string }
+  | {
+      type: 'toggleAssignment';
+      assignmentType: AssignmentKind;
+      id: string;
+      clients: Client[];
+      projects: Project[];
+      tasks: ProjectTask[];
+    };
+
+const createEmployeeAssignmentsState = (
+  isLoadingAssignments = false,
+): EmployeeAssignmentsState => ({
+  assignments: EMPTY_ASSIGNMENTS,
+  initialAssignments: EMPTY_ASSIGNMENTS,
+  clientSearch: '',
+  projectSearch: '',
+  taskSearch: '',
+  filterClientId: 'all',
+  filterProjectId: 'all',
+  isLoadingAssignments,
+  loadFailed: false,
+});
+
+const toggleAssignments = (
+  prev: AssignmentsState,
+  type: AssignmentKind,
+  id: string,
+  clients: Client[],
+  projects: Project[],
+  tasks: ProjectTask[],
+): AssignmentsState => {
+  const list =
+    type === 'client' ? prev.clientIds : type === 'project' ? prev.projectIds : prev.taskIds;
+  const isAdding = !list.includes(id);
+  const newList = isAdding ? [...list, id] : list.filter((item) => item !== id);
+
+  let newClientIds = prev.clientIds;
+  let newProjectIds = prev.projectIds;
+  let newTaskIds = prev.taskIds;
+
+  if (type === 'task') {
+    newTaskIds = newList;
+    if (isAdding) {
+      const task = tasks.find((item) => item.id === id);
+      if (task) {
+        const project = projects.find((item) => item.id === task.projectId);
+        if (project && !newProjectIds.includes(project.id)) {
+          newProjectIds = [...newProjectIds, project.id];
+        }
+        if (project) {
+          const client = clients.find((item) => item.id === project.clientId);
+          if (client && !newClientIds.includes(client.id)) {
+            newClientIds = [...newClientIds, client.id];
+          }
+        }
+      }
+    } else {
+      const task = tasks.find((item) => item.id === id);
+      if (newTaskIds.length === 0) {
+        newProjectIds = [];
+        newClientIds = [];
+      } else if (task) {
+        const project = projects.find((item) => item.id === task.projectId);
+        if (project) {
+          const hasTaskForProject = newTaskIds.some((taskId) => {
+            const remainingTask = tasks.find((item) => item.id === taskId);
+            return remainingTask?.projectId === project.id;
+          });
+
+          if (!hasTaskForProject) {
+            newProjectIds = newProjectIds.filter((projectId) => projectId !== project.id);
+          }
+
+          const client = clients.find((item) => item.id === project.clientId);
+          if (client) {
+            const hasProjectForClient = newProjectIds.some((projectId) => {
+              const remainingProject = projects.find((item) => item.id === projectId);
+              return remainingProject?.clientId === client.id;
+            });
+
+            if (!hasProjectForClient) {
+              newClientIds = newClientIds.filter((clientId) => clientId !== client.id);
+            }
+          }
+        }
+      }
+    }
+  } else if (type === 'project') {
+    newProjectIds = newList;
+    const project = projects.find((item) => item.id === id);
+    if (project) {
+      if (isAdding) {
+        if (!newClientIds.includes(project.clientId)) {
+          newClientIds = [...newClientIds, project.clientId];
+        }
+      } else {
+        const hasProjectForClient = newProjectIds.some((projectId) => {
+          const remainingProject = projects.find((item) => item.id === projectId);
+          return remainingProject?.clientId === project.clientId;
+        });
+
+        const hasTaskForClient = newTaskIds.some((taskId) => {
+          const remainingTask = tasks.find((item) => item.id === taskId);
+          const remainingProject = remainingTask
+            ? projects.find((item) => item.id === remainingTask.projectId)
+            : null;
+          return remainingProject?.clientId === project.clientId;
+        });
+
+        if (!hasProjectForClient && !hasTaskForClient) {
+          newClientIds = newClientIds.filter((clientId) => clientId !== project.clientId);
+        }
+      }
+    }
+  } else {
+    newClientIds = newList;
+  }
+
+  return {
+    clientIds: newClientIds,
+    projectIds: newProjectIds,
+    taskIds: newTaskIds,
+  };
+};
+
+const employeeAssignmentsReducer = (
+  state: EmployeeAssignmentsState,
+  action: EmployeeAssignmentsAction,
+): EmployeeAssignmentsState => {
+  switch (action.type) {
+    case 'resetSession':
+      return createEmployeeAssignmentsState(action.isLoadingAssignments);
+    case 'loadSuccess':
+      return {
+        ...state,
+        assignments: action.assignments,
+        initialAssignments: action.assignments,
+        isLoadingAssignments: false,
+        loadFailed: false,
+      };
+    case 'loadFailed':
+      return { ...state, isLoadingAssignments: false, loadFailed: true };
+    case 'setClientSearch':
+      return { ...state, clientSearch: action.value };
+    case 'setProjectSearch':
+      return { ...state, projectSearch: action.value };
+    case 'setTaskSearch':
+      return { ...state, taskSearch: action.value };
+    case 'setFilterClient':
+      return { ...state, filterClientId: action.value };
+    case 'setFilterProject':
+      return { ...state, filterProjectId: action.value };
+    case 'toggleAssignment':
+      return {
+        ...state,
+        assignments: toggleAssignments(
+          state.assignments,
+          action.assignmentType,
+          action.id,
+          action.clients,
+          action.projects,
+          action.tasks,
+        ),
+      };
+    default:
+      return state;
+  }
+};
+
 const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
   user,
   clients,
@@ -37,17 +229,29 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
   onClose,
 }) => {
   const { t } = useTranslation(['hr', 'common']);
-  const [assignments, setAssignments] = useState<AssignmentsState>(EMPTY_ASSIGNMENTS);
-  const [initialAssignments, setInitialAssignments] = useState<AssignmentsState>(EMPTY_ASSIGNMENTS);
-  const [clientSearch, setClientSearch] = useState('');
-  const [projectSearch, setProjectSearch] = useState('');
-  const [taskSearch, setTaskSearch] = useState('');
-  const [filterClientId, setFilterClientId] = useState('all');
-  const [filterProjectId, setFilterProjectId] = useState('all');
-  const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
-  // True when the most recent assignments fetch failed. While true, the Save
-  // button stays disabled — sending the (empty) state would wipe real data.
-  const [loadFailed, setLoadFailed] = useState(false);
+  const [state, dispatch] = useReducer(
+    employeeAssignmentsReducer,
+    undefined,
+    createEmployeeAssignmentsState,
+  );
+  const {
+    assignments,
+    initialAssignments,
+    clientSearch,
+    projectSearch,
+    taskSearch,
+    filterClientId,
+    filterProjectId,
+    isLoadingAssignments,
+    loadFailed,
+  } = state;
+  const modalSessionKey = isOpen && user ? user.id : 'closed';
+  const activeModalSessionKeyRef = useRef(modalSessionKey);
+
+  if (activeModalSessionKeyRef.current !== modalSessionKey) {
+    activeModalSessionKeyRef.current = modalSessionKey;
+    dispatch({ type: 'resetSession', isLoadingAssignments: modalSessionKey !== 'closed' });
+  }
 
   useEffect(() => {
     if (!isOpen || !user) return;
@@ -55,22 +259,15 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
     let isCancelled = false;
 
     const loadAssignments = async () => {
-      setIsLoadingAssignments(true);
-      setLoadFailed(false);
       try {
         const data = await usersApi.getAssignments(user.id);
         if (isCancelled) return;
-        setAssignments(data);
-        setInitialAssignments(data);
+        dispatch({ type: 'loadSuccess', assignments: data });
       } catch (err) {
         if (isCancelled) return;
         console.error('Failed to load assignments', err);
-        setLoadFailed(true);
+        dispatch({ type: 'loadFailed' });
         toastError(t('hr:workforce.failedToLoadAssignments'));
-      } finally {
-        if (!isCancelled) {
-          setIsLoadingAssignments(false);
-        }
       }
     };
 
@@ -81,27 +278,12 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
     };
   }, [isOpen, user, t]);
 
-  useEffect(() => {
-    if (isOpen) return;
-
-    setAssignments(EMPTY_ASSIGNMENTS);
-    setInitialAssignments(EMPTY_ASSIGNMENTS);
-    setClientSearch('');
-    setProjectSearch('');
-    setTaskSearch('');
-    setFilterClientId('all');
-    setFilterProjectId('all');
-    setIsLoadingAssignments(false);
-    setLoadFailed(false);
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (filterClientId === 'all' || filterProjectId === 'all') return;
+  if (filterClientId !== 'all' && filterProjectId !== 'all') {
     const selectedProject = projects.find((project) => project.id === filterProjectId);
     if (!selectedProject || selectedProject.clientId !== filterClientId) {
-      setFilterProjectId('all');
+      dispatch({ type: 'setFilterProject', value: 'all' });
     }
-  }, [filterClientId, filterProjectId, projects]);
+  }
 
   const filteredProjectsForFilter =
     filterClientId === 'all'
@@ -216,101 +398,8 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
     tasks,
   ]);
 
-  const toggleAssignment = (type: 'client' | 'project' | 'task', id: string) => {
-    setAssignments((prev) => {
-      const list =
-        type === 'client' ? prev.clientIds : type === 'project' ? prev.projectIds : prev.taskIds;
-      const isAdding = !list.includes(id);
-      const newList = isAdding ? [...list, id] : list.filter((item) => item !== id);
-
-      let newClientIds = prev.clientIds;
-      let newProjectIds = prev.projectIds;
-      let newTaskIds = prev.taskIds;
-
-      if (type === 'task') {
-        newTaskIds = newList;
-        if (isAdding) {
-          const task = tasks.find((item) => item.id === id);
-          if (task) {
-            const project = projects.find((item) => item.id === task.projectId);
-            if (project && !newProjectIds.includes(project.id)) {
-              newProjectIds = [...newProjectIds, project.id];
-            }
-            if (project) {
-              const client = clients.find((item) => item.id === project.clientId);
-              if (client && !newClientIds.includes(client.id)) {
-                newClientIds = [...newClientIds, client.id];
-              }
-            }
-          }
-        } else {
-          const task = tasks.find((item) => item.id === id);
-          if (newTaskIds.length === 0) {
-            newProjectIds = [];
-            newClientIds = [];
-          } else if (task) {
-            const project = projects.find((item) => item.id === task.projectId);
-            if (project) {
-              const hasTaskForProject = newTaskIds.some((taskId) => {
-                const remainingTask = tasks.find((item) => item.id === taskId);
-                return remainingTask?.projectId === project.id;
-              });
-
-              if (!hasTaskForProject) {
-                newProjectIds = newProjectIds.filter((projectId) => projectId !== project.id);
-              }
-
-              const client = clients.find((item) => item.id === project.clientId);
-              if (client) {
-                const hasProjectForClient = newProjectIds.some((projectId) => {
-                  const remainingProject = projects.find((item) => item.id === projectId);
-                  return remainingProject?.clientId === client.id;
-                });
-
-                if (!hasProjectForClient) {
-                  newClientIds = newClientIds.filter((clientId) => clientId !== client.id);
-                }
-              }
-            }
-          }
-        }
-      } else if (type === 'project') {
-        newProjectIds = newList;
-        const project = projects.find((item) => item.id === id);
-        if (project) {
-          if (isAdding) {
-            if (!newClientIds.includes(project.clientId)) {
-              newClientIds = [...newClientIds, project.clientId];
-            }
-          } else {
-            const hasProjectForClient = newProjectIds.some((projectId) => {
-              const remainingProject = projects.find((item) => item.id === projectId);
-              return remainingProject?.clientId === project.clientId;
-            });
-
-            const hasTaskForClient = newTaskIds.some((taskId) => {
-              const remainingTask = tasks.find((item) => item.id === taskId);
-              const remainingProject = remainingTask
-                ? projects.find((item) => item.id === remainingTask.projectId)
-                : null;
-              return remainingProject?.clientId === project.clientId;
-            });
-
-            if (!hasProjectForClient && !hasTaskForClient) {
-              newClientIds = newClientIds.filter((clientId) => clientId !== project.clientId);
-            }
-          }
-        }
-      } else {
-        newClientIds = newList;
-      }
-
-      return {
-        clientIds: newClientIds,
-        projectIds: newProjectIds,
-        taskIds: newTaskIds,
-      };
-    });
+  const toggleAssignment = (assignmentType: AssignmentKind, id: string) => {
+    dispatch({ type: 'toggleAssignment', assignmentType, id, clients, projects, tasks });
   };
 
   const saveAssignments = async () => {
@@ -376,7 +465,9 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                 <SelectControl
                   options={clientFilterOptions}
                   value={filterClientId}
-                  onChange={(value) => setFilterClientId(value as string)}
+                  onChange={(value) =>
+                    dispatch({ type: 'setFilterClient', value: value as string })
+                  }
                   placeholder={t('hr:workforce.filterByClient')}
                   searchable={true}
                   buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-semibold text-zinc-700 shadow-sm"
@@ -384,7 +475,9 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                 <SelectControl
                   options={projectFilterOptions}
                   value={filterProjectId}
-                  onChange={(value) => setFilterProjectId(value as string)}
+                  onChange={(value) =>
+                    dispatch({ type: 'setFilterProject', value: value as string })
+                  }
                   placeholder={t('hr:workforce.filterByProject')}
                   searchable={true}
                   buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-semibold text-zinc-700 shadow-sm"
@@ -408,7 +501,9 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                       placeholder={t('hr:workforce.searchClients')}
                       aria-label={t('hr:workforce.searchClients')}
                       value={clientSearch}
-                      onChange={(event) => setClientSearch(event.target.value)}
+                      onChange={(event) =>
+                        dispatch({ type: 'setClientSearch', value: event.target.value })
+                      }
                       className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
                     />
                   </div>
@@ -474,7 +569,9 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                       placeholder={t('hr:workforce.searchProjects')}
                       aria-label={t('hr:workforce.searchProjects')}
                       value={projectSearch}
-                      onChange={(event) => setProjectSearch(event.target.value)}
+                      onChange={(event) =>
+                        dispatch({ type: 'setProjectSearch', value: event.target.value })
+                      }
                       className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
                     />
                   </div>
@@ -546,7 +643,9 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                       placeholder={t('hr:workforce.searchTasks')}
                       aria-label={t('hr:workforce.searchTasks')}
                       value={taskSearch}
-                      onChange={(event) => setTaskSearch(event.target.value)}
+                      onChange={(event) =>
+                        dispatch({ type: 'setTaskSearch', value: event.target.value })
+                      }
                       className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
                     />
                   </div>

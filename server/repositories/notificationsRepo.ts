@@ -114,7 +114,13 @@ export const createForUsers = async (
   notification: NewNotificationForUsers,
   exec: DbExecutor = db,
 ): Promise<number> => {
-  const uniqueUserIds = Array.from(new Set(userIds.map((userId) => userId.trim()).filter(Boolean)));
+  const uniqueUserIds = Array.from(
+    userIds.reduce((ids, userId) => {
+      const trimmed = userId.trim();
+      if (trimmed) ids.add(trimmed);
+      return ids;
+    }, new Set<string>()),
+  );
   if (uniqueUserIds.length === 0) return 0;
 
   await exec.insert(notifications).values(

@@ -95,7 +95,10 @@ describe('ProjectsView create-form validation', () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
     ).text();
-    expect(source).toContain('.filter((o) => !clientId || o.clientId === clientId)');
+    expect(source).toContain(
+      "if (offer.status !== 'sent' && offer.status !== 'accepted') return options;",
+    );
+    expect(source).toContain('if (clientId && offer.clientId !== clientId) return options;');
     expect(source).toContain('setClientId(nextOffer.clientId);');
   });
 

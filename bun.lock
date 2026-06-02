@@ -35,7 +35,6 @@
       "devDependencies": {
         "@astrojs/starlight": "^0.39.2",
         "@biomejs/biome": "^2.4.14",
-        "@biomejs/cli-win32-x64": "^2.4.14",
         "@happy-dom/global-registrator": "^20.9.0",
         "@tailwindcss/postcss": "^4.2.4",
         "@tailwindcss/vite": "^4.2.4",

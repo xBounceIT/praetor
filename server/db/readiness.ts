@@ -3,8 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sql } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
-import { type DbExecutor, db, executeRows } from './drizzle.ts';
-import * as schema from './schema/index.ts';
+import { type DbExecutor, db, executeRows, schema } from './drizzle.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

@@ -61,7 +61,10 @@ const enumValuesMatch = (
   rightValues: readonly string[] | undefined,
 ) => {
   if (!leftValues || !rightValues || leftValues.length !== rightValues.length) return false;
-  return leftValues.every((value, index) => value === rightValues[index]);
+  return (
+    leftValues.length === rightValues.length &&
+    leftValues.every((value, index) => value === rightValues[index])
+  );
 };
 
 export const areProjectRuleFieldsComparable = (leftField: string, rightField: string) => {

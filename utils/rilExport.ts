@@ -49,6 +49,10 @@ const NOTE_HELPER_PATTERNS = {
   holiday: /(^|\s)F(N)?($|\s)/i,
   hardship: /(^|\s)(D|SD)($|\s)/i,
 } as const;
+const MONTH_LABEL_FORMATTER = new Intl.DateTimeFormat('it-IT', {
+  month: 'long',
+  year: 'numeric',
+});
 
 const splitDecimalHours = (hours: number): [number, number] => [
   Math.floor(hours),
@@ -83,9 +87,7 @@ const setMetadataRow = (worksheet: Worksheet, rowNumber: number, label: string, 
 };
 
 const formatMonthLabel = (year: number, month: number) =>
-  new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(
-    new Date(year, month - 1, 1),
-  );
+  MONTH_LABEL_FORMATTER.format(new Date(year, month - 1, 1));
 
 const normalizeRows = (rows: RilRow[]): RilRow[] => {
   const byDay = new Map(rows.map((row) => [row.day, row]));

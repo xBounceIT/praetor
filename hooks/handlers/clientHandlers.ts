@@ -54,12 +54,13 @@ export const makeClientHandlers = (deps: ClientHandlersDeps) => {
       // Read `projects` via the getter so we observe the latest array, not the
       // one captured at factory creation. Any project added/removed during the
       // delete round-trip would otherwise be missed when filtering tasks.
-      const projectIdsForClient = getProjects()
-        .filter((p) => p.clientId === id)
-        .map((p) => p.id);
+      const projectIdsForClient = new Set<string>();
+      for (const project of getProjects()) {
+        if (project.clientId === id) projectIdsForClient.add(project.id);
+      }
       setClients((prev) => prev.filter((c) => c.id !== id));
       setProjects((prev) => prev.filter((p) => p.clientId !== id));
-      setProjectTasks((prev) => prev.filter((t) => !projectIdsForClient.includes(t.projectId)));
+      setProjectTasks((prev) => prev.filter((t) => !projectIdsForClient.has(t.projectId)));
     } catch (err) {
       console.error('Failed to delete client:', err);
       toastError('Failed to delete client');

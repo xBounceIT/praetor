@@ -31,7 +31,6 @@ const EXPECTED_KEYS: readonly AuthScopedStateKey[] = [
   'supplierOrders',
   'supplierInvoices',
   'entries',
-  'entriesLoaded',
   'workUnits',
   'viewingUserAssignmentState',
 ];
@@ -78,7 +77,6 @@ describe('authScopedState', () => {
       const setUsers = mock(() => {});
       const setClients = mock(() => {});
       const setEntries = mock(() => {});
-      const setEntriesLoaded = mock(() => {});
 
       const noop = () => {};
       // Build a full resetters map where most are no-ops and a few are mocks.
@@ -87,7 +85,6 @@ describe('authScopedState', () => {
           if (key === 'users') return [key, setUsers];
           if (key === 'clients') return [key, setClients];
           if (key === 'entries') return [key, setEntries];
-          if (key === 'entriesLoaded') return [key, setEntriesLoaded];
           return [key, noop];
         }),
       ) as AuthScopedStateResetters;
@@ -97,7 +94,6 @@ describe('authScopedState', () => {
       expect(setUsers).toHaveBeenCalledTimes(1);
       expect(setClients).toHaveBeenCalledTimes(1);
       expect(setEntries).toHaveBeenCalledTimes(1);
-      expect(setEntriesLoaded).toHaveBeenCalledTimes(1);
     });
 
     test('compile-time guarantee: omitting a key fails to typecheck', () => {

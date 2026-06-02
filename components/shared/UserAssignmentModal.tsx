@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,124 @@ import StatusBadge, { type StatusType } from './StatusBadge';
 type LoadState = 'loading' | 'error' | 'ready';
 
 const EMPTY_ROLES: Role[] = [];
+
+type UserAssignmentState = {
+  assignedUserIds: string[];
+  loadState: LoadState;
+  userSearch: string;
+  selectedAvailableIds: Set<string>;
+  selectedAssignedIds: Set<string>;
+  isSaving: boolean;
+};
+
+type UserAssignmentAction =
+  | { type: 'loadStart' }
+  | { type: 'loadSuccess'; userIds: string[] }
+  | { type: 'loadError' }
+  | { type: 'setUserSearch'; value: string }
+  | { type: 'resetSelection' }
+  | { type: 'saveStart' }
+  | { type: 'saveDone' }
+  | { type: 'toggleAvailable'; userId: string }
+  | { type: 'toggleAssigned'; userId: string }
+  | { type: 'moveToAssigned'; userId: string }
+  | { type: 'moveToAvailable'; userId: string }
+  | { type: 'assignSelected' }
+  | { type: 'unassignSelected' };
+
+const createUserAssignmentState = (): UserAssignmentState => ({
+  assignedUserIds: [],
+  loadState: 'ready',
+  userSearch: '',
+  selectedAvailableIds: new Set(),
+  selectedAssignedIds: new Set(),
+  isSaving: false,
+});
+
+const toggleSetValue = (values: Set<string>, value: string): Set<string> => {
+  const next = new Set(values);
+  if (next.has(value)) {
+    next.delete(value);
+  } else {
+    next.add(value);
+  }
+  return next;
+};
+
+const removeSetValue = (values: Set<string>, value: string): Set<string> => {
+  const next = new Set(values);
+  next.delete(value);
+  return next;
+};
+
+const userAssignmentReducer = (
+  state: UserAssignmentState,
+  action: UserAssignmentAction,
+): UserAssignmentState => {
+  switch (action.type) {
+    case 'loadStart':
+      return {
+        ...state,
+        assignedUserIds: [],
+        loadState: 'loading',
+        selectedAvailableIds: new Set(),
+        selectedAssignedIds: new Set(),
+      };
+    case 'loadSuccess':
+      return { ...state, assignedUserIds: action.userIds, loadState: 'ready' };
+    case 'loadError':
+      return { ...state, loadState: 'error' };
+    case 'setUserSearch':
+      return { ...state, userSearch: action.value };
+    case 'resetSelection':
+      return {
+        ...state,
+        userSearch: '',
+        selectedAvailableIds: new Set(),
+        selectedAssignedIds: new Set(),
+      };
+    case 'saveStart':
+      return { ...state, isSaving: true };
+    case 'saveDone':
+      return { ...state, isSaving: false };
+    case 'toggleAvailable':
+      return {
+        ...state,
+        selectedAvailableIds: toggleSetValue(state.selectedAvailableIds, action.userId),
+      };
+    case 'toggleAssigned':
+      return {
+        ...state,
+        selectedAssignedIds: toggleSetValue(state.selectedAssignedIds, action.userId),
+      };
+    case 'moveToAssigned':
+      return {
+        ...state,
+        assignedUserIds: [...state.assignedUserIds, action.userId],
+        selectedAvailableIds: removeSetValue(state.selectedAvailableIds, action.userId),
+      };
+    case 'moveToAvailable':
+      return {
+        ...state,
+        assignedUserIds: state.assignedUserIds.filter((id) => id !== action.userId),
+        selectedAssignedIds: removeSetValue(state.selectedAssignedIds, action.userId),
+      };
+    case 'assignSelected':
+      return {
+        ...state,
+        assignedUserIds: [...state.assignedUserIds, ...state.selectedAvailableIds],
+        selectedAvailableIds: new Set(),
+      };
+    case 'unassignSelected':
+      return {
+        ...state,
+        assignedUserIds: state.assignedUserIds.filter((id) => !state.selectedAssignedIds.has(id)),
+        selectedAssignedIds: new Set(),
+      };
+    default:
+      return state;
+  }
+};
 
 export interface UserAssignmentModalProps {
   isOpen: boolean;
@@ -71,10 +189,11 @@ const UserRow: React.FC<{
 }> = ({ user, isSelected, onSelect, onDoubleClick, roleLookup }) => {
   const { roleBadgeType, roleName } = getRolePresentation(user, roleLookup);
   return (
-    <div
+    <button
+      type="button"
       onClick={onSelect}
       onDoubleClick={onDoubleClick}
-      className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+      className={`flex w-full items-center gap-3 p-3 rounded-xl border text-left cursor-pointer transition-all ${
         isSelected
           ? 'bg-primary/10 border-primary'
           : 'bg-card border-border hover:border-input hover:bg-accent'
@@ -95,6 +214,145 @@ const UserRow: React.FC<{
         </span>
       </div>
       <StatusBadge type={roleBadgeType} label={roleName} className="shrink-0" />
+    </button>
+  );
+};
+
+const UserAssignmentList: React.FC<{
+  list: User[];
+  selectedIds: Set<string>;
+  onToggleSelect: (id: string) => void;
+  onDoubleClickUser: (id: string) => void;
+  emptyMessage: string;
+  roleLookup: Map<string, Role>;
+}> = ({ list, selectedIds, onToggleSelect, onDoubleClickUser, emptyMessage, roleLookup }) => {
+  if (list.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+        <div className="size-12 bg-muted rounded-full flex items-center justify-center mb-2 text-muted-foreground">
+          <i className="fa-solid fa-user-slash text-lg"></i>
+        </div>
+        <span className="text-xs italic">{emptyMessage}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {list.map((user) => (
+        <UserRow
+          key={user.id}
+          user={user}
+          isSelected={selectedIds.has(user.id)}
+          onSelect={() => onToggleSelect(user.id)}
+          onDoubleClick={() => onDoubleClickUser(user.id)}
+          roleLookup={roleLookup}
+        />
+      ))}
+    </div>
+  );
+};
+
+const AssignmentModalHeader: React.FC<{
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  entityLabel: string;
+  entityName: string;
+  isSaving: boolean;
+  onClose: () => void;
+}> = ({ title, description, entityLabel, entityName, isSaving, onClose }) => {
+  const { t } = useTranslation('common');
+
+  return (
+    <ModalHeader>
+      <div>
+        <ModalTitle>{title ?? t('assignment.title')}</ModalTitle>
+        <ModalDescription>
+          {description ?? (
+            <>
+              {entityLabel}: <span className="font-bold text-praetor">{entityName}</span>
+            </>
+          )}
+        </ModalDescription>
+      </div>
+      <ModalCloseButton onClick={onClose} disabled={isSaving} />
+    </ModalHeader>
+  );
+};
+
+const AssignmentSearch: React.FC<{
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}> = ({ value, disabled, onChange }) => {
+  const { t } = useTranslation('common');
+
+  return (
+    <div className="border-b border-border bg-background p-4">
+      <div className="relative">
+        <i
+          className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+          aria-hidden="true"
+        ></i>
+        <Input
+          type="text"
+          placeholder={t('assignment.searchUsers')}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          className="pl-10"
+        />
+      </div>
+    </div>
+  );
+};
+
+const AssignmentModalFooter: React.FC<{
+  disabled: boolean;
+  isSaving: boolean;
+  canSave: boolean;
+  saveButtonLabel?: React.ReactNode;
+  onCancel: () => void;
+  onSave: () => void;
+}> = ({ disabled, isSaving, canSave, saveButtonLabel, onCancel, onSave }) => {
+  const { t } = useTranslation('common');
+
+  return (
+    <ModalFooter>
+      <Button type="button" variant="outline" onClick={onCancel} disabled={isSaving}>
+        {t('buttons.cancel')}
+      </Button>
+      <Button type="button" onClick={onSave} disabled={disabled || isSaving || !canSave}>
+        {isSaving ? t('buttons.saving') : (saveButtonLabel ?? t('buttons.save'))}
+      </Button>
+    </ModalFooter>
+  );
+};
+
+const AssignmentLoadingState: React.FC = () => (
+  <div className="flex flex-1 items-center justify-center py-16">
+    <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor" aria-hidden="true"></i>
+  </div>
+);
+
+const AssignmentErrorState: React.FC<{ onRetry: () => void }> = ({ onRetry }) => {
+  const { t } = useTranslation('common');
+
+  return (
+    <div className="flex flex-1 items-center justify-center py-16">
+      <div className="max-w-sm space-y-4 text-center">
+        <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+          <i className="fa-solid fa-triangle-exclamation text-2xl" aria-hidden="true"></i>
+        </div>
+        <div className="space-y-2">
+          <p className="font-bold text-foreground text-sm">{t('assignment.loadFailed')}</p>
+          <p className="text-muted-foreground text-sm">{t('assignment.loadRetryHint')}</p>
+        </div>
+        <Button type="button" onClick={onRetry} variant="outline">
+          <i className="fa-solid fa-rotate-right" aria-hidden="true"></i>
+          {t('buttons.refresh')}
+        </Button>
+      </div>
     </div>
   );
 };
@@ -118,35 +376,43 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
   const { t } = useTranslation('common');
 
   const roleLookup = useMemo(() => new Map(roles.map((r) => [r.id, r])), [roles]);
-  const [assignedUserIds, setAssignedUserIds] = useState<string[]>([]);
-  const [loadState, setLoadState] = useState<LoadState>('ready');
-  const [userSearch, setUserSearch] = useState('');
-  const [selectedAvailableIds, setSelectedAvailableIds] = useState<Set<string>>(new Set());
-  const [selectedAssignedIds, setSelectedAssignedIds] = useState<Set<string>>(new Set());
-  const [isSaving, setIsSaving] = useState(false);
+  const [state, dispatch] = useReducer(userAssignmentReducer, undefined, createUserAssignmentState);
+  const {
+    assignedUserIds,
+    loadState,
+    userSearch,
+    selectedAvailableIds,
+    selectedAssignedIds,
+    isSaving,
+  } = state;
   const initializedRef = useRef(false);
   const loadAbortControllerRef = useRef<AbortController | null>(null);
+
+  if (!isOpen && initializedRef.current) {
+    initializedRef.current = false;
+    loadAbortControllerRef.current?.abort();
+    loadAbortControllerRef.current = null;
+    if (isSaving) dispatch({ type: 'saveDone' });
+  }
 
   const load = useCallback(async () => {
     loadAbortControllerRef.current?.abort();
     const controller = new AbortController();
     loadAbortControllerRef.current = controller;
 
-    setLoadState('loading');
-    setAssignedUserIds([]);
-    setSelectedAvailableIds(new Set());
-    setSelectedAssignedIds(new Set());
+    dispatch({ type: 'loadStart' });
     try {
       const ids = await loadAssignedUserIds(controller.signal);
-      if (controller.signal.aborted) return;
-      setAssignedUserIds(ids);
-      setLoadState('ready');
+      if (!controller.signal.aborted) {
+        dispatch({ type: 'loadSuccess', userIds: ids });
+      }
     } catch (err) {
-      if (controller.signal.aborted || isAbortError(err)) return;
-      console.error('Failed to load assignments', err);
-      setLoadState('error');
-      if (loadErrorMessage) {
-        toastError(loadErrorMessage);
+      if (!controller.signal.aborted && !isAbortError(err)) {
+        console.error('Failed to load assignments', err);
+        dispatch({ type: 'loadError' });
+        if (loadErrorMessage) {
+          toastError(loadErrorMessage);
+        }
       }
     } finally {
       if (loadAbortControllerRef.current === controller) {
@@ -160,12 +426,6 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
       initializedRef.current = true;
       load();
     }
-    if (!isOpen) {
-      initializedRef.current = false;
-      loadAbortControllerRef.current?.abort();
-      loadAbortControllerRef.current = null;
-      setIsSaving(false);
-    }
   }, [isOpen, load]);
 
   useEffect(
@@ -178,18 +438,14 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
 
   const handleClose = useCallback(() => {
     if (isSaving) return;
-    setUserSearch('');
-    setSelectedAvailableIds(new Set());
-    setSelectedAssignedIds(new Set());
+    dispatch({ type: 'resetSelection' });
     loadAbortControllerRef.current?.abort();
     loadAbortControllerRef.current = null;
     onClose();
   }, [isSaving, onClose]);
 
   const forceClose = useCallback(() => {
-    setUserSearch('');
-    setSelectedAvailableIds(new Set());
-    setSelectedAssignedIds(new Set());
+    dispatch({ type: 'resetSelection' });
     loadAbortControllerRef.current?.abort();
     loadAbortControllerRef.current = null;
     onClose();
@@ -197,7 +453,7 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
 
   const handleSave = useCallback(async () => {
     if (disabled || isSaving || loadState !== 'ready') return;
-    setIsSaving(true);
+    dispatch({ type: 'saveStart' });
     try {
       await saveAssignedUserIds(assignedUserIds);
       forceClose();
@@ -205,7 +461,7 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
       console.error('Failed to save assignments', err);
       toastError(saveErrorMessage || t('assignment.saveFailed'));
     } finally {
-      setIsSaving(false);
+      dispatch({ type: 'saveDone' });
     }
   }, [
     disabled,
@@ -219,38 +475,17 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
   ]);
 
   const toggleAvailableSelection = useCallback((userId: string) => {
-    setSelectedAvailableIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(userId)) {
-        next.delete(userId);
-      } else {
-        next.add(userId);
-      }
-      return next;
-    });
+    dispatch({ type: 'toggleAvailable', userId });
   }, []);
 
   const toggleAssignedSelection = useCallback((userId: string) => {
-    setSelectedAssignedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(userId)) {
-        next.delete(userId);
-      } else {
-        next.add(userId);
-      }
-      return next;
-    });
+    dispatch({ type: 'toggleAssigned', userId });
   }, []);
 
   const moveToAssigned = useCallback(
     (userId: string) => {
       if (disabled) return;
-      setAssignedUserIds((prev) => [...prev, userId]);
-      setSelectedAvailableIds((prev) => {
-        const next = new Set(prev);
-        next.delete(userId);
-        return next;
-      });
+      dispatch({ type: 'moveToAssigned', userId });
     },
     [disabled],
   );
@@ -258,26 +493,19 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
   const moveToAvailable = useCallback(
     (userId: string) => {
       if (disabled) return;
-      setAssignedUserIds((prev) => prev.filter((id) => id !== userId));
-      setSelectedAssignedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(userId);
-        return next;
-      });
+      dispatch({ type: 'moveToAvailable', userId });
     },
     [disabled],
   );
 
   const assignSelected = useCallback(() => {
     if (disabled || selectedAvailableIds.size === 0) return;
-    setAssignedUserIds((prev) => [...prev, ...selectedAvailableIds]);
-    setSelectedAvailableIds(new Set());
+    dispatch({ type: 'assignSelected' });
   }, [disabled, selectedAvailableIds]);
 
   const unassignSelected = useCallback(() => {
     if (disabled || selectedAssignedIds.size === 0) return;
-    setAssignedUserIds((prev) => prev.filter((id) => !selectedAssignedIds.has(id)));
-    setSelectedAssignedIds(new Set());
+    dispatch({ type: 'unassignSelected' });
   }, [disabled, selectedAssignedIds]);
 
   const searchLower = userSearch.toLowerCase();
@@ -305,94 +533,30 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
       .sort((a, b) => assignedUserIds.indexOf(a.id) - assignedUserIds.indexOf(b.id));
   }, [users, assignedUserIds, searchLower]);
 
-  const renderUserList = (
-    list: User[],
-    selectedIds: Set<string>,
-    onToggleSelect: (id: string) => void,
-    onDoubleClickUser: (id: string) => void,
-    emptyMessage: string,
-  ) => {
-    if (list.length === 0) {
-      return (
-        <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-          <div className="size-12 bg-muted rounded-full flex items-center justify-center mb-2 text-muted-foreground">
-            <i className="fa-solid fa-user-slash text-lg"></i>
-          </div>
-          <span className="text-xs italic">{emptyMessage}</span>
-        </div>
-      );
-    }
-    return (
-      <div className="space-y-1.5">
-        {list.map((user) => (
-          <UserRow
-            key={user.id}
-            user={user}
-            isSelected={selectedIds.has(user.id)}
-            onSelect={() => onToggleSelect(user.id)}
-            onDoubleClick={() => onDoubleClickUser(user.id)}
-            roleLookup={roleLookup}
-          />
-        ))}
-      </div>
-    );
-  };
-
   return (
     <Modal isOpen={isOpen} onClose={handleClose} ariaLabel={null}>
       {() => (
         <ModalContent size="2xl" className="max-h-[85vh]">
-          <ModalHeader>
-            <div>
-              <ModalTitle>{title ?? t('assignment.title')}</ModalTitle>
-              <ModalDescription>
-                {description ?? (
-                  <>
-                    {entityLabel}: <span className="font-bold text-praetor">{entityName}</span>
-                  </>
-                )}
-              </ModalDescription>
-            </div>
-            <ModalCloseButton onClick={handleClose} disabled={isSaving} />
-          </ModalHeader>
+          <AssignmentModalHeader
+            title={title}
+            description={description}
+            entityLabel={entityLabel}
+            entityName={entityName}
+            isSaving={isSaving}
+            onClose={handleClose}
+          />
 
-          <div className="p-4 border-b border-border bg-background">
-            <div className="relative">
-              <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"></i>
-              <Input
-                type="text"
-                placeholder={t('assignment.searchUsers')}
-                value={userSearch}
-                onChange={(e) => setUserSearch(e.target.value)}
-                disabled={loadState !== 'ready'}
-                className="pl-10"
-              />
-            </div>
-          </div>
+          <AssignmentSearch
+            value={userSearch}
+            disabled={loadState !== 'ready'}
+            onChange={(value) => dispatch({ type: 'setUserSearch', value })}
+          />
 
           <ModalBody className="flex-1 overflow-hidden flex flex-col bg-muted/30 p-0">
             {loadState === 'loading' ? (
-              <div className="flex items-center justify-center py-16 flex-1">
-                <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
-              </div>
+              <AssignmentLoadingState />
             ) : loadState === 'error' ? (
-              <div className="flex items-center justify-center py-16 flex-1">
-                <div className="max-w-sm text-center space-y-4">
-                  <div className="size-16 bg-destructive/10 text-destructive rounded-full flex items-center justify-center mx-auto">
-                    <i className="fa-solid fa-triangle-exclamation text-2xl"></i>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-bold text-foreground">
-                      {t('assignment.loadFailed')}
-                    </p>
-                    <p className="text-sm text-muted-foreground">{t('assignment.loadRetryHint')}</p>
-                  </div>
-                  <Button type="button" onClick={load} variant="outline">
-                    <i className="fa-solid fa-rotate-right"></i>
-                    {t('buttons.refresh')}
-                  </Button>
-                </div>
-              </div>
+              <AssignmentErrorState onRetry={load} />
             ) : (
               <div className="flex-1 flex gap-0 overflow-hidden p-4">
                 <div className="flex-1 flex flex-col min-w-0">
@@ -403,13 +567,14 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
                     </span>
                   </h4>
                   <div className="flex-1 overflow-y-auto pr-2">
-                    {renderUserList(
-                      availableUsers,
-                      selectedAvailableIds,
-                      toggleAvailableSelection,
-                      moveToAssigned,
-                      t('assignment.noUsersToAssign'),
-                    )}
+                    <UserAssignmentList
+                      list={availableUsers}
+                      selectedIds={selectedAvailableIds}
+                      onToggleSelect={toggleAvailableSelection}
+                      onDoubleClickUser={moveToAssigned}
+                      emptyMessage={t('assignment.noUsersToAssign')}
+                      roleLookup={roleLookup}
+                    />
                   </div>
                   <div className="pt-3 mt-2 border-t border-border">
                     <Button
@@ -443,13 +608,14 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
                     </span>
                   </h4>
                   <div className="flex-1 overflow-y-auto pr-2">
-                    {renderUserList(
-                      assignedUsers,
-                      selectedAssignedIds,
-                      toggleAssignedSelection,
-                      moveToAvailable,
-                      t('assignment.noUsersAssigned'),
-                    )}
+                    <UserAssignmentList
+                      list={assignedUsers}
+                      selectedIds={selectedAssignedIds}
+                      onToggleSelect={toggleAssignedSelection}
+                      onDoubleClickUser={moveToAvailable}
+                      emptyMessage={t('assignment.noUsersAssigned')}
+                      roleLookup={roleLookup}
+                    />
                   </div>
                   <div className="pt-3 mt-2 border-t border-border">
                     <Button
@@ -472,18 +638,14 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
             )}
           </ModalBody>
 
-          <ModalFooter>
-            <Button type="button" variant="outline" onClick={handleClose} disabled={isSaving}>
-              {t('buttons.cancel')}
-            </Button>
-            <Button
-              type="button"
-              onClick={handleSave}
-              disabled={disabled || isSaving || loadState !== 'ready'}
-            >
-              {isSaving ? t('buttons.saving') : (saveButtonLabel ?? t('buttons.save'))}
-            </Button>
-          </ModalFooter>
+          <AssignmentModalFooter
+            disabled={disabled}
+            isSaving={isSaving}
+            canSave={loadState === 'ready'}
+            saveButtonLabel={saveButtonLabel}
+            onCancel={handleClose}
+            onSave={handleSave}
+          />
         </ModalContent>
       )}
     </Modal>

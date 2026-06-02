@@ -467,3 +467,27 @@ export const removeClientCascadeForUsersIfUnused = async (
           )`,
   );
 };
+
+export const deleteByIdAndRemoveUnusedClientCascade = async (
+  projectId: string,
+  clientId: string,
+  exec: DbExecutor = db,
+): Promise<void> => {
+  const previousUserIds = await findNonTopManagerUserIds(projectId, exec);
+  await deleteById(projectId, exec);
+  await removeClientCascadeForUsersIfUnused(previousUserIds, clientId, exec);
+};
+
+export const replaceNonTopManagerAssignments = async (
+  projectId: string,
+  userIds: string[],
+  clientId: string,
+  exec: DbExecutor = db,
+): Promise<void> => {
+  const previousUserIds = await findNonTopManagerUserIds(projectId, exec);
+  const removedUserIds = previousUserIds.filter((uid) => !userIds.includes(uid));
+  await clearNonTopManagerAssignments(projectId, exec);
+  await addManualAssignments(projectId, userIds, exec);
+  await ensureClientCascadeAssignments(userIds, clientId, exec);
+  await removeClientCascadeForUsersIfUnused(removedUserIds, clientId, exec);
+};
