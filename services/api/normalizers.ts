@@ -243,6 +243,8 @@ export const normalizeUser = (u: User): User => {
   assignIfPresent(raw, result, 'email', normalizeOptionalString);
   assignIfPresent(raw, result, 'costPerHour', normalizeCostPerHour);
   assignIfPresent(raw, result, 'employeeType', normalizeEmployeeType);
+  assignIfPresent(raw, result, 'firstName', normalizeOptionalString);
+  assignIfPresent(raw, result, 'lastName', normalizeOptionalString);
   assignIfPresent(raw, result, 'phone', normalizeOptionalString);
   assignIfPresent(raw, result, 'jobTitle', normalizeOptionalString);
   assignIfPresent(raw, result, 'department', normalizeOptionalString);
