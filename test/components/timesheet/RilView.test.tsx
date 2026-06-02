@@ -381,8 +381,6 @@ describe('<RilView />', () => {
         companyName: 'ACME',
         year: 2026,
         month: 5,
-        defaultStartTime: '09:00',
-        defaultExitTime: '18:00',
       }),
     );
   });

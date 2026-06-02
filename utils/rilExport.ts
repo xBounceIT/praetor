@@ -1,10 +1,9 @@
-import type { Cell, Worksheet } from 'exceljs';
+import type { Cell } from 'exceljs';
 import { Workbook } from 'exceljs';
 import type { RilRow } from './ril';
 import {
   calculateRilTotals,
   createEmptyRilRow,
-  isRequiredRilWorkday,
   isRilAbsenceRow,
   makeRilDownloadFilename,
   RIL_VISIBLE_HEADERS,
@@ -16,47 +15,55 @@ export interface RilWorkbookInput {
   companyName: string;
   year: number;
   month: number;
-  defaultStartTime: string;
-  defaultExitTime: string;
   lunchBreakMinutes: number;
 }
 
-const VISIBLE_COLUMN_COUNT = RIL_VISIBLE_HEADERS.length;
-const FIRST_DAY_ROW = 9;
-const HELPER_HEADERS = [
-  '+',
-  'Ore',
-  'Min',
-  '-',
-  'Ore',
-  'Min',
-  'Ore',
-  'Min',
-  'Giorni Lavorati',
-  'Giorni Lavorativi',
-  'Malattia',
-  'Permessi',
-  'Invest',
-  'Festa',
-  'Trasf',
-  'Disag',
-  'Rep fatta',
-] as const;
-const NOTE_HELPER_PATTERNS = {
-  sick: /(^|\s)M($|\s)/i,
-  permit: /(^|\s)P($|\s)|P2/i,
-  investment: /(^|\s)I($|\s)|I2/i,
-  holiday: /(^|\s)F(N)?($|\s)/i,
-  hardship: /(^|\s)(D|SD)($|\s)/i,
-} as const;
-const MONTH_LABEL_FORMATTER = new Intl.DateTimeFormat('it-IT', {
-  month: 'long',
-  year: 'numeric',
+const DAY_COUNT = 31;
+const HEADER_ROW = 6;
+const FIRST_DAY_ROW = 7;
+const LAST_DAY_ROW = FIRST_DAY_ROW + DAY_COUNT - 1;
+// The legend and the summary boxes sit side by side from this row down (see the column
+// constants below); their lengths never collide because they occupy non-overlapping columns.
+const SUMMARY_START_ROW = LAST_DAY_ROW + 2;
+const ORDER_COLUMN_INDEX = RIL_VISIBLE_HEADERS.indexOf('Commessa');
+// Legend: cols A–D (label merged across C–D). Summary: cols F–H (label merged across F–G,
+// value in H), col E left as a gap. Labels are merged so long Italian terms stay on one line
+// instead of wrapping and clipping inside a single narrow day-grid column.
+const LEGEND_MARKER_COLUMN = 1;
+const LEGEND_CODE_COLUMN = 2;
+const LEGEND_LABEL_COLUMN = 3;
+const LEGEND_LABEL_COLUMN_END = 4;
+const SUMMARY_LABEL_COLUMN = 6;
+const SUMMARY_LABEL_COLUMN_END = 7;
+const SUMMARY_VALUE_COLUMN = 8;
+
+const YELLOW_FILL = 'FFFFF200';
+const HEADER_FILL = 'FFF2F2F2';
+const WEEKEND_FILL = 'FFD9D9D9';
+const SUMMARY_FILL = 'FFFFC000';
+const LUNCH_FILL = 'FF00B0F0';
+const SUMMARY_TEXT = 'FF1F4E78';
+
+// Legend markers tying the Note and Cod columns to their legend groups; shared so the header
+// decoration and the legend block cannot drift apart.
+const NOTE_MARKER = '**';
+const CODE_MARKER = '***';
+
+// Column headers shown above the day grid. The reference RIL form tags Note and Cod with the
+// legend markers, so we decorate those two headers without mutating the shared constant.
+const HEADER_LABELS = RIL_VISIBLE_HEADERS.map((header) => {
+  if (header === 'Note') return `Note (${NOTE_MARKER})`;
+  if (header === 'Cod') return `Cod (${CODE_MARKER})`;
+  return header;
 });
 
-const splitDecimalHours = (hours: number): [number, number] => [
-  Math.floor(hours),
-  Math.round((hours % 1) * 60),
+const LEGEND_ROWS: ReadonlyArray<readonly [string, string, string]> = [
+  [NOTE_MARKER, 'P', 'Ferie'],
+  ['', 'P2', '1/2 Permesso'],
+  ['', 'M', 'Malattia'],
+  ['', 'F', 'Festività'],
+  [CODE_MARKER, 'TR', 'Trasferta'],
+  ['', 'SD', 'Sede Disagiata'],
 ];
 
 const setThinBorder = (cell: Cell) => {
@@ -68,30 +75,34 @@ const setThinBorder = (cell: Cell) => {
   };
 };
 
-const styleLabel = (cell: Cell) => {
-  cell.font = { bold: true, color: { argb: 'FF1F2937' } };
-  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
-  setThinBorder(cell);
+const setFill = (cell: Cell, argb: string) => {
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } };
 };
 
-const styleInput = (cell: Cell) => {
-  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
-  setThinBorder(cell);
+const MONTH_NAME_FORMAT = new Intl.DateTimeFormat('it-IT', { month: 'long' });
+const PICAP_FORMAT = new Intl.NumberFormat('it-IT', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+// Renders minutes as H:MM with an unpadded hour, to read like the reference form (e.g. 160:00).
+const formatMinutesClock = (minutes: number): string => {
+  const safeMinutes = Math.max(0, Math.round(minutes));
+  return `${Math.floor(safeMinutes / 60)}:${String(safeMinutes % 60).padStart(2, '0')}`;
 };
 
-const setMetadataRow = (worksheet: Worksheet, rowNumber: number, label: string, value: string) => {
-  worksheet.getCell(rowNumber, 1).value = label;
-  worksheet.getCell(rowNumber, 2).value = value;
-  styleLabel(worksheet.getCell(rowNumber, 1));
-  styleInput(worksheet.getCell(rowNumber, 2));
+const formatHoursClock = (hours: number): string => formatMinutesClock(hours * 60);
+
+const formatMonthLabel = (year: number, month: number) => {
+  const monthName = MONTH_NAME_FORMAT.format(new Date(year, month - 1, 1));
+  return `${monthName}-${String(year).slice(-2)}`;
 };
 
-const formatMonthLabel = (year: number, month: number) =>
-  MONTH_LABEL_FORMATTER.format(new Date(year, month - 1, 1));
+const formatPicap = (value: number) => PICAP_FORMAT.format(value);
 
 const normalizeRows = (rows: RilRow[]): RilRow[] => {
   const byDay = new Map(rows.map((row) => [row.day, row]));
-  return Array.from({ length: 31 }, (_, index) => {
+  return Array.from({ length: DAY_COUNT }, (_, index) => {
     const day = index + 1;
     const row = byDay.get(day);
     return row?.date ? row : createEmptyRilRow(day);
@@ -103,13 +114,13 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
   workbook.creator = 'Praetor';
   workbook.created = new Date();
   const worksheet = workbook.addWorksheet('Prospetto Presenze', {
-    views: [{ state: 'frozen', ySplit: 8 }],
+    views: [{ state: 'frozen', ySplit: HEADER_ROW }],
     pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 1 },
   });
   worksheet.properties.defaultRowHeight = 20;
 
   worksheet.columns = [
-    { key: 'day', width: 10 },
+    { key: 'day', width: 12 },
     { key: 'entrance', width: 12 },
     { key: 'exit', width: 12 },
     { key: 'hours', width: 10 },
@@ -119,40 +130,43 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
     { key: 'transfer', width: 18 },
     { key: 'code', width: 12 },
     { key: 'order', width: 28 },
-    ...HELPER_HEADERS.map((_, index) => ({
-      key: `helper${index + 1}`,
-      width: 12,
-      hidden: true,
-    })),
   ];
 
-  worksheet.mergeCells(1, 1, 1, VISIBLE_COLUMN_COUNT);
-  const title = worksheet.getCell(1, 1);
-  title.value = 'Prospetto Presenze';
-  title.font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
-  title.alignment = { horizontal: 'center' };
-  title.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E78' } };
-
-  setMetadataRow(worksheet, 2, 'Consulente', input.employeeName);
-  setMetadataRow(worksheet, 3, 'Azienda', input.companyName);
-  setMetadataRow(worksheet, 4, 'Mese', formatMonthLabel(input.year, input.month));
-  setMetadataRow(worksheet, 5, 'Entrata predefinita', input.defaultStartTime);
-  setMetadataRow(worksheet, 6, 'Uscita predefinita', input.defaultExitTime);
-  setMetadataRow(worksheet, 7, 'Pausa pranzo', `${input.lunchBreakMinutes} min`);
-
-  const headerRow = worksheet.getRow(8);
-  RIL_VISIBLE_HEADERS.forEach((header, index) => {
-    const cell = headerRow.getCell(index + 1);
-    cell.value = header;
-    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3B82F6' } };
-    cell.alignment = { horizontal: 'center' };
+  const setMetaLabel = (rowNumber: number, label: string) => {
+    const cell = worksheet.getCell(rowNumber, 1);
+    cell.value = label;
+    cell.font = { bold: true, color: { argb: 'FF1F2937' } };
+    setFill(cell, YELLOW_FILL);
+    cell.alignment = { vertical: 'middle', horizontal: 'left' };
     setThinBorder(cell);
-  });
-  HELPER_HEADERS.forEach((header, index) => {
-    const cell = headerRow.getCell(VISIBLE_COLUMN_COUNT + index + 1);
-    cell.value = header;
-    cell.font = { bold: true };
+  };
+
+  const setMetaValue = (rowNumber: number, value: string, fillArgb?: string) => {
+    worksheet.mergeCells(rowNumber, 2, rowNumber, 5);
+    for (let column = 2; column <= 5; column += 1) {
+      setThinBorder(worksheet.getCell(rowNumber, column));
+    }
+    const cell = worksheet.getCell(rowNumber, 2);
+    cell.value = value;
+    cell.font = { bold: true, color: { argb: 'FF1F2937' } };
+    cell.alignment = { vertical: 'middle', horizontal: 'left' };
+    if (fillArgb) setFill(cell, fillArgb);
+  };
+
+  setMetaLabel(1, 'Dipendente:');
+  setMetaValue(1, input.employeeName);
+  setMetaLabel(2, 'Società:');
+  setMetaValue(2, input.companyName);
+  setMetaLabel(4, 'MESE:');
+  setMetaValue(4, formatMonthLabel(input.year, input.month), YELLOW_FILL);
+
+  const headerRow = worksheet.getRow(HEADER_ROW);
+  HEADER_LABELS.forEach((label, index) => {
+    const cell = headerRow.getCell(index + 1);
+    cell.value = label;
+    cell.font = { bold: true, color: { argb: 'FF1F2937' } };
+    setFill(cell, HEADER_FILL);
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
     setThinBorder(cell);
   });
 
@@ -160,19 +174,10 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
   rows.forEach((rilRow, index) => {
     const rowNumber = FIRST_DAY_ROW + index;
     const worksheetRow = worksheet.getRow(rowNumber);
-    const isRequiredWorkday = isRequiredRilWorkday(rilRow);
     const isAbsenceRow = isRilAbsenceRow(rilRow);
-    const hoursDecimal = isAbsenceRow ? 0 : rilRow.hoursDecimal;
-    const worked = !isAbsenceRow && rilRow.worked;
-    const extraHours = Math.max(hoursDecimal - 8, 0);
-    const shortfallHours =
-      isRequiredWorkday && hoursDecimal > 0 && hoursDecimal < 8 ? 8 - hoursDecimal : 0;
-    const [extraWholeHours, extraMinutes] = splitDecimalHours(extraHours);
-    const [shortfallWholeHours, shortfallMinutes] = splitDecimalHours(shortfallHours);
-    const [workedWholeHours, workedMinutes] = splitDecimalHours(hoursDecimal);
-    const normalizedCode = rilRow.code.trim().toUpperCase();
-    const values = [
-      rilRow.date ? rilRow.day : '',
+    const isNonWorkingDay = Boolean(rilRow.date) && (!rilRow.isWorkday || rilRow.isHoliday);
+    const values: Array<string | number> = [
+      rilRow.date ? `${rilRow.weekday} ${rilRow.day}`.trim() : '',
       isAbsenceRow ? '' : rilRow.entrance,
       isAbsenceRow ? '' : rilRow.exit,
       isAbsenceRow ? '' : rilRow.hours,
@@ -182,62 +187,86 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
       isAbsenceRow ? '' : rilRow.transfer,
       rilRow.code,
       rilRow.order,
-      extraHours,
-      extraWholeHours,
-      extraMinutes,
-      shortfallHours,
-      shortfallWholeHours,
-      shortfallMinutes,
-      workedWholeHours,
-      workedMinutes,
-      worked && isRequiredWorkday ? 1 : 0,
-      isRequiredWorkday ? 1 : 0,
-      NOTE_HELPER_PATTERNS.sick.test(rilRow.notes) ? 1 : 0,
-      NOTE_HELPER_PATTERNS.permit.test(rilRow.notes) ? 1 : 0,
-      NOTE_HELPER_PATTERNS.investment.test(rilRow.notes) ? 1 : 0,
-      NOTE_HELPER_PATTERNS.holiday.test(rilRow.notes) ? 1 : 0,
-      normalizedCode === 'TR' ? 1 : 0,
-      normalizedCode === 'SD' || NOTE_HELPER_PATTERNS.hardship.test(rilRow.notes) ? 1 : 0,
-      rilRow.phoneAvailability ? 1 : 0,
     ];
     values.forEach((value, cellIndex) => {
       const cell = worksheetRow.getCell(cellIndex + 1);
       cell.value = value;
-      cell.alignment = { vertical: 'middle', horizontal: cellIndex === 9 ? 'left' : 'center' };
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: cellIndex === ORDER_COLUMN_INDEX ? 'left' : 'center',
+        wrapText: true,
+      };
       setThinBorder(cell);
+      if (isNonWorkingDay) setFill(cell, WEEKEND_FILL);
     });
   });
 
-  const totals = calculateRilTotals(rows);
-  const totalRow = worksheet.getRow(40);
-  totalRow.getCell(1).value = 'Totali';
-  totalRow.getCell(4).value = totals.totalHours;
-  totalRow.getCell(5).value = totals.totalPicap;
-  for (let column = 1; column <= VISIBLE_COLUMN_COUNT + HELPER_HEADERS.length; column += 1) {
-    const cell = totalRow.getCell(column);
-    cell.font = { bold: true };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } };
-    setThinBorder(cell);
-  }
+  // Writes a styled, optionally merged cell. Merging lets long legend/summary labels stay on a
+  // single line instead of wrapping and clipping inside a narrow day-grid column.
+  const writeBoxCell = (
+    rowNumber: number,
+    startColumn: number,
+    endColumn: number,
+    value: string | number,
+    options: {
+      bold?: boolean;
+      color?: string;
+      align?: 'left' | 'center' | 'right';
+      fill?: string;
+    } = {},
+  ) => {
+    if (endColumn > startColumn) {
+      worksheet.mergeCells(rowNumber, startColumn, rowNumber, endColumn);
+    }
+    for (let column = startColumn; column <= endColumn; column += 1) {
+      const cell = worksheet.getCell(rowNumber, column);
+      if (options.fill) setFill(cell, options.fill);
+      setThinBorder(cell);
+    }
+    const master = worksheet.getCell(rowNumber, startColumn);
+    master.value = value;
+    master.font = {
+      bold: options.bold ?? false,
+      ...(options.color ? { color: { argb: options.color } } : {}),
+    };
+    master.alignment = { vertical: 'middle', horizontal: options.align ?? 'left' };
+  };
 
-  const summaryRows: Array<[number, string, string | number]> = [
-    [42, 'Extra', Math.max(totals.totalPicap - totals.workdays * 8, 0)],
-    [44, 'Giorni Lavorativi', totals.workdays],
-    [45, 'Giorni Lavorati', totals.workedDays],
-    [46, 'Tipo Calcolo', 3],
-    [49, 'Pausa Pranzo', `${input.lunchBreakMinutes} min`],
-    [51, 'Festivi feriali', totals.holidayWeekdays],
-  ];
-  summaryRows.forEach(([rowNumber, label, value]) => {
-    worksheet.getCell(rowNumber, 1).value = label;
-    worksheet.getCell(rowNumber, 2).value = value;
-    styleLabel(worksheet.getCell(rowNumber, 1));
-    styleInput(worksheet.getCell(rowNumber, 2));
+  LEGEND_ROWS.forEach(([marker, code, label], index) => {
+    const rowNumber = SUMMARY_START_ROW + index;
+    writeBoxCell(rowNumber, LEGEND_MARKER_COLUMN, LEGEND_MARKER_COLUMN, marker, {
+      bold: true,
+      align: 'center',
+    });
+    writeBoxCell(rowNumber, LEGEND_CODE_COLUMN, LEGEND_CODE_COLUMN, code, {
+      bold: true,
+      align: 'center',
+    });
+    writeBoxCell(rowNumber, LEGEND_LABEL_COLUMN, LEGEND_LABEL_COLUMN_END, label);
   });
 
-  worksheet.eachRow((row) => {
-    row.eachCell((cell) => {
-      cell.alignment = { ...cell.alignment, vertical: 'middle', wrapText: true };
+  const totals = calculateRilTotals(rows);
+  const extraHours = Math.max(0, totals.totalHours - totals.workedDays * 8);
+  const summaryRows: ReadonlyArray<readonly [string, string | number, string]> = [
+    ['Giorni Lavorati', totals.workedDays, SUMMARY_FILL],
+    ['Ore Extra', formatHoursClock(extraHours), SUMMARY_FILL],
+    ['Totale Ore', formatHoursClock(totals.totalHours), SUMMARY_FILL],
+    ['Totale PICAP', formatPicap(totals.totalPicap), SUMMARY_FILL],
+    ['Pausa Pranzo', formatMinutesClock(input.lunchBreakMinutes), LUNCH_FILL],
+  ];
+  summaryRows.forEach(([label, value, fillArgb], index) => {
+    const rowNumber = SUMMARY_START_ROW + index;
+    writeBoxCell(rowNumber, SUMMARY_LABEL_COLUMN, SUMMARY_LABEL_COLUMN_END, label, {
+      bold: true,
+      color: SUMMARY_TEXT,
+      align: 'left',
+      fill: fillArgb,
+    });
+    writeBoxCell(rowNumber, SUMMARY_VALUE_COLUMN, SUMMARY_VALUE_COLUMN, value, {
+      bold: true,
+      color: SUMMARY_TEXT,
+      align: 'right',
+      fill: fillArgb,
     });
   });
 

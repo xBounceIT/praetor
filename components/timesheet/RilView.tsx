@@ -446,8 +446,6 @@ const RilView: React.FC<RilViewProps> = ({
         companyName: settings.rilCompanyName || '',
         year: monthBounds.year,
         month: monthBounds.month,
-        defaultStartTime,
-        defaultExitTime,
         lunchBreakMinutes,
       });
     } catch (err) {
