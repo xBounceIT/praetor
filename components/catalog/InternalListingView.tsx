@@ -26,6 +26,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
+import { NESTED_MODAL_Z_INDEX } from '../shared/modalLayers';
 import SelectControl, { type Option } from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -737,7 +738,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       <Modal
         isOpen={isManageTypesModalOpen}
         onClose={() => setIsManageTypesModalOpen(false)}
-        zIndex={70}
+        zIndex={NESTED_MODAL_Z_INDEX}
       >
         <ModalContent size="2xl">
           <ModalHeader>
@@ -924,7 +925,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       <Modal
         isOpen={isManageCategoriesModalOpen}
         onClose={() => setIsManageCategoriesModalOpen(false)}
-        zIndex={70}
+        zIndex={NESTED_MODAL_Z_INDEX}
       >
         <ModalContent size="2xl">
           <ModalHeader>
@@ -1073,7 +1074,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       <Modal
         isOpen={isManageSubcategoriesModalOpen}
         onClose={() => setIsManageSubcategoriesModalOpen(false)}
-        zIndex={70}
+        zIndex={NESTED_MODAL_Z_INDEX}
       >
         <ModalContent size="2xl">
           <ModalHeader>
