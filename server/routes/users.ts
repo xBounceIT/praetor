@@ -89,6 +89,8 @@ const userSchema = {
     costPerHour: { type: 'number' },
     isDisabled: { type: 'boolean' },
     employeeType: { type: 'string', enum: ['app_user', 'internal', 'external'] },
+    firstName: nullableStringSchema,
+    lastName: nullableStringSchema,
     phone: nullableStringSchema,
     jobTitle: nullableStringSchema,
     department: nullableStringSchema,
@@ -135,6 +137,8 @@ const userCreateBodySchema = {
     email: { type: 'string' },
     costPerHour: { type: 'number' },
     employeeType: { type: 'string', enum: ['app_user', 'internal', 'external'] },
+    firstName: nullableStringSchema,
+    lastName: nullableStringSchema,
     phone: nullableStringSchema,
     jobTitle: nullableStringSchema,
     department: nullableStringSchema,
@@ -159,6 +163,8 @@ const userUpdateBodySchema = {
     costPerHour: { type: 'number' },
     role: { type: 'string' },
     email: { type: 'string' },
+    firstName: nullableStringSchema,
+    lastName: nullableStringSchema,
     phone: nullableStringSchema,
     jobTitle: nullableStringSchema,
     department: nullableStringSchema,
@@ -340,6 +346,8 @@ const HR_VIEW_PERM_BY_EMPLOYEE_TYPE: Record<usersRepo.EmployeeType, string> = {
 };
 
 const HR_DETAIL_FIELDS = [
+  'firstName',
+  'lastName',
   'phone',
   'jobTitle',
   'department',
@@ -419,6 +427,8 @@ const parseHrDetails = (
 ): { ok: true; fields: usersRepo.UserHrFields } | { ok: false; message: string } => {
   const fields: usersRepo.UserHrFields = {};
   const stringFields = [
+    'firstName',
+    'lastName',
     'phone',
     'jobTitle',
     'department',
@@ -1183,6 +1193,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // not appear in the audit diff either.
         costPerHour: fields.costPerHour,
         role: fields.role,
+        firstName: fields.firstName,
+        lastName: fields.lastName,
         phone: fields.phone,
         jobTitle: fields.jobTitle,
         department: fields.department,
