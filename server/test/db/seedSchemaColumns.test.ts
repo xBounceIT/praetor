@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { getTableColumns } from 'drizzle-orm';
 import { projects } from '../../db/schema/projects.ts';
+import { parseInsertValuesBlocks } from './seedSqlParsing.ts';
 
 // Drift guard between server/db/seed.sql and the projects schema. The demo seed refresh
 // (db/demoSeed.ts) applies seed.sql verbatim at startup, so any column the seed names that no
@@ -18,44 +19,22 @@ const schemaColumns = new Set(
   Object.values(getTableColumns(projects)).map((column) => column.name),
 );
 
-// Each `INSERT INTO projects ( ... ) ... ;` statement in seed.sql (the compatibility defaults and
-// the dm_* demo dataset). A projects column list has no quotes or nested parens, and these
-// statements carry no `;` inside their literals, so slicing to the next `;` bounds the block.
-const projectInsertBlocks = Array.from(
-  SEED_SQL.matchAll(/INSERT\s+INTO\s+projects\s*\(/gi),
-  (match) => {
-    const start = match.index ?? 0;
-    const semicolon = SEED_SQL.indexOf(';', start);
-    return SEED_SQL.slice(start, semicolon === -1 ? undefined : semicolon);
-  },
-);
-
-// Column names from the `(...)` list immediately after `INSERT INTO projects`.
-const columnListOf = (block: string) => {
-  const open = block.indexOf('(');
-  const close = block.indexOf(')', open);
-  return block
-    .slice(open + 1, close)
-    .split(',')
-    .map((column) => column.trim())
-    .filter((column) => column.length > 0);
-};
-
-// Target columns of an `ON CONFLICT ... DO UPDATE SET col = EXCLUDED.col` clause.
-const upsertTargetsOf = (block: string) =>
-  Array.from(block.matchAll(/(\w+)\s*=\s*EXCLUDED\./g), (match) => match[1]);
+// parseInsertValuesBlocks keys each parsed row by its column name, so the union of keys across
+// every `INSERT INTO projects (...)` block (the compatibility defaults and the dm_* demo
+// dataset) is exactly the set of projects columns the seed references. The ON CONFLICT
+// `col = EXCLUDED.col` targets need no separate check: EXCLUDED.col is only valid when col is
+// already in the insert column list, which this set covers.
+const seededRows = parseInsertValuesBlocks(SEED_SQL, 'projects');
+const referencedColumns = new Set(seededRows.flatMap((row) => Object.keys(row)));
 
 describe('seed.sql projects inserts stay in sync with the projects schema', () => {
-  test('parses both projects INSERT statements', () => {
-    expect(projectInsertBlocks.length).toBeGreaterThanOrEqual(2);
+  test('parses the projects INSERT rows from seed.sql', () => {
+    // Guards against a vacuous pass if the seed format changes and parsing yields nothing.
+    expect(seededRows.length).toBeGreaterThanOrEqual(2);
   });
 
   test('every referenced column exists on the projects table', () => {
-    const referenced = projectInsertBlocks.flatMap((block) => [
-      ...columnListOf(block),
-      ...upsertTargetsOf(block),
-    ]);
-    const unknown = [...new Set(referenced)].filter((column) => !schemaColumns.has(column));
+    const unknown = [...referencedColumns].filter((column) => !schemaColumns.has(column));
     expect(unknown).toEqual([]);
   });
 });
