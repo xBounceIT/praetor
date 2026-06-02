@@ -67,6 +67,17 @@ const fallbackRouteTitleKey = (view: View) =>
 
 const EMPTY_NOTIFICATIONS: Notification[] = [];
 
+const formatTodayLabel = (language: string) =>
+  new Date().toLocaleDateString(language, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+
+const SUB_PAGE_TITLE_KEY: Partial<Record<View, string>> = {
+  'projects/detail': 'titles.projectDetail',
+};
+
 const getModuleFromRoute = (route: View): string => {
   if (route === 'docs' || route.startsWith('docs/')) return 'docs';
   if (route.startsWith('timesheets/')) return 'timesheets';
@@ -327,13 +338,7 @@ const Layout: React.FC<LayoutProps> = ({
     buildPermission('notifications', 'view'),
   );
 
-  // Sub-pages with no sidebar entry (so no `activeRoute`) need an explicit title
-  // mapping — otherwise the fallback below capitalizes the URL slug and we ship
-  // an untranslated "Detail" header.
-  const subPageTitleKey: Partial<Record<View, string>> = {
-    'projects/detail': 'titles.projectDetail',
-  };
-  const subPageTitleKeyForView = subPageTitleKey[activeView as View];
+  const subPageTitleKeyForView = SUB_PAGE_TITLE_KEY[activeView as View];
   const pageTitle = isNotFound
     ? t('notFound')
     : subPageTitleKeyForView
@@ -343,6 +348,7 @@ const Layout: React.FC<LayoutProps> = ({
         t(fallbackRouteTitleKey(activeView), {
           defaultValue: activeView.split('/').pop()?.replace('-', ' ') || activeView,
         }));
+  const todayLabel = useMemo(() => formatTodayLabel(i18n.language), [i18n.language]);
 
   return (
     <SidebarProvider>
@@ -380,13 +386,7 @@ const Layout: React.FC<LayoutProps> = ({
             <h2 className="truncate text-lg font-semibold capitalize text-zinc-800">{pageTitle}</h2>
           </div>
           <div className="flex items-center gap-6">
-            <span className="hidden text-sm font-medium text-zinc-400 lg:inline">
-              {new Date().toLocaleDateString(i18n.language, {
-                weekday: 'long',
-                month: 'long',
-                day: 'numeric',
-              })}
-            </span>
+            <span className="hidden text-sm font-medium text-zinc-400 lg:inline">{todayLabel}</span>
 
             {canViewNotifications &&
               onMarkNotificationAsRead &&

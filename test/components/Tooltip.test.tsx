@@ -110,7 +110,7 @@ describe('<Tooltip />', () => {
 
   test('uses one app-level TooltipProvider instead of wrapping every tooltip root', async () => {
     const tooltipSource = await readFile('components/ui/tooltip.tsx', 'utf8');
-    const entrySource = await readFile('index.tsx', 'utf8');
+    const entrySource = await readFile('src/main.tsx', 'utf8');
 
     expect(entrySource).toContain('<TooltipProvider>');
     expect(tooltipSource).not.toContain('<TooltipProvider>');

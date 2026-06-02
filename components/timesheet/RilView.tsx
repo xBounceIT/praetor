@@ -1,6 +1,6 @@
 import { Download, Loader2, RotateCcw } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
@@ -76,6 +76,72 @@ type EditableRilField = 'entrance' | 'exit' | 'notes' | 'transfer' | 'code';
 
 const canEditRilRow = (row: RilRow) => Boolean(row.date && !row.isHoliday);
 
+const RilEditableInput: React.FC<{
+  row: RilRow;
+  field: EditableRilField;
+  label: string;
+  onUpdate: (day: number, field: EditableRilField, value: string) => void;
+}> = ({ row, field, label, onUpdate }) => (
+  <Input
+    aria-label={`${label} ${row.day}`}
+    type="time"
+    value={String(row[field] ?? '')}
+    disabled={!canEditRilRow(row)}
+    onChange={(event) => onUpdate(row.day, field, event.target.value)}
+    className="h-7 w-full min-w-0 px-2 text-xs tabular-nums disabled:cursor-not-allowed"
+  />
+);
+
+const RilComputedValue: React.FC<{
+  row: RilRow;
+  label: string;
+  value: string | number;
+}> = ({ row, label, value }) => (
+  <output
+    aria-label={`${label} ${row.day}`}
+    className="block min-h-7 px-1 py-1.5 text-right text-xs tabular-nums"
+  >
+    {value || '-'}
+  </output>
+);
+
+const RilSelectControl: React.FC<{
+  row: RilRow;
+  field: EditableRilField;
+  label: string;
+  options: ReadonlyArray<RilSelectOption>;
+  onUpdate: (day: number, field: EditableRilField, value: string) => void;
+}> = ({ row, field, label, options, onUpdate }) => {
+  const currentValue = String(row[field] ?? '').trim();
+  const selectOptions =
+    currentValue && !options.some((option) => option.value === currentValue)
+      ? [{ value: currentValue, label: currentValue, display: currentValue }, ...options]
+      : options;
+
+  return (
+    <Select
+      value={currentValue || EMPTY_SELECT_VALUE}
+      onValueChange={(value) => onUpdate(row.day, field, value === EMPTY_SELECT_VALUE ? '' : value)}
+      disabled={!canEditRilRow(row)}
+    >
+      <SelectTrigger
+        aria-label={`${label} ${row.day}`}
+        className="h-7 w-full min-w-0 px-2 text-xs disabled:cursor-not-allowed [&>svg]:size-3"
+      >
+        <SelectValue placeholder="-" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={EMPTY_SELECT_VALUE}>-</SelectItem>
+        {selectOptions.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.display ?? `${option.value} - ${option.label}`}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+};
+
 const normalizeMonthKey = (value: string): string => {
   try {
     return getRilMonthBounds(value).monthKey;
@@ -86,6 +152,56 @@ const normalizeMonthKey = (value: string): string => {
 
 const getLocale = (language: string | undefined) => (language?.startsWith('it') ? 'it' : 'en');
 
+const collectRilMissingDays = (rows: RilRow[], isMissing: (row: RilRow) => boolean): string[] => {
+  const days: string[] = [];
+  for (const row of rows) {
+    if (isMissing(row)) days.push(String(row.day));
+  }
+  return days;
+};
+
+type RilViewState = {
+  monthKey: string;
+  rows: RilRow[];
+  isLoading: boolean;
+  isExporting: boolean;
+  error: string | null;
+};
+
+type RilViewAction =
+  | { type: 'setMonthKey'; monthKey: string }
+  | { type: 'loadStart' }
+  | { type: 'loadSuccess'; rows: RilRow[] }
+  | { type: 'loadError'; error: string; rows: RilRow[] }
+  | { type: 'setRows'; rows: RilRow[] }
+  | { type: 'updateRows'; updater: (rows: RilRow[]) => RilRow[] }
+  | { type: 'setError'; error: string }
+  | { type: 'exportStart' }
+  | { type: 'exportDone'; error?: string };
+
+const rilViewReducer = (state: RilViewState, action: RilViewAction): RilViewState => {
+  switch (action.type) {
+    case 'setMonthKey':
+      return { ...state, monthKey: action.monthKey };
+    case 'loadStart':
+      return { ...state, isLoading: true, error: null };
+    case 'loadSuccess':
+      return { ...state, rows: action.rows, isLoading: false };
+    case 'loadError':
+      return { ...state, rows: action.rows, isLoading: false, error: action.error };
+    case 'setRows':
+      return { ...state, rows: action.rows };
+    case 'updateRows':
+      return { ...state, rows: action.updater(state.rows) };
+    case 'setError':
+      return { ...state, error: action.error };
+    case 'exportStart':
+      return { ...state, isExporting: true, error: null };
+    case 'exportDone':
+      return { ...state, isExporting: false, error: action.error ?? state.error };
+  }
+};
+
 const RilView: React.FC<RilViewProps> = ({
   currentUser,
   availableUsers,
@@ -95,13 +211,16 @@ const RilView: React.FC<RilViewProps> = ({
   settings,
 }) => {
   const { t, i18n } = useTranslation('timesheets');
-  const [monthKey, setMonthKey] = useState(() => getCurrentRilMonthKey());
-  const [sourceEntries, setSourceEntries] = useState<TimeEntry[]>([]);
-  const [projectCatalog, setProjectCatalog] = useState<Project[]>(projects);
-  const [rows, setRows] = useState<RilRow[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(rilViewReducer, undefined, () => ({
+    monthKey: getCurrentRilMonthKey(),
+    rows: [],
+    isLoading: false,
+    isExporting: false,
+    error: null,
+  }));
+  const { monthKey, rows, isLoading, isExporting, error } = state;
+  const sourceEntriesRef = useRef<TimeEntry[]>([]);
+  const projectCatalogRef = useRef<Project[]>([]);
   const loadTokenRef = useRef(0);
 
   const effectiveUserId = viewingUserId || currentUser.id;
@@ -156,11 +275,11 @@ const RilView: React.FC<RilViewProps> = ({
   }, [monthBounds.year]);
 
   const updateSelectedMonth = (nextMonth: string) => {
-    setMonthKey(`${monthBounds.year}-${nextMonth}`);
+    dispatch({ type: 'setMonthKey', monthKey: `${monthBounds.year}-${nextMonth}` });
   };
 
   const updateSelectedYear = (nextYear: string) => {
-    setMonthKey(`${nextYear}-${selectedMonthValue}`);
+    dispatch({ type: 'setMonthKey', monthKey: `${nextYear}-${selectedMonthValue}` });
   };
 
   const generateRows = useCallback(
@@ -191,12 +310,12 @@ const RilView: React.FC<RilViewProps> = ({
 
   const loadMonthEntries = useCallback(async () => {
     const token = ++loadTokenRef.current;
-    setIsLoading(true);
-    setError(null);
+    dispatch({ type: 'loadStart' });
     try {
       const entriesPromise = (async () => {
         const nextEntries: TimeEntry[] = [];
         let cursor: string | null = null;
+        let isStale = false;
         do {
           const page = await api.entries.listPage({
             userId: effectiveUserId,
@@ -206,29 +325,37 @@ const RilView: React.FC<RilViewProps> = ({
             limit: 500,
             purpose: 'ril',
           });
-          if (loadTokenRef.current !== token) return null;
-          nextEntries.push(...page.entries);
-          cursor = page.nextCursor;
+          isStale = loadTokenRef.current !== token;
+          if (isStale) {
+            cursor = null;
+          } else {
+            nextEntries.push(...page.entries);
+            cursor = page.nextCursor;
+          }
         } while (cursor);
-        return nextEntries;
+        return isStale ? null : nextEntries;
       })();
       const [nextEntries, nextProjects] = await Promise.all([
         entriesPromise,
         api.projects.list({ userId: effectiveUserId }),
       ]);
-      if (loadTokenRef.current !== token || !nextEntries) return;
-      setSourceEntries(nextEntries);
-      setProjectCatalog(nextProjects);
-      setRows(generateRows(nextEntries, nextProjects));
+      if (loadTokenRef.current === token && nextEntries) {
+        sourceEntriesRef.current = nextEntries;
+        projectCatalogRef.current = nextProjects;
+        dispatch({ type: 'loadSuccess', rows: generateRows(nextEntries, nextProjects) });
+      }
     } catch (err) {
-      if (loadTokenRef.current !== token) return;
-      setError(err instanceof Error ? err.message : 'Failed to load RIL data');
-      setSourceEntries([]);
-      setRows(generateRows([], []));
-    } finally {
-      if (loadTokenRef.current === token) setIsLoading(false);
+      if (loadTokenRef.current === token) {
+        sourceEntriesRef.current = [];
+        projectCatalogRef.current = projects;
+        dispatch({
+          type: 'loadError',
+          error: err instanceof Error ? err.message : 'Failed to load RIL data',
+          rows: generateRows([], []),
+        });
+      }
     }
-  }, [effectiveUserId, generateRows, monthBounds.fromDate, monthBounds.toDate]);
+  }, [effectiveUserId, generateRows, monthBounds.fromDate, monthBounds.toDate, projects]);
 
   useEffect(() => {
     void loadMonthEntries();
@@ -237,74 +364,81 @@ const RilView: React.FC<RilViewProps> = ({
   const totals = useMemo(() => calculateRilTotals(rows), [rows]);
 
   const handleReset = () => {
-    setRows(generateRows(sourceEntries, projectCatalog));
+    dispatch({
+      type: 'setRows',
+      rows: generateRows(sourceEntriesRef.current, projectCatalogRef.current),
+    });
   };
 
   const updateRow = useCallback(
     (day: number, field: EditableRilField, value: string) => {
-      setRows((prev) =>
-        prev.map((row) => {
-          if (row.day !== day || !canEditRilRow(row)) return row;
+      dispatch({
+        type: 'updateRows',
+        updater: (currentRows) =>
+          currentRows.map((row) => {
+            if (row.day !== day || !canEditRilRow(row)) return row;
 
-          const nextRow = { ...row, [field]: value };
-          if (field === 'notes' && isRilAbsenceRow(nextRow)) {
+            const nextRow = { ...row, [field]: value };
+            if (field === 'notes' && isRilAbsenceRow(nextRow)) {
+              return {
+                ...nextRow,
+                entrance: '',
+                exit: '',
+                hours: '',
+                hoursDecimal: 0,
+                picap: 0,
+                transfer: '',
+                worked: false,
+              };
+            }
+            if (field !== 'entrance' && field !== 'exit') return nextRow;
+
+            const hoursDecimal = calculateRilWorkedHoursFromTimes(
+              nextRow.entrance,
+              nextRow.exit,
+              lunchBreakMinutes,
+            );
             return {
               ...nextRow,
-              entrance: '',
-              exit: '',
-              hours: '',
-              hoursDecimal: 0,
-              picap: 0,
-              transfer: '',
-              worked: false,
+              hours: formatRilHoursAsDuration(hoursDecimal),
+              hoursDecimal,
+              picap: hoursDecimal > 0 ? roundRilPicapHours(hoursDecimal) : 0,
+              worked: hoursDecimal > 0,
             };
-          }
-          if (field !== 'entrance' && field !== 'exit') return nextRow;
-
-          const hoursDecimal = calculateRilWorkedHoursFromTimes(
-            nextRow.entrance,
-            nextRow.exit,
-            lunchBreakMinutes,
-          );
-          return {
-            ...nextRow,
-            hours: formatRilHoursAsDuration(hoursDecimal),
-            hoursDecimal,
-            picap: hoursDecimal > 0 ? roundRilPicapHours(hoursDecimal) : 0,
-            worked: hoursDecimal > 0,
-          };
-        }),
-      );
+          }),
+      });
     },
     [lunchBreakMinutes],
-  );
-
-  const getEditableValue = useCallback(
-    (row: RilRow, field: EditableRilField): string => String(row[field] ?? ''),
-    [],
   );
 
   const handleExport = async () => {
     const validRows = rows.filter(isRequiredRilWorkday);
     const attendanceRows = validRows.filter((row) => !isRilAbsenceRow(row));
-    const missingTimeDays = attendanceRows
-      .filter((row) => !row.entrance.trim() || !row.exit.trim())
-      .map((row) => String(row.day));
+    const missingTimeDays = collectRilMissingDays(
+      attendanceRows,
+      (row) => !row.entrance.trim() || !row.exit.trim(),
+    );
     if (missingTimeDays.length > 0) {
-      setError(t('ril.missingTimes', { days: missingTimeDays.join(', ') }));
+      dispatch({
+        type: 'setError',
+        error: t('ril.missingTimes', { days: missingTimeDays.join(', ') }),
+      });
       return;
     }
 
-    const missingTransferDays = attendanceRows
-      .filter((row) => !row.transfer.trim())
-      .map((row) => String(row.day));
+    const missingTransferDays = collectRilMissingDays(
+      attendanceRows,
+      (row) => !row.transfer.trim(),
+    );
     if (missingTransferDays.length > 0) {
-      setError(t('ril.missingTransfer', { days: missingTransferDays.join(', ') }));
+      dispatch({
+        type: 'setError',
+        error: t('ril.missingTransfer', { days: missingTransferDays.join(', ') }),
+      });
       return;
     }
 
-    setIsExporting(true);
-    setError(null);
+    dispatch({ type: 'exportStart' });
     try {
       await downloadRilWorkbook({
         rows,
@@ -315,68 +449,14 @@ const RilView: React.FC<RilViewProps> = ({
         lunchBreakMinutes,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('ril.exportFailed'));
+      dispatch({
+        type: 'exportDone',
+        error: err instanceof Error ? err.message : t('ril.exportFailed'),
+      });
+      return;
     } finally {
-      setIsExporting(false);
+      dispatch({ type: 'exportDone' });
     }
-  };
-
-  const renderEditableInput = (row: RilRow, field: EditableRilField, label: string) => (
-    <Input
-      aria-label={`${label} ${row.day}`}
-      type="time"
-      value={getEditableValue(row, field)}
-      disabled={!canEditRilRow(row)}
-      onChange={(event) => updateRow(row.day, field, event.target.value)}
-      className="h-7 w-full min-w-0 px-2 text-xs tabular-nums disabled:cursor-not-allowed"
-    />
-  );
-
-  const renderComputedValue = (row: RilRow, label: string, value: string | number) => (
-    <output
-      aria-label={`${label} ${row.day}`}
-      className="block min-h-7 px-1 py-1.5 text-right text-xs tabular-nums"
-    >
-      {value || '-'}
-    </output>
-  );
-
-  const renderSelectControl = (
-    row: RilRow,
-    field: EditableRilField,
-    label: string,
-    options: ReadonlyArray<RilSelectOption>,
-  ) => {
-    const currentValue = getEditableValue(row, field).trim();
-    const selectOptions =
-      currentValue && !options.some((option) => option.value === currentValue)
-        ? [{ value: currentValue, label: currentValue, display: currentValue }, ...options]
-        : options;
-
-    return (
-      <Select
-        value={currentValue || EMPTY_SELECT_VALUE}
-        onValueChange={(value) =>
-          updateRow(row.day, field, value === EMPTY_SELECT_VALUE ? '' : value)
-        }
-        disabled={!canEditRilRow(row)}
-      >
-        <SelectTrigger
-          aria-label={`${label} ${row.day}`}
-          className="h-7 w-full min-w-0 px-2 text-xs disabled:cursor-not-allowed [&>svg]:size-3"
-        >
-          <SelectValue placeholder="-" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={EMPTY_SELECT_VALUE}>-</SelectItem>
-          {selectOptions.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.display ?? `${option.value} - ${option.label}`}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    );
   };
 
   const tableHeaders = [
@@ -521,34 +601,57 @@ const RilView: React.FC<RilViewProps> = ({
                     {row.day}
                   </TableCell>
                   <TableCell className="w-24 min-w-24 px-2 py-1">
-                    {renderEditableInput(row, 'entrance', t('ril.columns.entrance'))}
+                    <RilEditableInput
+                      row={row}
+                      field="entrance"
+                      label={t('ril.columns.entrance')}
+                      onUpdate={updateRow}
+                    />
                   </TableCell>
                   <TableCell className="w-24 min-w-24 px-2 py-1">
-                    {renderEditableInput(row, 'exit', t('ril.columns.exit'))}
+                    <RilEditableInput
+                      row={row}
+                      field="exit"
+                      label={t('ril.columns.exit')}
+                      onUpdate={updateRow}
+                    />
                   </TableCell>
                   <TableCell className="w-20 min-w-20 px-2 py-1">
-                    {renderComputedValue(row, t('ril.columns.hours'), row.hours)}
+                    <RilComputedValue row={row} label={t('ril.columns.hours')} value={row.hours} />
                   </TableCell>
                   <TableCell className="w-20 min-w-20 px-2 py-1">
-                    {renderComputedValue(
-                      row,
-                      t('ril.columns.picap'),
-                      row.worked || row.picap > 0 ? row.picap : '',
-                    )}
+                    <RilComputedValue
+                      row={row}
+                      label={t('ril.columns.picap')}
+                      value={row.worked || row.picap > 0 ? row.picap : ''}
+                    />
                   </TableCell>
                   <TableCell className="w-32 min-w-32 px-2 py-1">
-                    {renderSelectControl(row, 'notes', t('ril.columns.notes'), noteOptions)}
+                    <RilSelectControl
+                      row={row}
+                      field="notes"
+                      label={t('ril.columns.notes')}
+                      options={noteOptions}
+                      onUpdate={updateRow}
+                    />
                   </TableCell>
                   <TableCell className="w-40 min-w-40 px-2 py-1">
-                    {renderSelectControl(
-                      row,
-                      'transfer',
-                      t('ril.columns.transfer'),
-                      transferOptions,
-                    )}
+                    <RilSelectControl
+                      row={row}
+                      field="transfer"
+                      label={t('ril.columns.transfer')}
+                      options={transferOptions}
+                      onUpdate={updateRow}
+                    />
                   </TableCell>
                   <TableCell className="w-32 min-w-32 px-2 py-1">
-                    {renderSelectControl(row, 'code', t('ril.columns.code'), RIL_CODE_OPTIONS)}
+                    <RilSelectControl
+                      row={row}
+                      field="code"
+                      label={t('ril.columns.code')}
+                      options={RIL_CODE_OPTIONS}
+                      onUpdate={updateRow}
+                    />
                   </TableCell>
                 </TableRow>
               ))}

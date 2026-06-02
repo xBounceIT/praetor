@@ -781,13 +781,13 @@ export const replaceUserRoles = async (
   // the user's secondary roles.
   await runAtomically(exec, async (tx) => {
     await executeRows(tx, sql`DELETE FROM user_roles WHERE user_id = ${userId}`);
-    if (roleIds.length === 0) return;
-
-    const valueRows = roleIds.map((roleId) => sql`(${userId}, ${roleId})`);
-    await executeRows(
-      tx,
-      sql`INSERT INTO user_roles (user_id, role_id) VALUES ${sql.join(valueRows, sql`, `)} ON CONFLICT DO NOTHING`,
-    );
+    if (roleIds.length > 0) {
+      const valueRows = roleIds.map((roleId) => sql`(${userId}, ${roleId})`);
+      await executeRows(
+        tx,
+        sql`INSERT INTO user_roles (user_id, role_id) VALUES ${sql.join(valueRows, sql`, `)} ON CONFLICT DO NOTHING`,
+      );
+    }
   });
 };
 

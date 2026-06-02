@@ -2,7 +2,7 @@
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": [
     "App.tsx",
-    "index.tsx",
+    "src/main.tsx",
     "components",
     "services",
     "utils",

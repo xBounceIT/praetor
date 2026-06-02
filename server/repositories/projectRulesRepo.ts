@@ -69,12 +69,13 @@ const EMPTY_ACTION_CONFIG: ProjectRuleActionConfig = {
 const normalizeRecipientIds = (values: unknown): string[] =>
   Array.isArray(values)
     ? Array.from(
-        new Set(
-          values
-            .filter((id): id is string => typeof id === 'string')
-            .map((id) => id.trim())
-            .filter(Boolean),
-        ),
+        values.reduce((ids, id) => {
+          if (typeof id === 'string') {
+            const trimmed = id.trim();
+            if (trimmed) ids.add(trimmed);
+          }
+          return ids;
+        }, new Set<string>()),
       )
     : [];
 

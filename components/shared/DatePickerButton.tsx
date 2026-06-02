@@ -1,6 +1,6 @@
 import { ArrowUp, CalendarDays } from 'lucide-react';
 import type React from 'react';
-import { useEffect, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,13 +38,16 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
 }) => {
   const { t } = useTranslation('common');
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<string | null>(
-    value ? getLocalDateString(value) : null,
-  );
-  const [hours, setHours] = useState(() => (value ? value.getHours() : 0));
-  const [minutes, setMinutes] = useState(() => (value ? value.getMinutes() : 0));
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [hours, setHours] = useState(0);
+  const [minutes, setMinutes] = useState(0);
+  const loadedValueKeyRef = useRef<string | null>(null);
+  const valueKey = value
+    ? `${getLocalDateString(value)}T${value.getHours()}:${value.getMinutes()}`
+    : '';
 
-  useEffect(() => {
+  if (loadedValueKeyRef.current !== valueKey) {
+    loadedValueKeyRef.current = valueKey;
     if (value) {
       setSelectedDate(getLocalDateString(value));
       setHours(value.getHours());
@@ -52,7 +55,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
     } else {
       setSelectedDate(null);
     }
-  }, [value]);
+  }
 
   const formatDisplayValue = () => {
     if (!value) return placeholder || label;

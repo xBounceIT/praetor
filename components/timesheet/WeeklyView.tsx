@@ -1,6 +1,6 @@
 import { Eye, EyeOff } from 'lucide-react';
 import type React from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -91,6 +91,73 @@ type EntryRow = {
 const FORM_ROW_KEY = '__form_row__';
 const EMPTY_DAY_MAP: DayMap = {};
 
+type WeeklyDayForInput = {
+  dateStr: string;
+  isForbidden: boolean;
+};
+
+const WeeklyDayCellInputs: React.FC<{
+  rowKey: string;
+  day: WeeklyDayForInput;
+  cell: DayCell;
+  baseCell?: DayCell;
+  notePlaceholder: string;
+  onUpdate: (
+    rowKey: string,
+    dateStr: string,
+    patch: Partial<Pick<DayCell, 'duration' | 'note'>>,
+    baseCell?: DayCell,
+  ) => void;
+}> = ({ rowKey, day, cell, baseCell, notePlaceholder, onUpdate }) => (
+  <div className="flex flex-col gap-2">
+    <ValidatedNumberInput
+      placeholder="0.0"
+      disabled={day.isForbidden}
+      value={cell.duration}
+      onValueChange={(value) => onUpdate(rowKey, day.dateStr, { duration: value }, baseCell)}
+      className={cn(
+        'h-9 w-full text-center text-sm font-bold',
+        day.isForbidden && 'opacity-50 cursor-not-allowed',
+      )}
+    />
+    <Input
+      type="text"
+      placeholder={notePlaceholder}
+      disabled={day.isForbidden}
+      value={cell.note}
+      onChange={(e) => onUpdate(rowKey, day.dateStr, { note: e.target.value }, baseCell)}
+      className={cn('h-7 text-xs rounded', day.isForbidden && 'opacity-40 cursor-not-allowed')}
+      // Kept in sync with server MAX_NOTES_LENGTH (server/services/timeEntries.ts).
+      maxLength={2000}
+    />
+  </div>
+);
+
+const WeeklyRowLabel: React.FC<{
+  clientName: string;
+  projectName: string;
+  taskName: string;
+}> = ({ clientName, projectName, taskName }) => {
+  const rows: Array<{ icon: string; text: string }> = [];
+  if (clientName) rows.push({ icon: 'fa-building', text: clientName });
+  if (projectName) rows.push({ icon: 'fa-folder-open', text: projectName });
+  if (taskName) rows.push({ icon: 'fa-list-check', text: taskName });
+  if (rows.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1">
+      {rows.map(({ icon, text }) => (
+        <div key={icon} className="flex items-center gap-2 text-xs text-foreground">
+          <i
+            className={cn('fa-solid w-3 text-[10px] text-muted-foreground', icon)}
+            aria-hidden="true"
+          />
+          <span className="line-clamp-1">{text}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const parseDuration = (raw: string): number => {
   if (!raw) return 0;
   const parsed = parseFloat(raw.replace(',', '.'));
@@ -98,6 +165,45 @@ const parseDuration = (raw: string): number => {
 };
 
 type EditClassification = 'add' | 'update' | 'delete' | 'noop';
+
+type StateUpdate<T> = T | ((prev: T) => T);
+
+type WeeklyViewState = {
+  errors: WeeklyEntryFormErrors;
+  isLoading: boolean;
+  showSuccess: boolean;
+  weekNote: string;
+  hideWeekend: boolean;
+  pendingEdits: Record<string, DayMap>;
+};
+
+type WeeklyViewAction =
+  | { type: 'setErrors'; update: StateUpdate<WeeklyEntryFormErrors> }
+  | { type: 'setIsLoading'; value: boolean }
+  | { type: 'setShowSuccess'; value: boolean }
+  | { type: 'setWeekNote'; value: string }
+  | { type: 'setHideWeekend'; update: StateUpdate<boolean> }
+  | { type: 'setPendingEdits'; update: StateUpdate<Record<string, DayMap>> };
+
+const resolveStateUpdate = <T,>(current: T, update: StateUpdate<T>): T =>
+  typeof update === 'function' ? (update as (prev: T) => T)(current) : update;
+
+const weeklyViewReducer = (state: WeeklyViewState, action: WeeklyViewAction): WeeklyViewState => {
+  switch (action.type) {
+    case 'setErrors':
+      return { ...state, errors: resolveStateUpdate(state.errors, action.update) };
+    case 'setIsLoading':
+      return { ...state, isLoading: action.value };
+    case 'setShowSuccess':
+      return { ...state, showSuccess: action.value };
+    case 'setWeekNote':
+      return { ...state, weekNote: action.value };
+    case 'setHideWeekend':
+      return { ...state, hideWeekend: resolveStateUpdate(state.hideWeekend, action.update) };
+    case 'setPendingEdits':
+      return { ...state, pendingEdits: resolveStateUpdate(state.pendingEdits, action.update) };
+  }
+};
 
 const classifyEdit = (base: DayCell | undefined, edit: DayCell): EditClassification => {
   const newDuration = parseDuration(edit.duration);
@@ -177,11 +283,34 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     defaultLocation,
   });
 
-  const [errors, setErrors] = useState<WeeklyEntryFormErrors>({});
-  const [isLoading, setIsLoading] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [weekNote, setWeekNote] = useState('');
-  const [hideWeekend, setHideWeekend] = useState(false);
+  const [weeklyState, dispatchWeeklyState] = useReducer(weeklyViewReducer, {
+    errors: {},
+    isLoading: false,
+    showSuccess: false,
+    weekNote: '',
+    hideWeekend: false,
+    pendingEdits: {},
+  });
+  const { errors, isLoading, showSuccess, weekNote, hideWeekend, pendingEdits } = weeklyState;
+  const setErrors = useCallback((update: StateUpdate<WeeklyEntryFormErrors>) => {
+    dispatchWeeklyState({ type: 'setErrors', update });
+  }, []);
+  const setIsLoading = useCallback((value: boolean) => {
+    dispatchWeeklyState({ type: 'setIsLoading', value });
+  }, []);
+  const setShowSuccess = useCallback((value: boolean) => {
+    dispatchWeeklyState({ type: 'setShowSuccess', value });
+  }, []);
+  const setWeekNote = useCallback((value: string) => {
+    dispatchWeeklyState({ type: 'setWeekNote', value });
+  }, []);
+  const setHideWeekend = useCallback((update: StateUpdate<boolean>) => {
+    dispatchWeeklyState({ type: 'setHideWeekend', update });
+  }, []);
+  const setPendingEdits = useCallback((update: StateUpdate<Record<string, DayMap>>) => {
+    dispatchWeeklyState({ type: 'setPendingEdits', update });
+  }, []);
+  const currentWeekStartKey = getLocalDateString(currentWeekStart);
 
   // Saturday and Sunday columns are hidden when `hideWeekend` is on so the
   // weekday columns can claim the freed width. State + submit still operate
@@ -195,13 +324,12 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     [weekDays, hideWeekend],
   );
 
-  const [pendingEdits, setPendingEdits] = useState<Record<string, DayMap>>({});
+  const pendingEditsWeekKeyRef = useRef(currentWeekStartKey);
 
-  // Reset pending edits whenever the visible week changes.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: currentWeekStart is the intended trigger
-  useEffect(() => {
+  if (pendingEditsWeekKeyRef.current !== currentWeekStartKey) {
+    pendingEditsWeekKeyRef.current = currentWeekStartKey;
     setPendingEdits({});
-  }, [currentWeekStart]);
+  }
 
   // One row per TimeEntry in the current week (keyed by entry.id) so duplicates
   // sharing (client, project, task, date) stay visible and independently
@@ -316,7 +444,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       }
       return changed ? next : prev;
     });
-  }, [entryRowKeySet]);
+  }, [entryRowKeySet, setPendingEdits]);
 
   const getCellValue = (rowKey: string, dateStr: string, baseDays?: DayMap): DayCell => {
     const edit = pendingEdits[rowKey]?.[dateStr];
@@ -343,42 +471,6 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       };
       return { ...prev, [rowKey]: { ...rowEdits, [dateStr]: nextCell } };
     });
-  };
-
-  const renderDayCellInputs = (
-    rowKey: string,
-    day: (typeof weekDays)[number],
-    baseDays: DayMap,
-  ) => {
-    const cell = getCellValue(rowKey, day.dateStr, baseDays);
-    return (
-      <div className="flex flex-col gap-2">
-        <ValidatedNumberInput
-          placeholder="0.0"
-          disabled={day.isForbidden}
-          value={cell.duration}
-          onValueChange={(value) =>
-            updateCell(rowKey, day.dateStr, { duration: value }, baseDays[day.dateStr])
-          }
-          className={cn(
-            'h-9 w-full text-center text-sm font-bold',
-            day.isForbidden && 'opacity-50 cursor-not-allowed',
-          )}
-        />
-        <Input
-          type="text"
-          placeholder={t('weekly.note')}
-          disabled={day.isForbidden}
-          value={cell.note}
-          onChange={(e) =>
-            updateCell(rowKey, day.dateStr, { note: e.target.value }, baseDays[day.dateStr])
-          }
-          className={cn('h-7 text-xs rounded', day.isForbidden && 'opacity-40 cursor-not-allowed')}
-          // Kept in sync with server MAX_NOTES_LENGTH (server/services/timeEntries.ts).
-          maxLength={2000}
-        />
-      </div>
-    );
   };
 
   const clearError = (field: keyof WeeklyEntryFormErrors) => {
@@ -521,7 +613,10 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
 
   useEffect(() => {
     if (!showSuccess) return;
-    const timer = setTimeout(() => setShowSuccess(false), 2500);
+    const timer = setTimeout(
+      () => dispatchWeeklyState({ type: 'setShowSuccess', value: false }),
+      2500,
+    );
     return () => clearTimeout(timer);
   }, [showSuccess]);
 
@@ -563,31 +658,6 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
       taskName: selection.taskName,
     };
   }, [clients, projects, selection.clientId, selection.projectId, selection.taskName]);
-
-  const renderRowLabel = (
-    clientName: string,
-    projectName: string,
-    taskName: string,
-  ): React.ReactNode => {
-    const rows: Array<{ icon: string; text: string }> = [];
-    if (clientName) rows.push({ icon: 'fa-building', text: clientName });
-    if (projectName) rows.push({ icon: 'fa-folder-open', text: projectName });
-    if (taskName) rows.push({ icon: 'fa-list-check', text: taskName });
-    if (rows.length === 0) return null;
-    return (
-      <div className="flex flex-col gap-1">
-        {rows.map(({ icon, text }) => (
-          <div key={icon} className="flex items-center gap-2 text-xs text-foreground">
-            <i
-              className={cn('fa-solid w-3 text-[10px] text-muted-foreground', icon)}
-              aria-hidden="true"
-            />
-            <span className="line-clamp-1">{text}</span>
-          </div>
-        ))}
-      </div>
-    );
-  };
 
   const hasPendingEdits = useMemo(() => {
     const rowHasChange = (rowKey: string, baseDays: DayMap) => {
@@ -818,24 +888,33 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                   <p className="text-[10px] font-bold text-praetor uppercase tracking-wider mb-2">
                     {t('weekly.newEntry')}
                   </p>
-                  {renderRowLabel(
-                    formSelectionLabels.clientName,
-                    formSelectionLabels.projectName,
-                    formSelectionLabels.taskName,
-                  )}
+                  <WeeklyRowLabel
+                    clientName={formSelectionLabels.clientName}
+                    projectName={formSelectionLabels.projectName}
+                    taskName={formSelectionLabels.taskName}
+                  />
                 </TableCell>
-                {visibleWeekDays.map((day) => (
-                  <TableCell
-                    key={day.dateStr}
-                    className={cn(
-                      'min-w-28 px-2 py-3 align-top',
-                      day.isToday && 'bg-accent/60',
-                      day.isWeekendOrHoliday && 'bg-destructive/5',
-                    )}
-                  >
-                    {renderDayCellInputs(FORM_ROW_KEY, day, EMPTY_DAY_MAP)}
-                  </TableCell>
-                ))}
+                {visibleWeekDays.map((day) => {
+                  const cell = getCellValue(FORM_ROW_KEY, day.dateStr, EMPTY_DAY_MAP);
+                  return (
+                    <TableCell
+                      key={day.dateStr}
+                      className={cn(
+                        'min-w-28 px-2 py-3 align-top',
+                        day.isToday && 'bg-accent/60',
+                        day.isWeekendOrHoliday && 'bg-destructive/5',
+                      )}
+                    >
+                      <WeeklyDayCellInputs
+                        rowKey={FORM_ROW_KEY}
+                        day={day}
+                        cell={cell}
+                        notePlaceholder={t('weekly.note')}
+                        onUpdate={updateCell}
+                      />
+                    </TableCell>
+                  );
+                })}
               </TableRow>
               <TableRow className="hover:bg-transparent border-b-0">
                 <TableCell colSpan={1 + visibleWeekDays.length} className="h-6 p-0" />
@@ -855,7 +934,11 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                 entryRows.map((row) => (
                   <TableRow key={row.key} className="hover:bg-muted/30">
                     <TableCell className="px-4 py-3 align-middle whitespace-normal">
-                      {renderRowLabel(row.clientName, row.projectName, row.taskName)}
+                      <WeeklyRowLabel
+                        clientName={row.clientName}
+                        projectName={row.projectName}
+                        taskName={row.taskName}
+                      />
                     </TableCell>
                     {visibleWeekDays.map((day) => {
                       const cell = getCellValue(row.key, day.dateStr, row.baseDays);
@@ -869,7 +952,14 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
                             showSuccess && parseDuration(cell.duration) > 0 && 'bg-emerald-500/10',
                           )}
                         >
-                          {renderDayCellInputs(row.key, day, row.baseDays)}
+                          <WeeklyDayCellInputs
+                            rowKey={row.key}
+                            day={day}
+                            cell={cell}
+                            baseCell={row.baseDays[day.dateStr]}
+                            notePlaceholder={t('weekly.note')}
+                            onUpdate={updateCell}
+                          />
                         </TableCell>
                       );
                     })}

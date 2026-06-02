@@ -103,9 +103,15 @@ export const ALL_PERMISSIONS: Permission[] = PERMISSION_DEFINITIONS.flatMap((def
   buildPermissions(definition.id, definition.actions),
 );
 
-export const CONFIGURATION_PERMISSIONS: Permission[] = PERMISSION_DEFINITIONS.filter((def) =>
-  def.id.startsWith('administration.'),
-).flatMap((def) => buildPermissions(def.id, def.actions));
+export const CONFIGURATION_PERMISSIONS: Permission[] = PERMISSION_DEFINITIONS.reduce<Permission[]>(
+  (permissions, def) => {
+    if (def.id.startsWith('administration.')) {
+      permissions.push(...buildPermissions(def.id, def.actions));
+    }
+    return permissions;
+  },
+  [],
+);
 
 export const isTopManagerOnlyPermission = (permission: string) => {
   const matchesResource = (resource: string) =>

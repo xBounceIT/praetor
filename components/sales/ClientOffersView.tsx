@@ -56,6 +56,7 @@ import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import OfferVersionsPanel from './OfferVersionsPanel';
+import ProductSelectOrFallback from './ProductSelectOrFallback';
 
 export interface ClientOffersViewProps {
   offers: ClientOffer[];
@@ -218,37 +219,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   const isLinkedProductMissing = (item: ClientOfferItem) =>
     Boolean(item.supplierQuoteItemId && (!item.productId || !activeProductIds.has(item.productId)));
 
-  const renderProductSelectOrFallback = (
-    item: ClientOfferItem,
-    index: number,
-    selectProps: { className?: string; buttonClassName?: string },
-  ) => {
-    const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
-    if (isLinkedProductMissing(item)) {
-      return (
-        <input
-          type="text"
-          readOnly
-          value={item.productName || ''}
-          aria-label={t('sales:clientOffers.selectProduct', { defaultValue: 'Select product' })}
-          className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-sm text-zinc-600"
-        />
-      );
-    }
-    return (
-      <SelectControl
-        options={productOptions}
-        value={item.productId}
-        onChange={(val) => updateItem(index, 'productId', val as string)}
-        placeholder={t('sales:clientOffers.selectProduct', {
-          defaultValue: 'Select product',
-        })}
-        searchable={true}
-        disabled={isReadOnly || isLinkedToSupplierQuote}
-        className={selectProps.className}
-        buttonClassName={selectProps.buttonClassName}
-      />
-    );
+  const updateProductSelection = (index: number, productId: string) => {
+    updateItem(index, 'productId', productId);
   };
 
   const handleUnitTypeChange = (index: number, newType: SupplierUnitType) => {
@@ -1326,11 +1298,22 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                       statusLabel={statusLabel}
                                     />
                                   </div>
-                                  {renderProductSelectOrFallback(item, index, {
-                                    className: 'min-w-0',
-                                    buttonClassName:
-                                      'w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm',
-                                  })}
+                                  <ProductSelectOrFallback
+                                    item={item}
+                                    index={index}
+                                    options={productOptions}
+                                    isProductMissing={isLinkedProductMissing(item)}
+                                    isReadOnly={isReadOnly}
+                                    ariaLabel={t('sales:clientOffers.selectProduct', {
+                                      defaultValue: 'Select product',
+                                    })}
+                                    placeholder={t('sales:clientOffers.selectProduct', {
+                                      defaultValue: 'Select product',
+                                    })}
+                                    onProductChange={updateProductSelection}
+                                    className="min-w-0"
+                                    buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
+                                  />
                                 </div>
                               </div>
                               <Button
@@ -1483,11 +1466,22 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                   />
                                 </div>
                                 <div className="col-span-3 min-w-0">
-                                  {renderProductSelectOrFallback(item, index, {
-                                    className: 'min-w-0',
-                                    buttonClassName:
-                                      'w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm',
-                                  })}
+                                  <ProductSelectOrFallback
+                                    item={item}
+                                    index={index}
+                                    options={productOptions}
+                                    isProductMissing={isLinkedProductMissing(item)}
+                                    isReadOnly={isReadOnly}
+                                    ariaLabel={t('sales:clientOffers.selectProduct', {
+                                      defaultValue: 'Select product',
+                                    })}
+                                    placeholder={t('sales:clientOffers.selectProduct', {
+                                      defaultValue: 'Select product',
+                                    })}
+                                    onProductChange={updateProductSelection}
+                                    className="min-w-0"
+                                    buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
+                                  />
                                 </div>
                                 <div className="col-span-2">
                                   <div className="flex items-center gap-1">

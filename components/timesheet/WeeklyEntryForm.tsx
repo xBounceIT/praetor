@@ -176,9 +176,11 @@ const WeeklyEntryForm: React.FC<WeeklyEntryFormProps> = ({
         projects={projects}
         clients={clients}
         currency={currency}
-        canCreate={canCreateCustomTask}
-        canUpdate={false}
-        canDelete={false}
+        permissions={{
+          canCreate: canCreateCustomTask,
+          canUpdate: false,
+          canDelete: false,
+        }}
         onAdd={handleAddCustomTaskSubmit}
         onUpdate={() => {}}
         initialProjectId={selection.projectId}
