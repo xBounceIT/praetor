@@ -192,39 +192,11 @@ const deriveCanonicalUsername = (
 const deriveDisplayName = (attributes: Record<string, unknown>): string | undefined =>
   getFirstAttributeValue(attributes, 'cn', 'displayName');
 
-// A configured attribute name, trimmed, falling back to the built-in default when blank.
-const resolveAttributeName = (configured: string | undefined, fallback: string): string =>
-  configured?.trim() || fallback;
-
-const deriveFirstName = (
-  attributes: Record<string, unknown>,
-  config: ldapRepo.LdapConfig,
-): string | undefined =>
-  getFirstAttributeValue(
-    attributes,
-    resolveAttributeName(config.firstNameAttribute, ldapRepo.DEFAULT_CONFIG.firstNameAttribute),
-  );
-
-const deriveLastName = (
-  attributes: Record<string, unknown>,
-  config: ldapRepo.LdapConfig,
-): string | undefined =>
-  getFirstAttributeValue(
-    attributes,
-    resolveAttributeName(config.lastNameAttribute, ldapRepo.DEFAULT_CONFIG.lastNameAttribute),
-  );
-
-// Configured email attribute first, then the conventional mail/email keys as a safety net.
-const deriveEmail = (
-  attributes: Record<string, unknown>,
-  config: ldapRepo.LdapConfig,
-): string | undefined =>
-  getFirstAttributeValue(
-    attributes,
-    resolveAttributeName(config.emailAttribute, ldapRepo.DEFAULT_CONFIG.emailAttribute),
-    'mail',
-    'email',
-  );
+// The configured directory attribute name (trimmed), falling back to the built-in default when
+// blank. Keyed by config field so the field and its default can never be mismatched.
+type LdapAttributeKey = 'firstNameAttribute' | 'lastNameAttribute' | 'emailAttribute';
+const attributeName = (config: ldapRepo.LdapConfig, key: LdapAttributeKey): string =>
+  config[key]?.trim() || ldapRepo.DEFAULT_CONFIG[key];
 
 export type DirectoryProfile = {
   firstName?: string;
@@ -240,9 +212,15 @@ const resolveDirectoryProfile = (
   attributes: Record<string, unknown>,
   config: ldapRepo.LdapConfig,
 ): DirectoryProfile => {
-  const firstName = deriveFirstName(attributes, config);
-  const lastName = deriveLastName(attributes, config);
-  const email = deriveEmail(attributes, config);
+  const firstName = getFirstAttributeValue(attributes, attributeName(config, 'firstNameAttribute'));
+  const lastName = getFirstAttributeValue(attributes, attributeName(config, 'lastNameAttribute'));
+  // Configured email attribute first, then the conventional mail/email keys as a safety net.
+  const email = getFirstAttributeValue(
+    attributes,
+    attributeName(config, 'emailAttribute'),
+    'mail',
+    'email',
+  );
   const composed = [firstName, lastName].filter(Boolean).join(' ').trim();
   return { firstName, lastName, email, name: composed || deriveDisplayName(attributes) };
 };
@@ -259,9 +237,9 @@ const buildUserAttributeList = (config: ldapRepo.LdapConfig): string[] => {
     'email',
     'sn',
     'givenName',
-    resolveAttributeName(config.firstNameAttribute, ldapRepo.DEFAULT_CONFIG.firstNameAttribute),
-    resolveAttributeName(config.lastNameAttribute, ldapRepo.DEFAULT_CONFIG.lastNameAttribute),
-    resolveAttributeName(config.emailAttribute, ldapRepo.DEFAULT_CONFIG.emailAttribute),
+    attributeName(config, 'firstNameAttribute'),
+    attributeName(config, 'lastNameAttribute'),
+    attributeName(config, 'emailAttribute'),
   ];
   return [...new Set(attrs)];
 };

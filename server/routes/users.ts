@@ -997,10 +997,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const dateRangeError = getHrDateRangeError(hrDetails, targetUser);
       if (dateRangeError) return badRequest(reply, dateRangeError);
 
-      if (targetUser.authMethod !== 'local' && (name !== undefined || email !== undefined)) {
+      // Identity fields (display name, first/last name, email) are owned by the directory for
+      // externally-managed users and are overwritten on each sync — reject attempts to set them
+      // here so the API enforces the same read-only contract the UI shows (identityReadOnly).
+      const managesExternalIdentity =
+        name !== undefined ||
+        email !== undefined ||
+        hrDetails.firstName !== undefined ||
+        hrDetails.lastName !== undefined;
+      if (targetUser.authMethod !== 'local' && managesExternalIdentity) {
         return replyError(request, reply, {
           statusCode: 409,
-          message: 'Name and email are managed by the external authentication provider',
+          message: 'Name, surname, and email are managed by the external authentication provider',
           action: 'user.update.conflict',
           entityType: 'user',
           entityId: idResult.value,
