@@ -37,14 +37,14 @@ mock.module('../../../components/shared/DeleteConfirmModal', () => ({
   }) =>
     isOpen
       ? createPortal(
-          <div role="dialog" aria-modal="true">
+          <dialog open aria-modal="true">
             <button type="button" onClick={onClose} disabled={isDeleting}>
               buttons.noGoBack
             </button>
             <button type="button" onClick={onConfirm} disabled={isDeleting}>
               {isDeleting ? 'buttons.saving' : 'buttons.yesDelete'}
             </button>
-          </div>,
+          </dialog>,
           document.body,
         )
       : null,

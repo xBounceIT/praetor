@@ -1,7 +1,8 @@
 import type { TFunction } from 'i18next';
 import type React from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
+import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Textarea } from '@/components/ui/textarea';
@@ -83,6 +84,72 @@ const getOrderStatusLabel = (status: ClientsOrder['status'], t: (key: string) =>
 const isHistoryRow = (status: ClientsOrder['status']) =>
   status === 'confirmed' || status === 'denied';
 
+type ClientsOrdersViewState = {
+  isModalOpen: boolean;
+  editingOrder: ClientsOrder | null;
+  isDeleteConfirmOpen: boolean;
+  orderToDelete: ClientsOrder | null;
+  errors: Record<string, string>;
+  previewVersion: OrderVersion | null;
+  formData: Partial<ClientsOrder>;
+};
+
+type ClientsOrdersViewAction =
+  | { type: 'setIsModalOpen'; value: React.SetStateAction<boolean> }
+  | { type: 'setEditingOrder'; value: React.SetStateAction<ClientsOrder | null> }
+  | { type: 'setIsDeleteConfirmOpen'; value: React.SetStateAction<boolean> }
+  | { type: 'setOrderToDelete'; value: React.SetStateAction<ClientsOrder | null> }
+  | { type: 'setErrors'; value: React.SetStateAction<Record<string, string>> }
+  | { type: 'setPreviewVersion'; value: React.SetStateAction<OrderVersion | null> }
+  | { type: 'setFormData'; value: React.SetStateAction<Partial<ClientsOrder>> };
+
+const resolveStateAction = <T,>(value: React.SetStateAction<T>, previous: T): T =>
+  typeof value === 'function' ? (value as (previous: T) => T)(previous) : value;
+
+const createClientsOrdersInitialState = (): ClientsOrdersViewState => ({
+  isModalOpen: false,
+  editingOrder: null,
+  isDeleteConfirmOpen: false,
+  orderToDelete: null,
+  errors: {},
+  previewVersion: null,
+  formData: {
+    clientId: '',
+    clientName: '',
+    items: [],
+    paymentTerms: 'immediate',
+    discount: 0,
+    discountType: 'percentage',
+    status: 'draft',
+    notes: '',
+  },
+});
+
+const clientsOrdersViewReducer = (
+  state: ClientsOrdersViewState,
+  action: ClientsOrdersViewAction,
+): ClientsOrdersViewState => {
+  switch (action.type) {
+    case 'setIsModalOpen':
+      return { ...state, isModalOpen: resolveStateAction(action.value, state.isModalOpen) };
+    case 'setEditingOrder':
+      return { ...state, editingOrder: resolveStateAction(action.value, state.editingOrder) };
+    case 'setIsDeleteConfirmOpen':
+      return {
+        ...state,
+        isDeleteConfirmOpen: resolveStateAction(action.value, state.isDeleteConfirmOpen),
+      };
+    case 'setOrderToDelete':
+      return { ...state, orderToDelete: resolveStateAction(action.value, state.orderToDelete) };
+    case 'setErrors':
+      return { ...state, errors: resolveStateAction(action.value, state.errors) };
+    case 'setPreviewVersion':
+      return { ...state, previewVersion: resolveStateAction(action.value, state.previewVersion) };
+    case 'setFormData':
+      return { ...state, formData: resolveStateAction(action.value, state.formData) };
+  }
+};
+
 interface PricingCellProps {
   value: number;
   isHistory: boolean;
@@ -145,24 +212,42 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   orderFilterId,
 }) => {
   const { t, i18n } = useTranslation(['accounting', 'crm', 'common', 'sales']);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingOrder, setEditingOrder] = useState<ClientsOrder | null>(null);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [orderToDelete, setOrderToDelete] = useState<ClientsOrder | null>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [previewVersion, setPreviewVersion] = useState<OrderVersion | null>(null);
+  const [viewState, dispatchViewState] = useReducer(
+    clientsOrdersViewReducer,
+    undefined,
+    createClientsOrdersInitialState,
+  );
+  const {
+    isModalOpen,
+    editingOrder,
+    isDeleteConfirmOpen,
+    orderToDelete,
+    errors,
+    previewVersion,
+    formData,
+  } = viewState;
 
-  // Form State
-  const [formData, setFormData] = useState<Partial<ClientsOrder>>({
-    clientId: '',
-    clientName: '',
-    items: [],
-    paymentTerms: 'immediate',
-    discount: 0,
-    discountType: 'percentage',
-    status: 'draft',
-    notes: '',
-  });
+  const setIsModalOpen = useCallback((value: React.SetStateAction<boolean>) => {
+    dispatchViewState({ type: 'setIsModalOpen', value });
+  }, []);
+  const setEditingOrder = useCallback((value: React.SetStateAction<ClientsOrder | null>) => {
+    dispatchViewState({ type: 'setEditingOrder', value });
+  }, []);
+  const setIsDeleteConfirmOpen = useCallback((value: React.SetStateAction<boolean>) => {
+    dispatchViewState({ type: 'setIsDeleteConfirmOpen', value });
+  }, []);
+  const setOrderToDelete = useCallback((value: React.SetStateAction<ClientsOrder | null>) => {
+    dispatchViewState({ type: 'setOrderToDelete', value });
+  }, []);
+  const setErrors = useCallback((value: React.SetStateAction<Record<string, string>>) => {
+    dispatchViewState({ type: 'setErrors', value });
+  }, []);
+  const setPreviewVersion = useCallback((value: React.SetStateAction<OrderVersion | null>) => {
+    dispatchViewState({ type: 'setPreviewVersion', value });
+  }, []);
+  const setFormData = useCallback((value: React.SetStateAction<Partial<ClientsOrder>>) => {
+    dispatchViewState({ type: 'setFormData', value });
+  }, []);
 
   const orderToFormData = useCallback(
     (order: ClientsOrder): Partial<ClientsOrder> => ({
@@ -188,13 +273,13 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       setPreviewVersion(null);
       setIsModalOpen(true);
     },
-    [orderToFormData],
+    [orderToFormData, setEditingOrder, setErrors, setFormData, setIsModalOpen, setPreviewVersion],
   );
 
   const closeEditModal = useCallback(() => {
     setIsModalOpen(false);
     setPreviewVersion(null);
-  }, []);
+  }, [setIsModalOpen, setPreviewVersion]);
 
   const handleVersionPreview = useCallback(
     (version: OrderVersion) => {
@@ -213,13 +298,13 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       });
       setErrors({});
     },
-    [editingOrder],
+    [editingOrder, setErrors, setFormData, setPreviewVersion],
   );
 
   const handleClearPreview = useCallback(() => {
     if (editingOrder) setFormData(orderToFormData(editingOrder));
     setPreviewVersion(null);
-  }, [editingOrder, orderToFormData]);
+  }, [editingOrder, orderToFormData, setFormData, setPreviewVersion]);
 
   const handleVersionRestored = useCallback(
     (updated: ClientsOrder) => {
@@ -228,7 +313,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       setPreviewVersion(null);
       onOrderRestored?.(updated);
     },
-    [onOrderRestored, orderToFormData],
+    [onOrderRestored, orderToFormData, setEditingOrder, setFormData, setPreviewVersion],
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -277,10 +362,13 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     }
   };
 
-  const confirmDelete = useCallback((order: ClientsOrder) => {
-    setOrderToDelete(order);
-    setIsDeleteConfirmOpen(true);
-  }, []);
+  const confirmDelete = useCallback(
+    (order: ClientsOrder) => {
+      setOrderToDelete(order);
+      setIsDeleteConfirmOpen(true);
+    },
+    [setIsDeleteConfirmOpen, setOrderToDelete],
+  );
 
   const handleDelete = async () => {
     if (!orderToDelete) return;
@@ -790,46 +878,34 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                 )}
                 {/* Linked Offer Info */}
                 {formData.linkedOfferId && (
-                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
-                        <i className="fa-solid fa-link" aria-hidden="true"></i>
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-foreground">
-                          {t('accounting:clientsOrders.linkedOffer', {
-                            defaultValue: 'Linked Offer',
-                          })}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {t('accounting:clientsOrders.linkedOfferInfo', {
-                            number: formData.linkedOfferId,
-                            defaultValue: 'Offer #{{number}}',
-                          })}
-                        </div>
-                        <div className="mt-0.5 text-[10px] text-muted-foreground">
-                          {isReadOnly
-                            ? t('accounting:clientsOrders.offerDetailsReadOnly', {
-                                defaultValue: '(Order details are read-only)',
-                              })
-                            : t('accounting:clientsOrders.offerDetailsEditable', {
-                                defaultValue: '(Order details are editable)',
-                              })}
-                        </div>
-                      </div>
-                    </div>
-                    {onViewOffer && formData.linkedOfferId && (
-                      <Button
-                        type="button"
-                        variant="link"
-                        size="sm"
-                        onClick={() => onViewOffer(formData.linkedOfferId as string)}
-                        className="px-0"
-                      >
-                        {t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })}
-                      </Button>
-                    )}
-                  </div>
+                  <LinkedRecordBanner
+                    label={t('accounting:clientsOrders.linkedOffer', {
+                      defaultValue: 'Linked Offer',
+                    })}
+                    value={t('accounting:clientsOrders.linkedOfferInfo', {
+                      number: formData.linkedOfferId,
+                      defaultValue: 'Offer #{{number}}',
+                    })}
+                    note={
+                      isReadOnly
+                        ? t('accounting:clientsOrders.offerDetailsReadOnly', {
+                            defaultValue: '(Order details are read-only)',
+                          })
+                        : t('accounting:clientsOrders.offerDetailsEditable', {
+                            defaultValue: '(Order details are editable)',
+                          })
+                    }
+                    action={
+                      onViewOffer && formData.linkedOfferId
+                        ? {
+                            label: t('sales:clientOffers.viewOffer', {
+                              defaultValue: 'View offer',
+                            }),
+                            onClick: () => onViewOffer(formData.linkedOfferId as string),
+                          }
+                        : undefined
+                    }
+                  />
                 )}
 
                 {/* Order Details */}

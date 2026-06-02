@@ -67,6 +67,7 @@ type DragMode = 'move' | 'resize-e' | 'resize-s' | 'resize-se';
 interface DragState {
   id: string;
   mode: DragMode;
+  editingSession: number;
   pointerId: number;
   startClientX: number;
   startClientY: number;
@@ -96,10 +97,17 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
   const observerRef = useRef<ResizeObserver | null>(null);
   const [width, setWidth] = useState(0);
   const [drag, setDrag] = useState<DragState | null>(null);
+  const editingSessionRef = useRef(0);
+  const previousEditingRef = useRef(editing);
+  if (previousEditingRef.current !== editing) {
+    previousEditingRef.current = editing;
+    if (!editing) editingSessionRef.current += 1;
+  }
+  const activeDrag = editing && drag?.editingSession === editingSessionRef.current ? drag : null;
   // Latest drag, readable from the window listeners so a fast pointerup commits
   // the most recent preview rather than the closure's stale one.
   const dragRef = useRef<DragState | null>(null);
-  dragRef.current = drag;
+  dragRef.current = activeDrag;
 
   // Resolve the <DashboardItem> children into a flat id→content list.
   const items = useMemo<ResolvedItem[]>(() => {
@@ -160,8 +168,8 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
   // Memoized so the (compacting) `visibleLayout` doesn't re-run on unrelated
   // re-renders (width measurement, parent state, i18n) outside edit mode.
   const placed = useMemo(
-    () => (editing ? (drag ? drag.preview : layout) : visibleLayout(layout)),
-    [editing, drag, layout],
+    () => (editing ? (activeDrag ? activeDrag.preview : layout) : visibleLayout(layout)),
+    [editing, activeDrag, layout],
   );
   const placedById = useMemo(() => new Map(placed.map((w) => [w.id, w])), [placed]);
   const containerHeight = margin + bottom(placed) * unitY;
@@ -184,6 +192,7 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
     setDrag({
       id,
       mode,
+      editingSession: editingSessionRef.current,
       pointerId: e.pointerId,
       startClientX: e.clientX,
       startClientY: e.clientY,
@@ -199,7 +208,7 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
   // Subscribe to the window once per gesture (not per pointer move). The
   // handlers read live state from refs, so the committed geometry is always the
   // latest preview even though this effect doesn't re-run on every move.
-  const dragging = drag !== null;
+  const dragging = activeDrag !== null;
   useEffect(() => {
     if (!dragging) return;
     const onPointerMove = (e: PointerEvent) => {
@@ -271,12 +280,6 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
       window.removeEventListener('pointercancel', finish);
     };
   }, [dragging]);
-
-  // If edit mode ends mid-gesture, drop the drag so the read-only render never
-  // shows a translated card or a stray snap overlay.
-  useEffect(() => {
-    if (!editing) setDrag(null);
-  }, [editing]);
 
   // Keyboard parity: arrows move, shift+arrows resize, by one grid cell.
   const onItemKeyDown = (e: React.KeyboardEvent, id: string) => {
@@ -365,9 +368,9 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
       }}
     >
       {/* Snap target while moving a card. */}
-      {drag?.mode === 'move' &&
+      {activeDrag?.mode === 'move' &&
         (() => {
-          const target = drag.preview.find((w) => w.id === drag.id);
+          const target = activeDrag.preview.find((w) => w.id === activeDrag.id);
           if (!target) return null;
           return (
             <div
@@ -382,15 +385,15 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
         const state = placedById.get(item.id);
         if (!state) return null;
 
-        const isActive = drag?.id === item.id;
-        const isMoving = isActive && drag?.mode === 'move';
+        const isActive = activeDrag?.id === item.id;
+        const isMoving = isActive && activeDrag?.mode === 'move';
         // A moving card follows the cursor pixel-for-pixel (no transition); every
         // other card — including a card being *resized* — animates to its snapped
         // slot/size so resizing eases between grid steps instead of jumping.
         const style: React.CSSProperties = isMoving
           ? {
-              ...rectStyle(drag.origin),
-              transform: `translate(${drag.dxPx}px, ${drag.dyPx}px)`,
+              ...rectStyle(activeDrag.origin),
+              transform: `translate(${activeDrag.dxPx}px, ${activeDrag.dyPx}px)`,
               zIndex: 30,
             }
           : { ...rectStyle(state), zIndex: isActive ? 20 : undefined };

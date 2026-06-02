@@ -1,7 +1,7 @@
 import type { TFunction } from 'i18next';
 import { ArrowRight, Loader2, RefreshCw } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { logsApi } from '../../services/api/logs';
 import type { AuditLogEntry } from '../../types';
@@ -188,21 +188,81 @@ interface LogsViewProps {
   treatSaturdayAsHoliday?: boolean;
 }
 
+type LogsViewState = {
+  rows: AuditLogEntry[];
+  loading: boolean;
+  error: string;
+  isRefreshing: boolean;
+  selectedPreset: TimeRange | null;
+  startDate: Date;
+  endDate: Date;
+};
+
+type LogsViewAction =
+  | { type: 'loadStart'; initial: boolean }
+  | { type: 'loadSuccess'; rows: AuditLogEntry[] }
+  | { type: 'loadError'; error: string }
+  | { type: 'selectPreset'; range: TimeRange }
+  | { type: 'setStartDate'; date: Date }
+  | { type: 'setEndDate'; date: Date };
+
+const createLogsViewState = (): LogsViewState => {
+  const range = getPresetRange('last7Days');
+  return {
+    rows: [],
+    loading: true,
+    error: '',
+    isRefreshing: false,
+    selectedPreset: 'last7Days',
+    startDate: range.start,
+    endDate: range.end,
+  };
+};
+
+const logsViewReducer = (state: LogsViewState, action: LogsViewAction): LogsViewState => {
+  switch (action.type) {
+    case 'loadStart':
+      return {
+        ...state,
+        error: '',
+        loading: action.initial,
+        isRefreshing: !action.initial,
+      };
+    case 'loadSuccess':
+      return {
+        ...state,
+        rows: action.rows,
+        loading: false,
+        isRefreshing: false,
+      };
+    case 'loadError':
+      return {
+        ...state,
+        error: action.error,
+        loading: false,
+        isRefreshing: false,
+      };
+    case 'selectPreset': {
+      const { start, end } = getPresetRange(action.range);
+      return { ...state, selectedPreset: action.range, startDate: start, endDate: end };
+    }
+    case 'setStartDate':
+      return { ...state, startDate: action.date, selectedPreset: null };
+    case 'setEndDate':
+      return { ...state, endDate: action.date, selectedPreset: null };
+  }
+};
+
 const LogsView: React.FC<LogsViewProps> = ({
   startOfWeek = 'Monday',
   treatSaturdayAsHoliday = false,
 }) => {
   const { t, i18n } = useTranslation(['administration', 'common']);
   const [activeTab, setActiveTab] = useState<'audit'>('audit');
-  const [rows, setRows] = useState<AuditLogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [state, dispatch] = useReducer(logsViewReducer, undefined, createLogsViewState);
   const initialLoadRef = useRef(true);
   const latestAuditRequestIdRef = useRef(0);
-  const [selectedPreset, setSelectedPreset] = useState<TimeRange | null>('last7Days');
-  const [startDate, setStartDate] = useState<Date>(() => getPresetRange('last7Days').start);
-  const [endDate, setEndDate] = useState<Date>(() => getPresetRange('last7Days').end);
+  const { rows, loading, error, isRefreshing, selectedPreset, startDate, endDate } = state;
 
   const timeRangeOptions = useMemo(
     () => [
@@ -222,50 +282,46 @@ const LogsView: React.FC<LogsViewProps> = ({
 
   const handleTimeRangeChange = useCallback((value: string | string[]) => {
     const range = (Array.isArray(value) ? value[0] : value) as TimeRange;
-    setSelectedPreset(range);
-    const { start, end } = getPresetRange(range);
-    setStartDate(start);
-    setEndDate(end);
+    dispatch({ type: 'selectPreset', range });
   }, []);
 
   const handleStartDateChange = useCallback((date: Date) => {
-    setStartDate(date);
-    setSelectedPreset(null);
+    dispatch({ type: 'setStartDate', date });
   }, []);
 
   const handleEndDateChange = useCallback((date: Date) => {
-    setEndDate(date);
-    setSelectedPreset(null);
+    dispatch({ type: 'setEndDate', date });
   }, []);
 
   const handleStartDateClear = useCallback(() => {
     const date = new Date();
     date.setDate(date.getDate() - 7);
     date.setHours(0, 0, 0, 0);
-    setStartDate(date);
-    setSelectedPreset(null);
+    dispatch({ type: 'setStartDate', date });
   }, []);
 
   const handleEndDateClear = useCallback(() => {
     const date = new Date();
     date.setHours(23, 59, 59, 999);
-    setEndDate(date);
-    setSelectedPreset(null);
+    dispatch({ type: 'setEndDate', date });
   }, []);
 
   const loadAuditLogs = useCallback(
     async (requestId: number) => {
-      setError('');
       try {
         const data = await logsApi.listAudit({ startDate, endDate });
-        if (latestAuditRequestIdRef.current !== requestId) return false;
-        setRows(data);
-        return true;
+        const isLatest = latestAuditRequestIdRef.current === requestId;
+        if (isLatest) {
+          dispatch({ type: 'loadSuccess', rows: data });
+        }
+        return isLatest;
       } catch (err) {
-        if (latestAuditRequestIdRef.current !== requestId) return false;
-        const message = err instanceof Error ? err.message : t('logs.errors.loadFailed');
-        setError(message || t('logs.errors.loadFailed'));
-        return true;
+        const isLatest = latestAuditRequestIdRef.current === requestId;
+        if (isLatest) {
+          const message = err instanceof Error ? err.message : t('logs.errors.loadFailed');
+          dispatch({ type: 'loadError', error: message || t('logs.errors.loadFailed') });
+        }
+        return isLatest;
       }
     },
     [t, startDate, endDate],
@@ -277,17 +333,10 @@ const LogsView: React.FC<LogsViewProps> = ({
     const isInitialLoad = initialLoadRef.current;
 
     const load = async () => {
-      if (isInitialLoad) {
-        setLoading(true);
-        const isCurrent = await loadAuditLogs(requestId);
-        if (!isCurrent) return;
-        setLoading(false);
+      dispatch({ type: 'loadStart', initial: isInitialLoad });
+      const isCurrent = await loadAuditLogs(requestId);
+      if (isCurrent && isInitialLoad) {
         initialLoadRef.current = false;
-      } else {
-        setIsRefreshing(true);
-        const isCurrent = await loadAuditLogs(requestId);
-        if (!isCurrent) return;
-        setIsRefreshing(false);
       }
     };
 
@@ -300,10 +349,8 @@ const LogsView: React.FC<LogsViewProps> = ({
   const handleRefreshLogs = async () => {
     const requestId = latestAuditRequestIdRef.current + 1;
     latestAuditRequestIdRef.current = requestId;
-    setIsRefreshing(true);
-    const isCurrent = await loadAuditLogs(requestId);
-    if (!isCurrent) return;
-    setIsRefreshing(false);
+    dispatch({ type: 'loadStart', initial: false });
+    await loadAuditLogs(requestId);
   };
 
   const dateTimeFormatter = useMemo(

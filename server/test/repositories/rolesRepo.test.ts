@@ -239,13 +239,19 @@ describe('deleteRole', () => {
   });
 });
 
-describe('insertPermission', () => {
-  test('passes roleId and permission and uses ON CONFLICT DO NOTHING', async () => {
+describe('insertPermissions', () => {
+  test('passes roleId and permissions and uses ON CONFLICT DO NOTHING', async () => {
     exec.enqueue({ rows: [] });
-    await rolesRepo.insertPermission('manager', 'projects.view', testDb);
+    await rolesRepo.insertPermissions('manager', ['projects.view', 'projects.update'], testDb);
     expect(exec.calls[0].params).toContain('manager');
     expect(exec.calls[0].params).toContain('projects.view');
+    expect(exec.calls[0].params).toContain('projects.update');
     expect(exec.calls[0].sql.toLowerCase()).toContain('on conflict do nothing');
+  });
+
+  test('does not fire SQL when permissions are empty', async () => {
+    await rolesRepo.insertPermissions('manager', [], testDb);
+    expect(exec.calls).toHaveLength(0);
   });
 });
 

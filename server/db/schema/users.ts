@@ -31,6 +31,10 @@ export const users = pgTable(
   {
     id: varchar('id', { length: 50 }).primaryKey(),
     name: varchar('name', { length: 255 }).notNull(),
+    // Structured identity parts. `name` remains the required display string; first/last
+    // are optional and, for LDAP/SSO-managed users, populated from the directory.
+    firstName: varchar('first_name', { length: 255 }),
+    lastName: varchar('last_name', { length: 255 }),
     username: varchar('username', { length: 100 }).notNull().unique(),
     passwordHash: varchar('password_hash', { length: 255 }).notNull(),
     role: varchar('role', { length: 50 })

@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import Checkbox from './Checkbox';
 import type { CustomView } from './customViewHelpers';
 import Modal from './Modal';
 import {
@@ -117,25 +116,30 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
               <div className="max-h-64 overflow-y-auto rounded-md border border-border p-1.5 space-y-0.5">
                 {columns.map((col) => {
                   const isVisible = !hiddenColIds.has(col.id);
-                  // Checkbox onChange owns the toggle; the row's onClick handles
-                  // clicks on the text label only. Clicks inside the inner
-                  // <label> bubble twice (the visible click + a UA-synthesised
-                  // click on the hidden input), so we ignore those here to
-                  // avoid a double-toggle that cancels itself.
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={col.id}
-                      className="flex items-center gap-2 px-2 py-1.5 hover:bg-accent rounded cursor-pointer"
-                      onClick={(e) => {
-                        if ((e.target as HTMLElement).closest('label')) return;
-                        toggleCol(col.id);
-                      }}
+                      aria-pressed={isVisible}
+                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-accent"
+                      onClick={() => toggleCol(col.id)}
                     >
-                      <Checkbox size="sm" checked={isVisible} onChange={() => toggleCol(col.id)} />
+                      <span
+                        aria-hidden="true"
+                        className={`flex size-3.5 items-center justify-center rounded border-2 transition-colors ${
+                          isVisible ? 'border-praetor bg-praetor text-white' : 'border-zinc-300'
+                        }`}
+                      >
+                        <i
+                          className={`fa-solid fa-check text-[8px] transition-transform ${
+                            isVisible ? 'scale-100' : 'scale-0'
+                          }`}
+                        ></i>
+                      </span>
                       <span className="text-xs text-muted-foreground select-none">
                         {col.header}
                       </span>
-                    </div>
+                    </button>
                   );
                 })}
               </div>

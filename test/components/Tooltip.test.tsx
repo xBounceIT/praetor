@@ -58,7 +58,7 @@ describe('<Tooltip />', () => {
     await userEvent.hover(screen.getByRole('button', { name: 'trigger' }));
 
     const tooltip = await findTooltipContent();
-    expect(tooltip.className).toContain('z-[70]');
+    expect(tooltip.className).toContain('z-[90]');
   });
 
   test('applies shared width and wrapping constraints', async () => {
@@ -110,7 +110,7 @@ describe('<Tooltip />', () => {
 
   test('uses one app-level TooltipProvider instead of wrapping every tooltip root', async () => {
     const tooltipSource = await readFile('components/ui/tooltip.tsx', 'utf8');
-    const entrySource = await readFile('index.tsx', 'utf8');
+    const entrySource = await readFile('src/main.tsx', 'utf8');
 
     expect(entrySource).toContain('<TooltipProvider>');
     expect(tooltipSource).not.toContain('<TooltipProvider>');

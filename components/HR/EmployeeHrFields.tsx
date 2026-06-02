@@ -114,6 +114,32 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
             <FieldError className="text-xs">{errors.name}</FieldError>
           </Field>
 
+          <Field>
+            <FieldLabel htmlFor={`${prefix}-firstName`}>
+              {t('employeeProfile.firstName')}
+            </FieldLabel>
+            <Input
+              id={`${prefix}-firstName`}
+              type="text"
+              value={formData.firstName}
+              onChange={(e) => setField('firstName', e.target.value)}
+              placeholder={t('employeeProfile.firstName')}
+              disabled={identityReadOnly}
+            />
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor={`${prefix}-lastName`}>{t('employeeProfile.lastName')}</FieldLabel>
+            <Input
+              id={`${prefix}-lastName`}
+              type="text"
+              value={formData.lastName}
+              onChange={(e) => setField('lastName', e.target.value)}
+              placeholder={t('employeeProfile.lastName')}
+              disabled={identityReadOnly}
+            />
+          </Field>
+
           <Field data-invalid={Boolean(errors.email)}>
             <FieldLabel htmlFor={`${prefix}-email`}>{t('employeeProfile.email')}</FieldLabel>
             <Input

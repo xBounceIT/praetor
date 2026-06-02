@@ -952,12 +952,14 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
   const allContacts = normalizeContacts(formData.contacts);
 
-  const contactTableRows = allContacts
-    .map((contact, contactIndex) => ({
-      ...contact,
-      contactIndex,
-    }))
-    .filter((contact) => contact.fullName || contact.role || contact.email || contact.phone);
+  const contactTableRows = allContacts.reduce<
+    Array<(typeof allContacts)[number] & { contactIndex: number }>
+  >((rows, contact, contactIndex) => {
+    if (contact.fullName || contact.role || contact.email || contact.phone) {
+      rows.push({ ...contact, contactIndex });
+    }
+    return rows;
+  }, []);
 
   const manageCategoryLabels: Record<ClientProfileOptionCategory, string> = {
     sector: t('crm:clients.sector'),

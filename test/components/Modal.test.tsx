@@ -3,8 +3,11 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 
 const { THEME_CHANGE_EVENT, THEME_STORAGE_KEY } = await import('../../utils/theme');
-const Modal = (await import('../../components/shared/Modal')).default;
+const { default: Modal } = await import('../../components/shared/Modal');
 const { ModalContent } = await import('../../components/shared/ModalLayout');
+const { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } = await import(
+  '../../components/ui/select'
+);
 
 describe('<Modal />', () => {
   afterEach(() => {
@@ -196,6 +199,46 @@ describe('<Modal />', () => {
     const dialog = screen.getByRole('dialog');
     expect(backdrop.style.zIndex).toBe('999');
     expect(dialog.style.zIndex).toBe('1000');
+  });
+
+  test('floating dropdowns render above the highest-z-index modal', () => {
+    // 70 is the highest zIndex any modal in the app uses (nested "manage" modals);
+    // Modal renders content at zIndex + 1 = 71, the worst case a dropdown must clear.
+    const HIGHEST_MODAL_Z_INDEX = 70;
+    render(
+      <Modal isOpen={true} onClose={() => {}} zIndex={HIGHEST_MODAL_Z_INDEX}>
+        <Select open value="unit" onValueChange={() => {}}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="unit">Unit</SelectItem>
+            <SelectItem value="hours">Hours</SelectItem>
+          </SelectContent>
+        </Select>
+      </Modal>,
+    );
+
+    // The open Select applies aria-hidden to the rest of the tree, so query the
+    // modal panel by data-slot rather than by the (now-hidden) dialog role.
+    const modalContent = document.body.querySelector(
+      '[data-slot="dialog-content"]',
+    ) as HTMLElement | null;
+    expect(modalContent).not.toBeNull();
+    const modalContentZIndex = Number.parseInt(modalContent?.style.zIndex ?? '0', 10);
+
+    const selectContent = document.body.querySelector(
+      '[data-slot="select-content"]',
+    ) as HTMLElement | null;
+    expect(selectContent).not.toBeNull();
+
+    const floatingZIndex = Number.parseInt(
+      selectContent?.className.match(/z-\[(\d+)\]/)?.[1] ?? '0',
+      10,
+    );
+
+    // The dropdown must paint on top of the modal panel, not behind it.
+    expect(floatingZIndex).toBeGreaterThan(modalContentZIndex);
   });
 
   test('custom backdropClass is applied', () => {

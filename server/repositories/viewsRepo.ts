@@ -256,13 +256,13 @@ export const replaceShares = (
 ): Promise<void> =>
   runAtomically(exec, async (tx) => {
     await tx.delete(savedViewShares).where(eq(savedViewShares.viewId, viewId));
-    if (shares.length === 0) return;
+    if (shares.length > 0) {
+      // Dedupe on userId so two entries for the same user can't violate the PK; last permission wins.
+      const byUser = new Map<string, SavedViewPermission>();
+      for (const share of shares) byUser.set(share.userId, share.permission);
 
-    // Dedupe on userId so two entries for the same user can't violate the PK; last permission wins.
-    const byUser = new Map<string, SavedViewPermission>();
-    for (const share of shares) byUser.set(share.userId, share.permission);
-
-    await tx
-      .insert(savedViewShares)
-      .values(Array.from(byUser, ([userId, permission]) => ({ viewId, userId, permission })));
+      await tx
+        .insert(savedViewShares)
+        .values(Array.from(byUser, ([userId, permission]) => ({ viewId, userId, permission })));
+    }
   });

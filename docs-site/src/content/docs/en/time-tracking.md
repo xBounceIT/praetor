@@ -33,7 +33,7 @@ For every valid weekday, Praetor starts the draft with the configured default en
 
 In the statement, **Notes** and **Location** use the option lists configured by administrators in RIL global settings. **Code** can be selected from `TR` business trip and `SD` hardship office.
 
-Before export, every valid weekday must have **Start**, **End**, and **Location** filled in. The **Export Excel** button creates a one-sheet `.xlsx` workbook named **Prospetto Presenze** with the RIL columns: Giorno, Entrata, Uscita, Ore, PICAP, Reperib. Telef., Note, Trasferta, Cod, and Commessa.
+Before export, every valid weekday must have **Start**, **End**, and **Location** filled in. The **Export Excel** button creates a one-sheet `.xlsx` workbook named **Prospetto Presenze** with the RIL columns: Giorno, Entrata, Uscita, Ore, PICAP, Reperib. Telef., Note, Trasferta, Cod, and Commessa. The sheet shows **Dipendente** (employee), **Società** (company), and **MESE** (month) at the top, followed by the day grid and, at the bottom, the code legend (P, P2, M, F, TR, SD) and the monthly totals: **Giorni Lavorati**, **Ore Extra**, **Totale Ore**, **Totale PICAP**, and **Pausa Pranzo**.
 
 ## Recurring tasks
 

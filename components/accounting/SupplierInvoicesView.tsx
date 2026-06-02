@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
@@ -58,6 +58,110 @@ const calculateTotals = (items: SupplierInvoiceItem[]) => {
   return { subtotal, total: subtotal };
 };
 
+const createDefaultSupplierInvoiceForm = (): Partial<SupplierInvoice> => {
+  const issueDate = getLocalDateString();
+  return {
+    linkedSaleId: '',
+    supplierId: '',
+    supplierName: '',
+    id: '',
+    issueDate,
+    dueDate: addDaysToDateOnly(issueDate, 30),
+    status: 'draft',
+    subtotal: 0,
+    total: 0,
+    amountPaid: 0,
+    notes: '',
+    items: [],
+  };
+};
+
+const invoiceToFormData = (invoice: SupplierInvoice): Partial<SupplierInvoice> => ({
+  ...invoice,
+  issueDate: invoice.issueDate ? normalizeDateOnlyString(invoice.issueDate) : '',
+  dueDate: invoice.dueDate ? normalizeDateOnlyString(invoice.dueDate) : '',
+  items: invoice.items.map((item) => ({ ...item })),
+});
+
+type SupplierInvoicesState = {
+  editingInvoice: SupplierInvoice | null;
+  invoiceToDelete: SupplierInvoice | null;
+  isModalOpen: boolean;
+  isDeleteConfirmOpen: boolean;
+  formData: Partial<SupplierInvoice>;
+};
+
+type SupplierInvoicesAction =
+  | { type: 'openEdit'; invoice: SupplierInvoice }
+  | { type: 'closeModal' }
+  | { type: 'submitSuccess' }
+  | { type: 'confirmDelete'; invoice: SupplierInvoice }
+  | { type: 'deleteSuccess' }
+  | { type: 'patchForm'; patch: Partial<SupplierInvoice> }
+  | {
+      type: 'updateItem';
+      index: number;
+      field: keyof SupplierInvoiceItem;
+      value: string | number;
+      products: Product[];
+    }
+  | { type: 'removeItem'; index: number };
+
+const createSupplierInvoicesState = (): SupplierInvoicesState => ({
+  editingInvoice: null,
+  invoiceToDelete: null,
+  isModalOpen: false,
+  isDeleteConfirmOpen: false,
+  formData: createDefaultSupplierInvoiceForm(),
+});
+
+const supplierInvoicesReducer = (
+  state: SupplierInvoicesState,
+  action: SupplierInvoicesAction,
+): SupplierInvoicesState => {
+  switch (action.type) {
+    case 'openEdit':
+      return {
+        ...state,
+        editingInvoice: action.invoice,
+        formData: invoiceToFormData(action.invoice),
+        isModalOpen: true,
+      };
+    case 'closeModal':
+      return { ...state, isModalOpen: false };
+    case 'submitSuccess':
+      return { ...state, isModalOpen: false };
+    case 'confirmDelete':
+      return { ...state, invoiceToDelete: action.invoice, isDeleteConfirmOpen: true };
+    case 'deleteSuccess':
+      return { ...state, invoiceToDelete: null, isDeleteConfirmOpen: false };
+    case 'patchForm':
+      return { ...state, formData: { ...state.formData, ...action.patch } };
+    case 'updateItem': {
+      const items = [...(state.formData.items || [])];
+      const nextItem = { ...items[action.index], [action.field]: action.value };
+
+      if (action.field === 'productId') {
+        const product = action.products.find((item) => item.id === action.value);
+        if (product) {
+          nextItem.description = product.name;
+          nextItem.unitPrice = Number(product.costo);
+        }
+      }
+
+      items[action.index] = nextItem;
+      const totals = calculateTotals(items);
+      return { ...state, formData: { ...state.formData, items, ...totals } };
+    }
+    case 'removeItem': {
+      const items = (state.formData.items || []).filter((_, index) => index !== action.index);
+      return { ...state, formData: { ...state.formData, items } };
+    }
+    default:
+      return state;
+  }
+};
+
 export interface SupplierInvoicesViewProps {
   invoices: SupplierInvoice[];
   suppliers: Supplier[];
@@ -94,75 +198,36 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
     [activeSuppliers],
   );
 
-  const [editingInvoice, setEditingInvoice] = useState<SupplierInvoice | null>(null);
-  const [invoiceToDelete, setInvoiceToDelete] = useState<SupplierInvoice | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [formData, setFormData] = useState<Partial<SupplierInvoice>>({
-    linkedSaleId: '',
-    supplierId: '',
-    supplierName: '',
-    id: '',
-    issueDate: getLocalDateString(),
-    dueDate: addDaysToDateOnly(getLocalDateString(), 30),
-    status: 'draft',
-    subtotal: 0,
-    total: 0,
-    amountPaid: 0,
-    notes: '',
-    items: [],
-  });
+  const [state, dispatch] = useReducer(
+    supplierInvoicesReducer,
+    undefined,
+    createSupplierInvoicesState,
+  );
+  const { editingInvoice, invoiceToDelete, isModalOpen, isDeleteConfirmOpen, formData } = state;
 
   const openEditModal = useCallback((invoice: SupplierInvoice) => {
-    setEditingInvoice(invoice);
-    setFormData({
-      ...invoice,
-      issueDate: invoice.issueDate ? normalizeDateOnlyString(invoice.issueDate) : '',
-      dueDate: invoice.dueDate ? normalizeDateOnlyString(invoice.dueDate) : '',
-      items: invoice.items.map((item) => ({ ...item })),
-    });
-    setIsModalOpen(true);
+    dispatch({ type: 'openEdit', invoice });
   }, []);
 
   const confirmDelete = useCallback((invoice: SupplierInvoice) => {
-    setInvoiceToDelete(invoice);
-    setIsDeleteConfirmOpen(true);
+    dispatch({ type: 'confirmDelete', invoice });
   }, []);
 
   const handleDelete = useCallback(async () => {
     if (!invoiceToDelete) return;
     await onDeleteInvoice(invoiceToDelete.id);
-    setIsDeleteConfirmOpen(false);
-    setInvoiceToDelete(null);
+    dispatch({ type: 'deleteSuccess' });
   }, [invoiceToDelete, onDeleteInvoice]);
 
   const updateItem = useCallback(
     (index: number, field: keyof SupplierInvoiceItem, value: string | number) => {
-      setFormData((prev) => {
-        const items = [...(prev.items || [])];
-        const nextItem = { ...items[index], [field]: value };
-
-        if (field === 'productId') {
-          const product = products.find((item) => item.id === value);
-          if (product) {
-            nextItem.description = product.name;
-            nextItem.unitPrice = Number(product.costo);
-          }
-        }
-
-        items[index] = nextItem;
-        const totals = calculateTotals(items);
-        return { ...prev, items, ...totals };
-      });
+      dispatch({ type: 'updateItem', index, field, value, products });
     },
     [products],
   );
 
   const removeItem = useCallback((index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      items: (prev.items || []).filter((_, i) => i !== index),
-    }));
+    dispatch({ type: 'removeItem', index });
   }, []);
 
   const handleSubmit = useCallback(
@@ -183,7 +248,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         })),
       });
 
-      setIsModalOpen(false);
+      dispatch({ type: 'submitSuccess' });
     },
     [editingInvoice, formData, onUpdateInvoice],
   );
@@ -343,7 +408,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+      <Modal isOpen={isModalOpen} onClose={() => dispatch({ type: 'closeModal' })}>
         <ModalContent size="full" className="max-h-[90vh]">
           <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
             <ModalHeader>
@@ -358,7 +423,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                   ? t('accounting:supplierInvoices.editInvoice')
                   : t('accounting:supplierInvoices.addInvoice')}
               </ModalTitle>
-              <ModalCloseButton onClick={() => setIsModalOpen(false)} />
+              <ModalCloseButton onClick={() => dispatch({ type: 'closeModal' })} />
             </ModalHeader>
 
             <ModalBody className="flex-1 space-y-5">
@@ -375,11 +440,13 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                       value={formData.supplierId || ''}
                       onChange={(value) => {
                         const supplier = suppliers.find((item) => item.id === value);
-                        setFormData((prev) => ({
-                          ...prev,
-                          supplierId: value as string,
-                          supplierName: supplier?.name || '',
-                        }));
+                        dispatch({
+                          type: 'patchForm',
+                          patch: {
+                            supplierId: value as string,
+                            supplierName: supplier?.name || '',
+                          },
+                        });
                       }}
                       searchable={true}
                       label={t('accounting:supplierInvoices.supplier')}
@@ -397,7 +464,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                       required
                       value={formData.id || ''}
                       onChange={(event) =>
-                        setFormData((prev) => ({ ...prev, id: event.target.value }))
+                        dispatch({ type: 'patchForm', patch: { id: event.target.value } })
                       }
                       className="font-medium"
                       placeholder="INV-XXXX"
@@ -413,7 +480,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                       required
                       value={formData.issueDate || ''}
                       onChange={(event) =>
-                        setFormData((prev) => ({ ...prev, issueDate: event.target.value }))
+                        dispatch({ type: 'patchForm', patch: { issueDate: event.target.value } })
                       }
                     />
                   </Field>
@@ -427,7 +494,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                       required
                       value={formData.dueDate || ''}
                       onChange={(event) =>
-                        setFormData((prev) => ({ ...prev, dueDate: event.target.value }))
+                        dispatch({ type: 'patchForm', patch: { dueDate: event.target.value } })
                       }
                     />
                   </Field>
@@ -439,10 +506,10 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                       options={statusOptions}
                       value={formData.status || 'draft'}
                       onChange={(value) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          status: value as SupplierInvoice['status'],
-                        }))
+                        dispatch({
+                          type: 'patchForm',
+                          patch: { status: value as SupplierInvoice['status'] },
+                        })
                       }
                       label={t('accounting:supplierInvoices.status')}
                       searchable={false}
@@ -708,7 +775,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     rows={4}
                     value={formData.notes || ''}
                     onChange={(event) =>
-                      setFormData((prev) => ({ ...prev, notes: event.target.value }))
+                      dispatch({ type: 'patchForm', patch: { notes: event.target.value } })
                     }
                     className="min-h-28 resize-none"
                     placeholder={t('accounting:supplierInvoices.notesPlaceholder')}
@@ -738,10 +805,10 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                       label: t('accounting:supplierInvoices.amountPaid'),
                       value: formData.amountPaid || 0,
                       onChange: (value) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          amountPaid: value === '' ? 0 : Number(value),
-                        })),
+                        dispatch({
+                          type: 'patchForm',
+                          patch: { amountPaid: value === '' ? 0 : Number(value) },
+                        }),
                     }}
                     balanceDue={{
                       label: t('accounting:supplierInvoices.balanceDue'),
@@ -754,7 +821,11 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
             </ModalBody>
 
             <ModalFooter>
-              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => dispatch({ type: 'closeModal' })}
+              >
                 {t('common:buttons.cancel')}
               </Button>
               <Button type="submit">
@@ -767,7 +838,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
 
       <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen}
-        onClose={() => setIsDeleteConfirmOpen(false)}
+        onClose={() => dispatch({ type: 'deleteSuccess' })}
         onConfirm={() => {
           void handleDelete();
         }}

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import type { Client, ClientsOrder } from '../../../types';
-import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
 import {
   expectSourceContainsAll,
@@ -9,7 +9,17 @@ import {
   readComponentSource,
 } from '../modalStylingTestUtils';
 
-installI18nMock();
+// Stable `t`/`i18n` references: opening the edit modal mounts OrderVersionsPanel, whose
+// `reload` puts `t` in a useCallback dep array. The shared installI18nMock helper hands out a
+// fresh `t` per render, which makes that effect re-fire forever (the panel's reducer always
+// yields a new state). A stable identity mirrors real react-i18next and avoids the loop.
+const t = (key: string) => key;
+const i18n = { language: 'en', changeLanguage: () => {} };
+mock.module('react-i18next', () => ({
+  useTranslation: () => ({ t, i18n }),
+  Trans: ({ children }: { children: ReactNode }) => children,
+  initReactI18next: { type: '3rdParty', init: () => {} },
+}));
 
 mock.module('sonner', () => ({
   toast: {

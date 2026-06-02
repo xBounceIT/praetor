@@ -103,16 +103,20 @@ const Modal: React.FC<ModalProps> = ({
         renderWithShadcnFormPrimitives,
       );
 
+  const cancelPendingFocus = useCallback(() => {
+    focusRunIdRef.current += 1;
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
     }
 
     return () => {
-      focusRunIdRef.current += 1;
+      cancelPendingFocus();
       document.body.style.overflow = '';
     };
-  }, [isOpen]);
+  }, [isOpen, cancelPendingFocus]);
 
   const focusModalContentNow = useCallback(() => {
     const content = contentRef.current;

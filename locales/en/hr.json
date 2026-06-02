@@ -143,6 +143,8 @@
     "employmentSection": "Employment",
     "emergencySection": "Emergency and Notes",
     "notSet": "Not set",
+    "firstName": "First Name",
+    "lastName": "Last Name",
     "email": "Email Address",
     "phone": "Phone Number",
     "jobTitle": "Job Title",

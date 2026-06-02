@@ -33,7 +33,7 @@ Per ogni giorno feriale valido, Praetor prepara la bozza con gli orari di entrat
 
 Nel prospetto, **Note** e **Trasferta** usano le opzioni configurate dagli amministratori nelle impostazioni globali RIL. **Cod** è selezionabile tra `TR` trasferta e `SD` sede disagiata.
 
-Prima dell'esportazione, ogni giorno feriale valido deve avere **Entrata**, **Uscita** e **Trasferta** compilati. Il pulsante **Esporta Excel** crea un file `.xlsx` con un solo foglio, **Prospetto Presenze**, e colonne compatibili con il modello RIL: Giorno, Entrata, Uscita, Ore, PICAP, Reperib. Telef., Note, Trasferta, Cod e Commessa.
+Prima dell'esportazione, ogni giorno feriale valido deve avere **Entrata**, **Uscita** e **Trasferta** compilati. Il pulsante **Esporta Excel** crea un file `.xlsx` con un solo foglio, **Prospetto Presenze**, e colonne compatibili con il modello RIL: Giorno, Entrata, Uscita, Ore, PICAP, Reperib. Telef., Note, Trasferta, Cod e Commessa. Il foglio riporta in alto **Dipendente**, **Società** e **MESE**, seguiti dalla griglia dei giorni e, in fondo, dalla legenda dei codici (P, P2, M, F, TR, SD) e dai totali del mese: **Giorni Lavorati**, **Ore Extra**, **Totale Ore**, **Totale PICAP** e **Pausa Pranzo**.
 
 ## Attività ricorrenti
 

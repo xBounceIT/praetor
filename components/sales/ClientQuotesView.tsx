@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -56,6 +57,7 @@ import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import ProductSelectOrFallback from './ProductSelectOrFallback';
 import QuoteVersionsPanel from './QuoteVersionsPanel';
 
 export interface ClientQuotesViewProps {
@@ -764,35 +766,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   const isLinkedProductMissing = (item: QuoteItem) =>
     Boolean(item.supplierQuoteItemId && (!item.productId || !activeProductIds.has(item.productId)));
 
-  const renderProductSelectOrFallback = (
-    item: QuoteItem,
-    index: number,
-    selectProps: { className?: string; buttonClassName?: string },
-  ) => {
-    const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
-    if (isLinkedProductMissing(item)) {
-      return (
-        <input
-          type="text"
-          readOnly
-          value={item.productName || ''}
-          aria-label={t('sales:clientQuotes.selectProduct', { defaultValue: 'Select product' })}
-          className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-sm text-zinc-600"
-        />
-      );
-    }
-    return (
-      <SelectControl
-        options={activeProductOptions}
-        value={item.productId}
-        onChange={(val) => updateProductRow(index, 'productId', val as string)}
-        placeholder={t('sales:clientQuotes.selectProduct')}
-        searchable={true}
-        disabled={isReadOnly || isLinkedToSupplierQuote}
-        className={selectProps.className}
-        buttonClassName={selectProps.buttonClassName}
-      />
-    );
+  const updateProductSelection = (index: number, productId: string) => {
+    updateProductRow(index, 'productId', productId);
   };
 
   const handleUnitTypeChange = (index: number, newType: SupplierUnitType) => {
@@ -1372,39 +1347,26 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                   </div>
                 )}
                 {editingQuote?.linkedOfferId && (
-                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-8 items-center justify-center rounded-md border border-border bg-background text-primary">
-                        <i className="fa-solid fa-link" aria-hidden="true"></i>
-                      </div>
-                      <div>
-                        <div className="text-sm font-semibold text-foreground">
-                          {t('sales:clientQuotes.linkedOffer', { defaultValue: 'Linked Offer' })}
-                        </div>
-                        <div className="text-xs text-primary">
-                          {t('sales:clientQuotes.linkedOfferInfo', {
-                            number: editingQuote.linkedOfferId,
-                            defaultValue: 'Offer #{{number}}',
-                          })}
-                        </div>
-                        <div className="mt-0.5 text-[10px] text-muted-foreground">
-                          {t('sales:clientQuotes.offerDetailsReadOnly', {
-                            defaultValue: '(Quote details are read-only)',
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                    {onViewOffers && (
-                      <Button
-                        type="button"
-                        variant="link"
-                        onClick={() => onViewOffers(editingQuote.id)}
-                        className="h-auto px-0 text-xs font-semibold"
-                      >
-                        {t('sales:clientQuotes.viewOffer', { defaultValue: 'View Offer' })}
-                      </Button>
-                    )}
-                  </div>
+                  <LinkedRecordBanner
+                    label={t('sales:clientQuotes.linkedOffer', { defaultValue: 'Linked Offer' })}
+                    value={t('sales:clientQuotes.linkedOfferInfo', {
+                      number: editingQuote.linkedOfferId,
+                      defaultValue: 'Offer #{{number}}',
+                    })}
+                    note={t('sales:clientQuotes.offerDetailsReadOnly', {
+                      defaultValue: '(Quote details are read-only)',
+                    })}
+                    action={
+                      onViewOffers
+                        ? {
+                            label: t('sales:clientQuotes.viewOffer', {
+                              defaultValue: 'View Offer',
+                            }),
+                            onClick: () => onViewOffers(editingQuote.id),
+                          }
+                        : undefined
+                    }
+                  />
                 )}
                 {/* Client Selection */}
                 <div className="space-y-2">
@@ -1644,11 +1606,20 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                       statusLabel={statusLabel}
                                     />
                                   </div>
-                                  {renderProductSelectOrFallback(item, index, {
-                                    className: 'min-w-0',
-                                    buttonClassName:
-                                      'w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm',
-                                  })}
+                                  <ProductSelectOrFallback
+                                    item={item}
+                                    index={index}
+                                    options={activeProductOptions}
+                                    isProductMissing={isLinkedProductMissing(item)}
+                                    isReadOnly={isReadOnly}
+                                    ariaLabel={t('sales:clientQuotes.selectProduct', {
+                                      defaultValue: 'Select product',
+                                    })}
+                                    placeholder={t('sales:clientQuotes.selectProduct')}
+                                    onProductChange={updateProductSelection}
+                                    className="min-w-0"
+                                    buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
+                                  />
                                 </div>
                               </div>
                               <Button
@@ -1813,11 +1784,20 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   />
                                 </div>
                                 <div className="col-span-3 min-w-0">
-                                  {renderProductSelectOrFallback(item, index, {
-                                    className: 'min-w-0',
-                                    buttonClassName:
-                                      'w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm',
-                                  })}
+                                  <ProductSelectOrFallback
+                                    item={item}
+                                    index={index}
+                                    options={activeProductOptions}
+                                    isProductMissing={isLinkedProductMissing(item)}
+                                    isReadOnly={isReadOnly}
+                                    ariaLabel={t('sales:clientQuotes.selectProduct', {
+                                      defaultValue: 'Select product',
+                                    })}
+                                    placeholder={t('sales:clientQuotes.selectProduct')}
+                                    onProductChange={updateProductSelection}
+                                    className="min-w-0"
+                                    buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
+                                  />
                                 </div>
                                 <div className="col-span-2">
                                   <div className="flex items-center gap-1">

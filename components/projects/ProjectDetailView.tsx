@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Area,
@@ -12,6 +12,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,7 +37,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useCurrentUserId } from '../../contexts/CurrentUserContext';
+import { useCurrentUserId } from '../../contexts/useCurrentUserId';
 import { entriesApi, projectsApi } from '../../services/api';
 import type {
   BillingFrequency,
@@ -247,15 +248,33 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
 
   // Analytics state
   const [entries, setEntries] = useState<TimeEntry[]>([]);
-  const [entriesLoading, setEntriesLoading] = useState(true);
+  const [entriesLoading, setEntriesLoading] = useState(false);
   const [entriesTruncated, setEntriesTruncated] = useState(false);
   const [entriesError, setEntriesError] = useState<'forbidden' | 'failed' | null>(null);
   const [assignedUserIds, setAssignedUserIds] = useState<string[]>([]);
-  const [assignedLoading, setAssignedLoading] = useState(true);
+  const [assignedLoading, setAssignedLoading] = useState(false);
+  const entriesLoadKey = `${project.id}|${canViewEntries ? '1' : '0'}`;
+  const assignedLoadKey = `${project.id}|${canManageAssignments ? '1' : '0'}`;
+  const loadedEntriesKeyRef = useRef<string | null>(null);
+  const loadedAssignedKeyRef = useRef<string | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<ProjectTask | null>(null);
   const [isTaskDeleteConfirmOpen, setIsTaskDeleteConfirmOpen] = useState(false);
   const [isAssignmentsOpen, setIsAssignmentsOpen] = useState(false);
+
+  if (loadedEntriesKeyRef.current !== entriesLoadKey) {
+    loadedEntriesKeyRef.current = entriesLoadKey;
+    setEntries([]);
+    setEntriesTruncated(false);
+    setEntriesError(canViewEntries ? null : 'forbidden');
+    setEntriesLoading(canViewEntries);
+  }
+
+  if (loadedAssignedKeyRef.current !== assignedLoadKey) {
+    loadedAssignedKeyRef.current = assignedLoadKey;
+    setAssignedUserIds([]);
+    setAssignedLoading(canManageAssignments);
+  }
 
   // Dashboard layout: position / size / visibility of the analytics cards on a
   // free-form grid, plus saved named views. The named-view library is now
@@ -286,17 +305,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     // Short-circuit when the caller lacks the tracker view permission — the route
     // would return 403 and we'd burn 10 round-trips for nothing.
     if (!canViewEntries) {
-      setEntries([]);
-      setEntriesTruncated(false);
-      setEntriesError('forbidden');
-      setEntriesLoading(false);
       return;
     }
     const ac = new AbortController();
-    setEntriesLoading(true);
-    setEntries([]);
-    setEntriesTruncated(false);
-    setEntriesError(null);
     (async () => {
       try {
         const collected: TimeEntry[] = [];
@@ -345,15 +356,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     // that permission the fetch 403s, we'd swallow the error, and the KPI would render
     // a misleading "0" team size for projects that actually have members.
     if (!canManageAssignments) {
-      setAssignedUserIds([]);
-      setAssignedLoading(false);
       return;
     }
     const ac = new AbortController();
-    setAssignedLoading(true);
-    // Reset before the new fetch so the avatar row doesn't briefly show the
-    // previous project's members while switching projects.
-    setAssignedUserIds([]);
     projectsApi
       .getUsers(project.id, ac.signal)
       .then((ids) => {
@@ -392,14 +397,13 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     const byUser = new Map<string, Map<string, number>>();
     const taskTotals = new Map<string, number>();
     const taskNames = new Map<string, string>();
+    const tasksById = new Map(tasks.map((task) => [task.id, task]));
     for (const e of entries) {
       const taskKey = e.taskId ?? `name:${e.task || ''}`;
       const dur = e.duration ?? 0;
       taskTotals.set(taskKey, (taskTotals.get(taskKey) ?? 0) + dur);
       // Prefer the current task name (handles renames), then the entry snapshot.
-      const currentName = e.taskId
-        ? (tasks.find((tk) => tk.id === e.taskId)?.name ?? e.task)
-        : e.task;
+      const currentName = e.taskId ? (tasksById.get(e.taskId)?.name ?? e.task) : e.task;
       const resolved = currentName || unknownLabel;
       const existing = taskNames.get(taskKey);
       if (!existing || (existing === unknownLabel && resolved !== unknownLabel)) {
@@ -930,32 +934,18 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             </p>
           </div>
           {linkedOrder && (
-            <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
-              <div className="flex items-center gap-3">
-                <div className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
-                  <i className="fa-solid fa-link" aria-hidden="true"></i>
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-foreground">
-                    {t('projects:projects.linkedOrder')}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {formatOrderId(linkedOrder.id)} · {linkedOrder.clientName}
-                  </div>
-                </div>
-              </div>
-              {onViewOrder && (
-                <Button
-                  type="button"
-                  variant="link"
-                  size="sm"
-                  onClick={() => onViewOrder(linkedOrder.id)}
-                  className="px-0"
-                >
-                  {t('projects:projects.viewOrder')}
-                </Button>
-              )}
-            </div>
+            <LinkedRecordBanner
+              label={t('projects:projects.linkedOrder')}
+              value={formatOrderId(linkedOrder.id) + ' · ' + linkedOrder.clientName}
+              action={
+                onViewOrder
+                  ? {
+                      label: t('projects:projects.viewOrder'),
+                      onClick: () => onViewOrder(linkedOrder.id),
+                    }
+                  : undefined
+              }
+            />
           )}
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -1419,7 +1409,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               subtitle={teamSize > 0 ? t('projects:detail.kpi.teamSizeSubtitle') : undefined}
               footer={
                 !assignedLoading && assignedUsers.length > 0 ? (
-                  <div className="flex -space-x-2">
+                  <div className="flex [&>*+*]:-ml-2">
                     {assignedUsers.slice(0, 6).map((u) => (
                       <Avatar key={u.id} className="size-7 border-2 border-card">
                         <AvatarFallback className="text-[10px]">
@@ -2079,7 +2069,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
   // h-full so the card fills its dashboard grid cell instead of leaving a
   // transparent strip below short content.
   <Card className="h-full gap-3">
-    <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
+    <CardHeader className="flex flex-row items-start justify-between gap-2">
       <CardDescription className="text-xs font-medium uppercase tracking-wide">
         {title}
       </CardDescription>
@@ -2095,7 +2085,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
         {loading ? (
           <Skeleton className="h-8 w-24" />
         ) : unavailable ? (
-          <span className="text-base text-muted-foreground">—</span>
+          <span className="text-base text-muted-foreground">-</span>
         ) : (
           value
         )}
@@ -2149,7 +2139,7 @@ const ChartLocked: React.FC<{
     },
   }[variant];
   return (
-    <div className="relative" role="status" aria-live="polite">
+    <output className="relative block" aria-live="polite">
       {/* Dashed box matching the bar/area chart's height tokens, so the locked
           state keeps the same footprint as the live chart. */}
       <div className="h-[260px] w-full rounded-lg border-2 border-dashed border-muted/40 xl:h-[320px]" />
@@ -2164,7 +2154,7 @@ const ChartLocked: React.FC<{
           <span className="text-[11px] opacity-90">{description}</span>
         </div>
       </div>
-    </div>
+    </output>
   );
 };
 
@@ -2229,14 +2219,21 @@ const UserTaskTooltip: React.FC<{
   if (!active || !payload?.length) return null;
   const userName = payload[0]?.payload?.userName;
   const meta = new Map(series.map((s) => [s.seriesKey, s]));
-  const rows = payload
-    .filter((p) => typeof p.value === 'number' && p.value > 0)
-    .map((p) => ({
-      key: p.dataKey ?? '',
-      name: meta.get(p.dataKey ?? '')?.name ?? p.dataKey ?? '',
-      color: meta.get(p.dataKey ?? '')?.color ?? 'var(--muted-foreground)',
-      value: p.value as number,
-    }));
+  const rows = payload.reduce<Array<{ key: string; name: string; color: string; value: number }>>(
+    (acc, p) => {
+      if (typeof p.value !== 'number' || p.value <= 0) return acc;
+      const key = p.dataKey ?? '';
+      const itemMeta = meta.get(key);
+      acc.push({
+        key,
+        name: itemMeta?.name ?? p.dataKey ?? '',
+        color: itemMeta?.color ?? 'var(--muted-foreground)',
+        value: p.value,
+      });
+      return acc;
+    },
+    [],
+  );
   if (rows.length === 0) return null;
   const total = rows.reduce((s, r) => s + r.value, 0);
   const fmt = (n: number) => n.toLocaleString(language, { maximumFractionDigits: 1 });
@@ -2246,7 +2243,7 @@ const UserTaskTooltip: React.FC<{
       {rows.map((r) => (
         <div key={r.key} className="flex items-center gap-2">
           <span
-            className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
+            className="size-2.5 shrink-0 rounded-[2px]"
             style={{ backgroundColor: r.color }}
             aria-hidden="true"
           />

@@ -1,6 +1,7 @@
 import type React from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
+import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -76,6 +77,139 @@ const calculateTotals = (
   };
 };
 
+const createDefaultSupplierOrderForm = (): Partial<SupplierSaleOrder> => ({
+  linkedQuoteId: '',
+  supplierId: '',
+  supplierName: '',
+  items: [],
+  paymentTerms: 'immediate',
+  discount: 0,
+  discountType: 'percentage',
+  status: 'draft',
+  notes: '',
+});
+
+const supplierOrderToFormData = (order: SupplierSaleOrder): Partial<SupplierSaleOrder> => ({
+  ...order,
+  items: order.items.map((item) => ({ ...item })),
+});
+
+const supplierOrderVersionToFormData = (
+  version: SupplierOrderVersion,
+): Partial<SupplierSaleOrder> => ({
+  ...version.snapshot.order,
+  items: version.snapshot.items.map((item) => ({ ...item })),
+});
+
+type SupplierOrdersState = {
+  editingOrder: SupplierSaleOrder | null;
+  orderToDelete: SupplierSaleOrder | null;
+  isModalOpen: boolean;
+  isDeleteConfirmOpen: boolean;
+  previewVersion: SupplierOrderVersion | null;
+  formData: Partial<SupplierSaleOrder>;
+};
+
+type SupplierOrdersAction =
+  | { type: 'openEdit'; order: SupplierSaleOrder }
+  | { type: 'closeModal' }
+  | { type: 'previewVersion'; version: SupplierOrderVersion }
+  | { type: 'clearPreview' }
+  | { type: 'versionRestored'; order: SupplierSaleOrder }
+  | { type: 'confirmDelete'; order: SupplierSaleOrder }
+  | { type: 'deleteSuccess' }
+  | { type: 'submitSuccess' }
+  | { type: 'patchForm'; patch: Partial<SupplierSaleOrder> }
+  | {
+      type: 'updateItem';
+      index: number;
+      field: keyof SupplierSaleOrderItem;
+      value: string | number;
+      products: Product[];
+    }
+  | { type: 'removeItem'; index: number };
+
+const createSupplierOrdersState = (): SupplierOrdersState => ({
+  editingOrder: null,
+  orderToDelete: null,
+  isModalOpen: false,
+  isDeleteConfirmOpen: false,
+  previewVersion: null,
+  formData: createDefaultSupplierOrderForm(),
+});
+
+const supplierOrdersReducer = (
+  state: SupplierOrdersState,
+  action: SupplierOrdersAction,
+): SupplierOrdersState => {
+  switch (action.type) {
+    case 'openEdit':
+      return {
+        ...state,
+        editingOrder: action.order,
+        formData: supplierOrderToFormData(action.order),
+        previewVersion: null,
+        isModalOpen: true,
+      };
+    case 'closeModal':
+      return { ...state, isModalOpen: false, previewVersion: null };
+    case 'previewVersion':
+      return {
+        ...state,
+        previewVersion: action.version,
+        formData: supplierOrderVersionToFormData(action.version),
+      };
+    case 'clearPreview':
+      return state.editingOrder
+        ? {
+            ...state,
+            formData: supplierOrderToFormData(state.editingOrder),
+            previewVersion: null,
+          }
+        : { ...state, previewVersion: null };
+    case 'versionRestored':
+      return {
+        ...state,
+        editingOrder: action.order,
+        formData: supplierOrderToFormData(action.order),
+        previewVersion: null,
+      };
+    case 'confirmDelete':
+      return { ...state, orderToDelete: action.order, isDeleteConfirmOpen: true };
+    case 'deleteSuccess':
+      return { ...state, orderToDelete: null, isDeleteConfirmOpen: false };
+    case 'submitSuccess':
+      return { ...state, isModalOpen: false };
+    case 'patchForm':
+      return { ...state, formData: { ...state.formData, ...action.patch } };
+    case 'updateItem': {
+      const items = [...(state.formData.items || [])];
+      const nextItem = { ...items[action.index], [action.field]: action.value };
+
+      if (action.field === 'productId') {
+        const product = action.products.find((item) => item.id === action.value);
+        if (product) {
+          nextItem.productName = product.name;
+          nextItem.unitPrice = Number(product.costo);
+        }
+      }
+
+      items[action.index] = nextItem;
+      return { ...state, formData: { ...state.formData, items } };
+    }
+    case 'removeItem':
+      return {
+        ...state,
+        formData: {
+          ...state.formData,
+          items: (state.formData.items || []).filter((_, index) => index !== action.index),
+        },
+      };
+    default:
+      return state;
+  }
+};
+
 export interface SupplierOrdersViewProps {
   orders: SupplierSaleOrder[];
   suppliers: Supplier[];
@@ -122,103 +256,57 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
     [activeSuppliers],
   );
 
-  const [editingOrder, setEditingOrder] = useState<SupplierSaleOrder | null>(null);
-  const [orderToDelete, setOrderToDelete] = useState<SupplierSaleOrder | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [previewVersion, setPreviewVersion] = useState<SupplierOrderVersion | null>(null);
-  const [formData, setFormData] = useState<Partial<SupplierSaleOrder>>({
-    linkedQuoteId: '',
-    supplierId: '',
-    supplierName: '',
-    items: [],
-    paymentTerms: 'immediate',
-    discount: 0,
-    discountType: 'percentage',
-    status: 'draft',
-    notes: '',
-  });
+  const [state, dispatch] = useReducer(supplierOrdersReducer, undefined, createSupplierOrdersState);
+  const {
+    editingOrder,
+    orderToDelete,
+    isModalOpen,
+    isDeleteConfirmOpen,
+    previewVersion,
+    formData,
+  } = state;
 
   const baseReadOnly = Boolean(editingOrder && editingOrder.status !== 'draft');
   const isReadOnly = baseReadOnly || previewVersion !== null;
 
   const openEditModal = useCallback((order: SupplierSaleOrder) => {
-    setEditingOrder(order);
-    setFormData({
-      ...order,
-      items: order.items.map((item) => ({ ...item })),
-    });
-    setPreviewVersion(null);
-    setIsModalOpen(true);
+    dispatch({ type: 'openEdit', order });
   }, []);
 
   const closeEditModal = useCallback(() => {
-    setIsModalOpen(false);
-    setPreviewVersion(null);
+    dispatch({ type: 'closeModal' });
   }, []);
 
   const handleVersionPreview = useCallback((version: SupplierOrderVersion) => {
-    setPreviewVersion(version);
-    setFormData({
-      ...version.snapshot.order,
-      items: version.snapshot.items.map((item) => ({ ...item })),
-    });
+    dispatch({ type: 'previewVersion', version });
   }, []);
 
   const handleClearPreview = useCallback(() => {
-    if (editingOrder) {
-      setFormData({
-        ...editingOrder,
-        items: editingOrder.items.map((item) => ({ ...item })),
-      });
-    }
-    setPreviewVersion(null);
-  }, [editingOrder]);
+    dispatch({ type: 'clearPreview' });
+  }, []);
 
   const handleVersionRestored = useCallback(
     async (updated: SupplierSaleOrder) => {
-      setEditingOrder(updated);
-      setFormData({
-        ...updated,
-        items: updated.items.map((item) => ({ ...item })),
-      });
-      setPreviewVersion(null);
+      dispatch({ type: 'versionRestored', order: updated });
       if (onOrderRestored) await onOrderRestored(updated);
     },
     [onOrderRestored],
   );
 
   const confirmDelete = useCallback((order: SupplierSaleOrder) => {
-    setOrderToDelete(order);
-    setIsDeleteConfirmOpen(true);
+    dispatch({ type: 'confirmDelete', order });
   }, []);
 
   const handleDelete = useCallback(async () => {
     if (!orderToDelete) return;
     await onDeleteOrder(orderToDelete.id);
-    setIsDeleteConfirmOpen(false);
-    setOrderToDelete(null);
+    dispatch({ type: 'deleteSuccess' });
   }, [onDeleteOrder, orderToDelete]);
 
   const updateItem = useCallback(
     (index: number, field: keyof SupplierSaleOrderItem, value: string | number) => {
       if (isReadOnly) return;
-
-      setFormData((prev) => {
-        const items = [...(prev.items || [])];
-        const nextItem = { ...items[index], [field]: value };
-
-        if (field === 'productId') {
-          const product = products.find((item) => item.id === value);
-          if (product) {
-            nextItem.productName = product.name;
-            nextItem.unitPrice = Number(product.costo);
-          }
-        }
-
-        items[index] = nextItem;
-        return { ...prev, items };
-      });
+      dispatch({ type: 'updateItem', index, field, value, products });
     },
     [isReadOnly, products],
   );
@@ -226,10 +314,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   const removeItem = useCallback(
     (index: number) => {
       if (isReadOnly) return;
-      setFormData((prev) => ({
-        ...prev,
-        items: (prev.items || []).filter((_, i) => i !== index),
-      }));
+      dispatch({ type: 'removeItem', index });
     },
     [isReadOnly],
   );
@@ -249,7 +334,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         })),
       });
 
-      setIsModalOpen(false);
+      dispatch({ type: 'submitSuccess' });
     },
     [editingOrder, formData, onUpdateOrder],
   );
@@ -544,41 +629,25 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 
                 {/* Linked Quote Info */}
                 {formData.linkedQuoteId && (
-                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
-                        <i className="fa-solid fa-link" aria-hidden="true"></i>
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-foreground">
-                          {t('accounting:supplierOrders.linkedQuote')}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {t('accounting:supplierOrders.linkedQuoteInfo', {
-                            number: formData.linkedQuoteId,
-                          })}
-                        </div>
-                        <div className="mt-0.5 text-[10px] text-muted-foreground">
-                          {t('accounting:supplierOrders.quoteDetailsReadOnly')}
-                        </div>
-                      </div>
-                    </div>
-                    {onViewQuote && (
-                      <Button
-                        type="button"
-                        variant="link"
-                        size="sm"
-                        onClick={() => {
-                          const linkedQuoteId = formData.linkedQuoteId;
-                          if (!linkedQuoteId) return;
-                          onViewQuote(linkedQuoteId);
-                        }}
-                        className="px-0"
-                      >
-                        {t('accounting:supplierOrders.viewQuote')}
-                      </Button>
-                    )}
-                  </div>
+                  <LinkedRecordBanner
+                    label={t('accounting:supplierOrders.linkedQuote')}
+                    value={t('accounting:supplierOrders.linkedQuoteInfo', {
+                      number: formData.linkedQuoteId,
+                    })}
+                    note={t('accounting:supplierOrders.quoteDetailsReadOnly')}
+                    action={
+                      onViewQuote
+                        ? {
+                            label: t('accounting:supplierOrders.viewQuote'),
+                            onClick: () => {
+                              const linkedQuoteId = formData.linkedQuoteId;
+                              if (!linkedQuoteId) return;
+                              onViewQuote(linkedQuoteId);
+                            },
+                          }
+                        : undefined
+                    }
+                  />
                 )}
 
                 <div className="space-y-2">
@@ -594,11 +663,13 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                         value={formData.supplierId || ''}
                         onChange={(value) => {
                           const supplier = suppliers.find((item) => item.id === value);
-                          setFormData((prev) => ({
-                            ...prev,
-                            supplierId: value as string,
-                            supplierName: supplier?.name || '',
-                          }));
+                          dispatch({
+                            type: 'patchForm',
+                            patch: {
+                              supplierId: value as string,
+                              supplierName: supplier?.name || '',
+                            },
+                          });
                         }}
                         searchable={true}
                         disabled={isReadOnly}
@@ -618,10 +689,10 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                         options={paymentTermsOptions}
                         value={formData.paymentTerms || 'immediate'}
                         onChange={(value) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            paymentTerms: value as SupplierSaleOrder['paymentTerms'],
-                          }))
+                          dispatch({
+                            type: 'patchForm',
+                            patch: { paymentTerms: value as SupplierSaleOrder['paymentTerms'] },
+                          })
                         }
                         searchable={false}
                         disabled={isReadOnly}
@@ -874,7 +945,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                       value={formData.notes || ''}
                       disabled={isReadOnly}
                       onChange={(event) =>
-                        setFormData((prev) => ({ ...prev, notes: event.target.value }))
+                        dispatch({ type: 'patchForm', patch: { notes: event.target.value } })
                       }
                       className="min-h-28 resize-none"
                     />
@@ -896,12 +967,12 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                         value: formData.discount || 0,
                         type: formData.discountType || 'percentage',
                         onChange: (value) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            discount: value === '' ? 0 : Number(value),
-                          })),
+                          dispatch({
+                            type: 'patchForm',
+                            patch: { discount: value === '' ? 0 : Number(value) },
+                          }),
                         onTypeChange: (type) =>
-                          setFormData((prev) => ({ ...prev, discountType: type })),
+                          dispatch({ type: 'patchForm', patch: { discountType: type } }),
                         disabled: isReadOnly,
                       }}
                       discountRow={
@@ -946,7 +1017,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 
       <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen}
-        onClose={() => setIsDeleteConfirmOpen(false)}
+        onClose={() => dispatch({ type: 'deleteSuccess' })}
         onConfirm={() => {
           void handleDelete();
         }}
