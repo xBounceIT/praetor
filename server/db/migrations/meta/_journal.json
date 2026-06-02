@@ -484,6 +484,13 @@
       "when": 1780346533996,
       "tag": "0068_remove_project_color",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1780436147060,
+      "tag": "0069_add_ril_drafts_and_weekday_transfer",
+      "breakpoints": true
     }
   ]
 }

@@ -34,6 +34,11 @@
     "entriesLoaded": "{{count}} voci caricate",
     "totalHours": "{{count}} ore",
     "workedDays": "{{count}} giorni lavorati",
+    "draft": {
+      "saving": "Salvataggio bozza…",
+      "saved": "Bozza salvata",
+      "saveError": "Impossibile salvare la bozza"
+    },
     "summary": {
       "title": "Riepilogo RIL",
       "workedDays": "Giorni Lavorati",

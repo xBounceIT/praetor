@@ -10,7 +10,15 @@ export { clientOffersApi } from './api/clientOffers';
 export { clientQuotesApi } from './api/clientQuotes';
 export { clientsApi } from './api/clients';
 export { clientsOrdersApi } from './api/clientsOrders';
-export type { LoginResponse, PersonalAccessToken, Settings } from './api/contracts';
+export type {
+  LoginResponse,
+  PersonalAccessToken,
+  RilDraft,
+  RilDraftRow,
+  RilWeekday,
+  RilWeekdayTransferDefaults,
+  Settings,
+} from './api/contracts';
 export { emailApi } from './api/email';
 export { employeesApi } from './api/employees';
 export { entriesApi } from './api/entries';
@@ -23,6 +31,7 @@ export { productsApi } from './api/products';
 export { projectRulesApi } from './api/projectRules';
 export { projectsApi } from './api/projects';
 export { reportsApi } from './api/reports';
+export { rilDraftsApi } from './api/rilDrafts';
 export { rolesApi } from './api/roles';
 export type { CreatedMcpToken, McpToken, McpTokenScope } from './api/settings';
 export { MCP_TOKEN_SCOPES, settingsApi } from './api/settings';
@@ -65,6 +74,7 @@ import { productsApi } from './api/products';
 import { projectRulesApi } from './api/projectRules';
 import { projectsApi } from './api/projects';
 import { reportsApi } from './api/reports';
+import { rilDraftsApi } from './api/rilDrafts';
 import { rolesApi } from './api/roles';
 import { settingsApi } from './api/settings';
 import { ssoApi } from './api/sso';
@@ -87,6 +97,7 @@ export default {
   projects: projectsApi,
   tasks: tasksApi,
   entries: entriesApi,
+  rilDrafts: rilDraftsApi,
   products: productsApi,
   projectRules: projectRulesApi,
   quotes: clientQuotesApi,

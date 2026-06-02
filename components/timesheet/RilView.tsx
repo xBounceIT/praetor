@@ -1,6 +1,6 @@
-import { Download, Loader2, RotateCcw } from 'lucide-react';
+import { Check, CircleAlert, Download, Loader2, RotateCcw } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
@@ -24,10 +24,12 @@ import {
 import api from '../../services/api';
 import type { GeneralSettings, Project, TimeEntry, User } from '../../types';
 import {
+  applyRilDraftToRows,
   calculateRilTotals,
   calculateRilWorkedHoursFromTimes,
   DEFAULT_RIL_EXIT_TIME,
   DEFAULT_RIL_START_TIME,
+  extractRilDraftRows,
   formatRilHoursAsDuration,
   formatRilLunchWindow,
   generateRilRows,
@@ -48,6 +50,10 @@ const RIL_CODE_OPTIONS = [
   { value: 'SD', label: 'Sede Disagiata' },
 ] as const;
 const RIL_MONTH_OPTION_DATE_YEAR = 2020;
+// Debounce window for persisting draft edits to the backend after the user stops typing.
+const DRAFT_SAVE_DEBOUNCE_MS = 800;
+
+type RilDraftStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 type RilSelectOption = {
   value: string;
@@ -70,6 +76,9 @@ interface RilViewProps {
     | 'rilNoteOptions'
     | 'rilTransferOptions'
   >;
+  // Current user's per-weekday default "Trasferta" preference (keys 'monday'..'friday'). Applied
+  // only when the user views their own RIL.
+  weekdayTransferDefaults?: Record<string, string>;
 }
 
 type EditableRilField = 'entrance' | 'exit' | 'notes' | 'transfer' | 'code';
@@ -209,6 +218,7 @@ const RilView: React.FC<RilViewProps> = ({
   onViewUserChange,
   projects,
   settings,
+  weekdayTransferDefaults,
 }) => {
   const { t, i18n } = useTranslation('timesheets');
   const [state, dispatch] = useReducer(rilViewReducer, undefined, () => ({
@@ -222,14 +232,33 @@ const RilView: React.FC<RilViewProps> = ({
   const sourceEntriesRef = useRef<TimeEntry[]>([]);
   const projectCatalogRef = useRef<Project[]>([]);
   const loadTokenRef = useRef(0);
+  const [draftStatus, setDraftStatus] = useState<RilDraftStatus>('idle');
+  // Mirror of the latest rows so the debounced save reads current state without re-arming on
+  // every keystroke.
+  const rowsRef = useRef<RilRow[]>([]);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The (user, month) the currently displayed rows belong to. Lets the switch flush target the
+  // sheet being left without making the flush depend on reactive values.
+  const draftContextRef = useRef<{ userId: string; monthKey: string } | null>(null);
+  // The currently in-flight autosave PUT, if any. handleReset chains its DELETE after this so a
+  // save already on the wire can't resurrect the draft the user just discarded.
+  const inFlightSaveRef = useRef<Promise<unknown> | null>(null);
+  // Gates autosave: stays false until a draft GET succeeds for the active (user, month) so a
+  // failed load can't overwrite a draft we never saw, and hydration itself can't trigger a save.
+  const draftSyncReadyRef = useRef(false);
 
   const effectiveUserId = viewingUserId || currentUser.id;
   const selectedUser = availableUsers.find((user) => user.id === effectiveUserId) ?? currentUser;
   const monthBounds = useMemo(() => getRilMonthBounds(normalizeMonthKey(monthKey)), [monthKey]);
+  const draftMonthKey = monthBounds.monthKey;
   const locale = getLocale(i18n.language);
   const defaultStartTime = settings.rilDefaultStartTime || DEFAULT_RIL_START_TIME;
   const defaultExitTime = settings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME;
   const lunchBreakMinutes = settings.rilLunchBreakMinutes ?? 60;
+  // The per-weekday default transfer is a personal preference, so it only applies to the user's
+  // own RIL — not when a manager views someone else's sheet.
+  const ownWeekdayTransferDefaults =
+    effectiveUserId === currentUser.id ? weekdayTransferDefaults : undefined;
   const selectedMonthValue = String(monthBounds.month).padStart(2, '0');
   const selectedYearValue = String(monthBounds.year);
   const noteOptions = useMemo<RilSelectOption[]>(
@@ -295,6 +324,7 @@ const RilView: React.FC<RilViewProps> = ({
         locale,
         noteOptions: normalizeRilNoteOptions(settings.rilNoteOptions),
         transferOptions: transferOptionValues,
+        weekdayTransferDefaults: ownWeekdayTransferDefaults,
       }),
     [
       locale,
@@ -305,11 +335,30 @@ const RilView: React.FC<RilViewProps> = ({
       monthBounds.year,
       settings.rilNoteOptions,
       transferOptionValues,
+      ownWeekdayTransferDefaults,
     ],
   );
 
   const loadMonthEntries = useCallback(async () => {
+    // Switching sheets: flush a pending debounced save for the month we're leaving before its rows
+    // get replaced. draftContextRef holds the outgoing (user, month); rowsRef still holds its rows
+    // (the new load dispatches asynchronously below). This is not an effect cleanup, so it runs
+    // synchronously on the switch path.
+    const leaving = draftContextRef.current;
+    if (leaving && saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+      if (rowsRef.current.length) {
+        void api.rilDrafts
+          .save(leaving.monthKey, extractRilDraftRows(rowsRef.current), leaving.userId)
+          .catch(() => {});
+      }
+    }
+    draftContextRef.current = { userId: effectiveUserId, monthKey: draftMonthKey };
     const token = ++loadTokenRef.current;
+    // Block autosave until this load's draft GET resolves (hydration must not trigger a save, and a
+    // failed GET must not let us clobber a draft we never read).
+    draftSyncReadyRef.current = false;
     dispatch({ type: 'loadStart' });
     try {
       const entriesPromise = (async () => {
@@ -335,14 +384,30 @@ const RilView: React.FC<RilViewProps> = ({
         } while (cursor);
         return isStale ? null : nextEntries;
       })();
-      const [nextEntries, nextProjects] = await Promise.all([
+      // A failed draft GET must not abort the load (rows still render from timesheets) but it
+      // does disable autosave so we never clobber a draft we couldn't read.
+      const draftPromise = api.rilDrafts
+        .get(draftMonthKey, effectiveUserId)
+        .then((draft) => ({ ok: true as const, draft }))
+        .catch(() => ({ ok: false as const, draft: null }));
+      const [nextEntries, nextProjects, draftResult] = await Promise.all([
         entriesPromise,
         api.projects.list({ userId: effectiveUserId }),
+        draftPromise,
       ]);
       if (loadTokenRef.current === token && nextEntries) {
         sourceEntriesRef.current = nextEntries;
         projectCatalogRef.current = nextProjects;
-        dispatch({ type: 'loadSuccess', rows: generateRows(nextEntries, nextProjects) });
+        const baseRows = generateRows(nextEntries, nextProjects);
+        if (draftResult.ok) {
+          const merged = applyRilDraftToRows(baseRows, draftResult.draft?.rows, lunchBreakMinutes);
+          dispatch({ type: 'loadSuccess', rows: merged });
+          setDraftStatus(draftResult.draft?.updatedAt ? 'saved' : 'idle');
+          draftSyncReadyRef.current = true;
+        } else {
+          dispatch({ type: 'loadSuccess', rows: baseRows });
+          setDraftStatus('error');
+        }
       }
     } catch (err) {
       if (loadTokenRef.current === token) {
@@ -353,21 +418,81 @@ const RilView: React.FC<RilViewProps> = ({
           error: err instanceof Error ? err.message : 'Failed to load RIL data',
           rows: generateRows([], []),
         });
+        setDraftStatus('idle');
       }
     }
-  }, [effectiveUserId, generateRows, monthBounds.fromDate, monthBounds.toDate, projects]);
+  }, [
+    effectiveUserId,
+    generateRows,
+    monthBounds.fromDate,
+    monthBounds.toDate,
+    draftMonthKey,
+    lunchBreakMinutes,
+    projects,
+  ]);
 
   useEffect(() => {
     void loadMonthEntries();
   }, [loadMonthEntries]);
 
+  // Keep the rows mirror current for the debounced save and the flush-on-switch cleanup.
+  useEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
+
   const totals = useMemo(() => calculateRilTotals(rows), [rows]);
 
+  // Persist the current month's draft to the backend. Captures (user, month) from the closure so
+  // a late-firing save still targets the right sheet.
+  const flushDraftSave = useCallback(async () => {
+    saveTimerRef.current = null;
+    const rowsToSave = rowsRef.current;
+    if (!rowsToSave.length) return;
+    const savePromise = api.rilDrafts.save(
+      draftMonthKey,
+      extractRilDraftRows(rowsToSave),
+      effectiveUserId,
+    );
+    inFlightSaveRef.current = savePromise;
+    try {
+      await savePromise;
+      // A newer edit re-armed the timer while we were saving — let that save own the final status.
+      if (saveTimerRef.current === null) setDraftStatus('saved');
+    } catch {
+      setDraftStatus('error');
+    } finally {
+      if (inFlightSaveRef.current === savePromise) inFlightSaveRef.current = null;
+    }
+  }, [draftMonthKey, effectiveUserId]);
+
+  const scheduleDraftSave = useCallback(() => {
+    if (!draftSyncReadyRef.current) return;
+    setDraftStatus('saving');
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      void flushDraftSave();
+    }, DRAFT_SAVE_DEBOUNCE_MS);
+  }, [flushDraftSave]);
+
   const handleReset = () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
     dispatch({
       type: 'setRows',
       rows: generateRows(sourceEntriesRef.current, projectCatalogRef.current),
     });
+    setDraftStatus('idle');
+    if (draftSyncReadyRef.current) {
+      const removeDraft = () =>
+        api.rilDrafts.remove(draftMonthKey, effectiveUserId).catch(() => {});
+      // If a debounced save is already on the wire, sequence the delete after it so the late PUT
+      // can't recreate the draft we're discarding; otherwise delete immediately.
+      const pending = inFlightSaveRef.current;
+      if (pending) void pending.finally(removeDraft);
+      else void removeDraft();
+    }
   };
 
   const updateRow = useCallback(
@@ -407,8 +532,9 @@ const RilView: React.FC<RilViewProps> = ({
             };
           }),
       });
+      scheduleDraftSave();
     },
-    [lunchBreakMinutes],
+    [lunchBreakMinutes, scheduleDraftSave],
   );
 
   const handleExport = async () => {
@@ -501,12 +627,33 @@ const RilView: React.FC<RilViewProps> = ({
     [],
   );
 
+  const draftStatusContent =
+    draftStatus === 'saving' ? (
+      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+        <Loader2 aria-hidden="true" className="size-3 animate-spin" />
+        {t('ril.draft.saving')}
+      </span>
+    ) : draftStatus === 'saved' ? (
+      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+        <Check aria-hidden="true" className="size-3 text-emerald-600 dark:text-emerald-400" />
+        {t('ril.draft.saved')}
+      </span>
+    ) : draftStatus === 'error' ? (
+      <span className="inline-flex items-center gap-1.5 text-destructive">
+        <CircleAlert aria-hidden="true" className="size-3" />
+        {t('ril.draft.saveError')}
+      </span>
+    ) : null;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 border-b border-border pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-foreground">{t('ril.title')}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{t('ril.subtitle')}</p>
+          <output aria-live="polite" className="mt-2 block min-h-4 text-xs">
+            {draftStatusContent}
+          </output>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <Field className="min-w-48">

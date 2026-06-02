@@ -2605,6 +2605,7 @@ const AppContent: React.FC = () => {
                 onViewUserChange={setViewingUserId}
                 projects={projects}
                 settings={generalSettings}
+                weekdayTransferDefaults={userSettings.rilWeekdayTransferDefaults}
               />
             )}
             {hasViewAccess(currentUser.permissions, 'crm/clients') &&
@@ -3086,6 +3087,11 @@ const AppContent: React.FC = () => {
                 settings={userSettings}
                 authMethod={currentUser.authMethod ?? 'local'}
                 authProviderName={currentUser.authProviderName ?? null}
+                rilTransferOptions={
+                  hasViewAccess(currentUser.permissions, 'timesheets/ril')
+                    ? generalSettings.rilTransferOptions
+                    : []
+                }
                 onUpdate={handleUpdateUserSettings}
                 onUpdatePassword={handleUpdateUserPassword}
                 onListMcpTokens={handleListMcpTokens}

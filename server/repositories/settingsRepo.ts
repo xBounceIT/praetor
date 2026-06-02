@@ -1,29 +1,43 @@
 import { eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
-import { settings } from '../db/schema/settings.ts';
+import { type StoredRilWeekdayTransferDefaults, settings } from '../db/schema/settings.ts';
 
 export const LANGUAGES = ['en', 'it', 'auto'] as const;
 export type Language = (typeof LANGUAGES)[number];
 export const DEFAULT_LANGUAGE: Language = 'auto';
 
+// Lowercase English weekday names used as keys for the per-day default RIL transfer preference.
+// Only weekdays are configurable — weekend/holiday RIL rows are never filled in.
+export const RIL_WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const;
+export type RilWeekday = (typeof RIL_WEEKDAYS)[number];
+export type RilWeekdayTransferDefaults = StoredRilWeekdayTransferDefaults;
+
 export type Settings = {
   fullName: string | null;
   email: string | null;
   language: Language;
+  rilWeekdayTransferDefaults: RilWeekdayTransferDefaults;
 };
 
 const SETTINGS_PROJECTION = {
   fullName: settings.fullName,
   email: settings.email,
   language: settings.language,
+  rilWeekdayTransferDefaults: settings.rilWeekdayTransferDefaults,
 } as const;
 
-type SettingsRow = { fullName: string | null; email: string | null; language: string | null };
+type SettingsRow = {
+  fullName: string | null;
+  email: string | null;
+  language: string | null;
+  rilWeekdayTransferDefaults: RilWeekdayTransferDefaults | null;
+};
 
 const mapRow = (row: SettingsRow): Settings => ({
   fullName: row.fullName,
   email: row.email,
   language: (row.language as Language | null) ?? DEFAULT_LANGUAGE,
+  rilWeekdayTransferDefaults: row.rilWeekdayTransferDefaults ?? {},
 });
 
 const findByUserId = async (userId: string, exec: DbExecutor): Promise<Settings | undefined> => {
@@ -64,9 +78,22 @@ export const getOrCreateForUser = async (
 
 export const upsertForUser = async (
   userId: string,
-  patch: { fullName: string | null; email: string | null; language: Language | null },
+  patch: {
+    fullName: string | null;
+    email: string | null;
+    language: Language | null;
+    // Optional so the many identity-sync callers (auth/LDAP/SSO) keep working unchanged; when
+    // omitted the existing column is preserved via COALESCE.
+    rilWeekdayTransferDefaults?: RilWeekdayTransferDefaults | null;
+  },
   exec: DbExecutor = db,
 ): Promise<Settings> => {
+  // jsonb COALESCE needs the patch bound as a stringified ::jsonb param (mirrors
+  // generalSettingsRepo); a null param leaves the existing row value untouched.
+  const rilWeekdayParam =
+    patch.rilWeekdayTransferDefaults == null
+      ? null
+      : JSON.stringify(patch.rilWeekdayTransferDefaults);
   const result = await exec
     .insert(settings)
     .values({
@@ -74,6 +101,7 @@ export const upsertForUser = async (
       fullName: patch.fullName,
       email: patch.email,
       language: patch.language ?? DEFAULT_LANGUAGE,
+      rilWeekdayTransferDefaults: patch.rilWeekdayTransferDefaults ?? {},
     })
     .onConflictDoUpdate({
       target: settings.userId,
@@ -81,6 +109,7 @@ export const upsertForUser = async (
         fullName: sql`COALESCE(${patch.fullName}, ${settings.fullName})`,
         email: sql`COALESCE(${patch.email}, ${settings.email})`,
         language: sql`COALESCE(${patch.language}, ${settings.language})`,
+        rilWeekdayTransferDefaults: sql`COALESCE(${rilWeekdayParam}::jsonb, ${settings.rilWeekdayTransferDefaults})`,
         updatedAt: sql`CURRENT_TIMESTAMP`,
       },
     })

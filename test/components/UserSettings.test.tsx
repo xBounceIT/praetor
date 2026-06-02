@@ -399,6 +399,110 @@ describe('<UserSettings /> MCP tokens', () => {
   });
 });
 
+describe('<UserSettings /> RIL preferences tab', () => {
+  const rilTransferOptions = ['In office', 'Remote working'];
+
+  // renderSettings() deliberately omits rilTransferOptions, so render directly here. A per-test
+  // `settings` override lets each case seed (or not seed) the stored weekday defaults.
+  const renderRilSettings = (
+    rilSettings: Settings = settings,
+    options: string[] = rilTransferOptions,
+    update: (updates: Partial<Settings>) => Promise<void> = onUpdate,
+  ) =>
+    render(
+      <UserSettings
+        settings={rilSettings}
+        rilTransferOptions={options}
+        onUpdate={update}
+        onUpdatePassword={onUpdatePassword}
+        onListMcpTokens={onListMcpTokens}
+        onCreateMcpToken={onCreateMcpToken}
+        onRevokeMcpToken={onRevokeMcpToken}
+        onGetPersonalAccessToken={onGetPersonalAccessToken}
+        onRenewPersonalAccessToken={onRenewPersonalAccessToken}
+      />,
+    );
+
+  beforeEach(() => {
+    for (const m of [
+      onUpdate,
+      onUpdatePassword,
+      onListMcpTokens,
+      onCreateMcpToken,
+      onRevokeMcpToken,
+      onGetPersonalAccessToken,
+      onRenewPersonalAccessToken,
+    ]) {
+      m.mockClear();
+    }
+  });
+
+  test('hides the RIL tab when no transfer options are configured', () => {
+    // renderSettings defaults rilTransferOptions to [], so the tab must not appear.
+    renderSettings();
+    expect(screen.queryByRole('button', { name: /ril.title/ })).not.toBeInTheDocument();
+  });
+
+  test('shows the RIL tab when transfer options are configured', () => {
+    renderRilSettings();
+    expect(screen.getByRole('button', { name: /ril.title/ })).toBeInTheDocument();
+  });
+
+  test('opening the RIL tab reveals a select for each Monday..Friday weekday', () => {
+    renderRilSettings();
+    fireEvent.click(screen.getByRole('button', { name: /ril.title/ }));
+
+    // The selects are keyed by id ril-transfer-monday..friday; the i18n mock does not localize
+    // the Intl weekday labels, so target the controls by their stable ids.
+    for (const day of ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']) {
+      const trigger = document.getElementById(`ril-transfer-${day}`);
+      expect(trigger).not.toBeNull();
+      expect(trigger?.tagName).toBe('BUTTON');
+    }
+    expect(Array.from(document.querySelectorAll('[id^="ril-transfer-"]'))).toHaveLength(5);
+  });
+
+  test('pre-populates a weekday select from settings.rilWeekdayTransferDefaults', () => {
+    renderRilSettings({ ...settings, rilWeekdayTransferDefaults: { friday: 'Remote working' } });
+    fireEvent.click(screen.getByRole('button', { name: /ril.title/ }));
+
+    // Controlled Radix Select renders the selected option's text inside the trigger button.
+    expect(document.getElementById('ril-transfer-friday')).toHaveTextContent('Remote working');
+    // An unset weekday falls back to the "no default" sentinel label.
+    expect(document.getElementById('ril-transfer-monday')).toHaveTextContent('ril.noDefault');
+  });
+
+  test('selecting a transfer option for Monday pushes it through onUpdate', async () => {
+    renderRilSettings({ ...settings, rilWeekdayTransferDefaults: { monday: 'In office' } });
+    fireEvent.click(screen.getByRole('button', { name: /ril.title/ }));
+
+    const mondayTrigger = document.getElementById('ril-transfer-monday') as HTMLButtonElement;
+    // Seeded value is reflected before the change.
+    expect(mondayTrigger).toHaveTextContent('In office');
+
+    fireEvent.click(mondayTrigger);
+    fireEvent.click(screen.getByRole('option', { name: 'Remote working' }));
+
+    await waitFor(() =>
+      expect(onUpdate).toHaveBeenCalledWith({
+        rilWeekdayTransferDefaults: { monday: 'Remote working' },
+      }),
+    );
+  });
+
+  test('choosing "No default" drops the weekday key from the persisted defaults', async () => {
+    renderRilSettings({ ...settings, rilWeekdayTransferDefaults: { monday: 'In office' } });
+    fireEvent.click(screen.getByRole('button', { name: /ril.title/ }));
+
+    const mondayTrigger = document.getElementById('ril-transfer-monday') as HTMLButtonElement;
+    fireEvent.click(mondayTrigger);
+    fireEvent.click(screen.getByRole('option', { name: 'ril.noDefault' }));
+
+    // The sentinel maps to "remove the key", so the resulting object has no monday entry.
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledWith({ rilWeekdayTransferDefaults: {} }));
+  });
+});
+
 describe('<UserSettings /> non-local auth', () => {
   beforeEach(() => {
     for (const m of [
