@@ -27,6 +27,11 @@ export const ldapConfig = pgTable(
     // Matches the column type used by SSO encrypted fields (clientSecret, privateKey).
     bindPassword: text('bind_password').default(''),
     userFilter: varchar('user_filter', { length: 255 }).default('(uid={0})'),
+    // Directory attribute names mapped onto the user's structured identity. Defaults cover
+    // both Active Directory and OpenLDAP/inetOrgPerson (givenName/sn/mail).
+    firstNameAttribute: varchar('first_name_attribute', { length: 255 }).default('givenName'),
+    lastNameAttribute: varchar('last_name_attribute', { length: 255 }).default('sn'),
+    emailAttribute: varchar('email_attribute', { length: 255 }).default('mail'),
     groupBaseDn: varchar('group_base_dn', { length: 500 }).default('ou=groups,dc=example,dc=com'),
     groupFilter: varchar('group_filter', { length: 255 }).default('(member={0})'),
     roleMappings: jsonb('role_mappings')

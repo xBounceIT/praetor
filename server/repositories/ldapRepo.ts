@@ -18,6 +18,9 @@ export const DEFAULT_CONFIG: LdapConfig = {
   bindDn: 'cn=read-only-admin,dc=example,dc=com',
   bindPassword: '',
   userFilter: '(uid={0})',
+  firstNameAttribute: 'givenName',
+  lastNameAttribute: 'sn',
+  emailAttribute: 'mail',
   groupBaseDn: 'ou=groups,dc=example,dc=com',
   groupFilter: '(member={0})',
   roleMappings: [],
@@ -33,6 +36,9 @@ const LDAP_PROJECTION = {
   bindDn: ldapConfig.bindDn,
   bindPassword: ldapConfig.bindPassword,
   userFilter: ldapConfig.userFilter,
+  firstNameAttribute: ldapConfig.firstNameAttribute,
+  lastNameAttribute: ldapConfig.lastNameAttribute,
+  emailAttribute: ldapConfig.emailAttribute,
   groupBaseDn: ldapConfig.groupBaseDn,
   groupFilter: ldapConfig.groupFilter,
   roleMappings: ldapConfig.roleMappings,
@@ -48,6 +54,9 @@ type LdapRow = {
   bindDn: string | null;
   bindPassword: string | null;
   userFilter: string | null;
+  firstNameAttribute: string | null;
+  lastNameAttribute: string | null;
+  emailAttribute: string | null;
   groupBaseDn: string | null;
   groupFilter: string | null;
   roleMappings: LdapRoleMapping[] | null;
@@ -81,6 +90,9 @@ const mapRow = (row: LdapRow): LdapConfig => ({
   bindDn: row.bindDn ?? DEFAULT_CONFIG.bindDn,
   bindPassword: decodeBindPassword(row.bindPassword),
   userFilter: row.userFilter ?? DEFAULT_CONFIG.userFilter,
+  firstNameAttribute: row.firstNameAttribute ?? DEFAULT_CONFIG.firstNameAttribute,
+  lastNameAttribute: row.lastNameAttribute ?? DEFAULT_CONFIG.lastNameAttribute,
+  emailAttribute: row.emailAttribute ?? DEFAULT_CONFIG.emailAttribute,
   groupBaseDn: row.groupBaseDn ?? DEFAULT_CONFIG.groupBaseDn,
   groupFilter: row.groupFilter ?? DEFAULT_CONFIG.groupFilter,
   roleMappings: row.roleMappings ?? [],
@@ -149,6 +161,9 @@ const buildUpdateSet = (patch: LdapConfigPatch) => {
     bindDn: sql`COALESCE(${patch.bindDn ?? null}, ${ldapConfig.bindDn})`,
     bindPassword: sql`COALESCE(${bindPasswordParam}, ${ldapConfig.bindPassword})`,
     userFilter: sql`COALESCE(${patch.userFilter ?? null}, ${ldapConfig.userFilter})`,
+    firstNameAttribute: sql`COALESCE(${patch.firstNameAttribute ?? null}, ${ldapConfig.firstNameAttribute})`,
+    lastNameAttribute: sql`COALESCE(${patch.lastNameAttribute ?? null}, ${ldapConfig.lastNameAttribute})`,
+    emailAttribute: sql`COALESCE(${patch.emailAttribute ?? null}, ${ldapConfig.emailAttribute})`,
     groupBaseDn: sql`COALESCE(${patch.groupBaseDn ?? null}, ${ldapConfig.groupBaseDn})`,
     groupFilter: sql`COALESCE(${patch.groupFilter ?? null}, ${ldapConfig.groupFilter})`,
     roleMappings: sql`COALESCE(${roleMappingsParam}::jsonb, ${ldapConfig.roleMappings})`,
