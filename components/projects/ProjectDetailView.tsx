@@ -12,6 +12,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -933,32 +934,18 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             </p>
           </div>
           {linkedOrder && (
-            <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
-              <div className="flex items-center gap-3">
-                <div className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
-                  <i className="fa-solid fa-link" aria-hidden="true"></i>
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-foreground">
-                    {t('projects:projects.linkedOrder')}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {formatOrderId(linkedOrder.id)} · {linkedOrder.clientName}
-                  </div>
-                </div>
-              </div>
-              {onViewOrder && (
-                <Button
-                  type="button"
-                  variant="link"
-                  size="sm"
-                  onClick={() => onViewOrder(linkedOrder.id)}
-                  className="px-0"
-                >
-                  {t('projects:projects.viewOrder')}
-                </Button>
-              )}
-            </div>
+            <LinkedRecordBanner
+              label={t('projects:projects.linkedOrder')}
+              value={formatOrderId(linkedOrder.id) + ' · ' + linkedOrder.clientName}
+              action={
+                onViewOrder
+                  ? {
+                      label: t('projects:projects.viewOrder'),
+                      onClick: () => onViewOrder(linkedOrder.id),
+                    }
+                  : undefined
+              }
+            />
           )}
 
           <div className="grid gap-4 md:grid-cols-2">

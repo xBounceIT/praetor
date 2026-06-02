@@ -2,6 +2,7 @@ import type { TFunction } from 'i18next';
 import type React from 'react';
 import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
+import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Textarea } from '@/components/ui/textarea';
@@ -874,42 +875,28 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                 )}
                 {/* Linked Offer Info */}
                 {formData.linkedOfferId && (
-                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
-                        <i className="fa-solid fa-link" aria-hidden="true"></i>
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-foreground">
-                          {t('accounting:clientsOrders.linkedOffer', {
-                            defaultValue: 'Linked Offer',
-                          })}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {t('accounting:clientsOrders.linkedOfferInfo', {
-                            number: formData.linkedOfferId,
-                            defaultValue: 'Offer #{{number}}',
-                          })}
-                        </div>
-                        <div className="mt-0.5 text-[10px] text-muted-foreground">
-                          {t('accounting:clientsOrders.offerDetailsReadOnly', {
-                            defaultValue: '(Order details are read-only)',
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                    {onViewOffer && formData.linkedOfferId && (
-                      <Button
-                        type="button"
-                        variant="link"
-                        size="sm"
-                        onClick={() => onViewOffer(formData.linkedOfferId as string)}
-                        className="px-0"
-                      >
-                        {t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })}
-                      </Button>
-                    )}
-                  </div>
+                  <LinkedRecordBanner
+                    label={t('accounting:clientsOrders.linkedOffer', {
+                      defaultValue: 'Linked Offer',
+                    })}
+                    value={t('accounting:clientsOrders.linkedOfferInfo', {
+                      number: formData.linkedOfferId,
+                      defaultValue: 'Offer #{{number}}',
+                    })}
+                    note={t('accounting:clientsOrders.offerDetailsReadOnly', {
+                      defaultValue: '(Order details are read-only)',
+                    })}
+                    action={
+                      onViewOffer && formData.linkedOfferId
+                        ? {
+                            label: t('sales:clientOffers.viewOffer', {
+                              defaultValue: 'View offer',
+                            }),
+                            onClick: () => onViewOffer(formData.linkedOfferId as string),
+                          }
+                        : undefined
+                    }
+                  />
                 )}
 
                 {/* Order Details */}

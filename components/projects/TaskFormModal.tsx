@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
+import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -195,40 +196,6 @@ const taskFormReducer = (state: TaskFormState, action: TaskFormAction): TaskForm
 
 type TaskFormModalSessionProps = Omit<TaskFormModalProps, 'editingTask'> & {
   editingTask: ProjectTask | null;
-};
-
-const LinkedOrderPanel: React.FC<{
-  orderId: string;
-  onViewOrder?: (orderId: string) => void;
-}> = ({ orderId, onViewOrder }) => {
-  const { t } = useTranslation(['projects']);
-
-  return (
-    <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-4">
-      <div className="flex items-center gap-3">
-        <div className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
-          <i className="fa-solid fa-link" aria-hidden="true"></i>
-        </div>
-        <div>
-          <div className="text-sm font-medium text-foreground">
-            {t('projects:projects.linkedOrder')}
-          </div>
-          <div className="text-xs text-muted-foreground">{formatOrderId(orderId)}</div>
-        </div>
-      </div>
-      {onViewOrder && (
-        <Button
-          type="button"
-          variant="link"
-          size="sm"
-          onClick={() => onViewOrder(orderId)}
-          className="px-0"
-        >
-          {t('projects:projects.viewOrder')}
-        </Button>
-      )}
-    </div>
-  );
 };
 
 const TaskDisabledToggleField: React.FC<{
@@ -448,7 +415,18 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
 
           <ModalBody className="space-y-6">
             {isEditing && orderId ? (
-              <LinkedOrderPanel orderId={orderId} onViewOrder={onViewOrder} />
+              <LinkedRecordBanner
+                label={t('projects:projects.linkedOrder')}
+                value={formatOrderId(orderId)}
+                action={
+                  onViewOrder
+                    ? {
+                        label: t('projects:projects.viewOrder'),
+                        onClick: () => onViewOrder(orderId),
+                      }
+                    : undefined
+                }
+              />
             ) : null}
 
             <div className="space-y-4">

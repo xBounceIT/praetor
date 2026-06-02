@@ -2,6 +2,7 @@ import { RotateCcw } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -1029,32 +1030,20 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                   </div>
                 )}
                 {editingOffer?.linkedQuoteId && (
-                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-9 items-center justify-center rounded-md border border-border bg-background text-primary">
-                        <i className="fa-solid fa-link text-sm" aria-hidden="true"></i>
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                          {t('sales:clientOffers.sourceQuote', { defaultValue: 'Source quote' })}
-                        </p>
-                        <p className="text-sm font-semibold text-foreground">
-                          {editingOffer.linkedQuoteId}
-                        </p>
-                      </div>
-                    </div>
-                    {onViewQuote && (
-                      <Button
-                        type="button"
-                        variant="link"
-                        onClick={() => onViewQuote(editingOffer.linkedQuoteId)}
-                        className="h-auto px-0 text-xs font-semibold"
-                      >
-                        {t('sales:clientOffers.viewQuote', { defaultValue: 'View quote' })}
-                        <i className="fa-solid fa-arrow-right text-[10px]" aria-hidden="true"></i>
-                      </Button>
-                    )}
-                  </div>
+                  <LinkedRecordBanner
+                    label={t('sales:clientOffers.sourceQuote', { defaultValue: 'Source quote' })}
+                    value={editingOffer.linkedQuoteId}
+                    action={
+                      onViewQuote
+                        ? {
+                            label: t('sales:clientOffers.viewQuote', {
+                              defaultValue: 'View quote',
+                            }),
+                            onClick: () => onViewQuote(editingOffer.linkedQuoteId),
+                          }
+                        : undefined
+                    }
+                  />
                 )}
 
                 {isReadOnly && (

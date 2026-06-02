@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -778,41 +779,28 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   </div>
                 )}
                 {editingQuote?.linkedOrderId && (
-                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-8 items-center justify-center rounded-md border border-border bg-background text-primary">
-                        <i className="fa-solid fa-link" aria-hidden="true"></i>
-                      </div>
-                      <div>
-                        <div className="text-sm font-semibold text-foreground">
-                          {t('sales:supplierQuotes.linkedOrderTitle', {
-                            defaultValue: 'Linked Order',
-                          })}
-                        </div>
-                        <div className="text-xs text-primary">
-                          {t('sales:supplierQuotes.linkedOrderInfo', {
-                            number: editingQuote.linkedOrderId,
-                            defaultValue: 'Order #{{number}}',
-                          })}
-                        </div>
-                        <div className="mt-0.5 text-[10px] text-muted-foreground">
-                          {t('sales:supplierQuotes.orderDetailsReadOnly', {
-                            defaultValue: '(Quote details are read-only)',
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                    {onViewOrders && (
-                      <Button
-                        type="button"
-                        variant="link"
-                        onClick={() => onViewOrders(editingQuote.id)}
-                        className="h-auto px-0 text-xs font-semibold"
-                      >
-                        {t('sales:supplierQuotes.viewOrder', { defaultValue: 'View Order' })}
-                      </Button>
-                    )}
-                  </div>
+                  <LinkedRecordBanner
+                    label={t('sales:supplierQuotes.linkedOrderTitle', {
+                      defaultValue: 'Linked Order',
+                    })}
+                    value={t('sales:supplierQuotes.linkedOrderInfo', {
+                      number: editingQuote.linkedOrderId,
+                      defaultValue: 'Order #{{number}}',
+                    })}
+                    note={t('sales:supplierQuotes.orderDetailsReadOnly', {
+                      defaultValue: '(Quote details are read-only)',
+                    })}
+                    action={
+                      onViewOrders
+                        ? {
+                            label: t('sales:supplierQuotes.viewOrder', {
+                              defaultValue: 'View Order',
+                            }),
+                            onClick: () => onViewOrders(editingQuote.id),
+                          }
+                        : undefined
+                    }
+                  />
                 )}
 
                 <div className="space-y-2">
