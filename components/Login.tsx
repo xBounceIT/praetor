@@ -96,10 +96,6 @@ const Login: React.FC<LoginProps> = ({
     onLoginRef.current = onLogin;
   }, [onLogin]);
 
-  // Mount-only: SSO provider list and ticket consumption shouldn't re-run on
-  // every parent re-render. `onLogin` is read through `onLoginRef`, and `t`
-  // is referenced only for an error message lookup at that moment.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only effect
   useEffect(() => {
     let cancelled = false;
     const url = new URL(window.location.href);
@@ -146,7 +142,7 @@ const Login: React.FC<LoginProps> = ({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   const messageForLoginError = (err: unknown): string => {
     if (err instanceof ApiError && err.errorCode === 'ldap_unavailable') {
@@ -186,7 +182,7 @@ const Login: React.FC<LoginProps> = ({
         getShadcnThemeClassName(browserTheme),
       )}
     >
-      <div className="relative w-full max-w-md overflow-hidden rounded-xl border bg-card text-card-foreground px-8 py-8 shadow-lg">
+      <div className="relative w-full max-w-md overflow-hidden rounded-xl border bg-card p-8 text-card-foreground shadow-lg">
         <div className="absolute inset-0 -top-px -left-px z-0" style={gridOverlayStyle} />
 
         <div className="relative isolate flex w-full flex-col items-center">

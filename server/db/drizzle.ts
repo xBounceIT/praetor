@@ -2,7 +2,95 @@ import type { ExtractTablesWithRelations, SQL } from 'drizzle-orm';
 import { drizzle, type NodePgQueryResultHKT } from 'drizzle-orm/node-postgres';
 import type { PgDatabase } from 'drizzle-orm/pg-core';
 import pool from './index.ts';
-import * as schema from './schema/index.ts';
+import * as auditLogsSchema from './schema/auditLogs.ts';
+import * as clientProfileOptionsSchema from './schema/clientProfileOptions.ts';
+import * as clientsSchema from './schema/clients.ts';
+import * as customerOfferItemsSchema from './schema/customerOfferItems.ts';
+import * as customerOffersSchema from './schema/customerOffers.ts';
+import * as emailConfigSchema from './schema/emailConfig.ts';
+import * as generalSettingsSchema from './schema/generalSettings.ts';
+import * as invoicesSchema from './schema/invoices.ts';
+import * as ldapConfigSchema from './schema/ldapConfig.ts';
+import * as mcpTokensSchema from './schema/mcpTokens.ts';
+import * as notificationsSchema from './schema/notifications.ts';
+import * as offerVersionsSchema from './schema/offerVersions.ts';
+import * as orderVersionsSchema from './schema/orderVersions.ts';
+import * as personalAccessTokensSchema from './schema/personalAccessTokens.ts';
+import * as productCategoriesSchema from './schema/productCategories.ts';
+import * as productSubcategoriesSchema from './schema/productSubcategories.ts';
+import * as productsSchema from './schema/products.ts';
+import * as productTypesSchema from './schema/productTypes.ts';
+import * as projectRulesSchema from './schema/projectRules.ts';
+import * as projectsSchema from './schema/projects.ts';
+import * as quotesSchema from './schema/quotes.ts';
+import * as quoteVersionsSchema from './schema/quoteVersions.ts';
+import * as reportChatMessagesSchema from './schema/reportChatMessages.ts';
+import * as reportChatSessionsSchema from './schema/reportChatSessions.ts';
+import * as rolesSchema from './schema/roles.ts';
+import * as salesSchema from './schema/sales.ts';
+import * as savedViewsSchema from './schema/savedViews.ts';
+import * as settingsSchema from './schema/settings.ts';
+import * as ssoSchema from './schema/sso.ts';
+import * as ssoProvidersSchema from './schema/ssoProviders.ts';
+import * as supplierInvoicesSchema from './schema/supplierInvoices.ts';
+import * as supplierOrderVersionsSchema from './schema/supplierOrderVersions.ts';
+import * as supplierQuoteAttachmentsSchema from './schema/supplierQuoteAttachments.ts';
+import * as supplierQuotesSchema from './schema/supplierQuotes.ts';
+import * as supplierQuoteVersionsSchema from './schema/supplierQuoteVersions.ts';
+import * as supplierSalesSchema from './schema/supplierSales.ts';
+import * as suppliersSchema from './schema/suppliers.ts';
+import * as tasksSchema from './schema/tasks.ts';
+import * as timeEntriesSchema from './schema/timeEntries.ts';
+import * as usersSchema from './schema/users.ts';
+import * as userWorkUnitsSchema from './schema/userWorkUnits.ts';
+import * as workUnitManagersSchema from './schema/workUnitManagers.ts';
+import * as workUnitsSchema from './schema/workUnits.ts';
+
+export const schema = {
+  ...auditLogsSchema,
+  ...clientProfileOptionsSchema,
+  ...clientsSchema,
+  ...customerOfferItemsSchema,
+  ...customerOffersSchema,
+  ...emailConfigSchema,
+  ...generalSettingsSchema,
+  ...invoicesSchema,
+  ...ldapConfigSchema,
+  ...mcpTokensSchema,
+  ...notificationsSchema,
+  ...offerVersionsSchema,
+  ...orderVersionsSchema,
+  ...personalAccessTokensSchema,
+  ...productCategoriesSchema,
+  ...productSubcategoriesSchema,
+  ...productsSchema,
+  ...productTypesSchema,
+  ...projectRulesSchema,
+  ...projectsSchema,
+  ...quotesSchema,
+  ...quoteVersionsSchema,
+  ...reportChatMessagesSchema,
+  ...reportChatSessionsSchema,
+  ...rolesSchema,
+  ...salesSchema,
+  ...savedViewsSchema,
+  ...settingsSchema,
+  ...ssoSchema,
+  ...ssoProvidersSchema,
+  ...supplierInvoicesSchema,
+  ...supplierOrderVersionsSchema,
+  ...supplierQuoteAttachmentsSchema,
+  ...supplierQuotesSchema,
+  ...supplierQuoteVersionsSchema,
+  ...supplierSalesSchema,
+  ...suppliersSchema,
+  ...tasksSchema,
+  ...timeEntriesSchema,
+  ...usersSchema,
+  ...userWorkUnitsSchema,
+  ...workUnitManagersSchema,
+  ...workUnitsSchema,
+} as const;
 
 export const db = drizzle(pool, { schema });
 

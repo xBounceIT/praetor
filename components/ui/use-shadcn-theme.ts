@@ -31,14 +31,14 @@ export const useResolvedShadcnTheme = () => {
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => getCurrentShadcnTheme());
 
   useEffect(() => {
-    const handleThemeChange = (event: Event) => {
-      const detail = (event as CustomEvent<{ resolvedTheme?: ResolvedTheme }>).detail;
-      setResolvedTheme(detail?.resolvedTheme ?? getCurrentShadcnTheme());
+    const syncTheme = () => {
+      const nextTheme = getCurrentShadcnTheme();
+      setResolvedTheme((current) => (current === nextTheme ? current : nextTheme));
     };
 
-    setResolvedTheme(getCurrentShadcnTheme());
-    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange);
-    return () => window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange);
+    syncTheme();
+    window.addEventListener(THEME_CHANGE_EVENT, syncTheme);
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, syncTheme);
   }, []);
 
   return resolvedTheme;
@@ -53,7 +53,6 @@ export const useBrowserTheme = (): ResolvedTheme => {
   const [browserTheme, setBrowserTheme] = useState<ResolvedTheme>(() => getBrowserTheme());
 
   useEffect(() => {
-    setBrowserTheme(getBrowserTheme());
     return subscribeBrowserTheme(setBrowserTheme);
   }, []);
 

@@ -3,6 +3,7 @@ import React, {
   Suspense,
   useCallback,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -180,6 +181,43 @@ const getModuleFromView = (view: View | '404'): string | null => {
   return null;
 };
 
+const isUserScopedTimesheetView = (view: View | '404') =>
+  view === 'timesheets/tracker' || view === 'timesheets/ril';
+
+const EMPTY_PERMISSIONS: string[] = [];
+
+type TestEmailResult = { success: boolean; code: string; params?: Record<string, string> };
+
+const updateUserPassword = async (currentPassword: string, newPassword: string) => {
+  try {
+    await api.settings.updatePassword(currentPassword, newPassword);
+  } catch (err) {
+    console.error('Failed to update password:', err);
+    throw err;
+  }
+};
+
+const listMcpTokens = () => api.settings.listMcpTokens();
+
+const createMcpToken = (name: string, scope: McpTokenScope) =>
+  api.settings.createMcpToken(name, scope);
+
+const revokeMcpToken = (id: string) => api.settings.revokeMcpToken(id);
+
+const testEmail = async (recipientEmail: string): Promise<TestEmailResult> => {
+  try {
+    const result = await api.email.sendTestEmail(recipientEmail);
+    return result;
+  } catch (err) {
+    console.error('Failed to send test email:', err);
+    return {
+      success: false,
+      code: 'TEST_EMAIL_ERROR',
+      params: { error: err instanceof Error ? err.message : 'Failed to send test email' },
+    };
+  }
+};
+
 type TimeEntryDraft = Omit<
   TimeEntry,
   'id' | 'createdAt' | 'version' | 'userId' | 'hourlyCost' | 'cost'
@@ -269,6 +307,22 @@ const TrackerView: React.FC<{
   const dailyTotal = useMemo(() => {
     return filteredEntries.reduce((sum, e) => sum + e.duration, 0);
   }, [filteredEntries]);
+  const activityHeaderExtras = useMemo(
+    () =>
+      selectedDate ? (
+        <div className="flex items-baseline gap-2">
+          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+            {t('tracker.dayTotal')}
+          </span>
+          <span
+            className={`text-lg font-black transition-colors ${dailyTotal > dailyGoal ? 'text-destructive' : 'text-praetor'}`}
+          >
+            {dailyTotal.toFixed(2)} h
+          </span>
+        </div>
+      ) : undefined,
+    [dailyGoal, dailyTotal, selectedDate, t],
+  );
 
   const [pendingDeleteEntry, setPendingDeleteEntry] = useState<TimeEntry | null>(null);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
@@ -580,20 +634,7 @@ const TrackerView: React.FC<{
                     })
                   : t('entry.recentActivity')
               }
-              headerExtras={
-                selectedDate ? (
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                      {t('tracker.dayTotal')}
-                    </span>
-                    <span
-                      className={`text-lg font-black transition-colors ${dailyTotal > dailyGoal ? 'text-destructive' : 'text-praetor'}`}
-                    >
-                      {dailyTotal.toFixed(2)} h
-                    </span>
-                  </div>
-                ) : undefined
-              }
+              headerExtras={activityHeaderExtras}
               data={filteredEntries}
               columns={activityColumns}
               defaultRowsPerPage={10}
@@ -721,12 +762,6 @@ const AppContent: React.FC = () => {
   const entriesStreamTokenRef = useRef(0);
   // Bumped on navigation/auth reset so stale module-load completions cannot commit state.
   const moduleLoadTokenRef = useRef(0);
-  // Flips to true once the initial entries page resolves; the recurring-entry
-  // generator effect waits on this rather than relying on a setTimeout
-  // heuristic to guess when entries are loaded. Reset to false on
-  // logout/role-switch alongside `setEntries([])`. We use state (not a ref) so
-  // the dependent effect re-runs when the flag changes.
-  const [entriesLoaded, setEntriesLoaded] = useState(false);
   const [ldapConfig, setLdapConfig] = useState<LdapConfig>(INITIAL_LDAP_CONFIG);
   const [generalSettings, setGeneralSettings] =
     useState<GeneralSettingsState>(INITIAL_GENERAL_SETTINGS);
@@ -742,16 +777,17 @@ const AppContent: React.FC = () => {
     appendFailure,
     reset: resetModuleLoader,
   } = useModuleLoader();
-  const [hasLoadedGeneralSettings, setHasLoadedGeneralSettings] = useState(false);
-  const [hasLoadedLdapConfig, setHasLoadedLdapConfig] = useState(false);
-  const [hasLoadedSsoProviders, setHasLoadedSsoProviders] = useState(false);
+  const hasLoadedGeneralSettingsRef = useRef(false);
+  const hasLoadedLdapConfigRef = useRef(false);
+  const hasLoadedSsoProvidersRef = useRef(false);
   const [ssoProviders, setSsoProviders] = useState<SsoProvider[]>([]);
-  const [hasLoadedEmailConfig, setHasLoadedEmailConfig] = useState(false);
+  const hasLoadedEmailConfigRef = useRef(false);
   const [emailConfig, setEmailConfig] = useState<EmailConfig>(INITIAL_EMAIL_CONFIG);
+  const hasLoadedGeneralSettings = hasLoadedGeneralSettingsRef.current;
 
   const [workUnits, setWorkUnits] = useState<WorkUnit[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
-  const [hasLoadedRoles, setHasLoadedRoles] = useState(false);
+  const hasLoadedRolesRef = useRef(false);
 
   // Items and unread count share one state so handlers can derive both from
   // `prev` in a single updater — splitting them races the 60s polling refresh
@@ -875,6 +911,9 @@ const AppContent: React.FC = () => {
   // refs so in-flight awaits still observe the latest value.
   const activeViewRef = useRef<View | '404'>(activeView);
   activeViewRef.current = activeView;
+  const currentUserRef = useRef<User | null>(null);
+  const viewingUserIdRef = useRef(viewingUserId);
+  viewingUserIdRef.current = viewingUserId;
   // Short-circuits hashchange events fired by our own writes. See
   // utils/programmaticHashTracker.ts for why this is a counter rather than a
   // single-value marker (issue #623). Also still prevents an infinite rewrite
@@ -904,6 +943,15 @@ const AppContent: React.FC = () => {
     }
     if (resolved !== 'projects/detail') {
       setSelectedProjectId(null);
+    }
+    const currentUser = currentUserRef.current;
+    if (
+      currentUser &&
+      !isUserScopedTimesheetView(resolved) &&
+      viewingUserIdRef.current !== currentUser.id
+    ) {
+      viewingUserIdRef.current = currentUser.id;
+      React.startTransition(() => setViewingUserId(currentUser.id));
     }
   }, []);
 
@@ -936,15 +984,25 @@ const AppContent: React.FC = () => {
     entriesStreamTokenRef.current++;
     resetModuleLoader();
     clearAuthScopedState({
-      hasLoadedGeneralSettings: () => setHasLoadedGeneralSettings(false),
+      hasLoadedGeneralSettings: () => {
+        hasLoadedGeneralSettingsRef.current = false;
+      },
       generalSettings: () => setGeneralSettings(INITIAL_GENERAL_SETTINGS),
-      hasLoadedLdapConfig: () => setHasLoadedLdapConfig(false),
+      hasLoadedLdapConfig: () => {
+        hasLoadedLdapConfigRef.current = false;
+      },
       ldapConfig: () => setLdapConfig(INITIAL_LDAP_CONFIG),
-      hasLoadedEmailConfig: () => setHasLoadedEmailConfig(false),
+      hasLoadedEmailConfig: () => {
+        hasLoadedEmailConfigRef.current = false;
+      },
       emailConfig: () => setEmailConfig(INITIAL_EMAIL_CONFIG),
-      hasLoadedSsoProviders: () => setHasLoadedSsoProviders(false),
+      hasLoadedSsoProviders: () => {
+        hasLoadedSsoProvidersRef.current = false;
+      },
       ssoProviders: () => setSsoProviders([]),
-      hasLoadedRoles: () => setHasLoadedRoles(false),
+      hasLoadedRoles: () => {
+        hasLoadedRolesRef.current = false;
+      },
       roles: () => setRoles([]),
       users: () => setUsers([]),
       clients: () => setClients([]),
@@ -960,7 +1018,6 @@ const AppContent: React.FC = () => {
       supplierOrders: () => setSupplierOrders([]),
       supplierInvoices: () => setSupplierInvoices([]),
       entries: () => setEntries([]),
-      entriesLoaded: () => setEntriesLoaded(false),
       workUnits: () => setWorkUnits([]),
       viewingUserAssignmentState: () =>
         setViewingUserAssignmentState({
@@ -987,6 +1044,8 @@ const AppContent: React.FC = () => {
     dismissServerUnreachable,
   } = useAuth({
     onLogin: (user) => {
+      currentUserRef.current = user;
+      viewingUserIdRef.current = user.id;
       clearAuthScopedAppState();
       setViewingUserId(user.id);
       const defaultView = getDefaultViewForPermissions(user.permissions || [], VALID_VIEWS);
@@ -997,6 +1056,8 @@ const AppContent: React.FC = () => {
       }
     },
     onLogout: () => {
+      currentUserRef.current = null;
+      viewingUserIdRef.current = '';
       clearAuthScopedAppState();
       setViewingUserId('');
     },
@@ -1004,7 +1065,6 @@ const AppContent: React.FC = () => {
 
   // Read by the hashchange listener (mounted once) so it sees the latest user
   // without the effect resubscribing — events fired during teardown are lost.
-  const currentUserRef = useRef(currentUser);
   currentUserRef.current = currentUser;
 
   // The login screen always follows the OS/browser color scheme; the signed-in
@@ -1219,41 +1279,51 @@ const AppContent: React.FC = () => {
   // and reads latest values via refs — resubscribing on every navigation would
   // drop hashchange events that fire between removeEventListener and the next
   // addEventListener call during rapid back/forward clicking.
+  const handleHashChange = useEffectEvent(() => {
+    if (programmaticHashTracker.consumeIfPending()) return;
+    const rawHash = stripHashPrefix(window.location.hash);
+    const outcome = resolveHashChange({
+      rawHash,
+      activeView: activeViewRef.current,
+      validViews: VALID_VIEWS,
+      hasUser: !!currentUserRef.current,
+    });
+    if (outcome.kind === 'noop') return;
+    if (outcome.kind === 'rewrite-hash') {
+      // Apply the resolved view in this same call: the follow-up hashchange
+      // fired by the rewrite below will be short-circuited by the guard
+      // above, so we cannot rely on it to set the view.
+      programmaticHashTracker.registerWrite();
+      window.location.hash = outcome.newHash.slice(1);
+    }
+    setActiveView(outcome.view);
+  });
+
   useEffect(() => {
-    const handleHashChange = () => {
-      if (programmaticHashTracker.consumeIfPending()) return;
-      const rawHash = stripHashPrefix(window.location.hash);
-      const outcome = resolveHashChange({
-        rawHash,
-        activeView: activeViewRef.current,
-        validViews: VALID_VIEWS,
-        hasUser: !!currentUserRef.current,
-      });
-      if (outcome.kind === 'noop') return;
-      if (outcome.kind === 'rewrite-hash') {
-        // Apply the resolved view in this same call: the follow-up hashchange
-        // fired by the rewrite below will be short-circuited by the guard
-        // above, so we cannot rely on it to set the view.
-        programmaticHashTracker.registerWrite();
-        window.location.hash = outcome.newHash.slice(1);
-      }
-      setActiveView(outcome.view);
-    };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [VALID_VIEWS, setActiveView, programmaticHashTracker]);
+  }, []);
 
-  // Reset viewingUserId when navigating away from user-scoped timesheet views.
-  useEffect(() => {
-    if (
-      activeView !== 'timesheets/tracker' &&
-      activeView !== 'timesheets/ril' &&
-      currentUser &&
-      viewingUserId !== currentUser.id
-    ) {
-      React.startTransition(() => setViewingUserId(currentUser.id));
+  const generateRecurringEntries = useCallback(async () => {
+    if (!currentUser) return;
+
+    const today = new Date();
+    const fromDate = getLocalDateString(today);
+    const future = new Date(today);
+    future.setDate(today.getDate() + 14);
+    const toDate = getLocalDateString(future);
+
+    try {
+      const result = await api.entries.generateRecurring({ fromDate, toDate });
+      if (result.generated.length > 0) {
+        setEntries((prev) =>
+          [...result.generated, ...prev].sort((a, b) => b.createdAt - a.createdAt),
+        );
+      }
+    } catch (err) {
+      console.error('Failed to generate recurring entries:', err);
     }
-  }, [activeView, currentUser, viewingUserId]);
+  }, [currentUser]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -1290,7 +1360,6 @@ const AppContent: React.FC = () => {
       entries: () => {
         entriesStreamTokenRef.current++;
         setEntries([]);
-        setEntriesLoaded(false);
       },
       workUnits: () => setWorkUnits([]),
       users: () => setUsers([]),
@@ -1308,42 +1377,45 @@ const AppContent: React.FC = () => {
     }
 
     const loadGeneralSettings = async () => {
-      if (hasLoadedGeneralSettings) return;
+      if (hasLoadedGeneralSettingsRef.current) return;
       const genSettings = await api.generalSettings.get();
-      if (!isCurrentModuleLoad()) return;
-      setGeneralSettings({
-        ...genSettings,
-        currency: normalizeCurrency(genSettings.currency),
-        geminiApiKey: genSettings.geminiApiKey || '',
-        aiProvider: genSettings.aiProvider || 'gemini',
-        openrouterApiKey: genSettings.openrouterApiKey || '',
-        geminiModelId: genSettings.geminiModelId || '',
-        openrouterModelId: genSettings.openrouterModelId || '',
-        defaultLocation: genSettings.defaultLocation || 'remote',
-        rilCompanyName: genSettings.rilCompanyName || '',
-        rilDefaultStartTime: genSettings.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
-        rilDefaultExitTime: genSettings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,
-        rilLunchBreakMinutes: genSettings.rilLunchBreakMinutes ?? 60,
-        rilNoteOptions: normalizeRilNoteOptions(genSettings.rilNoteOptions),
-        rilTransferOptions: normalizeRilTransferOptions(genSettings.rilTransferOptions),
-      });
-      setHasLoadedGeneralSettings(true);
+      if (isCurrentModuleLoad()) {
+        setGeneralSettings({
+          ...genSettings,
+          currency: normalizeCurrency(genSettings.currency),
+          geminiApiKey: genSettings.geminiApiKey || '',
+          aiProvider: genSettings.aiProvider || 'gemini',
+          openrouterApiKey: genSettings.openrouterApiKey || '',
+          geminiModelId: genSettings.geminiModelId || '',
+          openrouterModelId: genSettings.openrouterModelId || '',
+          defaultLocation: genSettings.defaultLocation || 'remote',
+          rilCompanyName: genSettings.rilCompanyName || '',
+          rilDefaultStartTime: genSettings.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
+          rilDefaultExitTime: genSettings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,
+          rilLunchBreakMinutes: genSettings.rilLunchBreakMinutes ?? 60,
+          rilNoteOptions: normalizeRilNoteOptions(genSettings.rilNoteOptions),
+          rilTransferOptions: normalizeRilTransferOptions(genSettings.rilTransferOptions),
+        });
+        hasLoadedGeneralSettingsRef.current = true;
+      }
     };
 
     const loadLdapConfig = async () => {
-      if (hasLoadedLdapConfig) return;
+      if (hasLoadedLdapConfigRef.current) return;
       const ldap = await api.ldap.getConfig();
-      if (!isCurrentModuleLoad()) return;
-      setLdapConfig(ldap);
-      setHasLoadedLdapConfig(true);
+      if (isCurrentModuleLoad()) {
+        setLdapConfig(ldap);
+        hasLoadedLdapConfigRef.current = true;
+      }
     };
 
     const loadSsoProviders = async () => {
-      if (hasLoadedSsoProviders) return;
+      if (hasLoadedSsoProvidersRef.current) return;
       const providers = await api.sso.listProviders();
-      if (!isCurrentModuleLoad()) return;
-      setSsoProviders(providers);
-      setHasLoadedSsoProviders(true);
+      if (isCurrentModuleLoad()) {
+        setSsoProviders(providers);
+        hasLoadedSsoProvidersRef.current = true;
+      }
     };
 
     const loadAuthenticationConfig = async () => {
@@ -1351,19 +1423,21 @@ const AppContent: React.FC = () => {
     };
 
     const loadEmailConfig = async () => {
-      if (hasLoadedEmailConfig) return;
+      if (hasLoadedEmailConfigRef.current) return;
       const email = await api.email.getConfig();
-      if (!isCurrentModuleLoad()) return;
-      setEmailConfig(email);
-      setHasLoadedEmailConfig(true);
+      if (isCurrentModuleLoad()) {
+        setEmailConfig(email);
+        hasLoadedEmailConfigRef.current = true;
+      }
     };
 
     const loadRoles = async () => {
-      if (hasLoadedRoles) return;
+      if (hasLoadedRolesRef.current) return;
       const rolesData = await api.roles.list();
-      if (!isCurrentModuleLoad()) return;
-      setRoles(rolesData);
-      setHasLoadedRoles(true);
+      if (isCurrentModuleLoad()) {
+        setRoles(rolesData);
+        hasLoadedRolesRef.current = true;
+      }
     };
 
     const loadOptionalDataset = async (
@@ -1664,13 +1738,7 @@ const AppContent: React.FC = () => {
                   apply: (page) => {
                     const token = ++entriesStreamTokenRef.current;
                     setEntries((prev) => mergeById(prev, page.entries, null, page.nextCursor));
-                    // Signal that the initial page of entries is in state. The
-                    // recurring-entries generator effect gates on this so it
-                    // never runs against the empty-array initial state (which
-                    // used to be papered over with a setTimeout(100) heuristic
-                    // and could miss/duplicate entries under varying API
-                    // latency).
-                    setEntriesLoaded(true);
+                    void generateRecurringEntries();
                     if (page.nextCursor) void streamRemainingEntries(page.nextCursor, token);
                   },
                 },
@@ -1681,11 +1749,10 @@ const AppContent: React.FC = () => {
               ],
               { shouldApply: isCurrentModuleLoad },
             );
-            // The recurring-entry generator gates on entriesLoaded but
-            // fetches from the server independently of the local entries
-            // array, so unblock it even when the initial entries fetch fails.
+            // Recurring generation fetches from the server independently of
+            // local entries, so still run it when the initial entries fetch fails.
             if (failedDatasets.includes('entries')) {
-              setEntriesLoaded(true);
+              void generateRecurringEntries();
             }
             await loadOptionalDataset(
               module,
@@ -2004,11 +2071,7 @@ const AppContent: React.FC = () => {
     invalidateModules,
     recordFailures,
     appendFailure,
-    hasLoadedGeneralSettings,
-    hasLoadedLdapConfig,
-    hasLoadedSsoProviders,
-    hasLoadedEmailConfig,
-    hasLoadedRoles,
+    generateRecurringEntries,
   ]);
 
   // Load target user assignments when the timesheet user switcher changes.
@@ -2188,27 +2251,6 @@ const AppContent: React.FC = () => {
     return [currentUser];
   }, [users, currentUser]);
 
-  const generateRecurringEntries = useCallback(async () => {
-    if (!currentUser) return;
-
-    const today = new Date();
-    const fromDate = getLocalDateString(today);
-    const future = new Date(today);
-    future.setDate(today.getDate() + 14);
-    const toDate = getLocalDateString(future);
-
-    try {
-      const result = await api.entries.generateRecurring({ fromDate, toDate });
-      if (result.generated.length > 0) {
-        setEntries((prev) =>
-          [...result.generated, ...prev].sort((a, b) => b.createdAt - a.createdAt),
-        );
-      }
-    } catch (err) {
-      console.error('Failed to generate recurring entries:', err);
-    }
-  }, [currentUser]);
-
   const trackerCatalogs = useMemo(
     () =>
       filterTrackerCatalogs({
@@ -2221,20 +2263,6 @@ const AppContent: React.FC = () => {
       }),
     [clients, projects, projectTasks, currentUser, viewingUserId, viewingUserAssignmentState],
   );
-
-  // Generate recurring entries once the initial entries page is in state.
-  // Previously this used a setTimeout(100) heuristic to guess when the
-  // entries fetch had resolved — that race was visible under slow APIs
-  // (could miss new recurring rows) and could double-fire on fast ones.
-  // Sequencing on `entriesLoaded` makes the ordering deterministic: the
-  // generator inspects the real `entries` state, and `setEntriesLoaded` is
-  // flipped to false on logout/role-switch/module-clear, so a subsequent
-  // entries refetch will re-trigger generation exactly once.
-  useEffect(() => {
-    if (!currentUser) return;
-    if (!entriesLoaded) return;
-    generateRecurringEntries();
-  }, [generateRecurringEntries, currentUser, entriesLoaded]);
 
   const taskHandlers = useMemo(
     () =>
@@ -2255,6 +2283,23 @@ const AppContent: React.FC = () => {
   const handleUpdateTask = taskHandlers.update;
   const handleMakeRecurring = taskHandlers.makeRecurring;
   const handleRecurringAction = taskHandlers.recurringAction;
+  const handleDeleteProjectTask = useCallback(async (id: string) => {
+    try {
+      await api.tasks.delete(id);
+      setProjectTasks((prev) => prev.filter((task) => task.id !== id));
+    } catch (err) {
+      console.error('Failed to delete task:', err);
+    }
+  }, []);
+  const handleDeleteProjectTaskWithToast = useCallback(async (id: string) => {
+    try {
+      await api.tasks.delete(id);
+      setProjectTasks((prev) => prev.filter((task) => task.id !== id));
+    } catch (err) {
+      console.error('Failed to delete task:', err);
+      toastError('Failed to delete task');
+    }
+  }, []);
 
   const addClient = clientHandlers.add;
   const handleUpdateClient = clientHandlers.update;
@@ -2357,21 +2402,10 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleUpdateUserPassword = async (currentPassword: string, newPassword: string) => {
-    try {
-      await api.settings.updatePassword(currentPassword, newPassword);
-    } catch (err) {
-      console.error('Failed to update password:', err);
-      throw err;
-    }
-  };
-
-  const handleListMcpTokens = () => api.settings.listMcpTokens();
-
-  const handleCreateMcpToken = (name: string, scope: McpTokenScope) =>
-    api.settings.createMcpToken(name, scope);
-
-  const handleRevokeMcpToken = (id: string) => api.settings.revokeMcpToken(id);
+  const handleUpdateUserPassword = updateUserPassword;
+  const handleListMcpTokens = listMcpTokens;
+  const handleCreateMcpToken = createMcpToken;
+  const handleRevokeMcpToken = revokeMcpToken;
 
   const handleGetPersonalAccessToken = useCallback(
     async (): Promise<PersonalAccessToken> => api.settings.getPersonalAccessToken(),
@@ -2427,21 +2461,7 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleTestEmail = async (
-    recipientEmail: string,
-  ): Promise<{ success: boolean; code: string; params?: Record<string, string> }> => {
-    try {
-      const result = await api.email.sendTestEmail(recipientEmail);
-      return result;
-    } catch (err) {
-      console.error('Failed to send test email:', err);
-      return {
-        success: false,
-        code: 'TEST_EMAIL_ERROR',
-        params: { error: err instanceof Error ? err.message : 'Failed to send test email' },
-      };
-    }
-  };
+  const handleTestEmail = testEmail;
 
   const handleAddUser = userHandlers.addUser;
   const handleDeleteUser = userHandlers.deleteUser;
@@ -2863,14 +2883,7 @@ const AppContent: React.FC = () => {
                   onDeleteProject={handleDeleteProject}
                   onAddTask={addProjectTask}
                   onUpdateTask={handleUpdateTask}
-                  onDeleteTask={async (id) => {
-                    try {
-                      await api.tasks.delete(id);
-                      setProjectTasks((prev) => prev.filter((t) => t.id !== id));
-                    } catch (err) {
-                      console.error('Failed to delete task:', err);
-                    }
-                  }}
+                  onDeleteTask={handleDeleteProjectTask}
                   onViewOrder={(orderId) => {
                     setClientsOrderFilterId(orderId);
                     setActiveView('accounting/clients-orders');
@@ -2897,7 +2910,7 @@ const AppContent: React.FC = () => {
                       orders={clientsOrders}
                       offers={clientOffers}
                       currency={generalSettings.currency}
-                      permissions={currentUser.permissions || []}
+                      permissions={currentUser.permissions || EMPTY_PERMISSIONS}
                       users={availableUsers}
                       roles={roles}
                       tasks={projectTasks}
@@ -2906,14 +2919,7 @@ const AppContent: React.FC = () => {
                       onDeleteProject={handleDeleteProject}
                       onAddTask={addProjectTask}
                       onUpdateTask={handleUpdateTask}
-                      onDeleteTask={async (id) => {
-                        try {
-                          await api.tasks.delete(id);
-                          setProjectTasks((prev) => prev.filter((t) => t.id !== id));
-                        } catch (err) {
-                          console.error('Failed to delete task:', err);
-                        }
-                      }}
+                      onDeleteTask={handleDeleteProjectTask}
                       onViewOrder={(orderId) => {
                         setClientsOrderFilterId(orderId);
                         setActiveView('accounting/clients-orders');
@@ -2940,7 +2946,7 @@ const AppContent: React.FC = () => {
                       offers={clientOffers}
                       users={availableUsers}
                       roles={roles}
-                      permissions={currentUser.permissions || []}
+                      permissions={currentUser.permissions || EMPTY_PERMISSIONS}
                       currency={generalSettings.currency}
                       tasks={projectTasks}
                       onBack={() => setActiveView('projects/manage')}
@@ -2948,14 +2954,7 @@ const AppContent: React.FC = () => {
                       onDeleteProject={handleDeleteProject}
                       onAddTask={addProjectTask}
                       onUpdateTask={handleUpdateTask}
-                      onDeleteTask={async (id) => {
-                        try {
-                          await api.tasks.delete(id);
-                          setProjectTasks((prev) => prev.filter((t) => t.id !== id));
-                        } catch (err) {
-                          console.error('Failed to delete task:', err);
-                        }
-                      }}
+                      onDeleteTask={handleDeleteProjectTask}
                       onViewOrder={(orderId) => {
                         setClientsOrderFilterId(orderId);
                         setActiveView('accounting/clients-orders');
@@ -2977,15 +2976,7 @@ const AppContent: React.FC = () => {
                   currency={generalSettings.currency}
                   onAddTask={addProjectTask}
                   onUpdateTask={handleUpdateTask}
-                  onDeleteTask={async (id) => {
-                    try {
-                      await api.tasks.delete(id);
-                      setProjectTasks((prev) => prev.filter((t) => t.id !== id));
-                    } catch (err) {
-                      console.error('Failed to delete task:', err);
-                      toastError('Failed to delete task');
-                    }
-                  }}
+                  onDeleteTask={handleDeleteProjectTaskWithToast}
                   onViewOrder={(orderId) => {
                     setClientsOrderFilterId(orderId);
                     setActiveView('accounting/clients-orders');

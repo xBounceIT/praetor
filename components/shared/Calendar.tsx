@@ -27,6 +27,8 @@ const DAY_KEYS_MONDAY_FIRST = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] 
 const DAY_KEYS_SUNDAY_FIRST = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
 const EMPTY_ENTRIES: TimeEntry[] = [];
+const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
 
 export interface CalendarProps {
   // Original props
@@ -50,6 +52,147 @@ export interface CalendarProps {
   // is embedded inside another surface (e.g. a popover) that already provides the background.
   bare?: boolean;
 }
+
+type CalendarHeaderProps = {
+  isCompact: boolean;
+  monthNames: string[];
+  month: number;
+  year: number;
+  currentMonth: number;
+  currentYear: number;
+  isMonthPickerOpen: boolean;
+  isYearPickerOpen: boolean;
+  todayLabel: string;
+  onToggleMonthPicker: () => void;
+  onToggleYearPicker: () => void;
+  onSelectMonth: (month: number) => void;
+  onSelectYear: (year: number) => void;
+  onPrevMonth: () => void;
+  onTodayClick: () => void;
+  onNextMonth: () => void;
+};
+
+const CalendarHeader: React.FC<CalendarHeaderProps> = ({
+  isCompact,
+  monthNames,
+  month,
+  year,
+  currentMonth,
+  currentYear,
+  isMonthPickerOpen,
+  isYearPickerOpen,
+  todayLabel,
+  onToggleMonthPicker,
+  onToggleYearPicker,
+  onSelectMonth,
+  onSelectYear,
+  onPrevMonth,
+  onTodayClick,
+  onNextMonth,
+}) => (
+  <div className={`flex items-center justify-between ${isCompact ? 'mb-3' : 'mb-4'}`}>
+    <div className="relative flex items-center gap-1">
+      <button
+        type="button"
+        onClick={onToggleMonthPicker}
+        className={`font-bold text-foreground hover:bg-muted rounded-md transition-colors flex items-center gap-1 ${
+          isCompact ? 'px-1.5 py-1 text-[13px]' : 'px-2 py-1 text-sm'
+        }`}
+      >
+        {monthNames[month]}
+        <ChevronDown
+          aria-hidden="true"
+          className={`size-2.5 text-muted-foreground transition-transform ${isMonthPickerOpen ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      <button
+        type="button"
+        onClick={onToggleYearPicker}
+        className={`text-muted-foreground font-medium hover:bg-muted rounded-md transition-colors flex items-center gap-1 ${
+          isCompact ? 'px-1.5 py-1 text-[13px]' : 'px-2 py-1 text-sm'
+        }`}
+      >
+        {year}
+        <ChevronDown
+          aria-hidden="true"
+          className={`size-2.5 text-muted-foreground transition-transform ${isYearPickerOpen ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {isMonthPickerOpen && (
+        <div className="absolute top-full left-0 mt-1 z-50 bg-popover text-popover-foreground border border-border shadow-xl rounded-lg p-2 grid grid-cols-3 gap-1 min-w-[200px] animate-in fade-in zoom-in-95 duration-150 origin-top-left">
+          {monthNames.map((mName, idx) => (
+            <button
+              key={MONTH_KEYS[idx]}
+              type="button"
+              onClick={() => onSelectMonth(idx)}
+              className={`text-[11px] font-bold py-2 rounded-lg transition-colors ${
+                idx === month
+                  ? 'bg-secondary text-secondary-foreground'
+                  : idx === currentMonth
+                    ? 'bg-muted text-secondary-foreground ring-1 ring-inset ring-border'
+                    : 'text-foreground hover:bg-muted'
+              }`}
+            >
+              {mName.slice(0, 3)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {isYearPickerOpen && (
+        <div className="absolute top-full left-0 mt-1 z-50 bg-popover text-popover-foreground border border-border shadow-xl rounded-lg p-2 grid grid-cols-3 gap-1 min-w-[180px] max-h-[200px] overflow-y-auto animate-in fade-in zoom-in-95 duration-150 origin-top-left">
+          {Array.from({ length: 9 }, (_, i) => currentYear - 4 + i).map((y) => (
+            <button
+              key={y}
+              type="button"
+              onClick={() => onSelectYear(y)}
+              className={`text-[11px] font-bold py-2 rounded-lg transition-colors ${
+                y === year
+                  ? 'bg-secondary text-secondary-foreground'
+                  : y === currentYear
+                    ? 'bg-muted text-secondary-foreground ring-1 ring-inset ring-border'
+                    : 'text-foreground hover:bg-muted'
+              }`}
+            >
+              {y}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+    <div className="flex gap-1">
+      <button
+        type="button"
+        onClick={onPrevMonth}
+        className={`hover:bg-muted rounded-lg text-muted-foreground transition-colors ${
+          isCompact ? 'p-1' : 'p-1.5'
+        }`}
+      >
+        <ChevronLeft aria-hidden="true" className="size-3" />
+      </button>
+      <button
+        type="button"
+        onClick={onTodayClick}
+        className={`font-bold uppercase tracking-wider text-secondary-foreground hover:bg-muted rounded-lg transition-colors ${
+          isCompact ? 'px-1.5 text-[9px]' : 'px-2 text-[10px]'
+        }`}
+      >
+        {todayLabel}
+      </button>
+      <button
+        type="button"
+        onClick={onNextMonth}
+        className={`hover:bg-muted rounded-lg text-muted-foreground transition-colors ${
+          isCompact ? 'p-1' : 'p-1.5'
+        }`}
+      >
+        <ChevronRight aria-hidden="true" className="size-3" />
+      </button>
+    </div>
+  </div>
+);
 
 const Calendar: React.FC<CalendarProps> = ({
   selectedDate,
@@ -88,9 +231,6 @@ const Calendar: React.FC<CalendarProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
-  const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
-
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
   const currentDate = new Date();
@@ -122,6 +262,22 @@ const Calendar: React.FC<CalendarProps> = ({
 
   const prevMonth = () => setViewDate(new Date(year, month - 1, 1));
   const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
+  const toggleMonthPicker = () => {
+    setIsMonthPickerOpen(!isMonthPickerOpen);
+    setIsYearPickerOpen(false);
+  };
+  const toggleYearPicker = () => {
+    setIsYearPickerOpen(!isYearPickerOpen);
+    setIsMonthPickerOpen(false);
+  };
+  const selectMonth = (nextMonthValue: number) => {
+    setViewDate(new Date(year, nextMonthValue, 1));
+    setIsMonthPickerOpen(false);
+  };
+  const selectYear = (nextYear: number) => {
+    setViewDate(new Date(nextYear, month, 1));
+    setIsYearPickerOpen(false);
+  };
 
   const handleDateClick = (dateStr: string) => {
     if (selectionMode === 'range' && onRangeSelect) {
@@ -260,122 +416,24 @@ const Calendar: React.FC<CalendarProps> = ({
       }`}
       ref={containerRef}
     >
-      <div className={`flex items-center justify-between ${isCompact ? 'mb-3' : 'mb-4'}`}>
-        <div className="relative flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              setIsMonthPickerOpen(!isMonthPickerOpen);
-              setIsYearPickerOpen(false);
-            }}
-            className={`font-bold text-foreground hover:bg-muted rounded-md transition-colors flex items-center gap-1 ${
-              isCompact ? 'px-1.5 py-1 text-[13px]' : 'px-2 py-1 text-sm'
-            }`}
-          >
-            {monthNames[month]}
-            <ChevronDown
-              aria-hidden="true"
-              className={`size-2.5 text-muted-foreground transition-transform ${isMonthPickerOpen ? 'rotate-180' : ''}`}
-            />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setIsYearPickerOpen(!isYearPickerOpen);
-              setIsMonthPickerOpen(false);
-            }}
-            className={`text-muted-foreground font-medium hover:bg-muted rounded-md transition-colors flex items-center gap-1 ${
-              isCompact ? 'px-1.5 py-1 text-[13px]' : 'px-2 py-1 text-sm'
-            }`}
-          >
-            {year}
-            <ChevronDown
-              aria-hidden="true"
-              className={`size-2.5 text-muted-foreground transition-transform ${isYearPickerOpen ? 'rotate-180' : ''}`}
-            />
-          </button>
-
-          {/* Month Picker Overlay */}
-          {isMonthPickerOpen && (
-            <div className="absolute top-full left-0 mt-1 z-50 bg-popover text-popover-foreground border border-border shadow-xl rounded-lg p-2 grid grid-cols-3 gap-1 min-w-[200px] animate-in fade-in zoom-in-95 duration-150 origin-top-left">
-              {monthNames.map((mName, idx) => (
-                <button
-                  key={MONTH_KEYS[idx]}
-                  type="button"
-                  onClick={() => {
-                    setViewDate(new Date(year, idx, 1));
-                    setIsMonthPickerOpen(false);
-                  }}
-                  className={`text-[11px] font-bold py-2 rounded-lg transition-colors ${
-                    idx === month
-                      ? 'bg-secondary text-secondary-foreground'
-                      : idx === currentMonth
-                        ? 'bg-muted text-secondary-foreground ring-1 ring-inset ring-border'
-                        : 'text-foreground hover:bg-muted'
-                  }`}
-                >
-                  {mName.slice(0, 3)}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Year Picker Overlay */}
-          {isYearPickerOpen && (
-            <div className="absolute top-full left-0 mt-1 z-50 bg-popover text-popover-foreground border border-border shadow-xl rounded-lg p-2 grid grid-cols-3 gap-1 min-w-[180px] max-h-[200px] overflow-y-auto animate-in fade-in zoom-in-95 duration-150 origin-top-left">
-              {Array.from({ length: 9 }, (_, i) => currentYear - 4 + i).map((y) => (
-                <button
-                  key={y}
-                  type="button"
-                  onClick={() => {
-                    setViewDate(new Date(y, month, 1));
-                    setIsYearPickerOpen(false);
-                  }}
-                  className={`text-[11px] font-bold py-2 rounded-lg transition-colors ${
-                    y === year
-                      ? 'bg-secondary text-secondary-foreground'
-                      : y === currentYear
-                        ? 'bg-muted text-secondary-foreground ring-1 ring-inset ring-border'
-                        : 'text-foreground hover:bg-muted'
-                  }`}
-                >
-                  {y}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="flex gap-1">
-          <button
-            type="button"
-            onClick={prevMonth}
-            className={`hover:bg-muted rounded-lg text-muted-foreground transition-colors ${
-              isCompact ? 'p-1' : 'p-1.5'
-            }`}
-          >
-            <ChevronLeft aria-hidden="true" className="size-3" />
-          </button>
-          <button
-            type="button"
-            onClick={handleTodayClick}
-            className={`font-bold uppercase tracking-wider text-secondary-foreground hover:bg-muted rounded-lg transition-colors ${
-              isCompact ? 'px-1.5 text-[9px]' : 'px-2 text-[10px]'
-            }`}
-          >
-            {t('calendar.today')}
-          </button>
-          <button
-            type="button"
-            onClick={nextMonth}
-            className={`hover:bg-muted rounded-lg text-muted-foreground transition-colors ${
-              isCompact ? 'p-1' : 'p-1.5'
-            }`}
-          >
-            <ChevronRight aria-hidden="true" className="size-3" />
-          </button>
-        </div>
-      </div>
+      <CalendarHeader
+        isCompact={isCompact}
+        monthNames={monthNames}
+        month={month}
+        year={year}
+        currentMonth={currentMonth}
+        currentYear={currentYear}
+        isMonthPickerOpen={isMonthPickerOpen}
+        isYearPickerOpen={isYearPickerOpen}
+        todayLabel={t('calendar.today')}
+        onToggleMonthPicker={toggleMonthPicker}
+        onToggleYearPicker={toggleYearPicker}
+        onSelectMonth={selectMonth}
+        onSelectYear={selectYear}
+        onPrevMonth={prevMonth}
+        onTodayClick={handleTodayClick}
+        onNextMonth={nextMonth}
+      />
 
       <div className={`grid grid-cols-7 gap-0.5 ${isCompact ? 'mb-0.5' : 'mb-1'}`}>
         {dayHeaders.map((day, idx) => {

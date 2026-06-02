@@ -112,7 +112,7 @@ export const bottom = (layout: DashboardLayout): number =>
 // Reading order on the grid: top-to-bottom, then left-to-right. Used by both
 // the compactor here and the single-column stack in DashboardGrid.
 export const sortByRowCol = (layout: DashboardLayout): DashboardLayout =>
-  [...layout].sort((a, b) => (a.y === b.y ? a.x - b.x : a.y - b.y));
+  layout.toSorted((a, b) => (a.y === b.y ? a.x - b.x : a.y - b.y));
 
 // Vertical compaction: float every widget up as far as it can go without
 // colliding, processing top-to-bottom so each rests on the ones above it. The
@@ -337,12 +337,17 @@ export const parseStoredDashboardViews = (
 ): DashboardView[] => {
   const arr = parseJsonArray(raw);
   if (!arr) return [];
-  return arr.filter(isValidStoredDashboardView).map((v) => ({
-    id: v.id,
-    name: v.name,
-    // Normalize so a view authored before a widget existed still renders it.
-    layout: normalizeLayout(v.layout, widgets),
-  }));
+  const views: DashboardView[] = [];
+  for (const value of arr) {
+    if (!isValidStoredDashboardView(value)) continue;
+    views.push({
+      id: value.id,
+      name: value.name,
+      // Normalize so a view authored before a widget existed still renders it.
+      layout: normalizeLayout(value.layout, widgets),
+    });
+  }
+  return views;
 };
 
 // Normalize the opaque `config` payload of a server-backed dashboard view into a
@@ -364,7 +369,11 @@ export const parseServerViewRawLayout = (
 ): DashboardLayout => {
   const raw = config?.layout;
   if (!Array.isArray(raw)) return [];
-  return raw.filter(isValidWidgetState).map((w) => ({ ...w }));
+  const layout: DashboardLayout = [];
+  for (const value of raw) {
+    if (isValidWidgetState(value)) layout.push({ ...value });
+  }
+  return layout;
 };
 
 export const parseStoredLayout = (

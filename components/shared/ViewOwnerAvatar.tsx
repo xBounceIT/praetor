@@ -39,7 +39,8 @@ const ViewOwnerAvatar: React.FC<ViewOwnerAvatarProps> = ({ ownerName, className 
             className,
           )}
         >
-          {initialsFromName(ownerName)}
+          <span aria-hidden="true">{initialsFromName(ownerName)}</span>
+          <span className="sr-only">{label}</span>
         </span>
       </TooltipTrigger>
       <TooltipContent side="bottom">{label}</TooltipContent>

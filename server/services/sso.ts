@@ -1167,8 +1167,10 @@ export const buildAuthUserResponse = async (
   user: usersRepo.AuthUser,
   activeRole: string,
 ): Promise<SsoLoginResponseUser> => {
-  const permissions = await getRolePermissions(activeRole);
-  const availableRoles = await rolesRepo.listAvailableRolesForUser(user.id);
+  const [permissions, availableRoles] = await Promise.all([
+    getRolePermissions(activeRole),
+    rolesRepo.listAvailableRolesForUser(user.id),
+  ]);
   return {
     ...user,
     role: activeRole,

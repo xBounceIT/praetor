@@ -610,7 +610,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             tx,
           );
           const items = await clientsOrdersRepo.insertItems(
-            orderId,
+            order.id,
             buildItemsForInsert(normalizedItems),
             tx,
           );
@@ -687,7 +687,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             const supplierQuote = await supplierQuotesRepo.findById(sqId, tx);
             if (!supplierQuote) return false;
             const supplierItems = await supplierQuotesRepo.findItemsForQuote(sqId, tx);
-
             const supplierOrderId = await generateSupplierOrderId(tx);
             await clientsOrdersRepo.createSupplierOrder(
               {

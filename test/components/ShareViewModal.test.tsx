@@ -33,7 +33,7 @@ mock.module('../../services/api/views', () => ({
 
 // Stub the current-user hook so the owner ('me') is excluded from the candidate list.
 let currentUserId: string | undefined = 'me';
-mock.module('../../contexts/CurrentUserContext', () => ({
+mock.module('../../contexts/useCurrentUserId', () => ({
   useCurrentUserId: () => currentUserId,
 }));
 

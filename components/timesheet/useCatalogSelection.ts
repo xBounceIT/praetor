@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useReducer } from 'react';
 import type { Client, Project, ProjectTask, TimeEntryLocation } from '../../types';
 
 export const CUSTOM_TASK_SENTINEL = 'custom';
@@ -35,6 +35,71 @@ export interface UseCatalogSelectionResult {
   resetLocation: () => void;
 }
 
+type CatalogSelectionState = {
+  clientId: string;
+  projectId: string;
+  taskId: string;
+  taskName: string;
+  location: TimeEntryLocation;
+  preserveMissingProject: boolean;
+  preserveMissingTask: boolean;
+};
+
+type CatalogSelectionAction =
+  | { type: 'setClient'; clientId: string }
+  | { type: 'setProject'; projectId: string }
+  | { type: 'setTask'; taskId: string; taskName: string }
+  | { type: 'setLocation'; location: TimeEntryLocation }
+  | { type: 'resetLocation'; location: TimeEntryLocation };
+
+const catalogSelectionReducer = (
+  state: CatalogSelectionState,
+  action: CatalogSelectionAction,
+): CatalogSelectionState => {
+  switch (action.type) {
+    case 'setClient':
+      return {
+        ...state,
+        clientId: action.clientId,
+        preserveMissingProject: false,
+        preserveMissingTask: false,
+      };
+    case 'setProject':
+      return {
+        ...state,
+        projectId: action.projectId,
+        preserveMissingProject: false,
+        preserveMissingTask: false,
+      };
+    case 'setTask':
+      return {
+        ...state,
+        taskId: action.taskId,
+        taskName: action.taskName,
+        preserveMissingTask: false,
+      };
+    case 'setLocation':
+    case 'resetLocation':
+      return { ...state, location: action.location };
+  }
+};
+
+const createInitialCatalogSelection = ({
+  clients,
+  defaultLocation,
+  initialSelection,
+}: Pick<UseCatalogSelectionOptions, 'clients' | 'defaultLocation' | 'initialSelection'> & {
+  defaultLocation: TimeEntryLocation;
+}): CatalogSelectionState => ({
+  clientId: initialSelection?.clientId ?? clients[0]?.id ?? '',
+  projectId: initialSelection?.projectId ?? '',
+  taskId: initialSelection?.taskId ?? '',
+  taskName: initialSelection?.taskName ?? '',
+  location: defaultLocation,
+  preserveMissingProject: initialSelection?.projectId !== undefined,
+  preserveMissingTask: initialSelection?.taskId !== undefined,
+});
+
 export function useCatalogSelection({
   clients,
   projects,
@@ -42,34 +107,29 @@ export function useCatalogSelection({
   defaultLocation = 'remote',
   initialSelection,
 }: UseCatalogSelectionOptions): UseCatalogSelectionResult {
-  const [clientId, setClientId] = useState(initialSelection?.clientId ?? clients[0]?.id ?? '');
-  const [projectId, setProjectId] = useState(initialSelection?.projectId ?? '');
-  const [taskId, setTaskId] = useState(initialSelection?.taskId ?? '');
-  const [taskName, setTaskName] = useState(initialSelection?.taskName ?? '');
-  const [location, setLocation] = useState<TimeEntryLocation>(defaultLocation);
+  const [selection, dispatch] = useReducer(
+    catalogSelectionReducer,
+    { clients, defaultLocation, initialSelection },
+    createInitialCatalogSelection,
+  );
 
-  // When seeded (edit dialog), the seed must survive the first snap-to-first pass —
-  // otherwise an entry whose task/project is no longer in the scoped catalog (orphan,
-  // archived) would silently jump to the catalog's first row. One ref per field so
-  // they consume independently.
-  const skipProjectSnapRef = useRef(initialSelection?.projectId !== undefined);
-  const skipTaskSnapRef = useRef(initialSelection?.taskId !== undefined);
-
-  useEffect(() => {
-    if (clients.length === 0) {
-      if (clientId !== '') setClientId('');
-      return;
-    }
-    if (!clients.some((client) => client.id === clientId)) {
-      setClientId(clients[0].id);
-    }
-  }, [clients, clientId]);
+  const clientId =
+    clients.length === 0
+      ? ''
+      : clients.some((client) => client.id === selection.clientId)
+        ? selection.clientId
+        : (clients[0]?.id ?? '');
 
   const filteredProjects = useMemo(
     () => projects.filter((project) => project.clientId === clientId),
     [projects, clientId],
   );
   const firstFilteredProjectId = filteredProjects[0]?.id ?? '';
+  const projectId = filteredProjects.some((project) => project.id === selection.projectId)
+    ? selection.projectId
+    : selection.preserveMissingProject
+      ? selection.projectId
+      : firstFilteredProjectId;
 
   const filteredTasks = useMemo(
     () => projectTasks.filter((task) => task.projectId === projectId),
@@ -77,50 +137,24 @@ export function useCatalogSelection({
   );
   const firstFilteredTaskId = filteredTasks[0]?.id ?? '';
   const firstFilteredTaskName = filteredTasks[0]?.name ?? '';
-
-  useEffect(() => {
-    const skipOnce = skipProjectSnapRef.current;
-    skipProjectSnapRef.current = false;
-    if (filteredProjects.length === 0) {
-      if (skipOnce) return;
-      if (projectId !== '') setProjectId('');
-      return;
-    }
-    if (!filteredProjects.some((project) => project.id === projectId)) {
-      if (skipOnce) return;
-      setProjectId(firstFilteredProjectId);
-    }
-  }, [filteredProjects, firstFilteredProjectId, projectId]);
-
-  useEffect(() => {
-    const skipOnce = skipTaskSnapRef.current;
-    skipTaskSnapRef.current = false;
-    if (filteredTasks.length === 0) {
-      if (skipOnce) return;
-      setTaskId('');
-      setTaskName('');
-      return;
-    }
-
-    if (!filteredTasks.some((task) => task.id === taskId)) {
-      if (skipOnce) return;
-      setTaskName(firstFilteredTaskName);
-      setTaskId(firstFilteredTaskId);
-    }
-  }, [filteredTasks, firstFilteredTaskId, firstFilteredTaskName, taskId]);
-
-  useEffect(() => {
-    if (clientId === '') {
-      setProjectId('');
-    }
-  }, [clientId]);
+  const selectedTask = filteredTasks.find((task) => task.id === selection.taskId);
+  const taskId = selectedTask
+    ? selectedTask.id
+    : selection.preserveMissingTask
+      ? selection.taskId
+      : firstFilteredTaskId;
+  const taskName = selectedTask
+    ? selectedTask.name
+    : selection.preserveMissingTask
+      ? selection.taskName
+      : firstFilteredTaskName;
 
   const setClient = (id: string) => {
-    setClientId(id);
+    dispatch({ type: 'setClient', clientId: id });
   };
 
   const setProject = (id: string) => {
-    setProjectId(id);
+    dispatch({ type: 'setProject', projectId: id });
   };
 
   // When `nextTaskName` is provided the assignment is direct — used after a
@@ -128,19 +162,17 @@ export function useCatalogSelection({
   // yet contain it. Otherwise the name is looked up from the scoped catalog.
   const setTask = (nextTaskId: string, nextTaskName?: string) => {
     if (nextTaskName !== undefined) {
-      setTaskId(nextTaskId);
-      setTaskName(nextTaskName);
+      dispatch({ type: 'setTask', taskId: nextTaskId, taskName: nextTaskName });
       return;
     }
     const task = filteredTasks.find((t) => t.id === nextTaskId);
     if (task) {
-      setTaskName(task.name);
-      setTaskId(task.id);
+      dispatch({ type: 'setTask', taskId: task.id, taskName: task.name });
     }
   };
 
   const resetLocation = () => {
-    setLocation(defaultLocation);
+    dispatch({ type: 'resetLocation', location: defaultLocation });
   };
 
   return {
@@ -148,13 +180,13 @@ export function useCatalogSelection({
     projectId,
     taskId,
     taskName,
-    location,
+    location: selection.location,
     filteredProjects,
     filteredTasks,
     setClient,
     setProject,
     setTask,
-    setLocation,
+    setLocation: (location) => dispatch({ type: 'setLocation', location }),
     resetLocation,
   };
 }

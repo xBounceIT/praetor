@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
@@ -46,6 +46,102 @@ const calculateOrderTotal = (items: SupplierSaleOrderItem[], discount: number): 
   return subtotal - discountAmount;
 };
 
+const createEmptySupplierForm = (): Partial<Supplier> => ({
+  name: '',
+  supplierCode: '',
+  contactName: '',
+  email: '',
+  phone: '',
+  address: '',
+  vatNumber: '',
+  taxCode: '',
+  paymentTerms: '',
+  notes: '',
+});
+
+const createSupplierForm = (supplier: Supplier): Partial<Supplier> => ({
+  name: supplier.name || '',
+  supplierCode: supplier.supplierCode || '',
+  contactName: supplier.contactName || '',
+  email: supplier.email || '',
+  phone: supplier.phone || '',
+  address: supplier.address || '',
+  vatNumber: supplier.vatNumber || '',
+  taxCode: supplier.taxCode || '',
+  paymentTerms: supplier.paymentTerms || '',
+  notes: supplier.notes || '',
+});
+
+type SuppliersViewState = {
+  isModalOpen: boolean;
+  editingSupplier: Supplier | null;
+  isDeleteConfirmOpen: boolean;
+  supplierToDelete: Supplier | null;
+  errors: Record<string, string>;
+  formData: Partial<Supplier>;
+};
+
+type SuppliersViewAction =
+  | { type: 'openAdd' }
+  | { type: 'openEdit'; supplier: Supplier }
+  | { type: 'closeModal' }
+  | { type: 'patchForm'; patch: Partial<Supplier> }
+  | { type: 'clearError'; field: string }
+  | { type: 'setErrors'; errors: Record<string, string> }
+  | { type: 'submitSuccess' }
+  | { type: 'confirmDelete'; supplier: Supplier }
+  | { type: 'deleteSuccess' };
+
+const createSuppliersViewState = (): SuppliersViewState => ({
+  isModalOpen: false,
+  editingSupplier: null,
+  isDeleteConfirmOpen: false,
+  supplierToDelete: null,
+  errors: {},
+  formData: createEmptySupplierForm(),
+});
+
+const suppliersViewReducer = (
+  state: SuppliersViewState,
+  action: SuppliersViewAction,
+): SuppliersViewState => {
+  switch (action.type) {
+    case 'openAdd':
+      return {
+        ...state,
+        isModalOpen: true,
+        editingSupplier: null,
+        errors: {},
+        formData: createEmptySupplierForm(),
+      };
+    case 'openEdit':
+      return {
+        ...state,
+        isModalOpen: true,
+        editingSupplier: action.supplier,
+        errors: {},
+        formData: createSupplierForm(action.supplier),
+      };
+    case 'closeModal':
+      return { ...state, isModalOpen: false };
+    case 'patchForm':
+      return { ...state, formData: { ...state.formData, ...action.patch } };
+    case 'clearError':
+      if (!state.errors[action.field]) return state;
+      return { ...state, errors: { ...state.errors, [action.field]: '' } };
+    case 'setErrors':
+      return { ...state, errors: action.errors };
+    case 'submitSuccess':
+      return { ...state, isModalOpen: false };
+    case 'confirmDelete':
+      return { ...state, supplierToDelete: action.supplier, isDeleteConfirmOpen: true };
+    case 'deleteSuccess':
+      return { ...state, isDeleteConfirmOpen: false, supplierToDelete: null };
+    default:
+      return state;
+  }
+};
+
 const SuppliersView: React.FC<SuppliersViewProps> = ({
   suppliers,
   supplierOrders,
@@ -59,62 +155,18 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
   const canCreateSuppliers = hasScopedActionPermission(permissions, 'crm.suppliers', 'create');
   const canUpdateSuppliers = hasScopedActionPermission(permissions, 'crm.suppliers', 'update');
   const canDeleteSuppliers = hasScopedActionPermission(permissions, 'crm.suppliers', 'delete');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [supplierToDelete, setSupplierToDelete] = useState<Supplier | null>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  // Form State
-  const [formData, setFormData] = useState<Partial<Supplier>>({
-    name: '',
-    supplierCode: '',
-    contactName: '',
-    email: '',
-    phone: '',
-    address: '',
-    vatNumber: '',
-    taxCode: '',
-    paymentTerms: '',
-    notes: '',
-  });
+  const [state, dispatch] = useReducer(suppliersViewReducer, undefined, createSuppliersViewState);
+  const { isModalOpen, editingSupplier, isDeleteConfirmOpen, supplierToDelete, errors, formData } =
+    state;
 
   const openAddModal = () => {
     if (!canCreateSuppliers) return;
-    setEditingSupplier(null);
-    setFormData({
-      name: '',
-      supplierCode: '',
-      contactName: '',
-      email: '',
-      phone: '',
-      address: '',
-      vatNumber: '',
-      taxCode: '',
-      paymentTerms: '',
-      notes: '',
-    });
-    setErrors({});
-    setIsModalOpen(true);
+    dispatch({ type: 'openAdd' });
   };
 
   const openEditModal = (supplier: Supplier) => {
     if (!canUpdateSuppliers) return;
-    setEditingSupplier(supplier);
-    setFormData({
-      name: supplier.name || '',
-      supplierCode: supplier.supplierCode || '',
-      contactName: supplier.contactName || '',
-      email: supplier.email || '',
-      phone: supplier.phone || '',
-      address: supplier.address || '',
-      vatNumber: supplier.vatNumber || '',
-      taxCode: supplier.taxCode || '',
-      paymentTerms: supplier.paymentTerms || '',
-      notes: supplier.notes || '',
-    });
-    setErrors({});
-    setIsModalOpen(true);
+    dispatch({ type: 'openEdit', supplier });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -152,7 +204,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
     }
 
     if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+      dispatch({ type: 'setErrors', errors: newErrors });
       return;
     }
 
@@ -169,30 +221,34 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
       } else {
         await onAddSupplier(payload);
       }
-      setIsModalOpen(false);
+      dispatch({ type: 'submitSuccess' });
     } catch (err) {
       const message = (err as Error).message;
       const fallback = t('crm:suppliers.failedToSave');
       if (message.toLowerCase().includes('supplier code')) {
-        setErrors({ ...newErrors, supplierCode: t('crm:suppliers.codeUnique') });
+        dispatch({
+          type: 'setErrors',
+          errors: { ...newErrors, supplierCode: t('crm:suppliers.codeUnique') },
+        });
       } else {
-        setErrors({ ...newErrors, general: message || fallback });
+        dispatch({
+          type: 'setErrors',
+          errors: { ...newErrors, general: message || fallback },
+        });
       }
       toastError(message || fallback);
     }
   };
 
   const confirmDelete = useCallback((supplier: Supplier) => {
-    setSupplierToDelete(supplier);
-    setIsDeleteConfirmOpen(true);
+    dispatch({ type: 'confirmDelete', supplier });
   }, []);
 
   const handleDelete = async () => {
     if (!supplierToDelete) return;
     try {
       await onDeleteSupplier(supplierToDelete.id);
-      setIsDeleteConfirmOpen(false);
-      setSupplierToDelete(null);
+      dispatch({ type: 'deleteSuccess' });
     } catch (err) {
       toastError((err as Error).message || t('crm:suppliers.failedToDelete'));
     }
@@ -401,7 +457,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add/Edit Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+      <Modal isOpen={isModalOpen} onClose={() => dispatch({ type: 'closeModal' })}>
         <ModalContent size="2xl" className="max-h-[90vh]">
           <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
             <ModalHeader>
@@ -414,7 +470,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
                 </span>
                 {editingSupplier ? t('crm:suppliers.editSupplier') : t('crm:suppliers.addSupplier')}
               </ModalTitle>
-              <ModalCloseButton onClick={() => setIsModalOpen(false)} />
+              <ModalCloseButton onClick={() => dispatch({ type: 'closeModal' })} />
             </ModalHeader>
 
             <ModalBody className="flex-1 space-y-8">
@@ -432,9 +488,8 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
                       type="text"
                       value={formData.supplierCode}
                       onChange={(e) => {
-                        setFormData((prev) => ({ ...prev, supplierCode: e.target.value }));
-                        if (errors.supplierCode)
-                          setErrors((prev) => ({ ...prev, supplierCode: '' }));
+                        dispatch({ type: 'patchForm', patch: { supplierCode: e.target.value } });
+                        dispatch({ type: 'clearError', field: 'supplierCode' });
                       }}
                       placeholder={t('crm:suppliers.codePlaceholder')}
                       aria-invalid={Boolean(errors.supplierCode)}
@@ -448,8 +503,8 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
                       type="text"
                       value={formData.name}
                       onChange={(e) => {
-                        setFormData((prev) => ({ ...prev, name: e.target.value }));
-                        if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
+                        dispatch({ type: 'patchForm', patch: { name: e.target.value } });
+                        dispatch({ type: 'clearError', field: 'name' });
                       }}
                       placeholder={t('crm:suppliers.namePlaceholder')}
                       aria-invalid={Boolean(errors.name)}
@@ -465,7 +520,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
                       type="text"
                       value={formData.contactName}
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, contactName: e.target.value }))
+                        dispatch({ type: 'patchForm', patch: { contactName: e.target.value } })
                       }
                       placeholder={t('crm:suppliers.contactPlaceholder')}
                     />
@@ -486,7 +541,9 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
                       id="supplier-email"
                       type="email"
                       value={formData.email}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+                      onChange={(e) =>
+                        dispatch({ type: 'patchForm', patch: { email: e.target.value } })
+                      }
                       placeholder={t('crm:suppliers.emailPlaceholder')}
                     />
                   </Field>
@@ -496,7 +553,9 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
                       id="supplier-phone"
                       type="text"
                       value={formData.phone}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+                      onChange={(e) =>
+                        dispatch({ type: 'patchForm', patch: { phone: e.target.value } })
+                      }
                       placeholder={t('crm:suppliers.phonePlaceholder')}
                     />
                   </Field>
@@ -507,7 +566,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
                       rows={2}
                       value={formData.address}
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, address: e.target.value }))
+                        dispatch({ type: 'patchForm', patch: { address: e.target.value } })
                       }
                       placeholder={t('crm:suppliers.addressPlaceholder')}
                       className="resize-none"
@@ -532,8 +591,8 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
                       type="text"
                       value={formData.vatNumber}
                       onChange={(e) => {
-                        setFormData((prev) => ({ ...prev, vatNumber: e.target.value }));
-                        if (errors.vatNumber) setErrors((prev) => ({ ...prev, vatNumber: '' }));
+                        dispatch({ type: 'patchForm', patch: { vatNumber: e.target.value } });
+                        dispatch({ type: 'clearError', field: 'vatNumber' });
                       }}
                       placeholder={t('crm:suppliers.vatPlaceholder')}
                       aria-invalid={Boolean(errors.vatNumber)}
@@ -549,7 +608,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
                       type="text"
                       value={formData.taxCode}
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, taxCode: e.target.value }))
+                        dispatch({ type: 'patchForm', patch: { taxCode: e.target.value } })
                       }
                       placeholder={t('crm:suppliers.taxCodePlaceholder')}
                     />
@@ -563,7 +622,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
                       type="text"
                       value={formData.paymentTerms}
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, paymentTerms: e.target.value }))
+                        dispatch({ type: 'patchForm', patch: { paymentTerms: e.target.value } })
                       }
                       placeholder={t('crm:suppliers.paymentTermsPlaceholder')}
                     />
@@ -574,7 +633,9 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
                       id="supplier-notes"
                       type="text"
                       value={formData.notes}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
+                      onChange={(e) =>
+                        dispatch({ type: 'patchForm', patch: { notes: e.target.value } })
+                      }
                       placeholder={t('crm:suppliers.notesPlaceholder')}
                     />
                   </Field>
@@ -590,7 +651,11 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
             </ModalBody>
 
             <ModalFooter>
-              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => dispatch({ type: 'closeModal' })}
+              >
                 {t('common:buttons.cancel')}
               </Button>
               <Button type="submit" disabled={!canSubmit}>
@@ -604,7 +669,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
       {/* Delete Confirmation Modal */}
       <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen}
-        onClose={() => setIsDeleteConfirmOpen(false)}
+        onClose={() => dispatch({ type: 'deleteSuccess' })}
         onConfirm={handleDelete}
         title={t('crm:suppliers.deleteSupplier')}
         description={`${t('common:messages.deleteConfirmNamed', {

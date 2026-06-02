@@ -2,9 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { I18nextProvider } from 'react-i18next';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import App from './App';
-import i18n from './i18n';
-import './src/index.css';
+import App from '../App';
+import i18n from '../i18n';
+import './index.css';
 import 'flag-icons/css/flag-icons.min.css';
 
 const rootElement = document.getElementById('root');

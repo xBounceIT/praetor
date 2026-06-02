@@ -74,14 +74,16 @@ const normalizePricingItemFields = <T extends PricingItemBase>(item: T): T => ({
 export const normalizeClient = (c: Client): Client => ({
   ...c,
   contacts: Array.isArray(c.contacts)
-    ? c.contacts
-        .map((contact) => ({
+    ? c.contacts.reduce<Client['contacts']>((contacts, contact) => {
+        const normalizedContact = {
           fullName: typeof contact.fullName === 'string' ? contact.fullName.trim() : '',
           role: typeof contact.role === 'string' ? contact.role.trim() || undefined : undefined,
           email: typeof contact.email === 'string' ? contact.email.trim() || undefined : undefined,
           phone: typeof contact.phone === 'string' ? contact.phone.trim() || undefined : undefined,
-        }))
-        .filter((contact) => contact.fullName.length > 0)
+        };
+        if (normalizedContact.fullName.length > 0) contacts?.push(normalizedContact);
+        return contacts;
+      }, [])
     : undefined,
   contactName: c.contactName ?? undefined,
   clientCode: c.clientCode ?? undefined,

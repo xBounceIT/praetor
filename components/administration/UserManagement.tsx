@@ -54,6 +54,60 @@ const sanitizeUsernamePart = (s: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 
+const isValidEmail = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed || /\s/.test(trimmed)) return false;
+
+  const atIndex = trimmed.indexOf('@');
+  if (atIndex <= 0 || atIndex !== trimmed.lastIndexOf('@')) return false;
+
+  const localPart = trimmed.slice(0, atIndex);
+  const domainPart = trimmed.slice(atIndex + 1);
+  if (!localPart || !domainPart) return false;
+  if (localPart.startsWith('.') || localPart.endsWith('.')) return false;
+  if (localPart.includes('..') || domainPart.includes('..')) return false;
+  if (!domainPart.includes('.')) return false;
+
+  const domainLabels = domainPart.split('.');
+  if (domainLabels.some((label) => !label)) return false;
+  if (domainLabels.some((label) => label.startsWith('-') || label.endsWith('-'))) return false;
+
+  return true;
+};
+
+const splitFullName = (fullName: string) => {
+  const trimmed = fullName.trim();
+  if (!trimmed) {
+    return { firstName: '', surname: '' };
+  }
+
+  const [firstName, ...surnameParts] = trimmed.split(/\s+/);
+  return { firstName, surname: surnameParts.join(' ') };
+};
+
+const buildFullName = (firstName: string, surname: string) =>
+  `${firstName.trim()} ${surname.trim()}`.trim();
+
+const sameStringSet = (a: string[], b: string[]) => {
+  if (a.length !== b.length) return false;
+  const as = new Set(a);
+  for (const v of b) if (!as.has(v)) return false;
+  return true;
+};
+
+const getAuthMethodBadgeType = (user: User): StatusType => {
+  switch (user.authMethod || 'local') {
+    case 'ldap':
+      return 'auth_ldap';
+    case 'oidc':
+      return 'auth_oidc';
+    case 'saml':
+      return 'auth_saml';
+    default:
+      return 'auth_local';
+  }
+};
+
 export interface UserManagementProps {
   users: User[];
   clients: Client[];
@@ -98,40 +152,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
   currency,
 }) => {
   const { t } = useTranslation(['hr', 'common']);
-
-  const isValidEmail = (value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed || /\s/.test(trimmed)) return false;
-
-    const atIndex = trimmed.indexOf('@');
-    if (atIndex <= 0 || atIndex !== trimmed.lastIndexOf('@')) return false;
-
-    const localPart = trimmed.slice(0, atIndex);
-    const domainPart = trimmed.slice(atIndex + 1);
-    if (!localPart || !domainPart) return false;
-    if (localPart.startsWith('.') || localPart.endsWith('.')) return false;
-    if (localPart.includes('..') || domainPart.includes('..')) return false;
-    if (!domainPart.includes('.')) return false;
-
-    const domainLabels = domainPart.split('.');
-    if (domainLabels.some((label) => !label)) return false;
-    if (domainLabels.some((label) => label.startsWith('-') || label.endsWith('-'))) return false;
-
-    return true;
-  };
-
-  const splitFullName = (fullName: string) => {
-    const trimmed = fullName.trim();
-    if (!trimmed) {
-      return { firstName: '', surname: '' };
-    }
-
-    const [firstName, ...surnameParts] = trimmed.split(/\s+/);
-    return { firstName, surname: surnameParts.join(' ') };
-  };
-
-  const buildFullName = (firstName: string, surname: string) =>
-    `${firstName.trim()} ${surname.trim()}`.trim();
 
   const roleOptions = React.useMemo(
     () =>
@@ -236,11 +256,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
   const canEditCostFor = (targetUserId: string) =>
     canUpdateAllCosts || (canUpdateOwnCost && targetUserId === currentUserId);
   const canManageAssignments = canUpdateUsers;
-  React.useEffect(() => {
-    if (!newRole && roleOptions[0]?.id) {
-      setNewRole(roleOptions[0].id);
-    }
-  }, [newRole, roleOptions]);
+  if (!newRole && roleOptions[0]?.id) {
+    setNewRole(roleOptions[0].id);
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -300,13 +318,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
     resetCreateUserForm();
   };
 
-  React.useEffect(() => {
-    if (filterClientId === 'all' || filterProjectId === 'all') return;
+  if (filterClientId !== 'all' && filterProjectId !== 'all') {
     const selectedProject = projects.find((project) => project.id === filterProjectId);
     if (!selectedProject || selectedProject.clientId !== filterClientId) {
       setFilterProjectId('all');
     }
-  }, [filterClientId, filterProjectId, projects]);
+  }
 
   const openAssignments = async (userId: string) => {
     if (!canManageAssignments) return;
@@ -555,13 +572,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
     setEditFormErrors({});
   };
 
-  const sameStringSet = (a: string[], b: string[]) => {
-    if (a.length !== b.length) return false;
-    const as = new Set(a);
-    for (const v of b) if (!as.has(v)) return false;
-    return true;
-  };
-
   const saveEdit = async () => {
     if (editingUser) {
       const identityReadOnly = isProviderManagedIdentity(editingUser);
@@ -790,7 +800,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const sortedUsers = React.useMemo(
     () =>
-      [...users].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
+      users.toSorted((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
     [users],
   );
 
@@ -813,18 +823,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
       return `${protocol}: ${user.authProviderName || t('hr:workforce.authMethod.providerMissing')}`;
     }
     return t(`hr:workforce.authMethod.${method}`);
-  };
-  const getAuthMethodBadgeType = (user: User): StatusType => {
-    switch (user.authMethod || 'local') {
-      case 'ldap':
-        return 'auth_ldap';
-      case 'oidc':
-        return 'auth_oidc';
-      case 'saml':
-        return 'auth_saml';
-      default:
-        return 'auth_local';
-    }
   };
   const getUserStatusLabel = (user: User) =>
     user.isDisabled ? t('common:common.disabled') : t('common:common.active');

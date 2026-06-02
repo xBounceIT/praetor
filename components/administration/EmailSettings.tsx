@@ -1,6 +1,6 @@
 import { Check, FlaskConical, Loader2, Save, Send, Server } from 'lucide-react';
 import type React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useReducer, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
@@ -53,21 +53,121 @@ const DEFAULT_CONFIG: EmailConfig = {
   fromName: 'Praetor',
 };
 
+type EmailTestResult = {
+  success: boolean;
+  code: string;
+  params?: Record<string, string>;
+};
+
+type EmailSettingsState = {
+  formData: EmailConfig;
+  originalConfig: EmailConfig;
+  testEmail: string;
+  testResult: EmailTestResult | null;
+  isTestLoading: boolean;
+  isSaving: boolean;
+  isSaved: boolean;
+  errors: Record<string, string>;
+  testErrors: Record<string, string>;
+};
+
+type StateUpdate<T> = T | ((prev: T) => T);
+
+type EmailSettingsAction =
+  | { type: 'loadConfig'; config: EmailConfig }
+  | { type: 'setFormData'; update: StateUpdate<EmailConfig> }
+  | { type: 'setOriginalConfig'; config: EmailConfig }
+  | { type: 'setTestEmail'; value: string }
+  | { type: 'setTestResult'; value: EmailTestResult | null }
+  | { type: 'setIsTestLoading'; value: boolean }
+  | { type: 'setIsSaving'; value: boolean }
+  | { type: 'setIsSaved'; value: boolean }
+  | { type: 'setErrors'; update: StateUpdate<Record<string, string>> }
+  | { type: 'setTestErrors'; update: StateUpdate<Record<string, string>> };
+
+const resolveStateUpdate = <T,>(current: T, update: StateUpdate<T>): T =>
+  typeof update === 'function' ? (update as (prev: T) => T)(current) : update;
+
+const emailSettingsReducer = (
+  state: EmailSettingsState,
+  action: EmailSettingsAction,
+): EmailSettingsState => {
+  switch (action.type) {
+    case 'loadConfig':
+      return { ...state, formData: action.config, originalConfig: action.config };
+    case 'setFormData':
+      return { ...state, formData: resolveStateUpdate(state.formData, action.update) };
+    case 'setOriginalConfig':
+      return { ...state, originalConfig: action.config };
+    case 'setTestEmail':
+      return { ...state, testEmail: action.value };
+    case 'setTestResult':
+      return { ...state, testResult: action.value };
+    case 'setIsTestLoading':
+      return { ...state, isTestLoading: action.value };
+    case 'setIsSaving':
+      return { ...state, isSaving: action.value };
+    case 'setIsSaved':
+      return { ...state, isSaved: action.value };
+    case 'setErrors':
+      return { ...state, errors: resolveStateUpdate(state.errors, action.update) };
+    case 'setTestErrors':
+      return { ...state, testErrors: resolveStateUpdate(state.testErrors, action.update) };
+  }
+};
+
 const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEmail }) => {
   const { t } = useTranslation('settings');
-  const [formData, setFormData] = useState<EmailConfig>(config || DEFAULT_CONFIG);
-  const [originalConfig, setOriginalConfig] = useState<EmailConfig>(config || DEFAULT_CONFIG);
-  const [testEmail, setTestEmail] = useState('');
-  const [testResult, setTestResult] = useState<{
-    success: boolean;
-    code: string;
-    params?: Record<string, string>;
-  } | null>(null);
-  const [isTestLoading, setIsTestLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [testErrors, setTestErrors] = useState<Record<string, string>>({});
+  const [state, dispatchState] = useReducer(emailSettingsReducer, undefined, () => ({
+    formData: DEFAULT_CONFIG,
+    originalConfig: DEFAULT_CONFIG,
+    testEmail: '',
+    testResult: null,
+    isTestLoading: false,
+    isSaving: false,
+    isSaved: false,
+    errors: {},
+    testErrors: {},
+  }));
+  const {
+    formData,
+    originalConfig,
+    testEmail,
+    testResult,
+    isTestLoading,
+    isSaving,
+    isSaved,
+    errors,
+    testErrors,
+  } = state;
+  const setFormData = useCallback((update: StateUpdate<EmailConfig>) => {
+    dispatchState({ type: 'setFormData', update });
+  }, []);
+  const setOriginalConfig = useCallback((nextConfig: EmailConfig) => {
+    dispatchState({ type: 'setOriginalConfig', config: nextConfig });
+  }, []);
+  const setTestEmail = useCallback((value: string) => {
+    dispatchState({ type: 'setTestEmail', value });
+  }, []);
+  const setTestResult = useCallback((value: EmailTestResult | null) => {
+    dispatchState({ type: 'setTestResult', value });
+  }, []);
+  const setIsTestLoading = useCallback((value: boolean) => {
+    dispatchState({ type: 'setIsTestLoading', value });
+  }, []);
+  const setIsSaving = useCallback((value: boolean) => {
+    dispatchState({ type: 'setIsSaving', value });
+  }, []);
+  const setIsSaved = useCallback((value: boolean) => {
+    dispatchState({ type: 'setIsSaved', value });
+  }, []);
+  const setErrors = useCallback((update: StateUpdate<Record<string, string>>) => {
+    dispatchState({ type: 'setErrors', update });
+  }, []);
+  const setTestErrors = useCallback((update: StateUpdate<Record<string, string>>) => {
+    dispatchState({ type: 'setTestErrors', update });
+  }, []);
+  const loadedConfigRef = useRef<EmailConfig | null>(null);
   const smtpPasswordReplace = useSecretReplaceState(
     formData.smtpPassword,
     (smtpPassword) => setFormData((prev) => ({ ...prev, smtpPassword })),
@@ -78,14 +178,11 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
   // Mirrors the username/firstName-surname pattern in UserManagement.
   const fromEmailManuallyEdited = useRef<boolean>(Boolean(config?.fromEmail));
 
-  // Sync formData when config prop changes (e.g., after API fetch)
-  useEffect(() => {
-    if (config) {
-      setFormData(config);
-      setOriginalConfig(config);
-      fromEmailManuallyEdited.current = Boolean(config.fromEmail);
-    }
-  }, [config]);
+  if (loadedConfigRef.current !== config) {
+    loadedConfigRef.current = config;
+    dispatchState({ type: 'loadConfig', config });
+    fromEmailManuallyEdited.current = Boolean(config.fromEmail);
+  }
 
   const hasChanges = JSON.stringify(formData) !== JSON.stringify(originalConfig);
 
