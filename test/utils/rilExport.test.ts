@@ -33,8 +33,6 @@ describe('RIL Excel export', () => {
       companyName: 'ACME',
       year: 2026,
       month: 5,
-      defaultStartTime: '09:00',
-      defaultExitTime: '18:00',
       lunchBreakMinutes: 60,
     });
     const worksheet = workbook.getWorksheet('Prospetto Presenze');
@@ -129,8 +127,6 @@ describe('RIL Excel export', () => {
       companyName: 'ACME',
       year: 2026,
       month: 2,
-      defaultStartTime: '09:00',
-      defaultExitTime: '18:00',
       lunchBreakMinutes: 60,
     });
     const worksheet = workbook.getWorksheet('Prospetto Presenze');
@@ -167,8 +163,6 @@ describe('RIL Excel export', () => {
       companyName: 'ACME',
       year: 2026,
       month: 5,
-      defaultStartTime: '09:00',
-      defaultExitTime: '18:00',
       lunchBreakMinutes: 60,
     });
     const worksheet = workbook.getWorksheet('Prospetto Presenze');

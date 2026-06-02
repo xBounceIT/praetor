@@ -15,8 +15,6 @@ export interface RilWorkbookInput {
   companyName: string;
   year: number;
   month: number;
-  defaultStartTime: string;
-  defaultExitTime: string;
   lunchBreakMinutes: number;
 }
 
@@ -24,8 +22,12 @@ const DAY_COUNT = 31;
 const HEADER_ROW = 6;
 const FIRST_DAY_ROW = 7;
 const LAST_DAY_ROW = FIRST_DAY_ROW + DAY_COUNT - 1;
+// The legend (cols A–C) and the summary boxes (cols E–F) sit side by side from this row down;
+// their differing lengths never collide because they occupy non-overlapping columns.
 const SUMMARY_START_ROW = LAST_DAY_ROW + 2;
 const ORDER_COLUMN_INDEX = RIL_VISIBLE_HEADERS.indexOf('Commessa');
+const SUMMARY_LABEL_COLUMN = 5;
+const SUMMARY_VALUE_COLUMN = 6;
 
 const YELLOW_FILL = 'FFFFF200';
 const HEADER_FILL = 'FFF2F2F2';
@@ -34,20 +36,25 @@ const SUMMARY_FILL = 'FFFFC000';
 const LUNCH_FILL = 'FF00B0F0';
 const SUMMARY_TEXT = 'FF1F4E78';
 
+// Legend markers tying the Note and Cod columns to their legend groups; shared so the header
+// decoration and the legend block cannot drift apart.
+const NOTE_MARKER = '**';
+const CODE_MARKER = '***';
+
 // Column headers shown above the day grid. The reference RIL form tags Note and Cod with the
 // legend markers, so we decorate those two headers without mutating the shared constant.
 const HEADER_LABELS = RIL_VISIBLE_HEADERS.map((header) => {
-  if (header === 'Note') return 'Note (**)';
-  if (header === 'Cod') return 'Cod (***)';
+  if (header === 'Note') return `Note (${NOTE_MARKER})`;
+  if (header === 'Cod') return `Cod (${CODE_MARKER})`;
   return header;
 });
 
 const LEGEND_ROWS: ReadonlyArray<readonly [string, string, string]> = [
-  ['**', 'P', 'Ferie'],
+  [NOTE_MARKER, 'P', 'Ferie'],
   ['', 'P2', '1/2 Permesso'],
   ['', 'M', 'Malattia'],
   ['', 'F', 'Festività'],
-  ['***', 'TR', 'Trasferta'],
+  [CODE_MARKER, 'TR', 'Trasferta'],
   ['', 'SD', 'Sede Disagiata'],
 ];
 
@@ -64,29 +71,26 @@ const setFill = (cell: Cell, argb: string) => {
   cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } };
 };
 
-// Renders decimal hours as H:MM (no hour padding) to read like the reference form (e.g. 160:00).
-const formatHoursClock = (hours: number): string => {
-  const safeHours = Math.max(0, hours);
-  const totalMinutes = Math.round(safeHours * 60);
-  return `${Math.floor(totalMinutes / 60)}:${String(totalMinutes % 60).padStart(2, '0')}`;
-};
+const MONTH_NAME_FORMAT = new Intl.DateTimeFormat('it-IT', { month: 'long' });
+const PICAP_FORMAT = new Intl.NumberFormat('it-IT', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
+// Renders minutes as H:MM with an unpadded hour, to read like the reference form (e.g. 160:00).
 const formatMinutesClock = (minutes: number): string => {
   const safeMinutes = Math.max(0, Math.round(minutes));
   return `${Math.floor(safeMinutes / 60)}:${String(safeMinutes % 60).padStart(2, '0')}`;
 };
 
+const formatHoursClock = (hours: number): string => formatMinutesClock(hours * 60);
+
 const formatMonthLabel = (year: number, month: number) => {
-  const monthName = new Intl.DateTimeFormat('it-IT', { month: 'long' }).format(
-    new Date(year, month - 1, 1),
-  );
+  const monthName = MONTH_NAME_FORMAT.format(new Date(year, month - 1, 1));
   return `${monthName}-${String(year).slice(-2)}`;
 };
 
-const formatPicap = (value: number) =>
-  new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
-    value,
-  );
+const formatPicap = (value: number) => PICAP_FORMAT.format(value);
 
 const normalizeRows = (rows: RilRow[]): RilRow[] => {
   const byDay = new Map(rows.map((row) => [row.day, row]));
@@ -137,7 +141,7 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
     const cell = worksheet.getCell(rowNumber, 2);
     cell.value = value;
     cell.font = { bold: true, color: { argb: 'FF1F2937' } };
-    cell.alignment = { vertical: 'middle', horizontal: 'left' };
+    cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
     if (fillArgb) setFill(cell, fillArgb);
   };
 
@@ -203,7 +207,7 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
     setThinBorder(codeCell);
     const labelCell = worksheet.getCell(rowNumber, 3);
     labelCell.value = label;
-    labelCell.alignment = { vertical: 'middle', horizontal: 'left' };
+    labelCell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
     setThinBorder(labelCell);
   });
 
@@ -218,16 +222,16 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
   ];
   summaryRows.forEach(([label, value, fillArgb], index) => {
     const rowNumber = SUMMARY_START_ROW + index;
-    const labelCell = worksheet.getCell(rowNumber, 5);
+    const labelCell = worksheet.getCell(rowNumber, SUMMARY_LABEL_COLUMN);
     labelCell.value = label;
     labelCell.font = { bold: true, color: { argb: SUMMARY_TEXT } };
-    labelCell.alignment = { vertical: 'middle', horizontal: 'left' };
+    labelCell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
     setFill(labelCell, fillArgb);
     setThinBorder(labelCell);
-    const valueCell = worksheet.getCell(rowNumber, 6);
+    const valueCell = worksheet.getCell(rowNumber, SUMMARY_VALUE_COLUMN);
     valueCell.value = value;
     valueCell.font = { bold: true, color: { argb: SUMMARY_TEXT } };
-    valueCell.alignment = { vertical: 'middle', horizontal: 'right' };
+    valueCell.alignment = { vertical: 'middle', horizontal: 'right', wrapText: true };
     setFill(valueCell, fillArgb);
     setThinBorder(valueCell);
   });
