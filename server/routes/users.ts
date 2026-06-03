@@ -1250,6 +1250,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           toValue: role !== undefined ? fullUser.role : undefined,
         },
       });
+
+      // Mirror the /:id/roles guard: if this update promoted the user into an admin role while the
+      // 2FA mandate is on and they have not enrolled, revoke their live sessions so they must
+      // re-login and enrol — their pre-existing token would otherwise keep admin access.
+      if (roleValue !== null) {
+        const updateTotpState = await usersRepo.getTotpState(idResult.value);
+        if (
+          await requiresAdminTotpEnrollment({
+            id: idResult.value,
+            role: roleValue,
+            authMethod: targetUser.authMethod,
+            totpEnabled: updateTotpState?.totpEnabled ?? false,
+          })
+        ) {
+          await usersRepo.bumpSessionVersion(idResult.value);
+        }
+      }
+
       return maskUserForRequest(request, fullUser);
     },
   );

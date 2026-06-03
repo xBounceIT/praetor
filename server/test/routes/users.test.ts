@@ -1336,6 +1336,38 @@ describe('PUT /api/users/:id', () => {
     );
   });
 
+  test('200 promoting to an admin role via PUT /:id revokes sessions when 2FA is enforced', async () => {
+    // The legacy single-role update path must also revoke a newly-admin user's sessions under
+    // enforcement — otherwise their pre-existing token keeps admin access without enrolling.
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    rolesFindByIdMock.mockResolvedValue({
+      id: 'admin',
+      name: 'Admin',
+      isSystem: true,
+      isAdmin: true,
+    });
+    updateUserDynamicMock.mockResolvedValue({ ...SAMPLE_USER_CORE, role: 'admin' });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, role: 'admin' });
+    generalSettingsGetMock.mockResolvedValue({ enforceTotpForAdmins: true });
+    getTotpStateMock.mockResolvedValue({
+      totpSecret: null,
+      totpEnabled: false,
+      totpConfirmedAt: null,
+      totpBackupCodes: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { role: 'admin' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(replaceUserRolesMock).toHaveBeenCalledWith('u-target', ['admin'], TX_SENTINEL);
+    expect(bumpSessionVersionMock).toHaveBeenCalledWith('u-target');
+  });
+
   test('403 cannot change own role (audits the denial)', async () => {
     findCoreByIdMock.mockResolvedValue({
       ...SAMPLE_USER_CORE,
