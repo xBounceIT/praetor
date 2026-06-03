@@ -605,6 +605,61 @@ describe('<RilView />', () => {
       await waitFor(() => expect(api.rilDrafts.remove).toHaveBeenCalledWith('2026-05', 'u1'));
     });
 
+    test('awaits an in-flight switch save before re-reading the same month draft', async () => {
+      api.entries.listPage.mockResolvedValue({
+        entries: [entry({ date: '2026-05-04', duration: 8 })],
+        nextCursor: null,
+      });
+      // Hold every save open so May's switch-flush PUT is still on the wire when we return to May.
+      let resolveSave: (value: {
+        monthKey: string;
+        rows: Record<string, unknown>;
+        updatedAt: string | null;
+      }) => void = () => {};
+      api.rilDrafts.save.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveSave = resolve;
+          }),
+      );
+
+      renderRilView();
+
+      const exitInput = await screen.findByLabelText('ril.columns.exit 4');
+      await waitFor(() => expect(api.rilDrafts.get).toHaveBeenCalledWith('2026-05', 'u1'));
+      // Edit May so the switch flush has a pending draft to persist.
+      fireEvent.change(exitInput, { target: { value: '17:00' } });
+
+      // Leave May for June: the flush fires save('2026-05'), which stays pending (deferred above).
+      fireEvent.click(screen.getByLabelText('ril.month'));
+      fireEvent.click(screen.getByRole('option', { name: 'June' }));
+      await waitFor(() =>
+        expect(api.rilDrafts.save.mock.calls.some((call) => call[0] === '2026-05')).toBe(true),
+      );
+
+      const mayGetCount = () =>
+        api.rilDrafts.get.mock.calls.filter((call) => call[0] === '2026-05').length;
+      // Only the initial mount has read May's draft; the pending save must block any re-read.
+      expect(mayGetCount()).toBe(1);
+      const loadsBeforeReturn = api.entries.listPage.mock.calls.length;
+
+      // Return to May while its save is still on the wire.
+      fireEvent.click(screen.getByLabelText('ril.month'));
+      fireEvent.click(screen.getByRole('option', { name: 'May' }));
+
+      // The entries reload starts immediately, but the draft GET stays gated behind the in-flight
+      // PUT so it can't hydrate stale rows. The old fire-and-forget flush re-read the draft here and
+      // could lose the just-flushed edit.
+      await waitFor(() =>
+        expect(api.entries.listPage.mock.calls.length).toBe(loadsBeforeReturn + 1),
+      );
+      expect(mayGetCount()).toBe(1);
+
+      // Once the save commits, the gated GET runs and reads the freshly-persisted draft.
+      resolveSave({ monthKey: '2026-05', rows: {}, updatedAt: null });
+      await waitFor(() => expect(mayGetCount()).toBe(2));
+    });
+
     test('applies weekdayTransferDefaults to the user own RIL', async () => {
       api.entries.listPage.mockResolvedValue({
         entries: [entry({ date: '2026-05-04', duration: 8, location: 'remote' })],

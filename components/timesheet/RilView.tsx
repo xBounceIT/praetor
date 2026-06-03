@@ -161,6 +161,9 @@ const normalizeMonthKey = (value: string): string => {
 
 const getLocale = (language: string | undefined) => (language?.startsWith('it') ? 'it' : 'en');
 
+// Key an in-flight draft save by the sheet it targets so a reload can find and await it.
+const draftSaveKey = (userId: string, monthKey: string) => `${userId}::${monthKey}`;
+
 const collectRilMissingDays = (rows: RilRow[], isMissing: (row: RilRow) => boolean): string[] => {
   const days: string[] = [];
   for (const row of rows) {
@@ -240,9 +243,12 @@ const RilView: React.FC<RilViewProps> = ({
   // The (user, month) the currently displayed rows belong to. Lets the switch flush target the
   // sheet being left without making the flush depend on reactive values.
   const draftContextRef = useRef<{ userId: string; monthKey: string } | null>(null);
-  // The currently in-flight autosave PUT, if any. handleReset chains its DELETE after this so a
-  // save already on the wire can't resurrect the draft the user just discarded.
-  const inFlightSaveRef = useRef<Promise<unknown> | null>(null);
+  // In-flight draft saves keyed by `${userId}::${monthKey}`, covering both the debounced autosave
+  // and the flush fired when leaving a sheet. A reload awaits the matching context's save before its
+  // draft GET so it can't hydrate stale rows behind an uncommitted PUT; handleReset chains its DELETE
+  // after the current context's save so a late PUT can't resurrect a just-discarded draft. Lazily
+  // created (initializer stays null) so it isn't reallocated on every render.
+  const pendingSavesRef = useRef<Map<string, Promise<unknown>> | null>(null);
   // Gates autosave: stays false until a draft GET succeeds for the active (user, month) so a
   // failed load can't overwrite a draft we never saw, and hydration itself can't trigger a save.
   const draftSyncReadyRef = useRef(false);
@@ -339,6 +345,22 @@ const RilView: React.FC<RilViewProps> = ({
     ],
   );
 
+  // Record a save promise under its (user, month) key and auto-evict it once settled, so a later
+  // reload of the same sheet can await an in-flight PUT before reading the draft back.
+  const trackDraftSave = useCallback(
+    (userId: string, monthKey: string, promise: Promise<unknown>) => {
+      const key = draftSaveKey(userId, monthKey);
+      // Allocate the map on first use only (the initializer stays null to avoid per-render churn).
+      const saves = pendingSavesRef.current ?? new Map<string, Promise<unknown>>();
+      pendingSavesRef.current = saves;
+      saves.set(key, promise);
+      void promise.finally(() => {
+        if (saves.get(key) === promise) saves.delete(key);
+      });
+    },
+    [],
+  );
+
   const loadMonthEntries = useCallback(async () => {
     // Switching sheets: flush a pending debounced save for the month we're leaving before its rows
     // get replaced. draftContextRef holds the outgoing (user, month); rowsRef still holds its rows
@@ -349,9 +371,11 @@ const RilView: React.FC<RilViewProps> = ({
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
       if (rowsRef.current.length) {
-        void api.rilDrafts
+        // Track this flush so a quick return to the same sheet awaits it before re-reading the draft.
+        const flushPromise = api.rilDrafts
           .save(leaving.monthKey, extractRilDraftRows(rowsRef.current), leaving.userId)
           .catch(() => {});
+        trackDraftSave(leaving.userId, leaving.monthKey, flushPromise);
       }
     }
     draftContextRef.current = { userId: effectiveUserId, monthKey: draftMonthKey };
@@ -384,10 +408,23 @@ const RilView: React.FC<RilViewProps> = ({
         } while (cursor);
         return isStale ? null : nextEntries;
       })();
-      // A failed draft GET must not abort the load (rows still render from timesheets) but it
-      // does disable autosave so we never clobber a draft we couldn't read.
-      const draftPromise = api.rilDrafts
-        .get(draftMonthKey, effectiveUserId)
+      // A failed draft GET must not abort the load (rows still render from timesheets) but it does
+      // disable autosave so we never clobber a draft we couldn't read. First await any save still in
+      // flight for this exact (user, month) — e.g. the flush fired when we last left this sheet — so
+      // the GET reads committed rows instead of stale ones behind an uncommitted PUT.
+      const pendingSave = pendingSavesRef.current?.get(
+        draftSaveKey(effectiveUserId, draftMonthKey),
+      );
+      const draftPromise = (async () => {
+        if (pendingSave) {
+          try {
+            await pendingSave;
+          } catch {
+            // A failed save shouldn't block the read; fall through and GET whatever is stored.
+          }
+        }
+        return api.rilDrafts.get(draftMonthKey, effectiveUserId);
+      })()
         .then((draft) => ({ ok: true as const, draft }))
         .catch(() => ({ ok: false as const, draft: null }));
       const [nextEntries, nextProjects, draftResult] = await Promise.all([
@@ -429,6 +466,7 @@ const RilView: React.FC<RilViewProps> = ({
     draftMonthKey,
     lunchBreakMinutes,
     projects,
+    trackDraftSave,
   ]);
 
   useEffect(() => {
@@ -453,17 +491,16 @@ const RilView: React.FC<RilViewProps> = ({
       extractRilDraftRows(rowsToSave),
       effectiveUserId,
     );
-    inFlightSaveRef.current = savePromise;
+    // Track under the current context so a reload (or reset) can await this PUT before acting.
+    trackDraftSave(effectiveUserId, draftMonthKey, savePromise);
     try {
       await savePromise;
       // A newer edit re-armed the timer while we were saving — let that save own the final status.
       if (saveTimerRef.current === null) setDraftStatus('saved');
     } catch {
       setDraftStatus('error');
-    } finally {
-      if (inFlightSaveRef.current === savePromise) inFlightSaveRef.current = null;
     }
-  }, [draftMonthKey, effectiveUserId]);
+  }, [draftMonthKey, effectiveUserId, trackDraftSave]);
 
   const scheduleDraftSave = useCallback(() => {
     if (!draftSyncReadyRef.current) return;
@@ -487,9 +524,9 @@ const RilView: React.FC<RilViewProps> = ({
     if (draftSyncReadyRef.current) {
       const removeDraft = () =>
         api.rilDrafts.remove(draftMonthKey, effectiveUserId).catch(() => {});
-      // If a debounced save is already on the wire, sequence the delete after it so the late PUT
-      // can't recreate the draft we're discarding; otherwise delete immediately.
-      const pending = inFlightSaveRef.current;
+      // If a save for this sheet is already on the wire, sequence the delete after it so the late
+      // PUT can't recreate the draft we're discarding; otherwise delete immediately.
+      const pending = pendingSavesRef.current?.get(draftSaveKey(effectiveUserId, draftMonthKey));
       if (pending) void pending.finally(removeDraft);
       else void removeDraft();
     }
