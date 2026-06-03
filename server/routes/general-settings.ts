@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
+import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { VALID_LOCATIONS } from '../services/timeEntries.ts';
 import { logAudit } from '../utils/audit.ts';
@@ -487,6 +488,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, enforceTotpForAdminsResult.message);
       }
 
+      const previousSettings = await generalSettingsRepo.get();
       const settings = await generalSettingsRepo.update({
         currency: currencyResult.value,
         dailyLimit: dailyLimitResult.value,
@@ -517,6 +519,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           secondaryLabel: settings.aiProvider ?? undefined,
         },
       });
+
+      // When admin-2FA enforcement is switched ON, revoke the sessions of admin-capable users who
+      // haven't enrolled: otherwise a session predating the change keeps admin privileges (incl. via
+      // /auth/switch-role) until it expires, making the policy effective only for future logins.
+      if (enforceTotpForAdminsResult.value && previousSettings?.enforceTotpForAdmins !== true) {
+        const revokedSessions = await usersRepo.bumpSessionVersionForUnenrolledAdmins();
+        if (revokedSessions > 0) {
+          await logAudit({
+            request,
+            action: 'settings.totp_enforcement_sessions_revoked',
+            entityType: 'settings',
+            details: { secondaryLabel: String(revokedSessions) },
+          });
+        }
+      }
+
       return toResponse(settings, true);
     },
   );

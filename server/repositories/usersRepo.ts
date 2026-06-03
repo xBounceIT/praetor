@@ -290,6 +290,44 @@ export const rotatePasswordAndBumpSession = async (
   return rows[0].sessionVersion;
 };
 
+// Bumps `session_version` for every local/ldap user who can act as an admin — via a built-in
+// admin/top-manager role or any custom role flagged `is_admin`, whether as their primary role or an
+// assigned (multi-)role — but who has NOT enrolled in TOTP. Called when the admin-2FA policy is
+// switched on so sessions predating the change can't keep admin privileges (including by calling
+// /auth/switch-role) without a second factor; affected users are forced to re-login and enrol.
+// Returns the number of sessions invalidated.
+export const bumpSessionVersionForUnenrolledAdmins = async (
+  exec: DbExecutor = db,
+): Promise<number> => {
+  const rows = await executeRows<{ id: string }>(
+    exec,
+    sql`
+      UPDATE users
+      SET session_version = session_version + 1
+      WHERE totp_enabled = false
+        AND auth_method IN ('local', 'ldap')
+        AND (
+          role = ${ADMIN_ROLE_ID}
+          OR role = ${TOP_MANAGER_ROLE_ID}
+          OR role IN (SELECT id FROM roles WHERE is_admin = true)
+          OR EXISTS (
+            SELECT 1
+            FROM user_roles ur
+            LEFT JOIN roles r ON r.id = ur.role_id
+            WHERE ur.user_id = users.id
+              AND (
+                ur.role_id = ${ADMIN_ROLE_ID}
+                OR ur.role_id = ${TOP_MANAGER_ROLE_ID}
+                OR r.is_admin = true
+              )
+          )
+        )
+      RETURNING id
+    `,
+  );
+  return rows.length;
+};
+
 export const findLoginUserByNormalizedUsername = async (
   username: string,
   exec: DbExecutor = db,

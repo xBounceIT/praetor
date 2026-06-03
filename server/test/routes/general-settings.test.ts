@@ -24,6 +24,7 @@ const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 const settingsGetMock = mock();
 const settingsUpdateMock = mock();
+const bumpSessionVersionForUnenrolledAdminsMock = mock(async () => 0);
 const logAuditMock = mock(async () => undefined);
 
 let routePlugin: FastifyPluginAsync;
@@ -34,6 +35,7 @@ beforeAll(async () => {
   mock.module('../../repositories/usersRepo.ts', () => ({
     ...usersRepoSnap,
     findAuthUserById: findAuthUserByIdMock,
+    bumpSessionVersionForUnenrolledAdmins: bumpSessionVersionForUnenrolledAdminsMock,
   }));
   mock.module('../../repositories/rolesRepo.ts', () => ({
     ...rolesRepoSnap,
@@ -107,6 +109,7 @@ const allMocks = [
   getRolePermissionsMock,
   settingsGetMock,
   settingsUpdateMock,
+  bumpSessionVersionForUnenrolledAdminsMock,
   logAuditMock,
 ];
 
@@ -118,6 +121,7 @@ beforeEach(async () => {
   userHasRoleMock.mockResolvedValue(true);
   // Default: viewer with admin perms (reveal API keys, allowed to PUT)
   getRolePermissionsMock.mockResolvedValue(['administration.general.update']);
+  bumpSessionVersionForUnenrolledAdminsMock.mockResolvedValue(0);
   logAuditMock.mockImplementation(async () => undefined);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/general-settings');
@@ -224,6 +228,61 @@ describe('PUT /api/general-settings', () => {
     );
     const body = JSON.parse(res.body);
     expect(body.geminiApiKey).toBe('plaintext-gemini-key');
+  });
+
+  test('200 enabling admin 2FA enforcement revokes unenrolled-admin sessions and audits it', async () => {
+    // false -> true transition: pre-existing sessions of admin-capable users without TOTP must be
+    // invalidated, or they keep admin privileges (incl. via /auth/switch-role) until expiry.
+    settingsGetMock.mockResolvedValue({ ...SETTINGS_WITH_KEYS, enforceTotpForAdmins: false });
+    settingsUpdateMock.mockResolvedValue({ ...SETTINGS_WITH_KEYS, enforceTotpForAdmins: true });
+    bumpSessionVersionForUnenrolledAdminsMock.mockResolvedValue(3);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { enforceTotpForAdmins: true },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(bumpSessionVersionForUnenrolledAdminsMock).toHaveBeenCalledTimes(1);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'settings.totp_enforcement_sessions_revoked',
+        entityType: 'settings',
+        details: expect.objectContaining({ secondaryLabel: '3' }),
+      }),
+    );
+  });
+
+  test('200 leaving enforcement already-on does not revoke sessions', async () => {
+    settingsGetMock.mockResolvedValue({ ...SETTINGS_WITH_KEYS, enforceTotpForAdmins: true });
+    settingsUpdateMock.mockResolvedValue({ ...SETTINGS_WITH_KEYS, enforceTotpForAdmins: true });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { enforceTotpForAdmins: true },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(bumpSessionVersionForUnenrolledAdminsMock).not.toHaveBeenCalled();
+  });
+
+  test('200 disabling enforcement does not revoke sessions', async () => {
+    settingsGetMock.mockResolvedValue({ ...SETTINGS_WITH_KEYS, enforceTotpForAdmins: true });
+    settingsUpdateMock.mockResolvedValue({ ...SETTINGS_WITH_KEYS, enforceTotpForAdmins: false });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { enforceTotpForAdmins: false },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(bumpSessionVersionForUnenrolledAdminsMock).not.toHaveBeenCalled();
   });
 
   test('200 accepts RIL settings and returns them', async () => {
