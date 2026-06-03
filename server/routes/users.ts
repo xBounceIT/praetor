@@ -1449,14 +1449,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
 
-      // An auth-method change can make the 2FA mandate START applying: an admin-capable OIDC/SAML
-      // user (exempt from app TOTP) switched to a TOTP-applicable method (local/ldap) while the
-      // mandate is on and unenrolled would otherwise keep their pre-existing session AND PAT/MCP
-      // tokens — the login enrollment gate only fires on a fresh /login, never on an existing
-      // session or token. Revoke both so they must re-login and enrol. requiresAdminTotpEnrollment
-      // no-ops for SSO targets, when enforcement is off, for non-admins, and for enrolled users, so
-      // the check is gated to the methods/users that actually need it (and to a real change).
-      if (authStateChanged) {
+      // This handler can make the 2FA mandate START applying in two ways, each of which must revoke
+      // the target's live session AND PAT/MCP tokens (the login enrollment gate only fires on a
+      // fresh /login, never on an existing session or token):
+      //   1. authStateChanged — an admin-capable OIDC/SAML user (exempt from app TOTP) switched to a
+      //      TOTP-applicable method (local/ldap).
+      //   2. mappedRoleIds — even when the auth method/provider is unchanged, the LDAP role mapping
+      //      above can elevate `updated.role` into an admin role, newly subjecting them to the
+      //      mandate.
+      // requiresAdminTotpEnrollment no-ops for SSO targets, when enforcement is off, for non-admins,
+      // and for enrolled users, so evaluating it on either trigger only revokes when truly needed.
+      if (authStateChanged || mappedRoleIds !== null) {
         const authMethodTotpState = await usersRepo.getTotpState(idResult.value);
         if (
           await requiresAdminTotpEnrollment({

@@ -2435,6 +2435,57 @@ describe('PUT /api/users/:id/auth-method', () => {
       expect(res.statusCode).toBe(200);
       expect(revokeUserCredentialsMock).not.toHaveBeenCalled();
     });
+
+    test('200 LDAP role-map elevation to admin revokes credentials even when the auth method is unchanged', async () => {
+      // authStateChanged is false (already LDAP, no provider switch), but the LDAP role mapping
+      // elevates the user to an admin role while enforced — their pre-existing session/PAT must
+      // still be revoked, or they keep newly-gained admin access without hitting the enroll gate.
+      findCoreByIdMock.mockResolvedValue({
+        ...SAMPLE_USER_CORE,
+        authMethod: 'ldap',
+        authProviderId: null,
+        role: 'user',
+      });
+      updateAuthMethodMock.mockResolvedValue({
+        ...SAMPLE_USER_ROW,
+        authMethod: 'ldap',
+        role: 'user',
+      });
+      ldapLookupUserGroupsMock.mockResolvedValue({
+        groups: ['cn=admins,ou=groups,dc=test,dc=com'],
+        roleMappings: [{ externalGroup: 'admins', role: 'admin' }],
+      });
+      // Mapping promotes them to admin: updated.role becomes 'admin', mappedRoleIds is set.
+      applyExternalRolesForUserIfMatchedMock.mockResolvedValue({
+        applied: true,
+        roleIds: ['admin'],
+      });
+      rolesFindByIdMock.mockResolvedValue({
+        id: 'admin',
+        name: 'Admin',
+        isSystem: true,
+        isAdmin: true,
+      });
+      generalSettingsGetMock.mockResolvedValue({ enforceTotpForAdmins: true });
+      getTotpStateMock.mockResolvedValue({
+        totpSecret: null,
+        totpEnabled: false,
+        totpConfirmedAt: null,
+        totpBackupCodes: null,
+      });
+
+      const res = await testApp.inject({
+        method: 'PUT',
+        url: '/api/users/u-target/auth-method',
+        headers: adminAuth(),
+        payload: { authMethod: 'ldap' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body).role).toBe('admin');
+      // The provider/method did not change (authStateChanged === false); only the role mapping did.
+      expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target');
+    });
   });
 
   // Regression: spawned follow-up from PR #659 review. Stale external_identities rows
