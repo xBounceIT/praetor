@@ -272,7 +272,7 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
     expect(payload.items).toHaveLength(1);
   });
 
-  test('the remove button is disabled for a line linked to a supplier order', async () => {
+  test('product selector and remove button are locked for a supplier-order-backed line', async () => {
     const supplierBackedDraft: ClientsOrder = {
       ...draftLinkedOrder,
       id: 'dm_so_04',
@@ -288,16 +288,23 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
     };
     const { dialog } = await openModal(supplierBackedDraft);
 
-    // A line whose supplier order was auto-created stays put: removing it would orphan
-    // the procurement order, so the trash control is locked even though the draft is editable.
+    // The product is fixed by the source supplier quote and removing the line would orphan the
+    // auto-created supplier order — both controls are locked (so the user can't reach an
+    // edit path the backend always rejects with 409) even though the draft is editable.
+    expect(
+      isDisabled(within(dialog).getByRole('button', { name: 'sales:clientQuotes.selectProduct' })),
+    ).toBe(true);
     expect(isDisabled(within(dialog).getByRole('button', { name: 'common:buttons.delete' }))).toBe(
       true,
     );
   });
 
-  test('the remove button stays enabled for a non-supplier draft line', async () => {
+  test('product selector and remove button stay enabled for a non-supplier draft line', async () => {
     const { dialog } = await openModal(draftLinkedOrder);
 
+    expect(
+      isDisabled(within(dialog).getByRole('button', { name: 'sales:clientQuotes.selectProduct' })),
+    ).toBe(false);
     expect(isDisabled(within(dialog).getByRole('button', { name: 'common:buttons.delete' }))).toBe(
       false,
     );

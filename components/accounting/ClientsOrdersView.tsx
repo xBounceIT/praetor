@@ -1085,7 +1085,10 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                     }
                                     placeholder={t('sales:clientQuotes.selectProduct')}
                                     searchable={true}
-                                    disabled={isReadOnly}
+                                    // Supplier-quote-backed lines have a fixed product (the backend
+                                    // rejects product/quantity changes on supplier-order-backed
+                                    // rows), so lock the selector just like the quantity control.
+                                    disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
                                     buttonClassName="h-9"
                                   />
                                 </div>
