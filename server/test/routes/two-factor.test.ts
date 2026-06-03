@@ -275,6 +275,35 @@ describe('POST /api/auth/2fa/setup', () => {
     expect(setTotpEnrollmentMock).toHaveBeenCalledTimes(1);
   });
 
+  test('401 (enroll token): a sessionVersion rotation since the token was issued blocks setup and stores nothing', async () => {
+    // A stale enroll token (e.g. an admin reset or credential rotation bumped sessionVersion after
+    // /login minted it) must not overwrite the pending secret/backup codes. /setup mirrors the
+    // /confirm guard so the stale token is rejected BEFORE any TOTP state is written.
+    findLoginUserByIdMock.mockResolvedValue({ ...LOGIN_USER, sessionVersion: 2 });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/2fa/setup',
+      headers: enrollHeader('u1', 1),
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(setTotpEnrollmentMock).not.toHaveBeenCalled();
+  });
+
+  test('401 (enroll token): a disabled account cannot store a new enrollment', async () => {
+    findLoginUserByIdMock.mockResolvedValue({ ...LOGIN_USER, isDisabled: true });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/2fa/setup',
+      headers: enrollHeader(),
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(setTotpEnrollmentMock).not.toHaveBeenCalled();
+  });
+
   test('403 (oidc/saml): totp_not_applicable and no enrollment stored', async () => {
     findCoreByIdMock.mockResolvedValue(userCore('oidc'));
 

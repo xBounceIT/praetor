@@ -111,6 +111,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(401).send({ error: 'Authentication required' });
       }
 
+      // Enroll-token path: the token was minted at /login up to 15 minutes ago and only carries
+      // userId + sessionVersion, so re-validate the account BEFORE writing any TOTP state. Mirrors
+      // the /confirm guard — otherwise a token issued before the user was disabled, had their
+      // employee type changed, was switched to an IdP-managed auth method, or had their
+      // sessionVersion bumped (admin reset / credential rotation) could still overwrite the pending
+      // secret and backup codes here, ahead of the confirm-time rejection. The session path is
+      // already validated fresh by authenticateToken on this request.
+      if (request.enrollUserId && !request.user) {
+        const enrollLoginUser = await usersRepo.findLoginUserById(userId);
+        if (
+          !enrollLoginUser ||
+          enrollLoginUser.isDisabled ||
+          enrollLoginUser.employeeType !== 'app_user' ||
+          !usersRepo.isTotpApplicable(enrollLoginUser.authMethod) ||
+          enrollLoginUser.sessionVersion !== request.enrollSessionVersion
+        ) {
+          return reply.code(401).send({ error: 'User not found' });
+        }
+      }
+
       const userCore = await usersRepo.findCoreById(userId);
       if (!userCore) {
         return reply.code(401).send({ error: 'User not found' });
