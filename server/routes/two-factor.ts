@@ -8,12 +8,13 @@ import { standardErrorResponses } from '../schemas/common.ts';
 import { redeemBackupCode } from '../services/backupCodes.ts';
 import { authUserSchema, buildSessionSuccess } from '../services/sessionResponse.ts';
 import { logAudit } from '../utils/audit.ts';
-import { decrypt, encrypt, isEncrypted } from '../utils/crypto.ts';
+import { encrypt } from '../utils/crypto.ts';
 import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
   buildOtpAuthUri,
   buildQrDataUri,
+  decryptTotpSecret,
   generateBackupCodes,
   generateTotpSecret,
   hashBackupCode,
@@ -86,11 +87,6 @@ const disableBodySchema = {
   },
 } as const;
 
-// Decrypts a stored TOTP secret. Stored values are always `encrypt()` output; the `isEncrypted`
-// guard keeps a (mis)stored plaintext from being fed into `decrypt()` and throwing.
-const decryptTotpSecret = (stored: string): string =>
-  isEncrypted(stored) ? decrypt(stored) : stored;
-
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // POST /setup - Begin enrollment: generate + store an (unconfirmed) secret and backup codes,
   // return the secret/otpauth URI/QR plus the one-time plaintext backup codes. Reachable both by a
@@ -98,7 +94,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/setup',
     {
-      onRequest: [requireEnrollOrSession],
+      onRequest: [fastify.rateLimit(LOGIN_RATE_LIMIT), requireEnrollOrSession],
       schema: {
         tags: ['auth'],
         summary: 'Begin TOTP enrollment',
@@ -168,7 +164,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/confirm',
     {
-      onRequest: [requireEnrollOrSession],
+      onRequest: [fastify.rateLimit(LOGIN_RATE_LIMIT), requireEnrollOrSession],
       schema: {
         tags: ['auth'],
         summary: 'Confirm and enable TOTP',
@@ -234,6 +230,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return reply.code(401).send({ error: 'User not found' });
         }
         const session = await buildSessionSuccess(loginUser);
+        // This is the user's real login — they had no session, only an enroll token. Log
+        // `user.login` here so a session born from mandatory enrollment isn't missing from the
+        // sign-in audit trail (mirrors the /login no-2FA path and /totp-challenge).
+        await logAudit({
+          request,
+          action: 'user.login',
+          entityType: 'user',
+          entityId: loginUser.id,
+          details: {
+            targetLabel: loginUser.name,
+            secondaryLabel: loginUser.role,
+          },
+          userId: loginUser.id,
+        });
         return { enabled: true, ...session };
       }
 

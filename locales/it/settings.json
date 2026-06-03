@@ -149,7 +149,7 @@
     "disableTitle": "Disabilita l'autenticazione a due fattori",
     "disableDescription": "Conferma la tua identità per disattivare l'autenticazione a due fattori.",
     "disablePasswordLabel": "Password attuale",
-    "disableCodeLabel": "Codice di autenticazione",
+    "disableCodeLabel": "Codice autenticatore o di backup",
     "confirmDisable": "Disabilita",
     "disabledSuccess": "Autenticazione a due fattori disabilitata.",
     "enabledSuccess": "Autenticazione a due fattori abilitata."

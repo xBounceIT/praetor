@@ -4,15 +4,16 @@ import { verifyBackupCode } from '../utils/totp.ts';
 
 // Attempts to redeem a submitted backup code against the caller's stored (hashed) codes: reads the
 // codes, finds the first unused match, stamps its `usedAt`, and persists the mutated array — all
-// on the passed executor. Callers MUST invoke this inside a `withDbTransaction` so the
-// read-verify-write is atomic and a single code cannot be spent twice by concurrent requests.
+// on the passed executor. Callers MUST invoke this inside a `withDbTransaction`: the read takes a
+// `FOR UPDATE` row lock so a concurrent submission of the same code blocks until this transaction
+// commits and then sees the stamped `usedAt`, so a single code cannot be spent twice.
 // Returns whether a code was consumed.
 export const redeemBackupCode = async (
   userId: string,
   submitted: string,
   exec: DbExecutor = db,
 ): Promise<boolean> => {
-  const state = await usersRepo.getTotpState(userId, exec);
+  const state = await usersRepo.getTotpState(userId, exec, { forUpdate: true });
   const codes = state?.totpBackupCodes;
   if (!codes || codes.length === 0) return false;
 

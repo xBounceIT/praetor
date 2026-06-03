@@ -1116,13 +1116,10 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                                 </FieldLabel>
                                 <Input
                                   id="totp-disable-code"
-                                  inputMode="numeric"
                                   autoComplete="one-time-code"
                                   value={disableCode}
                                   onChange={(e) => {
-                                    setDisableCode(
-                                      e.target.value.replace(/\D/g, '').slice(0, TOTP_CODE_LENGTH),
-                                    );
+                                    setDisableCode(e.target.value);
                                     if (disableError) setDisableError('');
                                   }}
                                   placeholder="123456"
@@ -1141,8 +1138,8 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                                 variant="destructive"
                                 disabled={
                                   isDisablingTotp ||
-                                  (!disablePassword.trim() &&
-                                    disableCode.length !== TOTP_CODE_LENGTH)
+                                  !disableCode.trim() ||
+                                  (isLocalAuth && !disablePassword.trim())
                                 }
                               >
                                 {isDisablingTotp ? (

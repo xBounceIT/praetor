@@ -166,8 +166,12 @@ export type UserTotpState = {
 export const getTotpState = async (
   userId: string,
   exec: DbExecutor = db,
+  opts: { forUpdate?: boolean } = {},
 ): Promise<UserTotpState | null> => {
-  const rows = await exec
+  // `forUpdate` takes a row lock so a concurrent backup-code redemption blocks until this
+  // transaction commits and then re-reads the (now-stamped) code — preventing a single code from
+  // being spent twice under READ COMMITTED. Only meaningful inside a transaction (redeemBackupCode).
+  const query = exec
     .select({
       totpSecret: users.totpSecret,
       totpEnabled: users.totpEnabled,
@@ -176,6 +180,7 @@ export const getTotpState = async (
     })
     .from(users)
     .where(eq(users.id, userId));
+  const rows = await (opts.forUpdate ? query.for('update') : query);
   if (!rows[0]) return null;
   return {
     totpSecret: rows[0].totpSecret ?? null,

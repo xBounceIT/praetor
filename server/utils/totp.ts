@@ -2,6 +2,7 @@ import { authenticator } from '@otplib/preset-v11';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import QRCode from 'qrcode';
+import { decrypt, isEncrypted } from './crypto.ts';
 
 // TOTP (RFC 6238) two-factor authentication helpers. Built on otplib's v11-compatible
 // `authenticator` preset (the v13 main package only ships the async functional API; the preset
@@ -41,6 +42,15 @@ export function buildOtpAuthUri(secret: string, accountLabel: string): string {
 /** Render an otpauth URI to a `data:image/png;base64,...` data URI for display as a QR code. */
 export function buildQrDataUri(otpauthUri: string): Promise<string> {
   return QRCode.toDataURL(otpauthUri);
+}
+
+/**
+ * Decrypts a stored TOTP secret. Stored values are always `encrypt()` output; the `isEncrypted`
+ * guard keeps a (mis)stored plaintext secret from being fed into `decrypt()` (which would throw).
+ * Shared by every endpoint that verifies a code so the guard is applied uniformly.
+ */
+export function decryptTotpSecret(stored: string): string {
+  return isEncrypted(stored) ? decrypt(stored) : stored;
 }
 
 /**

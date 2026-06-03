@@ -601,4 +601,30 @@ describe('<UserSettings /> Two-Factor Authentication card', () => {
     expect(await screen.findByText('twoFactor.manualKeyLabel')).toBeInTheDocument();
     expect(screen.getByText(totpSetupResult.secret)).toBeInTheDocument();
   });
+
+  test('disable dialog accepts an alphanumeric backup code, not only a 6-digit TOTP', async () => {
+    const getStatus = mock(() => Promise.resolve({ enabled: true, applicable: true }));
+    // LDAP user: the disable dialog shows only the code field (no password). The backend /disable
+    // accepts a backup code, so the field must not be restricted to digits — otherwise a user who
+    // lost their authenticator but holds backup codes can never turn 2FA off from the UI.
+    renderSettings({ authMethod: 'ldap', onGetTotpStatus: getStatus });
+
+    fireEvent.click(screen.getByText('security.title'));
+    await waitFor(() => expect(getStatus).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(await screen.findByRole('button', { name: /twoFactor.disable/ }));
+    await screen.findByText('twoFactor.disableTitle');
+
+    const codeInput = document.getElementById('totp-disable-code') as HTMLInputElement;
+    // The old digits-only input stripped non-digits, leaving '' and a permanently-disabled submit.
+    fireEvent.change(codeInput, { target: { value: 'abcde-fghij' } });
+    expect(codeInput.value).toBe('abcde-fghij');
+
+    const confirmButton = screen.getByRole('button', { name: 'twoFactor.confirmDisable' });
+    expect(confirmButton).not.toBeDisabled();
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => expect(onTotpDisable).toHaveBeenCalledTimes(1));
+    expect(onTotpDisable).toHaveBeenCalledWith({ code: 'abcde-fghij' });
+  });
 });

@@ -151,12 +151,12 @@ export const authApi = {
       ...bearerHeaders(bearerToken),
     });
 
-    // Enroll-token path: confirm also issues a session token + canonical user.
-    // Persist the token and normalize the user so the caller can complete login.
+    // Enroll-token path: confirm also issues a session token + canonical user. Reuse the shared
+    // finalize so the token is persisted and the user validated identically to every other login
+    // path — including the /auth/me fallback if the serialized user trips a guard (contract drift).
     if (response.token && response.user) {
-      setAuthToken(response.token);
-      const user = normalizeAuthUser(response.user);
-      return { enabled: true, token: response.token, user };
+      const finalized = await finalizeAuthResponse({ token: response.token, user: response.user });
+      return { enabled: true, token: finalized.token, user: finalized.user };
     }
     return { enabled: true };
   },

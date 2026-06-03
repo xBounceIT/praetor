@@ -339,6 +339,9 @@ describe('POST /api/auth/2fa/confirm', () => {
     expect(body.token).toBeUndefined();
     expect(enableTotpMock).toHaveBeenCalledWith('u1');
     expect(auditActions()).toContain('user.totp_enabled');
+    // A logged-in caller already logged user.login at their original sign-in; confirming 2FA from
+    // an existing session must NOT emit a second user.login.
+    expect(auditActions()).not.toContain('user.login');
   });
 
   test('400 (session): wrong code → invalid_totp_code, no enable, audits user.totp_enable.invalid_code', async () => {
@@ -385,6 +388,9 @@ describe('POST /api/auth/2fa/confirm', () => {
     expect(body.user).toMatchObject({ id: 'u1', username: 'alice', role: 'manager' });
     expect(enableTotpMock).toHaveBeenCalledWith('u1');
     expect(auditActions()).toContain('user.totp_enabled');
+    // This path mints a real session (the user only had an enroll token), so it must also record
+    // user.login — otherwise sessions born from mandatory enrollment are missing from the audit.
+    expect(auditActions()).toContain('user.login');
   });
 
   test('400 when no pending enrollment exists', async () => {

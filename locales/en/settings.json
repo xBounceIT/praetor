@@ -149,7 +149,7 @@
     "disableTitle": "Disable two-factor authentication",
     "disableDescription": "Confirm your identity to turn off two-factor authentication.",
     "disablePasswordLabel": "Current password",
-    "disableCodeLabel": "Authentication code",
+    "disableCodeLabel": "Authenticator or backup code",
     "confirmDisable": "Disable",
     "disabledSuccess": "Two-factor authentication disabled.",
     "enabledSuccess": "Two-factor authentication enabled."

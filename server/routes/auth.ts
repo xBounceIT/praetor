@@ -26,12 +26,11 @@ import {
 } from '../services/sessionResponse.ts';
 import * as ssoService from '../services/sso.ts';
 import { logAudit } from '../utils/audit.ts';
-import { decrypt } from '../utils/crypto.ts';
 import { computeAvatarInitials } from '../utils/initials.ts';
 import { ADMIN_ROLE_ID, getRolePermissions, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
-import { verifyTotpCode } from '../utils/totp.ts';
+import { decryptTotpSecret, verifyTotpCode } from '../utils/totp.ts';
 import {
   badRequest,
   requireNonEmptyString,
@@ -382,7 +381,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const state = await usersRepo.getTotpState(userId, tx);
         if (!state?.totpEnabled || !state.totpSecret) return false;
 
-        const secret = decrypt(state.totpSecret);
+        const secret = decryptTotpSecret(state.totpSecret);
         if (verifyTotpCode(secret, codeResult.value)) return true;
 
         return redeemBackupCode(userId, codeResult.value, tx);
