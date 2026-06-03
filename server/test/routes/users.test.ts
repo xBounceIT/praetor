@@ -2363,6 +2363,80 @@ describe('PUT /api/users/:id/auth-method', () => {
     expect(updateAuthMethodMock).not.toHaveBeenCalled();
   });
 
+  describe('admin-2FA enforcement on auth-method change', () => {
+    test('200 switching an admin-capable user from OIDC to local revokes credentials when 2FA is enforced', async () => {
+      // OIDC/SAML admins are exempt from app TOTP; switching one to a TOTP-applicable method while
+      // the mandate is on makes it START applying. Their pre-existing session AND PAT/MCP tokens
+      // must be revoked, or they keep admin access without ever hitting the login enrollment gate.
+      findCoreByIdMock.mockResolvedValue({
+        ...SAMPLE_USER_CORE,
+        authMethod: 'oidc',
+        authProviderId: 'sso-1',
+        role: 'admin',
+      });
+      updateAuthMethodMock.mockResolvedValue({
+        ...SAMPLE_USER_ROW,
+        authMethod: 'local',
+        role: 'admin',
+      });
+      rolesFindByIdMock.mockResolvedValue({
+        id: 'admin',
+        name: 'Admin',
+        isSystem: true,
+        isAdmin: true,
+      });
+      generalSettingsGetMock.mockResolvedValue({ enforceTotpForAdmins: true });
+      getTotpStateMock.mockResolvedValue({
+        totpSecret: null,
+        totpEnabled: false,
+        totpConfirmedAt: null,
+        totpBackupCodes: null,
+      });
+
+      const res = await testApp.inject({
+        method: 'PUT',
+        url: '/api/users/u-target/auth-method',
+        headers: adminAuth(),
+        payload: { authMethod: 'local' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(updateAuthMethodMock).toHaveBeenCalledWith('u-target', 'local', null, TX_SENTINEL);
+      expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target');
+    });
+
+    test('200 the same switch does NOT revoke when admin-2FA enforcement is off', async () => {
+      findCoreByIdMock.mockResolvedValue({
+        ...SAMPLE_USER_CORE,
+        authMethod: 'oidc',
+        authProviderId: 'sso-1',
+        role: 'admin',
+      });
+      updateAuthMethodMock.mockResolvedValue({
+        ...SAMPLE_USER_ROW,
+        authMethod: 'local',
+        role: 'admin',
+      });
+      // generalSettingsGetMock defaults to null (enforcement off) — the mandate never applies.
+      getTotpStateMock.mockResolvedValue({
+        totpSecret: null,
+        totpEnabled: false,
+        totpConfirmedAt: null,
+        totpBackupCodes: null,
+      });
+
+      const res = await testApp.inject({
+        method: 'PUT',
+        url: '/api/users/u-target/auth-method',
+        headers: adminAuth(),
+        payload: { authMethod: 'local' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(revokeUserCredentialsMock).not.toHaveBeenCalled();
+    });
+  });
+
   // Regression: spawned follow-up from PR #659 review. Stale external_identities rows
   // from a prior SSO binding must be wiped when an admin changes the auth method or
   // provider, or an A → B → A flip will silently re-authenticate via the original
