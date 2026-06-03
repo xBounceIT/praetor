@@ -434,7 +434,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   };
 
   const removeProductRow = (index: number) => {
-    const newItems = [...(formData.items || [])];
+    const currentItems = formData.items || [];
+    // Lines backed by an auto-created supplier order must not be removed here: replacing the
+    // item list would orphan the linked procurement order, so the backend rejects it (409).
+    if (currentItems[index]?.supplierSaleId) return;
+    const newItems = [...currentItems];
     newItems.splice(index, 1);
     setFormData((prev) => ({ ...prev, items: newItems }));
   };
@@ -481,8 +485,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   const activeClients = useMemo(() => clients.filter((c) => !c.isDisabled), [clients]);
   const activeProducts = useMemo(() => products.filter((p) => !p.isDisabled), [products]);
 
-  const isLinkedOffer = Boolean(formData.linkedOfferId);
-  const baseReadOnly = Boolean(isLinkedOffer || (editingOrder && editingOrder.status !== 'draft'));
+  // A draft order is always editable — including one created from an offer. The order is the
+  // live downstream document, so an upstream offer link must not lock it (mirrors the offers
+  // view, which keys read-only off status alone). Read-only kicks in once the order is
+  // confirmed/denied, or while previewing a historical version.
+  const baseReadOnly = Boolean(editingOrder && editingOrder.status !== 'draft');
   const isReadOnly = baseReadOnly || previewVersion !== null;
 
   const tableInitialFilterState = useMemo(() => {
@@ -883,9 +890,15 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                       number: formData.linkedOfferId,
                       defaultValue: 'Offer #{{number}}',
                     })}
-                    note={t('accounting:clientsOrders.offerDetailsReadOnly', {
-                      defaultValue: '(Order details are read-only)',
-                    })}
+                    note={
+                      isReadOnly
+                        ? t('accounting:clientsOrders.offerDetailsReadOnly', {
+                            defaultValue: '(Order details are read-only)',
+                          })
+                        : t('accounting:clientsOrders.offerDetailsEditable', {
+                            defaultValue: '(Order details are editable)',
+                          })
+                    }
                     action={
                       onViewOffer && formData.linkedOfferId
                         ? {
@@ -1072,7 +1085,10 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                     }
                                     placeholder={t('sales:clientQuotes.selectProduct')}
                                     searchable={true}
-                                    disabled={isReadOnly}
+                                    // Supplier-quote-backed lines have a fixed product (the backend
+                                    // rejects product/quantity changes on supplier-order-backed
+                                    // rows), so lock the selector just like the quantity control.
+                                    disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
                                     buttonClassName="h-9"
                                   />
                                 </div>
@@ -1199,7 +1215,15 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 variant="ghost"
                                 size="icon-sm"
                                 onClick={() => removeProductRow(index)}
-                                disabled={isReadOnly}
+                                disabled={isReadOnly || Boolean(item.supplierSaleId)}
+                                title={
+                                  item.supplierSaleId
+                                    ? t('accounting:clientsOrders.supplierOrderLineLocked', {
+                                        defaultValue:
+                                          'This line is linked to a supplier order and cannot be removed here.',
+                                      })
+                                    : undefined
+                                }
                                 className="text-muted-foreground hover:text-destructive"
                               >
                                 <i className="fa-solid fa-trash-can" aria-hidden="true"></i>

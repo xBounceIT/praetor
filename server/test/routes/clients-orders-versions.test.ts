@@ -181,6 +181,19 @@ const SAMPLE_ITEM = {
   unitType: 'hours' as const,
 };
 
+// A sale line whose accepted supplier quote auto-created a supplier (procurement) order at
+// create time: supplierSaleId / supplierSaleItemId point at the live supplier order row.
+const SUPPLIER_BACKED_ITEM = {
+  ...SAMPLE_ITEM,
+  id: 'si-sup',
+  supplierQuoteId: 'sq-1',
+  supplierQuoteItemId: 'sqi-1',
+  supplierQuoteSupplierName: 'ACME',
+  supplierSaleId: 'ss-1',
+  supplierSaleItemId: 'ssi-1',
+  supplierSaleSupplierName: 'ACME',
+};
+
 const SAMPLE_SNAPSHOT = {
   schemaVersion: 1 as const,
   order: SAMPLE_ORDER,
@@ -401,7 +414,8 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     expect(ovInsertMock).not.toHaveBeenCalled();
   });
 
-  test('409 when order has linkedOfferId', async () => {
+  test('200 restores a DRAFT order linked to an offer', async () => {
+    setupHappyPath();
     coFindExistingMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: null,
@@ -414,7 +428,11 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
       status: 'draft',
       notes: null,
     });
-    ovFindByIdMock.mockResolvedValue(SAMPLE_VERSION);
+    ovFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: { ...SAMPLE_SNAPSHOT, order: { ...SAMPLE_ORDER, linkedOfferId: 'off-1' } },
+    });
+    coRestoreSnapshotOrderMock.mockResolvedValue({ ...SAMPLE_ORDER, linkedOfferId: 'off-1' });
 
     const res = await testApp.inject({
       method: 'POST',
@@ -422,12 +440,17 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
       headers: authHeader(),
     });
 
-    expect(res.statusCode).toBe(409);
-    expect(JSON.parse(res.body).error).toContain('Source-linked');
-    expect(coRestoreSnapshotOrderMock).not.toHaveBeenCalled();
+    // Draft source-linked orders are editable, so their versions are restorable too. The
+    // restore preserves the offer link (snapshot carries linkedOfferId).
+    expect(res.statusCode).toBe(200);
+    expect(coRestoreSnapshotOrderMock).toHaveBeenCalled();
+    expect(ovInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'o-1', reason: 'restore' }),
+      TX_SENTINEL,
+    );
   });
 
-  test('409 when order has linkedQuoteId', async () => {
+  test('409 when a CONFIRMED source-linked order cannot be restored', async () => {
     coFindExistingMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: 'q-1',
@@ -437,7 +460,7 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
       paymentTerms: 'immediate',
       discount: 0,
       discountType: 'percentage' as const,
-      status: 'draft',
+      status: 'confirmed',
       notes: null,
     });
     ovFindByIdMock.mockResolvedValue(SAMPLE_VERSION);
@@ -449,7 +472,6 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     });
 
     expect(res.statusCode).toBe(409);
-    expect(JSON.parse(res.body).error).toContain('Source-linked');
     expect(coRestoreSnapshotOrderMock).not.toHaveBeenCalled();
   });
 
@@ -918,5 +940,224 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
     expect(coReplaceItemsMock).toHaveBeenCalled();
     expect(coReplaceItemsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
     expect(logAuditMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('PUT /api/clients-orders/:id source-linked draft editability', () => {
+  test('200 allows editing a DRAFT order linked to an offer (content + items)', async () => {
+    coFindExistingMock.mockResolvedValue({
+      id: 'o-1',
+      linkedQuoteId: null,
+      linkedOfferId: 'off-1',
+      clientId: 'c1',
+      clientName: 'Client',
+      paymentTerms: 'immediate',
+      discount: 0,
+      discountType: 'percentage' as const,
+      status: 'draft',
+      notes: null,
+    });
+    coFindItemsForOrderMock.mockResolvedValue([SAMPLE_ITEM]);
+    coFindFullForSnapshotMock.mockResolvedValue({
+      order: { ...SAMPLE_ORDER, linkedOfferId: 'off-1' },
+      items: [SAMPLE_ITEM],
+    });
+    coUpdateMock.mockResolvedValue({ ...SAMPLE_ORDER, linkedOfferId: 'off-1', notes: 'edited' });
+    coReplaceItemsMock.mockResolvedValue([{ ...SAMPLE_ITEM, quantity: 5 }]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: {
+        notes: 'edited',
+        items: [
+          {
+            id: SAMPLE_ITEM.id,
+            productId: SAMPLE_ITEM.productId,
+            productName: SAMPLE_ITEM.productName,
+            quantity: 5,
+            unitPrice: SAMPLE_ITEM.unitPrice,
+            productCost: SAMPLE_ITEM.productCost,
+            discount: SAMPLE_ITEM.discount,
+          },
+        ],
+      },
+    });
+
+    // Before the fix this returned 409 'Quote-linked order details are read-only'.
+    expect(res.statusCode).toBe(200);
+    expect(coUpdateMock).toHaveBeenCalledWith(
+      'o-1',
+      expect.objectContaining({ notes: 'edited' }),
+      TX_SENTINEL,
+    );
+    // Items are now actually replaced for a draft source-linked order.
+    expect(coReplaceItemsMock).toHaveBeenCalled();
+    // The content change is captured in version history.
+    expect(ovInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'o-1', reason: 'update' }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('409 still rejects editing a CONFIRMED order linked to an offer', async () => {
+    coFindExistingMock.mockResolvedValue({
+      id: 'o-1',
+      linkedQuoteId: null,
+      linkedOfferId: 'off-2',
+      clientId: 'c1',
+      clientName: 'Client',
+      paymentTerms: 'immediate',
+      discount: 0,
+      discountType: 'percentage' as const,
+      status: 'confirmed',
+      notes: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: { notes: 'edited' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Non-draft');
+    expect(coUpdateMock).not.toHaveBeenCalled();
+    expect(ovInsertMock).not.toHaveBeenCalled();
+  });
+
+  const draftOfferLinkedOrder = {
+    id: 'o-1',
+    linkedQuoteId: null,
+    linkedOfferId: 'off-1',
+    clientId: 'c1',
+    clientName: 'Client',
+    paymentTerms: 'immediate',
+    discount: 0,
+    discountType: 'percentage' as const,
+    status: 'draft',
+    notes: null,
+  };
+
+  test('409 rejects dropping a line linked to a supplier order from a DRAFT order', async () => {
+    coFindExistingMock.mockResolvedValue({ ...draftOfferLinkedOrder });
+    coFindItemsForOrderMock.mockResolvedValue([SUPPLIER_BACKED_ITEM]);
+
+    // Payload omits the supplier-order-backed line, replacing it with an unrelated one.
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: 'si-new',
+            productId: 'p-2',
+            productName: 'Other service',
+            quantity: 1,
+            unitPrice: 10,
+            productCost: 5,
+            discount: 0,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('supplier order');
+    expect(coReplaceItemsMock).not.toHaveBeenCalled();
+    expect(coUpdateMock).not.toHaveBeenCalled();
+    expect(ovInsertMock).not.toHaveBeenCalled();
+  });
+
+  test('409 rejects changing the quantity of a supplier-order-backed line', async () => {
+    coFindExistingMock.mockResolvedValue({ ...draftOfferLinkedOrder });
+    coFindItemsForOrderMock.mockResolvedValue([SUPPLIER_BACKED_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: SUPPLIER_BACKED_ITEM.id,
+            productId: SUPPLIER_BACKED_ITEM.productId,
+            productName: SUPPLIER_BACKED_ITEM.productName,
+            quantity: 99, // changed from 2 — would desync the procurement order
+            unitPrice: SUPPLIER_BACKED_ITEM.unitPrice,
+            productCost: SUPPLIER_BACKED_ITEM.productCost,
+            discount: SUPPLIER_BACKED_ITEM.discount,
+            supplierQuoteId: SUPPLIER_BACKED_ITEM.supplierQuoteId,
+            supplierQuoteItemId: SUPPLIER_BACKED_ITEM.supplierQuoteItemId,
+            supplierSaleId: SUPPLIER_BACKED_ITEM.supplierSaleId,
+            supplierSaleItemId: SUPPLIER_BACKED_ITEM.supplierSaleItemId,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('supplier order');
+    expect(coReplaceItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('200 allows editing around a preserved supplier-order-backed line', async () => {
+    coFindExistingMock.mockResolvedValue({ ...draftOfferLinkedOrder });
+    coFindItemsForOrderMock.mockResolvedValue([SUPPLIER_BACKED_ITEM]);
+    coFindFullForSnapshotMock.mockResolvedValue({
+      order: { ...SAMPLE_ORDER, linkedOfferId: 'off-1' },
+      items: [SUPPLIER_BACKED_ITEM],
+    });
+    coUpdateMock.mockResolvedValue({ ...SAMPLE_ORDER, linkedOfferId: 'off-1', notes: 'edited' });
+    coReplaceItemsMock.mockResolvedValue([
+      SUPPLIER_BACKED_ITEM,
+      { ...SAMPLE_ITEM, id: 'si-new', productId: 'p-2' },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: {
+        notes: 'edited',
+        items: [
+          {
+            // Supplier-backed line preserved (same product + quantity); only its sale price moves.
+            id: SUPPLIER_BACKED_ITEM.id,
+            productId: SUPPLIER_BACKED_ITEM.productId,
+            productName: SUPPLIER_BACKED_ITEM.productName,
+            quantity: SUPPLIER_BACKED_ITEM.quantity,
+            unitPrice: 250,
+            productCost: SUPPLIER_BACKED_ITEM.productCost,
+            discount: SUPPLIER_BACKED_ITEM.discount,
+            supplierQuoteId: SUPPLIER_BACKED_ITEM.supplierQuoteId,
+            supplierQuoteItemId: SUPPLIER_BACKED_ITEM.supplierQuoteItemId,
+            supplierSaleId: SUPPLIER_BACKED_ITEM.supplierSaleId,
+            supplierSaleItemId: SUPPLIER_BACKED_ITEM.supplierSaleItemId,
+          },
+          {
+            // A brand-new, non-supplier line is allowed alongside it.
+            id: 'si-new',
+            productId: 'p-2',
+            productName: 'Added service',
+            quantity: 1,
+            unitPrice: 10,
+            productCost: 5,
+            discount: 0,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(coReplaceItemsMock).toHaveBeenCalled();
+    expect(coUpdateMock).toHaveBeenCalledWith(
+      'o-1',
+      expect.objectContaining({ notes: 'edited' }),
+      TX_SENTINEL,
+    );
   });
 });

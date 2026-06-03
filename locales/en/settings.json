@@ -154,6 +154,12 @@
     "disabledSuccess": "Two-factor authentication disabled.",
     "enabledSuccess": "Two-factor authentication enabled."
   },
+  "ril": {
+    "title": "RIL",
+    "description": "Choose a default Trasferta (location) to pre-fill for each weekday on your RIL sheet.",
+    "noDefault": "No default",
+    "weekdayDefaultsHint": "These pre-fill the Trasferta column when a RIL sheet is generated. You can still change any day before exporting."
+  },
   "general": {
     "title": "General Settings",
     "pageTitle": "General Administration",

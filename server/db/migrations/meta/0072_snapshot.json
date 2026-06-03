@@ -1,6 +1,6 @@
 {
-  "id": "5900df6e-7156-4c46-ba61-b9b16f7663ee",
-  "prevId": "309a5343-eb2e-4518-958d-8d46828b39f5",
+  "id": "f49ab293-f620-4328-8e42-72ace5a3fd5d",
+  "prevId": "5900df6e-7156-4c46-ba61-b9b16f7663ee",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1083,6 +1083,13 @@
           "type": "boolean",
           "primaryKey": false,
           "notNull": false,
+          "default": false
+        },
+        "enforce_totp_for_admins": {
+          "name": "enforce_totp_for_admins",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
           "default": false
         },
         "gemini_api_key": {
@@ -7096,6 +7103,31 @@
           "primaryKey": false,
           "notNull": true,
           "default": 1
+        },
+        "totp_secret": {
+          "name": "totp_secret",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "totp_enabled": {
+          "name": "totp_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "totp_confirmed_at": {
+          "name": "totp_confirmed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "totp_backup_codes": {
+          "name": "totp_backup_codes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {

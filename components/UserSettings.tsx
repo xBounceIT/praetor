@@ -11,6 +11,7 @@ import {
   type LucideIcon,
   Moon,
   Palette,
+  Plane,
   RefreshCw,
   Save,
   Shield,
@@ -67,6 +68,8 @@ import type {
   McpToken,
   McpTokenScope,
   PersonalAccessToken,
+  RilWeekday,
+  RilWeekdayTransferDefaults,
   Settings,
 } from '../services/api';
 import type { UserAuthMethod } from '../types';
@@ -79,6 +82,9 @@ export interface UserSettingsProps {
   authMethod?: UserAuthMethod;
   authProviderName?: string | null;
   isLoading?: boolean;
+  // Available RIL "Trasferta" values (from general settings). Empty hides the RIL tab — e.g. for
+  // users without RIL access or when no options are configured.
+  rilTransferOptions?: string[];
   onUpdate: (updates: Partial<Settings>) => void;
   onUpdatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   onTotpSetup: () => Promise<{
@@ -215,11 +221,27 @@ const LANGUAGE_OPTIONS: ReadonlyArray<{
   },
 ];
 
+// Stable empty default for the optional rilTransferOptions prop — a fresh `[]` literal as the
+// default would change identity each render and defeat downstream memoization.
+const EMPTY_RIL_TRANSFER_OPTIONS: string[] = [];
+
+// Radix Select forbids an empty-string item value, so "no default" gets a sentinel.
+const RIL_NONE_TRANSFER_VALUE = '__none__';
+// Ordered weekday keys (match the stored preference). Labels are derived per-locale at render.
+const RIL_WEEKDAY_KEYS: readonly RilWeekday[] = [
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+];
+
 const UserSettings: React.FC<UserSettingsProps> = ({
   settings,
   authMethod = 'local',
   authProviderName = null,
   isLoading = false,
+  rilTransferOptions = EMPTY_RIL_TRANSFER_OPTIONS,
   onUpdate,
   onUpdatePassword,
   onTotpSetup,
@@ -233,7 +255,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   onGetPersonalAccessToken,
   onRenewPersonalAccessToken,
 }) => {
-  const { t } = useTranslation(['settings', 'common']);
+  const { t, i18n } = useTranslation(['settings', 'common']);
   const translateRef = useRef(t);
   const isLocalAuth = authMethod === 'local';
   const identityProviderLabel = isLocalAuth
@@ -252,8 +274,28 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const [currentTheme, setCurrentTheme] = useState<Theme>(() => getTheme());
 
   const [activeTab, setActiveTab] = useState<
-    'profile' | 'appearance' | 'language' | 'security' | 'mcp'
+    'profile' | 'appearance' | 'language' | 'security' | 'mcp' | 'ril'
   >('profile');
+  const showRilPreferences = rilTransferOptions.length > 0;
+  const [rilWeekdayTransferDefaults, setRilWeekdayTransferDefaults] =
+    useState<RilWeekdayTransferDefaults>(() => settings.rilWeekdayTransferDefaults ?? {});
+  // Tail of the weekday-default save chain: each update waits for the previous one so two quick
+  // edits can't land out of order and overwrite the server with a stale map.
+  const rilWeekdaySaveRef = useRef<Promise<unknown> | null>(null);
+  // Synchronous mirror of the weekday defaults. A queued save reads this at send time (not a map
+  // captured before the prior save settled), so a write chained behind a failed save won't re-send
+  // a value the UI already rolled back.
+  const rilWeekdayMapRef = useRef<RilWeekdayTransferDefaults>(rilWeekdayTransferDefaults);
+  const rilWeekdayDefs = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(i18n.language?.startsWith('it') ? 'it-IT' : 'en-US', {
+      weekday: 'long',
+    });
+    // 2024-01-01 is a Monday, so +0..+4 yields Monday..Friday in the active locale.
+    return RIL_WEEKDAY_KEYS.map((key, index) => {
+      const label = formatter.format(new Date(2024, 0, 1 + index));
+      return { key, label: label.charAt(0).toUpperCase() + label.slice(1) };
+    });
+  }, [i18n.language]);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
@@ -557,12 +599,53 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   }, [onListMcpTokens]);
 
   const handleTabChange = useCallback(
-    (tab: 'profile' | 'appearance' | 'language' | 'security' | 'mcp') => {
+    (tab: 'profile' | 'appearance' | 'language' | 'security' | 'mcp' | 'ril') => {
       setActiveTab(tab);
       if (tab === 'mcp') void loadMcpTokens();
     },
     [loadMcpTokens],
   );
+
+  // Persist the per-weekday default optimistically (same UX as the language picker): apply
+  // locally, push to the backend, and roll back on failure.
+  const handleWeekdayTransferChange = (day: RilWeekday, value: string) => {
+    const previousValue = rilWeekdayMapRef.current[day];
+    const next = { ...rilWeekdayMapRef.current };
+    if (value === RIL_NONE_TRANSFER_VALUE) delete next[day];
+    else next[day] = value;
+    rilWeekdayMapRef.current = next;
+    setRilWeekdayTransferDefaults(next);
+    // Serialize the save behind any in-flight one so two quick edits can't complete out of order
+    // and overwrite the server with a stale map. The PUT reads the live map at send time, so the
+    // last edit wins and a write queued behind a failed save drops the rolled-back day.
+    const prior = rilWeekdaySaveRef.current;
+    const run = (async () => {
+      if (prior) {
+        try {
+          await prior;
+        } catch {
+          // A failed prior save shouldn't block this one.
+        }
+      }
+      try {
+        await onUpdate({ rilWeekdayTransferDefaults: rilWeekdayMapRef.current });
+      } catch (err) {
+        console.error('Failed to update RIL transfer defaults:', err);
+        // Roll back only this day (in the live map and rendered state) before this run settles, so
+        // the next queued save reads the reverted map and won't re-send the failed value. Other
+        // weekday edits are preserved.
+        const reverted = { ...rilWeekdayMapRef.current };
+        if (previousValue === undefined) delete reverted[day];
+        else reverted[day] = previousValue;
+        rilWeekdayMapRef.current = reverted;
+        setRilWeekdayTransferDefaults(reverted);
+      }
+    })();
+    rilWeekdaySaveRef.current = run;
+    void run.finally(() => {
+      if (rilWeekdaySaveRef.current === run) rilWeekdaySaveRef.current = null;
+    });
+  };
 
   const handleCreateMcpToken = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -702,6 +785,19 @@ const UserSettings: React.FC<UserSettingsProps> = ({
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
           )}
         </button>
+        {showRilPreferences && (
+          <button
+            type="button"
+            onClick={() => handleTabChange('ril')}
+            className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'ril' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
+          >
+            <i className="fa-solid fa-plane-departure mr-2"></i>
+            {t('ril.title')}
+            {activeTab === 'ril' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
+            )}
+          </button>
+        )}
       </div>
 
       {activeTab === 'profile' && (
@@ -1613,6 +1709,55 @@ const UserSettings: React.FC<UserSettingsProps> = ({
             </div>
           </div>
         </section>
+      )}
+
+      {activeTab === 'ril' && showRilPreferences && (
+        <Card className="gap-0 overflow-hidden rounded-lg bg-background py-0 animate-in fade-in slide-in-from-right-4 duration-300">
+          <CardHeader className="border-b bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+            <CardTitle className="flex items-center gap-3 text-base">
+              <Plane aria-hidden="true" className="size-4 text-praetor" />
+              {t('ril.title')}
+            </CardTitle>
+            <CardDescription>{t('ril.description')}</CardDescription>
+          </CardHeader>
+          <CardContent className="p-6">
+            <fieldset className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {rilWeekdayDefs.map(({ key, label }) => {
+                const current = rilWeekdayTransferDefaults[key];
+                // Keep a stale value (an option an admin later removed) selectable so the user
+                // can see and change it rather than have it silently vanish.
+                const options =
+                  current && !rilTransferOptions.includes(current)
+                    ? [current, ...rilTransferOptions]
+                    : rilTransferOptions;
+                return (
+                  <Field key={key}>
+                    <FieldLabel htmlFor={`ril-transfer-${key}`}>{label}</FieldLabel>
+                    <Select
+                      value={current ?? RIL_NONE_TRANSFER_VALUE}
+                      onValueChange={(value) => void handleWeekdayTransferChange(key, value)}
+                    >
+                      <SelectTrigger id={`ril-transfer-${key}`} className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={RIL_NONE_TRANSFER_VALUE}>
+                          {t('ril.noDefault')}
+                        </SelectItem>
+                        {options.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                );
+              })}
+            </fieldset>
+            <FieldDescription className="mt-4">{t('ril.weekdayDefaultsHint')}</FieldDescription>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

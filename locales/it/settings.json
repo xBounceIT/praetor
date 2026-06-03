@@ -154,6 +154,12 @@
     "disabledSuccess": "Autenticazione a due fattori disabilitata.",
     "enabledSuccess": "Autenticazione a due fattori abilitata."
   },
+  "ril": {
+    "title": "RIL",
+    "description": "Scegli una Trasferta predefinita da precompilare per ogni giorno della settimana nel tuo prospetto RIL.",
+    "noDefault": "Nessuna predefinita",
+    "weekdayDefaultsHint": "Precompilano la colonna Trasferta quando viene generato un prospetto RIL. Puoi comunque modificare ogni giorno prima di esportare."
+  },
   "general": {
     "title": "Impostazioni Generali",
     "pageTitle": "Amministrazione Generale",

@@ -33,14 +33,57 @@ import {
 const ADMIN_USERNAME = 'admin';
 const DEFAULT_ADMIN_PASSWORD = 'password';
 
+const MAX_RIL_TRANSFER_VALUE_LENGTH = 64;
+
+const rilWeekdayTransferDefaultsSchema = {
+  type: 'object',
+  properties: Object.fromEntries(
+    settingsRepo.RIL_WEEKDAYS.map((day) => [
+      day,
+      { type: 'string', maxLength: MAX_RIL_TRANSFER_VALUE_LENGTH },
+    ]),
+  ),
+  additionalProperties: false,
+} as const;
+
+// Sanitize the per-weekday default-transfer map: drop unknown keys, trim values, and omit
+// blanks (a blank means "no default for that day"). `undefined` means the field was not sent,
+// so the existing column is preserved; an object (even `{}`) replaces the stored value.
+const parseRilWeekdayTransferDefaults = (
+  value: unknown,
+):
+  | { ok: true; value: settingsRepo.RilWeekdayTransferDefaults | null }
+  | { ok: false; message: string } => {
+  if (value === undefined || value === null) return { ok: true, value: null };
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    return { ok: false, message: 'rilWeekdayTransferDefaults must be an object' };
+  }
+  const out: settingsRepo.RilWeekdayTransferDefaults = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (!(settingsRepo.RIL_WEEKDAYS as readonly string[]).includes(key)) {
+      return { ok: false, message: `rilWeekdayTransferDefaults has an invalid weekday: ${key}` };
+    }
+    if (typeof raw !== 'string') {
+      return { ok: false, message: `rilWeekdayTransferDefaults.${key} must be a string` };
+    }
+    const trimmed = raw.trim();
+    if (trimmed.length > MAX_RIL_TRANSFER_VALUE_LENGTH) {
+      return { ok: false, message: `rilWeekdayTransferDefaults.${key} is too long` };
+    }
+    if (trimmed) out[key] = trimmed;
+  }
+  return { ok: true, value: out };
+};
+
 const settingsSchema = {
   type: 'object',
   properties: {
     fullName: { type: 'string' },
     email: { type: 'string' },
     language: { type: 'string', enum: [...settingsRepo.LANGUAGES] },
+    rilWeekdayTransferDefaults: rilWeekdayTransferDefaultsSchema,
   },
-  required: ['fullName', 'email', 'language'],
+  required: ['fullName', 'email', 'language', 'rilWeekdayTransferDefaults'],
 } as const;
 
 const settingsUpdateBodySchema = {
@@ -49,6 +92,7 @@ const settingsUpdateBodySchema = {
     fullName: { type: 'string' },
     email: { type: 'string' },
     language: { type: 'string', enum: [...settingsRepo.LANGUAGES] },
+    rilWeekdayTransferDefaults: rilWeekdayTransferDefaultsSchema,
   },
 } as const;
 
@@ -172,10 +216,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!assertAuthenticated(request, reply)) return;
 
-      const { fullName, email, language } = request.body as {
+      const { fullName, email, language, rilWeekdayTransferDefaults } = request.body as {
         fullName?: string;
         email?: string;
         language?: string;
+        rilWeekdayTransferDefaults?: unknown;
       };
       const fullNameResult = optionalNonEmptyString(fullName, 'fullName');
       if (!fullNameResult.ok) return badRequest(reply, fullNameResult.message);
@@ -185,6 +230,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const languageResult = optionalEnum(language, settingsRepo.LANGUAGES, 'language');
       if (!languageResult.ok) return badRequest(reply, languageResult.message);
+
+      const weekdayTransferResult = parseRilWeekdayTransferDefaults(rilWeekdayTransferDefaults);
+      if (!weekdayTransferResult.ok) return badRequest(reply, weekdayTransferResult.message);
 
       // Identity fields (name, email) are mastered by the upstream IdP for
       // non-local users; only the UI-preference `language` field stays editable.
@@ -199,6 +247,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         fullName: fullNameResult.value,
         email: emailResult.value,
         language: languageResult.value,
+        rilWeekdayTransferDefaults: weekdayTransferResult.value,
       });
     },
   );

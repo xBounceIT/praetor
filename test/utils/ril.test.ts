@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import type { Project, TimeEntry } from '../../types';
 import {
+  applyRilDraftToRows,
   calculateRilTotals,
   calculateRilWorkedHoursFromTimes,
   DEFAULT_RIL_NOTE_OPTIONS,
   DEFAULT_RIL_TRANSFER_OPTIONS,
+  extractRilDraftRows,
   formatRilLunchWindow,
   generateRilRows,
   getRilMonthBounds,
@@ -248,6 +250,225 @@ describe('RIL helpers', () => {
       totalPicap: 160,
       workedDays: 20,
       workdays: 20,
+    });
+  });
+});
+
+describe('generateRilRows weekdayTransferDefaults', () => {
+  // May 2026: 4=Mon, 5=Tue, 6=Wed, 7=Thu, 8=Fri; 1=Fri holiday; 2=Sat, 3=Sun weekends.
+  test('applies the per-weekday default on matching valid weekdays', () => {
+    const rows = generateRilRows({
+      year: 2026,
+      month: 5,
+      locale: 'en',
+      entries: [],
+      weekdayTransferDefaults: { monday: 'WFH' },
+    });
+
+    // Both Mondays in May 2026 (4 and 11) get the configured value.
+    expect(rows.find((row) => row.day === 4)?.transfer).toBe('WFH');
+    expect(rows.find((row) => row.day === 11)?.transfer).toBe('WFH');
+  });
+
+  test('takes precedence over the entry-location-derived value on the configured weekday', () => {
+    const rows = generateRilRows({
+      year: 2026,
+      month: 5,
+      locale: 'en',
+      weekdayTransferDefaults: { monday: 'WFH' },
+      entries: [
+        // Monday with an in-office entry would otherwise derive "In office".
+        entry({ id: 'office', date: '2026-05-04', duration: 8, location: 'office' }),
+      ],
+    });
+
+    expect(rows.find((row) => row.day === 4)?.transfer).toBe('WFH');
+  });
+
+  test('does not apply the default on weekends or holidays', () => {
+    const rows = generateRilRows({
+      year: 2026,
+      month: 5,
+      locale: 'en',
+      entries: [],
+      // Configure every weekday name including ones that fall on the holiday/weekend.
+      weekdayTransferDefaults: {
+        friday: 'WFH-FRI',
+        saturday: 'WFH-SAT',
+        sunday: 'WFH-SUN',
+      },
+    });
+
+    // May 1 is a Friday holiday: the friday default must not leak onto it.
+    expect(rows.find((row) => row.day === 1)?.isHoliday).toBe(true);
+    expect(rows.find((row) => row.day === 1)?.transfer).toBe('');
+    // May 2 (Sat) and May 3 (Sun) are weekends: never get a transfer default.
+    expect(rows.find((row) => row.day === 2)?.transfer).toBe('');
+    expect(rows.find((row) => row.day === 3)?.transfer).toBe('');
+    // A non-holiday Friday (May 8) still receives the configured friday default.
+    expect(rows.find((row) => row.day === 8)?.transfer).toBe('WFH-FRI');
+  });
+
+  test('falls back to entry-derived logic on weekdays without a configured default', () => {
+    const rows = generateRilRows({
+      year: 2026,
+      month: 5,
+      locale: 'en',
+      // Only Monday is configured; Tuesday/Wednesday must use the legacy derived value.
+      weekdayTransferDefaults: { monday: 'WFH' },
+      entries: [
+        entry({ id: 'tue-office', date: '2026-05-05', duration: 8, location: 'office' }),
+        entry({ id: 'wed-remote', date: '2026-05-06', duration: 8, location: 'remote' }),
+      ],
+    });
+
+    expect(rows.find((row) => row.day === 4)?.transfer).toBe('WFH');
+    expect(rows.find((row) => row.day === 5)?.transfer).toBe('In office');
+    expect(rows.find((row) => row.day === 6)?.transfer).toBe('Remote working');
+    // A weekday with no entries and no default stays blank.
+    expect(rows.find((row) => row.day === 7)?.transfer).toBe('');
+  });
+});
+
+describe('applyRilDraftToRows / extractRilDraftRows', () => {
+  const baseRows = () =>
+    generateRilRows({
+      year: 2026,
+      month: 5,
+      locale: 'en',
+      entries: [],
+      lunchBreakMinutes: 60,
+    });
+
+  test('applies saved fields onto matching editable rows and recomputes worked hours', () => {
+    const rows = baseRows();
+    const draft = {
+      // May 4 is a Monday workday.
+      '4': {
+        entrance: '08:00',
+        exit: '13:00',
+        notes: '',
+        transfer: 'Remote working',
+        code: 'X1',
+      },
+    };
+
+    const applied = applyRilDraftToRows(rows, draft, 60);
+    const day4 = applied.find((row) => row.day === 4);
+
+    expect(day4).toMatchObject({
+      entrance: '08:00',
+      exit: '13:00',
+      transfer: 'Remote working',
+      code: 'X1',
+      // 08:00-13:00 = 5h, lunch window 13:00-14:00 has no overlap -> 5h worked.
+      hours: '5:00',
+      hoursDecimal: 5,
+      picap: 5,
+      worked: true,
+    });
+  });
+
+  test('clears time/hours/transfer and unsets worked for an absence draft', () => {
+    const rows = baseRows();
+    const draft = {
+      // Absence note on a valid Monday workday.
+      '4': {
+        entrance: '09:00',
+        exit: '18:00',
+        notes: 'P',
+        transfer: 'Remote working',
+        code: '',
+      },
+    };
+
+    const applied = applyRilDraftToRows(rows, draft, 60);
+    const day4 = applied.find((row) => row.day === 4);
+
+    expect(day4).toMatchObject({
+      notes: 'P',
+      entrance: '',
+      exit: '',
+      hours: '',
+      hoursDecimal: 0,
+      picap: 0,
+      transfer: '',
+      worked: false,
+    });
+    expect(day4 ? isRilAbsenceRow(day4) : false).toBe(true);
+  });
+
+  test('leaves rows whose day is absent from the draft untouched', () => {
+    const rows = baseRows();
+    const day5Before = rows.find((row) => row.day === 5);
+    const draft = {
+      '4': { entrance: '08:00', exit: '13:00', notes: '', transfer: 'Remote working', code: '' },
+    };
+
+    const applied = applyRilDraftToRows(rows, draft, 60);
+    const day5After = applied.find((row) => row.day === 5);
+
+    expect(day5After).toEqual(day5Before);
+  });
+
+  test('skips holiday / non-editable rows even when a draft key exists', () => {
+    const rows = baseRows();
+    const day1Before = rows.find((row) => row.day === 1);
+    expect(day1Before?.isHoliday).toBe(true);
+    const draft = {
+      // May 1 is a Friday holiday -> not draftable; should be ignored.
+      '1': { entrance: '08:00', exit: '17:00', notes: '', transfer: 'Remote working', code: 'Z' },
+    };
+
+    const applied = applyRilDraftToRows(rows, draft, 60);
+
+    expect(applied.find((row) => row.day === 1)).toEqual(day1Before);
+  });
+
+  test('returns rows unchanged when the draft is null or empty', () => {
+    const rows = baseRows();
+
+    expect(applyRilDraftToRows(rows, null, 60)).toBe(rows);
+    expect(applyRilDraftToRows(rows, undefined, 60)).toBe(rows);
+    expect(applyRilDraftToRows(rows, {}, 60)).toBe(rows);
+  });
+
+  test('extractRilDraftRows keys editable rows by day with only the five editable fields', () => {
+    const rows = baseRows();
+    const draft = extractRilDraftRows(rows);
+
+    // Holiday (May 1) is excluded; editable workday May 4 is present.
+    expect(draft['1']).toBeUndefined();
+    expect(draft['4']).toEqual({
+      entrance: rows.find((row) => row.day === 4)?.entrance ?? '',
+      exit: rows.find((row) => row.day === 4)?.exit ?? '',
+      notes: '',
+      transfer: '',
+      code: '',
+    });
+    // Each captured entry exposes exactly the five editable fields, nothing else.
+    for (const fields of Object.values(draft)) {
+      expect(Object.keys(fields).sort()).toEqual(['code', 'entrance', 'exit', 'notes', 'transfer']);
+    }
+  });
+
+  test('extractRilDraftRows round-trips through applyRilDraftToRows for edited rows', () => {
+    const rows = baseRows().map((row) =>
+      row.day === 4
+        ? { ...row, entrance: '08:00', exit: '13:00', transfer: 'Remote working', code: 'RT1' }
+        : row,
+    );
+
+    const draft = extractRilDraftRows(rows);
+    const applied = applyRilDraftToRows(baseRows(), draft, 60);
+    const day4 = applied.find((row) => row.day === 4);
+
+    expect(day4).toMatchObject({
+      entrance: '08:00',
+      exit: '13:00',
+      transfer: 'Remote working',
+      code: 'RT1',
+      hoursDecimal: 5,
     });
   });
 });

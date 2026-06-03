@@ -502,8 +502,15 @@
     {
       "idx": 71,
       "version": "7",
-      "when": 1780508151129,
-      "tag": "0071_add_user_totp_and_totp_enforcement",
+      "when": 1780508318684,
+      "tag": "0071_add_ril_drafts_and_weekday_transfer",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1780518873755,
+      "tag": "0072_add_user_totp_and_totp_enforcement",
       "breakpoints": true
     }
   ]
