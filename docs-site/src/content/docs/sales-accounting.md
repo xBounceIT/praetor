@@ -27,6 +27,10 @@ I preventivi fornitori aiutano a confrontare costi e condizioni d'acquisto. Asso
 
 Gli ordini clienti e fornitori consolidano le informazioni operative. Prima di confermare, verifica anagrafica, righe, sconti, condizioni di pagamento e collegamenti con documenti precedenti.
 
+Un ordine di vendita creato da un'offerta accettata nasce in stato **Bozza** e resta completamente modificabile (cliente, righe, sconti, note e condizioni di pagamento) finché è in bozza. Passa in sola lettura solo dopo essere stato **Confermato** o **Rifiutato**.
+
+Le righe che hanno generato automaticamente un **ordine fornitore** (contrassegnate dal badge *Ordine fornitore*) restano bloccate anche in bozza: non possono essere rimosse né modificate nel prodotto o nella quantità, così l'ordine di approvvigionamento collegato non resta disallineato. Puoi comunque aggiornarne il prezzo di vendita, aggiungere altre righe e modificare i campi di testata.
+
 ## Fatture
 
 Le fatture clienti e fornitori devono riflettere ordini e consegne effettive. Controlla imponibili, IVA, totale e riferimenti al documento collegato.
