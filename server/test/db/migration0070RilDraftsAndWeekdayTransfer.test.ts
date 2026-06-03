@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { readMigrationFile } from '../helpers/schemaFiles.ts';
 
-const MIGRATION = readMigrationFile('0069_add_ril_drafts_and_weekday_transfer.sql');
+const MIGRATION = readMigrationFile('0070_add_ril_drafts_and_weekday_transfer.sql');
 
-describe('migration 0069: adds RIL drafts table and weekday transfer defaults', () => {
+describe('migration 0070: adds RIL drafts table and weekday transfer defaults', () => {
   test('creates the ril_drafts table with its core columns', () => {
     expect(MIGRATION).toContain('CREATE TABLE "ril_drafts"');
     expect(MIGRATION).toContain('"user_id" varchar(50)');

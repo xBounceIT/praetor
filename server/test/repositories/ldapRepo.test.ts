@@ -37,6 +37,9 @@ const PROJECTION_KEYS = [
   'bindDn',
   'bindPassword',
   'userFilter',
+  'firstNameAttribute',
+  'lastNameAttribute',
+  'emailAttribute',
   'groupBaseDn',
   'groupFilter',
   'roleMappings',
@@ -54,6 +57,9 @@ const baseFields: RowFields = {
   bindDn: 'cn=admin',
   bindPassword: '',
   userFilter: '(uid={0})',
+  firstNameAttribute: 'givenName',
+  lastNameAttribute: 'sn',
+  emailAttribute: 'mail',
   groupBaseDn: 'ou=groups',
   groupFilter: '(member={0})',
   roleMappings: [] as ldapRepo.LdapRoleMapping[],
@@ -205,6 +211,9 @@ describe('DEFAULT_CONFIG', () => {
       bindDn: 'cn=read-only-admin,dc=example,dc=com',
       bindPassword: '',
       userFilter: '(uid={0})',
+      firstNameAttribute: 'givenName',
+      lastNameAttribute: 'sn',
+      emailAttribute: 'mail',
       groupBaseDn: 'ou=groups,dc=example,dc=com',
       groupFilter: '(member={0})',
       roleMappings: [],
@@ -212,6 +221,50 @@ describe('DEFAULT_CONFIG', () => {
       autoProvisionAll: false,
       provisionOnLogin: true,
     });
+  });
+});
+
+describe('attribute mapping columns', () => {
+  test('get returns the stored first/last/email attribute names', async () => {
+    exec.enqueue({
+      rows: [
+        buildRow({
+          firstNameAttribute: 'preferredName',
+          lastNameAttribute: 'familyName',
+          emailAttribute: 'userPrincipalName',
+        }),
+      ],
+    });
+    const result = await ldapRepo.get(testDb);
+    expect(result?.firstNameAttribute).toBe('preferredName');
+    expect(result?.lastNameAttribute).toBe('familyName');
+    expect(result?.emailAttribute).toBe('userPrincipalName');
+  });
+
+  test('mapRow falls back to the defaults when the attribute columns are NULL', async () => {
+    exec.enqueue({
+      rows: [buildRow({ firstNameAttribute: null, lastNameAttribute: null, emailAttribute: null })],
+    });
+    const result = await ldapRepo.get(testDb);
+    expect(result?.firstNameAttribute).toBe('givenName');
+    expect(result?.lastNameAttribute).toBe('sn');
+    expect(result?.emailAttribute).toBe('mail');
+  });
+
+  test('update binds the attribute names as parameters', async () => {
+    exec.enqueue({ rows: [buildRow()] });
+    await ldapRepo.update(
+      {
+        firstNameAttribute: 'preferredName',
+        lastNameAttribute: 'familyName',
+        emailAttribute: 'userPrincipalName',
+      },
+      testDb,
+    );
+    const params = exec.calls[0].params;
+    expect(params).toContain('preferredName');
+    expect(params).toContain('familyName');
+    expect(params).toContain('userPrincipalName');
   });
 });
 

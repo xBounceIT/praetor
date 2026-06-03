@@ -793,6 +793,189 @@ describe('authenticate', () => {
   });
 });
 
+describe('attribute mapping (name / surname / email)', () => {
+  test('composes display name from default givenName + sn and returns first/last/email', async () => {
+    nextFixture = {
+      bindResponses: [null, null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: 'uid=alice,dc=test,dc=com',
+              object: {
+                uid: 'alice',
+                givenName: 'Alice',
+                sn: 'Smith',
+                cn: 'Alice the Admin',
+                mail: 'alice@example.com',
+              },
+            },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+
+    const result = await ldapService.authenticateWithProfile('alice', 'pw');
+
+    expect(result.authenticated).toBe(true);
+    expect(result.firstName).toBe('Alice');
+    expect(result.lastName).toBe('Smith');
+    expect(result.email).toBe('alice@example.com');
+    // Structured first+last composition wins over cn for the display name.
+    expect(result.displayName).toBe('Alice Smith');
+  });
+
+  test('honors custom configured attributes for first name, surname, and email', async () => {
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      firstNameAttribute: 'preferredName',
+      lastNameAttribute: 'familyName',
+      emailAttribute: 'userPrincipalName',
+    });
+    nextFixture = {
+      bindResponses: [null, null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: 'uid=bob,dc=test,dc=com',
+              object: {
+                uid: 'bob',
+                preferredName: 'Bobby',
+                familyName: 'Jones',
+                userPrincipalName: 'bob@corp.example',
+                // Conventional attributes present but must be ignored in favor of the config.
+                givenName: 'Robert',
+                sn: 'WrongSurname',
+                mail: 'wrong@example.com',
+              },
+            },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+
+    const result = await ldapService.authenticateWithProfile('bob', 'pw');
+
+    expect(result.firstName).toBe('Bobby');
+    expect(result.lastName).toBe('Jones');
+    expect(result.email).toBe('bob@corp.example');
+    expect(result.displayName).toBe('Bobby Jones');
+    // The configured attributes are requested from the directory.
+    expect(lastClientStats?.searchCalls[0]?.options.attributes).toEqual(
+      expect.arrayContaining(['preferredName', 'familyName', 'userPrincipalName']),
+    );
+  });
+
+  test('falls back to cn for the display name when first/last attributes are absent', async () => {
+    nextFixture = {
+      bindResponses: [null, null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: 'uid=carol,dc=test,dc=com',
+              object: { uid: 'carol', cn: 'Carol Common' },
+            },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+
+    const result = await ldapService.authenticateWithProfile('carol', 'pw');
+
+    expect(result.firstName).toBeUndefined();
+    expect(result.lastName).toBeUndefined();
+    expect(result.displayName).toBe('Carol Common');
+  });
+
+  test('configured email attribute falls back to mail when the custom attribute is empty', async () => {
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      emailAttribute: 'userPrincipalName',
+    });
+    nextFixture = {
+      bindResponses: [null, null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: 'uid=dan,dc=test,dc=com',
+              object: { uid: 'dan', cn: 'Dan', mail: 'dan@example.com' },
+            },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+      ],
+    };
+
+    const result = await ldapService.authenticateWithProfile('dan', 'pw');
+    expect(result.email).toBe('dan@example.com');
+  });
+
+  test('provisioning persists resolved first and last name on the new user', async () => {
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
+    nextFixture = {
+      bindResponses: [null, null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: 'uid=erin,dc=test,dc=com',
+              object: { uid: 'erin', givenName: 'Erin', sn: 'Stone', mail: 'erin@example.com' },
+            },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+        { entries: [], status: 0 },
+      ],
+    };
+
+    const result = await ldapService.authenticateAndProvision('erin', 'pw');
+
+    expect(result).toMatchObject({ authenticated: true, created: true });
+    expect(createUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Erin Stone', firstName: 'Erin', lastName: 'Stone' }),
+    );
+  });
+
+  test('sync writes first/last name to the directory profile of an existing user', async () => {
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(LDAP_LOGIN_USER);
+    nextFixture = {
+      bindResponses: [null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: 'uid=alice,dc=test,dc=com',
+              object: { uid: 'alice', givenName: 'Alice', sn: 'Smith' },
+            },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+        { entries: [], status: 0 },
+      ],
+    };
+
+    await ldapService.syncUsers();
+
+    expect(updateDirectoryProfileMock).toHaveBeenCalledWith(
+      LDAP_LOGIN_USER.id,
+      expect.objectContaining({ name: 'Alice Smith', firstName: 'Alice', lastName: 'Smith' }),
+      expect.anything(),
+    );
+  });
+});
+
 describe('findUserEntry (direct, with config preloaded)', () => {
   beforeEach(() => {
     (ldapService as unknown as { config: unknown }).config = ENABLED_LDAP_CONFIG;
@@ -816,6 +999,9 @@ describe('findUserEntry (direct, with config preloaded)', () => {
       'cn',
       'displayName',
       'mail',
+      'email',
+      'sn',
+      'givenName',
     ]);
     expect(search?.options.sizeLimit).toBe(1);
   });
@@ -915,12 +1101,13 @@ describe('syncUsers', () => {
     expect(String(search?.options.filter)).toBe('(uid=*)');
     expect(search?.options.attributes).toEqual([
       'uid',
+      'sAMAccountName',
       'cn',
+      'displayName',
+      'mail',
+      'email',
       'sn',
       'givenName',
-      'mail',
-      'displayName',
-      'sAMAccountName',
     ]);
   });
 
@@ -944,6 +1131,8 @@ describe('syncUsers', () => {
     expect(createUserMock).toHaveBeenCalledWith({
       id: 'u_test_id',
       name: 'Carol',
+      firstName: null,
+      lastName: null,
       username: 'carol',
       passwordHash: realUsersRepo.LDAP_PLACEHOLDER_PASSWORD_HASH,
       role: 'user',
@@ -1605,6 +1794,8 @@ describe('authenticateAndProvision', () => {
     expect(createUserMock).toHaveBeenCalledWith({
       id: 'u_test_id',
       name: 'Alice Real',
+      firstName: null,
+      lastName: null,
       username: 'alice',
       passwordHash: realUsersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
       role: 'user',

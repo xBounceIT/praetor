@@ -488,8 +488,15 @@
     {
       "idx": 69,
       "version": "7",
-      "when": 1780436147060,
-      "tag": "0069_add_ril_drafts_and_weekday_transfer",
+      "when": 1780428122956,
+      "tag": "0069_add_ldap_name_attributes",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1780504827739,
+      "tag": "0070_add_ril_drafts_and_weekday_transfer",
       "breakpoints": true
     }
   ]

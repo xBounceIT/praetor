@@ -50,6 +50,9 @@ const ldapConfig: LdapConfig = {
   bindDn: 'cn=admin,dc=example,dc=com',
   bindPassword: 'secret',
   userFilter: '(uid={0})',
+  firstNameAttribute: 'givenName',
+  lastNameAttribute: 'sn',
+  emailAttribute: 'mail',
   groupBaseDn: 'ou=groups,dc=example,dc=com',
   groupFilter: '(member={0})',
   roleMappings: [],
@@ -195,6 +198,31 @@ describe('<AuthSettings />', () => {
     const submitted = onSave.mock.calls[0]?.[0] as LdapConfig;
     expect(submitted.provisionOnLogin).toBe(false);
     expect(submitted.autoProvisionAll).toBe(true);
+  });
+
+  test('Attribute Mapping inputs render the configured values and round-trip to onSave', async () => {
+    const onSave = mock(async (_config: LdapConfig) => {});
+    renderAuthSettings({ onSave });
+
+    const firstNameInput = inputForLabel('admin.ldap.attributeMapping.firstNameLabel');
+    const lastNameInput = inputForLabel('admin.ldap.attributeMapping.lastNameLabel');
+    const emailInput = inputForLabel('admin.ldap.attributeMapping.emailLabel');
+
+    expect(firstNameInput.value).toBe('givenName');
+    expect(lastNameInput.value).toBe('sn');
+    expect(emailInput.value).toBe('mail');
+
+    fireEvent.change(firstNameInput, { target: { value: 'preferredName' } });
+    fireEvent.change(lastNameInput, { target: { value: 'familyName' } });
+    fireEvent.change(emailInput, { target: { value: 'userPrincipalName' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.saveConfiguration' }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    const submitted = onSave.mock.calls[0]?.[0] as LdapConfig;
+    expect(submitted.firstNameAttribute).toBe('preferredName');
+    expect(submitted.lastNameAttribute).toBe('familyName');
+    expect(submitted.emailAttribute).toBe('userPrincipalName');
   });
 
   // #638: the tester previously lied about every existing user — claiming they would be

@@ -71,6 +71,9 @@ const DEFAULT_LDAP_CONFIG: LdapConfig = {
   bindDn: 'cn=read-only-admin,dc=example,dc=com',
   bindPassword: '',
   userFilter: '(uid={0})',
+  firstNameAttribute: 'givenName',
+  lastNameAttribute: 'sn',
+  emailAttribute: 'mail',
   groupBaseDn: 'ou=groups,dc=example,dc=com',
   groupFilter: '(member={0})',
   roleMappings: [],
@@ -1092,6 +1095,44 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
 
               <fieldset className="border-t border-border p-6 space-y-4">
                 <legend className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
+                  {t('admin.ldap.attributeMapping.heading', 'Attribute Mapping')}
+                </legend>
+                <FieldDescription>
+                  {t(
+                    'admin.ldap.attributeMapping.description',
+                    'Directory attributes used to populate each user’s name and email. Leave blank to use the defaults (givenName, sn, mail).',
+                  )}
+                </FieldDescription>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <Field
+                    label={t('admin.ldap.attributeMapping.firstNameLabel', 'First Name Attribute')}
+                    value={ldapForm.firstNameAttribute}
+                    monospace
+                    onChange={(firstNameAttribute) =>
+                      setLdapForm((prev) => ({ ...prev, firstNameAttribute }))
+                    }
+                  />
+                  <Field
+                    label={t('admin.ldap.attributeMapping.lastNameLabel', 'Surname Attribute')}
+                    value={ldapForm.lastNameAttribute}
+                    monospace
+                    onChange={(lastNameAttribute) =>
+                      setLdapForm((prev) => ({ ...prev, lastNameAttribute }))
+                    }
+                  />
+                  <Field
+                    label={t('admin.ldap.attributeMapping.emailLabel', 'Email Attribute')}
+                    value={ldapForm.emailAttribute}
+                    monospace
+                    onChange={(emailAttribute) =>
+                      setLdapForm((prev) => ({ ...prev, emailAttribute }))
+                    }
+                  />
+                </div>
+              </fieldset>
+
+              <fieldset className="border-t border-border p-6 space-y-4">
+                <legend className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
                   {t('admin.ldap.provisioning.heading', 'User Provisioning')}
                 </legend>
                 <div className="flex items-start gap-3">
@@ -1365,6 +1406,16 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                             <span>{t('admin.ldap.test.userDn', 'User DN')}</span>
                             <span className="text-foreground break-all">
                               {testResult.userDn || '-'}
+                            </span>
+                            <span>{t('admin.ldap.test.resolvedName', 'Name')}</span>
+                            <span className="text-foreground break-all">
+                              {[testResult.firstName, testResult.lastName]
+                                .filter(Boolean)
+                                .join(' ') || '-'}
+                            </span>
+                            <span>{t('admin.ldap.test.resolvedEmail', 'Email')}</span>
+                            <span className="text-foreground break-all">
+                              {testResult.email || '-'}
                             </span>
                             <span>
                               {t(LDAP_ROLE_RESOLUTION_LABEL_KEYS[testResult.roleResolution])}

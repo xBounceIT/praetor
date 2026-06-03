@@ -41,9 +41,13 @@ export interface ExternalEmployeesViewProps {
   permissions: string[];
 }
 
-const getSurname = (name: string): string => {
-  const parts = name.trim().split(' ');
-  return parts.length > 1 ? parts[parts.length - 1] : name;
+// Prefer the structured surname (populated from the directory / HR profile); fall back to the
+// last whitespace-separated token of the display name for users without a stored last name.
+const getSurname = (user: User): string => {
+  const explicit = user.lastName?.trim();
+  if (explicit) return explicit;
+  const parts = user.name.trim().split(' ');
+  return parts.length > 1 ? parts[parts.length - 1] : user.name;
 };
 
 interface EmptyStateProps {
@@ -126,8 +130,8 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
     const filtered = users.filter((u) => u.employeeType === 'external' && !u.isDisabled);
 
     return filtered.sort((a, b) => {
-      const surnameA = getSurname(a.name).toLowerCase();
-      const surnameB = getSurname(b.name).toLowerCase();
+      const surnameA = getSurname(a).toLowerCase();
+      const surnameB = getSurname(b).toLowerCase();
       return surnameA.localeCompare(surnameB);
     });
   }, [users]);
