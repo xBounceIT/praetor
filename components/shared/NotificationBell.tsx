@@ -154,112 +154,111 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
               notifications.map((notification) => (
                 <div
                   key={notification.id}
-                  className={`group cursor-pointer border-b border-border px-4 py-3 transition-colors last:border-b-0 hover:bg-accent hover:text-accent-foreground ${
+                  className={`group w-full border-b border-border px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-accent hover:text-accent-foreground ${
                     notification.isRead
                       ? 'bg-popover text-popover-foreground'
                       : 'bg-accent text-accent-foreground'
                   }`}
-                  onClick={() => handleNotificationClick(notification)}
                 >
                   <div className="flex items-start gap-3">
-                    <div
-                      className={`flex-shrink-0 size-8 rounded-full flex items-center justify-center ${
-                        notification.isRead
-                          ? 'bg-muted text-muted-foreground'
-                          : 'bg-primary text-primary-foreground'
-                      }`}
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                      onClick={() => handleNotificationClick(notification)}
                     >
-                      <i
-                        className={`fa-solid ${getNotificationIconClass(notification.type)} text-sm`}
-                      ></i>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p
-                          className={`text-sm flex-1 ${
-                            notification.isRead
-                              ? 'text-muted-foreground'
-                              : 'text-accent-foreground font-medium'
-                          }`}
-                        >
-                          {getLocalizedTitle(notification)}
-                        </p>
-                        {!notification.isRead && (
-                          <span className="size-2 rounded-full bg-primary flex-shrink-0"></span>
-                        )}
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex">
-                              <button
-                                type="button"
-                                onClick={(e) => handleDelete(e, notification.id)}
-                                className="flex size-6 flex-shrink-0 items-center justify-center rounded-full text-destructive opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
-                                aria-label={t('notifications.delete', 'Delete notification')}
-                              >
-                                <i className="fa-solid fa-xmark text-xs"></i>
-                              </button>
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {t('notifications.delete', 'Delete notification')}
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {formatTimeAgo(notification.createdAt)}
-                        {notification.data?.clientName && (
-                          <span> · {notification.data.clientName}</span>
-                        )}
-                        {notification.type === 'project_rule_triggered' &&
-                          notification.data?.projectName && (
-                            <span> · {notification.data.projectName}</span>
-                          )}
-                      </p>
-
-                      {/* Expandable project list */}
-                      {notification.type === 'new_projects' &&
-                        notification.data?.projectNames &&
-                        notification.data.projectNames.length > 0 && (
-                          <div
-                            className={`mt-2 overflow-hidden transition-all duration-200 ${
-                              expandedId === notification.id ? 'max-h-40' : 'max-h-0'
+                      <span
+                        className={`flex size-8 flex-shrink-0 items-center justify-center rounded-full ${
+                          notification.isRead
+                            ? 'bg-muted text-muted-foreground'
+                            : 'bg-primary text-primary-foreground'
+                        }`}
+                      >
+                        <i
+                          className={`fa-solid ${getNotificationIconClass(notification.type)} text-sm`}
+                        ></i>
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2">
+                          <span
+                            className={`flex-1 text-sm ${
+                              notification.isRead
+                                ? 'text-muted-foreground'
+                                : 'text-accent-foreground font-medium'
                             }`}
                           >
-                            <ul className="space-y-1 border-l-2 border-border pl-3 text-xs text-muted-foreground">
-                              {notification.data.projectNames.map((name, idx) => (
-                                <li key={`${name}-${idx}`} className="truncate">
-                                  {name}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                      {notification.type === 'new_projects' &&
-                        notification.data?.projectNames &&
-                        notification.data.projectNames.length > 0 && (
-                          <button
-                            type="button"
-                            className="mt-1 flex items-center gap-1 text-xs text-primary hover:text-primary/80"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setExpandedId(
-                                expandedId === notification.id ? null : notification.id,
-                              );
-                            }}
-                          >
-                            <i
-                              className={`fa-solid fa-chevron-down text-[8px] transition-transform ${
-                                expandedId === notification.id ? 'rotate-180' : ''
-                              }`}
-                            ></i>
-                            {expandedId === notification.id
-                              ? t('notifications.hideProjects', 'Hide projects')
-                              : t('notifications.showProjects', 'Show projects')}
-                          </button>
-                        )}
-                    </div>
+                            {getLocalizedTitle(notification)}
+                          </span>
+                          {!notification.isRead && (
+                            <span className="size-2 flex-shrink-0 rounded-full bg-primary"></span>
+                          )}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {formatTimeAgo(notification.createdAt)}
+                          {notification.data?.clientName && (
+                            <span> · {notification.data.clientName}</span>
+                          )}
+                          {notification.type === 'project_rule_triggered' &&
+                            notification.data?.projectName && (
+                              <span> · {notification.data.projectName}</span>
+                            )}
+                        </span>
+                      </span>
+                    </button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDelete(e, notification.id)}
+                          className="flex size-6 flex-shrink-0 items-center justify-center rounded-full text-destructive opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                          aria-label={t('notifications.delete', 'Delete notification')}
+                        >
+                          <i className="fa-solid fa-xmark text-xs"></i>
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {t('notifications.delete', 'Delete notification')}
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
+                  {/* Expandable project list */}
+                  {notification.type === 'new_projects' &&
+                    notification.data?.projectNames &&
+                    notification.data.projectNames.length > 0 && (
+                      <div
+                        className={`ml-11 mt-2 overflow-hidden transition-all duration-200 ${
+                          expandedId === notification.id ? 'max-h-40' : 'max-h-0'
+                        }`}
+                      >
+                        <ul className="space-y-1 border-l-2 border-border pl-3 text-xs text-muted-foreground">
+                          {notification.data.projectNames.map((name, idx) => (
+                            <li key={`${name}-${idx}`} className="truncate">
+                              {name}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                  {notification.type === 'new_projects' &&
+                    notification.data?.projectNames &&
+                    notification.data.projectNames.length > 0 && (
+                      <button
+                        type="button"
+                        className="ml-11 mt-1 flex items-center gap-1 text-xs text-primary hover:text-primary/80"
+                        onClick={() => {
+                          setExpandedId(expandedId === notification.id ? null : notification.id);
+                        }}
+                      >
+                        <i
+                          className={`fa-solid fa-chevron-down text-[8px] transition-transform ${
+                            expandedId === notification.id ? 'rotate-180' : ''
+                          }`}
+                        ></i>
+                        {expandedId === notification.id
+                          ? t('notifications.hideProjects', 'Hide projects')
+                          : t('notifications.showProjects', 'Show projects')}
+                      </button>
+                    )}
                 </div>
               ))
             )}

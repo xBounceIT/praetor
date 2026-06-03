@@ -167,7 +167,7 @@ const DashboardControls: React.FC<DashboardControlsProps> = ({ controls }) => {
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {viewsLoading ? (
-            <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
               <i className="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>
               {t('common:views.loadingViews')}
             </div>
@@ -186,7 +186,7 @@ const DashboardControls: React.FC<DashboardControlsProps> = ({ controls }) => {
               <span className="text-xs underline">{t('common:views.retry')}</span>
             </DropdownMenuItem>
           ) : views.length === 0 ? (
-            <div className="px-2 py-2 text-xs text-muted-foreground">
+            <div className="p-2 text-xs text-muted-foreground">
               {t('projects:detail.dashboard.noViews')}
             </div>
           ) : (

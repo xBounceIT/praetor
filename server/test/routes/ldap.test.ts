@@ -277,6 +277,51 @@ describe('GET /api/ldap/config', () => {
     expect(response.statusCode).toBe(200);
     expect(JSON.parse(response.body).autoProvisionAll).toBe(true);
   });
+
+  test('returns the default first/last/email attribute names', async () => {
+    ldapGetMock.mockResolvedValue(null);
+    const response = await testApp.inject({
+      method: 'GET',
+      url: '/api/ldap/config',
+      headers: authHeader(),
+    });
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.firstNameAttribute).toBe('givenName');
+    expect(body.lastNameAttribute).toBe('sn');
+    expect(body.emailAttribute).toBe('mail');
+  });
+});
+
+describe('PUT /api/ldap/config - attribute mapping', () => {
+  test('forwards trimmed attribute names to ldapRepo.update', async () => {
+    const response = await putConfig({
+      enabled: false,
+      firstNameAttribute: '  preferredName  ',
+      lastNameAttribute: 'familyName',
+      emailAttribute: 'userPrincipalName',
+    });
+    expect(response.statusCode).toBe(200);
+    const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
+    expect(patch.firstNameAttribute).toBe('preferredName');
+    expect(patch.lastNameAttribute).toBe('familyName');
+    expect(patch.emailAttribute).toBe('userPrincipalName');
+  });
+
+  test('omitting attribute names does not pass the keys to ldapRepo.update', async () => {
+    const response = await putConfig({ enabled: false });
+    expect(response.statusCode).toBe(200);
+    const patch = ldapUpdateMock.mock.calls[0][0] as Partial<realLdapRepo.LdapConfig>;
+    expect(patch.firstNameAttribute).toBeUndefined();
+    expect(patch.lastNameAttribute).toBeUndefined();
+    expect(patch.emailAttribute).toBeUndefined();
+  });
+
+  test('returns the updated attribute name in the response', async () => {
+    const response = await putConfig({ enabled: false, firstNameAttribute: 'preferredName' });
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body).firstNameAttribute).toBe('preferredName');
+  });
 });
 
 describe('PUT /api/ldap/config - bindPassword masking', () => {
@@ -853,6 +898,45 @@ describe('POST /api/ldap/test', () => {
     expect(response.statusCode).toBe(400);
     expect(authenticateWithProfileMock).not.toHaveBeenCalled();
     expect(JSON.parse(response.body).error).toMatch(/username/i);
+  });
+
+  test('surfaces the resolved first/last name and email for valid credentials', async () => {
+    authenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      userDn: 'uid=alice,ou=people,dc=example,dc=com',
+      firstName: 'Alice',
+      lastName: 'Smith',
+      email: 'alice@example.com',
+      groups: [],
+      matchedRoleIds: [],
+    });
+
+    const response = await testLdapAuth({ username: 'alice', password: 'secret' });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.firstName).toBe('Alice');
+    expect(body.lastName).toBe('Smith');
+    expect(body.email).toBe('alice@example.com');
+  });
+
+  test('omits the resolved identity from the response when authentication fails', async () => {
+    authenticateWithProfileMock.mockResolvedValue({
+      authenticated: false,
+      firstName: 'Alice',
+      lastName: 'Smith',
+      email: 'alice@example.com',
+      groups: [],
+      matchedRoleIds: [],
+    });
+
+    const response = await testLdapAuth({ username: 'alice', password: 'wrong' });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.firstName).toBeUndefined();
+    expect(body.lastName).toBeUndefined();
+    expect(body.email).toBeUndefined();
   });
 });
 

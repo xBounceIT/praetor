@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supplierQuotesApi } from '../../services/api/supplierQuotes';
 import type { SupplierQuoteAttachment } from '../../types';
@@ -30,6 +30,40 @@ const getExtension = (name: string): string => {
   return name.slice(dot + 1).toLowerCase();
 };
 
+type AttachmentState = {
+  attachments: SupplierQuoteAttachment[];
+  isLoading: boolean;
+  error: string | null;
+};
+
+type AttachmentAction =
+  | { type: 'loading' }
+  | { type: 'loaded'; attachments: SupplierQuoteAttachment[]; error?: string | null }
+  | { type: 'error'; message: string }
+  | { type: 'prepend'; attachment: SupplierQuoteAttachment }
+  | { type: 'remove'; attachmentId: string };
+
+const attachmentReducer = (state: AttachmentState, action: AttachmentAction): AttachmentState => {
+  switch (action.type) {
+    case 'loading':
+      return { ...state, isLoading: true, error: null };
+    case 'loaded':
+      return { attachments: action.attachments, isLoading: false, error: action.error ?? null };
+    case 'error':
+      return { ...state, error: action.message };
+    case 'prepend':
+      return { ...state, error: null, attachments: [action.attachment, ...state.attachments] };
+    case 'remove':
+      return {
+        ...state,
+        error: null,
+        attachments: state.attachments.filter(
+          (attachment) => attachment.id !== action.attachmentId,
+        ),
+      };
+  }
+};
+
 interface SupplierQuoteAttachmentsSectionProps {
   quoteId: string;
   isReadOnly: boolean;
@@ -46,29 +80,32 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
   statusLabel,
 }) => {
   const { t, i18n } = useTranslation(['sales', 'common']);
-  const [attachments, setAttachments] = useState<SupplierQuoteAttachment[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const tRef = useRef(t);
+  tRef.current = t;
+  const [attachmentState, dispatchAttachments] = useReducer(attachmentReducer, {
+    attachments: [],
+    isLoading: true,
+    error: null,
+  });
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<SupplierQuoteAttachment | null>(null);
 
   const reload = useCallback(async () => {
-    setIsLoading(true);
+    dispatchAttachments({ type: 'loading' });
     try {
       const data = await supplierQuotesApi.listAttachments(quoteId);
-      setAttachments(data);
-      setError(null);
+      dispatchAttachments({ type: 'loaded', attachments: data });
     } catch {
-      setError(
-        t('sales:supplierQuotes.attachments.loadFailed', {
+      dispatchAttachments({
+        type: 'loaded',
+        attachments: [],
+        error: tRef.current('sales:supplierQuotes.attachments.loadFailed', {
           defaultValue: 'Failed to load attachments.',
         }),
-      );
-    } finally {
-      setIsLoading(false);
+      });
     }
-  }, [quoteId, t]);
+  }, [quoteId]);
 
   useEffect(() => {
     reload();
@@ -96,22 +133,23 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
     async (file: File) => {
       const validationError = validateFile(file);
       if (validationError) {
-        setError(validationError);
+        dispatchAttachments({ type: 'error', message: validationError });
         return;
       }
       setIsUploading(true);
-      setError(null);
       try {
         const created = await supplierQuotesApi.uploadAttachment(quoteId, file);
-        setAttachments((prev) => [created, ...prev]);
+        dispatchAttachments({ type: 'prepend', attachment: created });
       } catch (e) {
-        setError(
-          e instanceof Error && e.message
-            ? e.message
-            : t('sales:supplierQuotes.attachments.errors.uploadFailed', {
-                defaultValue: 'Upload failed',
-              }),
-        );
+        dispatchAttachments({
+          type: 'error',
+          message:
+            e instanceof Error && e.message
+              ? e.message
+              : t('sales:supplierQuotes.attachments.errors.uploadFailed', {
+                  defaultValue: 'Upload failed',
+                }),
+        });
       } finally {
         setIsUploading(false);
       }
@@ -152,15 +190,16 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
         link.click();
         link.remove();
         URL.revokeObjectURL(url);
-        setError(null);
       } catch (e) {
-        setError(
-          e instanceof Error && e.message
-            ? e.message
-            : t('sales:supplierQuotes.attachments.errors.downloadFailed', {
-                defaultValue: 'Download failed',
-              }),
-        );
+        dispatchAttachments({
+          type: 'error',
+          message:
+            e instanceof Error && e.message
+              ? e.message
+              : t('sales:supplierQuotes.attachments.errors.downloadFailed', {
+                  defaultValue: 'Download failed',
+                }),
+        });
       }
     },
     [quoteId, t],
@@ -170,16 +209,17 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
     if (!pendingDelete) return;
     try {
       await supplierQuotesApi.deleteAttachment(quoteId, pendingDelete.id);
-      setAttachments((prev) => prev.filter((a) => a.id !== pendingDelete.id));
-      setError(null);
+      dispatchAttachments({ type: 'remove', attachmentId: pendingDelete.id });
     } catch (e) {
-      setError(
-        e instanceof Error && e.message
-          ? e.message
-          : t('sales:supplierQuotes.attachments.errors.deleteFailed', {
-              defaultValue: 'Delete failed',
-            }),
-      );
+      dispatchAttachments({
+        type: 'error',
+        message:
+          e instanceof Error && e.message
+            ? e.message
+            : t('sales:supplierQuotes.attachments.errors.deleteFailed', {
+                defaultValue: 'Delete failed',
+              }),
+      });
     } finally {
       setPendingDelete(null);
     }
@@ -244,23 +284,23 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
         </label>
       )}
 
-      {error && (
+      {attachmentState.error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-          {error}
+          {attachmentState.error}
         </div>
       )}
 
-      {isLoading ? (
+      {attachmentState.isLoading ? (
         <div className="text-center py-4 text-zinc-400 text-sm">
           <i className="fa-solid fa-spinner fa-spin"></i>
         </div>
-      ) : attachments.length === 0 ? (
+      ) : attachmentState.attachments.length === 0 ? (
         <div className="text-center py-4 text-zinc-400 text-sm">
           {t('sales:supplierQuotes.attachments.empty', { defaultValue: 'No attachments yet.' })}
         </div>
       ) : (
         <ul className="divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white">
-          {attachments.map((attachment) => (
+          {attachmentState.attachments.map((attachment) => (
             <li key={attachment.id} className="flex items-center gap-3 px-3 py-2.5">
               <i className="fa-solid fa-file-lines text-zinc-400"></i>
               <div className="flex-1 min-w-0">

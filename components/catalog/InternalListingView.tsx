@@ -62,6 +62,12 @@ export interface InternalListingViewProps {
   onDeleteInternalSubcategory: (name: string, type: string, category: string) => Promise<void>;
 }
 
+const calcMargine = (costo: number, molPercentage: number) =>
+  calcProductSalePrice(costo, molPercentage) - costo;
+
+const getDisplayTypeName = (typeName: string) =>
+  typeName.charAt(0).toUpperCase() + typeName.slice(1);
+
 const InternalListingView: React.FC<InternalListingViewProps> = ({
   products,
   onAddProduct,
@@ -82,7 +88,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
   // Product Types State
   const [productTypes, setProductTypes] = useState<InternalProductType[]>([]);
-  const [isLoadingTypes, setIsLoadingTypes] = useState(false);
+  const [isLoadingTypes, setIsLoadingTypes] = useState(true);
 
   // Type Management State
   const [isManageTypesModalOpen, setIsManageTypesModalOpen] = useState(false);
@@ -139,21 +145,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   // Load product types on mount
   useEffect(() => {
     const loadTypes = async () => {
-      setIsLoadingTypes(true);
       try {
         const types = await api.products.listProductTypes();
         setProductTypes(types);
-        if (types.length > 0) {
-          const defaultType = types[0];
-          setFormData((prev) => {
-            if (prev.type) return prev;
-            return {
-              ...prev,
-              type: defaultType.name,
-              costUnit: defaultType.costUnit,
-            };
-          });
-        }
       } catch (err) {
         console.error('Failed to load product types:', err);
       } finally {
@@ -165,13 +159,18 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
   // Load categories when type changes or category modal opens
   const loadCategories = useCallback(async (type: string) => {
-    if (!type) return;
+    if (!type) {
+      setCategories([]);
+      return [];
+    }
     setIsLoadingCategories(true);
     try {
       const cats = await api.products.listInternalCategories(type);
       setCategories(cats);
+      return cats;
     } catch (err) {
       console.error('Failed to load categories:', err);
+      return [];
     } finally {
       setIsLoadingCategories(false);
     }
@@ -179,60 +178,39 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
   // Load subcategories when category changes or subcategory modal opens
   const loadSubcategories = useCallback(async (type: string, category: string) => {
-    if (!type || !category) return;
+    if (!type || !category) {
+      setSubcategories([]);
+      return [];
+    }
     setIsLoadingSubcategories(true);
     try {
       const subs = await api.products.listInternalSubcategories(type, category);
       setSubcategories(subs);
+      return subs;
     } catch (err) {
       console.error('Failed to load subcategories:', err);
+      return [];
     } finally {
       setIsLoadingSubcategories(false);
     }
   }, []);
 
-  // Load categories when modal opens and when type changes
-  useEffect(() => {
-    if (isModalOpen && formData.type) {
-      loadCategories(formData.type);
-    }
-  }, [isModalOpen, formData.type, loadCategories]);
-
-  // Load subcategories when modal opens with a category
-  useEffect(() => {
-    if (isModalOpen && formData.type && formData.category) {
-      loadSubcategories(formData.type, formData.category);
-    }
-  }, [isModalOpen, formData.type, formData.category, loadSubcategories]);
-
-  // Keep the displayed unit aligned with the selected internal product type.
-  useEffect(() => {
-    if (!formData.type || productTypes.length === 0) return;
-
-    const typeData = productTypes.find((t) => t.name === formData.type);
-    if (!typeData) return;
-
-    const nextCostUnit = typeData.costUnit;
-    setFormData((prev) => {
-      if (prev.costUnit === nextCostUnit) return prev;
-      return { ...prev, costUnit: nextCostUnit };
-    });
-  }, [formData.type, productTypes]);
-
-  // Auto-select first category when categories load (only for new products, not when editing)
-  useEffect(() => {
-    if (isModalOpen && !editingProduct && categories.length > 0 && !formData.category) {
-      const firstCategory = categories[0];
-      setFormData((prev) => ({
-        ...prev,
-        category: firstCategory.name,
-        subcategory: '',
-      }));
-    }
-  }, [isModalOpen, editingProduct, categories, formData.category]);
+  const selectFirstCategoryForType = useCallback(
+    (type: string, nextCategories: InternalProductCategory[]) => {
+      const firstCategory = nextCategories[0];
+      if (!firstCategory) return;
+      setFormData((prev) => {
+        if (prev.type !== type || prev.category) return prev;
+        return { ...prev, category: firstCategory.name, subcategory: '' };
+      });
+    },
+    [],
+  );
 
   const openAddModal = () => {
     setEditingProduct(null);
+    setCategories([]);
+    setSubcategories([]);
     setFormData({
       name: '',
       productCode: '',
@@ -247,12 +225,23 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     setErrors({});
     setServerError(null);
     setIsModalOpen(true);
+    if (defaultTypeName) {
+      void loadCategories(defaultTypeName).then((nextCategories) => {
+        selectFirstCategoryForType(defaultTypeName, nextCategories);
+        const firstCategory = nextCategories[0];
+        if (firstCategory) void loadSubcategories(defaultTypeName, firstCategory.name);
+      });
+    }
   };
 
   const openEditModal = (product: Product) => {
     setEditingProduct(product);
     // Look up cost unit from product types, fallback to the product's current value
     const typeData = productTypes.find((t) => t.name === product.type);
+    const typeName = product.type || (productTypes[0]?.name ?? '');
+    const categoryName = product.category || '';
+    setCategories([]);
+    setSubcategories([]);
     setFormData({
       name: product.name || '',
       productCode: product.productCode || '',
@@ -260,17 +249,15 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       costo: product.costo || 0,
       molPercentage: product.molPercentage || 0,
       costUnit: typeData?.costUnit || product.costUnit || 'unit',
-      category: product.category || '',
+      category: categoryName,
       subcategory: product.subcategory || '',
-      type: product.type || (productTypes[0]?.name ?? ''),
+      type: typeName,
     });
     setErrors({});
     setServerError(null);
     setIsModalOpen(true);
-  };
-
-  const calcMargine = (costo: number, molPercentage: number) => {
-    return calcProductSalePrice(costo, molPercentage) - costo;
+    if (typeName) void loadCategories(typeName);
+    if (typeName && categoryName) void loadSubcategories(typeName, categoryName);
   };
 
   const handleNumericValueChange = (field: 'costo' | 'molPercentage') => (value: string) => {
@@ -692,11 +679,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
   const subcategoryOptions: Option[] = availableSubcategories.map((s) => ({ id: s, name: s }));
 
-  // Helper to display type name (now just returns the name since types are user-managed)
-  const getDisplayTypeName = (typeName: string) => {
-    return typeName.charAt(0).toUpperCase() + typeName.slice(1);
-  };
-
   // Build type options from API-loaded product types
   const typeOptions: Option[] = productTypes.map((t) => ({
     id: t.name,
@@ -706,7 +688,8 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   const handleTypeChange = (val: string) => {
     const typeName = val;
     const typeData = productTypes.find((t) => t.name === typeName);
-    // Reset category and subcategory - new categories will be loaded by useEffect
+    // Reset category and subcategory, then load the category list for the selected type.
+    setCategories([]);
     setSubcategories([]);
     setFormData((prev) => ({
       ...prev,
@@ -718,6 +701,13 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     if (errors.type) {
       setErrors((prev) => ({ ...prev, type: '' }));
     }
+    void loadCategories(typeName).then((nextCategories) => {
+      if (!editingProduct) {
+        selectFirstCategoryForType(typeName, nextCategories);
+        const firstCategory = nextCategories[0];
+        if (firstCategory) void loadSubcategories(typeName, firstCategory.name);
+      }
+    });
   };
 
   const hasPricing =
@@ -1356,12 +1346,16 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                       options={categoryOptions}
                       value={formData.category || ''}
                       onChange={(val) => {
+                        const categoryName = val as string;
                         setSubcategories([]);
                         setFormData((prev) => ({
                           ...prev,
-                          category: val as string,
+                          category: categoryName,
                           subcategory: '',
                         }));
+                        if (formData.type && categoryName) {
+                          void loadSubcategories(formData.type, categoryName);
+                        }
                       }}
                       placeholder={t('crm:internalListing.selectOption')}
                       searchable={true}

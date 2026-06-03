@@ -1,71 +1,9 @@
 {
-  "id": "8237a270-d267-47ee-ad59-756048fc9f30",
+  "id": "1e2da8c8-ca7e-49b7-a2d0-f08222a5bac3",
   "prevId": "e0b6be4a-1dee-4e75-ad5f-2c85c4d2faf7",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.app_branding": {
-      "name": "app_branding",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "default": 1
-        },
-        "company_name": {
-          "name": "company_name",
-          "type": "varchar(120)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "logo_stored_name": {
-          "name": "logo_stored_name",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "logo_mime_type": {
-          "name": "logo_mime_type",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "logo_file_size": {
-          "name": "logo_file_size",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "logo_updated_at": {
-          "name": "logo_updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "CURRENT_TIMESTAMP"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "app_branding_id_check": {
-          "name": "app_branding_id_check",
-          "value": "\"app_branding\".\"id\" = 1"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.audit_logs": {
       "name": "audit_logs",
       "schema": "",
@@ -1561,6 +1499,27 @@
           "primaryKey": false,
           "notNull": false,
           "default": "'(uid={0})'"
+        },
+        "first_name_attribute": {
+          "name": "first_name_attribute",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'givenName'"
+        },
+        "last_name_attribute": {
+          "name": "last_name_attribute",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'sn'"
+        },
+        "email_attribute": {
+          "name": "email_attribute",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'mail'"
         },
         "group_base_dn": {
           "name": "group_base_dn",
@@ -6831,6 +6790,18 @@
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
+        },
+        "first_name": {
+          "name": "first_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_name": {
+          "name": "last_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
         },
         "username": {
           "name": "username",

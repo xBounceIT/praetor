@@ -29,7 +29,7 @@ const NotFound: React.FC<NotFoundProps> = ({ onReturn }) => {
           variant="icon"
           className="absolute size-16 rounded-2xl bg-primary/10 text-primary"
         >
-          <Compass aria-hidden="true" className="size-8 animate-bounce" />
+          <Compass aria-hidden="true" className="size-8 animate-in fade-in zoom-in duration-500" />
         </EmptyMedia>
       </div>
 

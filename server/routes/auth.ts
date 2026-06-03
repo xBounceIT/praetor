@@ -250,20 +250,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const token = generateToken(user.id, Date.now(), user.role, user.sessionVersion);
-      const permissions = await getRolePermissions(user.role);
-
-      await logAudit({
-        request,
-        action: 'user.login',
-        entityType: 'user',
-        entityId: user.id,
-        details: {
-          targetLabel: user.name,
-          secondaryLabel: user.role,
-        },
-        userId: user.id,
-      });
-      const availableRoles = await rolesRepo.listAvailableRolesForUser(user.id);
+      const [permissions, availableRoles] = await Promise.all([
+        getRolePermissions(user.role),
+        rolesRepo.listAvailableRolesForUser(user.id),
+        logAudit({
+          request,
+          action: 'user.login',
+          entityType: 'user',
+          entityId: user.id,
+          details: {
+            targetLabel: user.name,
+            secondaryLabel: user.role,
+          },
+          userId: user.id,
+        }),
+      ]);
       const effectiveAvailableRoles =
         availableRoles.length > 0
           ? availableRoles
@@ -369,8 +370,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const permissions = await getRolePermissions(roleIdResult.value);
-      const availableRoles = await rolesRepo.listAvailableRolesForUser(session.userId);
+      const [permissions, availableRoles] = await Promise.all([
+        getRolePermissions(roleIdResult.value),
+        rolesRepo.listAvailableRolesForUser(session.userId),
+      ]);
       const effectiveAvailableRoles =
         availableRoles.length > 0
           ? availableRoles

@@ -563,6 +563,8 @@ describe('updateUserDynamic', () => {
           '17.25',
           false,
           'app_user',
+          'Giulia',
+          'Bianchi',
           '+39 02 1234',
           'Consultant',
           'Delivery',
@@ -583,6 +585,8 @@ describe('updateUserDynamic', () => {
     const result = await usersRepo.updateUserDynamic(
       'user-1',
       {
+        firstName: 'Giulia',
+        lastName: 'Bianchi',
         phone: '+39 02 1234',
         jobTitle: 'Consultant',
         department: 'Delivery',
@@ -604,6 +608,8 @@ describe('updateUserDynamic', () => {
     expect(sql).toContain('"employee_code"');
     expect(result).toEqual(
       expect.objectContaining({
+        firstName: 'Giulia',
+        lastName: 'Bianchi',
         phone: '+39 02 1234',
         jobTitle: 'Consultant',
         department: 'Delivery',

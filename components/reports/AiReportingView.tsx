@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
@@ -64,13 +64,13 @@ const normalizeTableCellText = (value: string) =>
 const toMarkdownTableRow = (cells: string[]) => `| ${cells.join(' | ')} |`;
 
 const tableElementToMarkdown = (table: HTMLTableElement) => {
-  const rows = Array.from(table.querySelectorAll('tr'))
-    .map((row) =>
-      Array.from(row.querySelectorAll('th, td')).map((cell) =>
-        normalizeTableCellText(cell.textContent || ''),
-      ),
-    )
-    .filter((row) => row.length > 0);
+  const rows = Array.from(table.querySelectorAll('tr')).reduce<string[][]>((acc, row) => {
+    const cells = Array.from(row.querySelectorAll('th, td')).map((cell) =>
+      normalizeTableCellText(cell.textContent || ''),
+    );
+    if (cells.length > 0) acc.push(cells);
+    return acc;
+  }, []);
 
   if (rows.length === 0) return '';
 
@@ -99,11 +99,20 @@ type AssistantAttemptGroup = {
 
 const MESSAGES_PAGE_SIZE = 200;
 
-const mapNumberRecordEqual = (a: Record<string, number>, b: Record<string, number>) => {
-  const aKeys = Object.keys(a);
-  const bKeys = Object.keys(b);
-  if (aKeys.length !== bKeys.length) return false;
-  return aKeys.every((key) => a[key] === b[key]);
+type AttemptSelectionAction = { type: 'set'; groupId: string; index: number } | { type: 'reset' };
+
+const attemptSelectionReducer = (
+  state: Record<string, number>,
+  action: AttemptSelectionAction,
+): Record<string, number> => {
+  switch (action.type) {
+    case 'set':
+      return { ...state, [action.groupId]: action.index };
+    case 'reset':
+      return {};
+    default:
+      return state;
+  }
 };
 
 const buildAssistantAttemptGroups = (allMessages: ReportChatMessage[]): AssistantAttemptGroup[] => {
@@ -185,13 +194,14 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   const [isNewChat, setIsNewChat] = useState(false);
   const [messages, setMessages] = useState<ReportChatMessage[]>([]);
   const [draft, setDraft] = useState('');
-  const [isLoadingSessions, setIsLoadingSessions] = useState(true);
+  const [isLoadingSessions, setIsLoadingSessions] = useState(
+    Boolean(currentUserId && enableAiReporting),
+  );
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const [pendingEmptySessionId, setPendingEmptySessionId] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<ReportChatSessionSummary | null>(null);
@@ -201,9 +211,10 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   const [expandedThoughtMessageIds, setExpandedThoughtMessageIds] = useState<string[]>([]);
   const [editingMessageId, setEditingMessageId] = useState('');
   const [editingDraft, setEditingDraft] = useState('');
-  const [selectedAttemptIndexByGroup, setSelectedAttemptIndexByGroup] = useState<
-    Record<string, number>
-  >({});
+  const [attemptSelectionByGroup, dispatchAttemptSelection] = useReducer(
+    attemptSelectionReducer,
+    {},
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const loadTokenRef = useRef(0);
@@ -211,8 +222,50 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   const abortRef = useRef<AbortController | null>(null);
   const sendRunIdRef = useRef(0);
   const activeAssistantMessageIdRef = useRef('');
+  const pendingEmptySessionIdRef = useRef('');
   const pendingRetryAutoSelectGroupRef = useRef('');
   const tableRefs = useRef<Record<string, HTMLTableElement | null>>({});
+  const reportingSessionKey = `${currentUserId}|${enableAiReporting ? 'enabled' : 'disabled'}`;
+  const loadedReportingSessionKeyRef = useRef(reportingSessionKey);
+  const loadedActiveSessionIdRef = useRef(activeSessionId);
+
+  if (loadedReportingSessionKeyRef.current !== reportingSessionKey) {
+    sendRunIdRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    activeAssistantMessageIdRef.current = '';
+    loadedReportingSessionKeyRef.current = reportingSessionKey;
+    loadedActiveSessionIdRef.current = '';
+    setSessions([]);
+    setActiveSessionId('');
+    setIsNewChat(false);
+    setMessages([]);
+    setDraft('');
+    setError('');
+    setIsLoadingSessions(Boolean(currentUserId && enableAiReporting));
+    setIsLoadingMessages(false);
+    setIsLoadingOlderMessages(false);
+    setIsSending(false);
+    setHasNewText(false);
+    setHasOlderMessages(false);
+    setExpandedThoughtMessageIds([]);
+    pendingEmptySessionIdRef.current = '';
+    dispatchAttemptSelection({ type: 'reset' });
+  }
+
+  if (loadedActiveSessionIdRef.current !== activeSessionId) {
+    pendingRetryAutoSelectGroupRef.current = '';
+    loadedActiveSessionIdRef.current = activeSessionId;
+    dispatchAttemptSelection({ type: 'reset' });
+    if (activeSessionId) {
+      setIsNewChat(false);
+      setHasNewText(false);
+    } else {
+      setMessages([]);
+      setHasOlderMessages(false);
+      setIsLoadingOlderMessages(false);
+    }
+  }
 
   const canSend =
     enableAiReporting &&
@@ -222,6 +275,25 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     hasPermission(permissions, buildPermission('reports.ai_reporting', 'view'));
 
   const assistantAttemptGroups = useMemo(() => buildAssistantAttemptGroups(messages), [messages]);
+  const selectedAttemptIndexByGroup = useMemo(() => {
+    const next: Record<string, number> = {};
+    const pendingGroupId = pendingRetryAutoSelectGroupRef.current;
+    let autoSelectApplied = false;
+
+    for (const group of assistantAttemptGroups) {
+      const maxIndex = group.assistantAttempts.length - 1;
+      if (maxIndex < 0) continue;
+      let index = Math.min(attemptSelectionByGroup[group.id] ?? 0, maxIndex);
+      if (pendingGroupId && pendingGroupId === group.id) {
+        index = maxIndex;
+        autoSelectApplied = true;
+      }
+      next[group.id] = index;
+    }
+
+    if (autoSelectApplied) pendingRetryAutoSelectGroupRef.current = '';
+    return next;
+  }, [assistantAttemptGroups, attemptSelectionByGroup]);
   const assistantGroupByMessageId = useMemo(() => {
     const map: Record<string, string> = {};
     for (const group of assistantAttemptGroups) {
@@ -378,22 +450,32 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
         const data = await api.reports.getSessionMessages(sessionId, {
           limit: MESSAGES_PAGE_SIZE,
         });
-        if (token !== loadTokenRef.current) return;
-        setMessages(data);
-        setHasOlderMessages(data.length >= MESSAGES_PAGE_SIZE);
-        queueMicrotask(() => {
-          if (opts.forceScroll || isAtBottomRef.current) {
-            scrollToBottom();
-            setHasNewText(false);
-          } else {
-            setHasNewText(true);
+        if (token === loadTokenRef.current) {
+          const pendingEmptySessionId = pendingEmptySessionIdRef.current;
+          if (
+            pendingEmptySessionId &&
+            sessionId === pendingEmptySessionId &&
+            data.some((message) => message.sessionId === pendingEmptySessionId)
+          ) {
+            pendingEmptySessionIdRef.current = '';
           }
-          updateAtBottom();
-        });
+          setMessages(data);
+          setHasOlderMessages(data.length >= MESSAGES_PAGE_SIZE);
+          queueMicrotask(() => {
+            if (opts.forceScroll || isAtBottomRef.current) {
+              scrollToBottom();
+              setHasNewText(false);
+            } else {
+              setHasNewText(true);
+            }
+            updateAtBottom();
+          });
+        }
       } catch (err) {
-        if (token !== loadTokenRef.current) return;
-        setError((err as Error).message || t('aiReporting.error'));
-        setHasOlderMessages(false);
+        if (token === loadTokenRef.current) {
+          setError((err as Error).message || t('aiReporting.error'));
+          setHasOlderMessages(false);
+        }
       } finally {
         if (token === loadTokenRef.current) setIsLoadingMessages(false);
       }
@@ -445,6 +527,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     if (!enableAiReporting) return;
     if (!canSend || isCreatingSession || isSending || isLoadingMessages || isEmptySession) return;
 
+    const pendingEmptySessionId = pendingEmptySessionIdRef.current;
     if (pendingEmptySessionId && sessions.some((session) => session.id === pendingEmptySessionId)) {
       setIsNewChat(false);
       setActiveSessionId(pendingEmptySessionId);
@@ -475,7 +558,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       setMessages([]);
       setIsNewChat(false);
       setActiveSessionId(session.id);
-      setPendingEmptySessionId(session.id);
+      pendingEmptySessionIdRef.current = session.id;
       await loadSessions({ preferredSessionId: session.id });
     } catch (err) {
       setError((err as Error).message || t('aiReporting.error'));
@@ -585,6 +668,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
       };
 
       try {
+        if (!isRunActive()) return;
         const streamed = await api.reports.chatStream(
           {
             sessionId: activeSessionId || undefined,
@@ -600,8 +684,11 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                 setActiveSessionId(sessionId);
                 setIsNewChat(false);
               }
-              if (pendingEmptySessionId && sessionId === pendingEmptySessionId) {
-                setPendingEmptySessionId('');
+              if (
+                pendingEmptySessionIdRef.current &&
+                sessionId === pendingEmptySessionIdRef.current
+              ) {
+                pendingEmptySessionIdRef.current = '';
               }
             },
             onThoughtDelta: (delta) => {
@@ -665,35 +752,39 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
           abortController.signal,
         );
 
-        if (!isRunActive()) return;
-        syncAssistantSession(streamed.sessionId);
-        closeThoughtPanel();
+        if (isRunActive()) {
+          syncAssistantSession(streamed.sessionId);
+          closeThoughtPanel();
 
-        if (!hadSession && streamed.sessionId) {
-          setActiveSessionId(streamed.sessionId);
-          setIsNewChat(false);
-        }
-        if (pendingEmptySessionId && streamed.sessionId === pendingEmptySessionId) {
-          setPendingEmptySessionId('');
-        }
+          if (!hadSession && streamed.sessionId) {
+            setActiveSessionId(streamed.sessionId);
+            setIsNewChat(false);
+          }
+          if (
+            pendingEmptySessionIdRef.current &&
+            streamed.sessionId === pendingEmptySessionIdRef.current
+          ) {
+            pendingEmptySessionIdRef.current = '';
+          }
 
-        const finalThought = String(streamed.thoughtContent || '').trim();
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMessageId
-              ? {
-                  ...m,
-                  content: streamed.text,
-                  thoughtContent: finalThought || undefined,
-                  sessionId: streamed.sessionId || m.sessionId,
-                }
-              : m,
-          ),
-        );
-        if (activeAssistantMessageIdRef.current === assistantMessageId) {
-          activeAssistantMessageIdRef.current = '';
+          const finalThought = String(streamed.thoughtContent || '').trim();
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMessageId
+                ? {
+                    ...m,
+                    content: streamed.text,
+                    thoughtContent: finalThought || undefined,
+                    sessionId: streamed.sessionId || m.sessionId,
+                  }
+                : m,
+            ),
+          );
+          if (activeAssistantMessageIdRef.current === assistantMessageId) {
+            activeAssistantMessageIdRef.current = '';
+          }
+          await loadSessions({ preferredSessionId: streamed.sessionId });
         }
-        await loadSessions({ preferredSessionId: streamed.sessionId });
       } catch (streamErr) {
         if (!isRunActive()) {
           cleanupCancelledAssistant();
@@ -711,6 +802,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                 : m,
             ),
           );
+          if (!isRunActive()) return;
           const fallback = await api.reports.chat(
             {
               sessionId: activeSessionId || undefined,
@@ -719,37 +811,41 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
             },
             abortController.signal,
           );
-          if (!isRunActive()) {
-            cleanupCancelledAssistant();
-            return;
-          }
+          if (isRunActive()) {
+            if (!hadSession) {
+              setActiveSessionId(fallback.sessionId);
+              setIsNewChat(false);
+            }
+            if (
+              pendingEmptySessionIdRef.current &&
+              fallback.sessionId === pendingEmptySessionIdRef.current
+            ) {
+              pendingEmptySessionIdRef.current = '';
+            }
 
-          if (!hadSession) {
-            setActiveSessionId(fallback.sessionId);
-            setIsNewChat(false);
-          }
-          if (pendingEmptySessionId && fallback.sessionId === pendingEmptySessionId) {
-            setPendingEmptySessionId('');
-          }
-
-          const completed = await typeAssistantMessage(
-            assistantMessageId,
-            fallback.text,
-            fallback.thoughtContent,
-            {
-              sessionId: fallback.sessionId,
-              shouldContinue: isRunActive,
-            },
-          );
-          if (!completed || !isRunActive()) {
+            const completed = await typeAssistantMessage(
+              assistantMessageId,
+              fallback.text,
+              fallback.thoughtContent,
+              {
+                sessionId: fallback.sessionId,
+                shouldContinue: isRunActive,
+              },
+            );
+            if (completed && isRunActive()) {
+              if (activeAssistantMessageIdRef.current === assistantMessageId) {
+                activeAssistantMessageIdRef.current = '';
+              }
+              setExpandedThoughtMessageIds((prev) =>
+                prev.filter((id) => id !== assistantMessageId),
+              );
+              await loadSessions({ preferredSessionId: fallback.sessionId });
+            } else {
+              cleanupCancelledAssistant();
+            }
+          } else {
             cleanupCancelledAssistant();
-            return;
           }
-          if (activeAssistantMessageIdRef.current === assistantMessageId) {
-            activeAssistantMessageIdRef.current = '';
-          }
-          setExpandedThoughtMessageIds((prev) => prev.filter((id) => id !== assistantMessageId));
-          await loadSessions({ preferredSessionId: fallback.sessionId });
         } else {
           if (!isRunActive()) return;
           setError((streamErr as Error).message || t('aiReporting.error'));
@@ -877,6 +973,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
         setExpandedThoughtMessageIds((prev) => prev.filter((id) => id !== placeholderId));
       };
 
+      if (!isRunActive()) return;
       const streamed = await api.reports.editMessageStream(
         {
           sessionId: activeSessionId,
@@ -953,22 +1050,23 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
         abortController.signal,
       );
 
-      if (!isRunActive()) return;
-      closeThoughtPanel();
+      if (isRunActive()) {
+        closeThoughtPanel();
 
-      const finalId = activeAssistantMessageIdRef.current || placeholderId;
-      const finalThought = String(streamed.thoughtContent || '').trim();
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === finalId
-            ? { ...m, content: streamed.text, thoughtContent: finalThought || undefined }
-            : m,
-        ),
-      );
-      if (activeAssistantMessageIdRef.current === finalId) {
-        activeAssistantMessageIdRef.current = '';
+        const finalId = activeAssistantMessageIdRef.current || placeholderId;
+        const finalThought = String(streamed.thoughtContent || '').trim();
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === finalId
+              ? { ...m, content: streamed.text, thoughtContent: finalThought || undefined }
+              : m,
+          ),
+        );
+        if (activeAssistantMessageIdRef.current === finalId) {
+          activeAssistantMessageIdRef.current = '';
+        }
+        await loadSessions({ preferredSessionId: streamed.sessionId });
       }
-      await loadSessions({ preferredSessionId: streamed.sessionId });
     } catch (err) {
       if (!isRunActive()) {
         cleanupPlaceholder();
@@ -1048,97 +1146,15 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
   }, []);
 
   useEffect(() => {
-    if (!currentUserId) return;
-    if (!enableAiReporting) {
-      sendRunIdRef.current += 1;
-      abortRef.current?.abort();
-      abortRef.current = null;
-      activeAssistantMessageIdRef.current = '';
-      setSessions([]);
-      setActiveSessionId('');
-      setIsNewChat(false);
-      setMessages([]);
-      setDraft('');
-      setError('');
-      setIsLoadingSessions(false);
-      setIsLoadingMessages(false);
-      setIsLoadingOlderMessages(false);
-      setIsSending(false);
-      setHasNewText(false);
-      setHasOlderMessages(false);
-      setExpandedThoughtMessageIds([]);
-      return;
-    }
-    sendRunIdRef.current += 1;
-    abortRef.current?.abort();
-    abortRef.current = null;
-    activeAssistantMessageIdRef.current = '';
-    setActiveSessionId('');
-    setIsNewChat(false);
-    setMessages([]);
-    setHasOlderMessages(false);
-    setIsLoadingOlderMessages(false);
-    setExpandedThoughtMessageIds([]);
-    setDraft('');
+    if (!currentUserId || !enableAiReporting) return;
     void loadSessions();
-    setPendingEmptySessionId('');
   }, [currentUserId, enableAiReporting, loadSessions]);
 
   useEffect(() => {
     if (!enableAiReporting) return;
     if (!activeSessionId) return;
-    setIsNewChat(false);
-    setHasNewText(false);
     void loadMessages(activeSessionId, { forceScroll: true });
   }, [activeSessionId, enableAiReporting, loadMessages]);
-
-  useEffect(() => {
-    if (!activeSessionId) {
-      setMessages([]);
-      setHasOlderMessages(false);
-      setIsLoadingOlderMessages(false);
-    }
-  }, [activeSessionId]);
-
-  useEffect(() => {
-    if (!activeSessionId || !pendingEmptySessionId) return;
-    if (activeSessionId !== pendingEmptySessionId) return;
-    if (isLoadingMessages) return;
-    const hasPendingMessages = messages.some(
-      (message) => message.sessionId === pendingEmptySessionId,
-    );
-    if (hasPendingMessages) {
-      setPendingEmptySessionId('');
-    }
-  }, [activeSessionId, isLoadingMessages, messages, pendingEmptySessionId]);
-
-  useEffect(() => {
-    setSelectedAttemptIndexByGroup((prev) => {
-      const next: Record<string, number> = {};
-      const pendingGroupId = pendingRetryAutoSelectGroupRef.current;
-      let autoSelectApplied = false;
-
-      for (const group of assistantAttemptGroups) {
-        const maxIndex = group.assistantAttempts.length - 1;
-        if (maxIndex < 0) continue;
-        let index = Math.min(prev[group.id] ?? 0, maxIndex);
-        if (pendingGroupId && pendingGroupId === group.id) {
-          index = maxIndex;
-          autoSelectApplied = true;
-        }
-        next[group.id] = index;
-      }
-
-      if (autoSelectApplied) pendingRetryAutoSelectGroupRef.current = '';
-      return mapNumberRecordEqual(prev, next) ? prev : next;
-    });
-  }, [assistantAttemptGroups]);
-
-  useEffect(() => {
-    pendingRetryAutoSelectGroupRef.current = '';
-    setSelectedAttemptIndexByGroup({});
-    if (!activeSessionId) return;
-  }, [activeSessionId]);
 
   const confirmDeleteSession = useCallback((session: ReportChatSessionSummary) => {
     setSessionToDelete(session);
@@ -1154,8 +1170,8 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     setError('');
     try {
       await api.reports.archiveSession(sessionToDelete.id);
-      if (sessionToDelete.id === pendingEmptySessionId) {
-        setPendingEmptySessionId('');
+      if (sessionToDelete.id === pendingEmptySessionIdRef.current) {
+        pendingEmptySessionIdRef.current = '';
       }
       setIsDeleteConfirmOpen(false);
       setSessionToDelete(null);
@@ -1165,7 +1181,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
     } finally {
       setIsDeletingSession(false);
     }
-  }, [canArchive, isDeletingSession, loadSessions, pendingEmptySessionId, sessionToDelete, t]);
+  }, [canArchive, isDeletingSession, loadSessions, sessionToDelete, t]);
 
   const activeTitle = isNewChat
     ? t('aiReporting.newChat', { defaultValue: 'New Chat' })
@@ -1455,6 +1471,9 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                           editingMessageId !== '' ||
                                           userMessage.id.startsWith('tmp-')
                                         }
+                                        aria-label={t('common:buttons.edit', {
+                                          defaultValue: 'Edit',
+                                        })}
                                         className={`p-1.5 rounded-lg transition-colors ${
                                           isSending ||
                                           !canSend ||
@@ -1653,11 +1672,6 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                   // published `Components` typing (intrinsic `code` props only).
                                   const { inline, className, children } = props;
 
-                                  const value =
-                                    typeof children === 'string'
-                                      ? children.replace(/\n$/, '')
-                                      : children;
-
                                   if (inline === false) {
                                     return (
                                       <code
@@ -1665,14 +1679,14 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                           className ?? ''
                                         }`}
                                       >
-                                        {value}
+                                        {children}
                                       </code>
                                     );
                                   }
 
                                   return (
                                     <code className="font-mono text-[12px] rounded bg-zinc-100 px-1 py-0.5 text-zinc-900">
-                                      {value}
+                                      {children}
                                     </code>
                                   );
                                 },
@@ -1725,10 +1739,11 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      setSelectedAttemptIndexByGroup((prev) => ({
-                                        ...prev,
-                                        [group.id]: Math.max(0, safeSelectedIndex - 1),
-                                      }))
+                                      dispatchAttemptSelection({
+                                        type: 'set',
+                                        groupId: group.id,
+                                        index: Math.max(0, safeSelectedIndex - 1),
+                                      })
                                     }
                                     disabled={safeSelectedIndex <= 0}
                                     aria-label={t('aiReporting.previousVersion', {
@@ -1748,13 +1763,11 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      setSelectedAttemptIndexByGroup((prev) => ({
-                                        ...prev,
-                                        [group.id]: Math.min(
-                                          attemptCount - 1,
-                                          safeSelectedIndex + 1,
-                                        ),
-                                      }))
+                                      dispatchAttemptSelection({
+                                        type: 'set',
+                                        groupId: group.id,
+                                        index: Math.min(attemptCount - 1, safeSelectedIndex + 1),
+                                      })
                                     }
                                     disabled={safeSelectedIndex >= attemptCount - 1}
                                     aria-label={t('aiReporting.nextVersion', {

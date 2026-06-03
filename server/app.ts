@@ -118,7 +118,7 @@ export const buildApp = async () => {
     },
   });
 
-  await fastify.register(cors, {
+  fastify.register(cors, {
     // Default to the documented Praetor dev frontend port (3000). Anything else (legacy
     // Vite default 5173, deployed origin, …) is opt-in via FRONTEND_URL.
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
@@ -126,14 +126,14 @@ export const buildApp = async () => {
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
-  await fastify.register(rateLimit, {
+  fastify.register(rateLimit, {
     ...GLOBAL_RATE_LIMIT,
     global: true,
     hook: 'onRequest',
     errorResponseBuilder: buildRateLimitErrorResponse,
   });
 
-  await fastify.register(multipart, {
+  fastify.register(multipart, {
     limits: {
       fileSize: 10 * 1024 * 1024,
       files: 1,
@@ -141,7 +141,7 @@ export const buildApp = async () => {
     },
   });
 
-  await fastify.register(swagger, {
+  fastify.register(swagger, {
     openapi: {
       info: {
         title: 'Praetor API',
@@ -161,37 +161,37 @@ export const buildApp = async () => {
     },
   });
 
-  await fastify.register(authRoutes, { prefix: '/api/auth' });
-  await fastify.register(ssoAuthRoutes, { prefix: '/api/auth/sso' });
-  await fastify.register(aiRoutes, { prefix: '/api/ai' });
-  await fastify.register(usersRoutes, { prefix: '/api/users' });
-  await fastify.register(viewsRoutes, { prefix: '/api/views' });
-  await fastify.register(clientsRoutes, { prefix: '/api/clients' });
-  await fastify.register(projectsRoutes, { prefix: '/api/projects' });
-  await fastify.register(projectRulesRoutes, { prefix: '/api/projects' });
-  await fastify.register(tasksRoutes, { prefix: '/api/tasks' });
-  await fastify.register(entriesRoutes, { prefix: '/api/entries' });
-  await fastify.register(settingsRoutes, { prefix: '/api/settings' });
-  await fastify.register(ssoRoutes, { prefix: '/api/sso' });
-  await fastify.register(ldapRoutes, { prefix: '/api/ldap' });
-  await fastify.register(generalSettingsRoutes, { prefix: '/api/general-settings' });
-  await fastify.register(brandingRoutes, { prefix: '/api/branding' });
-  await fastify.register(productsRoutes, { prefix: '/api/products' });
-  await fastify.register(clientQuotesRoutes, { prefix: '/api/sales/client-quotes' });
-  await fastify.register(clientOffersRoutes, { prefix: '/api/sales/client-offers' });
-  await fastify.register(workUnitsRoutes, { prefix: '/api/work-units' });
-  await fastify.register(clientsOrdersRoutes, { prefix: '/api/clients-orders' });
-  await fastify.register(invoicesRoutes, { prefix: '/api/invoices' });
-  await fastify.register(suppliersRoutes, { prefix: '/api/suppliers' });
-  await fastify.register(supplierQuotesRoutes, { prefix: '/api/sales/supplier-quotes' });
-  await fastify.register(supplierOrdersRoutes, { prefix: '/api/accounting/supplier-orders' });
-  await fastify.register(supplierInvoicesRoutes, { prefix: '/api/accounting/supplier-invoices' });
-  await fastify.register(notificationsRoutes, { prefix: '/api/notifications' });
-  await fastify.register(emailRoutes, { prefix: '/api/email' });
-  await fastify.register(rolesRoutes, { prefix: '/api/roles' });
-  await fastify.register(reportsRoutes, { prefix: '/api/reports' });
-  await fastify.register(logsRoutes, { prefix: '/api/logs' });
-  await fastify.register(mcpRoutes, { prefix: '/api/mcp' });
+  fastify.register(authRoutes, { prefix: '/api/auth' });
+  fastify.register(ssoAuthRoutes, { prefix: '/api/auth/sso' });
+  fastify.register(aiRoutes, { prefix: '/api/ai' });
+  fastify.register(usersRoutes, { prefix: '/api/users' });
+  fastify.register(viewsRoutes, { prefix: '/api/views' });
+  fastify.register(clientsRoutes, { prefix: '/api/clients' });
+  fastify.register(projectsRoutes, { prefix: '/api/projects' });
+  fastify.register(projectRulesRoutes, { prefix: '/api/projects' });
+  fastify.register(tasksRoutes, { prefix: '/api/tasks' });
+  fastify.register(entriesRoutes, { prefix: '/api/entries' });
+  fastify.register(settingsRoutes, { prefix: '/api/settings' });
+  fastify.register(ssoRoutes, { prefix: '/api/sso' });
+  fastify.register(ldapRoutes, { prefix: '/api/ldap' });
+  fastify.register(generalSettingsRoutes, { prefix: '/api/general-settings' });
+  fastify.register(brandingRoutes, { prefix: '/api/branding' });
+  fastify.register(productsRoutes, { prefix: '/api/products' });
+  fastify.register(clientQuotesRoutes, { prefix: '/api/sales/client-quotes' });
+  fastify.register(clientOffersRoutes, { prefix: '/api/sales/client-offers' });
+  fastify.register(workUnitsRoutes, { prefix: '/api/work-units' });
+  fastify.register(clientsOrdersRoutes, { prefix: '/api/clients-orders' });
+  fastify.register(invoicesRoutes, { prefix: '/api/invoices' });
+  fastify.register(suppliersRoutes, { prefix: '/api/suppliers' });
+  fastify.register(supplierQuotesRoutes, { prefix: '/api/sales/supplier-quotes' });
+  fastify.register(supplierOrdersRoutes, { prefix: '/api/accounting/supplier-orders' });
+  fastify.register(supplierInvoicesRoutes, { prefix: '/api/accounting/supplier-invoices' });
+  fastify.register(notificationsRoutes, { prefix: '/api/notifications' });
+  fastify.register(emailRoutes, { prefix: '/api/email' });
+  fastify.register(rolesRoutes, { prefix: '/api/roles' });
+  fastify.register(reportsRoutes, { prefix: '/api/reports' });
+  fastify.register(logsRoutes, { prefix: '/api/logs' });
+  fastify.register(mcpRoutes, { prefix: '/api/mcp' });
 
   fastify.get(
     '/api/health',
@@ -217,6 +217,8 @@ export const buildApp = async () => {
   );
 
   registerErrorHandler(fastify);
+
+  await fastify.ready();
 
   return fastify;
 };

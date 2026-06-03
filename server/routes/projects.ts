@@ -383,12 +383,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const locked = await projectsRepo.lockNameAndClientById(idResult.value, tx);
           if (!locked) throw new NotFoundError('Project');
 
-          const previousUserIds = await projectsRepo.findNonTopManagerUserIds(idResult.value, tx);
-
-          await projectsRepo.deleteById(idResult.value, tx);
-
-          await projectsRepo.removeClientCascadeForUsersIfUnused(
-            previousUserIds,
+          await projectsRepo.deleteByIdAndRemoveUnusedClientCascade(
+            idResult.value,
             locked.clientId,
             tx,
           );
@@ -796,16 +792,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const locked = await projectsRepo.lockNameAndClientById(idResult.value, tx);
           if (!locked) throw new NotFoundError('Project');
 
-          const previousUserIds = await projectsRepo.findNonTopManagerUserIds(idResult.value, tx);
-
-          await projectsRepo.clearNonTopManagerAssignments(idResult.value, tx);
-
-          await projectsRepo.addManualAssignments(idResult.value, validUserIds, tx);
-          await projectsRepo.ensureClientCascadeAssignments(validUserIds, locked.clientId, tx);
-
-          const removedUserIds = previousUserIds.filter((uid) => !validUserIds.includes(uid));
-          await projectsRepo.removeClientCascadeForUsersIfUnused(
-            removedUserIds,
+          await projectsRepo.replaceNonTopManagerAssignments(
+            idResult.value,
+            validUserIds,
             locked.clientId,
             tx,
           );

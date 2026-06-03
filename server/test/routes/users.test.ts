@@ -1136,6 +1136,25 @@ describe('PUT /api/users/:id', () => {
     expect(settingsUpsertForUserMock).not.toHaveBeenCalled();
   });
 
+  test('409 rejects manual first/last name changes for external-auth users', async () => {
+    findCoreByIdMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      authMethod: 'ldap',
+      authProviderId: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { firstName: 'Manual' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(updateUserDynamicMock).not.toHaveBeenCalled();
+    expect(settingsUpsertForUserMock).not.toHaveBeenCalled();
+  });
+
   test('200 external-auth user account update succeeds when synced identity is omitted', async () => {
     findCoreByIdMock.mockResolvedValue({
       ...SAMPLE_USER_CORE,

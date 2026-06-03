@@ -87,6 +87,8 @@ export interface RoleSummary {
 export interface User {
   id: string;
   name: string;
+  firstName?: string | null;
+  lastName?: string | null;
   role: UserRole;
   hasTopManagerRole?: boolean;
   isAdminOnly?: boolean;
@@ -362,6 +364,9 @@ export interface LdapConfig {
   bindDn: string;
   bindPassword: string;
   userFilter: string;
+  firstNameAttribute: string;
+  lastNameAttribute: string;
+  emailAttribute: string;
   groupBaseDn: string;
   groupFilter: string;
   roleMappings: LdapRoleMapping[];
@@ -383,6 +388,9 @@ export interface LdapTestResponse {
   username: string;
   message: string;
   userDn?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
   groups: string[];
   roleIds: string[];
   roleResolution: LdapRoleResolution;

@@ -23,6 +23,9 @@ export type CopyButtonProps = Omit<
   resetMs?: number;
 };
 
+const copyIconState = (visible: boolean) =>
+  cn('absolute inset-0 transition-all', visible ? 'scale-100 opacity-100' : 'scale-0 opacity-0');
+
 function CopyButton({
   value,
   onCopyError,
@@ -46,7 +49,7 @@ function CopyButton({
     [],
   );
 
-  const handleClick = async () => {
+  const copyValueToClipboard = async () => {
     try {
       const text = typeof value === 'function' ? await value() : value;
       if (text == null) return;
@@ -63,25 +66,22 @@ function CopyButton({
     }
   };
 
-  const iconState = (visible: boolean) =>
-    cn('absolute inset-0 transition-all', visible ? 'scale-100 opacity-100' : 'scale-0 opacity-0');
-
   return (
     <Button
       {...buttonProps}
       type={buttonProps.type ?? 'button'}
       variant={variant}
       size={size ?? (iconOnly ? 'icon-sm' : undefined)}
-      onClick={handleClick}
+      onClick={copyValueToClipboard}
       disabled={copied || externalDisabled}
       className={cn(copied && 'disabled:opacity-100', className)}
     >
       <span className="relative inline-block size-4 shrink-0">
         <Check
           aria-hidden="true"
-          className={cn(iconState(copied), 'stroke-green-600 dark:stroke-green-400')}
+          className={cn(copyIconState(copied), 'stroke-green-600 dark:stroke-green-400')}
         />
-        <Copy aria-hidden="true" className={iconState(!copied)} />
+        <Copy aria-hidden="true" className={copyIconState(!copied)} />
       </span>
       {!iconOnly && (copied ? copiedLabel : label)}
     </Button>

@@ -167,6 +167,9 @@ describe('<InternalEmployeesView /> row click', () => {
 
     expect(screen.getByLabelText('internalEmployees.name *')).toBeDisabled();
     expect(screen.getByLabelText('employeeProfile.email')).toBeDisabled();
+    // First/last name are directory-managed identity too — read-only for LDAP-bound users.
+    expect(screen.getByLabelText('employeeProfile.firstName')).toBeDisabled();
+    expect(screen.getByLabelText('employeeProfile.lastName')).toBeDisabled();
     fireEvent.change(screen.getByLabelText('employeeProfile.phone'), {
       target: { value: '+39 02 9999' },
     });
@@ -177,5 +180,27 @@ describe('<InternalEmployeesView /> row click', () => {
     expect(updates).toEqual(expect.objectContaining({ phone: '+39 02 9999' }));
     expect(updates).not.toHaveProperty('name');
     expect(updates).not.toHaveProperty('email');
+    expect(updates).not.toHaveProperty('firstName');
+    expect(updates).not.toHaveProperty('lastName');
+  });
+
+  test('sorts by the structured last name rather than the display-name tail', () => {
+    renderView({
+      users: [
+        { ...employee, id: 'u-rossi', name: 'Mario Rossi', firstName: 'Mario', lastName: 'Rossi' },
+        // Display-name tail "Verdi" sorts after "Rossi", but the stored surname "Bianchi"
+        // sorts before it — so this employee must render first.
+        {
+          ...employee,
+          id: 'u-bianchi',
+          name: 'Anna Verdi',
+          firstName: 'Anna',
+          lastName: 'Bianchi',
+        },
+      ],
+    });
+
+    const bodyText = document.body.textContent ?? '';
+    expect(bodyText.indexOf('Anna Verdi')).toBeLessThan(bodyText.indexOf('Mario Rossi'));
   });
 });

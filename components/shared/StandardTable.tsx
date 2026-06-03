@@ -25,6 +25,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
 } from 'react';
@@ -98,6 +99,274 @@ type StorageSuffix = (typeof STORAGE_SUFFIX)[keyof typeof STORAGE_SUFFIX];
 // Reserved height of empty-state cell = minBodyRows × this constant.
 const BODY_ROW_HEIGHT_PX = 44;
 
+const getSelectedFilterValues = <TData,>(column: TanStackColumn<TData, unknown>) => {
+  const filterValue = column.getFilterValue();
+  if (Array.isArray(filterValue)) return filterValue as string[];
+  if (typeof filterValue === 'string') return [filterValue];
+  return [];
+};
+
+const getElementLike = (node: ReactNode) => {
+  if (isValidElement(node))
+    return { type: node.type, props: node.props as Record<string, unknown> };
+  if (typeof node === 'object' && node !== null && 'props' in node) {
+    return node as { type?: unknown; props: Record<string, unknown> };
+  }
+  return null;
+};
+
+const getNodeText = (node: ReactNode): string => {
+  if (node === null || node === undefined || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(getNodeText).join(' ').trim();
+  const element = getElementLike(node);
+  if (element) return getNodeText(element.props.children as ReactNode);
+  return '';
+};
+
+const findActionNode = (node: ReactNode): ReactNode | null => {
+  if (node === null || node === undefined || typeof node === 'boolean') return null;
+  if (typeof node === 'string' || typeof node === 'number') return null;
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const actionNode = findActionNode(child);
+      if (actionNode) return actionNode;
+    }
+    return null;
+  }
+  const element = getElementLike(node);
+  if (!element) return null;
+  if (
+    (typeof element.type === 'string' && element.type === 'button') ||
+    element.props.type === 'button' ||
+    typeof element.props.onClick === 'function'
+  ) {
+    return node;
+  }
+
+  for (const child of Children.toArray(element.props.children as ReactNode)) {
+    const actionNode = findActionNode(child);
+    if (actionNode) return actionNode;
+  }
+  return null;
+};
+
+const collectClassNames = (node: ReactNode): string => {
+  if (node === null || node === undefined || typeof node === 'boolean') return '';
+  if (Array.isArray(node)) return node.map(collectClassNames).join(' ');
+  const element = getElementLike(node);
+  if (!element) return '';
+  const props = element.props as { className?: unknown; children?: ReactNode };
+  return [
+    typeof props.className === 'string' ? props.className : '',
+    collectClassNames(props.children),
+  ]
+    .filter(Boolean)
+    .join(' ');
+};
+
+const getActionIconClassName = (node: ReactNode) => {
+  const classNames = collectClassNames(node);
+  if (classNames.includes('fa-trash')) return 'text-destructive';
+  if (classNames.includes('fa-ban')) return 'text-amber-600';
+  if (classNames.includes('fa-rotate-left')) return 'text-primary';
+  if (classNames.includes('fa-pen')) return 'text-blue-500';
+  return 'text-muted-foreground';
+};
+
+const hasActionMenuItems = (node: ReactNode): boolean => {
+  const visit = (current: ReactNode): boolean => {
+    if (current === null || current === undefined || typeof current === 'boolean') return false;
+    if (typeof current === 'string' || typeof current === 'number') return false;
+    if (Array.isArray(current)) return current.some(visit);
+
+    const element = getElementLike(current);
+    if (!element) return false;
+
+    const props = element.props as {
+      children?: ReactNode | (() => ReactNode);
+      label?: ReactNode;
+      onClick?: unknown;
+      type?: unknown;
+    };
+
+    if (props.label !== undefined && typeof props.children === 'function') return true;
+
+    if (
+      (typeof element.type === 'string' && element.type === 'button') ||
+      props.type === 'button' ||
+      typeof props.onClick === 'function'
+    ) {
+      return true;
+    }
+
+    return Children.toArray(props.children as ReactNode).some(visit);
+  };
+
+  return visit(node);
+};
+
+interface HeaderFilterProps<T> {
+  column: TanStackColumn<T, unknown>;
+  sourceColumn: Column<T>;
+  options: string[];
+  filterSearch: string;
+  t: (key: string) => string;
+  onFilterSearchChange: (columnId: string, value: string) => void;
+  onFilterSearchClose: (columnId: string) => void;
+  onResetPage: () => void;
+}
+
+const HeaderFilter = <T,>({
+  column,
+  sourceColumn,
+  options,
+  filterSearch,
+  t,
+  onFilterSearchChange,
+  onFilterSearchClose,
+  onResetPage,
+}: HeaderFilterProps<T>) => {
+  if (!column.getCanFilter()) return null;
+  const selectedValues = getSelectedFilterValues(column);
+  const hasFilter = selectedValues.length > 0;
+  const normalizedFilterSearch = filterSearch.trim().toLocaleLowerCase();
+  const visibleOptions = normalizedFilterSearch
+    ? options.filter((option) =>
+        (option || t('table.empty')).toLocaleLowerCase().includes(normalizedFilterSearch),
+      )
+    : options;
+
+  return (
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (open || !filterSearch) return;
+        onFilterSearchClose(column.id);
+      }}
+    >
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant={hasFilter ? 'secondary' : 'ghost'}
+          size="icon-xs"
+          aria-label={`${t('table.filters')} ${sourceColumn.header}`}
+          onClick={(event) => event.stopPropagation()}
+          className="size-6 rounded-lg"
+        >
+          <i className="fa-solid fa-filter text-[10px]" aria-hidden="true"></i>
+          {hasFilter && <span className="sr-only">{selectedValues.length}</span>}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="w-64"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <DropdownMenuLabel className="text-xs">{sourceColumn.header}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <div className="p-1">
+          <Input
+            type="search"
+            value={filterSearch}
+            onChange={(event) => onFilterSearchChange(column.id, event.target.value)}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+            placeholder={t('table.search')}
+            aria-label={`${t('table.search')} ${sourceColumn.header}`}
+            className="h-8 text-xs"
+          />
+        </div>
+        <div className="max-h-64 overflow-y-auto">
+          {visibleOptions.length > 0 ? (
+            visibleOptions.map((option) => (
+              <DropdownMenuCheckboxItem
+                key={option || '__empty__'}
+                checked={selectedValues.includes(option)}
+                onSelect={(event) => {
+                  event.preventDefault();
+                  const next = selectedValues.includes(option)
+                    ? selectedValues.filter((value) => value !== option)
+                    : [...selectedValues, option];
+                  column.setFilterValue(next.length > 0 ? next : undefined);
+                  onResetPage();
+                }}
+                className="text-xs"
+              >
+                <span className="truncate">{option || t('table.empty')}</span>
+              </DropdownMenuCheckboxItem>
+            ))
+          ) : (
+            <DropdownMenuItem disabled className="text-xs">
+              {t('table.noResults')}
+            </DropdownMenuItem>
+          )}
+        </div>
+        {hasFilter && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault();
+                column.setFilterValue(undefined);
+                onResetPage();
+              }}
+              className="text-xs"
+            >
+              {t('table.clearFilter')}
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
+const StandardTableToolbarButton = ({
+  label,
+  iconClass,
+  icon,
+  onClick,
+  disabled = false,
+  active = false,
+  buttonRef,
+  tooltipDisabled = false,
+  text,
+}: {
+  label: string;
+  iconClass?: string;
+  icon?: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  active?: boolean;
+  buttonRef?: Ref<HTMLButtonElement>;
+  tooltipDisabled?: boolean;
+  text?: string;
+}) => (
+  <Tooltip disabled={tooltipDisabled}>
+    <TooltipTrigger asChild>
+      <span className="inline-flex">
+        <Button
+          type="button"
+          ref={buttonRef}
+          aria-label={label}
+          variant={active ? 'secondary' : 'outline'}
+          size="sm"
+          className={TABLE_CONTROL_BUTTON_CLASSNAME}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick();
+          }}
+          disabled={disabled}
+        >
+          {icon ?? <i className={`fa-solid ${iconClass} text-xs`} aria-hidden="true"></i>}
+          {text && <span>{text}</span>}
+        </Button>
+      </span>
+    </TooltipTrigger>
+    <TooltipContent side="bottom">{label}</TooltipContent>
+  </Tooltip>
+);
+
 const slugify = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
 
 const getStorageKey = (t: string, suffix: StorageSuffix) => `praetor_table_${suffix}_${slugify(t)}`;
@@ -166,7 +435,7 @@ const writeViewOrder = (viewKey: string, order: string[]) => {
 const applyViewOrder = (views: CustomView[], order: string[]): CustomView[] => {
   if (order.length === 0) return views;
   const orderIndex = new Map(order.map((id, idx) => [id, idx]));
-  return [...views].sort((a, b) => {
+  return views.toSorted((a, b) => {
     const ai = orderIndex.get(a.id);
     const bi = orderIndex.get(b.id);
     if (ai == null && bi == null) return 0;
@@ -216,6 +485,69 @@ const ACTION_MENU_ITEMS_CLASSNAME = 'flex flex-col gap-0.5';
 const ACTION_MENU_BUTTON_CLASSNAME =
   'flex h-7 w-full items-center justify-start gap-2 rounded-sm px-2 text-xs font-medium whitespace-nowrap text-popover-foreground outline-hidden transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50';
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
+type TableViewApplication = ReturnType<typeof computeViewApplication>;
+type TableViewState = {
+  sortState: SortState;
+  filterState: FilterState;
+  hiddenColIds: Set<string>;
+  activeViewId: string | null;
+};
+type TableViewAction =
+  | { type: 'set-active-view'; activeViewId: string | null }
+  | { type: 'set-filter-state'; filterState: FilterState; activeViewId?: string | null }
+  | { type: 'set-hidden-columns'; hiddenColIds: Set<string> }
+  | { type: 'set-sort-state'; sortState: SortState }
+  | {
+      type: 'apply-view';
+      application: TableViewApplication;
+      activeViewId?: string | null;
+    }
+  | { type: 'apply-column-visibility'; hiddenColIds: Set<string> };
+
+const tableViewReducer = (state: TableViewState, action: TableViewAction): TableViewState => {
+  switch (action.type) {
+    case 'set-active-view':
+      return { ...state, activeViewId: action.activeViewId };
+    case 'set-filter-state':
+      return {
+        ...state,
+        filterState: action.filterState,
+        activeViewId: action.activeViewId === undefined ? state.activeViewId : action.activeViewId,
+      };
+    case 'set-hidden-columns':
+      return { ...state, hiddenColIds: action.hiddenColIds };
+    case 'set-sort-state':
+      return { ...state, sortState: action.sortState };
+    case 'apply-view':
+      return {
+        ...state,
+        hiddenColIds: action.application.hiddenColIds,
+        sortState: action.application.sortState,
+        filterState: action.application.filterState,
+        activeViewId: action.activeViewId === undefined ? state.activeViewId : action.activeViewId,
+      };
+    case 'apply-column-visibility': {
+      const filterState = { ...state.filterState };
+      let filtersChanged = false;
+      for (const colId of action.hiddenColIds) {
+        if (filterState[colId]) {
+          delete filterState[colId];
+          filtersChanged = true;
+        }
+      }
+      return {
+        ...state,
+        hiddenColIds: action.hiddenColIds,
+        sortState:
+          state.sortState && action.hiddenColIds.has(state.sortState.colId)
+            ? null
+            : state.sortState,
+        filterState: filtersChanged ? filterState : state.filterState,
+        activeViewId: null,
+      };
+    }
+  }
+};
 
 export type Column<T> = {
   header: string;
@@ -302,8 +634,20 @@ const StandardTable = <T extends object>({
   const isServerBacked = viewKey != null;
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
-  const [sortState, setSortState] = useState<SortState>(null);
-  const [filterState, setFilterState] = useState<FilterState>(initialFilterState ?? {});
+  const [tableViewState, dispatchTableView] = useReducer(
+    tableViewReducer,
+    null,
+    (): TableViewState => ({
+      sortState: null,
+      filterState: initialFilterState ?? {},
+      hiddenColIds: new Set<string>(),
+      activeViewId:
+        typeof window === 'undefined'
+          ? null
+          : localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.activeView)),
+    }),
+  );
+  const { sortState, filterState, hiddenColIds, activeViewId } = tableViewState;
   const filterStateRef = useRef(filterState);
   filterStateRef.current = filterState;
 
@@ -332,9 +676,6 @@ const StandardTable = <T extends object>({
     return 'sm';
   });
 
-  // Session-only: column visibility resets on page reload
-  const [hiddenColIds, setHiddenColIds] = useState<Set<string>>(new Set<string>());
-
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() => {
     if (typeof window === 'undefined') return {};
     const saved = localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.colWidths));
@@ -353,7 +694,7 @@ const StandardTable = <T extends object>({
   });
   // Per-view ownership/permission metadata, keyed by view id. Server-backed only.
   const [serverViewMeta, setServerViewMeta] = useState<Map<string, ServerViewMeta>>(new Map());
-  const [viewsLoading, setViewsLoading] = useState(isServerBacked);
+  const [viewsLoading, setViewsLoading] = useState(Boolean(isServerBacked && viewKey));
   const [viewsLoadFailed, setViewsLoadFailed] = useState(false);
   const [viewBusy, setViewBusy] = useState(false);
   const [shareModalView, setShareModalView] = useState<CustomView | null>(null);
@@ -366,10 +707,6 @@ const StandardTable = <T extends object>({
       return next;
     });
   }, []);
-  const [activeViewId, setActiveViewId] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.activeView));
-  });
   // Read by the legacy-view migration so it can re-point a persisted active-view id (an old local
   // UUID) at the new server id after upload, without becoming a load-effect dependency.
   const activeViewIdRef = useRef(activeViewId);
@@ -387,6 +724,11 @@ const StandardTable = <T extends object>({
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewsAppliedOnceRef = useRef(false);
+
+  const handleGearOpenChange = useCallback((open: boolean) => {
+    if (!open) setViewsSubmenuOpen(false);
+    setGearOpen(open);
+  }, []);
 
   const storageKey = useMemo(() => getStorageKey(title, STORAGE_SUFFIX.rows), [title]);
 
@@ -418,7 +760,7 @@ const StandardTable = <T extends object>({
 
   const updateActiveViewId = useCallback(
     (id: string | null) => {
-      setActiveViewId(id);
+      dispatchTableView({ type: 'set-active-view', activeViewId: id });
       if (typeof window === 'undefined') return;
       const key = getStorageKey(title, STORAGE_SUFFIX.activeView);
       try {
@@ -433,7 +775,16 @@ const StandardTable = <T extends object>({
   // and a stale response can't overwrite fresh state.
   const loadAbortRef = useRef<AbortController | null>(null);
   // Bumped each time the user retries; re-runs the load effect.
-  const [viewsReloadToken, setViewsReloadToken] = useState(0);
+  const [viewsReloadToken, reloadViews] = useReducer((token: number) => token + 1, 0);
+  const viewsLoadKey =
+    isServerBacked && viewKey ? `${viewKey}|${viewsReloadToken}` : 'local-storage';
+  const loadedViewsKeyRef = useRef(viewsLoadKey);
+
+  if (loadedViewsKeyRef.current !== viewsLoadKey) {
+    loadedViewsKeyRef.current = viewsLoadKey;
+    setViewsLoading(Boolean(isServerBacked && viewKey));
+    setViewsLoadFailed(false);
+  }
 
   // One-time, best-effort migration of legacy localStorage views into the server store the first
   // time a table gains a `viewKey`. Without it, existing users would lose the custom views they
@@ -478,28 +829,35 @@ const StandardTable = <T extends object>({
       }
 
       const activeId = activeViewIdRef.current;
+      const uploadResults = await Promise.all(
+        legacy.map(async (view) => {
+          if (signal.aborted) return { status: 'skipped' as const, view };
+          try {
+            const dto = await viewsApi.create({
+              kind: 'table',
+              scopeKey: key,
+              name: view.name,
+              config: customViewToConfig(view),
+            });
+            return { status: 'uploaded' as const, view, dto };
+          } catch (err) {
+            console.error('Failed to migrate a legacy table view', err);
+            return { status: 'failed' as const, view };
+          }
+        }),
+      );
+
       const remaining: CustomView[] = [];
       let uploaded = false;
-      for (const view of legacy) {
-        if (signal.aborted) {
-          remaining.push(view);
+      for (const result of uploadResults) {
+        if (result.status !== 'uploaded') {
+          remaining.push(result.view);
           continue;
         }
-        try {
-          const dto = await viewsApi.create({
-            kind: 'table',
-            scopeKey: key,
-            name: view.name,
-            config: customViewToConfig(view),
-          });
-          uploaded = true;
-          // Keep the user's active preset applied after upgrade: re-point the persisted active
-          // marker (an old local id) at the new server id so the post-relist guard matches it.
-          if (view.id === activeId) updateActiveViewId(dto.id);
-        } catch (err) {
-          console.error('Failed to migrate a legacy table view', err);
-          remaining.push(view);
-        }
+        uploaded = true;
+        // Keep the user's active preset applied after upgrade: re-point the persisted active
+        // marker (an old local id) at the new server id so the post-relist guard matches it.
+        if (result.view.id === activeId && !signal.aborted) updateActiveViewId(result.dto.id);
       }
 
       try {
@@ -521,56 +879,53 @@ const StandardTable = <T extends object>({
   // Server-backed mode: load own + shared views on mount (and on viewKey change / retry).
   // Views are applied client-local ordering and the dangling-active-view guard re-runs once
   // the list resolves. Legacy mode is a no-op here (localStorage hydration happened in state init).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: viewsReloadToken is the intended retry trigger
   useEffect(() => {
+    void viewsReloadToken;
     if (!isServerBacked || !viewKey) return;
     const controller = new AbortController();
     loadAbortRef.current?.abort();
     loadAbortRef.current = controller;
-    setViewsLoading(true);
-    setViewsLoadFailed(false);
     (async () => {
       try {
         let dtos = await viewsApi.list('table', viewKey, controller.signal);
-        if (controller.signal.aborted) return;
-        // One-time migration of pre-upgrade localStorage views (claimed on the first
-        // server-backed load); re-list so any uploaded rows show up.
-        if (
-          await migrateLegacyViews(
+        if (!controller.signal.aborted) {
+          // One-time migration of pre-upgrade localStorage views (claimed on the first
+          // server-backed load); re-list so any uploaded rows show up.
+          const migrated = await migrateLegacyViews(
             viewKey,
             !dtos.some((d) => d.access === 'owner'),
             controller.signal,
-          )
-        ) {
-          if (controller.signal.aborted) return;
-          dtos = await viewsApi.list('table', viewKey, controller.signal);
-          if (controller.signal.aborted) return;
+          );
+          if (!controller.signal.aborted && migrated) {
+            dtos = await viewsApi.list('table', viewKey, controller.signal);
+          }
         }
-        const views = applyViewOrder(dtos.map(serverViewToCustomView), readViewOrder(viewKey));
-        setServerViewMeta(
-          new Map(
-            dtos.map((dto) => [
-              dto.id,
-              { access: dto.access, ownerId: dto.ownerId, ownerName: dto.ownerName },
-            ]),
-          ),
-        );
-        setCustomViews(views);
-        setViewsLoading(false);
-        // Re-run the dangling-active-view guard: drop a persisted activeViewId that no
-        // longer resolves (deleted server-side or no longer shared with this user).
-        viewsAppliedOnceRef.current = false;
+        if (!controller.signal.aborted) {
+          const views = applyViewOrder(dtos.map(serverViewToCustomView), readViewOrder(viewKey));
+          setServerViewMeta(
+            new Map(
+              dtos.map((dto) => [
+                dto.id,
+                { access: dto.access, ownerId: dto.ownerId, ownerName: dto.ownerName },
+              ]),
+            ),
+          );
+          setCustomViews(views);
+          setViewsLoading(false);
+          // Re-run the dangling-active-view guard: drop a persisted activeViewId that no
+          // longer resolves (deleted server-side or no longer shared with this user).
+          viewsAppliedOnceRef.current = false;
+        }
       } catch (err) {
-        if (controller.signal.aborted || (err instanceof Error && err.name === 'AbortError')) {
-          return;
+        if (!controller.signal.aborted && !(err instanceof Error && err.name === 'AbortError')) {
+          console.error('Failed to load saved views', err);
+          setViewsLoading(false);
+          setViewsLoadFailed(true);
         }
-        console.error('Failed to load saved views', err);
-        setViewsLoading(false);
-        setViewsLoadFailed(true);
       }
     })();
     return () => controller.abort();
-  }, [isServerBacked, viewKey, viewsReloadToken]);
+  }, [isServerBacked, viewKey, viewsReloadToken, migrateLegacyViews]);
 
   useEffect(
     () => () => {
@@ -582,11 +937,19 @@ const StandardTable = <T extends object>({
   useEffect(() => {
     const next = initialFilterState ?? {};
     if (filterStatesEqual(filterStateRef.current, next)) return;
-    setFilterState(next);
+    dispatchTableView({
+      type: 'set-filter-state',
+      filterState: next,
+      activeViewId: viewsAppliedOnceRef.current ? null : undefined,
+    });
     if (viewsAppliedOnceRef.current) {
-      updateActiveViewId(null);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem(getStorageKey(title, STORAGE_SUFFIX.activeView));
+        } catch {}
+      }
     }
-  }, [initialFilterState, updateActiveViewId]);
+  }, [initialFilterState, title]);
 
   const getColId = useCallback(
     (col: Column<T>) =>
@@ -699,15 +1062,24 @@ const StandardTable = <T extends object>({
   );
 
   const applyViewState = useCallback(
-    (view: CustomView) => {
+    (view: CustomView, nextActiveViewId?: string | null) => {
       const gearIds = new Set(gearColumns.map((c) => getColId(c)));
       const allIds = new Set((columns ?? []).map((c) => getColId(c)));
       const result = computeViewApplication(view, gearIds, allIds);
-      setHiddenColIds(result.hiddenColIds);
-      setSortState(result.sortState);
-      setFilterState(result.filterState);
+      dispatchTableView({
+        type: 'apply-view',
+        application: result,
+        activeViewId: nextActiveViewId,
+      });
+      if (nextActiveViewId !== undefined && typeof window !== 'undefined') {
+        const key = getStorageKey(title, STORAGE_SUFFIX.activeView);
+        try {
+          if (nextActiveViewId) localStorage.setItem(key, nextActiveViewId);
+          else localStorage.removeItem(key);
+        } catch {}
+      }
     },
-    [columns, gearColumns, getColId],
+    [columns, gearColumns, getColId, title],
   );
 
   useEffect(() => {
@@ -736,10 +1108,6 @@ const StandardTable = <T extends object>({
     viewsLoading,
     viewsLoadFailed,
   ]);
-
-  useEffect(() => {
-    if (!gearOpen) setViewsSubmenuOpen(false);
-  }, [gearOpen]);
 
   useEffect(
     () => () => {
@@ -888,7 +1256,10 @@ const StandardTable = <T extends object>({
     (updater: Updater<SortingState>) => {
       const next = functionalUpdate(updater, sorting);
       const firstSort = next[0];
-      setSortState(firstSort ? { colId: firstSort.id, px: firstSort.desc ? 'desc' : 'asc' } : null);
+      dispatchTableView({
+        type: 'set-sort-state',
+        sortState: firstSort ? { colId: firstSort.id, px: firstSort.desc ? 'desc' : 'asc' } : null,
+      });
       updateActiveViewId(null);
     },
     [sorting, updateActiveViewId],
@@ -905,11 +1276,19 @@ const StandardTable = <T extends object>({
           nextFilterState[filter.id] = [filter.value];
         }
       }
-      setFilterState(nextFilterState);
+      dispatchTableView({
+        type: 'set-filter-state',
+        filterState: nextFilterState,
+        activeViewId: null,
+      });
       setCurrentPage(1);
-      updateActiveViewId(null);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem(getStorageKey(title, STORAGE_SUFFIX.activeView));
+        } catch {}
+      }
     },
-    [columnFilters, updateActiveViewId],
+    [columnFilters, title],
   );
 
   const onPaginationChange = useCallback(
@@ -935,22 +1314,17 @@ const StandardTable = <T extends object>({
         if (next[colId] === false) nextHiddenColIds.add(colId);
       }
 
-      setHiddenColIds(nextHiddenColIds);
-      if (sortState && nextHiddenColIds.has(sortState.colId)) setSortState(null);
-      setFilterState((prev) => {
-        let changed = false;
-        const nextFilters = { ...prev };
-        for (const colId of nextHiddenColIds) {
-          if (nextFilters[colId]) {
-            delete nextFilters[colId];
-            changed = true;
-          }
-        }
-        return changed ? nextFilters : prev;
+      dispatchTableView({
+        type: 'apply-column-visibility',
+        hiddenColIds: nextHiddenColIds,
       });
-      updateActiveViewId(null);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem(getStorageKey(title, STORAGE_SUFFIX.activeView));
+        } catch {}
+      }
     },
-    [columnVisibility, gearColumns, getColId, sortState, updateActiveViewId],
+    [columnVisibility, gearColumns, getColId, title],
   );
 
   const onColumnSizingChange = useCallback(
@@ -1015,13 +1389,11 @@ const StandardTable = <T extends object>({
   const paddingRowCount = Math.max(0, normalizedMinBodyRows - paginatedRows.length);
   const emptyStateMinHeightPx = normalizedMinBodyRows * BODY_ROW_HEIGHT_PX;
 
-  useEffect(() => {
-    if (totalPages === 0) {
-      if (currentPage !== 1) setCurrentPage(1);
-      return;
-    }
-    if (currentPage > totalPages) setCurrentPage(totalPages);
-  }, [currentPage, totalPages]);
+  if (totalPages === 0) {
+    if (currentPage !== 1) setCurrentPage(1);
+  } else if (currentPage > totalPages) {
+    setCurrentPage(totalPages);
+  }
 
   // Pre-computed once per data/columns change so each filter popup open is O(1)
   // instead of re-scanning the full dataset on every header re-render.
@@ -1041,79 +1413,20 @@ const StandardTable = <T extends object>({
 
   const getFilterOptions = (colId: string) => filterOptionsByCol.get(colId) ?? [];
 
-  const getSelectedFilterValues = (column: TanStackColumn<T, unknown>) => {
-    const filterValue = column.getFilterValue();
-    if (Array.isArray(filterValue)) return filterValue as string[];
-    if (typeof filterValue === 'string') return [filterValue];
-    return [];
+  const updateFilterSearch = (columnId: string, value: string) => {
+    setFilterSearchByColumnId((prev) => ({ ...prev, [columnId]: value }));
   };
 
-  const getElementLike = (node: ReactNode) => {
-    if (isValidElement(node))
-      return { type: node.type, props: node.props as Record<string, unknown> };
-    if (typeof node === 'object' && node !== null && 'props' in node) {
-      return node as { type?: unknown; props: Record<string, unknown> };
-    }
-    return null;
+  const clearFilterSearch = (columnId: string) => {
+    setFilterSearchByColumnId((prev) => {
+      const next = { ...prev };
+      delete next[columnId];
+      return next;
+    });
   };
 
-  const getNodeText = (node: ReactNode): string => {
-    if (node === null || node === undefined || typeof node === 'boolean') return '';
-    if (typeof node === 'string' || typeof node === 'number') return String(node);
-    if (Array.isArray(node)) return node.map(getNodeText).join(' ').trim();
-    const element = getElementLike(node);
-    if (element) return getNodeText(element.props.children as ReactNode);
-    return '';
-  };
-
-  const findActionNode = (node: ReactNode): ReactNode | null => {
-    if (node === null || node === undefined || typeof node === 'boolean') return null;
-    if (typeof node === 'string' || typeof node === 'number') return null;
-    if (Array.isArray(node)) {
-      for (const child of node) {
-        const actionNode = findActionNode(child);
-        if (actionNode) return actionNode;
-      }
-      return null;
-    }
-    const element = getElementLike(node);
-    if (!element) return null;
-    if (
-      (typeof element.type === 'string' && element.type === 'button') ||
-      element.props.type === 'button' ||
-      typeof element.props.onClick === 'function'
-    ) {
-      return node;
-    }
-
-    for (const child of Children.toArray(element.props.children as ReactNode)) {
-      const actionNode = findActionNode(child);
-      if (actionNode) return actionNode;
-    }
-    return null;
-  };
-
-  const collectClassNames = (node: ReactNode): string => {
-    if (node === null || node === undefined || typeof node === 'boolean') return '';
-    if (Array.isArray(node)) return node.map(collectClassNames).join(' ');
-    const element = getElementLike(node);
-    if (!element) return '';
-    const props = element.props as { className?: unknown; children?: ReactNode };
-    return [
-      typeof props.className === 'string' ? props.className : '',
-      collectClassNames(props.children),
-    ]
-      .filter(Boolean)
-      .join(' ');
-  };
-
-  const getActionIconClassName = (node: ReactNode) => {
-    const classNames = collectClassNames(node);
-    if (classNames.includes('fa-trash')) return 'text-destructive';
-    if (classNames.includes('fa-ban')) return 'text-amber-600';
-    if (classNames.includes('fa-rotate-left')) return 'text-primary';
-    if (classNames.includes('fa-pen')) return 'text-blue-500';
-    return 'text-muted-foreground';
+  const resetFilterPage = () => {
+    table.setPageIndex(0);
   };
 
   const renderActionMenuButton = (node: ReactNode, label: ReactNode, key: number) => {
@@ -1230,38 +1543,6 @@ const StandardTable = <T extends object>({
     return items.length > 0 ? items : node;
   };
 
-  const hasActionMenuItems = (node: ReactNode): boolean => {
-    const visit = (current: ReactNode): boolean => {
-      if (current === null || current === undefined || typeof current === 'boolean') return false;
-      if (typeof current === 'string' || typeof current === 'number') return false;
-      if (Array.isArray(current)) return current.some(visit);
-
-      const element = getElementLike(current);
-      if (!element) return false;
-
-      const props = element.props as {
-        children?: ReactNode | (() => ReactNode);
-        label?: ReactNode;
-        onClick?: unknown;
-        type?: unknown;
-      };
-
-      if (props.label !== undefined && typeof props.children === 'function') return true;
-
-      if (
-        (typeof element.type === 'string' && element.type === 'button') ||
-        props.type === 'button' ||
-        typeof props.onClick === 'function'
-      ) {
-        return true;
-      }
-
-      return Children.toArray(props.children as ReactNode).some(visit);
-    };
-
-    return visit(node);
-  };
-
   const stepFontSize = (delta: -1 | 1) => {
     setFontSize((prev) => {
       const idx = FONT_SIZES.indexOf(prev);
@@ -1298,14 +1579,13 @@ const StandardTable = <T extends object>({
     setViewsSubmenuOpen(false);
     setGearOpen(false);
     if (view.id === activeViewId) return;
-    applyViewState(view);
-    updateActiveViewId(view.id);
+    applyViewState(view, view.id);
     setCurrentPage(1);
   };
 
   const reloadServerViews = () => {
     viewsAppliedOnceRef.current = false;
-    setViewsReloadToken((token) => token + 1);
+    reloadViews();
   };
 
   // A 403 means the caller's permission was downgraded mid-session; reload so the row
@@ -1349,7 +1629,9 @@ const StandardTable = <T extends object>({
               : v,
           ),
         );
-        if (activeViewId === editingId) setHiddenColIds(new Set(hidden));
+        if (activeViewId === editingId) {
+          dispatchTableView({ type: 'set-hidden-columns', hiddenColIds: new Set(hidden) });
+        }
       } else {
         const newView: CustomView = {
           id: generateViewId(),
@@ -1360,7 +1642,7 @@ const StandardTable = <T extends object>({
         };
         updateCustomViews((prev) => [...prev, newView]);
         updateActiveViewId(newView.id);
-        setHiddenColIds(new Set(hidden));
+        dispatchTableView({ type: 'set-hidden-columns', hiddenColIds: new Set(hidden) });
       }
       setModalState(null);
       return;
@@ -1379,14 +1661,16 @@ const StandardTable = <T extends object>({
         const updated = serverViewToCustomView(dto);
         updateCustomViews((prev) => prev.map((v) => (v.id === editingId ? updated : v)));
         rememberServerViewMeta(dto);
-        if (activeViewId === editingId) setHiddenColIds(new Set(hidden));
+        if (activeViewId === editingId) {
+          dispatchTableView({ type: 'set-hidden-columns', hiddenColIds: new Set(hidden) });
+        }
       } else {
         const dto = await viewsApi.create({ kind: 'table', scopeKey: viewKey, name, config });
         const created = serverViewToCustomView(dto);
         updateCustomViews((prev) => [...prev, created]);
         rememberServerViewMeta(dto);
         updateActiveViewId(created.id);
-        setHiddenColIds(new Set(hidden));
+        dispatchTableView({ type: 'set-hidden-columns', hiddenColIds: new Set(hidden) });
       }
       setModalState(null);
     } catch (err) {
@@ -1549,159 +1833,6 @@ const StandardTable = <T extends object>({
     setPasteError(null);
   };
 
-  const renderToolbarButton = ({
-    tooltipKey,
-    iconClass,
-    icon,
-    onClick,
-    disabled = false,
-    active = false,
-    buttonRef,
-    tooltipDisabled = false,
-    text,
-  }: {
-    tooltipKey: string;
-    iconClass?: string;
-    icon?: ReactNode;
-    onClick: () => void;
-    disabled?: boolean;
-    active?: boolean;
-    buttonRef?: Ref<HTMLButtonElement>;
-    tooltipDisabled?: boolean;
-    text?: string;
-  }) => {
-    const label = t(tooltipKey);
-    return (
-      <Tooltip disabled={tooltipDisabled}>
-        <TooltipTrigger asChild>
-          <span className="inline-flex">
-            <Button
-              type="button"
-              ref={buttonRef}
-              aria-label={label}
-              variant={active ? 'secondary' : 'outline'}
-              size="sm"
-              className={TABLE_CONTROL_BUTTON_CLASSNAME}
-              onClick={(e) => {
-                e.stopPropagation();
-                onClick();
-              }}
-              disabled={disabled}
-            >
-              {icon ?? <i className={`fa-solid ${iconClass} text-xs`} aria-hidden="true"></i>}
-              {text && <span>{text}</span>}
-            </Button>
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">{label}</TooltipContent>
-      </Tooltip>
-    );
-  };
-
-  const renderHeaderFilter = (column: TanStackColumn<T, unknown>, sourceColumn: Column<T>) => {
-    if (!column.getCanFilter()) return null;
-    const selectedValues = getSelectedFilterValues(column);
-    const hasFilter = selectedValues.length > 0;
-    const options = getFilterOptions(column.id);
-    const filterSearch = filterSearchByColumnId[column.id] ?? '';
-    const normalizedFilterSearch = filterSearch.trim().toLocaleLowerCase();
-    const visibleOptions = normalizedFilterSearch
-      ? options.filter((option) =>
-          (option || t('table.empty')).toLocaleLowerCase().includes(normalizedFilterSearch),
-        )
-      : options;
-
-    return (
-      <DropdownMenu
-        onOpenChange={(open) => {
-          if (open || !filterSearchByColumnId[column.id]) return;
-          setFilterSearchByColumnId((prev) => {
-            const next = { ...prev };
-            delete next[column.id];
-            return next;
-          });
-        }}
-      >
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant={hasFilter ? 'secondary' : 'ghost'}
-            size="icon-xs"
-            aria-label={`${t('table.filters')} ${sourceColumn.header}`}
-            onClick={(event) => event.stopPropagation()}
-            className="size-6 rounded-lg"
-          >
-            <i className="fa-solid fa-filter text-[10px]" aria-hidden="true"></i>
-            {hasFilter && <span className="sr-only">{selectedValues.length}</span>}
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="start"
-          className="w-64"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <DropdownMenuLabel className="text-xs">{sourceColumn.header}</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <div className="p-1">
-            <Input
-              type="search"
-              value={filterSearch}
-              onChange={(event) => {
-                const value = event.target.value;
-                setFilterSearchByColumnId((prev) => ({ ...prev, [column.id]: value }));
-              }}
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => event.stopPropagation()}
-              placeholder={t('table.search')}
-              aria-label={`${t('table.search')} ${sourceColumn.header}`}
-              className="h-8 text-xs"
-            />
-          </div>
-          <div className="max-h-64 overflow-y-auto">
-            {visibleOptions.length > 0 ? (
-              visibleOptions.map((option) => (
-                <DropdownMenuCheckboxItem
-                  key={option || '__empty__'}
-                  checked={selectedValues.includes(option)}
-                  onSelect={(event) => {
-                    event.preventDefault();
-                    const next = selectedValues.includes(option)
-                      ? selectedValues.filter((value) => value !== option)
-                      : [...selectedValues, option];
-                    column.setFilterValue(next.length > 0 ? next : undefined);
-                    table.setPageIndex(0);
-                  }}
-                  className="text-xs"
-                >
-                  <span className="truncate">{option || t('table.empty')}</span>
-                </DropdownMenuCheckboxItem>
-              ))
-            ) : (
-              <DropdownMenuItem disabled className="text-xs">
-                {t('table.noResults')}
-              </DropdownMenuItem>
-            )}
-          </div>
-          {hasFilter && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={(event) => {
-                  event.preventDefault();
-                  column.setFilterValue(undefined);
-                  table.setPageIndex(0);
-                }}
-                className="text-xs"
-              >
-                {t('table.clearFilter')}
-              </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    );
-  };
-
   const renderInternalFooter = () => {
     const isSinglePage = Math.max(totalPages, 1) <= 1;
     const canPreviousPage = !isSinglePage && table.getCanPreviousPage();
@@ -1788,26 +1919,26 @@ const StandardTable = <T extends object>({
           {headerAction}
           {data != null && columns != null && (
             <>
-              {renderToolbarButton({
-                tooltipKey: 'table.exportToCsv',
-                iconClass: 'fa-file-export',
-                onClick: handleExportToCsv,
-                disabled: processedRows.length === 0,
-                text: t('table.export'),
-              })}
-              {renderToolbarButton({
-                tooltipKey: 'table.decreaseFont',
-                icon: <ZoomOut className="size-3.5" aria-hidden="true" />,
-                onClick: () => stepFontSize(-1),
-                disabled: fontSize === 'xs',
-              })}
-              {renderToolbarButton({
-                tooltipKey: 'table.increaseFont',
-                icon: <ZoomIn className="size-3.5" aria-hidden="true" />,
-                onClick: () => stepFontSize(1),
-                disabled: fontSize === 'base',
-              })}
-              <DropdownMenu open={gearOpen} onOpenChange={setGearOpen}>
+              <StandardTableToolbarButton
+                label={t('table.exportToCsv')}
+                iconClass="fa-file-export"
+                onClick={handleExportToCsv}
+                disabled={processedRows.length === 0}
+                text={t('table.export')}
+              />
+              <StandardTableToolbarButton
+                label={t('table.decreaseFont')}
+                icon={<ZoomOut className="size-3.5" aria-hidden="true" />}
+                onClick={() => stepFontSize(-1)}
+                disabled={fontSize === 'xs'}
+              />
+              <StandardTableToolbarButton
+                label={t('table.increaseFont')}
+                icon={<ZoomIn className="size-3.5" aria-hidden="true" />}
+                onClick={() => stepFontSize(1)}
+                disabled={fontSize === 'base'}
+              />
+              <DropdownMenu open={gearOpen} onOpenChange={handleGearOpenChange}>
                 <DropdownMenuTrigger asChild>
                   <Button
                     type="button"
@@ -1884,16 +2015,13 @@ const StandardTable = <T extends object>({
                       </DropdownMenuLabel>
                       <DropdownMenuSeparator />
                       {isServerBacked && viewsLoading && (
-                        <div
-                          role="status"
-                          className="flex items-center justify-center gap-2 px-2 py-3 text-xs text-muted-foreground"
-                        >
+                        <output className="flex items-center justify-center gap-2 px-2 py-3 text-xs text-muted-foreground">
                           <i
                             className="fa-solid fa-circle-notch fa-spin text-[10px]"
                             aria-hidden="true"
                           ></i>
                           <span>{t('views.loadingViews')}</span>
-                        </div>
+                        </output>
                       )}
                       {isServerBacked && viewsLoadFailed && !viewsLoading && (
                         <div className="flex flex-col items-center gap-2 px-2 py-3 text-center">
@@ -2305,13 +2433,24 @@ const StandardTable = <T extends object>({
                                   />
                                 )}
                               </button>
-                              {renderHeaderFilter(header.column, col)}
+                              <HeaderFilter
+                                column={header.column}
+                                sourceColumn={col}
+                                options={getFilterOptions(header.column.id)}
+                                filterSearch={filterSearchByColumnId[header.column.id] ?? ''}
+                                t={t}
+                                onFilterSearchChange={updateFilterSearch}
+                                onFilterSearchClose={clearFilterSearch}
+                                onResetPage={resetFilterPage}
+                              />
                             </div>
                           )}
 
                           {header.column.getCanResize() && (
-                            <div
-                              className="absolute top-0 right-0 z-10 flex h-full w-2 cursor-col-resize touch-none select-none items-center justify-end"
+                            <button
+                              type="button"
+                              aria-label="Resize column"
+                              className="absolute top-0 right-0 z-10 flex h-full w-2 cursor-col-resize touch-none select-none items-center justify-end border-0 bg-transparent p-0"
                               data-column-resize-handle={colId}
                               onMouseDown={(event) => {
                                 event.stopPropagation();
@@ -2334,7 +2473,7 @@ const StandardTable = <T extends object>({
                                       : 'bg-border group-hover:bg-primary/40'
                                 }`}
                               />
-                            </div>
+                            </button>
                           )}
                         </TableHead>
                       </Fragment>

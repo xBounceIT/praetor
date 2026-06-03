@@ -73,6 +73,13 @@ const parseTlsCaForPatch = (
   return { ok: true, patch: { tlsCaCertificate: sanitized } };
 };
 
+// Directory attribute names are free-form keys with no {0} placeholder or DN structure to
+// validate. Trim whitespace; map an omitted field to `undefined` (preserve stored value).
+// A blank-after-trim value is kept as '' so the operator can clear an override — the LDAP
+// service then falls back to the built-in default attribute.
+const normalizeAttributeName = (value: string | undefined): string | undefined =>
+  value === undefined ? undefined : value.trim();
+
 const roleMappingSchema = {
   type: 'object',
   properties: {
@@ -89,6 +96,9 @@ const ldapConfigSchemaProperties = {
   bindDn: { type: 'string' },
   bindPassword: { type: 'string' },
   userFilter: { type: 'string' },
+  firstNameAttribute: { type: 'string' },
+  lastNameAttribute: { type: 'string' },
+  emailAttribute: { type: 'string' },
   groupBaseDn: { type: 'string' },
   groupFilter: { type: 'string' },
   roleMappings: { type: 'array', items: roleMappingSchema },
@@ -110,6 +120,9 @@ const ldapConfigUpdateBodySchemaProperties = {
   bindDn: { type: 'string' },
   bindPassword: { type: 'string' },
   userFilter: { type: 'string' },
+  firstNameAttribute: { type: 'string' },
+  lastNameAttribute: { type: 'string' },
+  emailAttribute: { type: 'string' },
   groupBaseDn: { type: 'string' },
   groupFilter: { type: 'string' },
   roleMappings: { type: 'array', items: roleMappingSchema },
@@ -154,6 +167,9 @@ const ldapTestResponseSchema = {
     username: { type: 'string' },
     message: { type: 'string' },
     userDn: { type: 'string' },
+    firstName: { type: 'string' },
+    lastName: { type: 'string' },
+    email: { type: 'string' },
     groups: { type: 'array', items: { type: 'string' } },
     roleIds: { type: 'array', items: { type: 'string' } },
     roleResolution: ldapRoleResolutionSchema,
@@ -231,6 +247,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         bindDn?: string;
         bindPassword?: string;
         userFilter?: string;
+        firstNameAttribute?: string;
+        lastNameAttribute?: string;
+        emailAttribute?: string;
         groupBaseDn?: string;
         groupFilter?: string;
         roleMappings?: Array<{ ldapGroup?: string; role?: string }>;
@@ -360,6 +379,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         bindDn,
         bindPassword,
         userFilter: normalizedUserFilter,
+        // Attribute names are free-form directory keys: trim for hygiene, but allow blank
+        // (the LDAP service falls back to givenName/sn/mail when an attribute is empty).
+        // `undefined` preserves the stored value via the repo's COALESCE patch.
+        firstNameAttribute: normalizeAttributeName(body.firstNameAttribute),
+        lastNameAttribute: normalizeAttributeName(body.lastNameAttribute),
+        emailAttribute: normalizeAttributeName(body.emailAttribute),
         groupBaseDn,
         groupFilter: normalizedGroupFilter,
         roleMappings: validatedMappings,
@@ -506,6 +531,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ? 'LDAP authentication succeeded'
           : 'LDAP authentication failed. Verify the credentials and saved LDAP configuration.',
         userDn: result.userDn,
+        // Surface the resolved identity so admins can verify their attribute mapping.
+        firstName: authenticated ? result.firstName : undefined,
+        lastName: authenticated ? result.lastName : undefined,
+        email: authenticated ? result.email : undefined,
         groups: authenticated ? result.groups : [],
         roleIds,
         roleResolution,
