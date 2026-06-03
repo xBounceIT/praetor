@@ -1,5 +1,5 @@
 {
-  "id": "c1b132a5-11ae-4a82-a7ce-6a8301b3ece7",
+  "id": "1e2da8c8-ca7e-49b7-a2d0-f08222a5bac3",
   "prevId": "e0b6be4a-1dee-4e75-ad5f-2c85c4d2faf7",
   "version": "7",
   "dialect": "postgresql",
@@ -1023,13 +1023,6 @@
           "notNull": false,
           "default": false
         },
-        "enforce_totp_for_admins": {
-          "name": "enforce_totp_for_admins",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
         "gemini_api_key": {
           "name": "gemini_api_key",
           "type": "varchar(255)",
@@ -1506,6 +1499,27 @@
           "primaryKey": false,
           "notNull": false,
           "default": "'(uid={0})'"
+        },
+        "first_name_attribute": {
+          "name": "first_name_attribute",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'givenName'"
+        },
+        "last_name_attribute": {
+          "name": "last_name_attribute",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'sn'"
+        },
+        "email_attribute": {
+          "name": "email_attribute",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'mail'"
         },
         "group_base_dn": {
           "name": "group_base_dn",
@@ -6777,6 +6791,18 @@
           "primaryKey": false,
           "notNull": true
         },
+        "first_name": {
+          "name": "first_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_name": {
+          "name": "last_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
         "username": {
           "name": "username",
           "type": "varchar(100)",
@@ -6927,31 +6953,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": 1
-        },
-        "totp_secret": {
-          "name": "totp_secret",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "totp_enabled": {
-          "name": "totp_enabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "totp_confirmed_at": {
-          "name": "totp_confirmed_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "totp_backup_codes": {
-          "name": "totp_backup_codes",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {

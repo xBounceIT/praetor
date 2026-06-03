@@ -85,7 +85,7 @@ mock.module('../../services/api/views', () => ({
 }));
 
 let currentUserId: string | undefined = CURRENT_USER_ID;
-mock.module('../../contexts/CurrentUserContext', () => ({
+mock.module('../../contexts/useCurrentUserId', () => ({
   useCurrentUserId: () => currentUserId,
 }));
 

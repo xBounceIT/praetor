@@ -174,15 +174,17 @@ const loadAuthenticatedUserContext = async (
 
   const effectiveRole = activeRole ?? user.role;
 
-  const permissions = await getRolePermissions(effectiveRole);
   // Final authorization check: re-read enabled/session/token state in the same statement
   // that verifies role membership, so revocation between the initial user read and
   // permission loading cannot bind a stale authenticated context.
-  const hasRole = await rolesRepo.userHasRole(user.id, effectiveRole, {
-    requireEnabledUser: true,
-    expectedSessionVersion,
-    expectedTokenVersion,
-  });
+  const [permissions, hasRole] = await Promise.all([
+    getRolePermissions(effectiveRole),
+    rolesRepo.userHasRole(user.id, effectiveRole, {
+      requireEnabledUser: true,
+      expectedSessionVersion,
+      expectedTokenVersion,
+    }),
+  ]);
   if (!hasRole) {
     // Generic 403 here covers role/enabled/version failure indistinguishably:
     // the fast-fail branches above emit specific errorCodes (`session_revoked`,

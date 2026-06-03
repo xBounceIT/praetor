@@ -264,9 +264,11 @@ export const createTimeEntry = async (
     }
   }
 
-  const hourlyCost = await usersRepo.findCostPerHour(targetUserId);
-  const resolvedTaskId = await tasksRepo.findIdByProjectAndName(projectId, task);
-  const projectClientId = await projectsRepo.findClientId(projectId);
+  const [hourlyCost, resolvedTaskId, projectClientId] = await Promise.all([
+    usersRepo.findCostPerHour(targetUserId),
+    tasksRepo.findIdByProjectAndName(projectId, task),
+    projectsRepo.findClientId(projectId),
+  ]);
   if (projectClientId === null) badRequest('Project not found');
   if (projectClientId !== clientId) {
     badRequest('Project does not belong to the selected client');
@@ -700,9 +702,10 @@ export const generateRecurringEntries = async (
       toDate,
       tx,
     );
-    const pending = candidates
-      .filter((candidate) => !existingKeys.has(candidate.key))
-      .map((candidate) => candidate.entry);
+    const pending = candidates.reduce<PendingEntry[]>((entries, candidate) => {
+      if (!existingKeys.has(candidate.key)) entries.push(candidate.entry);
+      return entries;
+    }, []);
 
     if (pending.length === 0) {
       return {

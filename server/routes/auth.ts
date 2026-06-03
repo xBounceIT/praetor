@@ -484,8 +484,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const permissions = await getRolePermissions(roleIdResult.value);
-      const availableRoles = await rolesRepo.listAvailableRolesForUser(session.userId);
+      const [permissions, availableRoles] = await Promise.all([
+        getRolePermissions(roleIdResult.value),
+        rolesRepo.listAvailableRolesForUser(session.userId),
+      ]);
       const effectiveAvailableRoles =
         availableRoles.length > 0
           ? availableRoles

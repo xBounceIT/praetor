@@ -1,6 +1,6 @@
 import { PlusIcon, Trash2Icon } from 'lucide-react';
 import type React from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
@@ -61,6 +61,29 @@ export interface ProjectRuleFormModalProps {
   onSubmit: (payload: ProjectRuleFormPayload) => Promise<void>;
 }
 
+type ProjectRuleFormState = {
+  name: string;
+  conditionLogic: ProjectRuleConditionLogic;
+  conditions: ProjectRuleCondition[];
+  recipientUserIds: string[];
+  recipientRoleIds: string[];
+  isEnabled: boolean;
+  errors: Record<string, string>;
+  submitting: boolean;
+};
+
+type ProjectRuleFormAction =
+  | { type: 'setName'; name: string }
+  | { type: 'setConditionLogic'; conditionLogic: ProjectRuleConditionLogic }
+  | { type: 'updateCondition'; index: number; patch: Partial<ProjectRuleCondition> }
+  | { type: 'addCondition'; field: string }
+  | { type: 'removeCondition'; index: number }
+  | { type: 'setRecipientUserIds'; recipientUserIds: string[] }
+  | { type: 'setRecipientRoleIds'; recipientRoleIds: string[] }
+  | { type: 'setEnabled'; isEnabled: boolean }
+  | { type: 'setErrors'; errors: Record<string, string> }
+  | { type: 'setSubmitting'; submitting: boolean };
+
 const CONDITION_GRID_CLASSNAME =
   'grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_10rem_minmax(10rem,14rem)_2.25rem]';
 
@@ -111,45 +134,87 @@ const enumValueLabelKey = (field: string, value: string) => {
   return `projects:detail.rules.values.${field}.${value}`;
 };
 
-const ProjectRuleFormModal: React.FC<ProjectRuleFormModalProps> = ({
+const createProjectRuleFormState = (
+  rule: ProjectRule | null | undefined,
+  initialField: string,
+): ProjectRuleFormState => ({
+  name: rule?.name ?? '',
+  conditionLogic: rule?.conditionLogic ?? 'and',
+  conditions: conditionsForRule(rule, initialField),
+  recipientUserIds: rule?.actionConfig.recipientUserIds ?? [],
+  recipientRoleIds: rule?.actionConfig.recipientRoleIds ?? [],
+  isEnabled: rule?.isEnabled ?? true,
+  errors: {},
+  submitting: false,
+});
+
+const projectRuleFormReducer = (
+  state: ProjectRuleFormState,
+  action: ProjectRuleFormAction,
+): ProjectRuleFormState => {
+  switch (action.type) {
+    case 'setName':
+      return { ...state, name: action.name };
+    case 'setConditionLogic':
+      return { ...state, conditionLogic: action.conditionLogic };
+    case 'updateCondition':
+      return {
+        ...state,
+        conditions: state.conditions.map((condition, conditionIndex) =>
+          conditionIndex === action.index ? { ...condition, ...action.patch } : condition,
+        ),
+      };
+    case 'addCondition':
+      return {
+        ...state,
+        conditions: [...state.conditions, defaultConditionForField(action.field)],
+      };
+    case 'removeCondition':
+      return {
+        ...state,
+        conditions: state.conditions.filter((_, conditionIndex) => conditionIndex !== action.index),
+      };
+    case 'setRecipientUserIds':
+      return { ...state, recipientUserIds: action.recipientUserIds };
+    case 'setRecipientRoleIds':
+      return { ...state, recipientRoleIds: action.recipientRoleIds };
+    case 'setEnabled':
+      return { ...state, isEnabled: action.isEnabled };
+    case 'setErrors':
+      return { ...state, errors: action.errors };
+    case 'setSubmitting':
+      return { ...state, submitting: action.submitting };
+  }
+};
+
+type ProjectRuleFormModalSessionProps = ProjectRuleFormModalProps & {
+  initialField: string;
+};
+
+const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = ({
   open,
   onOpenChange,
   rule,
   recipients,
   permissions,
   onSubmit,
+  initialField,
 }) => {
   const { t } = useTranslation(['projects', 'common']);
   const availableFields = useMemo(() => getAvailableProjectRuleFields(permissions), [permissions]);
-  const initialField = rule?.field ?? availableFields[0]?.id ?? '';
-  const [name, setName] = useState(rule?.name ?? '');
-  const [conditionLogic, setConditionLogic] = useState<ProjectRuleConditionLogic>(
-    rule?.conditionLogic ?? 'and',
+  const [formState, dispatch] = useReducer(projectRuleFormReducer, undefined, () =>
+    createProjectRuleFormState(rule, initialField),
   );
-  const [conditions, setConditions] = useState<ProjectRuleCondition[]>(
-    conditionsForRule(rule, initialField),
-  );
-  const [recipientUserIds, setRecipientUserIds] = useState<string[]>(
-    rule?.actionConfig.recipientUserIds ?? [],
-  );
-  const [recipientRoleIds, setRecipientRoleIds] = useState<string[]>(
-    rule?.actionConfig.recipientRoleIds ?? [],
-  );
-  const [isEnabled, setIsEnabled] = useState(rule?.isEnabled ?? true);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    const nextField = rule?.field ?? availableFields[0]?.id ?? '';
-    setName(rule?.name ?? '');
-    setConditionLogic(rule?.conditionLogic ?? 'and');
-    setConditions(conditionsForRule(rule, nextField));
-    setRecipientUserIds(rule?.actionConfig.recipientUserIds ?? []);
-    setRecipientRoleIds(rule?.actionConfig.recipientRoleIds ?? []);
-    setIsEnabled(rule?.isEnabled ?? true);
-    setErrors({});
-  }, [open, rule, availableFields]);
+  const {
+    name,
+    conditionLogic,
+    conditions,
+    recipientUserIds,
+    recipientRoleIds,
+    isEnabled,
+    errors,
+    submitting,
+  } = formState;
 
   const fieldOptions = availableFields.map((definition) => ({
     id: definition.id,
@@ -162,11 +227,7 @@ const ProjectRuleFormModal: React.FC<ProjectRuleFormModalProps> = ({
   const roleOptions = recipients.roles.map((role) => ({ id: role.id, name: role.name }));
 
   const updateCondition = (index: number, patch: Partial<ProjectRuleCondition>) => {
-    setConditions((current) =>
-      current.map((condition, conditionIndex) =>
-        conditionIndex === index ? { ...condition, ...patch } : condition,
-      ),
-    );
+    dispatch({ type: 'updateCondition', index, patch });
   };
 
   const firstValueFieldForField = (field: string) =>
@@ -197,11 +258,11 @@ const ProjectRuleFormModal: React.FC<ProjectRuleFormModalProps> = ({
   const addCondition = () => {
     const field = availableFields[0]?.id ?? '';
     if (!field) return;
-    setConditions((current) => [...current, defaultConditionForField(field)]);
+    dispatch({ type: 'addCondition', field });
   };
 
   const removeCondition = (index: number) => {
-    setConditions((current) => current.filter((_, conditionIndex) => conditionIndex !== index));
+    dispatch({ type: 'removeCondition', index });
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -232,10 +293,10 @@ const ProjectRuleFormModal: React.FC<ProjectRuleFormModalProps> = ({
     if (recipientUserIds.length + recipientRoleIds.length === 0) {
       nextErrors.recipients = t('projects:detail.rules.errors.recipientsRequired');
     }
-    setErrors(nextErrors);
+    dispatch({ type: 'setErrors', errors: nextErrors });
     if (Object.keys(nextErrors).length > 0) return;
 
-    setSubmitting(true);
+    dispatch({ type: 'setSubmitting', submitting: true });
     try {
       const normalizedConditions = conditions.map((condition) => ({
         field: condition.field,
@@ -258,7 +319,7 @@ const ProjectRuleFormModal: React.FC<ProjectRuleFormModalProps> = ({
       });
       onOpenChange(false);
     } finally {
-      setSubmitting(false);
+      dispatch({ type: 'setSubmitting', submitting: false });
     }
   };
 
@@ -282,7 +343,7 @@ const ProjectRuleFormModal: React.FC<ProjectRuleFormModalProps> = ({
             <Input
               id="project-rule-name"
               value={name}
-              onChange={(event) => setName(event.target.value)}
+              onChange={(event) => dispatch({ type: 'setName', name: event.target.value })}
               disabled={submitting}
               aria-invalid={!!errors.name}
               placeholder={t('projects:detail.rules.form.namePlaceholder')}
@@ -298,7 +359,12 @@ const ProjectRuleFormModal: React.FC<ProjectRuleFormModalProps> = ({
                 </FieldLabel>
                 <Select
                   value={conditionLogic}
-                  onValueChange={(next) => setConditionLogic(next as ProjectRuleConditionLogic)}
+                  onValueChange={(next) =>
+                    dispatch({
+                      type: 'setConditionLogic',
+                      conditionLogic: next as ProjectRuleConditionLogic,
+                    })
+                  }
                   disabled={submitting}
                 >
                   <SelectTrigger id="project-rule-condition-logic" className="w-full">
@@ -574,7 +640,12 @@ const ProjectRuleFormModal: React.FC<ProjectRuleFormModalProps> = ({
               placeholder={t('projects:detail.rules.form.usersPlaceholder')}
               options={userOptions}
               value={recipientUserIds}
-              onChange={(next) => setRecipientUserIds(Array.isArray(next) ? next : [])}
+              onChange={(next) =>
+                dispatch({
+                  type: 'setRecipientUserIds',
+                  recipientUserIds: Array.isArray(next) ? next : [],
+                })
+              }
             />
             <SelectControl
               id="project-rule-roles"
@@ -585,7 +656,12 @@ const ProjectRuleFormModal: React.FC<ProjectRuleFormModalProps> = ({
               placeholder={t('projects:detail.rules.form.rolesPlaceholder')}
               options={roleOptions}
               value={recipientRoleIds}
-              onChange={(next) => setRecipientRoleIds(Array.isArray(next) ? next : [])}
+              onChange={(next) =>
+                dispatch({
+                  type: 'setRecipientRoleIds',
+                  recipientRoleIds: Array.isArray(next) ? next : [],
+                })
+              }
             />
           </div>
           {errors.recipients && (
@@ -604,7 +680,7 @@ const ProjectRuleFormModal: React.FC<ProjectRuleFormModalProps> = ({
             <Switch
               id="project-rule-enabled"
               checked={isEnabled}
-              onCheckedChange={setIsEnabled}
+              onCheckedChange={(isEnabled) => dispatch({ type: 'setEnabled', isEnabled })}
               disabled={submitting}
             />
           </Field>
@@ -626,6 +702,14 @@ const ProjectRuleFormModal: React.FC<ProjectRuleFormModalProps> = ({
       </DialogContent>
     </Dialog>
   );
+};
+
+const ProjectRuleFormModal: React.FC<ProjectRuleFormModalProps> = (props) => {
+  const initialField =
+    props.rule?.field ?? getAvailableProjectRuleFields(props.permissions)[0]?.id ?? '';
+  const sessionKey = props.open ? `${props.rule?.id ?? 'new'}|${initialField}` : 'closed';
+
+  return <ProjectRuleFormModalSession key={sessionKey} {...props} initialField={initialField} />;
 };
 
 export default ProjectRuleFormModal;

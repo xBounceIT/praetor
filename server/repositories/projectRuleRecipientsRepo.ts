@@ -32,7 +32,13 @@ type RoleRecipientRow = {
 };
 
 const uniqueStrings = (values: readonly string[]): string[] =>
-  Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+  Array.from(
+    values.reduce((strings, value) => {
+      const trimmed = value.trim();
+      if (trimmed) strings.add(trimmed);
+      return strings;
+    }, new Set<string>()),
+  );
 
 const mapUserRow = (row: UserRecipientRow): ProjectRuleUserRecipientOption => ({
   id: row.id,

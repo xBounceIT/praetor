@@ -1,6 +1,6 @@
 import { Save } from 'lucide-react';
 import type React from 'react';
-import { useState } from 'react';
+import { useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
@@ -55,6 +55,54 @@ interface ContentProps extends Omit<EntryEditDialogProps, 'entry'> {
   entry: TimeEntry;
 }
 
+type EntryEditErrors = {
+  clientId?: string;
+  projectId?: string;
+  task?: string;
+};
+
+type EntryEditState = {
+  duration: string;
+  notes: string;
+  errors: EntryEditErrors;
+  isSubmitting: boolean;
+  isAddTaskModalOpen: boolean;
+};
+
+type EntryEditAction =
+  | { type: 'setDuration'; duration: string }
+  | { type: 'setNotes'; notes: string }
+  | { type: 'setErrors'; errors: EntryEditErrors }
+  | { type: 'clearError'; field: keyof EntryEditErrors }
+  | { type: 'setSubmitting'; isSubmitting: boolean }
+  | { type: 'setAddTaskModalOpen'; isOpen: boolean };
+
+const entryEditReducer = (state: EntryEditState, action: EntryEditAction): EntryEditState => {
+  switch (action.type) {
+    case 'setDuration':
+      return { ...state, duration: action.duration };
+    case 'setNotes':
+      return { ...state, notes: action.notes };
+    case 'setErrors':
+      return { ...state, errors: action.errors };
+    case 'clearError':
+      if (!state.errors[action.field]) return state;
+      return { ...state, errors: { ...state.errors, [action.field]: '' } };
+    case 'setSubmitting':
+      return { ...state, isSubmitting: action.isSubmitting };
+    case 'setAddTaskModalOpen':
+      return { ...state, isAddTaskModalOpen: action.isOpen };
+  }
+};
+
+const getInitialEntryEditState = (entry: TimeEntry): EntryEditState => ({
+  duration: String(entry.duration),
+  notes: entry.notes ?? '',
+  errors: {},
+  isSubmitting: false,
+  isAddTaskModalOpen: false,
+});
+
 const EntryEditDialogContent: React.FC<ContentProps> = ({
   entry,
   onClose,
@@ -89,26 +137,19 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
     },
   });
 
-  const [duration, setDuration] = useState(String(entry.duration));
-  const [notes, setNotes] = useState(entry.notes ?? '');
-  const [errors, setErrors] = useState<{
-    clientId?: string;
-    projectId?: string;
-    task?: string;
-  }>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
+  const [state, dispatch] = useReducer(entryEditReducer, entry, getInitialEntryEditState);
+  const { duration, notes, errors, isSubmitting, isAddTaskModalOpen } = state;
 
   const allowCustomTask = canCreateCustomTask && selection.projectId !== '';
 
   const handleDurationInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = event.target.value;
     if (rawValue !== '' && !/^[0-9]*([.,][0-9]*)?$/.test(rawValue)) return;
-    setDuration(rawValue.replace(',', '.'));
+    dispatch({ type: 'setDuration', duration: rawValue.replace(',', '.') });
   };
 
   const clearTaskError = () => {
-    if (errors.task) setErrors((prev) => ({ ...prev, task: '' }));
+    dispatch({ type: 'clearError', field: 'task' });
   };
 
   const handleAddCustomTaskSubmit = async (
@@ -143,13 +184,13 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newErrors: typeof errors = {};
+    const newErrors: EntryEditErrors = {};
     if (!selection.clientId) newErrors.clientId = t('entry.clientRequired');
     if (!selection.projectId) newErrors.projectId = t('entry.projectRequired');
     if (!selection.taskName) newErrors.task = t('entry.taskRequired');
 
     if (Object.keys(newErrors).length > 0 || durationInvalid) {
-      setErrors(newErrors);
+      dispatch({ type: 'setErrors', errors: newErrors });
       return;
     }
 
@@ -168,7 +209,7 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
     if ((notes || '') !== (entry.notes ?? '')) patch.notes = notes;
     if (selection.location !== entry.location) patch.location = selection.location;
 
-    setIsSubmitting(true);
+    dispatch({ type: 'setSubmitting', isSubmitting: true });
     try {
       if (Object.keys(patch).length > 1) {
         await onSave(entry.id, patch);
@@ -177,7 +218,7 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
     } catch (err) {
       toastError(err instanceof Error ? err.message : t('entry.entryUpdateFailed'));
     } finally {
-      setIsSubmitting(false);
+      dispatch({ type: 'setSubmitting', isSubmitting: false });
     }
   };
 
@@ -200,15 +241,15 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
               location={selection.location}
               onClientChange={(id) => {
                 selection.setClient(id);
-                if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+                dispatch({ type: 'clearError', field: 'clientId' });
               }}
               onProjectChange={(id) => {
                 selection.setProject(id);
-                if (errors.projectId) setErrors((prev) => ({ ...prev, projectId: '' }));
+                dispatch({ type: 'clearError', field: 'projectId' });
               }}
               onTaskChange={(taskId) => {
                 if (taskId === CUSTOM_TASK_SENTINEL) {
-                  setIsAddTaskModalOpen(true);
+                  dispatch({ type: 'setAddTaskModalOpen', isOpen: true });
                   return;
                 }
                 selection.setTask(taskId);
@@ -229,7 +270,7 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
                   id="entry-edit-notes"
                   type="text"
                   value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
+                  onChange={(e) => dispatch({ type: 'setNotes', notes: e.target.value })}
                   placeholder={t('entry.notesPlaceholder')}
                   className="h-10 rounded-lg"
                   // Kept in sync with server MAX_NOTES_LENGTH (server/services/timeEntries.ts).
@@ -270,14 +311,16 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
       </ModalContent>
       <TaskFormModal
         isOpen={isAddTaskModalOpen}
-        onClose={() => setIsAddTaskModalOpen(false)}
+        onClose={() => dispatch({ type: 'setAddTaskModalOpen', isOpen: false })}
         mode="add"
         projects={projects}
         clients={clients}
         currency={currency}
-        canCreate={canCreateCustomTask}
-        canUpdate={false}
-        canDelete={false}
+        permissions={{
+          canCreate: canCreateCustomTask,
+          canUpdate: false,
+          canDelete: false,
+        }}
         onAdd={handleAddCustomTaskSubmit}
         onUpdate={() => {}}
         initialProjectId={selection.projectId}

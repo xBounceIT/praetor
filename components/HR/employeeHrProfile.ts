@@ -3,6 +3,8 @@ import type { StatusType } from '../shared/StatusBadge';
 
 export type EmployeeHrFormData = {
   name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   phone: string;
   jobTitle: string;
@@ -50,6 +52,8 @@ export const WORK_LOCATION_OPTIONS: UserWorkLocation[] = [
 
 export const createEmptyEmployeeHrForm = (): EmployeeHrFormData => ({
   name: '',
+  firstName: '',
+  lastName: '',
   email: '',
   phone: '',
   jobTitle: '',
@@ -68,6 +72,8 @@ export const createEmptyEmployeeHrForm = (): EmployeeHrFormData => ({
 
 export const createEmployeeHrForm = (employee: User): EmployeeHrFormData => ({
   name: employee.name || '',
+  firstName: employee.firstName || '',
+  lastName: employee.lastName || '',
   email: employee.email || '',
   phone: employee.phone || '',
   jobTitle: employee.jobTitle || '',
@@ -110,6 +116,8 @@ export const buildEmployeeHrPayload = (
 
   if (options.includeIdentity) {
     payload.name = formData.name.trim();
+    payload.firstName = nullableText(formData.firstName);
+    payload.lastName = nullableText(formData.lastName);
     payload.email = formData.email.trim();
   }
 
@@ -126,6 +134,8 @@ export const buildEmployeeCreatePayload = (
 ): EmployeeCreatePayload => ({
   ...buildEmployeeHrPayload(formData, { includeIdentity: false, includeCost: options.includeCost }),
   name: formData.name.trim(),
+  firstName: nullableText(formData.firstName),
+  lastName: nullableText(formData.lastName),
   email: formData.email.trim(),
 });
 

@@ -28,10 +28,10 @@ ON CONFLICT (id) DO NOTHING;
 
 -- start_date/end_date bracket the demo time entries logged against each project
 -- (see the first time_entries block below) so every entry falls inside its project window.
-INSERT INTO projects (id, name, client_id, color, description, start_date, end_date) VALUES
-    ('p1', 'Website Redesign', 'c1', '#3b82f6', 'Complete overhaul of the main marketing site.', (CURRENT_DATE - INTERVAL '30 days')::date, (CURRENT_DATE + INTERVAL '30 days')::date),
-    ('p2', 'Mobile App', 'c1', '#10b981', 'Native iOS and Android application development.', (CURRENT_DATE - INTERVAL '28 days')::date, (CURRENT_DATE + INTERVAL '28 days')::date),
-    ('p3', 'Internal Research', 'c2', '#8b5cf6', 'Ongoing research into new market trends.', (CURRENT_DATE - INTERVAL '25 days')::date, (CURRENT_DATE + INTERVAL '25 days')::date)
+INSERT INTO projects (id, name, client_id, description, start_date, end_date) VALUES
+    ('p1', 'Website Redesign', 'c1', 'Complete overhaul of the main marketing site.', (CURRENT_DATE - INTERVAL '30 days')::date, (CURRENT_DATE + INTERVAL '30 days')::date),
+    ('p2', 'Mobile App', 'c1', 'Native iOS and Android application development.', (CURRENT_DATE - INTERVAL '28 days')::date, (CURRENT_DATE + INTERVAL '28 days')::date),
+    ('p3', 'Internal Research', 'c2', 'Ongoing research into new market trends.', (CURRENT_DATE - INTERVAL '25 days')::date, (CURRENT_DATE + INTERVAL '25 days')::date)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO tasks (id, name, project_id, description) VALUES
@@ -968,7 +968,6 @@ INSERT INTO projects (
     id,
     name,
     client_id,
-    color,
     description,
     is_disabled,
     created_at,
@@ -982,7 +981,6 @@ INSERT INTO projects (
         'dm_proj_01',
         'DM-CLI-001_DM-SVC-AUDIT_' || TO_CHAR(CURRENT_DATE, 'YYYY'),
         'dm_cli_01',
-        '#0f766e',
         'Assessment track for operations',
         FALSE,
         CURRENT_TIMESTAMP - INTERVAL '18 days',
@@ -996,7 +994,6 @@ INSERT INTO projects (
         'dm_proj_02',
         'DM-CLI-001_DM-SVC-DEPLOY_' || TO_CHAR(CURRENT_DATE, 'YYYY'),
         'dm_cli_01',
-        '#1d4ed8',
         'Deployment wave for phase one',
         FALSE,
         CURRENT_TIMESTAMP - INTERVAL '18 days',
@@ -1009,7 +1006,6 @@ INSERT INTO projects (
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
     client_id = EXCLUDED.client_id,
-    color = EXCLUDED.color,
     description = EXCLUDED.description,
     is_disabled = EXCLUDED.is_disabled,
     created_at = EXCLUDED.created_at,

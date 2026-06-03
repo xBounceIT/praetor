@@ -151,6 +151,8 @@
     "employmentSection": "Rapporto di lavoro",
     "emergencySection": "Emergenza e note",
     "notSet": "Non impostato",
+    "firstName": "Nome",
+    "lastName": "Cognome",
     "email": "Indirizzo email",
     "phone": "Numero di telefono",
     "jobTitle": "Mansione",

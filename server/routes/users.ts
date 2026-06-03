@@ -89,6 +89,8 @@ const userSchema = {
     costPerHour: { type: 'number' },
     isDisabled: { type: 'boolean' },
     employeeType: { type: 'string', enum: ['app_user', 'internal', 'external'] },
+    firstName: nullableStringSchema,
+    lastName: nullableStringSchema,
     phone: nullableStringSchema,
     jobTitle: nullableStringSchema,
     department: nullableStringSchema,
@@ -135,6 +137,8 @@ const userCreateBodySchema = {
     email: { type: 'string' },
     costPerHour: { type: 'number' },
     employeeType: { type: 'string', enum: ['app_user', 'internal', 'external'] },
+    firstName: nullableStringSchema,
+    lastName: nullableStringSchema,
     phone: nullableStringSchema,
     jobTitle: nullableStringSchema,
     department: nullableStringSchema,
@@ -159,6 +163,8 @@ const userUpdateBodySchema = {
     costPerHour: { type: 'number' },
     role: { type: 'string' },
     email: { type: 'string' },
+    firstName: nullableStringSchema,
+    lastName: nullableStringSchema,
     phone: nullableStringSchema,
     jobTitle: nullableStringSchema,
     department: nullableStringSchema,
@@ -340,6 +346,8 @@ const HR_VIEW_PERM_BY_EMPLOYEE_TYPE: Record<usersRepo.EmployeeType, string> = {
 };
 
 const HR_DETAIL_FIELDS = [
+  'firstName',
+  'lastName',
   'phone',
   'jobTitle',
   'department',
@@ -419,6 +427,8 @@ const parseHrDetails = (
 ): { ok: true; fields: usersRepo.UserHrFields } | { ok: false; message: string } => {
   const fields: usersRepo.UserHrFields = {};
   const stringFields = [
+    'firstName',
+    'lastName',
     'phone',
     'jobTitle',
     'department',
@@ -750,7 +760,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
           // Keep user_roles in sync with users.role (primary/default role).
           await usersRepo.addUserRole(id, roleValue, tx);
-
           await settingsRepo.upsertForUser(
             id,
             {
@@ -987,10 +996,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const dateRangeError = getHrDateRangeError(hrDetails, targetUser);
       if (dateRangeError) return badRequest(reply, dateRangeError);
 
-      if (targetUser.authMethod !== 'local' && (name !== undefined || email !== undefined)) {
+      // Identity fields (display name, first/last name, email) are owned by the directory for
+      // externally-managed users and are overwritten on each sync — reject attempts to set them
+      // here so the API enforces the same read-only contract the UI shows (identityReadOnly).
+      const managesExternalIdentity =
+        name !== undefined ||
+        email !== undefined ||
+        hrDetails.firstName !== undefined ||
+        hrDetails.lastName !== undefined;
+      if (targetUser.authMethod !== 'local' && managesExternalIdentity) {
         return replyError(request, reply, {
           statusCode: 409,
-          message: 'Name and email are managed by the external authentication provider',
+          message: 'Name, surname, and email are managed by the external authentication provider',
           action: 'user.update.conflict',
           entityType: 'user',
           entityId: idResult.value,
@@ -1183,6 +1200,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // not appear in the audit diff either.
         costPerHour: fields.costPerHour,
         role: fields.role,
+        firstName: fields.firstName,
+        lastName: fields.lastName,
         phone: fields.phone,
         jobTitle: fields.jobTitle,
         department: fields.department,

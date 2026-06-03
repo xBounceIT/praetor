@@ -261,8 +261,8 @@ export const syncTopManagerAssignmentsForUser = async (
   await runAtomically(exec, async (tx) => {
     const isTopManager = await userHasTopManagerRole(userId, tx);
 
-    // These branches often run inside an existing transaction. Keep the statements
-    // serialized because Drizzle's transaction executor is backed by a single pg client.
+    // Keep transaction statements serialized: Drizzle's transaction executor is
+    // backed by a single pg client, even when the statements are logically independent.
     if (!isTopManager) {
       await tx
         .delete(userClients)
@@ -309,15 +309,15 @@ const replaceAssignments = (
   runAtomically(exec, async (tx) => {
     // sql.identifier safely injects the allowlisted table/column from ASSIGNMENT_SPECS.
     await executeRows(tx, sql`DELETE FROM ${sql.identifier(spec.table)} WHERE user_id = ${userId}`);
-    if (ids.length === 0) return;
-
-    const valueRows = ids.map((id) => sql`(${userId}, ${id}, ${source})`);
-    await executeRows(
-      tx,
-      sql`INSERT INTO ${sql.identifier(spec.table)} (user_id, ${sql.identifier(spec.fkColumn)}, assignment_source)
-          VALUES ${sql.join(valueRows, sql`, `)}
-          ON CONFLICT DO NOTHING`,
-    );
+    if (ids.length > 0) {
+      const valueRows = ids.map((id) => sql`(${userId}, ${id}, ${source})`);
+      await executeRows(
+        tx,
+        sql`INSERT INTO ${sql.identifier(spec.table)} (user_id, ${sql.identifier(spec.fkColumn)}, assignment_source)
+            VALUES ${sql.join(valueRows, sql`, `)}
+            ON CONFLICT DO NOTHING`,
+      );
+    }
   });
 
 export const replaceUserClients = (

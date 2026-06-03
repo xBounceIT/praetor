@@ -1,6 +1,6 @@
 import { BellRingIcon, PencilIcon, PlusIcon, RefreshCwIcon, Trash2Icon } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,6 +29,88 @@ export interface ProjectRulesProps {
 }
 
 const emptyRecipients: ProjectRuleRecipientOptions = { users: [], roles: [] };
+
+type ProjectRulesState = {
+  rules: ProjectRule[];
+  recipients: ProjectRuleRecipientOptions;
+  loading: boolean;
+  error: boolean;
+  formRule: ProjectRule | null;
+  formOpen: boolean;
+  busyRuleId: string | null;
+  ruleToDelete: ProjectRule | null;
+};
+
+type ProjectRulesAction =
+  | { type: 'loadStart' }
+  | { type: 'loadSuccess'; rules: ProjectRule[]; recipients: ProjectRuleRecipientOptions }
+  | { type: 'loadError' }
+  | { type: 'openCreateForm' }
+  | { type: 'openEditForm'; rule: ProjectRule }
+  | { type: 'setFormOpen'; open: boolean }
+  | { type: 'upsertRule'; rule: ProjectRule }
+  | { type: 'setBusyRule'; ruleId: string | null }
+  | { type: 'confirmDelete'; rule: ProjectRule }
+  | { type: 'clearDelete' }
+  | { type: 'deleteRule'; ruleId: string };
+
+const createProjectRulesState = (): ProjectRulesState => ({
+  rules: [],
+  recipients: emptyRecipients,
+  loading: true,
+  error: false,
+  formRule: null,
+  formOpen: false,
+  busyRuleId: null,
+  ruleToDelete: null,
+});
+
+const projectRulesReducer = (
+  state: ProjectRulesState,
+  action: ProjectRulesAction,
+): ProjectRulesState => {
+  switch (action.type) {
+    case 'loadStart':
+      return { ...state, loading: true, error: false };
+    case 'loadSuccess':
+      return {
+        ...state,
+        rules: action.rules,
+        recipients: action.recipients,
+        loading: false,
+        error: false,
+      };
+    case 'loadError':
+      return { ...state, loading: false, error: true };
+    case 'openCreateForm':
+      return { ...state, formRule: null, formOpen: true };
+    case 'openEditForm':
+      return { ...state, formRule: action.rule, formOpen: true };
+    case 'setFormOpen':
+      return { ...state, formOpen: action.open };
+    case 'upsertRule':
+      return {
+        ...state,
+        rules: state.rules.some((rule) => rule.id === action.rule.id)
+          ? state.rules.map((rule) => (rule.id === action.rule.id ? action.rule : rule))
+          : [...state.rules, action.rule],
+      };
+    case 'setBusyRule':
+      return { ...state, busyRuleId: action.ruleId };
+    case 'confirmDelete':
+      return { ...state, ruleToDelete: action.rule };
+    case 'clearDelete':
+      return { ...state, ruleToDelete: null };
+    case 'deleteRule':
+      return {
+        ...state,
+        rules: state.rules.filter((rule) => rule.id !== action.ruleId),
+        ruleToDelete: null,
+      };
+    default:
+      return state;
+  }
+};
 
 const canModifyRuleField = (rule: ProjectRule, permissions: string[]) => {
   const conditions =
@@ -68,39 +150,27 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
   const canCreate = hasPermission(permissions, 'projects.rules.create');
   const canUpdate = hasPermission(permissions, 'projects.rules.update');
   const canDelete = hasPermission(permissions, 'projects.rules.delete');
-  const [rules, setRules] = useState<ProjectRule[]>([]);
-  const [recipients, setRecipients] = useState<ProjectRuleRecipientOptions>(emptyRecipients);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [formRule, setFormRule] = useState<ProjectRule | null>(null);
-  const [formOpen, setFormOpen] = useState(false);
-  const [busyRuleId, setBusyRuleId] = useState<string | null>(null);
-  const [ruleToDelete, setRuleToDelete] = useState<ProjectRule | null>(null);
-
+  const [state, dispatch] = useReducer(projectRulesReducer, undefined, createProjectRulesState);
+  const { rules, recipients, loading, error, formRule, formOpen, busyRuleId, ruleToDelete } = state;
   const loadRules = useCallback(
     async (signal?: AbortSignal) => {
       if (!canView) return;
-      setLoading(true);
-      setError(false);
+      dispatch({ type: 'loadStart' });
       try {
         const [nextRules, nextRecipients] = await Promise.all([
           projectRulesApi.list(projectId, signal),
           projectRulesApi.getRecipients(projectId, signal),
         ]);
         if (signal?.aborted) return;
-        setRules(nextRules);
-        setRecipients(nextRecipients);
+        dispatch({ type: 'loadSuccess', rules: nextRules, recipients: nextRecipients });
       } catch (err) {
         if (signal?.aborted) return;
         console.error('Failed to load project rules', err);
-        setError(true);
-      } finally {
-        if (!signal?.aborted) setLoading(false);
+        dispatch({ type: 'loadError' });
       }
     },
     [canView, projectId],
   );
-
   useEffect(() => {
     if (!canView) return;
     const controller = new AbortController();
@@ -144,11 +214,11 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
     try {
       if (formRule) {
         const updated = await projectRulesApi.update(projectId, formRule.id, payload);
-        setRules((current) => current.map((rule) => (rule.id === updated.id ? updated : rule)));
+        dispatch({ type: 'upsertRule', rule: updated });
         toastSuccess(t('projects:detail.rules.toasts.updated'));
       } else {
         const created = await projectRulesApi.create(projectId, payload);
-        setRules((current) => [...current, created]);
+        dispatch({ type: 'upsertRule', rule: created });
         toastSuccess(t('projects:detail.rules.toasts.created'));
       }
     } catch (err) {
@@ -161,38 +231,37 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
 
   const handleToggle = async (rule: ProjectRule, checked: boolean) => {
     if (!canUpdate || !canModifyRuleField(rule, permissions)) return;
-    setBusyRuleId(rule.id);
+    dispatch({ type: 'setBusyRule', ruleId: rule.id });
     try {
       const updated = await projectRulesApi.update(projectId, rule.id, { isEnabled: checked });
-      setRules((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      dispatch({ type: 'upsertRule', rule: updated });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : t('projects:detail.rules.toasts.saveFailed');
       toastError(message);
     } finally {
-      setBusyRuleId(null);
+      dispatch({ type: 'setBusyRule', ruleId: null });
     }
   };
 
   const handleDelete = async () => {
     if (!ruleToDelete || !canDelete) return;
-    setBusyRuleId(ruleToDelete.id);
+    dispatch({ type: 'setBusyRule', ruleId: ruleToDelete.id });
     try {
       await projectRulesApi.delete(projectId, ruleToDelete.id);
-      setRules((current) => current.filter((rule) => rule.id !== ruleToDelete.id));
+      dispatch({ type: 'deleteRule', ruleId: ruleToDelete.id });
       toastSuccess(t('projects:detail.rules.toasts.deleted'));
-      setRuleToDelete(null);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : t('projects:detail.rules.toasts.deleteFailed');
       toastError(message);
     } finally {
-      setBusyRuleId(null);
+      dispatch({ type: 'setBusyRule', ruleId: null });
     }
   };
 
   const sortedRules = useMemo(
-    () => [...rules].sort((left, right) => left.name.localeCompare(right.name)),
+    () => rules.toSorted((left, right) => left.name.localeCompare(right.name)),
     [rules],
   );
   const deletingSelectedRule = busyRuleId === ruleToDelete?.id;
@@ -212,10 +281,7 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
           <Button
             type="button"
             size="sm"
-            onClick={() => {
-              setFormRule(null);
-              setFormOpen(true);
-            }}
+            onClick={() => dispatch({ type: 'openCreateForm' })}
             disabled={loading || error}
           >
             <PlusIcon className="size-4" />
@@ -302,10 +368,7 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
                               variant="ghost"
                               size="icon-sm"
                               disabled={!canUpdateThis || busyRuleId === rule.id}
-                              onClick={() => {
-                                setFormRule(rule);
-                                setFormOpen(true);
-                              }}
+                              onClick={() => dispatch({ type: 'openEditForm', rule })}
                               aria-label={t('projects:detail.rules.actions.edit')}
                             >
                               <PencilIcon className="size-4" />
@@ -323,7 +386,7 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
                         variant="ghost"
                         size="icon-sm"
                         disabled={busyRuleId === rule.id}
-                        onClick={() => setRuleToDelete(rule)}
+                        onClick={() => dispatch({ type: 'confirmDelete', rule })}
                         aria-label={t('projects:detail.rules.actions.delete')}
                       >
                         <Trash2Icon className="size-4 text-destructive" />
@@ -339,7 +402,7 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
 
       <ProjectRuleFormModal
         open={formOpen}
-        onOpenChange={setFormOpen}
+        onOpenChange={(open) => dispatch({ type: 'setFormOpen', open })}
         rule={formRule}
         recipients={recipients}
         permissions={permissions}
@@ -348,7 +411,7 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
 
       <Dialog
         open={!!ruleToDelete}
-        onOpenChange={(open) => !open && !deletingSelectedRule && setRuleToDelete(null)}
+        onOpenChange={(open) => !open && !deletingSelectedRule && dispatch({ type: 'clearDelete' })}
       >
         <DialogContent>
           <DialogHeader>
@@ -361,7 +424,7 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
             <Button
               type="button"
               variant="outline"
-              onClick={() => setRuleToDelete(null)}
+              onClick={() => dispatch({ type: 'clearDelete' })}
               disabled={deletingSelectedRule}
             >
               {t('common:buttons.cancel')}

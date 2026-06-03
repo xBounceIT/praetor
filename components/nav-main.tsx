@@ -1,5 +1,5 @@
 import { ChevronRight, type LucideIcon } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
@@ -40,19 +40,7 @@ interface NavMainProps {
 
 export function NavMain({ items, label, onViewChange }: NavMainProps) {
   const { isMobile, setOpenMobile } = useSidebar();
-  const [openItems, setOpenItems] = useState(
-    () => new Set(items.filter((item) => item.isActive).map((item) => item.title)),
-  );
-
-  useEffect(() => {
-    setOpenItems((current) => {
-      const next = new Set(current);
-      for (const item of items) {
-        if (item.isActive) next.add(item.title);
-      }
-      return next;
-    });
-  }, [items]);
+  const [openInactiveItems, setOpenInactiveItems] = useState(() => new Set<string>());
 
   return (
     <SidebarGroup>
@@ -62,9 +50,10 @@ export function NavMain({ items, label, onViewChange }: NavMainProps) {
           <Collapsible
             key={item.title}
             asChild
-            open={openItems.has(item.title)}
+            open={item.isActive || openInactiveItems.has(item.title)}
             onOpenChange={(isOpen) => {
-              setOpenItems((current) => {
+              if (item.isActive) return;
+              setOpenInactiveItems((current) => {
                 const next = new Set(current);
                 if (isOpen) {
                   next.add(item.title);

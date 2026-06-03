@@ -32,7 +32,7 @@ const insertRoleMock = mock();
 const updateRoleNameMock = mock();
 const deleteRoleMock = mock();
 const isRoleInUseMock = mock();
-const insertPermissionMock = mock();
+const insertPermissionsMock = mock();
 const clearPermissionsMock = mock();
 const listExplicitPermissionsMock = mock();
 const listExplicitPermissionsForRolesMock = mock();
@@ -59,7 +59,7 @@ beforeAll(async () => {
     updateRoleName: updateRoleNameMock,
     deleteRole: deleteRoleMock,
     isRoleInUse: isRoleInUseMock,
-    insertPermission: insertPermissionMock,
+    insertPermissions: insertPermissionsMock,
     clearPermissions: clearPermissionsMock,
     listExplicitPermissions: listExplicitPermissionsMock,
     listExplicitPermissionsForRoles: listExplicitPermissionsForRolesMock,
@@ -137,7 +137,7 @@ const allMocks = [
   updateRoleNameMock,
   deleteRoleMock,
   isRoleInUseMock,
-  insertPermissionMock,
+  insertPermissionsMock,
   clearPermissionsMock,
   listExplicitPermissionsMock,
   listExplicitPermissionsForRolesMock,
@@ -241,7 +241,7 @@ describe('GET /api/roles', () => {
 describe('POST /api/roles', () => {
   test('201 creates role with permissions', async () => {
     insertRoleMock.mockResolvedValue(undefined);
-    insertPermissionMock.mockResolvedValue(undefined);
+    insertPermissionsMock.mockResolvedValue(undefined);
     listExplicitPermissionsMock.mockResolvedValue(['timesheets.tracker.view']);
 
     const res = await testApp.inject({
@@ -253,9 +253,9 @@ describe('POST /api/roles', () => {
 
     expect(res.statusCode).toBe(201);
     expect(insertRoleMock).toHaveBeenCalled();
-    expect(insertPermissionMock).toHaveBeenCalledWith(
+    expect(insertPermissionsMock).toHaveBeenCalledWith(
       expect.any(String),
-      'timesheets.tracker.view',
+      ['timesheets.tracker.view'],
       TX_SENTINEL,
     );
     expect(logAuditMock).toHaveBeenCalledWith(expect.objectContaining({ action: 'role.created' }));
@@ -272,7 +272,7 @@ describe('POST /api/roles', () => {
     });
 
     expect(res.statusCode).toBe(201);
-    expect(insertPermissionMock).not.toHaveBeenCalled();
+    expect(insertPermissionsMock).toHaveBeenCalledWith(expect.any(String), [], TX_SENTINEL);
   });
 
   test('400 missing name', async () => {
@@ -607,9 +607,9 @@ describe('PUT /api/roles/:id/permissions', () => {
 
     expect(res.statusCode).toBe(200);
     expect(clearPermissionsMock).toHaveBeenCalledWith('role-x', TX_SENTINEL);
-    expect(insertPermissionMock).toHaveBeenCalledWith(
+    expect(insertPermissionsMock).toHaveBeenCalledWith(
       'role-x',
-      'timesheets.tracker.view',
+      ['timesheets.tracker.view'],
       TX_SENTINEL,
     );
     expect(logAuditMock).toHaveBeenCalledWith(

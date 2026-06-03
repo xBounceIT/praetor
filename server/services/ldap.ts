@@ -100,6 +100,8 @@ export type LdapAuthResult = {
   roleMappings: ExternalRoleMapping[];
   canonicalUsername?: string;
   displayName?: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
 };
 
@@ -185,25 +187,85 @@ const deriveCanonicalUsername = (
   typedUsername: string,
 ): string => getFirstAttributeValue(attributes, 'uid', 'sAMAccountName') ?? typedUsername;
 
+// Display-name fallback for directories that only populate a common name rather than
+// structured given/surname attributes.
 const deriveDisplayName = (attributes: Record<string, unknown>): string | undefined =>
   getFirstAttributeValue(attributes, 'cn', 'displayName');
 
-const deriveEmail = (attributes: Record<string, unknown>): string | undefined =>
-  getFirstAttributeValue(attributes, 'mail', 'email');
+// The configured directory attribute name (trimmed), falling back to the built-in default when
+// blank. Keyed by config field so the field and its default can never be mismatched.
+type LdapAttributeKey = 'firstNameAttribute' | 'lastNameAttribute' | 'emailAttribute';
+const attributeName = (config: ldapRepo.LdapConfig, key: LdapAttributeKey): string =>
+  config[key]?.trim() || ldapRepo.DEFAULT_CONFIG[key];
+
+export type DirectoryProfile = {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  name?: string;
+};
+
+// Resolves a directory entry into Praetor's identity shape. The display `name` prefers the
+// structured "{firstName} {lastName}" composition and falls back to cn/displayName so existing
+// directories that only expose a common name keep producing a usable display name.
+const resolveDirectoryProfile = (
+  attributes: Record<string, unknown>,
+  config: ldapRepo.LdapConfig,
+): DirectoryProfile => {
+  const firstName = getFirstAttributeValue(attributes, attributeName(config, 'firstNameAttribute'));
+  const lastName = getFirstAttributeValue(attributes, attributeName(config, 'lastNameAttribute'));
+  // Configured email attribute first, then the conventional mail/email keys as a safety net.
+  const email = getFirstAttributeValue(
+    attributes,
+    attributeName(config, 'emailAttribute'),
+    'mail',
+    'email',
+  );
+  const composed = [firstName, lastName].filter(Boolean).join(' ').trim();
+  return { firstName, lastName, email, name: composed || deriveDisplayName(attributes) };
+};
+
+// Attributes to request from the directory: the conventional identity/username keys plus the
+// operator-configured first/last/email attributes (deduped) so a custom mapping is returned.
+const buildUserAttributeList = (config: ldapRepo.LdapConfig): string[] => {
+  const attrs = [
+    'uid',
+    'sAMAccountName',
+    'cn',
+    'displayName',
+    'mail',
+    'email',
+    'sn',
+    'givenName',
+    attributeName(config, 'firstNameAttribute'),
+    attributeName(config, 'lastNameAttribute'),
+    attributeName(config, 'emailAttribute'),
+  ];
+  return [...new Set(attrs)];
+};
 
 const syncDirectoryProfileTx = async (
   userId: string,
-  profile: { name?: string; email?: string },
+  profile: DirectoryProfile,
   tx: DbExecutor,
 ): Promise<void> => {
   const name = profile.name?.trim();
+  const firstName = profile.firstName?.trim();
+  const lastName = profile.lastName?.trim();
   const email = profile.email?.trim();
-  if (!name && !email) return;
+  if (!name && !firstName && !lastName && !email) return;
 
-  if (name) {
+  // Only write the identity columns the directory actually returned (mirrors the existing
+  // name-only guard): a sparse read must not wipe a previously synced first/last name.
+  if (name || firstName || lastName) {
     await usersRepo.updateDirectoryProfile(
       userId,
-      { name, avatarInitials: computeAvatarInitials(name) },
+      {
+        name: name || undefined,
+        avatarInitials: name ? computeAvatarInitials(name) : undefined,
+        firstName: firstName || undefined,
+        lastName: lastName || undefined,
+      },
       tx,
     );
   }
@@ -214,10 +276,8 @@ const syncDirectoryProfileTx = async (
   );
 };
 
-const syncDirectoryProfile = (
-  userId: string,
-  profile: { name?: string; email?: string },
-): Promise<void> => withDbTransaction((tx) => syncDirectoryProfileTx(userId, profile, tx));
+const syncDirectoryProfile = (userId: string, profile: DirectoryProfile): Promise<void> =>
+  withDbTransaction((tx) => syncDirectoryProfileTx(userId, profile, tx));
 
 const isUniqueViolationError = (err: unknown): boolean => {
   if (!err || typeof err !== 'object') return false;
@@ -376,6 +436,7 @@ class LDAPService {
       });
 
       const roleMappings = this.getRoleMappings();
+      const profile = resolveDirectoryProfile(userEntry.attributes, config);
       return {
         authenticated: true,
         userDn,
@@ -383,8 +444,10 @@ class LDAPService {
         matchedRoleIds: mapExternalGroupsToMatchedRoleIds(groups, roleMappings),
         roleMappings,
         canonicalUsername,
-        displayName: deriveDisplayName(userEntry.attributes),
-        email: deriveEmail(userEntry.attributes),
+        displayName: profile.name,
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        email: profile.email,
       };
     } finally {
       if (client) {
@@ -444,6 +507,8 @@ class LDAPService {
       }
       await syncDirectoryProfile(existingByCanonical.id, {
         name: result.displayName,
+        firstName: result.firstName,
+        lastName: result.lastName,
         email: result.email,
       });
       return {
@@ -483,6 +548,8 @@ class LDAPService {
       await usersRepo.createUser({
         id,
         name,
+        firstName: result.firstName?.trim() || null,
+        lastName: result.lastName?.trim() || null,
         username: canonicalUsername,
         passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
         role: primaryRole,
@@ -506,6 +573,8 @@ class LDAPService {
           await applyExternalRolesForUserIfMatched(racedUser.id, result.groups, roleMappings);
           await syncDirectoryProfile(racedUser.id, {
             name: result.displayName,
+            firstName: result.firstName,
+            lastName: result.lastName,
             email: result.email,
           });
           return {
@@ -598,7 +667,7 @@ class LDAPService {
     const searchOptions = {
       scope: 'sub',
       filter: buildUserLookupFilter(config.userFilter, username),
-      attributes: ['uid', 'sAMAccountName', 'cn', 'displayName', 'mail'],
+      attributes: buildUserAttributeList(config),
       sizeLimit: 1,
     };
 
@@ -736,7 +805,7 @@ class LDAPService {
       const searchOptions = {
         scope: 'sub',
         filter: buildUserSyncFilter(config.userFilter),
-        attributes: ['uid', 'cn', 'sn', 'givenName', 'mail', 'displayName', 'sAMAccountName'],
+        attributes: buildUserAttributeList(config),
       };
 
       const entries: LdapEntry[] = [];
@@ -787,9 +856,9 @@ class LDAPService {
         }
 
         const username = normalizeExternalUsername(candidate);
-        const directoryName = getFirstAttributeValue(entry, 'cn', 'displayName');
-        const name = directoryName ?? username;
-        const email = getFirstAttributeValue(entry, 'mail', 'email');
+        const profile = resolveDirectoryProfile(entry, config);
+        const name = profile.name ?? username;
+        const email = profile.email;
 
         const existing = await usersRepo.findLoginUserByNormalizedUsername(username);
 
@@ -823,13 +892,23 @@ class LDAPService {
               'LDAP sync skipped role-mapping diagnostic for user: group search failed',
             );
             // Still refresh the display name — that bit doesn't depend on group state.
-            await syncDirectoryProfile(existing.id, { name: directoryName, email });
+            await syncDirectoryProfile(existing.id, {
+              name: profile.name,
+              firstName: profile.firstName,
+              lastName: profile.lastName,
+              email,
+            });
             syncedCount++;
             continue;
           }
           // Refresh by id so pre-migration mixed-case usernames and provider email claims
           // both land on the already matched row.
-          await syncDirectoryProfile(existing.id, { name: directoryName, email });
+          await syncDirectoryProfile(existing.id, {
+            name: profile.name,
+            firstName: profile.firstName,
+            lastName: profile.lastName,
+            email,
+          });
           // Role mapping is bootstrap-only: sync refreshes display data but never rewrites
           // an existing user's roles from LDAP groups. Still warn when the user's groups
           // stop yielding any known role (no match or matched role was deleted), so admins
@@ -866,6 +945,8 @@ class LDAPService {
           await usersRepo.createUser({
             id,
             name,
+            firstName: profile.firstName?.trim() || null,
+            lastName: profile.lastName?.trim() || null,
             username,
             passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
             role: roleIds[0],

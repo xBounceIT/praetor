@@ -26,6 +26,8 @@ export type EmploymentStatus = UserEmploymentStatus;
 export type WorkLocation = UserWorkLocation;
 
 export type UserHrFields = {
+  firstName?: string | null;
+  lastName?: string | null;
   phone?: string | null;
   jobTitle?: string | null;
   department?: string | null;
@@ -333,12 +335,19 @@ export const updateNameByUsername = async (
 
 export const updateDirectoryProfile = async (
   userId: string,
-  fields: { name?: string; avatarInitials?: string },
+  fields: {
+    name?: string;
+    avatarInitials?: string;
+    firstName?: string | null;
+    lastName?: string | null;
+  },
   exec: DbExecutor = db,
 ): Promise<void> => {
   const set: Record<string, unknown> = {};
   if (fields.name !== undefined) set.name = fields.name;
   if (fields.avatarInitials !== undefined) set.avatarInitials = fields.avatarInitials;
+  if (fields.firstName !== undefined) set.firstName = fields.firstName;
+  if (fields.lastName !== undefined) set.lastName = fields.lastName;
   if (Object.keys(set).length === 0) return;
   await exec.update(users).set(set).where(eq(users.id, userId));
 };
@@ -355,6 +364,8 @@ export type NewUser = {
   passwordHash: string;
   role: string;
   avatarInitials: string;
+  firstName?: string | null;
+  lastName?: string | null;
   authMethod?: AuthMethod;
   authProviderId?: string | null;
 };
@@ -363,6 +374,8 @@ export const createUser = async (user: NewUser, exec: DbExecutor = db): Promise<
   await exec.insert(users).values({
     id: user.id,
     name: user.name,
+    firstName: user.firstName ?? null,
+    lastName: user.lastName ?? null,
     username: user.username,
     passwordHash: user.passwordHash,
     role: user.role,
@@ -386,6 +399,8 @@ export type UserListRow = {
   costPerHour: number;
   isDisabled: boolean;
   employeeType: EmployeeType;
+  firstName?: string | null;
+  lastName?: string | null;
   phone?: string | null;
   jobTitle?: string | null;
   department?: string | null;
@@ -471,6 +486,8 @@ type UserListRowDb = {
   costPerHour: string | number | null;
   isDisabled: boolean | null;
   employeeType: string | null;
+  firstName: string | null;
+  lastName: string | null;
   phone: string | null;
   jobTitle: string | null;
   department: string | null;
@@ -500,6 +517,8 @@ const mapUserListRow = (row: UserListRowDb): UserListRow => ({
   costPerHour: parseDbNumber(row.costPerHour, 0),
   isDisabled: !!row.isDisabled,
   employeeType: (row.employeeType as EmployeeType | null) ?? 'app_user',
+  firstName: row.firstName ?? undefined,
+  lastName: row.lastName ?? undefined,
   phone: row.phone ?? undefined,
   jobTitle: row.jobTitle ?? undefined,
   department: row.department ?? undefined,
@@ -528,6 +547,8 @@ type UpdatedUserRowDb = {
   costPerHour: string | number | null;
   isDisabled: boolean | null;
   employeeType: string | null;
+  firstName: string | null;
+  lastName: string | null;
   phone: string | null;
   jobTitle: string | null;
   department: string | null;
@@ -551,6 +572,8 @@ const mapUpdatedUserRow = (row: UpdatedUserRowDb): UpdatedUserRow => ({
   costPerHour: parseDbNumber(row.costPerHour, 0),
   isDisabled: !!row.isDisabled,
   employeeType: (row.employeeType as EmployeeType | null) ?? 'app_user',
+  firstName: row.firstName ?? null,
+  lastName: row.lastName ?? null,
   phone: row.phone ?? null,
   jobTitle: row.jobTitle ?? null,
   department: row.department ?? null,
@@ -566,6 +589,8 @@ const mapUpdatedUserRow = (row: UpdatedUserRowDb): UpdatedUserRow => ({
 });
 
 const setHrFields = (set: Record<string, unknown>, fields: UserHrFields): void => {
+  if (fields.firstName !== undefined) set.firstName = fields.firstName;
+  if (fields.lastName !== undefined) set.lastName = fields.lastName;
   if (fields.phone !== undefined) set.phone = fields.phone;
   if (fields.jobTitle !== undefined) set.jobTitle = fields.jobTitle;
   if (fields.department !== undefined) set.department = fields.department;
@@ -585,6 +610,8 @@ const setHrFields = (set: Record<string, unknown>, fields: UserHrFields): void =
 };
 
 const USER_HR_SELECT_COLUMNS = sql`
+            u.first_name AS "firstName",
+            u.last_name AS "lastName",
             u.phone,
             u.job_title AS "jobTitle",
             u.department,
@@ -805,6 +832,8 @@ export const insertUser = async (user: NewFullUser, exec: DbExecutor = db): Prom
     costPerHour: String(user.costPerHour),
     isDisabled: user.isDisabled,
     employeeType: user.employeeType,
+    firstName: user.firstName ?? null,
+    lastName: user.lastName ?? null,
     phone: user.phone ?? null,
     jobTitle: user.jobTitle ?? null,
     department: user.department ?? null,
@@ -862,6 +891,8 @@ export const updateUserDynamic = async (
     costPerHour: users.costPerHour,
     isDisabled: users.isDisabled,
     employeeType: users.employeeType,
+    firstName: users.firstName,
+    lastName: users.lastName,
     phone: users.phone,
     jobTitle: users.jobTitle,
     department: users.department,
@@ -898,13 +929,13 @@ export const replaceUserRoles = async (
   // the user's secondary roles.
   await runAtomically(exec, async (tx) => {
     await executeRows(tx, sql`DELETE FROM user_roles WHERE user_id = ${userId}`);
-    if (roleIds.length === 0) return;
-
-    const valueRows = roleIds.map((roleId) => sql`(${userId}, ${roleId})`);
-    await executeRows(
-      tx,
-      sql`INSERT INTO user_roles (user_id, role_id) VALUES ${sql.join(valueRows, sql`, `)} ON CONFLICT DO NOTHING`,
-    );
+    if (roleIds.length > 0) {
+      const valueRows = roleIds.map((roleId) => sql`(${userId}, ${roleId})`);
+      await executeRows(
+        tx,
+        sql`INSERT INTO user_roles (user_id, role_id) VALUES ${sql.join(valueRows, sql`, `)} ON CONFLICT DO NOTHING`,
+      );
+    }
   });
 };
 

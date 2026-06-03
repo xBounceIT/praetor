@@ -818,8 +818,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      await productsRepo.clearProductsCategoryByName(name, type);
-      await productsRepo.deleteInternalCategoryById(idResult.value);
+      await productsRepo.clearProductsCategoryAndDeleteInternalCategory(name, type, idResult.value);
 
       await logAudit({
         request,

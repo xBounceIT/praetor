@@ -1,6 +1,6 @@
 import { CheckIcon, ChevronsUpDownIcon, XIcon } from 'lucide-react';
 import type React from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
@@ -103,6 +103,32 @@ const TriggerLabel = ({ isPlaceholder, label }: { isPlaceholder: boolean; label:
   );
 };
 
+type SearchableSelectState = {
+  open: boolean;
+  searchTerm: string;
+};
+
+type SearchableSelectAction =
+  | { type: 'setOpen'; open: boolean }
+  | { type: 'setSearchTerm'; searchTerm: string }
+  | { type: 'close' };
+
+const searchableSelectReducer = (
+  state: SearchableSelectState,
+  action: SearchableSelectAction,
+): SearchableSelectState => {
+  switch (action.type) {
+    case 'setOpen':
+      return action.open ? { ...state, open: true } : { open: false, searchTerm: '' };
+    case 'setSearchTerm':
+      return { ...state, searchTerm: action.searchTerm };
+    case 'close':
+      return { open: false, searchTerm: '' };
+    default:
+      return state;
+  }
+};
+
 const PlainSelectControl = ({
   buttonClassName,
   className,
@@ -172,8 +198,11 @@ const SearchableSelectControl = ({
   value,
 }: SelectControlProps) => {
   const { t } = useTranslation('common');
-  const [open, setOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [state, dispatch] = useReducer(searchableSelectReducer, {
+    open: false,
+    searchTerm: '',
+  });
+  const { open, searchTerm } = state;
   const selectedOption = getSingleSelectedOption(options, value);
   const selectedValueSet = useMemo(() => new Set(Array.isArray(value) ? value : []), [value]);
   const selectedOptions = useMemo(
@@ -187,6 +216,10 @@ const SearchableSelectControl = ({
     ? selectedOptions.length === 0 && !displayValue
     : !selectedOption && !displayValue;
 
+  if (disabled && open) {
+    dispatch({ type: 'close' });
+  }
+
   const searchableOptions = useMemo(
     () =>
       options.map((option) => ({
@@ -199,22 +232,11 @@ const SearchableSelectControl = ({
   const filteredOptions = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     if (!normalizedSearch) return options;
-    return searchableOptions
-      .filter(({ normalizedName }) => normalizedName.includes(normalizedSearch))
-      .map(({ option }) => option);
+    return searchableOptions.reduce<Option[]>((matches, { option, normalizedName }) => {
+      if (normalizedName.includes(normalizedSearch)) matches.push(option);
+      return matches;
+    }, []);
   }, [options, searchTerm, searchableOptions]);
-
-  useEffect(() => {
-    if (!open) {
-      setSearchTerm('');
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (disabled) {
-      setOpen(false);
-    }
-  }, [disabled]);
 
   const handleSelect = (id: string) => {
     if (disabled) return;
@@ -229,13 +251,18 @@ const SearchableSelectControl = ({
     }
 
     onChange(id);
-    setOpen(false);
+    dispatch({ type: 'close' });
   };
 
   return (
     <Field className={cn('relative min-w-0', className)}>
       <SelectLabel id={id} label={label} />
-      <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
+      <Popover
+        open={open}
+        onOpenChange={
+          disabled ? undefined : (nextOpen) => dispatch({ type: 'setOpen', open: nextOpen })
+        }
+      >
         <PopoverTrigger asChild>
           <Button
             type="button"
@@ -284,7 +311,9 @@ const SearchableSelectControl = ({
           <Command shouldFilter={false}>
             <CommandInput
               value={searchTerm}
-              onValueChange={setSearchTerm}
+              onValueChange={(nextSearchTerm) =>
+                dispatch({ type: 'setSearchTerm', searchTerm: nextSearchTerm })
+              }
               placeholder={t('select.search')}
             />
             <CommandList>

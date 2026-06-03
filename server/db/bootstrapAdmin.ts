@@ -21,10 +21,10 @@ const resolveBootstrapAdminPassword = (): string => {
 };
 
 const matchesInsecureBootstrapPassword = async (passwordHash: string): Promise<boolean> => {
-  for (const candidate of INSECURE_BOOTSTRAP_ADMIN_PASSWORDS) {
-    if (await bcrypt.compare(candidate, passwordHash)) return true;
-  }
-  return false;
+  const matches = await Promise.all(
+    INSECURE_BOOTSTRAP_ADMIN_PASSWORDS.map((candidate) => bcrypt.compare(candidate, passwordHash)),
+  );
+  return matches.some(Boolean);
 };
 
 export const syncDefaultAdminPasswordWarning = async (

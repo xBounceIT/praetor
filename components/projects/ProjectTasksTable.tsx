@@ -32,6 +32,37 @@ export interface ProjectTasksTableProps {
   onRequestDeleteTask: (task: ProjectTask) => void;
 }
 
+type ProjectTaskHoursState = {
+  projectId: string | null;
+  hours: Record<string, number>;
+  loadState: 'idle' | 'loading' | 'error';
+};
+
+const INITIAL_TASK_HOURS_STATE: ProjectTaskHoursState = {
+  projectId: null,
+  hours: {},
+  loadState: 'idle',
+};
+
+const ProjectTaskEmptyState: React.FC<{ label: string }> = ({ label }) => (
+  <span className="text-xs italic text-muted-foreground">{label}</span>
+);
+
+const ProjectTaskAddButton: React.FC<{
+  label: string;
+  onAddTask: () => void | Promise<void>;
+}> = ({ label, onAddTask }) => (
+  <Button
+    type="button"
+    onClick={() => onAddTask()}
+    size="sm"
+    className={TABLE_CONTROL_BUTTON_CLASSNAME}
+  >
+    <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+    {label}
+  </Button>
+);
+
 const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
   projectId,
   tasks,
@@ -46,27 +77,33 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
   const { t } = useTranslation(['projects', 'common']);
 
   const [taskEdits, setTaskEdits] = useState<Record<string, Record<string, string>>>({});
-  const [projectTaskHours, setProjectTaskHours] = useState<Record<string, number>>({});
-  const [hoursLoadState, setHoursLoadState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [hoursState, setHoursState] = useState<ProjectTaskHoursState>(INITIAL_TASK_HOURS_STATE);
   const fetchHoursAbortRef = useRef<AbortController | null>(null);
+
+  if (hoursState.projectId !== projectId) {
+    setHoursState({
+      projectId,
+      hours: {},
+      loadState: projectId ? 'loading' : 'idle',
+    });
+  }
 
   useEffect(() => {
     if (!projectId) return;
     fetchHoursAbortRef.current?.abort();
     const ac = new AbortController();
     fetchHoursAbortRef.current = ac;
-    setHoursLoadState('loading');
-    setProjectTaskHours({});
     tasksApi
       .getHours(projectId, ac.signal)
       .then((h) => {
         if (ac.signal.aborted) return;
-        setProjectTaskHours(h);
-        setHoursLoadState('idle');
+        setHoursState({ projectId, hours: h, loadState: 'idle' });
       })
       .catch(() => {
         if (ac.signal.aborted) return;
-        setHoursLoadState('error');
+        setHoursState((prev) =>
+          prev.projectId === projectId ? { ...prev, loadState: 'error' } : prev,
+        );
       });
     return () => {
       ac.abort();
@@ -251,10 +288,11 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
       id: 'progress',
       disableFiltering: true,
       cell: ({ row }) => {
-        if (hoursLoadState === 'loading')
+        if (hoursState.loadState === 'loading')
           return <span className="text-xs text-muted-foreground">...</span>;
-        if (hoursLoadState === 'error') return <span className="text-xs text-destructive">-</span>;
-        const logged = projectTaskHours[row.name] ?? 0;
+        if (hoursState.loadState === 'error')
+          return <span className="text-xs text-destructive">-</span>;
+        const logged = hoursState.hours[row.name] ?? 0;
         const expected = row.expectedEffort ?? 0;
         const pct = expected > 0 ? Math.round((logged / expected) * 100) : 0;
         const overBudget = expected > 0 && logged > expected;
@@ -306,22 +344,10 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
       data={tasks}
       columns={columns}
       defaultRowsPerPage={5}
-      emptyState={
-        <span className="text-xs italic text-muted-foreground">
-          {t('projects:projects.noTasksAdded')}
-        </span>
-      }
+      emptyState={<ProjectTaskEmptyState label={t('projects:projects.noTasksAdded')} />}
       headerAction={
         canCreate ? (
-          <Button
-            type="button"
-            onClick={() => onAddTask()}
-            size="sm"
-            className={TABLE_CONTROL_BUTTON_CLASSNAME}
-          >
-            <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
-            {t('projects:projects.addTaskRow')}
-          </Button>
+          <ProjectTaskAddButton label={t('projects:projects.addTaskRow')} onAddTask={onAddTask} />
         ) : undefined
       }
     />

@@ -234,31 +234,39 @@ export const useDashboardLayout = (
       }
 
       const activeId = activeViewIdRef.current;
+      const uploadResults = await Promise.all(
+        legacy.map(async (view) => {
+          if (!isCurrent()) return { status: 'skipped' as const, view };
+          try {
+            const dto = await viewsApi.create({
+              kind: 'dashboard',
+              scopeKey: key,
+              name: view.name,
+              config: { layout: view.layout },
+            });
+            return { status: 'uploaded' as const, view, dto };
+          } catch (err) {
+            console.error('Failed to migrate a legacy dashboard view', err);
+            return { status: 'failed' as const, view };
+          }
+        }),
+      );
+
       const remaining: DashboardView[] = [];
       let uploaded = false;
-      for (const view of legacy) {
-        if (!isCurrent()) {
-          remaining.push(view);
+      for (const result of uploadResults) {
+        if (result.status !== 'uploaded') {
+          remaining.push(result.view);
           continue;
         }
-        try {
-          const dto = await viewsApi.create({
-            kind: 'dashboard',
-            scopeKey: key,
-            name: view.name,
-            config: { layout: view.layout },
-          });
-          uploaded = true;
-          // If this project had the legacy view active, re-point its marker at the new server id
-          // (and the ref, so the post-load reconcile matches it instead of clearing a dangling id).
-          if (view.id === activeId) {
-            setActiveViewId(dto.id);
-            persistActiveView(dto.id);
-            activeViewIdRef.current = dto.id;
-          }
-        } catch (err) {
-          console.error('Failed to migrate a legacy dashboard view', err);
-          remaining.push(view);
+        uploaded = true;
+        // If this project had the legacy view active, re-point its marker at the new server id
+        // (and the ref, so the post-load reconcile matches it instead of clearing a dangling id).
+        const uploadedViewId = result.dto.id;
+        if (result.view.id === activeId && isCurrent()) {
+          setActiveViewId(uploadedViewId);
+          persistActiveView(uploadedViewId);
+          activeViewIdRef.current = uploadedViewId;
         }
       }
 
@@ -292,26 +300,27 @@ export const useDashboardLayout = (
     setViewsError(false);
     try {
       let dtos = await viewsApi.list('dashboard', scopeKey);
-      if (seq !== loadSeqRef.current) return;
-      // One-time migration of pre-upgrade localStorage dashboard views; re-list if anything uploaded.
-      if (
-        await migrateLegacyDashboardViews(
+      if (seq === loadSeqRef.current) {
+        // One-time migration of pre-upgrade localStorage dashboard views; re-list if anything uploaded.
+        const migrated = await migrateLegacyDashboardViews(
           scopeKey,
           !dtos.some((d) => d.access === 'owner'),
           () => seq === loadSeqRef.current,
-        )
-      ) {
-        if (seq !== loadSeqRef.current) return;
-        dtos = await viewsApi.list('dashboard', scopeKey);
-        if (seq !== loadSeqRef.current) return;
+        );
+        if (seq === loadSeqRef.current && migrated) {
+          dtos = await viewsApi.list('dashboard', scopeKey);
+        }
       }
-      const mapped = dtos.map((dto) => mapServerView(dto, widgetsRef.current));
-      setViews(mapped);
-      reconcileAfterLoad(mapped);
+      if (seq === loadSeqRef.current) {
+        const mapped = dtos.map((dto) => mapServerView(dto, widgetsRef.current));
+        setViews(mapped);
+        reconcileAfterLoad(mapped);
+      }
     } catch (err) {
-      if (seq !== loadSeqRef.current) return;
-      console.error('Failed to load dashboard views', err);
-      setViewsError(true);
+      if (seq === loadSeqRef.current) {
+        console.error('Failed to load dashboard views', err);
+        setViewsError(true);
+      }
     } finally {
       if (seq === loadSeqRef.current) setViewsLoading(false);
     }

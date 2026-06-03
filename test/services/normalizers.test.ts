@@ -395,6 +395,8 @@ describe('normalizeUser', () => {
       hasTopManagerRole: true,
       isAdminOnly: false,
       employeeType: 'internal',
+      firstName: '  Mario  ',
+      lastName: '  Bianchi  ',
       phone: '  +39 02 1234  ',
       jobTitle: '  Consultant  ',
       department: '  Delivery  ',
@@ -420,6 +422,8 @@ describe('normalizeUser', () => {
     expect(result.hasTopManagerRole).toBe(true);
     expect(result.isAdminOnly).toBe(false);
     expect(result.employeeType).toBe('internal');
+    expect(result.firstName).toBe('Mario');
+    expect(result.lastName).toBe('Bianchi');
     expect(result.phone).toBe('+39 02 1234');
     expect(result.jobTitle).toBe('Consultant');
     expect(result.department).toBe('Delivery');
@@ -453,6 +457,8 @@ describe('normalizeUser', () => {
     expect(result.isAdminOnly).toBeUndefined();
     expect(result.employeeType).toBeUndefined();
     expect(result.phone).toBeUndefined();
+    expect(result.firstName).toBeUndefined();
+    expect(result.lastName).toBeUndefined();
     expect(result.employeeCode).toBeUndefined();
     expect(result.employmentStatus).toBeUndefined();
   });

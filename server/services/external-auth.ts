@@ -108,10 +108,14 @@ export const mapExternalGroupsToMatchedRoleIds = (
   mappings: ExternalRoleMapping[],
 ): string[] => {
   const roleIds: string[] = [];
+  const roleIdSet = new Set<string>();
   for (const mapping of mappings) {
     if (!mapping.externalGroup?.trim() || !mapping.role?.trim()) continue;
     if (groups.some((group) => mappingMatchesGroup(mapping.externalGroup, group))) {
-      if (!roleIds.includes(mapping.role)) roleIds.push(mapping.role);
+      if (!roleIdSet.has(mapping.role)) {
+        roleIdSet.add(mapping.role);
+        roleIds.push(mapping.role);
+      }
     }
   }
   return roleIds;
