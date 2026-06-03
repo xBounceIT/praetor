@@ -46,6 +46,7 @@
     "supplierOrderColumn": "Ordine fornitore",
     "noSupplierOrder": "Nessun ordine fornitore",
     "supplierOrderBadge": "Ordine fornitore",
+    "supplierOrderLineLocked": "Questa riga è collegata a un ordine fornitore e non può essere rimossa qui.",
     "paymentDueDate": "Data scadenza pagamento",
     "failedToSave": "Impossibile salvare l'ordine. Riprova.",
     "failedToDelete": "Impossibile eliminare l'ordine. Riprova.",

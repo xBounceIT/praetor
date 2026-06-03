@@ -434,7 +434,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   };
 
   const removeProductRow = (index: number) => {
-    const newItems = [...(formData.items || [])];
+    const currentItems = formData.items || [];
+    // Lines backed by an auto-created supplier order must not be removed here: replacing the
+    // item list would orphan the linked procurement order, so the backend rejects it (409).
+    if (currentItems[index]?.supplierSaleId) return;
+    const newItems = [...currentItems];
     newItems.splice(index, 1);
     setFormData((prev) => ({ ...prev, items: newItems }));
   };
@@ -1208,7 +1212,15 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 variant="ghost"
                                 size="icon-sm"
                                 onClick={() => removeProductRow(index)}
-                                disabled={isReadOnly}
+                                disabled={isReadOnly || Boolean(item.supplierSaleId)}
+                                title={
+                                  item.supplierSaleId
+                                    ? t('accounting:clientsOrders.supplierOrderLineLocked', {
+                                        defaultValue:
+                                          'This line is linked to a supplier order and cannot be removed here.',
+                                      })
+                                    : undefined
+                                }
                                 className="text-muted-foreground hover:text-destructive"
                               >
                                 <i className="fa-solid fa-trash-can" aria-hidden="true"></i>

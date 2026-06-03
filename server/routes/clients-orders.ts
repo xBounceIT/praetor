@@ -1003,6 +1003,49 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
+      // A draft order created from an offer can include lines whose accepted supplier quotes
+      // auto-created supplier (procurement) orders at create time (supplierSaleId /
+      // supplierSaleItemId are recorded on the sale item). clientsOrdersRepo.replaceItems
+      // deletes+reinserts sale_items without reconciling those supplier orders, so dropping such a
+      // line — or changing its product/quantity — would leave procurement pointing at stale data.
+      // Keep the supplier-order-backed lines locked; header fields, sale-side fields (price /
+      // discount / note), other lines and additions all stay editable.
+      if (isSourceLinkedOrder && allowSourceLinkedEdit && items !== undefined) {
+        if (existingItems === null) {
+          existingItems = await clientsOrdersRepo.findItemsForOrder(idResult.value);
+        }
+        const supplierBackedItems = existingItems.filter((it) => it.supplierSaleItemId);
+        if (supplierBackedItems.length > 0) {
+          const incomingBySupplierItemId = new Map(
+            (normalizedItems ?? [])
+              .filter((it) => it.supplierSaleItemId)
+              .map((it) => [it.supplierSaleItemId as string, it] as const),
+          );
+          const desyncsSupplierOrder = supplierBackedItems.some((existing) => {
+            const incoming = incomingBySupplierItemId.get(existing.supplierSaleItemId as string);
+            return (
+              !incoming ||
+              incoming.productId !== existing.productId ||
+              Number(incoming.quantity) !== Number(existing.quantity)
+            );
+          });
+          if (desyncsSupplierOrder) {
+            return replyError(request, reply, {
+              statusCode: 409,
+              message: 'Order lines linked to a supplier order cannot be removed or changed',
+              action: 'client_order.update.conflict',
+              entityType: 'client_order',
+              entityId: idResult.value,
+              details: {
+                targetLabel: idResult.value,
+                secondaryLabel: 'supplier_linked_items_locked',
+                changedFields: ['items'],
+              },
+            });
+          }
+        }
+      }
+
       let linkedQuoteIdValue: string | null = null;
       if (linkedOfferId !== undefined && linkedOfferIdValue) {
         if (existingOrder.linkedOfferId && existingOrder.linkedOfferId !== linkedOfferIdValue) {

@@ -271,4 +271,35 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
     expect(payload.linkedOfferId).toBe('off-1');
     expect(payload.items).toHaveLength(1);
   });
+
+  test('the remove button is disabled for a line linked to a supplier order', async () => {
+    const supplierBackedDraft: ClientsOrder = {
+      ...draftLinkedOrder,
+      id: 'dm_so_04',
+      items: [
+        {
+          ...orders[0].items[0],
+          id: 'item-sup',
+          supplierQuoteItemId: 'sqi-1',
+          supplierSaleId: 'ss-1',
+          supplierSaleItemId: 'ssi-1',
+        },
+      ],
+    };
+    const { dialog } = await openModal(supplierBackedDraft);
+
+    // A line whose supplier order was auto-created stays put: removing it would orphan
+    // the procurement order, so the trash control is locked even though the draft is editable.
+    expect(isDisabled(within(dialog).getByRole('button', { name: 'common:buttons.delete' }))).toBe(
+      true,
+    );
+  });
+
+  test('the remove button stays enabled for a non-supplier draft line', async () => {
+    const { dialog } = await openModal(draftLinkedOrder);
+
+    expect(isDisabled(within(dialog).getByRole('button', { name: 'common:buttons.delete' }))).toBe(
+      false,
+    );
+  });
 });

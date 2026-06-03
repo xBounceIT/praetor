@@ -46,6 +46,7 @@
     "supplierOrderColumn": "Supplier Order",
     "noSupplierOrder": "No supplier order",
     "supplierOrderBadge": "Supplier order",
+    "supplierOrderLineLocked": "This line is linked to a supplier order and cannot be removed here.",
     "paymentDueDate": "Payment due date",
     "failedToSave": "Failed to save the order. Please retry.",
     "failedToDelete": "Failed to delete the order. Please retry.",

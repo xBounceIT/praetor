@@ -29,6 +29,8 @@ Customer and supplier orders consolidate operational information. Before confirm
 
 A sale order created from an accepted offer starts as a **Draft** and stays fully editable (client, rows, discounts, notes, and payment terms) while it is a draft. It becomes read-only only after it is **Confirmed** or **Denied**.
 
+Rows that automatically generated a **supplier order** (marked with the *Supplier order* badge) stay locked even in draft: they cannot be removed, nor can their product or quantity change, so the linked procurement order never falls out of sync. You can still update their sale price, add other rows, and edit the header fields.
+
 ## Invoices
 
 Customer and supplier invoices should match actual orders and deliveries. Check taxable amounts, VAT, totals, and references to the linked document.
