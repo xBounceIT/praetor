@@ -405,6 +405,27 @@ describe('POST /api/auth/2fa/confirm', () => {
     expect(auditActions()).toContain('user.login');
   });
 
+  test('401 (enroll token): account switched to OIDC/SAML since the token was issued is rejected', async () => {
+    getTotpStateMock.mockResolvedValue({
+      totpSecret: encrypt(SECRET),
+      totpEnabled: false,
+      totpConfirmedAt: null,
+      totpBackupCodes: null,
+    });
+    findLoginUserByIdMock.mockResolvedValue({ ...LOGIN_USER, authMethod: 'oidc' });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/2fa/confirm',
+      headers: enrollHeader(),
+      payload: { code: validCode() },
+    });
+
+    expect(res.statusCode).toBe(401);
+    // No local session is minted for an account no longer on a TOTP-applicable auth method.
+    expect(JSON.parse(res.body).token).toBeUndefined();
+  });
+
   test('400 when no pending enrollment exists', async () => {
     getTotpStateMock.mockResolvedValue({
       totpSecret: null,

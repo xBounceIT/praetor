@@ -1355,6 +1355,24 @@ describe('POST /api/auth/totp-challenge', () => {
     );
   });
 
+  test('400 when the account was switched to an IdP-managed method after the challenge issued', async () => {
+    // The 5-minute challenge token was issued while local/LDAP; if an admin switches the account to
+    // OIDC/SAML in that window, the stale challenge must not mint a local session.
+    findLoginUserByIdMock.mockResolvedValue({ ...TOTP_LOGIN_USER, authMethod: 'oidc' });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/totp-challenge',
+      payload: {
+        challengeToken: challengeTokenFor('u1'),
+        code: authenticator.generate(TOTP_SECRET),
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).errorCode).toBe('invalid_totp_code');
+  });
+
   test('200: a valid unused backup code succeeds and is burned via markBackupCodeUsed', async () => {
     findLoginUserByIdMock.mockResolvedValue(TOTP_LOGIN_USER);
     getTotpStateMock.mockResolvedValue(backupState());

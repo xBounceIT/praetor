@@ -227,7 +227,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // Re-validate the account before minting a session: the enroll token was issued by /login
         // up to 15 minutes ago and the user may have been disabled (or had their employee type
         // changed) since. Mirrors the same gate /totp-challenge applies before issuing a session.
-        if (!loginUser || loginUser.isDisabled || loginUser.employeeType !== 'app_user') {
+        if (
+          !loginUser ||
+          loginUser.isDisabled ||
+          loginUser.employeeType !== 'app_user' ||
+          // The enroll token is valid for 15m; if the account was switched to OIDC/SAML since it was
+          // issued, app TOTP no longer applies — don't enable it for a local session here.
+          !usersRepo.isTotpApplicable(loginUser.authMethod)
+        ) {
           return reply.code(401).send({ error: 'User not found' });
         }
         const session = await buildSessionSuccess(loginUser);

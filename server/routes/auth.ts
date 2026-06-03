@@ -373,7 +373,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         reply.code(400).send({ error: 'Invalid code', errorCode: 'invalid_totp_code' });
 
       const user = await usersRepo.findLoginUserById(userId);
-      if (!user || user.isDisabled || !user.totpEnabled || user.employeeType !== 'app_user') {
+      if (
+        !user ||
+        user.isDisabled ||
+        !user.totpEnabled ||
+        user.employeeType !== 'app_user' ||
+        // The auth method can change between /login (which issued this challenge token) and now; an
+        // account switched to OIDC/SAML in that window must not complete a local TOTP challenge.
+        !usersRepo.isTotpApplicable(user.authMethod)
+      ) {
         return invalidCode();
       }
 
