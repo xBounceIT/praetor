@@ -1,4 +1,5 @@
 import type React from 'react';
+import { useState } from 'react';
 
 import { NavMain, type SidebarModuleItem } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -27,6 +28,8 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   logoutLabel: string;
   switchRoleLabel: string;
   version: string;
+  companyName?: string | null;
+  logoUrl?: string | null;
   onViewChange: (view: View) => void;
   onLogout: () => void;
   onSwitchRole: (roleId: string) => void;
@@ -44,11 +47,20 @@ export function AppSidebar({
   logoutLabel,
   switchRoleLabel,
   version,
+  companyName,
+  logoUrl,
   onViewChange,
   onLogout,
   onSwitchRole,
   ...props
 }: AppSidebarProps) {
+  // The server serves GET /api/branding/logo as a 404 ("behave as no logo") when the stored file
+  // is missing on disk, but the client only has the cached logoUrl. Without a fallback the browser
+  // paints its broken-image glyph, so on load failure we drop back to the bundled favicon. Tracking
+  // the failed URL (rather than a boolean + reset effect) means a later logoUrl change is retried
+  // automatically and a failing favicon can't loop.
+  const [failedLogoUrl, setFailedLogoUrl] = useState<string | null>(null);
+  const resolvedLogoUrl = logoUrl && logoUrl !== failedLogoUrl ? logoUrl : praetorFaviconUrl;
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -60,14 +72,17 @@ export function AppSidebar({
             >
               <div className="flex aspect-square size-8 items-center justify-center rounded-lg border border-sidebar-border bg-background text-sidebar-foreground">
                 <img
-                  src={praetorFaviconUrl}
+                  src={resolvedLogoUrl}
                   alt=""
                   className="size-full rounded-lg object-cover"
                   aria-hidden="true"
+                  onError={() => {
+                    if (logoUrl) setFailedLogoUrl(logoUrl);
+                  }}
                 />
               </div>
               <div className="grid flex-1 text-left text-sm leading-[var(--text-sm--line-height)] text-sidebar-foreground">
-                <span className="truncate font-semibold italic">PRAETOR</span>
+                <span className="truncate font-semibold italic">{companyName || 'PRAETOR'}</span>
                 <span className="truncate text-sm leading-[var(--text-sm--line-height)] text-sidebar-foreground/80">
                   {roleLabel} {workspaceLabel}
                 </span>
@@ -81,7 +96,7 @@ export function AppSidebar({
       </SidebarContent>
       <SidebarFooter>
         <div className="px-2 text-sm leading-[var(--text-sm--line-height)] text-sidebar-foreground/60 group-data-[collapsible=icon]:hidden">
-          Praetor v{version}
+          {companyName || 'Praetor'} v{version}
         </div>
         <NavUser
           user={currentUser}

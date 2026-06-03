@@ -35,6 +35,7 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL is required}
     volumes:
       - ssl_certs:/app/certs
+      - uploads_data:/app/uploads
     expose:
       - '3001'
     depends_on:
@@ -54,3 +55,4 @@ services:
 volumes:
   postgres_data:
   ssl_certs:
+  uploads_data:

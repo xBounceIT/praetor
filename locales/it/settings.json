@@ -178,7 +178,8 @@
     "tabs": {
       "localization": "Localizzazione",
       "tracking": "Preferenze di Tracciamento",
-      "ai": "Capacità AI"
+      "ai": "Capacità AI",
+      "branding": "Personalizzazione"
     },
     "currencyLabel": "Valuta dell'Applicazione",
     "currencyDescription": "Questo simbolo di valuta verrà utilizzato globalmente nei report e nella gestione utenti.",
@@ -247,6 +248,26 @@
       "remote": "Remoto",
       "transfer": "Trasferta"
     }
+  },
+  "branding": {
+    "title": "Personalizzazione",
+    "description": "Personalizza il nome e il logo dell'azienda mostrati nella barra laterale e nella schermata di accesso.",
+    "companyNameLabel": "Nome Azienda",
+    "companyNameDescription": "Sostituisce il nome \"PRAETOR\" nella barra laterale. Lascia vuoto per usare il valore predefinito.",
+    "companyNamePlaceholder": "es. Acme S.r.l.",
+    "save": "Salva",
+    "logoLabel": "Logo Azienda",
+    "logoDescription": "Mostrato nella barra laterale e nella schermata di accesso. Lascia vuoto per usare il logo Praetor predefinito.",
+    "uploadButton": "Carica logo",
+    "removeButton": "Rimuovi",
+    "uploadHint": "PNG, JPEG, WEBP o SVG, fino a 2 MB.",
+    "currentLogoAlt": "Logo aziendale attuale",
+    "nameSaved": "Nome azienda salvato",
+    "logoUploaded": "Logo caricato",
+    "logoRemoved": "Logo rimosso",
+    "saveFailed": "Impossibile salvare la personalizzazione",
+    "invalidType": "Immagine non supportata. Usa PNG, JPEG, WEBP o SVG.",
+    "tooLarge": "Immagine troppo grande. La dimensione massima è 2 MB."
   },
   "messages": {
     "loading": "Caricamento impostazioni...",

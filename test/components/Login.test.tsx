@@ -479,6 +479,44 @@ describe('<Login />', () => {
       expect(logo.classList.contains('invert')).toBe(false);
     });
   });
+
+  describe('custom branding', () => {
+    test('renders the uploaded logo and skips the dark-mode invert', () => {
+      // Even in dark mode a custom logo keeps its own colors — only the bundled
+      // multi-color Praetor logo is flattened to white via brightness-0 + invert.
+      setPrefersDarkScheme(true);
+
+      render(<Login onLogin={() => {}} companyName="Acme" logoUrl="/api/branding/logo?v=1" />);
+      const logo = screen.getByAltText('Acme logo');
+
+      expect(logo.getAttribute('src')).toBe('/api/branding/logo?v=1');
+      expect(logo.classList.contains('brightness-0')).toBe(false);
+      expect(logo.classList.contains('invert')).toBe(false);
+    });
+
+    test('falls back to the bundled Praetor logo when no custom logo is set', () => {
+      render(<Login onLogin={() => {}} />);
+      const logo = screen.getByAltText('Praetor Logo');
+      expect(logo.getAttribute('src')).toBe('/praetor-logo.png');
+    });
+
+    test('falls back to the bundled logo (with dark-mode invert) if the custom logo fails to load', () => {
+      // The server 404s a logo whose file is missing on disk, so the <img> errors; we must drop
+      // back to the bundled Praetor logo instead of leaving the browser's broken-image glyph.
+      setPrefersDarkScheme(true);
+      render(<Login onLogin={() => {}} companyName="Acme" logoUrl="/api/branding/logo?v=1" />);
+
+      expect(screen.getByAltText('Acme logo').getAttribute('src')).toBe('/api/branding/logo?v=1');
+
+      fireEvent.error(screen.getByAltText('Acme logo'));
+
+      // Now showing the bundled default, which regains the dark-mode white-flatten treatment.
+      const logo = screen.getByAltText('Acme logo');
+      expect(logo.getAttribute('src')).toBe('/praetor-logo.png');
+      expect(logo.classList.contains('brightness-0')).toBe(true);
+      expect(logo.classList.contains('invert')).toBe(true);
+    });
+  });
 });
 
 // Multi-step second factor: /auth/login can short-circuit into a TOTP challenge

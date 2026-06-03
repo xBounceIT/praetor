@@ -82,6 +82,8 @@ Quando la 2FA è attiva, dopo username e password l'accesso richiede un codice d
 
 Le impostazioni generali controllano funzioni trasversali come AI reporting e preferenze applicative. Le impostazioni email servono per invii e notifiche.
 
+Nella scheda **Personalizzazione**, gli amministratori personalizzano il nome e il logo dell'azienda. Il nome azienda sostituisce la scritta "PRAETOR" nella barra laterale, mentre il logo caricato sostituisce sia l'icona nella barra laterale sia il logo della schermata di accesso. I logo accettano PNG, JPEG, WEBP o SVG fino a 2 MB; lasciando vuoto un campo si ripristina il valore predefinito di Praetor. La personalizzazione è leggibile pubblicamente affinché la schermata di accesso possa mostrarla prima dell'accesso, ma solo gli amministratori con il permesso di aggiornamento delle impostazioni generali possono modificarla.
+
 Dalla scheda **Preferenze di Tracciamento** gli amministratori configurano anche i metadati usati dal prospetto RIL: nome azienda, orari di entrata e uscita predefiniti, minuti di pausa pranzo, opzioni Note e opzioni Trasferta. Le Note si configurano con campi separati **Codice** e **Nome**; le Trasferte si configurano con righe nome aggiungibili, con la prima opzione usata per i giorni in sede e la seconda per il telelavoro. Gli orari predefiniti popolano i giorni RIL validi, e il valore della pausa pranzo viene usato per ricalcolare Ore e PICAP dai valori modificabili di entrata e uscita; nessuna di queste impostazioni modifica le registrazioni esistenti.
 
 La visibilità della pagina RIL si gestisce dai ruoli con il permesso **timesheets.ril.view**. I ruoli che avevano già accesso al Time Tracker ricevono automaticamente il permesso durante la migrazione.
