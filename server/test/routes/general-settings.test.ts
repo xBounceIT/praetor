@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import * as realDrizzle from '../../db/drizzle.ts';
 import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
@@ -18,13 +19,17 @@ const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
 const generalSettingsRepoSnap = { ...realGeneralSettingsRepo };
 const auditSnap = { ...realAudit };
+const drizzleSnap = { ...realDrizzle };
 
 const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 const settingsGetMock = mock();
 const settingsUpdateMock = mock();
-const bumpSessionVersionForUnenrolledAdminsMock = mock(async () => 0);
+const revokeCredentialsForUnenrolledAdminsMock = mock(async () => 0);
+// Run the callback with a throwaway tx so the route's atomic enable-enforcement branch executes its
+// body; the repo calls inside are themselves mocked and ignore the executor.
+const withDbTransactionMock = mock(async (fn: (tx: unknown) => unknown) => fn({}));
 const logAuditMock = mock(async () => undefined);
 
 let routePlugin: FastifyPluginAsync;
@@ -35,7 +40,7 @@ beforeAll(async () => {
   mock.module('../../repositories/usersRepo.ts', () => ({
     ...usersRepoSnap,
     findAuthUserById: findAuthUserByIdMock,
-    bumpSessionVersionForUnenrolledAdmins: bumpSessionVersionForUnenrolledAdminsMock,
+    revokeCredentialsForUnenrolledAdmins: revokeCredentialsForUnenrolledAdminsMock,
   }));
   mock.module('../../repositories/rolesRepo.ts', () => ({
     ...rolesRepoSnap,
@@ -54,6 +59,10 @@ beforeAll(async () => {
     ...auditSnap,
     logAudit: logAuditMock,
   }));
+  mock.module('../../db/drizzle.ts', () => ({
+    ...drizzleSnap,
+    withDbTransaction: withDbTransactionMock,
+  }));
 
   routePlugin = (await import('../../routes/general-settings.ts')).default as FastifyPluginAsync;
 });
@@ -65,6 +74,7 @@ afterAll(() => {
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../repositories/generalSettingsRepo.ts', () => generalSettingsRepoSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
+  mock.module('../../db/drizzle.ts', () => drizzleSnap);
 });
 
 const HAPPY_USER = {
@@ -109,7 +119,8 @@ const allMocks = [
   getRolePermissionsMock,
   settingsGetMock,
   settingsUpdateMock,
-  bumpSessionVersionForUnenrolledAdminsMock,
+  revokeCredentialsForUnenrolledAdminsMock,
+  withDbTransactionMock,
   logAuditMock,
 ];
 
@@ -121,7 +132,8 @@ beforeEach(async () => {
   userHasRoleMock.mockResolvedValue(true);
   // Default: viewer with admin perms (reveal API keys, allowed to PUT)
   getRolePermissionsMock.mockResolvedValue(['administration.general.update']);
-  bumpSessionVersionForUnenrolledAdminsMock.mockResolvedValue(0);
+  revokeCredentialsForUnenrolledAdminsMock.mockResolvedValue(0);
+  withDbTransactionMock.mockImplementation(async (fn: (tx: unknown) => unknown) => fn({}));
   logAuditMock.mockImplementation(async () => undefined);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/general-settings');
@@ -230,12 +242,13 @@ describe('PUT /api/general-settings', () => {
     expect(body.geminiApiKey).toBe('plaintext-gemini-key');
   });
 
-  test('200 enabling admin 2FA enforcement revokes unenrolled-admin sessions and audits it', async () => {
-    // false -> true transition: pre-existing sessions of admin-capable users without TOTP must be
-    // invalidated, or they keep admin privileges (incl. via /auth/switch-role) until expiry.
+  test('200 enabling admin 2FA enforcement revokes unenrolled-admin credentials atomically and audits it', async () => {
+    // false -> true transition: pre-existing sessions AND PAT/MCP tokens of admin-capable users
+    // without TOTP must be invalidated, or they keep admin privileges (incl. via /auth/switch-role
+    // or the API) until expiry. The setting write + revocation must commit in a single transaction.
     settingsGetMock.mockResolvedValue({ ...SETTINGS_WITH_KEYS, enforceTotpForAdmins: false });
     settingsUpdateMock.mockResolvedValue({ ...SETTINGS_WITH_KEYS, enforceTotpForAdmins: true });
-    bumpSessionVersionForUnenrolledAdminsMock.mockResolvedValue(3);
+    revokeCredentialsForUnenrolledAdminsMock.mockResolvedValue(3);
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -245,7 +258,11 @@ describe('PUT /api/general-settings', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(bumpSessionVersionForUnenrolledAdminsMock).toHaveBeenCalledTimes(1);
+    expect(revokeCredentialsForUnenrolledAdminsMock).toHaveBeenCalledTimes(1);
+    // The update + revocation run inside withDbTransaction so a crash can't persist the policy
+    // while leaving the stale admin credentials valid.
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
+    expect(settingsUpdateMock).toHaveBeenCalledTimes(1);
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'settings.totp_enforcement_sessions_revoked',
@@ -267,7 +284,7 @@ describe('PUT /api/general-settings', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(bumpSessionVersionForUnenrolledAdminsMock).not.toHaveBeenCalled();
+    expect(revokeCredentialsForUnenrolledAdminsMock).not.toHaveBeenCalled();
   });
 
   test('200 disabling enforcement does not revoke sessions', async () => {
@@ -282,7 +299,7 @@ describe('PUT /api/general-settings', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(bumpSessionVersionForUnenrolledAdminsMock).not.toHaveBeenCalled();
+    expect(revokeCredentialsForUnenrolledAdminsMock).not.toHaveBeenCalled();
   });
 
   test('200 accepts RIL settings and returns them', async () => {

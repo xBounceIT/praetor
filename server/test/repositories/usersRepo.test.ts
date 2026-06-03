@@ -146,6 +146,29 @@ describe('rotatePasswordAndBumpSession', () => {
   });
 });
 
+describe('revokeCredentialsForUnenrolledAdmins', () => {
+  test('bumps BOTH session_version and token_version for unenrolled local/ldap admins', async () => {
+    // RETURNING id yields one row per revoked admin; the count is the return value.
+    exec.enqueue({ rows: [{ id: 'a1' }, { id: 'a2' }, { id: 'a3' }] });
+    const count = await usersRepo.revokeCredentialsForUnenrolledAdmins(testDb);
+    expect(count).toBe(3);
+
+    const sql = exec.calls[0].sql;
+    // Sessions AND non-interactive PAT/MCP tokens (token_version) must both rotate — bumping only
+    // session_version would leave a pre-existing admin PAT exercising privileges with no 2FA.
+    expect(sql).toContain('session_version = session_version + 1');
+    expect(sql).toContain('token_version = token_version + 1');
+    // Scope guard: only unenrolled, password-based (local/ldap) admins.
+    expect(sql).toContain('totp_enabled = false');
+    expect(sql).toContain("auth_method IN ('local', 'ldap')");
+  });
+
+  test('returns 0 when no unenrolled admin matched', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await usersRepo.revokeCredentialsForUnenrolledAdmins(testDb)).toBe(0);
+  });
+});
+
 describe('findCostPerHour', () => {
   test('parses string-encoded numerics from pg', async () => {
     exec.enqueue({ rows: [['42.5']] });

@@ -293,20 +293,24 @@ export const rotatePasswordAndBumpSession = async (
   return rows[0].sessionVersion;
 };
 
-// Bumps `session_version` for every local/ldap user who can act as an admin — via a built-in
+// Revokes EVERY live credential — interactive sessions (session_version) AND non-interactive
+// PAT/MCP tokens (token_version) — for each local/ldap user who can act as an admin via a built-in
 // admin/top-manager role or any custom role flagged `is_admin`, whether as their primary role or an
-// assigned (multi-)role — but who has NOT enrolled in TOTP. Called when the admin-2FA policy is
-// switched on so sessions predating the change can't keep admin privileges (including by calling
-// /auth/switch-role) without a second factor; affected users are forced to re-login and enrol.
-// Returns the number of sessions invalidated.
-export const bumpSessionVersionForUnenrolledAdmins = async (
+// assigned (multi-)role, but who has NOT enrolled in TOTP. Called when the admin-2FA policy is
+// switched on. Bumping session_version alone would leave a pre-existing PAT/MCP token (which keys
+// off token_version, and never traverses the login 2FA gate) exercising admin privileges with no
+// second factor until its idle expiry — so both counters move together, mirroring
+// rotatePasswordAndBumpSession. Affected admins must re-login, enrol, and re-issue any tokens.
+// Returns the number of admins whose credentials were revoked.
+export const revokeCredentialsForUnenrolledAdmins = async (
   exec: DbExecutor = db,
 ): Promise<number> => {
   const rows = await executeRows<{ id: string }>(
     exec,
     sql`
       UPDATE users
-      SET session_version = session_version + 1
+      SET session_version = session_version + 1,
+          token_version = token_version + 1
       WHERE totp_enabled = false
         AND auth_method IN ('local', 'ldap')
         AND (

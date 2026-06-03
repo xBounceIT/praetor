@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
@@ -489,7 +490,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const previousSettings = await generalSettingsRepo.get();
-      const settings = await generalSettingsRepo.update({
+      const settingsPatch = {
         currency: currencyResult.value,
         dailyLimit: dailyLimitResult.value,
         startOfWeek: startOfWeekResult.value,
@@ -509,7 +510,31 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         rilNoteOptions: rilNoteOptionsResult.value,
         rilTransferOptions: rilTransferOptionsResult.value,
         enforceTotpForAdmins: enforceTotpForAdminsResult.value,
-      });
+      };
+
+      // Switching admin-2FA enforcement ON must also revoke the live credentials (sessions AND
+      // PAT/MCP tokens) of admin-capable users who haven't enrolled — otherwise a session or token
+      // predating the change keeps admin privileges (incl. via /auth/switch-role or the API) until
+      // it expires. Persist the setting and run the revocation inside ONE transaction so they commit
+      // together: if they weren't atomic, a crash after the setting committed would let a retry
+      // observe enforcement already on, skip the revocation, and strand those credentials valid.
+      const enablingEnforcement =
+        enforceTotpForAdminsResult.value === true &&
+        previousSettings?.enforceTotpForAdmins !== true;
+
+      let settings: Awaited<ReturnType<typeof generalSettingsRepo.update>>;
+      let revokedAdmins = 0;
+      if (enablingEnforcement) {
+        const result = await withDbTransaction(async (tx) => {
+          const updated = await generalSettingsRepo.update(settingsPatch, tx);
+          const revoked = await usersRepo.revokeCredentialsForUnenrolledAdmins(tx);
+          return { updated, revoked };
+        });
+        settings = result.updated;
+        revokedAdmins = result.revoked;
+      } else {
+        settings = await generalSettingsRepo.update(settingsPatch);
+      }
 
       await logAudit({
         request,
@@ -520,19 +545,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
 
-      // When admin-2FA enforcement is switched ON, revoke the sessions of admin-capable users who
-      // haven't enrolled: otherwise a session predating the change keeps admin privileges (incl. via
-      // /auth/switch-role) until it expires, making the policy effective only for future logins.
-      if (enforceTotpForAdminsResult.value && previousSettings?.enforceTotpForAdmins !== true) {
-        const revokedSessions = await usersRepo.bumpSessionVersionForUnenrolledAdmins();
-        if (revokedSessions > 0) {
-          await logAudit({
-            request,
-            action: 'settings.totp_enforcement_sessions_revoked',
-            entityType: 'settings',
-            details: { secondaryLabel: String(revokedSessions) },
-          });
-        }
+      // Audit the revocation only after the transaction commits — an audit-write failure must not
+      // roll back the security-critical credential revocation it is recording.
+      if (revokedAdmins > 0) {
+        await logAudit({
+          request,
+          action: 'settings.totp_enforcement_sessions_revoked',
+          entityType: 'settings',
+          details: { secondaryLabel: String(revokedAdmins) },
+        });
       }
 
       return toResponse(settings, true);
