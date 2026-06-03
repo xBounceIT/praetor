@@ -536,10 +536,11 @@ describe('<UserSettings /> RIL preferences tab', () => {
     );
     expect(tuesdayTrigger).toHaveTextContent('In office');
     await waitFor(() => expect(calls).toBe(2));
-    // The queued save carries Tuesday's edit through to the server (last write wins).
-    expect((update.mock.calls[1][0] as Partial<Settings>).rilWeekdayTransferDefaults?.tuesday).toBe(
-      'In office',
-    );
+    // The queued save is recomputed from the live map at send time: it carries Tuesday's edit
+    // through (last write wins) but drops Monday, whose save failed and was rolled back.
+    const secondPayload = (update.mock.calls[1][0] as Partial<Settings>).rilWeekdayTransferDefaults;
+    expect(secondPayload?.tuesday).toBe('In office');
+    expect(secondPayload?.monday).toBeUndefined();
     deferreds[1].resolve();
   });
 });

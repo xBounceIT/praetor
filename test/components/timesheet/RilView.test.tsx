@@ -694,6 +694,55 @@ describe('<RilView />', () => {
       await waitFor(() => expect(api.rilDrafts.save).toHaveBeenCalledTimes(2), { timeout: 3000 });
     }, 10000);
 
+    test('a reload waits for an in-flight reset delete before re-reading the draft', async () => {
+      api.entries.listPage.mockResolvedValue({
+        entries: [entry({ date: '2026-05-04', duration: 8 })],
+        nextCursor: null,
+      });
+      // Hold the reset DELETE open so it is still in flight when we navigate back to May.
+      let resolveRemove: () => void = () => {};
+      api.rilDrafts.remove.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveRemove = () => resolve({});
+          }),
+      );
+
+      renderRilView();
+      const exitInput = await screen.findByLabelText('ril.columns.exit 4');
+      await waitFor(() => expect(api.rilDrafts.get).toHaveBeenCalledWith('2026-05', 'u1'));
+
+      // Edit then reset: the DELETE fires and stays in flight.
+      fireEvent.change(exitInput, { target: { value: '17:00' } });
+      fireEvent.click(screen.getByRole('button', { name: /ril.reset/ }));
+      await waitFor(() => expect(api.rilDrafts.remove).toHaveBeenCalledWith('2026-05', 'u1'));
+
+      const mayGetCount = () =>
+        api.rilDrafts.get.mock.calls.filter((call) => call[0] === '2026-05').length;
+      const getBefore = mayGetCount();
+      const loadsBefore = api.entries.listPage.mock.calls.length;
+
+      // Leave to June and return to May while the DELETE is still pending.
+      fireEvent.click(screen.getByLabelText('ril.month'));
+      fireEvent.click(screen.getByRole('option', { name: 'June' }));
+      await waitFor(() =>
+        expect(api.entries.listPage.mock.calls.length).toBeGreaterThan(loadsBefore),
+      );
+      fireEvent.click(screen.getByLabelText('ril.month'));
+      fireEvent.click(screen.getByRole('option', { name: 'May' }));
+
+      // The May reload starts, but its draft GET must stay gated behind the in-flight DELETE so it
+      // can't re-read (and rehydrate) the draft the user just discarded.
+      await waitFor(() =>
+        expect(api.entries.listPage.mock.calls.length).toBeGreaterThan(loadsBefore + 1),
+      );
+      expect(mayGetCount()).toBe(getBefore);
+
+      // Once the DELETE commits, the gated GET runs.
+      resolveRemove();
+      await waitFor(() => expect(mayGetCount()).toBe(getBefore + 1));
+    });
+
     test('applies weekdayTransferDefaults to the user own RIL', async () => {
       api.entries.listPage.mockResolvedValue({
         entries: [entry({ date: '2026-05-04', duration: 8, location: 'remote' })],

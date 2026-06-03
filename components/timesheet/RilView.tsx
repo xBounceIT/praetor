@@ -554,13 +554,16 @@ const RilView: React.FC<RilViewProps> = ({
     });
     setDraftStatus('idle');
     if (draftSyncReadyRef.current) {
-      const removeDraft = () =>
-        api.rilDrafts.remove(draftMonthKey, effectiveUserId).catch(() => {});
+      const userId = effectiveUserId;
+      const monthKey = draftMonthKey;
+      const removeDraft = () => api.rilDrafts.remove(monthKey, userId).catch(() => {});
       // If a save for this sheet is already on the wire, sequence the delete after it so the late
-      // PUT can't recreate the draft we're discarding; otherwise delete immediately.
-      const pending = pendingSavesRef.current?.get(draftSaveKey(effectiveUserId, draftMonthKey));
-      if (pending) void pending.finally(removeDraft);
-      else void removeDraft();
+      // PUT can't recreate the draft we're discarding; otherwise delete immediately. Either way,
+      // register the delete as a pending op so a quick reload of this sheet awaits it before its
+      // GET and can't re-read (and rehydrate) the draft we just discarded.
+      const pending = pendingSavesRef.current?.get(draftSaveKey(userId, monthKey));
+      const removal = pending ? pending.finally(removeDraft) : removeDraft();
+      trackDraftSave(userId, monthKey, removal);
     }
   };
 
