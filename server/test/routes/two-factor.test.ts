@@ -424,6 +424,10 @@ describe('POST /api/auth/2fa/confirm', () => {
     expect(res.statusCode).toBe(401);
     // No local session is minted for an account no longer on a TOTP-applicable auth method.
     expect(JSON.parse(res.body).token).toBeUndefined();
+    // The account is re-validated BEFORE any TOTP mutation, so a denied enroll never enables TOTP
+    // or emits user.totp_enabled.
+    expect(enableTotpMock).not.toHaveBeenCalled();
+    expect(auditActions()).not.toContain('user.totp_enabled');
   });
 
   test('400 when no pending enrollment exists', async () => {

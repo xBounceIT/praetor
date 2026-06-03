@@ -186,6 +186,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const codeResult = requireNonEmptyString(code, 'code');
       if (!codeResult.ok) return badRequest(reply, codeResult.message);
 
+      // For the enroll-token path the caller has no session yet and the token was issued by /login
+      // up to 15 minutes ago — re-validate the account BEFORE mutating any TOTP state, so a user who
+      // has since been disabled, had their employee type changed, or been switched to an IdP-managed
+      // auth method can't flip TOTP on (and emit user.totp_enabled) before being denied.
+      let enrollLoginUser: Awaited<ReturnType<typeof usersRepo.findLoginUserById>> = null;
+      if (request.enrollUserId && !request.user) {
+        enrollLoginUser = await usersRepo.findLoginUserById(userId);
+        if (
+          !enrollLoginUser ||
+          enrollLoginUser.isDisabled ||
+          enrollLoginUser.employeeType !== 'app_user' ||
+          !usersRepo.isTotpApplicable(enrollLoginUser.authMethod)
+        ) {
+          return reply.code(401).send({ error: 'User not found' });
+        }
+      }
+
       const state = await usersRepo.getTotpState(userId);
       // Require a pending (stored-but-not-yet-enabled) enrollment. A missing secret or an
       // already-enabled account both fail here.
@@ -220,24 +237,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         userId,
       });
 
-      // Enroll-token path: the user has no session yet, so mint one now (mirroring the login
-      // no-2FA success response) and return it alongside the enabled flag.
-      if (request.enrollUserId && !request.user) {
-        const loginUser = await usersRepo.findLoginUserById(userId);
-        // Re-validate the account before minting a session: the enroll token was issued by /login
-        // up to 15 minutes ago and the user may have been disabled (or had their employee type
-        // changed) since. Mirrors the same gate /totp-challenge applies before issuing a session.
-        if (
-          !loginUser ||
-          loginUser.isDisabled ||
-          loginUser.employeeType !== 'app_user' ||
-          // The enroll token is valid for 15m; if the account was switched to OIDC/SAML since it was
-          // issued, app TOTP no longer applies — don't enable it for a local session here.
-          !usersRepo.isTotpApplicable(loginUser.authMethod)
-        ) {
-          return reply.code(401).send({ error: 'User not found' });
-        }
-        const session = await buildSessionSuccess(loginUser);
+      // Enroll-token path: the user had no session, so mint one now (mirroring the login no-2FA
+      // success response). The account was already re-validated above, before TOTP was enabled.
+      if (enrollLoginUser) {
+        const session = await buildSessionSuccess(enrollLoginUser);
         // This is the user's real login — they had no session, only an enroll token. Log
         // `user.login` here so a session born from mandatory enrollment isn't missing from the
         // sign-in audit trail (mirrors the /login no-2FA path and /totp-challenge).
@@ -245,12 +248,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           request,
           action: 'user.login',
           entityType: 'user',
-          entityId: loginUser.id,
+          entityId: enrollLoginUser.id,
           details: {
-            targetLabel: loginUser.name,
-            secondaryLabel: loginUser.role,
+            targetLabel: enrollLoginUser.name,
+            secondaryLabel: enrollLoginUser.role,
           },
-          userId: loginUser.id,
+          userId: enrollLoginUser.id,
         });
         return { enabled: true, ...session };
       }
