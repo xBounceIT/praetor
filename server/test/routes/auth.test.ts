@@ -932,6 +932,34 @@ describe('POST /api/auth/login', () => {
     expect(actions).toContain('user.totp_enrollment_required');
   });
 
+  test('200: enforcement on + assignable top_manager (is_admin=false in DB) → mandatory enrollment', async () => {
+    // The seeded top_manager role carries is_admin=false, but it is always treated as admin; an
+    // assignable top_manager must trigger enforcement just like an explicit is_admin role.
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
+      ...LOGIN_USER,
+      role: 'manager',
+      totpEnabled: false,
+    });
+    bcryptCompareMock.mockResolvedValue(true);
+    generalSettingsGetMock.mockResolvedValue({ enforceTotpForAdmins: true });
+    listAvailableRolesForUserMock.mockResolvedValue([
+      { id: 'manager', name: 'Manager', isSystem: true, isAdmin: false },
+      { id: 'top_manager', name: 'Top Manager', isSystem: true, isAdmin: false },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'alice', password: 'secret' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      totpEnrollmentRequired: true,
+      enrollToken: expect.any(String),
+    });
+  });
+
   test('200: enforcement off (no settings row) + admin without TOTP gets a normal session (regression)', async () => {
     // generalSettingsGetMock resolves null by default (file-wide), so enforceTotpForAdmins is
     // falsey and the admin logs in normally — the enrollment detour must NOT trigger.

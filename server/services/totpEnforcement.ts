@@ -22,7 +22,12 @@ const isAdminRoleId = async (roleId: string): Promise<boolean> => {
 const userHasAnyAdminRole = async (userId: string, primaryRole: string): Promise<boolean> => {
   if (await isAdminRoleId(primaryRole)) return true;
   const roles = await rolesRepo.listAvailableRolesForUser(userId);
-  return roles.some((role) => role.isAdmin);
+  // Mirror isAdminRoleId for assigned roles too: the built-in admin/top-manager roles are always
+  // admin even though the seeded top_manager row carries is_admin = false, so short-circuit their
+  // ids here — otherwise an assignable top_manager role would slip past enforcement.
+  return roles.some(
+    (role) => role.id === ADMIN_ROLE_ID || role.id === TOP_MANAGER_ROLE_ID || role.isAdmin,
+  );
 };
 
 /** Whether the admin-2FA enforcement policy is currently switched on. */
