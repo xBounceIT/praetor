@@ -1252,8 +1252,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
 
       // Mirror the /:id/roles guard: if this update promoted the user into an admin role while the
-      // 2FA mandate is on and they have not enrolled, revoke their live sessions so they must
-      // re-login and enrol — their pre-existing token would otherwise keep admin access.
+      // 2FA mandate is on and they have not enrolled, revoke their live credentials so they must
+      // re-login and enrol. Both sessions AND PAT/MCP tokens are revoked — a pre-existing token
+      // keys off token_version (not session_version) and never traverses the login 2FA gate, so
+      // bumping the session alone would let them keep admin API access without a second factor.
       if (roleValue !== null) {
         const updateTotpState = await usersRepo.getTotpState(idResult.value);
         if (
@@ -1264,7 +1266,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             totpEnabled: updateTotpState?.totpEnabled ?? false,
           })
         ) {
-          await usersRepo.bumpSessionVersion(idResult.value);
+          await usersRepo.revokeUserCredentials(idResult.value);
         }
       }
 
@@ -1507,9 +1509,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Cannot reset your own two-factor authentication');
       }
 
+      // Disabling 2FA and revoking the user's live credentials commit together. Both sessions AND
+      // PAT/MCP tokens are revoked: a 2FA reset is a recovery/possible-compromise action, and if the
+      // mandate is on this leaves the target an unenrolled admin — a surviving PAT (keyed off
+      // token_version) would otherwise keep admin API access with no second factor.
       await withDbTransaction(async (tx) => {
         await usersRepo.disableTotp(idResult.value, tx);
-        await usersRepo.bumpSessionVersion(idResult.value, tx);
+        await usersRepo.revokeUserCredentials(idResult.value, tx);
       });
 
       await logAudit({
@@ -1639,8 +1645,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
 
       // If the new role set makes this user an admin without 2FA while the mandate is on, revoke
-      // their live sessions: the login gate can't catch an admin role granted to an already
+      // their live credentials: the login gate can't catch an admin role granted to an already
       // authenticated user, so force them to re-login and enrol before they can act as an admin.
+      // Sessions AND PAT/MCP tokens are revoked — a pre-existing token keys off token_version and
+      // would otherwise keep admin API access with no second factor.
       const rolesTotpState = await usersRepo.getTotpState(idResult.value);
       if (
         await requiresAdminTotpEnrollment({
@@ -1650,7 +1658,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           totpEnabled: rolesTotpState?.totpEnabled ?? false,
         })
       ) {
-        await usersRepo.bumpSessionVersion(idResult.value);
+        await usersRepo.revokeUserCredentials(idResult.value);
       }
 
       await logAudit({

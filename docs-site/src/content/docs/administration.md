@@ -76,7 +76,7 @@ Quando la 2FA è attiva, dopo username e password l'accesso richiede un codice d
 
 **Provider OIDC/SAML.** Gli utenti che accedono tramite un provider esterno (OIDC o SAML) non usano la 2FA di Praetor: il secondo fattore è gestito dal loro identity provider. Per questi utenti l'attivazione non è disponibile e il criterio di imposizione per gli amministratori non si applica.
 
-**Ripristino.** Se un utente perde l'accesso al proprio authenticator, un amministratore può azzerarne la 2FA dal menu azioni nella lista utenti (**Reimposta 2FA**). L'operazione disattiva la 2FA dell'utente e revoca le sue sessioni attive; al successivo accesso l'utente userà solo la password (e, se l'imposizione è attiva e l'utente è amministratore, gli verrà richiesto di riconfigurarla).
+**Ripristino.** Se un utente perde l'accesso al proprio authenticator, un amministratore può azzerarne la 2FA dal menu azioni nella lista utenti (**Reimposta 2FA**). L'operazione disattiva la 2FA dell'utente e revoca le sue credenziali attive — sia le sessioni sia i token API (token di accesso personali e token MCP), poiché il ripristino è un'azione di recupero e un token ancora valido manterrebbe altrimenti l'accesso senza 2FA; al successivo accesso l'utente userà solo la password (e, se l'imposizione è attiva e l'utente è amministratore, gli verrà richiesto di riconfigurarla).
 
 ## Impostazioni generali ed email
 

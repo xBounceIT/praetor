@@ -169,6 +169,19 @@ describe('revokeCredentialsForUnenrolledAdmins', () => {
   });
 });
 
+describe('revokeUserCredentials', () => {
+  test('bumps BOTH session_version and token_version for the target user', async () => {
+    exec.enqueue({ rows: [], rowCount: 1 });
+    await usersRepo.revokeUserCredentials('user-1', testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    // A privilege/2FA change must invalidate interactive sessions AND non-interactive PAT/MCP
+    // tokens — bumping session_version alone would leave a pre-existing token validating.
+    expect(sql).toContain('"session_version"');
+    expect(sql).toContain('"token_version"');
+    expect(exec.calls[0].params).toContain('user-1');
+  });
+});
+
 describe('findCostPerHour', () => {
   test('parses string-encoded numerics from pg', async () => {
     exec.enqueue({ rows: [['42.5']] });

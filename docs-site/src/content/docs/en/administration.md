@@ -76,7 +76,7 @@ When 2FA is enabled, after username and password sign-in requires a code from th
 
 **OIDC/SAML providers.** Users who sign in through an external provider (OIDC or SAML) do not use Praetor's 2FA: the second factor is handled by their identity provider. Enrollment is not offered to these users and the administrator enforcement policy does not apply to them.
 
-**Recovery.** If a user loses access to their authenticator, an administrator can reset the user's 2FA from the row actions menu in the user list (**Reset 2FA**). This disables the user's 2FA and revokes their active sessions; on next sign-in the user uses only their password (and, if enforcement is on and the user is an administrator, they will be prompted to set it up again).
+**Recovery.** If a user loses access to their authenticator, an administrator can reset the user's 2FA from the row actions menu in the user list (**Reset 2FA**). This disables the user's 2FA and revokes their active credentials — both sessions and API tokens (personal access tokens and MCP tokens), since a reset is a recovery action and a surviving token would otherwise keep access without 2FA; on next sign-in the user uses only their password (and, if enforcement is on and the user is an administrator, they will be prompted to set it up again).
 
 ## General and email settings
 

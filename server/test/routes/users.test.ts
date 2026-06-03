@@ -63,7 +63,7 @@ const getUserRoleIdsMock = mock();
 const canManageUserMock = mock();
 const getAssignmentsMock = mock();
 const disableTotpMock = mock();
-const bumpSessionVersionMock = mock();
+const revokeUserCredentialsMock = mock();
 const getTotpStateMock = mock();
 const generalSettingsGetMock = mock<() => Promise<{ enforceTotpForAdmins: boolean } | null>>(
   async () => null,
@@ -134,7 +134,7 @@ beforeAll(async () => {
     canManageUser: canManageUserMock,
     getAssignments: getAssignmentsMock,
     disableTotp: disableTotpMock,
-    bumpSessionVersion: bumpSessionVersionMock,
+    revokeUserCredentials: revokeUserCredentialsMock,
     getTotpState: getTotpStateMock,
   }));
   mock.module('../../repositories/clientsRepo.ts', () => ({
@@ -348,7 +348,7 @@ const allMocks = [
   canManageUserMock,
   getAssignmentsMock,
   disableTotpMock,
-  bumpSessionVersionMock,
+  revokeUserCredentialsMock,
   getTotpStateMock,
   generalSettingsGetMock,
   listClientsMock,
@@ -1365,7 +1365,7 @@ describe('PUT /api/users/:id', () => {
 
     expect(res.statusCode).toBe(200);
     expect(replaceUserRolesMock).toHaveBeenCalledWith('u-target', ['admin'], TX_SENTINEL);
-    expect(bumpSessionVersionMock).toHaveBeenCalledWith('u-target');
+    expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target');
   });
 
   test('403 cannot change own role (audits the denial)', async () => {
@@ -2489,10 +2489,10 @@ describe('PUT /api/users/:id/auth-method', () => {
 // =========================================================================
 
 describe('POST /api/users/:id/2fa/reset', () => {
-  test('200 admin with all-scope resets TOTP: disables + bumps session version atomically', async () => {
+  test('200 admin with all-scope resets TOTP: disables + revokes all credentials atomically', async () => {
     findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
     disableTotpMock.mockResolvedValue(undefined);
-    bumpSessionVersionMock.mockResolvedValue(undefined);
+    revokeUserCredentialsMock.mockResolvedValue(undefined);
 
     const res = await testApp.inject({
       method: 'POST',
@@ -2503,11 +2503,12 @@ describe('POST /api/users/:id/2fa/reset', () => {
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ ok: true });
 
-    // Recovery clears the target's enrollment AND invalidates every live session
-    // (the bumped sessionVersion no longer matches the tokens they hold). Both run
-    // inside the same withDbTransaction, so both land with the shared TX sentinel.
+    // Recovery clears the target's enrollment AND revokes every live credential — both interactive
+    // sessions and PAT/MCP tokens (revokeUserCredentials bumps session_version AND token_version),
+    // so a surviving token can't keep admin API access if the reset leaves an enforced admin
+    // unenrolled. Both run inside the same withDbTransaction, landing with the shared TX sentinel.
     expect(disableTotpMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
-    expect(bumpSessionVersionMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+    expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
 
     // Caller already holds administration.user_management_all.view, so the
     // manager-scope fallback is short-circuited.
@@ -2533,7 +2534,7 @@ describe('POST /api/users/:id/2fa/reset', () => {
     findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
     canManageUserMock.mockResolvedValue(true);
     disableTotpMock.mockResolvedValue(undefined);
-    bumpSessionVersionMock.mockResolvedValue(undefined);
+    revokeUserCredentialsMock.mockResolvedValue(undefined);
 
     const res = await testApp.inject({
       method: 'POST',
@@ -2545,7 +2546,7 @@ describe('POST /api/users/:id/2fa/reset', () => {
     expect(JSON.parse(res.body)).toEqual({ ok: true });
     expect(canManageUserMock).toHaveBeenCalledWith('u-target', MANAGER_USER.id);
     expect(disableTotpMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
-    expect(bumpSessionVersionMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+    expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
   });
 
   test('404 when the target user does not exist', async () => {
@@ -2559,7 +2560,7 @@ describe('POST /api/users/:id/2fa/reset', () => {
 
     expect(res.statusCode).toBe(404);
     expect(disableTotpMock).not.toHaveBeenCalled();
-    expect(bumpSessionVersionMock).not.toHaveBeenCalled();
+    expect(revokeUserCredentialsMock).not.toHaveBeenCalled();
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'user.totp_reset.not_found',
@@ -2582,7 +2583,7 @@ describe('POST /api/users/:id/2fa/reset', () => {
     // Permission gate (requirePermission) rejects before the handler body runs.
     expect(findCoreByIdMock).not.toHaveBeenCalled();
     expect(disableTotpMock).not.toHaveBeenCalled();
-    expect(bumpSessionVersionMock).not.toHaveBeenCalled();
+    expect(revokeUserCredentialsMock).not.toHaveBeenCalled();
   });
 
   test('403 non-all-scope caller without canManageUser over the target', async () => {
@@ -2602,7 +2603,7 @@ describe('POST /api/users/:id/2fa/reset', () => {
 
     expect(res.statusCode).toBe(403);
     expect(disableTotpMock).not.toHaveBeenCalled();
-    expect(bumpSessionVersionMock).not.toHaveBeenCalled();
+    expect(revokeUserCredentialsMock).not.toHaveBeenCalled();
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'user.totp_reset.denied',
@@ -2625,7 +2626,7 @@ describe('POST /api/users/:id/2fa/reset', () => {
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toBe('Cannot reset your own two-factor authentication');
     expect(disableTotpMock).not.toHaveBeenCalled();
-    expect(bumpSessionVersionMock).not.toHaveBeenCalled();
+    expect(revokeUserCredentialsMock).not.toHaveBeenCalled();
   });
 
   test('401 missing token', async () => {
@@ -2728,7 +2729,7 @@ describe('PUT /api/users/:id/roles', () => {
     expect(replaceUserRolesMock).toHaveBeenCalledWith('u-target', ['user', 'admin'], TX_SENTINEL);
     // Primary role is now admin, the mandate is on, and they have no TOTP → revoke their sessions
     // so they must re-login and enrol before they can act as an admin.
-    expect(bumpSessionVersionMock).toHaveBeenCalledWith('u-target');
+    expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target');
   });
 
   test('200 role change without enforcement does not revoke sessions', async () => {
@@ -2750,7 +2751,7 @@ describe('PUT /api/users/:id/roles', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(bumpSessionVersionMock).not.toHaveBeenCalled();
+    expect(revokeUserCredentialsMock).not.toHaveBeenCalled();
   });
 
   test('403 cannot edit own roles', async () => {

@@ -151,6 +151,26 @@ export const bumpSessionVersion = async (userId: string, exec: DbExecutor = db):
     .where(eq(users.id, userId));
 };
 
+// Revokes BOTH of a single user's credential generations in one statement — session_version (the
+// interactive session JWT) AND token_version (personal-access + MCP tokens). Use wherever a
+// privilege or second-factor change must invalidate everything the user currently holds: an
+// unenrolled user promoted into an admin role while the 2FA mandate is on (a pre-existing PAT would
+// otherwise keep admin API access with no second factor, since PAT/MCP auth keys off token_version
+// and never traverses the login 2FA gate), or an admin-initiated 2FA reset. For a logout or a
+// self-service action that should only end interactive sessions, use bumpSessionVersion instead.
+export const revokeUserCredentials = async (
+  userId: string,
+  exec: DbExecutor = db,
+): Promise<void> => {
+  await exec
+    .update(users)
+    .set({
+      sessionVersion: sql`${users.sessionVersion} + 1`,
+      tokenVersion: sql`${users.tokenVersion} + 1`,
+    })
+    .where(eq(users.id, userId));
+};
+
 // ===========================================================================
 // TOTP two-factor authentication state
 // ===========================================================================
