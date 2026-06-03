@@ -197,7 +197,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           !enrollLoginUser ||
           enrollLoginUser.isDisabled ||
           enrollLoginUser.employeeType !== 'app_user' ||
-          !usersRepo.isTotpApplicable(enrollLoginUser.authMethod)
+          !usersRepo.isTotpApplicable(enrollLoginUser.authMethod) ||
+          // Reject an enroll token left outstanding across a credential/session rotation — the
+          // bumped sessionVersion no longer matches the value the token was signed with.
+          enrollLoginUser.sessionVersion !== request.enrollSessionVersion
         ) {
           return reply.code(401).send({ error: 'User not found' });
         }

@@ -1,8 +1,9 @@
 // Focused coverage for the single-purpose 2FA token helpers and the authenticateToken
-// hardening that refuses any token carrying a `purpose` claim. These tokens are signed with
-// the same JWT secret/algorithm as session tokens but deliberately omit
-// sessionStart/sessionVersion, so the round-trip and rejection behaviours below are the only
-// thing standing between a narrow enroll/challenge step and a full session.
+// hardening that refuses any token carrying a `purpose` claim. These tokens are signed with the
+// same JWT secret/algorithm as session tokens but deliberately omit sessionStart (carrying
+// sessionVersion only so a stale token can be rejected after a credential rotation), so the
+// round-trip and rejection behaviours below are the only thing standing between a narrow
+// enroll/challenge step and a full session.
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import jwt from 'jsonwebtoken';
 import {
@@ -102,18 +103,33 @@ beforeEach(() => {
 });
 
 describe('signPurposeToken + verifyPurposeToken round-trip', () => {
-  test('a totp_challenge token verifies back to its userId', () => {
-    const token = signPurposeToken({ userId: 'u1', purpose: 'totp_challenge' }, '5m');
-    expect(verifyPurposeToken(token, 'totp_challenge')).toEqual({ userId: 'u1' });
+  test('a totp_challenge token verifies back to its userId and sessionVersion', () => {
+    const token = signPurposeToken(
+      { userId: 'u1', purpose: 'totp_challenge', sessionVersion: 3 },
+      '5m',
+    );
+    expect(verifyPurposeToken(token, 'totp_challenge')).toEqual({
+      userId: 'u1',
+      sessionVersion: 3,
+    });
   });
 
-  test('a totp_enroll token verifies back to its userId', () => {
-    const token = signPurposeToken({ userId: 'enrollee-7', purpose: 'totp_enroll' }, '10m');
-    expect(verifyPurposeToken(token, 'totp_enroll')).toEqual({ userId: 'enrollee-7' });
+  test('a totp_enroll token verifies back to its userId and sessionVersion', () => {
+    const token = signPurposeToken(
+      { userId: 'enrollee-7', purpose: 'totp_enroll', sessionVersion: 5 },
+      '10m',
+    );
+    expect(verifyPurposeToken(token, 'totp_enroll')).toEqual({
+      userId: 'enrollee-7',
+      sessionVersion: 5,
+    });
   });
 
-  test('the signed token carries no sessionStart/sessionVersion claims', () => {
-    const token = signPurposeToken({ userId: 'u1', purpose: 'totp_challenge' }, '5m');
+  test('the signed token carries sessionVersion (for revocation) but no sessionStart claim', () => {
+    const token = signPurposeToken(
+      { userId: 'u1', purpose: 'totp_challenge', sessionVersion: 7 },
+      '5m',
+    );
     const decoded = jwt.decode(token) as jwt.JwtPayload & {
       purpose?: string;
       sessionStart?: unknown;
@@ -121,20 +137,28 @@ describe('signPurposeToken + verifyPurposeToken round-trip', () => {
     };
     expect(decoded.purpose).toBe('totp_challenge');
     expect(decoded.userId).toBe('u1');
+    // No sessionStart — that (plus the purpose guard) is what stops it acting as a session token.
     expect(decoded.sessionStart).toBeUndefined();
-    expect(decoded.sessionVersion).toBeUndefined();
+    // sessionVersion IS present so the consuming handler can reject it after a credential rotation.
+    expect(decoded.sessionVersion).toBe(7);
   });
 });
 
 describe('verifyPurposeToken rejection paths', () => {
   test('throws when the purpose does not match the expected purpose', () => {
     // Signed as enroll, verified as challenge: a token must only unlock the step it names.
-    const token = signPurposeToken({ userId: 'u1', purpose: 'totp_enroll' }, '5m');
+    const token = signPurposeToken(
+      { userId: 'u1', purpose: 'totp_enroll', sessionVersion: 1 },
+      '5m',
+    );
     expect(() => verifyPurposeToken(token, 'totp_challenge')).toThrow();
   });
 
   test('throws on a tampered token (broken signature)', () => {
-    const token = signPurposeToken({ userId: 'u1', purpose: 'totp_challenge' }, '5m');
+    const token = signPurposeToken(
+      { userId: 'u1', purpose: 'totp_challenge', sessionVersion: 1 },
+      '5m',
+    );
     // Flip the final character of the signature segment to invalidate the HMAC.
     const lastChar = token.slice(-1);
     const tampered = `${token.slice(0, -1)}${lastChar === 'a' ? 'b' : 'a'}`;
@@ -143,14 +167,20 @@ describe('verifyPurposeToken rejection paths', () => {
   });
 
   test('throws on an expired token', () => {
-    const expired = signPurposeToken({ userId: 'u1', purpose: 'totp_challenge' }, '-1s');
+    const expired = signPurposeToken(
+      { userId: 'u1', purpose: 'totp_challenge', sessionVersion: 1 },
+      '-1s',
+    );
     expect(() => verifyPurposeToken(expired, 'totp_challenge')).toThrow();
   });
 });
 
 describe('authenticateToken rejects purpose tokens', () => {
   test('401 invalid_token_purpose for a totp_challenge token, before any repo access', async () => {
-    const token = signPurposeToken({ userId: 'u1', purpose: 'totp_challenge' }, '5m');
+    const token = signPurposeToken(
+      { userId: 'u1', purpose: 'totp_challenge', sessionVersion: 1 },
+      '5m',
+    );
     const request = buildFakeRequest(token);
     const reply = buildFakeReply();
 
@@ -167,7 +197,10 @@ describe('authenticateToken rejects purpose tokens', () => {
   });
 
   test('401 invalid_token_purpose for a totp_enroll token as well', async () => {
-    const token = signPurposeToken({ userId: 'u1', purpose: 'totp_enroll' }, '5m');
+    const token = signPurposeToken(
+      { userId: 'u1', purpose: 'totp_enroll', sessionVersion: 1 },
+      '5m',
+    );
     const request = buildFakeRequest(token);
     const reply = buildFakeReply();
 
@@ -184,7 +217,10 @@ describe('authenticateToken rejects purpose tokens', () => {
 
 describe('requireEnrollOrSession', () => {
   test('a valid totp_enroll token sets request.enrollUserId and not request.user', async () => {
-    const token = signPurposeToken({ userId: 'enrollee-9', purpose: 'totp_enroll' }, '10m');
+    const token = signPurposeToken(
+      { userId: 'enrollee-9', purpose: 'totp_enroll', sessionVersion: 1 },
+      '10m',
+    );
     const request = buildFakeRequest(token);
     const reply = buildFakeReply();
 

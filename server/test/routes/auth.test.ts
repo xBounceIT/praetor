@@ -809,7 +809,10 @@ describe('POST /api/auth/login', () => {
 
     // The challenge token is a single-purpose 'totp_challenge' token for this user — it must NOT
     // be usable as a session (authenticateToken rejects any 'purpose' claim).
-    expect(verifyPurposeToken(body.challengeToken, 'totp_challenge')).toEqual({ userId: 'u1' });
+    expect(verifyPurposeToken(body.challengeToken, 'totp_challenge')).toEqual({
+      userId: 'u1',
+      sessionVersion: 1,
+    });
 
     // Audit: the challenge was issued; a real session was NOT granted.
     expect(logAuditMock).toHaveBeenCalledTimes(1);
@@ -849,7 +852,10 @@ describe('POST /api/auth/login', () => {
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body).toEqual({ totpRequired: true, challengeToken: expect.any(String) });
-    expect(verifyPurposeToken(body.challengeToken, 'totp_challenge')).toEqual({ userId: 'u1' });
+    expect(verifyPurposeToken(body.challengeToken, 'totp_challenge')).toEqual({
+      userId: 'u1',
+      sessionVersion: 1,
+    });
     // LDAP bind ran; bcrypt did not.
     expect(ldapAuthenticateWithProfileMock).toHaveBeenCalledWith('alice', 'secret');
     expect(bcryptCompareMock).not.toHaveBeenCalled();
@@ -881,7 +887,10 @@ describe('POST /api/auth/login', () => {
     expect(body.user).toBeUndefined();
 
     // The enroll token is a single-purpose 'totp_enroll' token for this admin.
-    expect(verifyPurposeToken(body.enrollToken, 'totp_enroll')).toEqual({ userId: 'u1' });
+    expect(verifyPurposeToken(body.enrollToken, 'totp_enroll')).toEqual({
+      userId: 'u1',
+      sessionVersion: 1,
+    });
 
     expect(logAuditMock).toHaveBeenCalledTimes(1);
     expect(logAuditMock).toHaveBeenCalledWith(
@@ -924,7 +933,10 @@ describe('POST /api/auth/login', () => {
     const body = JSON.parse(res.body);
     expect(body).toEqual({ totpEnrollmentRequired: true, enrollToken: expect.any(String) });
     expect(body.token).toBeUndefined();
-    expect(verifyPurposeToken(body.enrollToken, 'totp_enroll')).toEqual({ userId: 'u1' });
+    expect(verifyPurposeToken(body.enrollToken, 'totp_enroll')).toEqual({
+      userId: 'u1',
+      sessionVersion: 1,
+    });
     const actions = logAuditMock.mock.calls.map(
       (call) => (call as unknown as [{ action: string }])[0].action,
     );
@@ -1333,7 +1345,8 @@ describe('POST /api/auth/totp-challenge', () => {
   const challengeTokenFor = (
     userId = 'u1',
     expiresIn: Parameters<typeof signPurposeToken>[1] = '5m',
-  ) => signPurposeToken({ userId, purpose: 'totp_challenge' }, expiresIn);
+    sessionVersion = 1,
+  ) => signPurposeToken({ userId, purpose: 'totp_challenge', sessionVersion }, expiresIn);
 
   test('200 happy path: a valid TOTP code exchanges the challenge for a session', async () => {
     findLoginUserByIdMock.mockResolvedValue(TOTP_LOGIN_USER);
@@ -1393,6 +1406,24 @@ describe('POST /api/auth/totp-challenge', () => {
       url: '/api/auth/totp-challenge',
       payload: {
         challengeToken: challengeTokenFor('u1'),
+        code: authenticator.generate(TOTP_SECRET),
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).errorCode).toBe('invalid_totp_code');
+  });
+
+  test('400 when the challenge token predates a credential/session rotation (sessionVersion mismatch)', async () => {
+    // The token carries the pre-rotation sessionVersion; the reloaded user now has a bumped one
+    // (password change / admin reset / disable), so the stale challenge cannot mint a session.
+    findLoginUserByIdMock.mockResolvedValue({ ...TOTP_LOGIN_USER, sessionVersion: 2 });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/totp-challenge',
+      payload: {
+        challengeToken: challengeTokenFor('u1', '5m', 1),
         code: authenticator.generate(TOTP_SECRET),
       },
     });
@@ -1578,7 +1609,10 @@ describe('POST /api/auth/totp-challenge', () => {
       method: 'POST',
       url: '/api/auth/totp-challenge',
       payload: {
-        challengeToken: signPurposeToken({ userId: 'u1', purpose: 'totp_enroll' }, '15m'),
+        challengeToken: signPurposeToken(
+          { userId: 'u1', purpose: 'totp_enroll', sessionVersion: 1 },
+          '15m',
+        ),
         code: '123456',
       },
     });

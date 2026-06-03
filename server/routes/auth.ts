@@ -276,7 +276,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return {
           totpRequired: true,
-          challengeToken: signPurposeToken({ userId: user.id, purpose: 'totp_challenge' }, '5m'),
+          challengeToken: signPurposeToken(
+            { userId: user.id, purpose: 'totp_challenge', sessionVersion: user.sessionVersion },
+            '5m',
+          ),
         };
       }
 
@@ -305,7 +308,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return {
           totpEnrollmentRequired: true,
-          enrollToken: signPurposeToken({ userId: user.id, purpose: 'totp_enroll' }, '15m'),
+          enrollToken: signPurposeToken(
+            { userId: user.id, purpose: 'totp_enroll', sessionVersion: user.sessionVersion },
+            '15m',
+          ),
         };
       }
 
@@ -357,8 +363,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Expired or tampered challenge tokens are reported distinctly so the client can prompt the
       // user to log in again rather than re-enter a code against a dead token.
       let userId: string;
+      let challengeSessionVersion: number;
       try {
-        ({ userId } = verifyPurposeToken(challengeTokenResult.value, 'totp_challenge'));
+        ({ userId, sessionVersion: challengeSessionVersion } = verifyPurposeToken(
+          challengeTokenResult.value,
+          'totp_challenge',
+        ));
       } catch {
         return reply
           .code(401)
@@ -380,7 +390,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         user.employeeType !== 'app_user' ||
         // The auth method can change between /login (which issued this challenge token) and now; an
         // account switched to OIDC/SAML in that window must not complete a local TOTP challenge.
-        !usersRepo.isTotpApplicable(user.authMethod)
+        !usersRepo.isTotpApplicable(user.authMethod) ||
+        // Reject a challenge left outstanding across a credential/session rotation (password change,
+        // admin reset, disable) — the bumped sessionVersion no longer matches the token's.
+        user.sessionVersion !== challengeSessionVersion
       ) {
         return invalidCode();
       }

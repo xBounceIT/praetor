@@ -111,6 +111,7 @@ export type PurposeTokenPurpose = 'totp_challenge' | 'totp_enroll';
 type PurposeJwtPayload = JwtPayload & {
   userId: string;
   purpose: PurposeTokenPurpose;
+  sessionVersion: number;
 };
 
 type NonEmptyGuardArgs = [string, ...string[]];
@@ -340,8 +341,9 @@ export const requireEnrollOrSession = async (request: FastifyRequest, reply: Fas
   }
 
   try {
-    const { userId } = verifyPurposeToken(token, 'totp_enroll');
+    const { userId, sessionVersion } = verifyPurposeToken(token, 'totp_enroll');
     request.enrollUserId = userId;
+    request.enrollSessionVersion = sessionVersion;
     return;
   } catch {
     // Not a valid enroll token (wrong purpose, expired, session token, PAT, …) — defer to standard
@@ -466,17 +468,20 @@ export const generateToken = (
     algorithm: JWT_ALGORITHM,
   });
 
-// Signs a single-purpose 2FA token. No sessionStart/sessionVersion claims — these tokens grant
-// only the narrow step they name and are rejected by authenticateToken on the strength of their
-// `purpose` claim, so they cannot be replayed as a session.
+// Signs a single-purpose 2FA token. No sessionStart claim — these tokens grant only the narrow step
+// they name and are rejected by authenticateToken on the strength of their `purpose` claim, so they
+// cannot be replayed as a session. They DO carry the user's `sessionVersion` at issue time so the
+// consuming handler can reject a token left outstanding across a credential/session rotation
+// (password change, admin reset, disable) within its 5–15 minute lifetime.
 export const signPurposeToken = (
-  payload: { userId: string; purpose: PurposeTokenPurpose },
+  payload: { userId: string; purpose: PurposeTokenPurpose; sessionVersion: number },
   expiresIn: import('jsonwebtoken').SignOptions['expiresIn'],
 ) =>
-  jwt.sign({ userId: payload.userId, purpose: payload.purpose }, getJwtSecret(), {
-    expiresIn,
-    algorithm: JWT_ALGORITHM,
-  });
+  jwt.sign(
+    { userId: payload.userId, purpose: payload.purpose, sessionVersion: payload.sessionVersion },
+    getJwtSecret(),
+    { expiresIn, algorithm: JWT_ALGORITHM },
+  );
 
 // Verifies a purpose token and asserts it is the exact purpose the caller expects. Throws on a
 // bad signature, expiry, missing/non-string userId, or a purpose mismatch — callers translate
@@ -484,16 +489,20 @@ export const signPurposeToken = (
 export const verifyPurposeToken = (
   token: string,
   expectedPurpose: PurposeTokenPurpose,
-): { userId: string } => {
+): { userId: string; sessionVersion: number } => {
   const decoded = jwt.verify(token, getJwtSecret(), {
     algorithms: [JWT_ALGORITHM],
   }) as PurposeJwtPayload;
 
-  if (decoded.purpose !== expectedPurpose || typeof decoded.userId !== 'string') {
+  if (
+    decoded.purpose !== expectedPurpose ||
+    typeof decoded.userId !== 'string' ||
+    typeof decoded.sessionVersion !== 'number'
+  ) {
     throw new Error('Invalid token purpose');
   }
 
-  return { userId: decoded.userId };
+  return { userId: decoded.userId, sessionVersion: decoded.sessionVersion };
 };
 
 export default {

@@ -218,8 +218,8 @@ const sessionHeader = (userId = 'u1') => ({
   authorization: `Bearer ${signToken({ userId })}`,
 });
 
-const enrollHeader = (userId = 'u1') => ({
-  authorization: `Bearer ${signPurposeToken({ userId, purpose: 'totp_enroll' }, '15m')}`,
+const enrollHeader = (userId = 'u1', sessionVersion = 1) => ({
+  authorization: `Bearer ${signPurposeToken({ userId, purpose: 'totp_enroll', sessionVersion }, '15m')}`,
 });
 
 // Extracts the action strings passed to logAudit across all calls, in order.
@@ -428,6 +428,28 @@ describe('POST /api/auth/2fa/confirm', () => {
     // or emits user.totp_enabled.
     expect(enableTotpMock).not.toHaveBeenCalled();
     expect(auditActions()).not.toContain('user.totp_enabled');
+  });
+
+  test('401 (enroll token): a sessionVersion rotation since the token was issued is rejected', async () => {
+    // The enroll token carries the pre-rotation sessionVersion; the reloaded user has a bumped one
+    // (password change / admin reset / disable), so confirm is rejected before enabling TOTP.
+    getTotpStateMock.mockResolvedValue({
+      totpSecret: encrypt(SECRET),
+      totpEnabled: false,
+      totpConfirmedAt: null,
+      totpBackupCodes: null,
+    });
+    findLoginUserByIdMock.mockResolvedValue({ ...LOGIN_USER, sessionVersion: 2 });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/2fa/confirm',
+      headers: enrollHeader('u1', 1),
+      payload: { code: validCode() },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(enableTotpMock).not.toHaveBeenCalled();
   });
 
   test('400 when no pending enrollment exists', async () => {
