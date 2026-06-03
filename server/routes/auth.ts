@@ -116,6 +116,16 @@ const isAdminRole = async (roleId: string): Promise<boolean> => {
   return role?.isAdmin ?? false;
 };
 
+// Whether the user can act as an admin through ANY of their roles — their active/primary role or
+// any role they could switch into via /auth/switch-role. Admin-2FA enforcement must consider every
+// assignable admin role: otherwise a multi-role user whose primary role is non-admin could log in
+// with no enrollment and then switch into an admin role, bypassing the policy.
+const userHasAnyAdminRole = async (userId: string, primaryRole: string): Promise<boolean> => {
+  if (await isAdminRole(primaryRole)) return true;
+  const roles = await rolesRepo.listAvailableRolesForUser(userId);
+  return roles.some((role) => role.isAdmin);
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // POST /login
   fastify.post(
@@ -284,11 +294,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         };
       }
 
-      // (b) Mandatory enrollment — only reached when the admin has NO TOTP configured yet.
+      // (b) Mandatory enrollment — only reached when an admin-capable user has NO TOTP configured
+      // yet. We check EVERY assignable admin role (not just the primary one) so a multi-role admin
+      // can't log in under a non-admin role and then switch into an admin role without a 2nd factor.
       if (totpApplies && !user.totpEnabled) {
         const settings = await generalSettingsRepo.get();
         const enforce = settings?.enforceTotpForAdmins ?? false;
-        if (enforce && (await isAdminRole(user.role))) {
+        if (enforce && (await userHasAnyAdminRole(user.id, user.role))) {
           await logAudit({
             request,
             action: 'user.totp_enrollment_required',

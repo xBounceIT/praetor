@@ -897,6 +897,40 @@ describe('POST /api/auth/login', () => {
     expect(actions).not.toContain('user.login');
   });
 
+  test('200: enforcement on + non-admin primary role but an assignable admin role → mandatory enrollment', async () => {
+    // Multi-role bypass guard (P1): the primary role is non-admin, so the old primary-role-only
+    // check would have issued a full session with no 2FA — and the user could then switch into the
+    // admin role they hold. Enforcement must consider every assignable admin role.
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
+      ...LOGIN_USER,
+      role: 'manager',
+      totpEnabled: false,
+    });
+    bcryptCompareMock.mockResolvedValue(true);
+    generalSettingsGetMock.mockResolvedValue({ enforceTotpForAdmins: true });
+    listAvailableRolesForUserMock.mockResolvedValue([
+      { id: 'manager', name: 'Manager', isSystem: true, isAdmin: false },
+      { id: 'admin', name: 'Admin', isSystem: true, isAdmin: true },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'alice', password: 'secret' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body).toEqual({ totpEnrollmentRequired: true, enrollToken: expect.any(String) });
+    expect(body.token).toBeUndefined();
+    expect(verifyPurposeToken(body.enrollToken, 'totp_enroll')).toEqual({ userId: 'u1' });
+    const actions = logAuditMock.mock.calls.map(
+      (call) => (call as unknown as [{ action: string }])[0].action,
+    );
+    expect(actions).not.toContain('user.login');
+    expect(actions).toContain('user.totp_enrollment_required');
+  });
+
   test('200: enforcement off (no settings row) + admin without TOTP gets a normal session (regression)', async () => {
     // generalSettingsGetMock resolves null by default (file-wide), so enforceTotpForAdmins is
     // falsey and the admin logs in normally — the enrollment detour must NOT trigger.
