@@ -501,6 +501,43 @@ describe('<UserSettings /> RIL preferences tab', () => {
     // The sentinel maps to "remove the key", so the resulting object has no monday entry.
     await waitFor(() => expect(onUpdate).toHaveBeenCalledWith({ rilWeekdayTransferDefaults: {} }));
   });
+
+  test('a failed weekday save rolls back only that day, preserving concurrent edits', async () => {
+    // First save (Monday) stays pending so we can reject it AFTER the second (Tuesday) succeeds —
+    // the exact out-of-order failure that must not drop the newer Tuesday selection.
+    let rejectFirst: (reason?: unknown) => void = () => {};
+    let calls = 0;
+    const update = mock((_updates: Partial<Settings>): Promise<void> => {
+      calls += 1;
+      if (calls === 1) {
+        return new Promise<void>((_, reject) => {
+          rejectFirst = reject;
+        });
+      }
+      return Promise.resolve();
+    });
+
+    renderRilSettings(settings, rilTransferOptions, update);
+    fireEvent.click(screen.getByRole('button', { name: /ril.title/ }));
+
+    const mondayTrigger = document.getElementById('ril-transfer-monday') as HTMLButtonElement;
+    fireEvent.click(mondayTrigger);
+    fireEvent.click(screen.getByRole('option', { name: 'Remote working' }));
+    await waitFor(() => expect(calls).toBe(1));
+
+    const tuesdayTrigger = document.getElementById('ril-transfer-tuesday') as HTMLButtonElement;
+    fireEvent.click(tuesdayTrigger);
+    fireEvent.click(screen.getByRole('option', { name: 'In office' }));
+    await waitFor(() => expect(calls).toBe(2));
+    expect(tuesdayTrigger).toHaveTextContent('In office');
+
+    // Fail the earlier Monday save: rollback must revert only Monday, leaving Tuesday intact.
+    rejectFirst(new Error('save failed'));
+    await waitFor(() =>
+      expect(document.getElementById('ril-transfer-monday')).toHaveTextContent('ril.noDefault'),
+    );
+    expect(document.getElementById('ril-transfer-tuesday')).toHaveTextContent('In office');
+  });
 });
 
 describe('<UserSettings /> non-local auth', () => {

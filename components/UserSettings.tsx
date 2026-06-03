@@ -452,8 +452,8 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   // Persist the per-weekday default optimistically (same UX as the language picker): apply
   // locally, push to the backend, and roll back on failure.
   const handleWeekdayTransferChange = async (day: RilWeekday, value: string) => {
-    const previous = rilWeekdayTransferDefaults;
-    const next = { ...previous };
+    const previousValue = rilWeekdayTransferDefaults[day];
+    const next = { ...rilWeekdayTransferDefaults };
     if (value === RIL_NONE_TRANSFER_VALUE) delete next[day];
     else next[day] = value;
     setRilWeekdayTransferDefaults(next);
@@ -461,7 +461,14 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       await onUpdate({ rilWeekdayTransferDefaults: next });
     } catch (err) {
       console.error('Failed to update RIL transfer defaults:', err);
-      setRilWeekdayTransferDefaults(previous);
+      // Roll back only this day's change via a functional update, so a failed save can't drop
+      // other weekday edits made (and possibly already persisted) while this request was in flight.
+      setRilWeekdayTransferDefaults((current) => {
+        const reverted = { ...current };
+        if (previousValue === undefined) delete reverted[day];
+        else reverted[day] = previousValue;
+        return reverted;
+      });
     }
   };
 
