@@ -291,6 +291,7 @@ describe('POST /api/auth/login', () => {
       username: 'alice',
       role: 'manager',
       avatarInitials: 'AL',
+      authMethod: 'local',
       permissions: HAPPY_PERMISSIONS,
       availableRoles: HAPPY_ROLES,
     });
@@ -1008,6 +1009,21 @@ describe('GET /api/auth/me', () => {
     });
   });
 
+  test('200 includes authMethod so the client can tailor 2FA management for LDAP users', async () => {
+    // Without authMethod the client defaults LDAP users to "local" and demands a (nonexistent)
+    // password in the Disable-2FA dialog. /me must carry the auth method.
+    findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, authMethod: 'ldap' });
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: authHeader('u1'),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).authMethod).toBe('ldap');
+  });
+
   test('200 sets x-auth-token sliding-window header', async () => {
     const res = await testApp.inject({
       method: 'GET',
@@ -1313,6 +1329,7 @@ describe('POST /api/auth/totp-challenge', () => {
       username: 'alice',
       role: 'manager',
       avatarInitials: 'AL',
+      authMethod: 'local',
       permissions: HAPPY_PERMISSIONS,
       availableRoles: HAPPY_ROLES,
     });

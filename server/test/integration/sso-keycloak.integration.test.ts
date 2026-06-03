@@ -229,6 +229,7 @@ const toAuthUser = (user: StoredUser): AuthUser => ({
   username: user.username,
   role: user.role,
   avatarInitials: user.avatarInitials,
+  authMethod: user.authMethod,
   isDisabled: user.isDisabled,
   sessionVersion: user.sessionVersion,
   tokenVersion: user.tokenVersion,
@@ -245,6 +246,7 @@ const resetStores = (): void => {
     username: ALICE_USERNAME,
     role: 'user',
     avatarInitials: 'LA',
+    authMethod: 'local',
     isDisabled: false,
     sessionVersion: 1,
     tokenVersion: 1,
@@ -350,6 +352,7 @@ describe.skipIf(SHOULD_SKIP_SSO)('SSO integration: Keycloak OIDC and SAML', () =
       insertUser: async (user: NewFullUser) => {
         users.set(user.id, {
           ...user,
+          authMethod: user.authMethod ?? 'local',
           passwordHash: user.passwordHash,
           sessionVersion: 1,
           tokenVersion: 1,

@@ -442,6 +442,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         username: request.user?.username,
         role: request.user?.role,
         avatarInitials: request.user?.avatarInitials,
+        authMethod: request.user?.authMethod,
         permissions: request.user?.permissions || [],
         availableRoles: effectiveAvailableRoles,
       };
@@ -547,6 +548,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           username: request.user?.username,
           role: roleIdResult.value,
           avatarInitials: request.user?.avatarInitials,
+          authMethod: request.user?.authMethod,
           permissions,
           availableRoles: effectiveAvailableRoles,
         },

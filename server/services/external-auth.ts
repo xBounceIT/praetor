@@ -402,6 +402,7 @@ export const resolveExternalIdentity = async (
         username: user.username,
         role: effectivePrimaryRole,
         avatarInitials: user.avatarInitials,
+        authMethod: input.protocol,
         isDisabled: user.isDisabled,
         sessionVersion: user.sessionVersion,
         tokenVersion: user.tokenVersion,

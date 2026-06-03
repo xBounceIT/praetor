@@ -201,6 +201,7 @@ const loadAuthenticatedUserContext = async (
     username: user.username,
     role: effectiveRole,
     avatarInitials: user.avatarInitials,
+    authMethod: user.authMethod,
     permissions,
   };
 

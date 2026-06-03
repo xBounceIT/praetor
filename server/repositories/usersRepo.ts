@@ -48,6 +48,7 @@ export type AuthUser = {
   username: string;
   role: string;
   avatarInitials: string;
+  authMethod: AuthMethod;
   isDisabled: boolean;
   sessionVersion: number;
   tokenVersion: number;
@@ -122,6 +123,7 @@ export const findAuthUserById = async (
       username: users.username,
       role: users.role,
       avatarInitials: users.avatarInitials,
+      authMethod: users.authMethod,
       isDisabled: users.isDisabled,
       sessionVersion: users.sessionVersion,
       tokenVersion: users.tokenVersion,
@@ -135,6 +137,7 @@ export const findAuthUserById = async (
     username: rows[0].username,
     role: rows[0].role,
     avatarInitials: rows[0].avatarInitials,
+    authMethod: rows[0].authMethod ?? 'local',
     isDisabled: rows[0].isDisabled ?? false,
     sessionVersion: rows[0].sessionVersion,
     tokenVersion: rows[0].tokenVersion,

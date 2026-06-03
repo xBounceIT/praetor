@@ -14,6 +14,7 @@ declare module 'fastify' {
       username: string;
       role: string;
       avatarInitials: string;
+      authMethod?: 'local' | 'ldap' | 'oidc' | 'saml';
       permissions: string[];
     };
     // Set by the `requireEnrollOrSession` guard when the request carries a valid

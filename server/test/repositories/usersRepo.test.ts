@@ -37,9 +37,9 @@ describe('getPasswordHash', () => {
 
 describe('findAuthUserById', () => {
   test('returns the mapped user when the row exists', async () => {
-    // Projection: id, name, username, role, avatarInitials, isDisabled, sessionVersion,
-    // tokenVersion
-    exec.enqueue({ rows: [['user-1', 'Alice', 'alice', 'manager', 'AL', false, 3, 2]] });
+    // Projection: id, name, username, role, avatarInitials, authMethod, isDisabled,
+    // sessionVersion, tokenVersion
+    exec.enqueue({ rows: [['user-1', 'Alice', 'alice', 'manager', 'AL', 'ldap', false, 3, 2]] });
     const result = await usersRepo.findAuthUserById('user-1', testDb);
     expect(result).toEqual({
       id: 'user-1',
@@ -47,6 +47,7 @@ describe('findAuthUserById', () => {
       username: 'alice',
       role: 'manager',
       avatarInitials: 'AL',
+      authMethod: 'ldap',
       isDisabled: false,
       sessionVersion: 3,
       tokenVersion: 2,

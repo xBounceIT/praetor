@@ -14,6 +14,7 @@ export const authUserSchema = {
     username: { type: 'string' },
     role: { type: 'string' },
     avatarInitials: { type: 'string' },
+    authMethod: { type: 'string' },
     permissions: { type: 'array', items: { type: 'string' } },
     availableRoles: {
       type: 'array',
@@ -68,6 +69,7 @@ export const buildSessionSuccess = async (user: LoginUserWithAuth) => {
       username: user.username,
       role: user.role,
       avatarInitials: user.avatarInitials,
+      authMethod: user.authMethod,
       permissions,
       availableRoles: effectiveAvailableRoles,
     },
