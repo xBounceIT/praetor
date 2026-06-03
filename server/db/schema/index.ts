@@ -1,3 +1,4 @@
+export * from './appBranding.ts';
 export * from './auditLogs.ts';
 export * from './clientProfileOptions.ts';
 export * from './clients.ts';

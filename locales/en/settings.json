@@ -150,7 +150,8 @@
     "tabs": {
       "localization": "Localization",
       "tracking": "Tracking Preferences",
-      "ai": "AI Capabilities"
+      "ai": "AI Capabilities",
+      "branding": "Branding"
     },
     "currencyLabel": "Application Currency",
     "currencyDescription": "This currency symbol will be used globally in reports and user management.",
@@ -219,6 +220,26 @@
       "remote": "Remote",
       "transfer": "Transfer"
     }
+  },
+  "branding": {
+    "title": "Branding",
+    "description": "Customize the company name and logo shown in the sidebar and on the login screen.",
+    "companyNameLabel": "Company Name",
+    "companyNameDescription": "Replaces the \"PRAETOR\" name in the sidebar. Leave empty to use the default.",
+    "companyNamePlaceholder": "e.g. Acme Inc.",
+    "save": "Save",
+    "logoLabel": "Company Logo",
+    "logoDescription": "Shown in the sidebar and on the login screen. Leave empty to use the default Praetor logo.",
+    "uploadButton": "Upload logo",
+    "removeButton": "Remove",
+    "uploadHint": "PNG, JPEG, WEBP or SVG, up to 2 MB.",
+    "currentLogoAlt": "Current company logo",
+    "nameSaved": "Company name saved",
+    "logoUploaded": "Logo uploaded",
+    "logoRemoved": "Logo removed",
+    "saveFailed": "Failed to save branding",
+    "invalidType": "Unsupported image. Use PNG, JPEG, WEBP or SVG.",
+    "tooLarge": "Image is too large. Maximum size is 2 MB."
   },
   "messages": {
     "loading": "Loading settings...",

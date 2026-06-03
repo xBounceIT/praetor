@@ -173,6 +173,15 @@ export interface GeneralSettings {
   rilTransferOptions?: string[];
 }
 
+// App-wide branding shown in the sidebar and on the login screen. `companyName` replaces
+// the "PRAETOR" wordmark; `logoUrl` (when set) replaces the bundled logo. Both fall back
+// to the bundled Praetor defaults when null. `logoUrl` is a ready-to-render, cache-busted
+// URL derived client-side from the branding API response.
+export interface AppBranding {
+  companyName: string | null;
+  logoUrl: string | null;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -973,6 +982,7 @@ export interface SupplierInvoice {
 export const AUDIT_ENTITY_TYPES = [
   'auth',
   'route',
+  'app_branding',
   'client',
   'client_offer',
   'client_order',

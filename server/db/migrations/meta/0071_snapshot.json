@@ -1,6 +1,6 @@
 {
-  "id": "309a5343-eb2e-4518-958d-8d46828b39f5",
-  "prevId": "1e2da8c8-ca7e-49b7-a2d0-f08222a5bac3",
+  "id": "5900df6e-7156-4c46-ba61-b9b16f7663ee",
+  "prevId": "309a5343-eb2e-4518-958d-8d46828b39f5",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3620,6 +3620,76 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.ril_drafts": {
+      "name": "ril_drafts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "month_key": {
+          "name": "month_key",
+          "type": "varchar(7)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rows": {
+          "name": "rows",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ril_drafts_user_id_users_id_fk": {
+          "name": "ril_drafts_user_id_users_id_fk",
+          "tableFrom": "ril_drafts",
+          "tableTo": "users",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "ril_drafts_user_month_unique": {
+          "name": "ril_drafts_user_month_unique",
+          "nullsNotDistinct": false,
+          "columns": ["user_id", "month_key"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "ril_drafts_month_key_check": {
+          "name": "ril_drafts_month_key_check",
+          "value": "\"ril_drafts\".\"month_key\" ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'"
+        },
+        "ril_drafts_rows_object_check": {
+          "name": "ril_drafts_rows_object_check",
+          "value": "jsonb_typeof(\"ril_drafts\".\"rows\") = 'object'"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.role_permissions": {
       "name": "role_permissions",
       "schema": "",
@@ -4457,6 +4527,13 @@
           "notNull": false,
           "default": true
         },
+        "ril_weekday_transfer_defaults": {
+          "name": "ril_weekday_transfer_defaults",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp",
@@ -4494,6 +4571,10 @@
         "settings_start_of_week_check": {
           "name": "settings_start_of_week_check",
           "value": "\"settings\".\"start_of_week\" IN ('Monday', 'Sunday')"
+        },
+        "settings_ril_weekday_transfer_defaults_object_check": {
+          "name": "settings_ril_weekday_transfer_defaults_object_check",
+          "value": "jsonb_typeof(\"settings\".\"ril_weekday_transfer_defaults\") = 'object'"
         }
       },
       "isRLSEnabled": false

@@ -5,6 +5,7 @@
 
 export { aiApi } from './api/ai';
 export { authApi } from './api/auth';
+export { brandingApi } from './api/branding';
 export { ApiError, getApiBase, getAuthToken, setAuthToken } from './api/client';
 export { clientOffersApi } from './api/clientOffers';
 export { clientQuotesApi } from './api/clientQuotes';
@@ -57,6 +58,7 @@ export { workUnitsApi } from './api/workUnits';
 
 import { aiApi } from './api/ai';
 import { authApi } from './api/auth';
+import { brandingApi } from './api/branding';
 import { getApiBase, getAuthToken, setAuthToken } from './api/client';
 import { clientOffersApi } from './api/clientOffers';
 import { clientQuotesApi } from './api/clientQuotes';
@@ -90,6 +92,7 @@ import { workUnitsApi } from './api/workUnits';
 export default {
   auth: authApi,
   ai: aiApi,
+  branding: brandingApi,
   reports: reportsApi,
   users: usersApi,
   employees: employeesApi,
