@@ -3075,6 +3075,10 @@ const AppContent: React.FC = () => {
                   onSetEnforceTotpForAdmins={(value) =>
                     handleUpdateGeneralSettings({ enforceTotpForAdmins: value })
                   }
+                  canManageEnforceTotp={hasPermission(
+                    currentUser.permissions,
+                    'administration.general.update',
+                  )}
                 />
               )}
 

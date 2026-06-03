@@ -111,6 +111,7 @@ const renderAuthSettings = (overrides: Partial<ComponentProps<typeof AuthSetting
     onDeleteSsoProvider: mock(async () => {}),
     enforceTotpForAdmins: false,
     onSetEnforceTotpForAdmins: mock((_value: boolean) => {}),
+    canManageEnforceTotp: true,
     ...overrides,
   };
 
@@ -232,6 +233,15 @@ describe('<AuthSettings />', () => {
 
       expect(onSetEnforceTotpForAdmins).toHaveBeenCalledTimes(1);
       expect(onSetEnforceTotpForAdmins).toHaveBeenCalledWith(true);
+    });
+
+    test('hides the enforcement card when the user lacks general-settings update permission', () => {
+      // The policy persists via the general-settings endpoint; a user who can view auth settings
+      // but not update general settings must not see a toggle that would 403 on save.
+      renderAuthSettings({ canManageEnforceTotp: false });
+
+      expect(screen.queryByText('enforceTotp.label')).not.toBeInTheDocument();
+      expect(document.getElementById('enforce-totp-for-admins')).toBeNull();
     });
   });
 

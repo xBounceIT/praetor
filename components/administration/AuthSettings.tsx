@@ -64,6 +64,11 @@ export interface AuthSettingsProps {
   onDeleteSsoProvider: (id: string) => Promise<void>;
   enforceTotpForAdmins: boolean;
   onSetEnforceTotpForAdmins: (value: boolean) => void | Promise<void>;
+  // The admin-2FA policy persists through the general-settings endpoint
+  // (administration.general.update). The toggle lives on this auth page for discoverability, so we
+  // hide it from users who can view auth settings but lack general.update — otherwise they would
+  // see a control that 403s on save. Visible iff usable.
+  canManageEnforceTotp: boolean;
 }
 
 const DEFAULT_LDAP_CONFIG: LdapConfig = {
@@ -181,6 +186,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   onDeleteSsoProvider,
   enforceTotpForAdmins,
   onSetEnforceTotpForAdmins,
+  canManageEnforceTotp,
 }) => {
   const { t } = useTranslation('auth');
   const [activeTab, setActiveTab] = useState<'ldap' | SsoProtocol>('ldap');
@@ -1013,26 +1019,28 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
 
       {activeTab === 'ldap' && (
         <div className="space-y-8">
-          <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
-            <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-              <CardTitle className="flex items-center gap-3 text-base">
-                <ShieldCheck aria-hidden="true" className="size-4 text-praetor" />
-                {t('enforceTotp.label')}
-              </CardTitle>
-              <CardDescription>{t('enforceTotp.description')}</CardDescription>
-              <CardAction>
-                <Switch
-                  id="enforce-totp-for-admins"
-                  checked={enforceTotpForAdmins}
-                  onCheckedChange={onSetEnforceTotpForAdmins}
-                  aria-label={t('enforceTotp.label')}
-                />
-              </CardAction>
-            </CardHeader>
-            <CardContent className="p-6">
-              <p className="text-xs text-muted-foreground">{t('enforceTotp.ssoNote')}</p>
-            </CardContent>
-          </Card>
+          {canManageEnforceTotp && (
+            <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+              <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+                <CardTitle className="flex items-center gap-3 text-base">
+                  <ShieldCheck aria-hidden="true" className="size-4 text-praetor" />
+                  {t('enforceTotp.label')}
+                </CardTitle>
+                <CardDescription>{t('enforceTotp.description')}</CardDescription>
+                <CardAction>
+                  <Switch
+                    id="enforce-totp-for-admins"
+                    checked={enforceTotpForAdmins}
+                    onCheckedChange={onSetEnforceTotpForAdmins}
+                    aria-label={t('enforceTotp.label')}
+                  />
+                </CardAction>
+              </CardHeader>
+              <CardContent className="p-6">
+                <p className="text-xs text-muted-foreground">{t('enforceTotp.ssoNote')}</p>
+              </CardContent>
+            </Card>
+          )}
 
           <form onSubmit={handleSaveLdap} className="space-y-8">
             <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
