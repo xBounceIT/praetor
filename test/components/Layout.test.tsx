@@ -473,3 +473,55 @@ describe('<Layout />', () => {
     expect(onViewChange).toHaveBeenCalledWith('docs');
   });
 });
+
+describe('<Layout /> sidebar branding', () => {
+  const CUSTOM_LOGO = '/api/branding/logo?v=1';
+
+  beforeEach(() => {
+    mediaQueryListeners.clear();
+    setMobileViewport(false);
+    localStorage.clear();
+    document.documentElement.classList.remove('dark');
+  });
+
+  const brandImgVia = (label: string) =>
+    screen
+      .getByText(label)
+      .closest('[data-sidebar="menu-button"]')
+      ?.querySelector('img') as HTMLImageElement | null;
+
+  test('shows the company name and uploaded logo, replacing PRAETOR and the bundled icon', () => {
+    renderLayout({ companyName: 'Acme', logoUrl: CUSTOM_LOGO });
+
+    // Feature (b): the configurable company name replaces the "PRAETOR" wordmark...
+    expect(screen.getByText('Acme')).toBeDefined();
+    expect(screen.queryByText('PRAETOR')).toBeNull();
+    // ...including the footer (which otherwise reads "Praetor v<version>").
+    expect(screen.getByText(/^Acme v/)).toBeDefined();
+    // Feature (a): the uploaded logo URL is used as the sidebar icon, as-is.
+    expect(brandImgVia('Acme')?.getAttribute('src')).toBe(CUSTOM_LOGO);
+  });
+
+  test('falls back to the PRAETOR wordmark and bundled favicon when no branding is set', () => {
+    renderLayout();
+
+    expect(screen.getByText('PRAETOR')).toBeDefined();
+    const src = brandImgVia('PRAETOR')?.getAttribute('src') ?? '';
+    // The bundled favicon import resolves to a non-empty asset reference, never the API logo URL.
+    expect(src.length).toBeGreaterThan(0);
+    expect(src).not.toBe(CUSTOM_LOGO);
+  });
+
+  test('falls back to the bundled favicon when the custom sidebar logo fails to load', () => {
+    renderLayout({ companyName: 'Acme', logoUrl: CUSTOM_LOGO });
+
+    const img = brandImgVia('Acme');
+    expect(img?.getAttribute('src')).toBe(CUSTOM_LOGO);
+
+    // Mirrors the server contract: a logo whose file is gone on disk 404s, so the <img> errors.
+    fireEvent.error(img as HTMLImageElement);
+
+    // The icon reverts to the bundled favicon instead of leaving a broken image.
+    expect(brandImgVia('Acme')?.getAttribute('src')).not.toBe(CUSTOM_LOGO);
+  });
+});

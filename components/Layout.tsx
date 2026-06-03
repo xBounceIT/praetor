@@ -102,6 +102,8 @@ export interface LayoutProps {
   roles: Role[];
   isNotFound?: boolean;
   isAiReportingEnabled?: boolean;
+  companyName?: string | null;
+  logoUrl?: string | null;
   notifications?: Notification[];
   unreadNotificationCount?: number;
   onMarkNotificationAsRead?: (id: string) => void;
@@ -119,6 +121,8 @@ const Layout: React.FC<LayoutProps> = ({
   roles,
   isNotFound,
   isAiReportingEnabled = false,
+  companyName,
+  logoUrl,
   notifications = EMPTY_NOTIFICATIONS,
   unreadNotificationCount = 0,
   onMarkNotificationAsRead,
@@ -366,6 +370,8 @@ const Layout: React.FC<LayoutProps> = ({
         logoutLabel={t('menu.logout')}
         switchRoleLabel={t('menu.switchRole')}
         version={import.meta.env.VITE_APP_VERSION ?? ''}
+        companyName={companyName}
+        logoUrl={logoUrl}
         onViewChange={onViewChange}
         onLogout={onLogout}
         onSwitchRole={onSwitchRole}

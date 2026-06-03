@@ -9,6 +9,7 @@ import { createChildLogger, serializeError } from './logger.ts';
 export const AUDIT_ENTITY_TYPES = [
   'auth',
   'route',
+  'app_branding',
   'client',
   'client_offer',
   'client_order',
