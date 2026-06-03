@@ -5,10 +5,33 @@ export interface LoginResponse {
   user: User;
 }
 
+// Lowercase English weekday names — the only days a RIL row can be filled in.
+export type RilWeekday = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday';
+
+// Per-weekday default RIL "Trasferta" (location) value. Sparse: only carries configured days.
+export type RilWeekdayTransferDefaults = Partial<Record<RilWeekday, string>>;
+
 export interface Settings {
   fullName: string;
   email: string;
   language?: 'en' | 'it' | 'auto';
+  rilWeekdayTransferDefaults?: RilWeekdayTransferDefaults;
+}
+
+// The five user-editable fields of one RIL row, persisted as a draft.
+export interface RilDraftRow {
+  entrance: string;
+  exit: string;
+  notes: string;
+  transfer: string;
+  code: string;
+}
+
+export interface RilDraft {
+  monthKey: string;
+  // Keyed by day-of-month (stringified 1..31); sparse.
+  rows: Record<string, RilDraftRow>;
+  updatedAt: string | null;
 }
 
 export interface PersonalAccessToken {

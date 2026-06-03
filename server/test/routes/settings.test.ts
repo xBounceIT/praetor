@@ -136,6 +136,7 @@ const HAPPY_SETTINGS = {
   fullName: 'Alice',
   email: 'alice@example.com',
   language: 'en',
+  rilWeekdayTransferDefaults: {},
 };
 
 const HAPPY_PERSONAL_ACCESS_TOKEN = {
@@ -262,6 +263,7 @@ describe('PUT /api/settings', () => {
       fullName: 'Alice B',
       email: 'alice@b.com',
       language: 'it',
+      rilWeekdayTransferDefaults: null,
     });
   });
 
@@ -280,6 +282,7 @@ describe('PUT /api/settings', () => {
       fullName: null,
       email: null,
       language: null,
+      rilWeekdayTransferDefaults: null,
     });
   });
 
@@ -369,6 +372,52 @@ describe('PUT /api/settings', () => {
       fullName: null,
       email: null,
       language: 'it',
+      rilWeekdayTransferDefaults: null,
+    });
+  });
+
+  test('200 sanitizes and forwards rilWeekdayTransferDefaults', async () => {
+    upsertForUserMock.mockResolvedValue({
+      ...HAPPY_SETTINGS,
+      rilWeekdayTransferDefaults: { monday: 'Telelavoro', friday: 'In sede' },
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/settings',
+      headers: authHeader(),
+      payload: {
+        rilWeekdayTransferDefaults: { monday: 'Telelavoro', friday: ' In sede ', tuesday: '  ' },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // tuesday is blank → dropped; friday is trimmed.
+    expect(upsertForUserMock).toHaveBeenCalledWith('u1', {
+      fullName: null,
+      email: null,
+      language: null,
+      rilWeekdayTransferDefaults: { monday: 'Telelavoro', friday: 'In sede' },
+    });
+  });
+
+  test('strips unknown weekday keys before persisting (Fastify removeAdditional)', async () => {
+    upsertForUserMock.mockResolvedValue(HAPPY_SETTINGS);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/settings',
+      headers: authHeader(),
+      payload: { rilWeekdayTransferDefaults: { monday: 'Telelavoro', saturday: 'In sede' } },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // `saturday` is not a configurable weekday → stripped by the schema; only `monday` survives.
+    expect(upsertForUserMock).toHaveBeenCalledWith('u1', {
+      fullName: null,
+      email: null,
+      language: null,
+      rilWeekdayTransferDefaults: { monday: 'Telelavoro' },
     });
   });
 });

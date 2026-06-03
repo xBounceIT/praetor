@@ -399,6 +399,152 @@ describe('<UserSettings /> MCP tokens', () => {
   });
 });
 
+describe('<UserSettings /> RIL preferences tab', () => {
+  const rilTransferOptions = ['In office', 'Remote working'];
+
+  // renderSettings() deliberately omits rilTransferOptions, so render directly here. A per-test
+  // `settings` override lets each case seed (or not seed) the stored weekday defaults.
+  const renderRilSettings = (
+    rilSettings: Settings = settings,
+    options: string[] = rilTransferOptions,
+    update: (updates: Partial<Settings>) => Promise<void> = onUpdate,
+  ) =>
+    render(
+      <UserSettings
+        settings={rilSettings}
+        rilTransferOptions={options}
+        onUpdate={update}
+        onUpdatePassword={onUpdatePassword}
+        onListMcpTokens={onListMcpTokens}
+        onCreateMcpToken={onCreateMcpToken}
+        onRevokeMcpToken={onRevokeMcpToken}
+        onGetPersonalAccessToken={onGetPersonalAccessToken}
+        onRenewPersonalAccessToken={onRenewPersonalAccessToken}
+      />,
+    );
+
+  beforeEach(() => {
+    for (const m of [
+      onUpdate,
+      onUpdatePassword,
+      onListMcpTokens,
+      onCreateMcpToken,
+      onRevokeMcpToken,
+      onGetPersonalAccessToken,
+      onRenewPersonalAccessToken,
+    ]) {
+      m.mockClear();
+    }
+  });
+
+  test('hides the RIL tab when no transfer options are configured', () => {
+    // renderSettings defaults rilTransferOptions to [], so the tab must not appear.
+    renderSettings();
+    expect(screen.queryByRole('button', { name: /ril.title/ })).not.toBeInTheDocument();
+  });
+
+  test('shows the RIL tab when transfer options are configured', () => {
+    renderRilSettings();
+    expect(screen.getByRole('button', { name: /ril.title/ })).toBeInTheDocument();
+  });
+
+  test('opening the RIL tab reveals a select for each Monday..Friday weekday', () => {
+    renderRilSettings();
+    fireEvent.click(screen.getByRole('button', { name: /ril.title/ }));
+
+    // The selects are keyed by id ril-transfer-monday..friday; the i18n mock does not localize
+    // the Intl weekday labels, so target the controls by their stable ids.
+    for (const day of ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']) {
+      const trigger = document.getElementById(`ril-transfer-${day}`);
+      expect(trigger).not.toBeNull();
+      expect(trigger?.tagName).toBe('BUTTON');
+    }
+    expect(Array.from(document.querySelectorAll('[id^="ril-transfer-"]'))).toHaveLength(5);
+  });
+
+  test('pre-populates a weekday select from settings.rilWeekdayTransferDefaults', () => {
+    renderRilSettings({ ...settings, rilWeekdayTransferDefaults: { friday: 'Remote working' } });
+    fireEvent.click(screen.getByRole('button', { name: /ril.title/ }));
+
+    // Controlled Radix Select renders the selected option's text inside the trigger button.
+    expect(document.getElementById('ril-transfer-friday')).toHaveTextContent('Remote working');
+    // An unset weekday falls back to the "no default" sentinel label.
+    expect(document.getElementById('ril-transfer-monday')).toHaveTextContent('ril.noDefault');
+  });
+
+  test('selecting a transfer option for Monday pushes it through onUpdate', async () => {
+    renderRilSettings({ ...settings, rilWeekdayTransferDefaults: { monday: 'In office' } });
+    fireEvent.click(screen.getByRole('button', { name: /ril.title/ }));
+
+    const mondayTrigger = document.getElementById('ril-transfer-monday') as HTMLButtonElement;
+    // Seeded value is reflected before the change.
+    expect(mondayTrigger).toHaveTextContent('In office');
+
+    fireEvent.click(mondayTrigger);
+    fireEvent.click(screen.getByRole('option', { name: 'Remote working' }));
+
+    await waitFor(() =>
+      expect(onUpdate).toHaveBeenCalledWith({
+        rilWeekdayTransferDefaults: { monday: 'Remote working' },
+      }),
+    );
+  });
+
+  test('choosing "No default" drops the weekday key from the persisted defaults', async () => {
+    renderRilSettings({ ...settings, rilWeekdayTransferDefaults: { monday: 'In office' } });
+    fireEvent.click(screen.getByRole('button', { name: /ril.title/ }));
+
+    const mondayTrigger = document.getElementById('ril-transfer-monday') as HTMLButtonElement;
+    fireEvent.click(mondayTrigger);
+    fireEvent.click(screen.getByRole('option', { name: 'ril.noDefault' }));
+
+    // The sentinel maps to "remove the key", so the resulting object has no monday entry.
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledWith({ rilWeekdayTransferDefaults: {} }));
+  });
+
+  test('serializes weekday saves and rolls back only the failed day', async () => {
+    // Each save is deferred so we control ordering: serialization must hold Tuesday's PUT until
+    // Monday's settles, and a failed Monday save must roll back only Monday — keeping Tuesday.
+    const deferreds: Array<{ resolve: () => void; reject: (reason?: unknown) => void }> = [];
+    let calls = 0;
+    const update = mock((_updates: Partial<Settings>): Promise<void> => {
+      calls += 1;
+      return new Promise<void>((resolve, reject) => {
+        deferreds.push({ resolve: () => resolve(), reject });
+      });
+    });
+
+    renderRilSettings(settings, rilTransferOptions, update);
+    fireEvent.click(screen.getByRole('button', { name: /ril.title/ }));
+
+    const mondayTrigger = document.getElementById('ril-transfer-monday') as HTMLButtonElement;
+    fireEvent.click(mondayTrigger);
+    fireEvent.click(screen.getByRole('option', { name: 'Remote working' }));
+    await waitFor(() => expect(calls).toBe(1));
+
+    // Change Tuesday while Monday's PUT is still in flight: its save must be queued, not fired.
+    const tuesdayTrigger = document.getElementById('ril-transfer-tuesday') as HTMLButtonElement;
+    fireEvent.click(tuesdayTrigger);
+    fireEvent.click(screen.getByRole('option', { name: 'In office' }));
+    await waitFor(() => expect(tuesdayTrigger).toHaveTextContent('In office')); // optimistic
+    expect(calls).toBe(1); // serialized: Tuesday's PUT waits for Monday's
+
+    // Fail Monday's PUT. Its day rolls back; Tuesday stays, and its queued PUT now fires.
+    deferreds[0].reject(new Error('save failed'));
+    await waitFor(() =>
+      expect(document.getElementById('ril-transfer-monday')).toHaveTextContent('ril.noDefault'),
+    );
+    expect(tuesdayTrigger).toHaveTextContent('In office');
+    await waitFor(() => expect(calls).toBe(2));
+    // The queued save is recomputed from the live map at send time: it carries Tuesday's edit
+    // through (last write wins) but drops Monday, whose save failed and was rolled back.
+    const secondPayload = (update.mock.calls[1][0] as Partial<Settings>).rilWeekdayTransferDefaults;
+    expect(secondPayload?.tuesday).toBe('In office');
+    expect(secondPayload?.monday).toBeUndefined();
+    deferreds[1].resolve();
+  });
+});
+
 describe('<UserSettings /> non-local auth', () => {
   beforeEach(() => {
     for (const m of [

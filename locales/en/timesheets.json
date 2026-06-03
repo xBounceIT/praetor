@@ -34,6 +34,11 @@
     "entriesLoaded": "{{count}} entries loaded",
     "totalHours": "{{count}} hours",
     "workedDays": "{{count}} worked days",
+    "draft": {
+      "saving": "Saving draft…",
+      "saved": "Draft saved",
+      "saveError": "Couldn't save draft"
+    },
     "summary": {
       "title": "RIL summary",
       "workedDays": "Worked Days",

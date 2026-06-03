@@ -498,6 +498,13 @@
       "when": 1780504984631,
       "tag": "0070_add_app_branding",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1780508318684,
+      "tag": "0071_add_ril_drafts_and_weekday_transfer",
+      "breakpoints": true
     }
   ]
 }

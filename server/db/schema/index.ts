@@ -23,6 +23,7 @@ export * from './quotes.ts';
 export * from './quoteVersions.ts';
 export * from './reportChatMessages.ts';
 export * from './reportChatSessions.ts';
+export * from './rilDrafts.ts';
 export * from './roles.ts';
 export * from './sales.ts';
 export * from './savedViews.ts';

@@ -1,6 +1,19 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, numeric, pgTable, serial, timestamp, varchar } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  jsonb,
+  numeric,
+  pgTable,
+  serial,
+  timestamp,
+  varchar,
+} from 'drizzle-orm/pg-core';
 import { users } from './users.ts';
+
+// Default RIL "Trasferta" (location) value to pre-fill per weekday, keyed by lowercase English
+// weekday name ('monday'..'friday'). Sparse: only carries weekdays the user configured.
+export type StoredRilWeekdayTransferDefaults = Record<string, string>;
 
 // Per-user app preferences.
 export const settings = pgTable(
@@ -23,10 +36,18 @@ export const settings = pgTable(
       .default('Monday'),
     compactView: boolean('compact_view').default(false),
     treatSaturdayAsHoliday: boolean('treat_saturday_as_holiday').default(true),
+    rilWeekdayTransferDefaults: jsonb('ril_weekday_transfer_defaults')
+      .$type<StoredRilWeekdayTransferDefaults>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     check('settings_language_check', sql`${table.language} IN ('en', 'it', 'auto')`),
     check('settings_start_of_week_check', sql`${table.startOfWeek} IN ('Monday', 'Sunday')`),
+    check(
+      'settings_ril_weekday_transfer_defaults_object_check',
+      sql`jsonb_typeof(${table.rilWeekdayTransferDefaults}) = 'object'`,
+    ),
   ],
 );

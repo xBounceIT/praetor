@@ -23,6 +23,7 @@ import productsRoutes from './routes/products.ts';
 import projectRulesRoutes from './routes/project-rules.ts';
 import projectsRoutes from './routes/projects.ts';
 import reportsRoutes from './routes/reports.ts';
+import rilDraftsRoutes from './routes/ril-drafts.ts';
 import rolesRoutes from './routes/roles.ts';
 import settingsRoutes from './routes/settings.ts';
 import ssoRoutes from './routes/sso.ts';
@@ -171,6 +172,7 @@ export const buildApp = async () => {
   fastify.register(projectRulesRoutes, { prefix: '/api/projects' });
   fastify.register(tasksRoutes, { prefix: '/api/tasks' });
   fastify.register(entriesRoutes, { prefix: '/api/entries' });
+  fastify.register(rilDraftsRoutes, { prefix: '/api/ril-drafts' });
   fastify.register(settingsRoutes, { prefix: '/api/settings' });
   fastify.register(ssoRoutes, { prefix: '/api/sso' });
   fastify.register(ldapRoutes, { prefix: '/api/ldap' });

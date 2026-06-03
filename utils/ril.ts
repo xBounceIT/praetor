@@ -4,6 +4,23 @@ import { isItalianHoliday } from './holidays';
 
 export type RilLocale = 'en' | 'it';
 
+// Lowercase English weekday names, keyed by JS `Date.getDay()` (0=Sun..6=Sat). Used to look up
+// the per-weekday default "Trasferta" preference when generating rows.
+export const RIL_WEEKDAY_NAMES = [
+  'sunday',
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+] as const;
+
+// The five user-editable RIL fields persisted in a draft (computed fields are re-derived).
+export type RilDraftRowFields = Pick<RilRow, 'entrance' | 'exit' | 'notes' | 'transfer' | 'code'>;
+// Draft rows keyed by day-of-month (stringified 1..31); sparse.
+export type RilDraftRowsMap = Record<string, RilDraftRowFields>;
+
 export interface RilGenerationOptions {
   year: number;
   month: number;
@@ -15,6 +32,9 @@ export interface RilGenerationOptions {
   locale?: RilLocale;
   noteOptions?: readonly RilNoteOption[];
   transferOptions?: readonly string[];
+  // Per-weekday default "Trasferta" value (keys: 'monday'..'friday'). When set for a weekday it
+  // pre-fills that day's transfer, taking precedence over the entry-location-derived default.
+  weekdayTransferDefaults?: Record<string, string>;
 }
 
 export interface RilMonthBounds {
@@ -263,6 +283,7 @@ export const generateRilRows = ({
   locale = 'en',
   noteOptions,
   transferOptions,
+  weekdayTransferDefaults,
 }: RilGenerationOptions): RilRow[] => {
   const daysInMonth = new Date(year, month, 0).getDate();
   const projectById = new Map(projects.map((project) => [project.id, project]));
@@ -321,6 +342,13 @@ export const generateRilRows = ({
     const allRemote =
       dayEntries.length > 0 &&
       dayEntries.every((entry) => (entry.location ?? 'remote') === 'remote');
+    // The user's per-weekday default takes precedence on fillable days; otherwise fall back to the
+    // location derived from that day's entries (unchanged legacy behavior).
+    const weekdayDefaultTransfer = isValidWorkday
+      ? (weekdayTransferDefaults?.[RIL_WEEKDAY_NAMES[dayOfWeek]] ?? '').trim()
+      : '';
+    const derivedTransfer =
+      dayEntries.length > 0 ? (allRemote ? remoteTransferValue : officeTransferValue) : '';
 
     return {
       day,
@@ -333,8 +361,7 @@ export const generateRilRows = ({
       picap: worked ? roundRilPicapHours(hoursDecimal) : 0,
       phoneAvailability: '',
       notes: isHoliday ? holidayNoteValue : '',
-      transfer:
-        dayEntries.length > 0 ? (allRemote ? remoteTransferValue : officeTransferValue) : '',
+      transfer: weekdayDefaultTransfer || derivedTransfer,
       code: '',
       order: Array.from(uniqueProjects).join('; '),
       isHoliday,
@@ -349,6 +376,78 @@ export const isRequiredRilWorkday = (row: RilRow): boolean =>
 
 export const isRilAbsenceRow = (row: RilRow): boolean =>
   isRequiredRilWorkday(row) && row.notes.trim().length > 0;
+
+// Only dated, non-holiday rows are editable (mirrors RilView's canEditRilRow); holiday/weekend
+// placeholder rows are read-only and never carry a draft.
+const isDraftableRilRow = (row: RilRow): boolean => Boolean(row.date && !row.isHoliday);
+
+// Re-derive hours/PICAP/worked (and clear time fields for absence rows) after applying stored
+// editable fields. Mirrors the per-field logic in RilView's updateRow so a hydrated draft matches
+// what live editing would have produced.
+const recomputeRilRow = (row: RilRow, lunchBreakMinutes: number): RilRow => {
+  if (isRilAbsenceRow(row)) {
+    return {
+      ...row,
+      entrance: '',
+      exit: '',
+      hours: '',
+      hoursDecimal: 0,
+      picap: 0,
+      transfer: '',
+      worked: false,
+    };
+  }
+  const hoursDecimal = calculateRilWorkedHoursFromTimes(row.entrance, row.exit, lunchBreakMinutes);
+  return {
+    ...row,
+    hours: formatRilHoursAsDuration(hoursDecimal),
+    hoursDecimal,
+    picap: hoursDecimal > 0 ? roundRilPicapHours(hoursDecimal) : 0,
+    worked: hoursDecimal > 0,
+  };
+};
+
+// Merge a saved draft onto freshly-generated rows: apply the five editable fields for each
+// editable day, then re-derive computed fields. Non-editable rows and days absent from the draft
+// are left untouched.
+export const applyRilDraftToRows = (
+  rows: RilRow[],
+  draftRows: RilDraftRowsMap | null | undefined,
+  lunchBreakMinutes: number = DEFAULT_LUNCH_BREAK_MINUTES,
+): RilRow[] => {
+  if (!draftRows || Object.keys(draftRows).length === 0) return rows;
+  return rows.map((row) => {
+    if (!isDraftableRilRow(row)) return row;
+    const saved = draftRows[String(row.day)];
+    if (!saved) return row;
+    const merged: RilRow = {
+      ...row,
+      entrance: saved.entrance ?? row.entrance,
+      exit: saved.exit ?? row.exit,
+      notes: saved.notes ?? row.notes,
+      transfer: saved.transfer ?? row.transfer,
+      code: saved.code ?? row.code,
+    };
+    return recomputeRilRow(merged, lunchBreakMinutes);
+  });
+};
+
+// Snapshot the editable fields of every editable row for persistence. Stores the full month so a
+// reload reproduces exactly what the user saw; non-editable rows are skipped.
+export const extractRilDraftRows = (rows: RilRow[]): RilDraftRowsMap => {
+  const out: RilDraftRowsMap = {};
+  for (const row of rows) {
+    if (!isDraftableRilRow(row)) continue;
+    out[String(row.day)] = {
+      entrance: row.entrance,
+      exit: row.exit,
+      notes: row.notes,
+      transfer: row.transfer,
+      code: row.code,
+    };
+  }
+  return out;
+};
 
 export const calculateRilTotals = (rows: RilRow[]): RilTotals => {
   const datedRows = rows.filter((row) => row.date);
