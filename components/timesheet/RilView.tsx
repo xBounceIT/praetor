@@ -361,6 +361,37 @@ const RilView: React.FC<RilViewProps> = ({
     [],
   );
 
+  // Serialize draft saves per (user, month): chain each PUT after any in-flight save to the same
+  // sheet so two never overlap and an older write can't land last and clobber newer rows on the
+  // server. Resolves to {ok} (never rejects) so fire-and-forget callers can't leak a rejection.
+  const enqueueDraftSave = useCallback(
+    (
+      userId: string,
+      monthKey: string,
+      rows: ReturnType<typeof extractRilDraftRows>,
+    ): Promise<{ ok: boolean }> => {
+      const prior = pendingSavesRef.current?.get(draftSaveKey(userId, monthKey));
+      const run = (async (): Promise<{ ok: boolean }> => {
+        if (prior) {
+          try {
+            await prior;
+          } catch {
+            // A failed prior save shouldn't block this one — the latest rows still need persisting.
+          }
+        }
+        try {
+          await api.rilDrafts.save(monthKey, rows, userId);
+          return { ok: true };
+        } catch {
+          return { ok: false };
+        }
+      })();
+      trackDraftSave(userId, monthKey, run);
+      return run;
+    },
+    [trackDraftSave],
+  );
+
   const loadMonthEntries = useCallback(async () => {
     // Switching sheets: flush a pending debounced save for the month we're leaving before its rows
     // get replaced. draftContextRef holds the outgoing (user, month); rowsRef still holds its rows
@@ -371,11 +402,13 @@ const RilView: React.FC<RilViewProps> = ({
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
       if (rowsRef.current.length) {
-        // Track this flush so a quick return to the same sheet awaits it before re-reading the draft.
-        const flushPromise = api.rilDrafts
-          .save(leaving.monthKey, extractRilDraftRows(rowsRef.current), leaving.userId)
-          .catch(() => {});
-        trackDraftSave(leaving.userId, leaving.monthKey, flushPromise);
+        // Snapshot the leaving sheet's rows now (rowsRef changes when the new sheet loads) and
+        // enqueue a serialized save so a quick return awaits it and it can't overlap another save.
+        void enqueueDraftSave(
+          leaving.userId,
+          leaving.monthKey,
+          extractRilDraftRows(rowsRef.current),
+        );
       }
     }
     draftContextRef.current = { userId: effectiveUserId, monthKey: draftMonthKey };
@@ -466,7 +499,7 @@ const RilView: React.FC<RilViewProps> = ({
     draftMonthKey,
     lunchBreakMinutes,
     projects,
-    trackDraftSave,
+    enqueueDraftSave,
   ]);
 
   useEffect(() => {
@@ -486,21 +519,20 @@ const RilView: React.FC<RilViewProps> = ({
     saveTimerRef.current = null;
     const rowsToSave = rowsRef.current;
     if (!rowsToSave.length) return;
-    const savePromise = api.rilDrafts.save(
+    // Enqueue a serialized save (chained after any in-flight PUT for this sheet) so overlapping
+    // saves can't land out of order; the later edit always wins on the server.
+    const { ok } = await enqueueDraftSave(
+      effectiveUserId,
       draftMonthKey,
       extractRilDraftRows(rowsToSave),
-      effectiveUserId,
     );
-    // Track under the current context so a reload (or reset) can await this PUT before acting.
-    trackDraftSave(effectiveUserId, draftMonthKey, savePromise);
-    try {
-      await savePromise;
-      // A newer edit re-armed the timer while we were saving — let that save own the final status.
-      if (saveTimerRef.current === null) setDraftStatus('saved');
-    } catch {
+    if (!ok) {
       setDraftStatus('error');
+      return;
     }
-  }, [draftMonthKey, effectiveUserId, trackDraftSave]);
+    // A newer edit re-armed the timer while we were saving — let that save own the final status.
+    if (saveTimerRef.current === null) setDraftStatus('saved');
+  }, [draftMonthKey, effectiveUserId, enqueueDraftSave]);
 
   const scheduleDraftSave = useCallback(() => {
     if (!draftSyncReadyRef.current) return;

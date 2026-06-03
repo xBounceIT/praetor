@@ -660,6 +660,40 @@ describe('<RilView />', () => {
       await waitFor(() => expect(mayGetCount()).toBe(2));
     });
 
+    test('serializes overlapping draft saves so a slow PUT cannot be overtaken', async () => {
+      api.entries.listPage.mockResolvedValue({
+        entries: [entry({ date: '2026-05-04', duration: 8 })],
+        nextCursor: null,
+      });
+      // Defer every save so the first PUT stays in flight while the second is scheduled.
+      const resolvers: Array<() => void> = [];
+      api.rilDrafts.save.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolvers.push(() => resolve(emptyDraft));
+          }),
+      );
+
+      renderRilView();
+      const exitInput = await screen.findByLabelText('ril.columns.exit 4');
+      await waitFor(() => expect(api.rilDrafts.get).toHaveBeenCalled());
+
+      // First edit → its debounced PUT fires and stays in flight.
+      fireEvent.change(exitInput, { target: { value: '17:00' } });
+      await waitFor(() => expect(api.rilDrafts.save).toHaveBeenCalledTimes(1), { timeout: 3000 });
+
+      // Second edit while the first PUT is pending → its debounced save is scheduled, but the new
+      // PUT must stay queued behind the first one (serialized) rather than racing it.
+      fireEvent.change(exitInput, { target: { value: '16:00' } });
+      // Wait past the 800ms debounce so the second flush has fired; the PUT must still be gated.
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      expect(api.rilDrafts.save).toHaveBeenCalledTimes(1);
+
+      // Resolving the first PUT lets the serialized second PUT run — never overlapping.
+      resolvers[0]();
+      await waitFor(() => expect(api.rilDrafts.save).toHaveBeenCalledTimes(2), { timeout: 3000 });
+    }, 10000);
+
     test('applies weekdayTransferDefaults to the user own RIL', async () => {
       api.entries.listPage.mockResolvedValue({
         entries: [entry({ date: '2026-05-04', duration: 8, location: 'remote' })],

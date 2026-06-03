@@ -254,6 +254,9 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const showRilPreferences = rilTransferOptions.length > 0;
   const [rilWeekdayTransferDefaults, setRilWeekdayTransferDefaults] =
     useState<RilWeekdayTransferDefaults>(() => settings.rilWeekdayTransferDefaults ?? {});
+  // Tail of the weekday-default save chain: each update waits for the previous one so two quick
+  // edits can't land out of order and overwrite the server with a stale map.
+  const rilWeekdaySaveRef = useRef<Promise<unknown> | null>(null);
   const rilWeekdayDefs = useMemo(() => {
     const formatter = new Intl.DateTimeFormat(i18n.language?.startsWith('it') ? 'it-IT' : 'en-US', {
       weekday: 'long',
@@ -457,8 +460,23 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     if (value === RIL_NONE_TRANSFER_VALUE) delete next[day];
     else next[day] = value;
     setRilWeekdayTransferDefaults(next);
-    try {
+    // Serialize the save behind any in-flight one so two quick edits can't complete out of order
+    // and overwrite the server with a stale map; each PUT still sends the full map, so the last
+    // edit wins.
+    const prior = rilWeekdaySaveRef.current;
+    const run = (async () => {
+      if (prior) {
+        try {
+          await prior;
+        } catch {
+          // A failed prior save shouldn't block this one.
+        }
+      }
       await onUpdate({ rilWeekdayTransferDefaults: next });
+    })();
+    rilWeekdaySaveRef.current = run;
+    try {
+      await run;
     } catch (err) {
       console.error('Failed to update RIL transfer defaults:', err);
       // Roll back only this day's change via a functional update, so a failed save can't drop
@@ -469,6 +487,8 @@ const UserSettings: React.FC<UserSettingsProps> = ({
         else reverted[day] = previousValue;
         return reverted;
       });
+    } finally {
+      if (rilWeekdaySaveRef.current === run) rilWeekdaySaveRef.current = null;
     }
   };
 

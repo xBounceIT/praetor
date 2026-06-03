@@ -502,19 +502,16 @@ describe('<UserSettings /> RIL preferences tab', () => {
     await waitFor(() => expect(onUpdate).toHaveBeenCalledWith({ rilWeekdayTransferDefaults: {} }));
   });
 
-  test('a failed weekday save rolls back only that day, preserving concurrent edits', async () => {
-    // First save (Monday) stays pending so we can reject it AFTER the second (Tuesday) succeeds —
-    // the exact out-of-order failure that must not drop the newer Tuesday selection.
-    let rejectFirst: (reason?: unknown) => void = () => {};
+  test('serializes weekday saves and rolls back only the failed day', async () => {
+    // Each save is deferred so we control ordering: serialization must hold Tuesday's PUT until
+    // Monday's settles, and a failed Monday save must roll back only Monday — keeping Tuesday.
+    const deferreds: Array<{ resolve: () => void; reject: (reason?: unknown) => void }> = [];
     let calls = 0;
     const update = mock((_updates: Partial<Settings>): Promise<void> => {
       calls += 1;
-      if (calls === 1) {
-        return new Promise<void>((_, reject) => {
-          rejectFirst = reject;
-        });
-      }
-      return Promise.resolve();
+      return new Promise<void>((resolve, reject) => {
+        deferreds.push({ resolve: () => resolve(), reject });
+      });
     });
 
     renderRilSettings(settings, rilTransferOptions, update);
@@ -525,18 +522,25 @@ describe('<UserSettings /> RIL preferences tab', () => {
     fireEvent.click(screen.getByRole('option', { name: 'Remote working' }));
     await waitFor(() => expect(calls).toBe(1));
 
+    // Change Tuesday while Monday's PUT is still in flight: its save must be queued, not fired.
     const tuesdayTrigger = document.getElementById('ril-transfer-tuesday') as HTMLButtonElement;
     fireEvent.click(tuesdayTrigger);
     fireEvent.click(screen.getByRole('option', { name: 'In office' }));
-    await waitFor(() => expect(calls).toBe(2));
-    expect(tuesdayTrigger).toHaveTextContent('In office');
+    await waitFor(() => expect(tuesdayTrigger).toHaveTextContent('In office')); // optimistic
+    expect(calls).toBe(1); // serialized: Tuesday's PUT waits for Monday's
 
-    // Fail the earlier Monday save: rollback must revert only Monday, leaving Tuesday intact.
-    rejectFirst(new Error('save failed'));
+    // Fail Monday's PUT. Its day rolls back; Tuesday stays, and its queued PUT now fires.
+    deferreds[0].reject(new Error('save failed'));
     await waitFor(() =>
       expect(document.getElementById('ril-transfer-monday')).toHaveTextContent('ril.noDefault'),
     );
-    expect(document.getElementById('ril-transfer-tuesday')).toHaveTextContent('In office');
+    expect(tuesdayTrigger).toHaveTextContent('In office');
+    await waitFor(() => expect(calls).toBe(2));
+    // The queued save carries Tuesday's edit through to the server (last write wins).
+    expect((update.mock.calls[1][0] as Partial<Settings>).rilWeekdayTransferDefaults?.tuesday).toBe(
+      'In office',
+    );
+    deferreds[1].resolve();
   });
 });
 
