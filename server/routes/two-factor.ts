@@ -206,6 +206,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
+      // Session caller: re-check applicability too. A local/LDAP user can be switched to an
+      // IdP-managed method mid-enrollment (the auth-method update doesn't revoke their session, and
+      // /setup's gate ran earlier), so don't enable app TOTP on an account that no longer supports
+      // it. request.user.authMethod is loaded fresh by authenticateToken on this request.
+      if (request.user && !usersRepo.isTotpApplicable(request.user.authMethod ?? 'local')) {
+        return reply.code(403).send({
+          error: 'Two-factor authentication is managed by the identity provider',
+          errorCode: 'totp_not_applicable',
+        });
+      }
+
       const state = await usersRepo.getTotpState(userId);
       // Require a pending (stored-but-not-yet-enabled) enrollment. A missing secret or an
       // already-enabled account both fail here.
