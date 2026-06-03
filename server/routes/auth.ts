@@ -9,7 +9,6 @@ import {
   signPurposeToken,
   verifyPurposeToken,
 } from '../middleware/auth.ts';
-import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as settingsRepo from '../repositories/settingsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
@@ -25,9 +24,14 @@ import {
   sessionSuccessResponseSchema,
 } from '../services/sessionResponse.ts';
 import * as ssoService from '../services/sso.ts';
+import {
+  adminRoleSwitchBlocked,
+  isTotpEnforcedForAdmins,
+  requiresAdminTotpEnrollment,
+} from '../services/totpEnforcement.ts';
 import { logAudit } from '../utils/audit.ts';
 import { computeAvatarInitials } from '../utils/initials.ts';
-import { ADMIN_ROLE_ID, getRolePermissions, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
+import { getRolePermissions } from '../utils/permissions.ts';
 import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { decryptTotpSecret, verifyTotpCode } from '../utils/totp.ts';
@@ -106,24 +110,6 @@ const syncLdapLoginProfile = async (
   });
 
   return name ? { name, avatarInitials } : {};
-};
-
-// Whether the user's primary role grants admin privileges. The built-in admin/top-manager role
-// ids are always treated as admin; any custom role is resolved through its `isAdmin` flag.
-const isAdminRole = async (roleId: string): Promise<boolean> => {
-  if (roleId === ADMIN_ROLE_ID || roleId === TOP_MANAGER_ROLE_ID) return true;
-  const role = await rolesRepo.findById(roleId);
-  return role?.isAdmin ?? false;
-};
-
-// Whether the user can act as an admin through ANY of their roles — their active/primary role or
-// any role they could switch into via /auth/switch-role. Admin-2FA enforcement must consider every
-// assignable admin role: otherwise a multi-role user whose primary role is non-admin could log in
-// with no enrollment and then switch into an admin role, bypassing the policy.
-const userHasAnyAdminRole = async (userId: string, primaryRole: string): Promise<boolean> => {
-  if (await isAdminRole(primaryRole)) return true;
-  const roles = await rolesRepo.listAvailableRolesForUser(userId);
-  return roles.some((role) => role.isAdmin);
 };
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -294,29 +280,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         };
       }
 
-      // (b) Mandatory enrollment — only reached when an admin-capable user has NO TOTP configured
-      // yet. We check EVERY assignable admin role (not just the primary one) so a multi-role admin
-      // can't log in under a non-admin role and then switch into an admin role without a 2nd factor.
-      if (totpApplies && !user.totpEnabled) {
-        const settings = await generalSettingsRepo.get();
-        const enforce = settings?.enforceTotpForAdmins ?? false;
-        if (enforce && (await userHasAnyAdminRole(user.id, user.role))) {
-          await logAudit({
-            request,
-            action: 'user.totp_enrollment_required',
-            entityType: 'user',
-            entityId: user.id,
-            details: {
-              targetLabel: user.name,
-              secondaryLabel: user.role,
-            },
-            userId: user.id,
-          });
-          return {
-            totpEnrollmentRequired: true,
-            enrollToken: signPurposeToken({ userId: user.id, purpose: 'totp_enroll' }, '15m'),
-          };
-        }
+      // (b) Mandatory enrollment — an admin-capable user (via any assignable admin role) who has
+      // not set up TOTP is routed into enrollment instead of receiving a session when the policy is
+      // on. Considering every assignable admin role stops a multi-role admin from logging in under
+      // a non-admin role and then switching into admin without a second factor.
+      if (
+        await requiresAdminTotpEnrollment({
+          id: user.id,
+          role: user.role,
+          authMethod,
+          totpEnabled: user.totpEnabled,
+        })
+      ) {
+        await logAudit({
+          request,
+          action: 'user.totp_enrollment_required',
+          entityType: 'user',
+          entityId: user.id,
+          details: {
+            targetLabel: user.name,
+            secondaryLabel: user.role,
+          },
+          userId: user.id,
+        });
+        return {
+          totpEnrollmentRequired: true,
+          enrollToken: signPurposeToken({ userId: user.id, purpose: 'totp_enroll' }, '15m'),
+        };
       }
 
       // (c) No 2FA in play — issue the session exactly as the legacy flow did, logging user.login.
@@ -493,6 +483,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: roleIdResult.value,
           details: { targetLabel: roleIdResult.value, secondaryLabel: 'role_switch' },
         });
+      }
+
+      // Block elevating into an admin role without 2FA when the policy requires it. The login gate
+      // can't catch sessions that predate enforcement or a later admin-role grant, so re-check here.
+      // Enforce-first so a non-admin switch or a disabled policy skips the extra reads.
+      if (await isTotpEnforcedForAdmins()) {
+        const switchUser = await usersRepo.findLoginUserById(session.userId);
+        if (switchUser && (await adminRoleSwitchBlocked(switchUser, roleIdResult.value))) {
+          return replyError(request, reply, {
+            statusCode: 403,
+            message: 'Two-factor authentication is required to use an administrator role',
+            errorCode: 'totp_enrollment_required',
+            action: 'auth.role_switch.totp_required',
+            entityType: 'role',
+            entityId: roleIdResult.value,
+            details: { targetLabel: roleIdResult.value, secondaryLabel: 'totp_required' },
+          });
+        }
       }
 
       const [permissions, availableRoles] = await Promise.all([

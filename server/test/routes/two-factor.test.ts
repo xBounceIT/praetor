@@ -3,6 +3,7 @@ import { authenticator } from '@otplib/preset-v11';
 import * as realBcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
+import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realAudit from '../../utils/audit.ts';
@@ -29,6 +30,7 @@ const { signPurposeToken } = await import('../../middleware/auth.ts');
 // fires (i.e., before beforeAll executes) — see comment in routes/auth.test.ts.
 const usersRepoSnap = { ...realUsersRepo };
 const drizzleSnap = { ...realDrizzle };
+const generalSettingsRepoSnap = { ...realGeneralSettingsRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
 const auditSnap = { ...realAudit };
@@ -52,6 +54,9 @@ const getPasswordHashMock = mock();
 const bumpSessionVersionMock = mock();
 const findLoginUserByIdMock = mock();
 const listAvailableRolesForUserMock = mock();
+const generalSettingsGetMock = mock<() => Promise<{ enforceTotpForAdmins: boolean } | null>>(
+  async () => null,
+);
 const logAuditMock = mock(async () => undefined);
 const bcryptCompareMock = mock();
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
@@ -83,6 +88,10 @@ beforeAll(async () => {
     userHasRole: userHasRoleMock,
     listAvailableRolesForUser: listAvailableRolesForUserMock,
   }));
+  mock.module('../../repositories/generalSettingsRepo.ts', () => ({
+    ...generalSettingsRepoSnap,
+    get: generalSettingsGetMock,
+  }));
   mock.module('../../utils/permissions.ts', () => ({
     ...permissionsSnap,
     getRolePermissions: getRolePermissionsMock,
@@ -107,6 +116,7 @@ afterAll(() => {
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
+  mock.module('../../repositories/generalSettingsRepo.ts', () => generalSettingsRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('bcryptjs', () => bcryptSnap);
@@ -167,6 +177,7 @@ const allMocks = [
   listAvailableRolesForUserMock,
   logAuditMock,
   bcryptCompareMock,
+  generalSettingsGetMock,
 ];
 
 let testApp: FastifyInstance;
@@ -194,6 +205,7 @@ beforeEach(async () => {
   bumpSessionVersionMock.mockResolvedValue(undefined);
   findLoginUserByIdMock.mockResolvedValue(LOGIN_USER);
   bcryptCompareMock.mockResolvedValue(false);
+  generalSettingsGetMock.mockResolvedValue(null);
 
   testApp = await buildRouteTestApp(twoFactorRoutePlugin, '/api/auth/2fa');
 });
@@ -440,6 +452,27 @@ describe('POST /api/auth/2fa/disable', () => {
     expect(bumpSessionVersionMock).toHaveBeenCalledWith('u1');
     expect(typeof res.headers['x-auth-token']).toBe('string');
     expect(auditActions()).toContain('user.totp_disabled');
+  });
+
+  test('403 (enforced admin): cannot disable TOTP while the admin 2FA mandate applies', async () => {
+    // enforceTotpForAdmins is on and the user holds an admin role, so a self-service disable is
+    // rejected — an enforced admin must keep their second factor (only an admin reset can clear it).
+    getTotpStateMock.mockResolvedValue(enabledState());
+    findCoreByIdMock.mockResolvedValue({ ...userCore('local'), role: 'admin' });
+    bcryptCompareMock.mockResolvedValue(true);
+    generalSettingsGetMock.mockResolvedValue({ enforceTotpForAdmins: true });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/2fa/disable',
+      headers: sessionHeader(),
+      payload: { password: 'secret', code: validCode() },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).errorCode).toBe('totp_required_for_admin');
+    expect(disableTotpMock).not.toHaveBeenCalled();
+    expect(bumpSessionVersionMock).not.toHaveBeenCalled();
   });
 
   test('400 (local): wrong code → invalid_totp_code, no disable, audits user.totp_disable.invalid_code', async () => {

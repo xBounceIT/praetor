@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
 import * as realClientsRepo from '../../repositories/clientsRepo.ts';
 import * as realExternalIdentitiesRepo from '../../repositories/externalIdentitiesRepo.ts';
+import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
 import * as realProjectsRepo from '../../repositories/projectsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSettingsRepo from '../../repositories/settingsRepo.ts';
@@ -27,6 +28,7 @@ import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 const usersRepoSnap = { ...realUsersRepo };
 const clientsRepoSnap = { ...realClientsRepo };
 const externalIdentitiesRepoSnap = { ...realExternalIdentitiesRepo };
+const generalSettingsRepoSnap = { ...realGeneralSettingsRepo };
 const projectsRepoSnap = { ...realProjectsRepo };
 const tasksRepoSnap = { ...realTasksRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -62,6 +64,10 @@ const canManageUserMock = mock();
 const getAssignmentsMock = mock();
 const disableTotpMock = mock();
 const bumpSessionVersionMock = mock();
+const getTotpStateMock = mock();
+const generalSettingsGetMock = mock<() => Promise<{ enforceTotpForAdmins: boolean } | null>>(
+  async () => null,
+);
 
 // tracker catalog repos
 const listClientsMock = mock();
@@ -129,6 +135,7 @@ beforeAll(async () => {
     getAssignments: getAssignmentsMock,
     disableTotp: disableTotpMock,
     bumpSessionVersion: bumpSessionVersionMock,
+    getTotpState: getTotpStateMock,
   }));
   mock.module('../../repositories/clientsRepo.ts', () => ({
     ...clientsRepoSnap,
@@ -153,6 +160,10 @@ beforeAll(async () => {
     userHasRole: userHasRoleMock,
     findById: rolesFindByIdMock,
     findExistingIds: rolesFindExistingIdsMock,
+  }));
+  mock.module('../../repositories/generalSettingsRepo.ts', () => ({
+    ...generalSettingsRepoSnap,
+    get: generalSettingsGetMock,
   }));
   mock.module('../../repositories/settingsRepo.ts', () => ({
     ...settingsRepoSnap,
@@ -209,6 +220,7 @@ afterAll(() => {
   mock.module('../../repositories/projectsRepo.ts', () => projectsRepoSnap);
   mock.module('../../repositories/tasksRepo.ts', () => tasksRepoSnap);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
+  mock.module('../../repositories/generalSettingsRepo.ts', () => generalSettingsRepoSnap);
   mock.module('../../repositories/settingsRepo.ts', () => settingsRepoSnap);
   mock.module('../../repositories/ssoProvidersRepo.ts', () => ssoProvidersRepoSnap);
   mock.module('../../repositories/userAssignmentsRepo.ts', () => userAssignmentsRepoSnap);
@@ -337,6 +349,8 @@ const allMocks = [
   getAssignmentsMock,
   disableTotpMock,
   bumpSessionVersionMock,
+  getTotpStateMock,
+  generalSettingsGetMock,
   listClientsMock,
   listClientsByIdsMock,
   listProjectsForUserMock,
@@ -375,6 +389,8 @@ beforeEach(async () => {
   getRolePermissionsMock.mockResolvedValue(ALL_USER_PERMS);
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
+  getTotpStateMock.mockResolvedValue(null);
+  generalSettingsGetMock.mockResolvedValue(null);
   filterAssignedClientIdsMock.mockResolvedValue(new Set(['c1']));
   filterAssignedProjectIdsMock.mockResolvedValue(new Set(['p1']));
   filterAssignedTaskIdsMock.mockResolvedValue(new Set(['t1']));
@@ -2656,6 +2672,53 @@ describe('PUT /api/users/:id/roles', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'user.roles_updated' }),
     );
+  });
+
+  test('200 granting an admin role to an unenrolled user revokes sessions when 2FA is enforced', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    rolesFindExistingIdsMock.mockResolvedValue(new Set(['user', 'admin']));
+    generalSettingsGetMock.mockResolvedValue({ enforceTotpForAdmins: true });
+    getTotpStateMock.mockResolvedValue({
+      totpSecret: null,
+      totpEnabled: false,
+      totpConfirmedAt: null,
+      totpBackupCodes: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/roles',
+      headers: adminAuth(),
+      payload: { roleIds: ['user', 'admin'], primaryRoleId: 'admin' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(replaceUserRolesMock).toHaveBeenCalledWith('u-target', ['user', 'admin'], TX_SENTINEL);
+    // Primary role is now admin, the mandate is on, and they have no TOTP → revoke their sessions
+    // so they must re-login and enrol before they can act as an admin.
+    expect(bumpSessionVersionMock).toHaveBeenCalledWith('u-target');
+  });
+
+  test('200 role change without enforcement does not revoke sessions', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    rolesFindExistingIdsMock.mockResolvedValue(new Set(['user', 'admin']));
+    // generalSettingsGetMock defaults to null (enforcement off) — no revocation.
+    getTotpStateMock.mockResolvedValue({
+      totpSecret: null,
+      totpEnabled: false,
+      totpConfirmedAt: null,
+      totpBackupCodes: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/roles',
+      headers: adminAuth(),
+      payload: { roleIds: ['user', 'admin'], primaryRoleId: 'admin' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(bumpSessionVersionMock).not.toHaveBeenCalled();
   });
 
   test('403 cannot edit own roles', async () => {

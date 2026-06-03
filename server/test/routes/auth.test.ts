@@ -1079,6 +1079,28 @@ describe('POST /api/auth/switch-role', () => {
     );
   });
 
+  test('403: switching into an admin role without TOTP is blocked when enforcement is on', async () => {
+    // A session that predates enforcement (or a later admin-role grant) must not elevate into an
+    // admin role without a second factor — switch-role rejects it with totp_enrollment_required.
+    userHasRoleMock.mockResolvedValue(true);
+    generalSettingsGetMock.mockResolvedValue({ enforceTotpForAdmins: true });
+    findLoginUserByIdMock.mockResolvedValue({
+      ...LOGIN_USER,
+      authMethod: 'local',
+      totpEnabled: false,
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/switch-role',
+      headers: authHeader('u1', undefined, Date.now() - 1000),
+      payload: { roleId: 'admin' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).errorCode).toBe('totp_enrollment_required');
+  });
+
   test('403 user lacks the target role (and audits the denial)', async () => {
     // First userHasRole (in authenticateToken) succeeds; second (in switch-role handler) fails
     userHasRoleMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);

@@ -21,6 +21,7 @@ import {
   applyExternalRolesForUserIfMatched,
   externalGroupsYieldNoKnownRole,
 } from '../services/external-auth.ts';
+import { requiresAdminTotpEnrollment } from '../services/totpEnforcement.ts';
 import { getAuditChangedFields, getAuditCounts, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
@@ -1618,6 +1619,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // top-manager auto-assignments commit (or roll back) together.
         await userAssignmentsRepo.syncTopManagerAssignmentsForUser(idResult.value, tx);
       });
+
+      // If the new role set makes this user an admin without 2FA while the mandate is on, revoke
+      // their live sessions: the login gate can't catch an admin role granted to an already
+      // authenticated user, so force them to re-login and enrol before they can act as an admin.
+      const rolesTotpState = await usersRepo.getTotpState(idResult.value);
+      if (
+        await requiresAdminTotpEnrollment({
+          id: idResult.value,
+          role: primaryRoleIdResult.value,
+          authMethod: user.authMethod,
+          totpEnabled: rolesTotpState?.totpEnabled ?? false,
+        })
+      ) {
+        await usersRepo.bumpSessionVersion(idResult.value);
+      }
+
       await logAudit({
         request,
         action: 'user.roles_updated',

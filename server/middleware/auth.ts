@@ -343,9 +343,18 @@ export const requireEnrollOrSession = async (request: FastifyRequest, reply: Fas
     request.enrollUserId = userId;
     return;
   } catch {
-    // Not a valid enroll token (wrong purpose, expired, session token, PAT, …) — defer to the
-    // standard session authentication, which will set request.user or send its own 401/403.
-    return authenticateToken(request, reply);
+    // Not a valid enroll token (wrong purpose, expired, session token, PAT, …) — defer to standard
+    // authentication. These endpoints change the user's second factor, so a non-interactive
+    // personal access token must NOT be able to enrol/confirm 2FA: after authenticating, require a
+    // real session rather than a PAT.
+    await authenticateToken(request, reply);
+    if (!request.user) return; // authenticateToken already sent its own 401/403
+    if (request.auth?.source !== 'session') {
+      return reply.code(403).send({
+        error: 'An interactive session is required to manage two-factor authentication',
+        errorCode: 'session_required',
+      });
+    }
   }
 };
 

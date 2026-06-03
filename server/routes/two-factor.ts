@@ -7,6 +7,7 @@ import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardErrorResponses } from '../schemas/common.ts';
 import { redeemBackupCode } from '../services/backupCodes.ts';
 import { authUserSchema, buildSessionSuccess } from '../services/sessionResponse.ts';
+import { isAdminTotpMandatory } from '../services/totpEnforcement.ts';
 import { logAudit } from '../utils/audit.ts';
 import { encrypt } from '../utils/crypto.ts';
 import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -285,6 +286,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const userCore = await usersRepo.findCoreById(userId);
       if (!userCore) {
         return reply.code(401).send({ error: 'User not found' });
+      }
+
+      // An administrator subject to the 2FA mandate cannot turn their second factor off — that would
+      // leave an enforced admin operating without 2FA on a live session, defeating the policy. They
+      // must keep it enabled; only an admin reset (which also revokes their sessions) can clear it.
+      if (
+        await isAdminTotpMandatory({
+          id: userId,
+          role: userCore.role,
+          authMethod: userCore.authMethod,
+        })
+      ) {
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Two-factor authentication is required for your administrator role',
+          errorCode: 'totp_required_for_admin',
+          action: 'user.totp_disable.enforced',
+          entityType: 'user',
+          entityId: userId,
+          details: { secondaryLabel: 'enforced' },
+        });
       }
 
       // Re-auth step 1 (local only): verify the current password before touching the second factor.
