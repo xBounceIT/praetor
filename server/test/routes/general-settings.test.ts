@@ -308,6 +308,41 @@ describe('PUT /api/general-settings', () => {
     expect(revokeTokensForUnenrolledEnforcedUsersMock).not.toHaveBeenCalled();
   });
 
+  test('200 broadening the enforced role list (enforcement already on) revokes tokens', async () => {
+    // Enforcement stays on but the role scope changes — the change-detection (sameRoleSet) must
+    // notice it and revoke the now-enforced users' tokens, passing the NEW enforced/exempt lists.
+    settingsGetMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      enableTotp: true,
+      enforceTotp: true,
+      totpEnforcedRoleIds: ['admin'],
+      totpExemptRoleIds: [],
+    });
+    settingsUpdateMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      enableTotp: true,
+      enforceTotp: true,
+      totpEnforcedRoleIds: ['admin', 'manager'],
+      totpExemptRoleIds: [],
+    });
+    revokeTokensForUnenrolledEnforcedUsersMock.mockResolvedValue(2);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { totpEnforcedRoleIds: ['admin', 'manager'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(revokeTokensForUnenrolledEnforcedUsersMock).toHaveBeenCalledTimes(1);
+    expect(revokeTokensForUnenrolledEnforcedUsersMock).toHaveBeenCalledWith(
+      ['admin', 'manager'],
+      [],
+      expect.anything(),
+    );
+  });
+
   test('200 disabling enforcement does not revoke tokens', async () => {
     settingsGetMock.mockResolvedValue({
       ...SETTINGS_WITH_KEYS,

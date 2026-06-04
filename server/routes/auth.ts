@@ -403,6 +403,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return invalidCode();
       }
 
+      // Global kill-switch: if 2FA was turned off org-wide after this challenge was issued, do not
+      // accept the code. Collapses to the same generic failure; the user simply re-logs in and, with
+      // the feature off, /login issues a password-only session. Mirrors the /login challenge gate so
+      // a disabled feature never lets a stale challenge complete.
+      if (!(await isTotpFeatureEnabled())) {
+        return invalidCode();
+      }
+
       // Read the secret + backup codes and (on a backup-code hit) burn that code inside a single
       // transaction, so two concurrent submissions of the same backup code cannot both succeed.
       const verified = await withDbTransaction(async (tx) => {

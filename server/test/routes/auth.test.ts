@@ -1510,6 +1510,32 @@ describe('POST /api/auth/totp-challenge', () => {
     expect(JSON.parse(res.body).errorCode).toBe('invalid_totp_code');
   });
 
+  test('400 when 2FA was turned off org-wide after the challenge was issued (kill-switch)', async () => {
+    // The challenge token was issued while the feature was on; if an admin disables 2FA globally in
+    // the window, the stale challenge must not mint a session even with a correct code. The user
+    // re-logs in and, with the feature off, /login issues a password-only session instead.
+    findLoginUserByIdMock.mockResolvedValue(TOTP_LOGIN_USER);
+    getTotpStateMock.mockResolvedValue(backupState());
+    generalSettingsGetMock.mockResolvedValue({
+      enableTotp: false,
+      enforceTotp: false,
+      totpEnforcedRoleIds: [],
+      totpExemptRoleIds: [],
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/totp-challenge',
+      payload: {
+        challengeToken: challengeTokenFor('u1'),
+        code: authenticator.generate(TOTP_SECRET),
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).errorCode).toBe('invalid_totp_code');
+  });
+
   test('200: a valid unused backup code succeeds and is burned via markBackupCodeUsed', async () => {
     findLoginUserByIdMock.mockResolvedValue(TOTP_LOGIN_USER);
     getTotpStateMock.mockResolvedValue(backupState());

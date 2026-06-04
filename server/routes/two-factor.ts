@@ -294,6 +294,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           errorCode: 'totp_not_applicable',
         });
       }
+      // Global kill-switch: if 2FA was turned off org-wide between /setup and /confirm, don't finalize
+      // a pending enrollment — the feature being off means no enrollment, matching the /setup gate.
+      if (!(await isTotpFeatureEnabled())) {
+        return reply.code(403).send({
+          error: 'Two-factor authentication is currently disabled',
+          errorCode: 'totp_disabled',
+        });
+      }
 
       const state = await usersRepo.getTotpState(userId);
       // Require a pending (stored-but-not-yet-enabled) enrollment. A missing secret or an

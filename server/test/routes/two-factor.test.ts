@@ -509,6 +509,29 @@ describe('POST /api/auth/2fa/confirm', () => {
     expect(auditActions()).not.toContain('user.login');
   });
 
+  test('403 (session): the global kill-switch blocks confirming a pending enrollment with totp_disabled', async () => {
+    // 2FA turned off org-wide between /setup and /confirm — finalizing enrollment must be refused
+    // (mirrors the /setup gate), so a disabled feature can never activate a second factor.
+    generalSettingsGetMock.mockResolvedValue({ enableTotp: false });
+    getTotpStateMock.mockResolvedValue({
+      totpSecret: encrypt(SECRET),
+      totpEnabled: false,
+      totpConfirmedAt: null,
+      totpBackupCodes: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/2fa/confirm',
+      headers: sessionHeader(),
+      payload: { code: validCode() },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).errorCode).toBe('totp_disabled');
+    expect(enableTotpMock).not.toHaveBeenCalled();
+  });
+
   test('403 (session): cannot confirm TOTP after the account is switched to an IdP-managed method', async () => {
     // A local user starts setup, then is switched to OIDC before submitting the code; their
     // still-valid session must not enable app TOTP on an IdP-managed account.
