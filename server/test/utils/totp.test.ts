@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { authenticator } from '@otplib/preset-v11';
+import { encrypt } from '../../utils/crypto.ts';
 import {
   buildOtpAuthUri,
   buildQrDataUri,
+  decryptTotpSecret,
   generateBackupCodes,
   generateTotpSecret,
   hashBackupCode,
@@ -59,7 +61,44 @@ describe('buildQrDataUri', () => {
   });
 });
 
+describe('decryptTotpSecret', () => {
+  test('round-trips an encrypted secret', () => {
+    const secret = generateTotpSecret();
+    expect(decryptTotpSecret(encrypt(secret))).toBe(secret);
+  });
+
+  test('passes through a (mis)stored plaintext secret unchanged', () => {
+    const secret = generateTotpSecret();
+    // A plaintext base32 secret is not in `encrypt()` format, so it's returned as-is rather than
+    // fed into decrypt() (which would throw on it).
+    expect(decryptTotpSecret(secret)).toBe(secret);
+  });
+
+  test('returns null (never throws) for tampered/undecryptable ciphertext', () => {
+    const secret = generateTotpSecret();
+    // Build an encrypted-shaped value whose GCM auth tag no longer matches the ciphertext (the same
+    // shape a corrupted row or a rotated/lost ENCRYPTION_KEY produces). `isEncrypted` still passes —
+    // the segment lengths are preserved — so decrypt() is invoked and throws on tag verification.
+    const parts = encrypt(secret).split(':');
+    const tag = Buffer.from(parts[3], 'base64');
+    tag[0] ^= 0xff;
+    parts[3] = tag.toString('base64');
+    const tampered = parts.join(':');
+
+    expect(() => decryptTotpSecret(tampered)).not.toThrow();
+    expect(decryptTotpSecret(tampered)).toBeNull();
+    // The fail-closed contract: an undecryptable secret makes code verification reject (generic
+    // failure) rather than letting a 500 escape and reveal the stored data is unrecoverable.
+    expect(verifyTotpCode(decryptTotpSecret(tampered), '000000')).toBe(false);
+  });
+});
+
 describe('verifyTotpCode', () => {
+  test('rejects a null secret (undecryptable stored value) without throwing', () => {
+    expect(() => verifyTotpCode(null, '123456')).not.toThrow();
+    expect(verifyTotpCode(null, '123456')).toBe(false);
+  });
+
   test('accepts a freshly generated code for the secret', () => {
     const secret = generateTotpSecret();
     const code = authenticator.generate(secret);

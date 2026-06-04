@@ -45,21 +45,31 @@ export function buildQrDataUri(otpauthUri: string): Promise<string> {
 }
 
 /**
- * Decrypts a stored TOTP secret. Stored values are always `encrypt()` output; the `isEncrypted`
- * guard keeps a (mis)stored plaintext secret from being fed into `decrypt()` (which would throw).
- * Shared by every endpoint that verifies a code so the guard is applied uniformly.
+ * Decrypts a stored TOTP secret, returning `null` if it cannot be recovered. Stored values are
+ * always `encrypt()` output; the `isEncrypted` guard keeps a (mis)stored plaintext secret from
+ * being fed into `decrypt()` (which would throw). `decrypt()` can still throw on tampered ciphertext
+ * (GCM auth-tag mismatch) or a rotated/lost `ENCRYPTION_KEY`; we swallow that and return `null` so
+ * the shared verify path (`verifyTotpCode`) fails closed with the generic "invalid code" response
+ * instead of letting a 500 escape — which would turn an undecryptable secret into an oracle. Shared
+ * by every endpoint that verifies a code so the guard is applied uniformly.
  */
-export function decryptTotpSecret(stored: string): string {
-  return isEncrypted(stored) ? decrypt(stored) : stored;
+export function decryptTotpSecret(stored: string): string | null {
+  try {
+    return isEncrypted(stored) ? decrypt(stored) : stored;
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Verify a user-submitted TOTP code against the secret. Whitespace is stripped (authenticator
+ * Verify a user-submitted TOTP code against the secret. A `null` secret (an undecryptable stored
+ * value — see `decryptTotpSecret`) short-circuits to false. Whitespace is stripped (authenticator
  * apps display codes as `123 456`); an empty token short-circuits to false, and any malformed
  * token or secret that makes otplib throw is caught and treated as a rejected code. Honours the
  * `window: 1` skew tolerance configured above.
  */
-export function verifyTotpCode(secret: string, token: string): boolean {
+export function verifyTotpCode(secret: string | null, token: string): boolean {
+  if (secret === null) return false;
   const normalized = token.replace(/\s+/g, '');
   if (!normalized) return false;
   try {
