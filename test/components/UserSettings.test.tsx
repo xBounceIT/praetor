@@ -91,6 +91,12 @@ const renderSettings = (
     onGetPersonalAccessToken?: () => Promise<PersonalAccessToken>;
     onRenewPersonalAccessToken?: () => Promise<PersonalAccessToken>;
     onGetTotpStatus?: () => Promise<{ enabled: boolean; applicable: boolean }>;
+    onTotpSetup?: (password: string) => Promise<{
+      secret: string;
+      otpauthUri: string;
+      qrDataUri: string;
+      backupCodes: string[];
+    }>;
   } = {},
 ) =>
   render(
@@ -108,6 +114,7 @@ const renderSettings = (
         overrides.onRenewPersonalAccessToken ?? onRenewPersonalAccessToken
       }
       {...totpProps}
+      onTotpSetup={overrides.onTotpSetup ?? onTotpSetup}
       onGetTotpStatus={overrides.onGetTotpStatus ?? onGetTotpStatus}
     />,
   );
@@ -760,6 +767,29 @@ describe('<UserSettings /> Two-Factor Authentication card', () => {
     // The scan step (wizard-only content) renders the manual key once setup resolves.
     expect(await screen.findByText('twoFactor.manualKeyLabel')).toBeInTheDocument();
     expect(screen.getByText(totpSetupResult.secret)).toBeInTheDocument();
+  });
+
+  test('a failed setup does not auto-retry /setup in a loop', async () => {
+    // Regression: the wizard auto-runs onSetup exactly once per mount. A failure (e.g. a wrong
+    // re-auth password) must NOT re-fire it — onSetup is an inline closure whose identity changes
+    // on the error re-render, which previously re-triggered the effect and retried in a loop,
+    // burning the login rate limit and hiding the error.
+    const getStatus = mock(() => Promise.resolve({ enabled: false, applicable: true }));
+    const failingSetup = mock(() => Promise.reject(new Error('Incorrect password')));
+    renderSettings({ onGetTotpStatus: getStatus, onTotpSetup: failingSetup });
+
+    fireEvent.click(screen.getByText('security.title'));
+    await waitFor(() => expect(getStatus).toHaveBeenCalledTimes(1));
+    fireEvent.click(await screen.findByRole('button', { name: /twoFactor.setUp/ }));
+
+    const passwordInput = document.getElementById('totp-setup-password') as HTMLInputElement;
+    fireEvent.change(passwordInput, { target: { value: 'wrong-password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'twoFactor.continue' }));
+
+    await waitFor(() => expect(failingSetup).toHaveBeenCalledTimes(1));
+    // Let any erroneous re-fire settle; the count must stay at 1 (no retry loop).
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(failingSetup).toHaveBeenCalledTimes(1);
   });
 
   test('disable dialog accepts an alphanumeric backup code, not only a 6-digit TOTP', async () => {

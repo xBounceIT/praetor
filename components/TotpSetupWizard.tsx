@@ -53,7 +53,12 @@ const TotpSetupWizard: React.FC<TotpSetupWizardProps> = ({
   const [verifyError, setVerifyError] = useState<string | null>(null);
 
   const isMountedRef = useRef(true);
-  const setupInFlightRef = useRef(false);
+  // Set true on the first /setup attempt and NEVER reset — auto-run fires exactly once per mount,
+  // including after a failure. `onSetup` is an inline closure in both callers, so its identity
+  // changes on every re-render (e.g. the one triggered by setSetupError); without a sticky guard
+  // the effect below would re-fire and retry /setup in a loop, burning the login rate limit and
+  // hiding the error. Retrying requires remounting the wizard (the caller reopens the dialog).
+  const setupStartedRef = useRef(false);
 
   useEffect(
     () => () => {
@@ -63,10 +68,8 @@ const TotpSetupWizard: React.FC<TotpSetupWizardProps> = ({
   );
 
   const runSetup = useCallback(async () => {
-    // Guard against React 18 StrictMode double-invocation and re-renders: only one
-    // /setup call should ever fire for the lifetime of this wizard.
-    if (setupInFlightRef.current || setupResult) return;
-    setupInFlightRef.current = true;
+    if (setupStartedRef.current || setupResult) return;
+    setupStartedRef.current = true;
     setIsLoadingSetup(true);
     setSetupError(null);
     try {
@@ -78,7 +81,7 @@ const TotpSetupWizard: React.FC<TotpSetupWizardProps> = ({
         setSetupError((err as Error).message || t('twoFactor.invalidCode'));
       }
     } finally {
-      setupInFlightRef.current = false;
+      // Intentionally NOT resetting setupStartedRef — a failed setup must not auto-retry.
       if (isMountedRef.current) setIsLoadingSetup(false);
     }
   }, [onSetup, setupResult, t]);
