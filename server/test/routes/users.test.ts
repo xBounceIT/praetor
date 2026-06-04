@@ -4,6 +4,7 @@ import * as realDrizzle from '../../db/drizzle.ts';
 import * as realClientsRepo from '../../repositories/clientsRepo.ts';
 import * as realExternalIdentitiesRepo from '../../repositories/externalIdentitiesRepo.ts';
 import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
+import * as realPersonalAccessTokensRepo from '../../repositories/personalAccessTokensRepo.ts';
 import * as realProjectsRepo from '../../repositories/projectsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSettingsRepo from '../../repositories/settingsRepo.ts';
@@ -25,10 +26,16 @@ import { signToken } from '../helpers/jwt.ts';
 import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
+// authenticateToken's PAT path hashes the token via getHmacKey(), which needs ENCRYPTION_KEY.
+// Set it so a forged personal-access token reaches the session-only guard instead of failing to
+// hash (which would 403 as "Invalid or expired token" before requireSessionAuth runs).
+process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'test-encryption-key-32-bytes-long!!';
+
 const usersRepoSnap = { ...realUsersRepo };
 const clientsRepoSnap = { ...realClientsRepo };
 const externalIdentitiesRepoSnap = { ...realExternalIdentitiesRepo };
 const generalSettingsRepoSnap = { ...realGeneralSettingsRepo };
+const personalAccessTokensRepoSnap = { ...realPersonalAccessTokensRepo };
 const projectsRepoSnap = { ...realProjectsRepo };
 const tasksRepoSnap = { ...realTasksRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -45,6 +52,10 @@ const drizzleSnap = { ...realDrizzle };
 const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
+// PAT auth path — lets a test forge a VALID personal-access token so authenticateToken sets
+// request.auth.source = 'personalAccessToken' and the session-only guard is what rejects it.
+const findPatByTokenHashMock = mock();
+const markPatUsedMock = mock(async () => undefined);
 
 // usersRepo
 const listAllForAdminMock = mock();
@@ -137,6 +148,11 @@ beforeAll(async () => {
     revokeUserCredentials: revokeUserCredentialsMock,
     getTotpState: getTotpStateMock,
   }));
+  mock.module('../../repositories/personalAccessTokensRepo.ts', () => ({
+    ...personalAccessTokensRepoSnap,
+    findByTokenHash: findPatByTokenHashMock,
+    markUsed: markPatUsedMock,
+  }));
   mock.module('../../repositories/clientsRepo.ts', () => ({
     ...clientsRepoSnap,
     list: listClientsMock,
@@ -221,6 +237,7 @@ afterAll(() => {
   mock.module('../../repositories/tasksRepo.ts', () => tasksRepoSnap);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../repositories/generalSettingsRepo.ts', () => generalSettingsRepoSnap);
+  mock.module('../../repositories/personalAccessTokensRepo.ts', () => personalAccessTokensRepoSnap);
   mock.module('../../repositories/settingsRepo.ts', () => settingsRepoSnap);
   mock.module('../../repositories/ssoProvidersRepo.ts', () => ssoProvidersRepoSnap);
   mock.module('../../repositories/userAssignmentsRepo.ts', () => userAssignmentsRepoSnap);
@@ -376,6 +393,8 @@ const allMocks = [
   deleteAllForUserMock,
   logAuditMock,
   withDbTransactionMock,
+  findPatByTokenHashMock,
+  markPatUsedMock,
 ];
 
 let testApp: FastifyInstance;
@@ -407,6 +426,16 @@ beforeEach(async () => {
   // diagnostic override with mockResolvedValue(true).
   externalGroupsYieldNoKnownRoleMock.mockResolvedValue(false);
   deleteAllForUserMock.mockResolvedValue(0);
+  // A forged-but-VALID PAT for the admin caller (tokenVersionAtIssue undefined → version check
+  // skipped, since ADMIN_USER has no tokenVersion), so authenticateToken accepts it and the
+  // session-only guard is what rejects it. Only consulted when a praetor_pat_ token is sent.
+  findPatByTokenHashMock.mockResolvedValue({
+    userId: ADMIN_USER.id,
+    tokenVersionAtIssue: undefined,
+    lastUsedAt: null,
+    updatedAt: new Date(),
+  });
+  markPatUsedMock.mockResolvedValue(undefined);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/users');
 });
@@ -418,6 +447,9 @@ afterEach(async () => {
 const adminAuth = () => ({ authorization: `Bearer ${signToken({ userId: ADMIN_USER.id })}` });
 const managerAuth = () => ({ authorization: `Bearer ${signToken({ userId: MANAGER_USER.id })}` });
 const userAuth = () => ({ authorization: `Bearer ${signToken({ userId: REGULAR_USER.id })}` });
+// A personal-access-token bearer header (praetor_pat_ prefix → authenticateToken's PAT path); the
+// default findPatByTokenHashMock makes it a valid PAT for the admin caller.
+const patHeader = () => ({ authorization: 'Bearer praetor_pat_forged-test-token' });
 
 // =========================================================================
 // GET /api/users - list users
@@ -2764,6 +2796,23 @@ describe('POST /api/users/:id/2fa/reset', () => {
   test('401 missing token', async () => {
     const res = await testApp.inject({ method: 'POST', url: '/api/users/u-target/2fa/reset' });
     expect(res.statusCode).toBe(401);
+  });
+
+  test('403 (PAT): a personal-access token cannot reset another user’s 2FA — session auth required', async () => {
+    // Clearing a target's second factor is a sensitive 2FA management action; a leaked PAT with
+    // user-management update permission must not be able to do it (mirrors /2fa/disable + regen).
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users/u-target/2fa/reset',
+      headers: patHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error).toBe('Session authentication required');
+    expect(disableTotpMock).not.toHaveBeenCalled();
+    expect(revokeUserCredentialsMock).not.toHaveBeenCalled();
   });
 });
 

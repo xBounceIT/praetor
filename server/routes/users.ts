@@ -2,7 +2,12 @@ import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { withDbTransaction } from '../db/drizzle.ts';
-import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
+import {
+  authenticateToken,
+  requireAnyPermission,
+  requirePermission,
+  requireSessionAuth,
+} from '../middleware/auth.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
 import * as externalIdentitiesRepo from '../repositories/externalIdentitiesRepo.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
@@ -1503,7 +1508,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/:id/2fa/reset',
     {
-      onRequest: [authenticateToken, requirePermission('administration.user_management.update')],
+      // requireSessionAuth: clearing another user's second factor is a security-sensitive action,
+      // so it must use an interactive session — a leaked PAT/MCP token with user-management update
+      // permission must not be able to strip a target's 2FA (mirrors /2fa/disable + regenerate).
+      onRequest: [
+        authenticateToken,
+        requireSessionAuth,
+        requirePermission('administration.user_management.update'),
+      ],
       schema: {
         tags: ['users'],
         summary: "Reset another user's two-factor authentication",
