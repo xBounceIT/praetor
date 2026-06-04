@@ -15,6 +15,7 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 // crypto.encrypt/decrypt (used REAL here to build TOTP-secret fixtures and to exercise the
@@ -605,8 +606,11 @@ describe('POST /api/auth/2fa/disable', () => {
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ enabled: false });
     expect(bcryptCompareMock).toHaveBeenCalledWith('secret', LOGIN_USER.passwordHash);
-    expect(disableTotpMock).toHaveBeenCalledWith('u1');
-    expect(bumpSessionVersionMock).toHaveBeenCalledWith('u1');
+    // disable + session-version bump run inside ONE transaction (shared TX sentinel), so the
+    // account is never left disabled-but-not-revoked if a write fails between them.
+    expect(withDbTransactionMock).toHaveBeenCalled();
+    expect(disableTotpMock).toHaveBeenCalledWith('u1', TX_SENTINEL);
+    expect(bumpSessionVersionMock).toHaveBeenCalledWith('u1', TX_SENTINEL);
     expect(typeof res.headers['x-auth-token']).toBe('string');
     expect(auditActions()).toContain('user.totp_disabled');
   });
@@ -681,8 +685,9 @@ describe('POST /api/auth/2fa/disable', () => {
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ enabled: false });
     expect(bcryptCompareMock).not.toHaveBeenCalled();
-    expect(disableTotpMock).toHaveBeenCalledWith('u1');
-    expect(bumpSessionVersionMock).toHaveBeenCalledWith('u1');
+    // disable + session bump run atomically inside the same transaction (shared TX sentinel).
+    expect(disableTotpMock).toHaveBeenCalledWith('u1', TX_SENTINEL);
+    expect(bumpSessionVersionMock).toHaveBeenCalledWith('u1', TX_SENTINEL);
   });
 });
 

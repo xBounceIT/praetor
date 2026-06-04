@@ -429,24 +429,30 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      await usersRepo.disableTotp(userId);
-
-      // Rotate the session so any stolen tokens predating the disable are revoked, then re-sign the
-      // caller's x-auth-token (mirroring settings.ts PUT /password) so they aren't logged out.
-      // bumpSessionVersion returns void, so re-read the bumped value to mint the replacement token;
-      // authenticateToken's onRequest sliding-window already wrote a now-revoked pre-bump token.
-      await usersRepo.bumpSessionVersion(userId);
-      if (request.auth?.source === 'session' && request.auth.sessionStart !== undefined) {
-        const refreshed = await usersRepo.findAuthUserById(userId);
-        if (refreshed) {
-          const refreshedToken = generateToken(
-            userId,
-            request.auth.sessionStart,
-            request.user?.role,
-            refreshed.sessionVersion,
-          );
-          reply.header('x-auth-token', refreshedToken);
-        }
+      // Disable 2FA and rotate the session version in ONE transaction so the account is never
+      // committed in a disabled-but-not-revoked state: if these weren't atomic, a crash between them
+      // would leave TOTP off while stolen tokens predating the disable still validate — defeating
+      // the revocation. The bumped version is read inside the same transaction, so the caller's
+      // replacement x-auth-token (re-signed below, mirroring settings.ts PUT /password, so they
+      // aren't logged out) is minted from the committed value without an extra read or a race.
+      const newSessionVersion = await withDbTransaction(async (tx) => {
+        await usersRepo.disableTotp(userId, tx);
+        await usersRepo.bumpSessionVersion(userId, tx);
+        const refreshed = await usersRepo.findAuthUserById(userId, tx);
+        return refreshed?.sessionVersion;
+      });
+      if (
+        newSessionVersion !== undefined &&
+        request.auth?.source === 'session' &&
+        request.auth.sessionStart !== undefined
+      ) {
+        const refreshedToken = generateToken(
+          userId,
+          request.auth.sessionStart,
+          request.user?.role,
+          newSessionVersion,
+        );
+        reply.header('x-auth-token', refreshedToken);
       }
 
       await logAudit({
