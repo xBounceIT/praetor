@@ -1,3 +1,4 @@
+import { type DbExecutor, db } from '../db/drizzle.ts';
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import { type AuthMethod, isTotpApplicable } from '../repositories/usersRepo.ts';
@@ -10,18 +11,24 @@ import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 // turn their second factor off — all while the policy says administrators must use 2FA.
 
 // Built-in admin/top-manager role ids are always admin; any custom role via its `is_admin` flag.
-const isAdminRoleId = async (roleId: string): Promise<boolean> => {
+// `exec` lets callers run the lookup inside an open transaction so it sees uncommitted role writes
+// (e.g. a role grant being made atomic with the resulting credential revocation).
+const isAdminRoleId = async (roleId: string, exec: DbExecutor = db): Promise<boolean> => {
   if (roleId === ADMIN_ROLE_ID || roleId === TOP_MANAGER_ROLE_ID) return true;
-  const role = await rolesRepo.findById(roleId);
+  const role = await rolesRepo.findById(roleId, exec);
   return role?.isAdmin ?? false;
 };
 
 // Whether the user can act as an admin through ANY of their roles — their primary role or any role
 // they could switch into. Enforcement must consider every assignable admin role, not just the
 // active one, or a multi-role admin could dodge the mandate by signing in under a non-admin role.
-const userHasAnyAdminRole = async (userId: string, primaryRole: string): Promise<boolean> => {
-  if (await isAdminRoleId(primaryRole)) return true;
-  const roles = await rolesRepo.listAvailableRolesForUser(userId);
+const userHasAnyAdminRole = async (
+  userId: string,
+  primaryRole: string,
+  exec: DbExecutor = db,
+): Promise<boolean> => {
+  if (await isAdminRoleId(primaryRole, exec)) return true;
+  const roles = await rolesRepo.listAvailableRolesForUser(userId, exec);
   // Mirror isAdminRoleId for assigned roles too: the built-in admin/top-manager roles are always
   // admin even though the seeded top_manager row carries is_admin = false, so short-circuit their
   // ids here — otherwise an assignable top_manager role would slip past enforcement.
@@ -31,8 +38,8 @@ const userHasAnyAdminRole = async (userId: string, primaryRole: string): Promise
 };
 
 /** Whether the admin-2FA enforcement policy is currently switched on. */
-export const isTotpEnforcedForAdmins = async (): Promise<boolean> => {
-  const settings = await generalSettingsRepo.get();
+export const isTotpEnforcedForAdmins = async (exec: DbExecutor = db): Promise<boolean> => {
+  const settings = await generalSettingsRepo.get(exec);
   return settings?.enforceTotpForAdmins ?? false;
 };
 
@@ -45,22 +52,27 @@ type AdminUser = { id: string; role: string; authMethod: AuthMethod };
  * "is 2FA required for this admin?" decisions such as blocking a self-service disable. The cheap
  * applicability/enforcement checks run first so the role lookups are skipped when the policy is off.
  */
-export const isAdminTotpMandatory = async (user: AdminUser): Promise<boolean> => {
+export const isAdminTotpMandatory = async (
+  user: AdminUser,
+  exec: DbExecutor = db,
+): Promise<boolean> => {
   if (!isTotpApplicable(user.authMethod)) return false;
-  if (!(await isTotpEnforcedForAdmins())) return false;
-  return userHasAnyAdminRole(user.id, user.role);
+  if (!(await isTotpEnforcedForAdmins(exec))) return false;
+  return userHasAnyAdminRole(user.id, user.role, exec);
 };
 
 /**
  * Whether the mandate applies AND the user has not yet enrolled — i.e. they must be routed into
- * enrollment (at login) or have their session revoked (when granted an admin role) before they can
- * exercise admin privileges.
+ * enrollment (at login) or have their credentials revoked (when granted an admin role) before they
+ * can exercise admin privileges. Pass `exec` (an open transaction) when the decision must be made
+ * atomically with the role write that triggered it — the lookups then see the uncommitted roles.
  */
 export const requiresAdminTotpEnrollment = async (
   user: AdminUser & { totpEnabled: boolean },
+  exec: DbExecutor = db,
 ): Promise<boolean> => {
   if (user.totpEnabled) return false;
-  return isAdminTotpMandatory(user);
+  return isAdminTotpMandatory(user, exec);
 };
 
 /**

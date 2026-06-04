@@ -1365,7 +1365,9 @@ describe('PUT /api/users/:id', () => {
 
     expect(res.statusCode).toBe(200);
     expect(replaceUserRolesMock).toHaveBeenCalledWith('u-target', ['admin'], TX_SENTINEL);
-    expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target');
+    // Revocation runs inside the role-grant transaction (shared TX sentinel) so the grant and the
+    // credential revocation commit or roll back together.
+    expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
   });
 
   test('403 cannot change own role (audits the denial)', async () => {
@@ -2852,9 +2854,10 @@ describe('PUT /api/users/:id/roles', () => {
 
     expect(res.statusCode).toBe(200);
     expect(replaceUserRolesMock).toHaveBeenCalledWith('u-target', ['user', 'admin'], TX_SENTINEL);
-    // Primary role is now admin, the mandate is on, and they have no TOTP → revoke their sessions
-    // so they must re-login and enrol before they can act as an admin.
-    expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target');
+    // Primary role is now admin, the mandate is on, and they have no TOTP → revoke their
+    // credentials. This runs inside the same transaction as the role replacement (shared TX
+    // sentinel) so the grant and revocation commit or roll back together.
+    expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
   });
 
   test('200 role change without enforcement does not revoke sessions', async () => {

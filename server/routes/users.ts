@@ -1159,6 +1159,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               if (roleValue !== null) {
                 await usersRepo.replaceUserRoles(idResult.value, [roleValue], tx);
                 await userAssignmentsRepo.syncTopManagerAssignmentsForUser(idResult.value, tx);
+                // Atomic with the role grant: if the new role makes this an unenrolled admin under
+                // the mandate, revoke their live credentials (sessions + PAT/MCP tokens) in the same
+                // transaction, so a crash can't leave the admin role granted with credentials still
+                // valid. The enforcement lookups read via `tx`, seeing the just-written role.
+                const totpState = await usersRepo.getTotpState(idResult.value, tx);
+                if (
+                  await requiresAdminTotpEnrollment(
+                    {
+                      id: idResult.value,
+                      role: roleValue,
+                      authMethod: targetUser.authMethod,
+                      totpEnabled: totpState?.totpEnabled ?? false,
+                    },
+                    tx,
+                  )
+                ) {
+                  await usersRepo.revokeUserCredentials(idResult.value, tx);
+                }
               }
             }
             if (needsSettingsUpsert) {
@@ -1250,25 +1268,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           toValue: role !== undefined ? fullUser.role : undefined,
         },
       });
-
-      // Mirror the /:id/roles guard: if this update promoted the user into an admin role while the
-      // 2FA mandate is on and they have not enrolled, revoke their live credentials so they must
-      // re-login and enrol. Both sessions AND PAT/MCP tokens are revoked — a pre-existing token
-      // keys off token_version (not session_version) and never traverses the login 2FA gate, so
-      // bumping the session alone would let them keep admin API access without a second factor.
-      if (roleValue !== null) {
-        const updateTotpState = await usersRepo.getTotpState(idResult.value);
-        if (
-          await requiresAdminTotpEnrollment({
-            id: idResult.value,
-            role: roleValue,
-            authMethod: targetUser.authMethod,
-            totpEnabled: updateTotpState?.totpEnabled ?? false,
-          })
-        ) {
-          await usersRepo.revokeUserCredentials(idResult.value);
-        }
-      }
 
       return maskUserForRequest(request, fullUser);
     },
@@ -1666,24 +1665,30 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // Sync runs inside the transaction so the role updates and the resulting
         // top-manager auto-assignments commit (or roll back) together.
         await userAssignmentsRepo.syncTopManagerAssignmentsForUser(idResult.value, tx);
-      });
 
-      // If the new role set makes this user an admin without 2FA while the mandate is on, revoke
-      // their live credentials: the login gate can't catch an admin role granted to an already
-      // authenticated user, so force them to re-login and enrol before they can act as an admin.
-      // Sessions AND PAT/MCP tokens are revoked — a pre-existing token keys off token_version and
-      // would otherwise keep admin API access with no second factor.
-      const rolesTotpState = await usersRepo.getTotpState(idResult.value);
-      if (
-        await requiresAdminTotpEnrollment({
-          id: idResult.value,
-          role: primaryRoleIdResult.value,
-          authMethod: user.authMethod,
-          totpEnabled: rolesTotpState?.totpEnabled ?? false,
-        })
-      ) {
-        await usersRepo.revokeUserCredentials(idResult.value);
-      }
+        // If the new role set makes this user an admin without 2FA while the mandate is on, revoke
+        // their live credentials so they must re-login and enrol before acting as an admin — the
+        // login gate can't catch an admin role granted to an already authenticated user. Sessions
+        // AND PAT/MCP tokens are revoked (a pre-existing token keys off token_version and would
+        // otherwise keep admin API access with no second factor). This runs INSIDE the transaction
+        // so the role grant and the revocation commit (or roll back) together — a crash between
+        // them must not leave the new admin role granted with credentials still valid. The
+        // enforcement lookups read via `tx`, so they see the just-written role set.
+        const rolesTotpState = await usersRepo.getTotpState(idResult.value, tx);
+        if (
+          await requiresAdminTotpEnrollment(
+            {
+              id: idResult.value,
+              role: primaryRoleIdResult.value,
+              authMethod: user.authMethod,
+              totpEnabled: rolesTotpState?.totpEnabled ?? false,
+            },
+            tx,
+          )
+        ) {
+          await usersRepo.revokeUserCredentials(idResult.value, tx);
+        }
+      });
 
       await logAudit({
         request,
