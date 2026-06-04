@@ -55,6 +55,7 @@ const markBackupCodeUsedMock = mock();
 const setBackupCodesMock = mock();
 const getPasswordHashMock = mock();
 const bumpSessionVersionMock = mock();
+const revokeUserCredentialsMock = mock();
 const findLoginUserByIdMock = mock();
 const listAvailableRolesForUserMock = mock();
 const generalSettingsGetMock = mock<() => Promise<{ enforceTotpForAdmins: boolean } | null>>(
@@ -84,6 +85,7 @@ beforeAll(async () => {
     setBackupCodes: setBackupCodesMock,
     getPasswordHash: getPasswordHashMock,
     bumpSessionVersion: bumpSessionVersionMock,
+    revokeUserCredentials: revokeUserCredentialsMock,
     findLoginUserById: findLoginUserByIdMock,
   }));
   mock.module('../../db/drizzle.ts', () => ({
@@ -186,6 +188,7 @@ const allMocks = [
   setBackupCodesMock,
   getPasswordHashMock,
   bumpSessionVersionMock,
+  revokeUserCredentialsMock,
   findLoginUserByIdMock,
   listAvailableRolesForUserMock,
   logAuditMock,
@@ -218,6 +221,7 @@ beforeEach(async () => {
   setBackupCodesMock.mockResolvedValue(undefined);
   getPasswordHashMock.mockResolvedValue(LOGIN_USER.passwordHash);
   bumpSessionVersionMock.mockResolvedValue(undefined);
+  revokeUserCredentialsMock.mockResolvedValue(undefined);
   findLoginUserByIdMock.mockResolvedValue(LOGIN_USER);
   bcryptCompareMock.mockResolvedValue(false);
   generalSettingsGetMock.mockResolvedValue(null);
@@ -467,7 +471,13 @@ describe('POST /api/auth/2fa/confirm', () => {
     expect(body.token).toBeUndefined();
     // enableTotp is bound to the exact verified pending ciphertext (compare-and-swap), so the
     // verified secret is passed through, not just the user id.
-    expect(enableTotpMock).toHaveBeenCalledWith('u1', expect.any(String));
+    expect(enableTotpMock).toHaveBeenCalledWith('u1', expect.any(String), TX_SENTINEL);
+    // Enabling 2FA rotates the user's other credentials in the same transaction (revoke pre-
+    // enrollment sessions + PATs so they can't keep bypassing the new second factor).
+    expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u1', TX_SENTINEL);
+    // The caller's own session is kept alive via a re-issued x-auth-token carrying the bumped
+    // version (mirrors /disable) — enabling 2FA doesn't log the current device out.
+    expect(typeof res.headers['x-auth-token']).toBe('string');
     expect(auditActions()).toContain('user.totp_enabled');
     // A logged-in caller already logged user.login at their original sign-in; confirming 2FA from
     // an existing session must NOT emit a second user.login.
@@ -539,7 +549,10 @@ describe('POST /api/auth/2fa/confirm', () => {
     expect(body.enabled).toBe(true);
     expect(body.token).toEqual(expect.any(String));
     expect(body.user).toMatchObject({ id: 'u1', username: 'alice', role: 'manager' });
-    expect(enableTotpMock).toHaveBeenCalledWith('u1', expect.any(String));
+    expect(enableTotpMock).toHaveBeenCalledWith('u1', expect.any(String), TX_SENTINEL);
+    // Enabling 2FA rotates the user's other credentials in the same transaction (revoke pre-
+    // enrollment sessions + PATs so they can't keep bypassing the new second factor).
+    expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u1', TX_SENTINEL);
     expect(auditActions()).toContain('user.totp_enabled');
     // This path mints a real session (the user only had an enroll token), so it must also record
     // user.login — otherwise sessions born from mandatory enrollment are missing from the audit.

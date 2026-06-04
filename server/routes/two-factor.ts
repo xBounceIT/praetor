@@ -290,7 +290,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'No pending two-factor enrollment to confirm');
       }
 
-      const secret = decryptTotpSecret(state.totpSecret);
+      // Capture the (now non-null) pending ciphertext in a local so its narrowed `string` type
+      // survives into the transaction closure below (TS drops property narrowing across closures).
+      const pendingSecretCiphertext = state.totpSecret;
+      const secret = decryptTotpSecret(pendingSecretCiphertext);
       if (!verifyTotpCode(secret, codeResult.value)) {
         return replyError(request, reply, {
           statusCode: 400,
@@ -303,16 +306,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      // Bind the enable to the exact ciphertext we just decrypted and verified: enableTotp's
-      // compare-and-swap only flips the flag while totp_secret still equals state.totpSecret.
-      const enabled = await usersRepo.enableTotp(userId, state.totpSecret);
-      if (!enabled) {
+      // Enable + rotate credentials atomically. Binding the enable to the exact verified ciphertext
+      // (enableTotp's compare-and-swap only flips the flag while totp_secret still equals
+      // state.totpSecret) AND rotating session_version + token_version in the SAME transaction: a
+      // crash between them must not leave 2FA on with stale credentials, and — more importantly —
+      // flipping totp_enabled while leaving the versions untouched would let any JWT or PAT issued
+      // BEFORE enrollment keep authenticating without ever satisfying the new second factor (a real
+      // gap when a user turns 2FA on after a suspected compromise, or to satisfy the admin mandate).
+      // The caller is kept signed in below (re-issued token / fresh session), mirroring /disable.
+      const enableOutcome = await withDbTransaction(async (tx) => {
+        const ok = await usersRepo.enableTotp(userId, pendingSecretCiphertext, tx);
+        if (!ok) return null;
+        await usersRepo.revokeUserCredentials(userId, tx);
+        const refreshed = await usersRepo.findAuthUserById(userId, tx);
+        return { sessionVersion: refreshed?.sessionVersion };
+      });
+      if (!enableOutcome) {
         // The CAS failed: the pending secret was cleared (concurrent disable) or rotated (concurrent
         // /setup) between the verify above and this write, so it no longer matches the one whose
         // code we just proved. Make the caller restart enrollment rather than enable an unverified
         // secret.
         return badRequest(reply, 'No pending two-factor enrollment to confirm');
       }
+      const newSessionVersion = enableOutcome.sessionVersion;
 
       await logAudit({
         request,
@@ -323,9 +339,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
 
       // Enroll-token path: the user had no session, so mint one now (mirroring the login no-2FA
-      // success response). The account was already re-validated above, before TOTP was enabled.
+      // success response). Mint it AFTER the rotation above, carrying the bumped sessionVersion, so
+      // the new session is valid while any pre-enrollment sessions stay revoked. The account was
+      // already re-validated above, before TOTP was enabled.
       if (enrollLoginUser) {
-        const session = await buildSessionSuccess(enrollLoginUser);
+        const session = await buildSessionSuccess({
+          ...enrollLoginUser,
+          sessionVersion: newSessionVersion ?? enrollLoginUser.sessionVersion,
+        });
         // This is the user's real login — they had no session, only an enroll token. Log
         // `user.login` here so a session born from mandatory enrollment isn't missing from the
         // sign-in audit trail (mirrors the /login no-2FA path and /totp-challenge).
@@ -341,6 +362,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           userId: enrollLoginUser.id,
         });
         return { enabled: true, ...session };
+      }
+
+      // Session path: re-sign the caller's x-auth-token with the bumped version (mirrors /disable)
+      // so enabling 2FA keeps the current device signed in while still revoking the user's other
+      // pre-enrollment sessions and tokens.
+      if (
+        request.auth?.source === 'session' &&
+        request.auth.sessionStart !== undefined &&
+        newSessionVersion !== undefined
+      ) {
+        const refreshedToken = generateToken(
+          userId,
+          request.auth.sessionStart,
+          request.user?.role,
+          newSessionVersion,
+        );
+        reply.header('x-auth-token', refreshedToken);
       }
 
       return { enabled: true };
