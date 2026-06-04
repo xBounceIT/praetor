@@ -257,9 +257,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const enabled = await usersRepo.enableTotp(userId);
+      // Bind the enable to the exact ciphertext we just decrypted and verified: enableTotp's
+      // compare-and-swap only flips the flag while totp_secret still equals state.totpSecret.
+      const enabled = await usersRepo.enableTotp(userId, state.totpSecret);
       if (!enabled) {
-        // The secret vanished between the read above and this write (e.g. a concurrent disable).
+        // The CAS failed: the pending secret was cleared (concurrent disable) or rotated (concurrent
+        // /setup) between the verify above and this write, so it no longer matches the one whose
+        // code we just proved. Make the caller restart enrollment rather than enable an unverified
+        // secret.
         return badRequest(reply, 'No pending two-factor enrollment to confirm');
       }
 

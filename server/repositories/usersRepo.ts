@@ -239,11 +239,22 @@ export const setTotpEnrollment = async (
 // Flips a pending enrollment live. The `totp_secret IS NOT NULL` guard means a stray confirm
 // for a user who never ran setup is a no-op; the boolean return lets the route distinguish a
 // genuine activation from that case.
-export const enableTotp = async (userId: string, exec: DbExecutor = db): Promise<boolean> => {
+export const enableTotp = async (
+  userId: string,
+  expectedSecret: string,
+  exec: DbExecutor = db,
+): Promise<boolean> => {
+  // Compare-and-swap on the exact pending ciphertext the caller just decrypted and verified. A
+  // concurrent /setup can rotate totp_secret between that verify and this write; matching the
+  // stored value (AES-GCM ciphertext is unique per encryption) pins the enable to the specific
+  // enrollment whose code was proven, so a racing /setup can't get an unverified secret enabled.
+  // The `totp_enabled = false` guard additionally makes a double-confirm a no-op.
   const rows = await exec
     .update(users)
     .set({ totpEnabled: true, totpConfirmedAt: sql`CURRENT_TIMESTAMP` })
-    .where(sql`${users.id} = ${userId} AND ${users.totpSecret} IS NOT NULL`)
+    .where(
+      sql`${users.id} = ${userId} AND ${users.totpSecret} = ${expectedSecret} AND ${users.totpEnabled} = false`,
+    )
     .returning({ id: users.id });
   return rows.length > 0;
 };

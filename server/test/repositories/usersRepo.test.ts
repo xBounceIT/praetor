@@ -182,6 +182,28 @@ describe('revokeUserCredentials', () => {
   });
 });
 
+describe('enableTotp', () => {
+  test('compare-and-swaps on the exact verified ciphertext (not IS NOT NULL)', async () => {
+    exec.enqueue({ rows: [{ id: 'u1' }], rowCount: 1 });
+    const ok = await usersRepo.enableTotp('u1', 'verified-cipher', testDb);
+    expect(ok).toBe(true);
+    const sql = exec.calls[0].sql.toLowerCase();
+    // Binds the enable to the specific pending secret so a racing /setup can't enable an
+    // unverified one: the ciphertext is matched as a parameter, and the old IS NOT NULL guard
+    // (which would enable whatever secret is currently stored) is gone.
+    expect(sql).toContain('"totp_secret"');
+    expect(sql).toContain('"totp_enabled"');
+    expect(sql).not.toContain('is not null');
+    expect(exec.calls[0].params).toContain('verified-cipher');
+    expect(exec.calls[0].params).toContain('u1');
+  });
+
+  test('returns false when no row matched (secret rotated or already enabled)', async () => {
+    exec.enqueue({ rows: [], rowCount: 0 });
+    expect(await usersRepo.enableTotp('u1', 'stale-cipher', testDb)).toBe(false);
+  });
+});
+
 describe('findCostPerHour', () => {
   test('parses string-encoded numerics from pg', async () => {
     exec.enqueue({ rows: [['42.5']] });
