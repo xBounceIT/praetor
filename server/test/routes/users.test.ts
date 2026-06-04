@@ -2082,6 +2082,8 @@ describe('PUT /api/users/:id/auth-method', () => {
       'u-target',
       ['cn=managers,ou=groups,dc=test,dc=com'],
       [{ externalGroup: 'managers', role: 'manager' }],
+      // Role mapping now applies inside the auth-method transaction (shared TX sentinel).
+      TX_SENTINEL,
     );
     const body = JSON.parse(res.body);
     expect(body.authMethod).toBe('ldap');
@@ -2404,7 +2406,9 @@ describe('PUT /api/users/:id/auth-method', () => {
 
       expect(res.statusCode).toBe(200);
       expect(updateAuthMethodMock).toHaveBeenCalledWith('u-target', 'local', null, TX_SENTINEL);
-      expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target');
+      // Revocation now runs inside the auth-method transaction (shared TX sentinel), atomic with
+      // the auth-method write.
+      expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
     });
 
     test('200 the same switch does NOT revoke when admin-2FA enforcement is off', async () => {
@@ -2486,7 +2490,8 @@ describe('PUT /api/users/:id/auth-method', () => {
       expect(res.statusCode).toBe(200);
       expect(JSON.parse(res.body).role).toBe('admin');
       // The provider/method did not change (authStateChanged === false); only the role mapping did.
-      expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target');
+      // Revocation runs inside the same transaction as the role mapping (shared TX sentinel).
+      expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
     });
   });
 

@@ -1,4 +1,4 @@
-import { type DbExecutor, withDbTransaction } from '../db/drizzle.ts';
+import { type DbExecutor, db, runAtomically, withDbTransaction } from '../db/drizzle.ts';
 import type { SsoProtocol } from '../db/schema/sso.ts';
 import * as externalIdentitiesRepo from '../repositories/externalIdentitiesRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
@@ -224,12 +224,18 @@ export const applyExternalRolesForUserIfMatched = async (
   userId: string,
   groups: string[],
   mappings: ExternalRoleMapping[],
+  exec: DbExecutor = db,
 ): Promise<{ applied: boolean; roleIds: string[] }> => {
   const matched = await filterToExistingRoleIds(
     mapExternalGroupsToMatchedRoleIds(groups, mappings),
   );
   if (matched.length === 0) return { applied: false, roleIds: [] };
-  await writeExternalRoleIds(userId, matched);
+  // runAtomically reuses the caller's transaction when one is passed (so an admin "change auth
+  // method to LDAP" bind can be atomic with the resulting credential revocation), or opens its own
+  // when called standalone — `exec` defaults to `db`, so existing callers are unaffected. Only the
+  // write is threaded: the role-existence read above hits the `roles` table, which the caller's
+  // transaction never mutates, so it's correct to read outside that transaction.
+  await runAtomically(exec, (tx) => writeExternalRoleIdsTx(userId, matched, tx));
   return { applied: true, roleIds: matched };
 };
 
