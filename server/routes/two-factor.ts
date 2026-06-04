@@ -2,7 +2,12 @@ import bcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { withDbTransaction } from '../db/drizzle.ts';
 import type { TotpBackupCode } from '../db/schema/users.ts';
-import { authenticateToken, generateToken, requireEnrollOrSession } from '../middleware/auth.ts';
+import {
+  authenticateToken,
+  generateToken,
+  requireEnrollOrSession,
+  requireSessionAuth,
+} from '../middleware/auth.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardErrorResponses } from '../schemas/common.ts';
 import { redeemBackupCode } from '../services/backupCodes.ts';
@@ -349,7 +354,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/disable',
     {
-      onRequest: [fastify.rateLimit(LOGIN_RATE_LIMIT), authenticateToken],
+      // requireSessionAuth: these second-factor management actions must use an interactive session,
+      // never a personal-access/MCP token — a leaked PAT plus one current code must not be able to
+      // disable 2FA or mint fresh recovery codes.
+      onRequest: [fastify.rateLimit(LOGIN_RATE_LIMIT), authenticateToken, requireSessionAuth],
       schema: {
         tags: ['auth'],
         summary: 'Disable TOTP',
@@ -472,7 +480,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/backup-codes/regenerate',
     {
-      onRequest: [fastify.rateLimit(LOGIN_RATE_LIMIT), authenticateToken],
+      // requireSessionAuth: these second-factor management actions must use an interactive session,
+      // never a personal-access/MCP token — a leaked PAT plus one current code must not be able to
+      // disable 2FA or mint fresh recovery codes.
+      onRequest: [fastify.rateLimit(LOGIN_RATE_LIMIT), authenticateToken, requireSessionAuth],
       schema: {
         tags: ['auth'],
         summary: 'Regenerate TOTP backup codes',

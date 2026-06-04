@@ -4,6 +4,7 @@ import * as realBcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
 import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
+import * as realPersonalAccessTokensRepo from '../../repositories/personalAccessTokensRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realAudit from '../../utils/audit.ts';
@@ -30,6 +31,7 @@ const { signPurposeToken } = await import('../../middleware/auth.ts');
 // Snapshot real exports so afterAll can restore them. Snapshot must run BEFORE mock.module
 // fires (i.e., before beforeAll executes) — see comment in routes/auth.test.ts.
 const usersRepoSnap = { ...realUsersRepo };
+const personalAccessTokensRepoSnap = { ...realPersonalAccessTokensRepo };
 const drizzleSnap = { ...realDrizzle };
 const generalSettingsRepoSnap = { ...realGeneralSettingsRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -60,6 +62,10 @@ const generalSettingsGetMock = mock<() => Promise<{ enforceTotpForAdmins: boolea
 );
 const logAuditMock = mock(async () => undefined);
 const bcryptCompareMock = mock();
+// Personal-access-token auth path: lets tests forge a VALID PAT so authenticateToken populates
+// request.auth.source = 'personalAccessToken' and the session-only guard is what rejects it.
+const findPatByTokenHashMock = mock();
+const markPatUsedMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 let twoFactorRoutePlugin: FastifyPluginAsync;
@@ -93,6 +99,11 @@ beforeAll(async () => {
     ...generalSettingsRepoSnap,
     get: generalSettingsGetMock,
   }));
+  mock.module('../../repositories/personalAccessTokensRepo.ts', () => ({
+    ...personalAccessTokensRepoSnap,
+    findByTokenHash: findPatByTokenHashMock,
+    markUsed: markPatUsedMock,
+  }));
   mock.module('../../utils/permissions.ts', () => ({
     ...permissionsSnap,
     getRolePermissions: getRolePermissionsMock,
@@ -118,6 +129,7 @@ afterAll(() => {
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../repositories/generalSettingsRepo.ts', () => generalSettingsRepoSnap);
+  mock.module('../../repositories/personalAccessTokensRepo.ts', () => personalAccessTokensRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('bcryptjs', () => bcryptSnap);
@@ -179,6 +191,8 @@ const allMocks = [
   logAuditMock,
   bcryptCompareMock,
   generalSettingsGetMock,
+  findPatByTokenHashMock,
+  markPatUsedMock,
 ];
 
 let testApp: FastifyInstance;
@@ -207,6 +221,16 @@ beforeEach(async () => {
   findLoginUserByIdMock.mockResolvedValue(LOGIN_USER);
   bcryptCompareMock.mockResolvedValue(false);
   generalSettingsGetMock.mockResolvedValue(null);
+  // A forged-but-VALID PAT for u1 (tokenVersion matches AUTH_USER), so authenticateToken accepts it
+  // and the session-only guard is what rejects the request. Only consulted when a praetor_pat_ token
+  // is sent; session tests use signToken and never hit this path.
+  findPatByTokenHashMock.mockResolvedValue({
+    userId: 'u1',
+    tokenVersionAtIssue: AUTH_USER.tokenVersion,
+    lastUsedAt: null,
+    updatedAt: new Date(),
+  });
+  markPatUsedMock.mockResolvedValue(undefined);
 
   testApp = await buildRouteTestApp(twoFactorRoutePlugin, '/api/auth/2fa');
 });
@@ -217,6 +241,12 @@ afterEach(async () => {
 
 const sessionHeader = (userId = 'u1') => ({
   authorization: `Bearer ${signToken({ userId })}`,
+});
+
+// A personal-access-token bearer header (praetor_pat_ prefix → authenticateToken's PAT path).
+// Pairs with the default findPatByTokenHashMock so authenticateToken accepts it as a valid PAT.
+const patHeader = () => ({
+  authorization: 'Bearer praetor_pat_forged-test-token',
 });
 
 const enrollHeader = (userId = 'u1', sessionVersion = 1) => ({
@@ -689,6 +719,22 @@ describe('POST /api/auth/2fa/disable', () => {
     expect(disableTotpMock).toHaveBeenCalledWith('u1', TX_SENTINEL);
     expect(bumpSessionVersionMock).toHaveBeenCalledWith('u1', TX_SENTINEL);
   });
+
+  test('403 (PAT): a personal-access token cannot disable 2FA — session auth required', async () => {
+    // A leaked PAT plus one current/recovery code must not be able to turn off the second factor;
+    // requireSessionAuth rejects non-interactive credentials before the handler runs.
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/2fa/disable',
+      headers: patHeader(),
+      payload: { password: 'secret', code: validCode() },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error).toBe('Session authentication required');
+    expect(disableTotpMock).not.toHaveBeenCalled();
+    expect(bumpSessionVersionMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/auth/2fa/backup-codes/regenerate', () => {
@@ -741,6 +787,21 @@ describe('POST /api/auth/2fa/backup-codes/regenerate', () => {
     expect(JSON.parse(res.body).errorCode).toBe('invalid_totp_code');
     expect(setBackupCodesMock).not.toHaveBeenCalled();
     expect(auditActions()).toContain('user.totp_backup_codes_regenerate.invalid_code');
+  });
+
+  test('403 (PAT): a personal-access token cannot regenerate backup codes — session auth required', async () => {
+    // A leaked PAT plus one valid code must not be able to mint a fresh set of recovery codes;
+    // requireSessionAuth rejects non-interactive credentials before the handler runs.
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/2fa/backup-codes/regenerate',
+      headers: patHeader(),
+      payload: { code: validCode() },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error).toBe('Session authentication required');
+    expect(setBackupCodesMock).not.toHaveBeenCalled();
   });
 });
 
