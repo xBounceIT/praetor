@@ -324,24 +324,24 @@ export const rotatePasswordAndBumpSession = async (
   return rows[0].sessionVersion;
 };
 
-// Revokes EVERY live credential — interactive sessions (session_version) AND non-interactive
-// PAT/MCP tokens (token_version) — for each local/ldap user who can act as an admin via a built-in
-// admin/top-manager role or any custom role flagged `is_admin`, whether as their primary role or an
-// assigned (multi-)role, but who has NOT enrolled in TOTP. Called when the admin-2FA policy is
-// switched on. Bumping session_version alone would leave a pre-existing PAT/MCP token (which keys
-// off token_version, and never traverses the login 2FA gate) exercising admin privileges with no
-// second factor until its idle expiry — so both counters move together, mirroring
-// rotatePasswordAndBumpSession. Affected admins must re-login, enrol, and re-issue any tokens.
-// Returns the number of admins whose credentials were revoked.
-export const revokeCredentialsForUnenrolledAdmins = async (
-  exec: DbExecutor = db,
-): Promise<number> => {
+// Revokes only the non-interactive credentials — PAT/MCP tokens (token_version) — of each
+// local/ldap user who can act as an admin via a built-in admin/top-manager role or any custom role
+// flagged `is_admin`, whether as their primary role or an assigned (multi-)role, but who has NOT
+// enrolled in TOTP. Called when the admin-2FA policy is switched on. Interactive sessions
+// (session_version) are deliberately left intact: those traverse the login 2FA gate, so an
+// unenrolled admin is routed into mandatory enrollment on their next sign-in (see auth.ts) and
+// blocked from switching into an admin role meanwhile — enforcing without abruptly logging anyone
+// out (which, for the admin who just toggled the policy, would silently break the app). PAT/MCP
+// tokens key off token_version and never reach the login gate, so they alone are rotated here:
+// otherwise a pre-existing token would keep exercising admin privileges over the API with no second
+// factor. Affected admins must re-issue any personal-access/MCP tokens after enrolling.
+// Returns the number of admins whose tokens were revoked.
+export const revokeTokensForUnenrolledAdmins = async (exec: DbExecutor = db): Promise<number> => {
   const rows = await executeRows<{ id: string }>(
     exec,
     sql`
       UPDATE users
-      SET session_version = session_version + 1,
-          token_version = token_version + 1
+      SET token_version = token_version + 1
       WHERE totp_enabled = false
         AND auth_method IN ('local', 'ldap')
         AND (

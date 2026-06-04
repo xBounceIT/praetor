@@ -146,18 +146,19 @@ describe('rotatePasswordAndBumpSession', () => {
   });
 });
 
-describe('revokeCredentialsForUnenrolledAdmins', () => {
-  test('bumps BOTH session_version and token_version for unenrolled local/ldap admins', async () => {
+describe('revokeTokensForUnenrolledAdmins', () => {
+  test('bumps ONLY token_version (not session_version) for unenrolled local/ldap admins', async () => {
     // RETURNING id yields one row per revoked admin; the count is the return value.
     exec.enqueue({ rows: [{ id: 'a1' }, { id: 'a2' }, { id: 'a3' }] });
-    const count = await usersRepo.revokeCredentialsForUnenrolledAdmins(testDb);
+    const count = await usersRepo.revokeTokensForUnenrolledAdmins(testDb);
     expect(count).toBe(3);
 
     const sql = exec.calls[0].sql;
-    // Sessions AND non-interactive PAT/MCP tokens (token_version) must both rotate — bumping only
-    // session_version would leave a pre-existing admin PAT exercising privileges with no 2FA.
-    expect(sql).toContain('session_version = session_version + 1');
+    // Only non-interactive PAT/MCP tokens (token_version) rotate. Interactive sessions are left
+    // intact on purpose: enforcement happens at next login, so bumping session_version would
+    // abruptly log out admins (including the one toggling the policy) for no security gain.
     expect(sql).toContain('token_version = token_version + 1');
+    expect(sql).not.toContain('session_version');
     // Scope guard: only unenrolled, password-based (local/ldap) admins.
     expect(sql).toContain('totp_enabled = false');
     expect(sql).toContain("auth_method IN ('local', 'ldap')");
@@ -165,7 +166,7 @@ describe('revokeCredentialsForUnenrolledAdmins', () => {
 
   test('returns 0 when no unenrolled admin matched', async () => {
     exec.enqueue({ rows: [] });
-    expect(await usersRepo.revokeCredentialsForUnenrolledAdmins(testDb)).toBe(0);
+    expect(await usersRepo.revokeTokensForUnenrolledAdmins(testDb)).toBe(0);
   });
 });
 

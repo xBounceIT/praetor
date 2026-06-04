@@ -512,12 +512,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         enforceTotpForAdmins: enforceTotpForAdminsResult.value,
       };
 
-      // Switching admin-2FA enforcement ON must also revoke the live credentials (sessions AND
-      // PAT/MCP tokens) of admin-capable users who haven't enrolled — otherwise a session or token
-      // predating the change keeps admin privileges (incl. via /auth/switch-role or the API) until
-      // it expires. Persist the setting and run the revocation inside ONE transaction so they commit
-      // together: if they weren't atomic, a crash after the setting committed would let a retry
-      // observe enforcement already on, skip the revocation, and strand those credentials valid.
+      // Switching admin-2FA enforcement ON revokes the non-interactive credentials (PAT/MCP tokens)
+      // of admin-capable users who haven't enrolled — those never traverse the login 2FA gate, so a
+      // token predating the change would otherwise keep admin API privileges with no second factor
+      // until it expires. Interactive sessions are deliberately NOT revoked: an unenrolled admin is
+      // forced into enrollment on their next sign-in (auth.ts) and blocked from switching into an
+      // admin role meanwhile, so the policy takes hold without abruptly logging anyone out — most
+      // importantly the admin who just toggled it. Persist the setting and run the token revocation
+      // inside ONE transaction so they commit together: if they weren't atomic, a crash after the
+      // setting committed would let a retry observe enforcement already on, skip the revocation, and
+      // strand those tokens valid.
       const enablingEnforcement =
         enforceTotpForAdminsResult.value === true &&
         previousSettings?.enforceTotpForAdmins !== true;
@@ -527,7 +531,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (enablingEnforcement) {
         const result = await withDbTransaction(async (tx) => {
           const updated = await generalSettingsRepo.update(settingsPatch, tx);
-          const revoked = await usersRepo.revokeCredentialsForUnenrolledAdmins(tx);
+          const revoked = await usersRepo.revokeTokensForUnenrolledAdmins(tx);
           return { updated, revoked };
         });
         settings = result.updated;
@@ -546,11 +550,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
 
       // Audit the revocation only after the transaction commits — an audit-write failure must not
-      // roll back the security-critical credential revocation it is recording.
+      // roll back the security-critical token revocation it is recording.
       if (revokedAdmins > 0) {
         await logAudit({
           request,
-          action: 'settings.totp_enforcement_sessions_revoked',
+          action: 'settings.totp_enforcement_tokens_revoked',
           entityType: 'settings',
           details: { secondaryLabel: String(revokedAdmins) },
         });
