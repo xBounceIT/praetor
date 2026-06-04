@@ -229,14 +229,19 @@ const auditActions = () =>
 describe('POST /api/auth/2fa/setup', () => {
   test('200 (session, local): returns secret/otpauthUri/qrDataUri/10 backup codes and stores an encrypted secret + 10 hashes', async () => {
     getTotpStateMock.mockResolvedValue(null);
+    // Session path now requires step-up re-auth: the account password must verify before a secret
+    // is written.
+    bcryptCompareMock.mockResolvedValue(true);
 
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/auth/2fa/setup',
       headers: sessionHeader(),
+      payload: { password: 'secret' },
     });
 
     expect(res.statusCode).toBe(200);
+    expect(bcryptCompareMock).toHaveBeenCalledWith('secret', LOGIN_USER.passwordHash);
     const body = JSON.parse(res.body);
     expect(body.secret).toEqual(expect.any(String));
     expect(body.otpauthUri).toMatch(/^otpauth:\/\/totp\/Praetor:/);
@@ -339,16 +344,67 @@ describe('POST /api/auth/2fa/setup', () => {
       totpConfirmedAt: new Date(),
       totpBackupCodes: null,
     });
+    bcryptCompareMock.mockResolvedValue(true);
 
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/auth/2fa/setup',
       headers: sessionHeader(),
+      payload: { password: 'secret' },
     });
 
     expect(res.statusCode).toBe(409);
     expect(setTotpEnrollmentMock).not.toHaveBeenCalled();
     expect(auditActions()).toContain('user.totp_setup.conflict');
+  });
+
+  test('400 (session): missing password is rejected before any secret is written', async () => {
+    // Step-up re-auth: a logged-in caller must supply their password. A stolen session alone (no
+    // password) must not be able to enroll an attacker-controlled second factor.
+    getTotpStateMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/2fa/setup',
+      headers: sessionHeader(),
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(setTotpEnrollmentMock).not.toHaveBeenCalled();
+  });
+
+  test('400 (session, local): wrong password → totp_setup_reauth_failed, no secret written', async () => {
+    getTotpStateMock.mockResolvedValue(null);
+    bcryptCompareMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/2fa/setup',
+      headers: sessionHeader(),
+      payload: { password: 'wrong-password' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).errorCode).toBe('totp_setup_reauth_failed');
+    expect(setTotpEnrollmentMock).not.toHaveBeenCalled();
+  });
+
+  test('200 (enroll token): no step-up password required (already login-verified)', async () => {
+    // The enroll-token path must NOT require a password — the token was minted from a verified
+    // login. bcryptCompare stays false (its default) to prove the password branch is never reached.
+    getTotpStateMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/2fa/setup',
+      headers: enrollHeader(),
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(setTotpEnrollmentMock).toHaveBeenCalledTimes(1);
+    expect(bcryptCompareMock).not.toHaveBeenCalled();
   });
 
   test('401 without any token', async () => {

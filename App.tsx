@@ -3133,7 +3133,7 @@ const AppContent: React.FC = () => {
                 }
                 onUpdate={handleUpdateUserSettings}
                 onUpdatePassword={handleUpdateUserPassword}
-                onTotpSetup={() => api.auth.totpSetup()}
+                onTotpSetup={(password: string) => api.auth.totpSetup(undefined, password)}
                 onTotpConfirm={(code) => api.auth.totpConfirm(code).then(() => undefined)}
                 onTotpDisable={(payload) => api.auth.totpDisable(payload).then(() => undefined)}
                 onRegenerateTotpBackupCodes={(code) => api.auth.regenerateTotpBackupCodes(code)}

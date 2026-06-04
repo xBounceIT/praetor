@@ -99,6 +99,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['auth'],
         summary: 'Begin TOTP enrollment',
+        // No body schema: the enroll-token path sends no body, and a declared object body schema
+        // makes Fastify 400 a bodyless POST. The session path's optional `password` is read and
+        // validated manually below; Fastify still parses a JSON body when one is sent.
         response: {
           200: setupResponseSchema,
           ...standardErrorResponses,
@@ -140,6 +143,44 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           error: 'Two-factor authentication is managed by the identity provider',
           errorCode: 'totp_not_applicable',
         });
+      }
+
+      // Session caller: require step-up re-authentication before writing a new secret. A stolen live
+      // session alone must not be able to implant an attacker-controlled second factor (which would
+      // then be demanded at every future login, persisting the takeover). The enroll-token path is
+      // exempt — that token was just minted from a verified login password. LOGIN_RATE_LIMIT (above)
+      // throttles the credential check.
+      if (request.user) {
+        const { password } = (request.body ?? {}) as { password?: unknown };
+        const passwordResult = requireNonEmptyString(password, 'password');
+        if (!passwordResult.ok) return badRequest(reply, passwordResult.message);
+
+        let reauthed = false;
+        if (userCore.authMethod === 'local') {
+          const hash = await usersRepo.getPasswordHash(userId);
+          reauthed = hash !== null && (await bcrypt.compare(passwordResult.value, hash));
+        } else {
+          // LDAP: verify the directory password the same way /login does (bind as the user). No
+          // local hash exists, and the user has no TOTP yet, so the directory password is the only
+          // re-auth factor available.
+          const ldapService = (await import('../services/ldap.ts')).default;
+          const result = await ldapService.authenticateWithProfile(
+            userCore.username,
+            passwordResult.value,
+          );
+          reauthed = result.authenticated;
+        }
+        if (!reauthed) {
+          return replyError(request, reply, {
+            statusCode: 400,
+            message: 'Incorrect password',
+            errorCode: 'totp_setup_reauth_failed',
+            action: 'user.totp_setup.reauth_failed',
+            entityType: 'user',
+            entityId: userId,
+            details: { secondaryLabel: 'reauth_failed' },
+          });
+        }
       }
 
       const state = await usersRepo.getTotpState(userId);

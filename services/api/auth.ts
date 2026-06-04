@@ -138,9 +138,13 @@ export const authApi = {
       }),
     ),
 
-  totpSetup: (bearerToken?: string): Promise<TotpSetupResponse> =>
+  totpSetup: (bearerToken?: string, password?: string): Promise<TotpSetupResponse> =>
     fetchApi<TotpSetupResponse>('/auth/2fa/setup', {
       method: 'POST',
+      // Session path sends the account password for step-up re-auth (a stolen session alone must
+      // not be able to enroll a second factor); the enroll-token path (bearerToken set) omits it —
+      // that token was already verified against the login password.
+      body: password !== undefined ? JSON.stringify({ password }) : undefined,
       ...bearerHeaders(bearerToken),
     }),
 

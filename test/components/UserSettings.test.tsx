@@ -735,7 +735,7 @@ describe('<UserSettings /> Two-Factor Authentication card', () => {
     expect(screen.queryByRole('button', { name: /twoFactor.setUp/ })).not.toBeInTheDocument();
   });
 
-  test('clicking Set up opens the wizard dialog and kicks off the setup call', async () => {
+  test('clicking Set up shows the re-auth gate, then runs the setup call with the password', async () => {
     const getStatus = mock(() => Promise.resolve({ enabled: false, applicable: true }));
     renderSettings({ onGetTotpStatus: getStatus });
 
@@ -745,9 +745,18 @@ describe('<UserSettings /> Two-Factor Authentication card', () => {
     const setUpButton = await screen.findByRole('button', { name: /twoFactor.setUp/ });
     fireEvent.click(setUpButton);
 
-    // The wizard dialog mounts and runs onSetup once on activation.
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    // Step-up re-auth gate appears first; the wizard (and its onSetup call) must NOT run yet — a
+    // stolen session can't reach secret generation without re-entering the password.
+    expect(await screen.findByText('twoFactor.reauthTitle')).toBeInTheDocument();
+    expect(onTotpSetup).not.toHaveBeenCalled();
+
+    // Enter the account password and continue → the wizard mounts and runs onSetup(password) once.
+    const passwordInput = document.getElementById('totp-setup-password') as HTMLInputElement;
+    fireEvent.change(passwordInput, { target: { value: 'my-password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'twoFactor.continue' }));
+
     await waitFor(() => expect(onTotpSetup).toHaveBeenCalledTimes(1));
+    expect(onTotpSetup).toHaveBeenCalledWith('my-password');
     // The scan step (wizard-only content) renders the manual key once setup resolves.
     expect(await screen.findByText('twoFactor.manualKeyLabel')).toBeInTheDocument();
     expect(screen.getByText(totpSetupResult.secret)).toBeInTheDocument();

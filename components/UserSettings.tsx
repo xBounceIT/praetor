@@ -87,7 +87,10 @@ export interface UserSettingsProps {
   rilTransferOptions?: string[];
   onUpdate: (updates: Partial<Settings>) => void;
   onUpdatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
-  onTotpSetup: () => Promise<{
+  // Takes the account password for step-up re-auth (a logged-in caller must re-confirm their
+  // identity before enrolling a second factor). The enroll-token path in Login.tsx does not use
+  // this prop.
+  onTotpSetup: (password: string) => Promise<{
     secret: string;
     otpauthUri: string;
     qrDataUri: string;
@@ -353,6 +356,10 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const [totpStatusError, setTotpStatusError] = useState('');
   const totpStatusInFlightRef = useRef(false);
   const [isTotpSetupOpen, setIsTotpSetupOpen] = useState(false);
+  // Step-up re-auth gate shown before the setup wizard: a logged-in caller must re-enter their
+  // account password before a new second factor is enrolled (blocks a stolen-session 2FA implant).
+  const [totpSetupPassword, setTotpSetupPassword] = useState('');
+  const [totpSetupReauthDone, setTotpSetupReauthDone] = useState(false);
 
   // Disable flow (re-auth dialog collecting password and/or a current code).
   const [isDisableDialogOpen, setIsDisableDialogOpen] = useState(false);
@@ -1393,6 +1400,10 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                           // Block dismissal while the setup dialog is mid-flow only via the
                           // wizard's own controls; closing here just resets local UI state.
                           setIsTotpSetupOpen(open);
+                          if (!open) {
+                            setTotpSetupPassword('');
+                            setTotpSetupReauthDone(false);
+                          }
                         }}
                       >
                         <DialogTrigger asChild>
@@ -1402,17 +1413,68 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                           </Button>
                         </DialogTrigger>
                         <DialogContent className="sm:max-w-md">
-                          <DialogHeader className="sr-only">
-                            <DialogTitle>{t('twoFactor.setupTitle')}</DialogTitle>
-                            <DialogDescription>{t('twoFactor.scanInstructions')}</DialogDescription>
-                          </DialogHeader>
-                          {isTotpSetupOpen && (
-                            <TotpSetupWizard
-                              onSetup={onTotpSetup}
-                              onConfirm={onTotpConfirm}
-                              onFinished={handleTotpSetupFinished}
-                              onCancel={() => setIsTotpSetupOpen(false)}
-                            />
+                          {isTotpSetupOpen && !totpSetupReauthDone ? (
+                            // Step-up re-auth gate: confirm the account password before the wizard
+                            // generates a secret. The wizard's onSetup then carries this password to
+                            // /setup, which re-verifies it server-side.
+                            <form
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                if (!totpSetupPassword.trim()) return;
+                                setTotpSetupReauthDone(true);
+                              }}
+                            >
+                              <DialogHeader>
+                                <DialogTitle>{t('twoFactor.reauthTitle')}</DialogTitle>
+                                <DialogDescription>
+                                  {t('twoFactor.reauthDescription')}
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4 py-4">
+                                <Field>
+                                  <FieldLabel htmlFor="totp-setup-password">
+                                    {t('twoFactor.reauthPasswordLabel')}
+                                  </FieldLabel>
+                                  <Input
+                                    id="totp-setup-password"
+                                    type="password"
+                                    value={totpSetupPassword}
+                                    onChange={(e) => setTotpSetupPassword(e.target.value)}
+                                    placeholder="••••••••"
+                                    autoComplete="current-password"
+                                  />
+                                </Field>
+                              </div>
+                              <DialogFooter>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => setIsTotpSetupOpen(false)}
+                                >
+                                  {t('twoFactor.cancel')}
+                                </Button>
+                                <Button type="submit" disabled={!totpSetupPassword.trim()}>
+                                  {t('twoFactor.continue')}
+                                </Button>
+                              </DialogFooter>
+                            </form>
+                          ) : (
+                            <>
+                              <DialogHeader className="sr-only">
+                                <DialogTitle>{t('twoFactor.setupTitle')}</DialogTitle>
+                                <DialogDescription>
+                                  {t('twoFactor.scanInstructions')}
+                                </DialogDescription>
+                              </DialogHeader>
+                              {isTotpSetupOpen && (
+                                <TotpSetupWizard
+                                  onSetup={() => onTotpSetup(totpSetupPassword)}
+                                  onConfirm={onTotpConfirm}
+                                  onFinished={handleTotpSetupFinished}
+                                  onCancel={() => setIsTotpSetupOpen(false)}
+                                />
+                              )}
+                            </>
                           )}
                         </DialogContent>
                       </Dialog>
