@@ -3072,11 +3072,19 @@ const AppContent: React.FC = () => {
                   ssoProviders={ssoProviders}
                   onSaveSsoProvider={handleSaveSsoProvider}
                   onDeleteSsoProvider={handleDeleteSsoProvider}
-                  enforceTotpForAdmins={generalSettings.enforceTotpForAdmins}
-                  onSetEnforceTotpForAdmins={(value) =>
-                    handleUpdateGeneralSettings({ enforceTotpForAdmins: value })
+                  enableTotp={generalSettings.enableTotp}
+                  onSetEnableTotp={(value) => handleUpdateGeneralSettings({ enableTotp: value })}
+                  enforceTotp={generalSettings.enforceTotp}
+                  onSetEnforceTotp={(value) => handleUpdateGeneralSettings({ enforceTotp: value })}
+                  enforcedRoleIds={generalSettings.totpEnforcedRoleIds}
+                  onSetEnforcedRoleIds={(value) =>
+                    handleUpdateGeneralSettings({ totpEnforcedRoleIds: value })
                   }
-                  canManageEnforceTotp={hasPermission(
+                  exemptRoleIds={generalSettings.totpExemptRoleIds}
+                  onSetExemptRoleIds={(value) =>
+                    handleUpdateGeneralSettings({ totpExemptRoleIds: value })
+                  }
+                  canManageMfa={hasPermission(
                     currentUser.permissions,
                     'administration.general.update',
                   )}

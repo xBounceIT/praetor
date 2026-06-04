@@ -52,6 +52,14 @@ const rilTransferOptionsSchema = {
   items: { type: 'string' },
 } as const;
 
+// Role-id lists for the 2FA enforce/exempt policy. Free-form strings (role ids), like the RIL
+// arrays — no foreign-key check, matching the existing array-field convention.
+const roleIdArraySchema = {
+  type: 'array',
+  maxItems: 100,
+  items: { type: 'string' },
+} as const;
+
 const generalSettingsSchema = {
   type: 'object',
   properties: {
@@ -73,7 +81,10 @@ const generalSettingsSchema = {
     rilLunchBreakMinutes: { type: 'integer' },
     rilNoteOptions: rilNoteOptionsSchema,
     rilTransferOptions: rilTransferOptionsSchema,
-    enforceTotpForAdmins: { type: 'boolean' },
+    enableTotp: { type: 'boolean' },
+    enforceTotp: { type: 'boolean' },
+    totpEnforcedRoleIds: roleIdArraySchema,
+    totpExemptRoleIds: roleIdArraySchema,
   },
   required: [
     'currency',
@@ -94,7 +105,10 @@ const generalSettingsSchema = {
     'rilLunchBreakMinutes',
     'rilNoteOptions',
     'rilTransferOptions',
-    'enforceTotpForAdmins',
+    'enableTotp',
+    'enforceTotp',
+    'totpEnforcedRoleIds',
+    'totpExemptRoleIds',
   ],
 } as const;
 
@@ -119,7 +133,10 @@ const generalSettingsUpdateBodySchema = {
     rilLunchBreakMinutes: { type: 'integer' },
     rilNoteOptions: rilNoteOptionsSchema,
     rilTransferOptions: rilTransferOptionsSchema,
-    enforceTotpForAdmins: { type: 'boolean' },
+    enableTotp: { type: 'boolean' },
+    enforceTotp: { type: 'boolean' },
+    totpEnforcedRoleIds: roleIdArraySchema,
+    totpExemptRoleIds: roleIdArraySchema,
   },
 } as const;
 
@@ -142,7 +159,10 @@ const DEFAULT_SETTINGS: generalSettingsRepo.GeneralSettings = {
   rilLunchBreakMinutes: 60,
   rilNoteOptions: DEFAULT_RIL_NOTE_OPTIONS.map((option) => ({ ...option })),
   rilTransferOptions: [...DEFAULT_RIL_TRANSFER_OPTIONS],
-  enforceTotpForAdmins: false,
+  enableTotp: true,
+  enforceTotp: false,
+  totpEnforcedRoleIds: [],
+  totpExemptRoleIds: [],
 };
 
 const maskApiKey = (value: string | null, reveal: boolean) =>
@@ -300,6 +320,32 @@ const validateOptionalRilTransferOptions = (value: unknown) => {
   return { ok: true as const, value: options };
 };
 
+// Validate a 2FA enforce/exempt role-id list: an optional array of non-empty role-id strings
+// (deduplicated). null/undefined leaves the column unchanged (COALESCE). An empty array is a valid,
+// meaningful value (clears the list) so it is preserved rather than coerced to null. Role ids are
+// free-form strings (no FK check), matching the rilTransferOptions convention.
+const validateOptionalRoleIdArray = (value: unknown, fieldName: string) => {
+  if (value === undefined || value === null) {
+    return { ok: true as const, value: null };
+  }
+  if (!Array.isArray(value)) {
+    return { ok: false as const, message: `${fieldName} must be an array` };
+  }
+  if (value.length > 100) {
+    return { ok: false as const, message: `${fieldName} must contain 100 or fewer roles` };
+  }
+  const roleIds: string[] = [];
+  const seen = new Set<string>();
+  for (const [index, entry] of value.entries()) {
+    const result = validateOptionString(entry, `${fieldName}[${index}]`, 50);
+    if (!result.ok) return result;
+    if (seen.has(result.value)) continue;
+    roleIds.push(result.value);
+    seen.add(result.value);
+  }
+  return { ok: true as const, value: roleIds };
+};
+
 const toResponse = (settings: generalSettingsRepo.GeneralSettings, revealApiKeys: boolean) => ({
   currency: settings.currency,
   dailyLimit: settings.dailyLimit,
@@ -319,7 +365,10 @@ const toResponse = (settings: generalSettingsRepo.GeneralSettings, revealApiKeys
   rilLunchBreakMinutes: settings.rilLunchBreakMinutes ?? 60,
   rilNoteOptions: normalizeRilNoteOptions(settings.rilNoteOptions),
   rilTransferOptions: normalizeRilTransferOptions(settings.rilTransferOptions),
-  enforceTotpForAdmins: settings.enforceTotpForAdmins ?? false,
+  enableTotp: settings.enableTotp ?? true,
+  enforceTotp: settings.enforceTotp ?? false,
+  totpEnforcedRoleIds: settings.totpEnforcedRoleIds ?? [],
+  totpExemptRoleIds: settings.totpExemptRoleIds ?? [],
 });
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -383,7 +432,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         rilLunchBreakMinutes?: number;
         rilNoteOptions?: RilNoteOption[];
         rilTransferOptions?: string[];
-        enforceTotpForAdmins?: boolean;
+        enableTotp?: boolean;
+        enforceTotp?: boolean;
+        totpEnforcedRoleIds?: string[];
+        totpExemptRoleIds?: string[];
       };
       const {
         currency,
@@ -401,6 +453,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         rilLunchBreakMinutes,
         rilNoteOptions,
         rilTransferOptions,
+        totpEnforcedRoleIds,
+        totpExemptRoleIds,
       } = body;
       const currencyResult = optionalNonEmptyString(currency, 'currency');
       if (!currencyResult.ok) return badRequest(reply, currencyResult.message);
@@ -484,10 +538,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!allowWeekendSelectionResult.ok) {
         return badRequest(reply, allowWeekendSelectionResult.message);
       }
-      const enforceTotpForAdminsResult = parseBooleanField(body, 'enforceTotpForAdmins');
-      if (!enforceTotpForAdminsResult.ok) {
-        return badRequest(reply, enforceTotpForAdminsResult.message);
-      }
+      const enableTotpResult = parseBooleanField(body, 'enableTotp');
+      if (!enableTotpResult.ok) return badRequest(reply, enableTotpResult.message);
+      const enforceTotpResult = parseBooleanField(body, 'enforceTotp');
+      if (!enforceTotpResult.ok) return badRequest(reply, enforceTotpResult.message);
+      const totpEnforcedRoleIdsResult = validateOptionalRoleIdArray(
+        totpEnforcedRoleIds,
+        'totpEnforcedRoleIds',
+      );
+      if (!totpEnforcedRoleIdsResult.ok)
+        return badRequest(reply, totpEnforcedRoleIdsResult.message);
+      const totpExemptRoleIdsResult = validateOptionalRoleIdArray(
+        totpExemptRoleIds,
+        'totpExemptRoleIds',
+      );
+      if (!totpExemptRoleIdsResult.ok) return badRequest(reply, totpExemptRoleIdsResult.message);
 
       const previousSettings = await generalSettingsRepo.get();
       const settingsPatch = {
@@ -509,33 +574,54 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         rilLunchBreakMinutes: rilLunchBreakMinutesResult.value,
         rilNoteOptions: rilNoteOptionsResult.value,
         rilTransferOptions: rilTransferOptionsResult.value,
-        enforceTotpForAdmins: enforceTotpForAdminsResult.value,
+        enableTotp: enableTotpResult.value,
+        enforceTotp: enforceTotpResult.value,
+        totpEnforcedRoleIds: totpEnforcedRoleIdsResult.value,
+        totpExemptRoleIds: totpExemptRoleIdsResult.value,
       };
 
-      // Switching admin-2FA enforcement ON revokes the non-interactive credentials (PAT/MCP tokens)
-      // of admin-capable users who haven't enrolled — those never traverse the login 2FA gate, so a
-      // token predating the change would otherwise keep admin API privileges with no second factor
-      // until it expires. Interactive sessions are deliberately NOT revoked: an unenrolled admin is
-      // forced into enrollment on their next sign-in (auth.ts) and blocked from switching into an
-      // admin role meanwhile, so the policy takes hold without abruptly logging anyone out — most
-      // importantly the admin who just toggled it. Persist the setting and run the token revocation
-      // inside ONE transaction so they commit together: if they weren't atomic, a crash after the
-      // setting committed would let a retry observe enforcement already on, skip the revocation, and
-      // strand those tokens valid.
-      const enablingEnforcement =
-        enforceTotpForAdminsResult.value === true &&
-        previousSettings?.enforceTotpForAdmins !== true;
+      // Resolve the policy that WILL be in effect after this write (a null patch value leaves the
+      // existing column unchanged via COALESCE, so fall back to the previous value, then the default).
+      const resultEnableTotp = enableTotpResult.value ?? previousSettings?.enableTotp ?? true;
+      const resultEnforceTotp = enforceTotpResult.value ?? previousSettings?.enforceTotp ?? false;
+      const resultEnforcedRoleIds =
+        totpEnforcedRoleIdsResult.value ?? previousSettings?.totpEnforcedRoleIds ?? [];
+      const resultExemptRoleIds =
+        totpExemptRoleIdsResult.value ?? previousSettings?.totpExemptRoleIds ?? [];
+
+      // Whenever the resulting policy enforces anyone AND an enforcement-relevant field actually
+      // changed (turning the feature/enforcement on, or broadening the enforced/exempt role sets),
+      // revoke the non-interactive credentials (PAT/MCP tokens) of every now-enforced user who hasn't
+      // enrolled — those tokens never traverse the login 2FA gate, so a token predating the change
+      // would otherwise keep privileged API access with no second factor until it expires. Interactive
+      // sessions are deliberately NOT revoked: an unenrolled enforced user is routed into enrollment on
+      // their next sign-in (auth.ts) and blocked from switching into an enforced role meanwhile, so the
+      // policy takes hold without abruptly logging anyone out — most importantly the admin toggling it.
+      // The setting write + token revocation run in ONE transaction so a crash can't persist the policy
+      // while leaving stale tokens valid.
+      const sameRoleSet = (a: string[], b: string[]): boolean =>
+        a.length === b.length && [...a].sort().join(' ') === [...b].sort().join(' ');
+      const enforcementRelevantChange =
+        resultEnableTotp !== (previousSettings?.enableTotp ?? true) ||
+        resultEnforceTotp !== (previousSettings?.enforceTotp ?? false) ||
+        !sameRoleSet(resultEnforcedRoleIds, previousSettings?.totpEnforcedRoleIds ?? []) ||
+        !sameRoleSet(resultExemptRoleIds, previousSettings?.totpExemptRoleIds ?? []);
+      const shouldRevokeTokens = resultEnableTotp && resultEnforceTotp && enforcementRelevantChange;
 
       let settings: Awaited<ReturnType<typeof generalSettingsRepo.update>>;
-      let revokedAdmins = 0;
-      if (enablingEnforcement) {
+      let revokedTokens = 0;
+      if (shouldRevokeTokens) {
         const result = await withDbTransaction(async (tx) => {
           const updated = await generalSettingsRepo.update(settingsPatch, tx);
-          const revoked = await usersRepo.revokeTokensForUnenrolledAdmins(tx);
+          const revoked = await usersRepo.revokeTokensForUnenrolledEnforcedUsers(
+            resultEnforcedRoleIds,
+            resultExemptRoleIds,
+            tx,
+          );
           return { updated, revoked };
         });
         settings = result.updated;
-        revokedAdmins = result.revoked;
+        revokedTokens = result.revoked;
       } else {
         settings = await generalSettingsRepo.update(settingsPatch);
       }
@@ -551,12 +637,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // Audit the revocation only after the transaction commits — an audit-write failure must not
       // roll back the security-critical token revocation it is recording.
-      if (revokedAdmins > 0) {
+      if (revokedTokens > 0) {
         await logAudit({
           request,
           action: 'settings.totp_enforcement_tokens_revoked',
           entityType: 'settings',
-          details: { secondaryLabel: String(revokedAdmins) },
+          details: { secondaryLabel: String(revokedTokens) },
         });
       }
 

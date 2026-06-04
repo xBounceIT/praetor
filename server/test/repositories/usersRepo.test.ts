@@ -146,27 +146,67 @@ describe('rotatePasswordAndBumpSession', () => {
   });
 });
 
-describe('revokeTokensForUnenrolledAdmins', () => {
-  test('bumps ONLY token_version (not session_version) for unenrolled local/ldap admins', async () => {
-    // RETURNING id yields one row per revoked admin; the count is the return value.
+describe('revokeTokensForUnenrolledEnforcedUsers', () => {
+  test('bumps ONLY token_version (not session_version) for unenrolled local/ldap enforced users', async () => {
+    // RETURNING id yields one row per revoked user; the count is the return value.
     exec.enqueue({ rows: [{ id: 'a1' }, { id: 'a2' }, { id: 'a3' }] });
-    const count = await usersRepo.revokeTokensForUnenrolledAdmins(testDb);
+    const count = await usersRepo.revokeTokensForUnenrolledEnforcedUsers(['admin'], [], testDb);
     expect(count).toBe(3);
 
     const sql = exec.calls[0].sql;
     // Only non-interactive PAT/MCP tokens (token_version) rotate. Interactive sessions are left
     // intact on purpose: enforcement happens at next login, so bumping session_version would
-    // abruptly log out admins (including the one toggling the policy) for no security gain.
+    // abruptly log out enforced users (including the admin toggling the policy) for no security gain.
     expect(sql).toContain('token_version = token_version + 1');
     expect(sql).not.toContain('session_version');
-    // Scope guard: only unenrolled, password-based (local/ldap) admins.
+    // Scope guard: only unenrolled, password-based (local/ldap) users.
     expect(sql).toContain('totp_enabled = false');
     expect(sql).toContain("auth_method IN ('local', 'ldap')");
   });
 
-  test('returns 0 when no unenrolled admin matched', async () => {
+  test('restricts to the enforced role ids (primary role and user_roles) and binds them as params', async () => {
+    exec.enqueue({ rows: [{ id: 'a1' }] });
+    await usersRepo.revokeTokensForUnenrolledEnforcedUsers(['admin', 'top_manager'], [], testDb);
+
+    const sql = exec.calls[0].sql;
+    // A non-empty enforced list restricts to users holding one of those roles, matched against
+    // the primary role column AND the user_roles join (multi-role assignments).
+    expect(sql).toContain('role IN');
+    expect(sql).toContain('FROM user_roles ur');
+    // The enforced role ids are passed as bound parameters (once for the primary-role IN, once
+    // for the user_roles EXISTS subquery).
+    expect(exec.calls[0].params).toContain('admin');
+    expect(exec.calls[0].params).toContain('top_manager');
+  });
+
+  test('excludes exempt role ids (exempt wins) and binds them as params', async () => {
+    exec.enqueue({ rows: [{ id: 'a1' }] });
+    await usersRepo.revokeTokensForUnenrolledEnforcedUsers(['admin'], ['contractor'], testDb);
+
+    const sql = exec.calls[0].sql;
+    // A non-empty exempt list carves out users whose primary role OR any assigned role is exempt.
+    expect(sql).toContain('role NOT IN');
+    expect(sql).toContain('NOT EXISTS');
+    expect(exec.calls[0].params).toContain('contractor');
+  });
+
+  test('adds no enforced-role restriction when the enforced list is empty (the "everyone" case)', async () => {
+    exec.enqueue({ rows: [{ id: 'a1' }, { id: 'a2' }] });
+    const count = await usersRepo.revokeTokensForUnenrolledEnforcedUsers([], [], testDb);
+    expect(count).toBe(2);
+
+    const sql = exec.calls[0].sql;
+    // Empty enforced list means "everyone" (local/ldap, minus the exempt carve-out), so the query
+    // must not narrow by a role IN (...) enforced clause, and no enforced role ids are bound.
+    expect(sql).not.toContain('role IN');
+    // With no exempt list either, the only conditions are the scope guards.
+    expect(sql).not.toContain('role NOT IN');
+    expect(sql).not.toContain('NOT EXISTS');
+  });
+
+  test('returns 0 when no unenrolled enforced user matched', async () => {
     exec.enqueue({ rows: [] });
-    expect(await usersRepo.revokeTokensForUnenrolledAdmins(testDb)).toBe(0);
+    expect(await usersRepo.revokeTokensForUnenrolledEnforcedUsers(['admin'], [], testDb)).toBe(0);
   });
 });
 

@@ -26,7 +26,7 @@ const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 const settingsGetMock = mock();
 const settingsUpdateMock = mock();
-const revokeTokensForUnenrolledAdminsMock = mock(async () => 0);
+const revokeTokensForUnenrolledEnforcedUsersMock = mock(async () => 0);
 // Run the callback with a throwaway tx so the route's atomic enable-enforcement branch executes its
 // body; the repo calls inside are themselves mocked and ignore the executor.
 const withDbTransactionMock = mock(async (fn: (tx: unknown) => unknown) => fn({}));
@@ -40,7 +40,7 @@ beforeAll(async () => {
   mock.module('../../repositories/usersRepo.ts', () => ({
     ...usersRepoSnap,
     findAuthUserById: findAuthUserByIdMock,
-    revokeTokensForUnenrolledAdmins: revokeTokensForUnenrolledAdminsMock,
+    revokeTokensForUnenrolledEnforcedUsers: revokeTokensForUnenrolledEnforcedUsersMock,
   }));
   mock.module('../../repositories/rolesRepo.ts', () => ({
     ...rolesRepoSnap,
@@ -111,6 +111,10 @@ const SETTINGS_WITH_KEYS = {
     { value: 'F', label: 'Festivita' },
   ],
   rilTransferOptions: ['In sede', 'Telelavoro'],
+  enableTotp: true,
+  enforceTotp: false,
+  totpEnforcedRoleIds: [],
+  totpExemptRoleIds: [],
 };
 
 const allMocks = [
@@ -119,7 +123,7 @@ const allMocks = [
   getRolePermissionsMock,
   settingsGetMock,
   settingsUpdateMock,
-  revokeTokensForUnenrolledAdminsMock,
+  revokeTokensForUnenrolledEnforcedUsersMock,
   withDbTransactionMock,
   logAuditMock,
 ];
@@ -132,7 +136,7 @@ beforeEach(async () => {
   userHasRoleMock.mockResolvedValue(true);
   // Default: viewer with admin perms (reveal API keys, allowed to PUT)
   getRolePermissionsMock.mockResolvedValue(['administration.general.update']);
-  revokeTokensForUnenrolledAdminsMock.mockResolvedValue(0);
+  revokeTokensForUnenrolledEnforcedUsersMock.mockResolvedValue(0);
   withDbTransactionMock.mockImplementation(async (fn: (tx: unknown) => unknown) => fn({}));
   logAuditMock.mockImplementation(async () => undefined);
 
@@ -242,26 +246,34 @@ describe('PUT /api/general-settings', () => {
     expect(body.geminiApiKey).toBe('plaintext-gemini-key');
   });
 
-  test('200 enabling admin 2FA enforcement revokes unenrolled-admin tokens atomically and audits it', async () => {
-    // false -> true transition: pre-existing PAT/MCP tokens of admin-capable users without TOTP must
-    // be invalidated, or they keep admin API privileges until expiry. Interactive sessions are left
+  test('200 enabling 2FA enforcement revokes unenrolled-enforced tokens atomically and audits it', async () => {
+    // false -> true transition: pre-existing PAT/MCP tokens of now-enforced users without TOTP must
+    // be invalidated, or they keep API privileges until expiry. Interactive sessions are left
     // alone (enforced at next login). The setting write + token revocation must commit in a single
     // transaction.
-    settingsGetMock.mockResolvedValue({ ...SETTINGS_WITH_KEYS, enforceTotpForAdmins: false });
-    settingsUpdateMock.mockResolvedValue({ ...SETTINGS_WITH_KEYS, enforceTotpForAdmins: true });
-    revokeTokensForUnenrolledAdminsMock.mockResolvedValue(3);
+    settingsGetMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      enableTotp: true,
+      enforceTotp: false,
+    });
+    settingsUpdateMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      enableTotp: true,
+      enforceTotp: true,
+    });
+    revokeTokensForUnenrolledEnforcedUsersMock.mockResolvedValue(3);
 
     const res = await testApp.inject({
       method: 'PUT',
       url: '/api/general-settings',
       headers: authHeader(),
-      payload: { enforceTotpForAdmins: true },
+      payload: { enforceTotp: true },
     });
 
     expect(res.statusCode).toBe(200);
-    expect(revokeTokensForUnenrolledAdminsMock).toHaveBeenCalledTimes(1);
+    expect(revokeTokensForUnenrolledEnforcedUsersMock).toHaveBeenCalledTimes(1);
     // The update + revocation run inside withDbTransaction so a crash can't persist the policy
-    // while leaving the stale admin tokens valid.
+    // while leaving the stale enforced-user tokens valid.
     expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
     expect(settingsUpdateMock).toHaveBeenCalledTimes(1);
     expect(logAuditMock).toHaveBeenCalledWith(
@@ -274,33 +286,75 @@ describe('PUT /api/general-settings', () => {
   });
 
   test('200 leaving enforcement already-on does not revoke tokens', async () => {
-    settingsGetMock.mockResolvedValue({ ...SETTINGS_WITH_KEYS, enforceTotpForAdmins: true });
-    settingsUpdateMock.mockResolvedValue({ ...SETTINGS_WITH_KEYS, enforceTotpForAdmins: true });
+    settingsGetMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      enableTotp: true,
+      enforceTotp: true,
+    });
+    settingsUpdateMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      enableTotp: true,
+      enforceTotp: true,
+    });
 
     const res = await testApp.inject({
       method: 'PUT',
       url: '/api/general-settings',
       headers: authHeader(),
-      payload: { enforceTotpForAdmins: true },
+      payload: { enforceTotp: true },
     });
 
     expect(res.statusCode).toBe(200);
-    expect(revokeTokensForUnenrolledAdminsMock).not.toHaveBeenCalled();
+    expect(revokeTokensForUnenrolledEnforcedUsersMock).not.toHaveBeenCalled();
   });
 
   test('200 disabling enforcement does not revoke tokens', async () => {
-    settingsGetMock.mockResolvedValue({ ...SETTINGS_WITH_KEYS, enforceTotpForAdmins: true });
-    settingsUpdateMock.mockResolvedValue({ ...SETTINGS_WITH_KEYS, enforceTotpForAdmins: false });
+    settingsGetMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      enableTotp: true,
+      enforceTotp: true,
+    });
+    settingsUpdateMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      enableTotp: true,
+      enforceTotp: false,
+    });
 
     const res = await testApp.inject({
       method: 'PUT',
       url: '/api/general-settings',
       headers: authHeader(),
-      payload: { enforceTotpForAdmins: false },
+      payload: { enforceTotp: false },
     });
 
     expect(res.statusCode).toBe(200);
-    expect(revokeTokensForUnenrolledAdminsMock).not.toHaveBeenCalled();
+    expect(revokeTokensForUnenrolledEnforcedUsersMock).not.toHaveBeenCalled();
+  });
+
+  test('200 round-trips totpEnforcedRoleIds and totpExemptRoleIds', async () => {
+    settingsUpdateMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      totpEnforcedRoleIds: ['admin'],
+      totpExemptRoleIds: ['viewer'],
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { totpEnforcedRoleIds: ['admin'], totpExemptRoleIds: ['viewer'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(settingsUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        totpEnforcedRoleIds: ['admin'],
+        totpExemptRoleIds: ['viewer'],
+      }),
+    );
+    const body = JSON.parse(res.body);
+    expect(body.totpEnforcedRoleIds).toEqual(['admin']);
+    expect(body.totpExemptRoleIds).toEqual(['viewer']);
   });
 
   test('200 accepts RIL settings and returns them', async () => {

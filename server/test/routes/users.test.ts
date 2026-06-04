@@ -76,9 +76,14 @@ const getAssignmentsMock = mock();
 const disableTotpMock = mock();
 const revokeUserCredentialsMock = mock();
 const getTotpStateMock = mock();
-const generalSettingsGetMock = mock<() => Promise<{ enforceTotpForAdmins: boolean } | null>>(
-  async () => null,
-);
+const generalSettingsGetMock = mock<
+  () => Promise<{
+    enableTotp?: boolean;
+    enforceTotp?: boolean;
+    totpEnforcedRoleIds?: string[];
+    totpExemptRoleIds?: string[];
+  } | null>
+>(async () => null);
 
 // tracker catalog repos
 const listClientsMock = mock();
@@ -90,6 +95,9 @@ const listTasksForUserMock = mock();
 // rolesRepo
 const rolesFindByIdMock = mock();
 const rolesFindExistingIdsMock = mock();
+// totpEnforcement (real service) gathers a user's assignable roles via this lookup; mock it so the
+// 2FA-enforcement decision is driven by the test's primary role/policy fixtures, not the live DB.
+const rolesListAvailableRolesForUserMock = mock();
 
 // ssoProvidersRepo
 const ssoFindByIdMock = mock();
@@ -176,6 +184,7 @@ beforeAll(async () => {
     userHasRole: userHasRoleMock,
     findById: rolesFindByIdMock,
     findExistingIds: rolesFindExistingIdsMock,
+    listAvailableRolesForUser: rolesListAvailableRolesForUserMock,
   }));
   mock.module('../../repositories/generalSettingsRepo.ts', () => ({
     ...generalSettingsRepoSnap,
@@ -375,6 +384,7 @@ const allMocks = [
   listTasksForUserMock,
   rolesFindByIdMock,
   rolesFindExistingIdsMock,
+  rolesListAvailableRolesForUserMock,
   ssoFindByIdMock,
   settingsUpsertForUserMock,
   userHasTopManagerRoleMock,
@@ -410,6 +420,8 @@ beforeEach(async () => {
   logAuditMock.mockImplementation(async () => undefined);
   getTotpStateMock.mockResolvedValue(null);
   generalSettingsGetMock.mockResolvedValue(null);
+  // No extra assignable roles by default — enforcement is driven by the user's primary role.
+  rolesListAvailableRolesForUserMock.mockResolvedValue([]);
   filterAssignedClientIdsMock.mockResolvedValue(new Set(['c1']));
   filterAssignedProjectIdsMock.mockResolvedValue(new Set(['p1']));
   filterAssignedTaskIdsMock.mockResolvedValue(new Set(['t1']));
@@ -1380,7 +1392,12 @@ describe('PUT /api/users/:id', () => {
     });
     updateUserDynamicMock.mockResolvedValue({ ...SAMPLE_USER_CORE, role: 'admin' });
     findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, role: 'admin' });
-    generalSettingsGetMock.mockResolvedValue({ enforceTotpForAdmins: true });
+    generalSettingsGetMock.mockResolvedValue({
+      enableTotp: true,
+      enforceTotp: true,
+      totpEnforcedRoleIds: ['admin'],
+      totpExemptRoleIds: [],
+    });
     getTotpStateMock.mockResolvedValue({
       totpSecret: null,
       totpEnabled: false,
@@ -2421,7 +2438,12 @@ describe('PUT /api/users/:id/auth-method', () => {
         isSystem: true,
         isAdmin: true,
       });
-      generalSettingsGetMock.mockResolvedValue({ enforceTotpForAdmins: true });
+      generalSettingsGetMock.mockResolvedValue({
+        enableTotp: true,
+        enforceTotp: true,
+        totpEnforcedRoleIds: ['admin'],
+        totpExemptRoleIds: [],
+      });
       getTotpStateMock.mockResolvedValue({
         totpSecret: null,
         totpEnabled: false,
@@ -2504,7 +2526,12 @@ describe('PUT /api/users/:id/auth-method', () => {
         isSystem: true,
         isAdmin: true,
       });
-      generalSettingsGetMock.mockResolvedValue({ enforceTotpForAdmins: true });
+      generalSettingsGetMock.mockResolvedValue({
+        enableTotp: true,
+        enforceTotp: true,
+        totpEnforcedRoleIds: ['admin'],
+        totpExemptRoleIds: [],
+      });
       getTotpStateMock.mockResolvedValue({
         totpSecret: null,
         totpEnabled: false,
@@ -2891,7 +2918,12 @@ describe('PUT /api/users/:id/roles', () => {
   test('200 granting an admin role to an unenrolled user revokes sessions when 2FA is enforced', async () => {
     findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
     rolesFindExistingIdsMock.mockResolvedValue(new Set(['user', 'admin']));
-    generalSettingsGetMock.mockResolvedValue({ enforceTotpForAdmins: true });
+    generalSettingsGetMock.mockResolvedValue({
+      enableTotp: true,
+      enforceTotp: true,
+      totpEnforcedRoleIds: ['admin'],
+      totpExemptRoleIds: [],
+    });
     getTotpStateMock.mockResolvedValue({
       totpSecret: null,
       totpEnabled: false,

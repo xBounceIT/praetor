@@ -25,9 +25,10 @@ import {
 } from '../services/sessionResponse.ts';
 import * as ssoService from '../services/sso.ts';
 import {
-  adminRoleSwitchBlocked,
-  isTotpEnforcedForAdmins,
-  requiresAdminTotpEnrollment,
+  isTotpEnforcementActive,
+  isTotpFeatureEnabled,
+  requiresTotpEnrollment,
+  totpRoleSwitchBlocked,
 } from '../services/totpEnforcement.ts';
 import { logAudit } from '../utils/audit.ts';
 import { computeAvatarInitials } from '../utils/initials.ts';
@@ -261,8 +262,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // session is granted (path c here, or the totp-challenge endpoint) — never on a 2FA detour.
       const totpApplies = usersRepo.isTotpApplicable(authMethod);
 
-      // (a) TOTP challenge — the user has confirmed 2FA and must present a code to finish login.
-      if (user.totpEnabled && totpApplies) {
+      // (a) TOTP challenge — the user has confirmed 2FA and must present a code to finish login. The
+      // global feature switch gates this: when 2FA is turned off org-wide it is a full bypass, so even
+      // an enrolled user signs in with password only (no challenge). The settings read is taken only
+      // for an enrolled, applicable user — non-enrolled users never reach a challenge regardless.
+      if (user.totpEnabled && totpApplies && (await isTotpFeatureEnabled())) {
         await logAudit({
           request,
           action: 'user.totp_challenge_issued',
@@ -283,12 +287,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         };
       }
 
-      // (b) Mandatory enrollment — an admin-capable user (via any assignable admin role) who has
-      // not set up TOTP is routed into enrollment instead of receiving a session when the policy is
-      // on. Considering every assignable admin role stops a multi-role admin from logging in under
-      // a non-admin role and then switching into admin without a second factor.
+      // (b) Mandatory enrollment — an enforced user (via any assignable enforced role, or because the
+      // enforced list is empty = everyone) who has not set up TOTP is routed into enrollment instead
+      // of receiving a session when enforcement is on. Considering every assignable role stops a
+      // multi-role user from logging in under a non-enforced role and then switching into an enforced
+      // one without a second factor. No-ops when the feature/enforcement is off or the user is exempt.
       if (
-        await requiresAdminTotpEnrollment({
+        await requiresTotpEnrollment({
           id: user.id,
           role: user.role,
           authMethod,
@@ -507,15 +512,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      // Block elevating into an admin role without 2FA when the policy requires it. The login gate
-      // can't catch sessions that predate enforcement or a later admin-role grant, so re-check here.
-      // Enforce-first so a non-admin switch or a disabled policy skips the extra reads.
-      if (await isTotpEnforcedForAdmins()) {
+      // Block elevating into an enforced role without 2FA when the policy requires it. The login gate
+      // can't catch sessions that predate enforcement or a later role grant, so re-check here.
+      // Enforce-first so a switch into a non-enforced role or a disabled policy skips the extra reads.
+      if (await isTotpEnforcementActive()) {
         const switchUser = await usersRepo.findLoginUserById(session.userId);
-        if (switchUser && (await adminRoleSwitchBlocked(switchUser, roleIdResult.value))) {
+        if (switchUser && (await totpRoleSwitchBlocked(switchUser, roleIdResult.value))) {
           return replyError(request, reply, {
             statusCode: 403,
-            message: 'Two-factor authentication is required to use an administrator role',
+            message: 'Two-factor authentication is required to use this role',
             errorCode: 'totp_enrollment_required',
             action: 'auth.role_switch.totp_required',
             entityType: 'role',

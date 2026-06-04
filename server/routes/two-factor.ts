@@ -12,7 +12,7 @@ import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardErrorResponses } from '../schemas/common.ts';
 import { redeemBackupCode } from '../services/backupCodes.ts';
 import { authUserSchema, buildSessionSuccess } from '../services/sessionResponse.ts';
-import { isAdminTotpMandatory } from '../services/totpEnforcement.ts';
+import { isTotpFeatureEnabled, isTotpMandatory } from '../services/totpEnforcement.ts';
 import { logAudit } from '../utils/audit.ts';
 import { encrypt } from '../utils/crypto.ts';
 import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -71,10 +71,15 @@ const backupCodesResponseSchema = {
 const statusResponseSchema = {
   type: 'object',
   properties: {
+    // `enabled`: this user has confirmed 2FA. `applicable`: their auth method supports app 2FA
+    // (local/ldap — false for oidc/saml). `featureEnabled`: the org-wide 2FA feature is on.
+    // `required`: the org policy mandates 2FA for this user's role(s).
     enabled: { type: 'boolean' },
     applicable: { type: 'boolean' },
+    featureEnabled: { type: 'boolean' },
+    required: { type: 'boolean' },
   },
-  required: ['enabled', 'applicable'],
+  required: ['enabled', 'applicable', 'featureEnabled', 'required'],
 } as const;
 
 const codeBodySchema = {
@@ -147,6 +152,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(403).send({
           error: 'Two-factor authentication is managed by the identity provider',
           errorCode: 'totp_not_applicable',
+        });
+      }
+      // Global kill-switch: when 2FA is turned off org-wide, no new enrollment is allowed.
+      if (!(await isTotpFeatureEnabled())) {
+        return reply.code(403).send({
+          error: 'Two-factor authentication is currently disabled',
+          errorCode: 'totp_disabled',
         });
       }
 
@@ -424,11 +436,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(401).send({ error: 'User not found' });
       }
 
-      // An administrator subject to the 2FA mandate cannot turn their second factor off — that would
-      // leave an enforced admin operating without 2FA on a live session, defeating the policy. They
-      // must keep it enabled; only an admin reset (which also revokes their sessions) can clear it.
+      // A user subject to the 2FA mandate cannot turn their second factor off — that would leave an
+      // enforced user operating without 2FA on a live session, defeating the policy. They must keep it
+      // enabled; only an admin reset (which also revokes their sessions) can clear it.
       if (
-        await isAdminTotpMandatory({
+        await isTotpMandatory({
           id: userId,
           role: userCore.role,
           authMethod: userCore.authMethod,
@@ -436,7 +448,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       ) {
         return replyError(request, reply, {
           statusCode: 403,
-          message: 'Two-factor authentication is required for your administrator role',
+          message: 'Two-factor authentication is required for your role',
           errorCode: 'totp_required_for_admin',
           action: 'user.totp_disable.enforced',
           entityType: 'user',
@@ -599,12 +611,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(401).send({ error: 'Authentication required' });
       }
 
-      const [state, userCore] = await Promise.all([
+      const [state, userCore, featureEnabled] = await Promise.all([
         usersRepo.getTotpState(userId),
         usersRepo.findCoreById(userId),
+        isTotpFeatureEnabled(),
       ]);
       const applicable = userCore ? usersRepo.isTotpApplicable(userCore.authMethod) : false;
-      return { enabled: state?.totpEnabled ?? false, applicable };
+      // `required` drives the user's Security card (optional vs "required by your organization", and
+      // whether self-disable is offered). isTotpMandatory itself returns false for non-applicable
+      // users and when the feature/enforcement is off, so it is safe to call unconditionally here.
+      const required = userCore
+        ? await isTotpMandatory({
+            id: userId,
+            role: userCore.role,
+            authMethod: userCore.authMethod,
+          })
+        : false;
+      return { enabled: state?.totpEnabled ?? false, applicable, featureEnabled, required };
     },
   );
 }

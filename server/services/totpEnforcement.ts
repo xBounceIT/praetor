@@ -2,90 +2,123 @@ import { type DbExecutor, db } from '../db/drizzle.ts';
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import { type AuthMethod, isTotpApplicable } from '../repositories/usersRepo.ts';
-import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 
-// Centralizes the "require 2FA for administrators" policy so every place a user can gain, retain,
-// or activate admin capability (login, role change, role switch, disabling 2FA) enforces it the
-// same way. Enforcing only at login leaves bypasses: a multi-role admin could log in under a
-// non-admin role, an existing session could be granted an admin role, or an admin could simply
-// turn their second factor off — all while the policy says administrators must use 2FA.
+// Centralizes the 2FA enforcement policy so every place a user can gain, retain, or activate an
+// enforced capability (login, role change, role switch, disabling 2FA) enforces it the same way.
+// Enforcing only at login leaves bypasses: a multi-role user could log in under a non-enforced role,
+// an existing session could be granted an enforced role, or a user could simply turn their second
+// factor off — all while the policy says they must use 2FA.
+//
+// The policy (org-wide, in general_settings) has four inputs:
+//   - enableTotp: global feature switch. OFF = no enrollment, no login challenge even for enrolled
+//     users, no enforcement (a true kill-switch). All other checks short-circuit to false.
+//   - enforceTotp: master enforcement switch.
+//   - enforcedRoleIds: roles whose holders must use 2FA. EMPTY = everyone (applicable users).
+//   - exemptRoleIds: roles whose holders are never forced (exempt wins over enforced).
+// SSO (oidc/saml) users are always exempt via `isTotpApplicable` — their IdP owns MFA.
 
-// Built-in admin/top-manager role ids are always admin; any custom role via its `is_admin` flag.
-// `exec` lets callers run the lookup inside an open transaction so it sees uncommitted role writes
-// (e.g. a role grant being made atomic with the resulting credential revocation).
-const isAdminRoleId = async (roleId: string, exec: DbExecutor = db): Promise<boolean> => {
-  if (roleId === ADMIN_ROLE_ID || roleId === TOP_MANAGER_ROLE_ID) return true;
-  const role = await rolesRepo.findById(roleId, exec);
-  return role?.isAdmin ?? false;
+export type TotpPolicy = {
+  enableTotp: boolean;
+  enforceTotp: boolean;
+  enforcedRoleIds: string[];
+  exemptRoleIds: string[];
 };
 
-// Whether the user can act as an admin through ANY of their roles — their primary role or any role
-// they could switch into. Enforcement must consider every assignable admin role, not just the
-// active one, or a multi-role admin could dodge the mandate by signing in under a non-admin role.
-const userHasAnyAdminRole = async (
+/** Read the org 2FA policy. `enableTotp` defaults to true (feature available, matching pre-policy
+ * behavior); the rest default to off/empty. `exec` lets callers read inside an open transaction. */
+export const getTotpPolicy = async (exec: DbExecutor = db): Promise<TotpPolicy> => {
+  const settings = await generalSettingsRepo.get(exec);
+  return {
+    enableTotp: settings?.enableTotp ?? true,
+    enforceTotp: settings?.enforceTotp ?? false,
+    enforcedRoleIds: settings?.totpEnforcedRoleIds ?? [],
+    exemptRoleIds: settings?.totpExemptRoleIds ?? [],
+  };
+};
+
+// Every role id the user can act under: their primary role plus any assignable (multi-)role. Used so
+// enforcement considers every role a user could switch into, not just the active one — otherwise a
+// multi-role user could dodge the mandate by signing in under a non-enforced role.
+const collectUserRoleIds = async (
   userId: string,
   primaryRole: string,
   exec: DbExecutor = db,
-): Promise<boolean> => {
-  if (await isAdminRoleId(primaryRole, exec)) return true;
+): Promise<string[]> => {
   const roles = await rolesRepo.listAvailableRolesForUser(userId, exec);
-  // Mirror isAdminRoleId for assigned roles too: the built-in admin/top-manager roles are always
-  // admin even though the seeded top_manager row carries is_admin = false, so short-circuit their
-  // ids here — otherwise an assignable top_manager role would slip past enforcement.
-  return roles.some(
-    (role) => role.id === ADMIN_ROLE_ID || role.id === TOP_MANAGER_ROLE_ID || role.isAdmin,
-  );
+  return [primaryRole, ...roles.map((role) => role.id)];
 };
-
-/** Whether the admin-2FA enforcement policy is currently switched on. */
-export const isTotpEnforcedForAdmins = async (exec: DbExecutor = db): Promise<boolean> => {
-  const settings = await generalSettingsRepo.get(exec);
-  return settings?.enforceTotpForAdmins ?? false;
-};
-
-type AdminUser = { id: string; role: string; authMethod: AuthMethod };
 
 /**
- * Whether the admin-2FA mandate currently applies to this user: TOTP is applicable to their auth
- * method (local/ldap — SSO users are governed by their IdP), enforcement is on, and they hold an
- * admin role (primary or assignable). Independent of whether they have already enrolled — use for
- * "is 2FA required for this admin?" decisions such as blocking a self-service disable. The cheap
- * applicability/enforcement checks run first so the role lookups are skipped when the policy is off.
+ * Pure predicate: given the policy and the full set of role ids a user holds, is 2FA required?
+ * Exempt wins (any exempt role spares the user); an empty enforced list means everyone. Assumes the
+ * feature/enforcement switches and auth-method applicability have NOT yet been checked — callers gate
+ * on `enableTotp`/`enforceTotp`/`isTotpApplicable` first (see `isTotpMandatory`).
  */
-export const isAdminTotpMandatory = async (
-  user: AdminUser,
+export const userIsEnforced = (policy: TotpPolicy, roleIds: string[]): boolean => {
+  if (roleIds.some((id) => policy.exemptRoleIds.includes(id))) return false;
+  if (policy.enforcedRoleIds.length === 0) return true;
+  return roleIds.some((id) => policy.enforcedRoleIds.includes(id));
+};
+
+/** Whether the global 2FA feature is on. Gates login challenges, enrollment, and the /status card. */
+export const isTotpFeatureEnabled = async (exec: DbExecutor = db): Promise<boolean> =>
+  (await getTotpPolicy(exec)).enableTotp;
+
+/** Whether enforcement is active at all (feature on AND enforcement on). Cheap early-exit. */
+export const isTotpEnforcementActive = async (exec: DbExecutor = db): Promise<boolean> => {
+  const policy = await getTotpPolicy(exec);
+  return policy.enableTotp && policy.enforceTotp;
+};
+
+type PolicyUser = { id: string; role: string; authMethod: AuthMethod };
+
+/**
+ * Whether the 2FA mandate currently applies to this user: TOTP is applicable to their auth method
+ * (local/ldap — SSO users are governed by their IdP), the feature + enforcement are on, and their
+ * role set is enforced (and not exempt). Independent of whether they have already enrolled — use for
+ * "is 2FA required for this user?" decisions such as blocking a self-service disable. The cheap
+ * applicability/policy checks run first so the role lookup is skipped when nothing is enforced.
+ */
+export const isTotpMandatory = async (
+  user: PolicyUser,
   exec: DbExecutor = db,
 ): Promise<boolean> => {
   if (!isTotpApplicable(user.authMethod)) return false;
-  if (!(await isTotpEnforcedForAdmins(exec))) return false;
-  return userHasAnyAdminRole(user.id, user.role, exec);
+  const policy = await getTotpPolicy(exec);
+  if (!policy.enableTotp || !policy.enforceTotp) return false;
+  const roleIds = await collectUserRoleIds(user.id, user.role, exec);
+  return userIsEnforced(policy, roleIds);
 };
 
 /**
  * Whether the mandate applies AND the user has not yet enrolled — i.e. they must be routed into
- * enrollment (at login) or have their credentials revoked (when granted an admin role) before they
- * can exercise admin privileges. Pass `exec` (an open transaction) when the decision must be made
- * atomically with the role write that triggered it — the lookups then see the uncommitted roles.
+ * enrollment (at login) or have their credentials revoked (when granted an enforced role) before they
+ * can exercise the enforced capability. Pass `exec` (an open transaction) when the decision must be
+ * made atomically with the role write that triggered it — the lookups then see the uncommitted roles.
  */
-export const requiresAdminTotpEnrollment = async (
-  user: AdminUser & { totpEnabled: boolean },
+export const requiresTotpEnrollment = async (
+  user: PolicyUser & { totpEnabled: boolean },
   exec: DbExecutor = db,
 ): Promise<boolean> => {
   if (user.totpEnabled) return false;
-  return isAdminTotpMandatory(user, exec);
+  return isTotpMandatory(user, exec);
 };
 
 /**
- * Whether switching INTO `targetRole` must be blocked because it is an admin role and the caller is
- * an enforced-but-unenrolled user. Closes the role-switch elevation path for sessions that predate
- * enforcement (or a role grant).
+ * Whether switching INTO `targetRole` must be blocked because doing so would make an unenrolled user
+ * subject to the mandate. Closes the role-switch elevation path for sessions that predate enforcement
+ * (or a role grant). Exempt still wins: a user holding an exempt role is never blocked.
  */
-export const adminRoleSwitchBlocked = async (
-  user: { authMethod: AuthMethod; totpEnabled: boolean },
+export const totpRoleSwitchBlocked = async (
+  user: { id: string; authMethod: AuthMethod; totpEnabled: boolean },
   targetRole: string,
+  exec: DbExecutor = db,
 ): Promise<boolean> => {
   if (user.totpEnabled) return false;
   if (!isTotpApplicable(user.authMethod)) return false;
-  if (!(await isTotpEnforcedForAdmins())) return false;
-  return isAdminRoleId(targetRole);
+  const policy = await getTotpPolicy(exec);
+  if (!policy.enableTotp || !policy.enforceTotp) return false;
+  // Consider the role they are switching into alongside the roles they already hold (exempt wins).
+  const roleIds = await collectUserRoleIds(user.id, targetRole, exec);
+  return userIsEnforced(policy, roleIds);
 };

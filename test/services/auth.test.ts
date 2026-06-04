@@ -305,7 +305,14 @@ describe('authApi', () => {
 
   describe('getTotpStatus', () => {
     test('GETs /auth/2fa/status and returns the body', async () => {
-      programRoutes({ '/auth/2fa/status': { enabled: true, applicable: true } });
+      programRoutes({
+        '/auth/2fa/status': {
+          enabled: true,
+          applicable: true,
+          featureEnabled: true,
+          required: true,
+        },
+      });
 
       const result = await authApi.getTotpStatus();
 
@@ -313,7 +320,12 @@ describe('authApi', () => {
       expect(String(call[0])).toContain('/auth/2fa/status');
       // GET has no explicit method override in the client call.
       expect((call[1] as { method?: string }).method).toBeUndefined();
-      expect(result).toEqual({ enabled: true, applicable: true });
+      expect(result).toEqual({
+        enabled: true,
+        applicable: true,
+        featureEnabled: true,
+        required: true,
+      });
     });
   });
 

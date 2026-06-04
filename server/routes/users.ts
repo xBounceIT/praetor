@@ -26,7 +26,7 @@ import {
   applyExternalRolesForUserIfMatched,
   externalGroupsYieldNoKnownRole,
 } from '../services/external-auth.ts';
-import { requiresAdminTotpEnrollment } from '../services/totpEnforcement.ts';
+import { requiresTotpEnrollment } from '../services/totpEnforcement.ts';
 import { getAuditChangedFields, getAuditCounts, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
@@ -1170,7 +1170,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 // valid. The enforcement lookups read via `tx`, seeing the just-written role.
                 const totpState = await usersRepo.getTotpState(idResult.value, tx);
                 if (
-                  await requiresAdminTotpEnrollment(
+                  await requiresTotpEnrollment(
                     {
                       id: idResult.value,
                       role: roleValue,
@@ -1426,13 +1426,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         //      a TOTP-applicable method (local/ldap).
         //   2. mappedRoleIds — the LDAP role mapping elevated `result.role` into an admin role, even
         //      when the auth method/provider was unchanged.
-        // requiresAdminTotpEnrollment no-ops for SSO targets, enforcement-off, non-admins, and
+        // requiresTotpEnrollment no-ops for SSO targets, enforcement-off, non-admins, and
         // enrolled users. In-transaction so it's atomic with the writes above; the lookups read via
         // `tx`, seeing the just-written auth method and roles.
         if (authStateChanged || mappedRoleIds !== null) {
           const totpState = await usersRepo.getTotpState(result.id, tx);
           if (
-            await requiresAdminTotpEnrollment(
+            await requiresTotpEnrollment(
               {
                 id: result.id,
                 role: result.role,
@@ -1708,7 +1708,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // enforcement lookups read via `tx`, so they see the just-written role set.
         const rolesTotpState = await usersRepo.getTotpState(idResult.value, tx);
         if (
-          await requiresAdminTotpEnrollment(
+          await requiresTotpEnrollment(
             {
               id: idResult.value,
               role: primaryRoleIdResult.value,

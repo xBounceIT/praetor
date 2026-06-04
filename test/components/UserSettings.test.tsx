@@ -70,7 +70,9 @@ const onTotpDisable = mock((_payload: { password?: string; code?: string }) => P
 const onRegenerateTotpBackupCodes = mock((_code: string) =>
   Promise.resolve({ backupCodes: ['55556666', '77778888'] }),
 );
-const onGetTotpStatus = mock(() => Promise.resolve({ enabled: false, applicable: true }));
+const onGetTotpStatus = mock(() =>
+  Promise.resolve({ enabled: false, applicable: true, featureEnabled: true, required: false }),
+);
 
 // The five 2FA handler props are required, so every render must supply them.
 // `onGetTotpStatus` defaults to a disabled-but-applicable status; individual
@@ -90,7 +92,12 @@ const renderSettings = (
     onUpdate?: (updates: Partial<Settings>) => Promise<void>;
     onGetPersonalAccessToken?: () => Promise<PersonalAccessToken>;
     onRenewPersonalAccessToken?: () => Promise<PersonalAccessToken>;
-    onGetTotpStatus?: () => Promise<{ enabled: boolean; applicable: boolean }>;
+    onGetTotpStatus?: () => Promise<{
+      enabled: boolean;
+      applicable: boolean;
+      featureEnabled: boolean;
+      required: boolean;
+    }>;
     onTotpSetup?: (password: string) => Promise<{
       secret: string;
       otpauthUri: string;
@@ -679,7 +686,9 @@ describe('<UserSettings /> Two-Factor Authentication card', () => {
   });
 
   test('lazily loads the 2FA status when the Security tab opens and renders the disabled badge', async () => {
-    const getStatus = mock(() => Promise.resolve({ enabled: false, applicable: true }));
+    const getStatus = mock(() =>
+      Promise.resolve({ enabled: false, applicable: true, featureEnabled: true, required: false }),
+    );
     renderSettings({ onGetTotpStatus: getStatus });
 
     // Not loaded until the Security tab is opened.
@@ -698,7 +707,9 @@ describe('<UserSettings /> Two-Factor Authentication card', () => {
   });
 
   test('renders the enabled badge plus Disable and Regenerate actions when 2FA is enabled', async () => {
-    const getStatus = mock(() => Promise.resolve({ enabled: true, applicable: true }));
+    const getStatus = mock(() =>
+      Promise.resolve({ enabled: true, applicable: true, featureEnabled: true, required: false }),
+    );
     renderSettings({ onGetTotpStatus: getStatus });
 
     fireEvent.click(screen.getByText('security.title'));
@@ -731,7 +742,9 @@ describe('<UserSettings /> Two-Factor Authentication card', () => {
   });
 
   test('shows the IdP-managed banner when the status reports it is not applicable', async () => {
-    const getStatus = mock(() => Promise.resolve({ enabled: false, applicable: false }));
+    const getStatus = mock(() =>
+      Promise.resolve({ enabled: false, applicable: false, featureEnabled: true, required: false }),
+    );
     renderSettings({ onGetTotpStatus: getStatus });
 
     fireEvent.click(screen.getByText('security.title'));
@@ -743,7 +756,9 @@ describe('<UserSettings /> Two-Factor Authentication card', () => {
   });
 
   test('clicking Set up shows the re-auth gate, then runs the setup call with the password', async () => {
-    const getStatus = mock(() => Promise.resolve({ enabled: false, applicable: true }));
+    const getStatus = mock(() =>
+      Promise.resolve({ enabled: false, applicable: true, featureEnabled: true, required: false }),
+    );
     renderSettings({ onGetTotpStatus: getStatus });
 
     fireEvent.click(screen.getByText('security.title'));
@@ -774,7 +789,9 @@ describe('<UserSettings /> Two-Factor Authentication card', () => {
     // re-auth password) must NOT re-fire it — onSetup is an inline closure whose identity changes
     // on the error re-render, which previously re-triggered the effect and retried in a loop,
     // burning the login rate limit and hiding the error.
-    const getStatus = mock(() => Promise.resolve({ enabled: false, applicable: true }));
+    const getStatus = mock(() =>
+      Promise.resolve({ enabled: false, applicable: true, featureEnabled: true, required: false }),
+    );
     const failingSetup = mock(() => Promise.reject(new Error('Incorrect password')));
     renderSettings({ onGetTotpStatus: getStatus, onTotpSetup: failingSetup });
 
@@ -793,7 +810,9 @@ describe('<UserSettings /> Two-Factor Authentication card', () => {
   });
 
   test('disable dialog accepts an alphanumeric backup code, not only a 6-digit TOTP', async () => {
-    const getStatus = mock(() => Promise.resolve({ enabled: true, applicable: true }));
+    const getStatus = mock(() =>
+      Promise.resolve({ enabled: true, applicable: true, featureEnabled: true, required: false }),
+    );
     // LDAP user: the disable dialog shows only the code field (no password). The backend /disable
     // accepts a backup code, so the field must not be restricted to digits — otherwise a user who
     // lost their authenticator but holds backup codes can never turn 2FA off from the UI.
@@ -816,5 +835,61 @@ describe('<UserSettings /> Two-Factor Authentication card', () => {
 
     await waitFor(() => expect(onTotpDisable).toHaveBeenCalledTimes(1));
     expect(onTotpDisable).toHaveBeenCalledWith({ code: 'abcde-fghij' });
+  });
+
+  test('shows the admin-disabled banner and hides Set up when the feature is off org-wide', async () => {
+    // Global kill-switch: enableTotp=false surfaces as featureEnabled:false on /status. Enrollment
+    // must be blocked entirely — no Set-up affordance — and the "turned off by admin" banner shown.
+    const getStatus = mock(() =>
+      Promise.resolve({ enabled: false, applicable: true, featureEnabled: false, required: false }),
+    );
+    renderSettings({ onGetTotpStatus: getStatus });
+
+    fireEvent.click(screen.getByText('security.title'));
+    await waitFor(() => expect(getStatus).toHaveBeenCalledTimes(1));
+
+    expect(await screen.findByText('twoFactor.disabledByAdminTitle')).toBeInTheDocument();
+    expect(screen.getByText('twoFactor.disabledByAdminDescription')).toBeInTheDocument();
+    // The feature-off branch offers no enroll/manage actions and suppresses the status badge.
+    expect(screen.queryByRole('button', { name: /twoFactor.setUp/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /twoFactor.disable/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('twoFactor.statusDisabled')).not.toBeInTheDocument();
+    expect(screen.queryByText('twoFactor.statusEnabled')).not.toBeInTheDocument();
+  });
+
+  test('shows the required-setup prompt and a Set up button when 2FA is mandatory but not enrolled', async () => {
+    // Role-enforced user who has not enrolled yet (required:true, enabled:false): the card nudges
+    // them to set up now, and still exposes the Set-up button so they can comply.
+    const getStatus = mock(() =>
+      Promise.resolve({ enabled: false, applicable: true, featureEnabled: true, required: true }),
+    );
+    renderSettings({ onGetTotpStatus: getStatus });
+
+    fireEvent.click(screen.getByText('security.title'));
+    await waitFor(() => expect(getStatus).toHaveBeenCalledTimes(1));
+
+    expect(await screen.findByText('twoFactor.requiredByOrgSetup')).toBeInTheDocument();
+    // The generic scan-instructions copy is replaced by the required-setup message.
+    expect(screen.queryByText('twoFactor.scanInstructions')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /twoFactor.setUp/ })).toBeInTheDocument();
+  });
+
+  test('hides Disable but keeps Regenerate when 2FA is enabled and mandatory for the role', async () => {
+    // Role-enforced user who is enrolled (required:true, enabled:true): the server forbids
+    // self-disable, so the Disable button is hidden, but Regenerate backup codes stays available.
+    const getStatus = mock(() =>
+      Promise.resolve({ enabled: true, applicable: true, featureEnabled: true, required: true }),
+    );
+    renderSettings({ onGetTotpStatus: getStatus });
+
+    fireEvent.click(screen.getByText('security.title'));
+    await waitFor(() => expect(getStatus).toHaveBeenCalledTimes(1));
+
+    expect(await screen.findByText('twoFactor.statusEnabled')).toBeInTheDocument();
+    expect(screen.getByText('twoFactor.requiredByOrg')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /twoFactor.disable/ })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /twoFactor.regenerateBackupCodes/ }),
+    ).toBeInTheDocument();
   });
 });

@@ -26,6 +26,8 @@ export interface TotpConfirmResponse {
 export interface TotpStatusResponse {
   enabled: boolean;
   applicable: boolean;
+  featureEnabled: boolean;
+  required: boolean;
 }
 
 export interface TotpBackupCodesResponse {

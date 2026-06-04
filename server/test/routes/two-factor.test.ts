@@ -58,9 +58,14 @@ const bumpSessionVersionMock = mock();
 const revokeUserCredentialsMock = mock();
 const findLoginUserByIdMock = mock();
 const listAvailableRolesForUserMock = mock();
-const generalSettingsGetMock = mock<() => Promise<{ enforceTotpForAdmins: boolean } | null>>(
-  async () => null,
-);
+const generalSettingsGetMock = mock<
+  () => Promise<{
+    enableTotp?: boolean;
+    enforceTotp?: boolean;
+    totpEnforcedRoleIds?: string[];
+    totpExemptRoleIds?: string[];
+  } | null>
+>(async () => null);
 const logAuditMock = mock(async () => undefined);
 const bcryptCompareMock = mock();
 // Personal-access-token auth path: lets tests forge a VALID PAT so authenticateToken populates
@@ -393,6 +398,26 @@ describe('POST /api/auth/2fa/setup', () => {
     expect(auditActions()).toContain('user.totp_setup.conflict');
   });
 
+  test('403 (feature disabled): the global kill-switch blocks new enrollment with totp_disabled', async () => {
+    // When 2FA is turned off org-wide (enableTotp false), no new enrollment is allowed for anyone —
+    // even an applicable local user. The gate fires before the step-up password check, and nothing
+    // is persisted.
+    getTotpStateMock.mockResolvedValue(null);
+    findCoreByIdMock.mockResolvedValue(userCore('local'));
+    generalSettingsGetMock.mockResolvedValue({ enableTotp: false });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/2fa/setup',
+      headers: sessionHeader(),
+      payload: { password: 'secret' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).errorCode).toBe('totp_disabled');
+    expect(setTotpEnrollmentMock).not.toHaveBeenCalled();
+  });
+
   test('400 (session): missing password is rejected before any secret is written', async () => {
     // Step-up re-auth: a logged-in caller must supply their password. A stolen session alone (no
     // password) must not be able to enroll an attacker-controlled second factor.
@@ -658,13 +683,22 @@ describe('POST /api/auth/2fa/disable', () => {
     expect(auditActions()).toContain('user.totp_disabled');
   });
 
-  test('403 (enforced admin): cannot disable TOTP while the admin 2FA mandate applies', async () => {
-    // enforceTotpForAdmins is on and the user holds an admin role, so a self-service disable is
-    // rejected — an enforced admin must keep their second factor (only an admin reset can clear it).
+  test('403 (enforced admin): cannot disable TOTP while the 2FA mandate applies to their role', async () => {
+    // The feature + enforcement are on and the admin role is in the enforced set, so a self-service
+    // disable is rejected — an enforced user must keep their second factor (only an admin reset can
+    // clear it). isTotpMandatory runs for real here against the mocked policy + role lookups.
     getTotpStateMock.mockResolvedValue(enabledState());
     findCoreByIdMock.mockResolvedValue({ ...userCore('local'), role: 'admin' });
     bcryptCompareMock.mockResolvedValue(true);
-    generalSettingsGetMock.mockResolvedValue({ enforceTotpForAdmins: true });
+    generalSettingsGetMock.mockResolvedValue({
+      enableTotp: true,
+      enforceTotp: true,
+      totpEnforcedRoleIds: ['admin'],
+      totpExemptRoleIds: [],
+    });
+    // The user's primary role ('admin') already satisfies the enforced set; no extra assignable
+    // roles needed.
+    listAvailableRolesForUserMock.mockResolvedValue([]);
 
     const res = await testApp.inject({
       method: 'POST',
@@ -819,7 +853,7 @@ describe('POST /api/auth/2fa/backup-codes/regenerate', () => {
 });
 
 describe('GET /api/auth/2fa/status', () => {
-  test('200: { enabled: true, applicable: true } for a local user with 2FA on', async () => {
+  test('200: { enabled, applicable, featureEnabled, required } for a local user with 2FA on', async () => {
     getTotpStateMock.mockResolvedValue({
       totpSecret: encrypt(SECRET),
       totpEnabled: true,
@@ -827,6 +861,9 @@ describe('GET /api/auth/2fa/status', () => {
       totpBackupCodes: null,
     });
     findCoreByIdMock.mockResolvedValue(userCore('local'));
+    // Default policy (null settings → feature on, enforcement off), so the feature is enabled but
+    // 2FA isn't mandated for this user.
+    generalSettingsGetMock.mockResolvedValue(null);
 
     const res = await testApp.inject({
       method: 'GET',
@@ -835,7 +872,70 @@ describe('GET /api/auth/2fa/status', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ enabled: true, applicable: true });
+    expect(JSON.parse(res.body)).toEqual({
+      enabled: true,
+      applicable: true,
+      featureEnabled: true,
+      required: false,
+    });
+  });
+
+  test('200: required:true when the feature + enforcement are on and the role is enforced', async () => {
+    getTotpStateMock.mockResolvedValue({
+      totpSecret: encrypt(SECRET),
+      totpEnabled: true,
+      totpConfirmedAt: new Date(),
+      totpBackupCodes: null,
+    });
+    findCoreByIdMock.mockResolvedValue({ ...userCore('local'), role: 'admin' });
+    generalSettingsGetMock.mockResolvedValue({
+      enableTotp: true,
+      enforceTotp: true,
+      totpEnforcedRoleIds: ['admin'],
+      totpExemptRoleIds: [],
+    });
+    listAvailableRolesForUserMock.mockResolvedValue([]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/auth/2fa/status',
+      headers: sessionHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      enabled: true,
+      applicable: true,
+      featureEnabled: true,
+      required: true,
+    });
+  });
+
+  test('200: featureEnabled:false when the org-wide 2FA feature is off', async () => {
+    getTotpStateMock.mockResolvedValue({
+      totpSecret: encrypt(SECRET),
+      totpEnabled: true,
+      totpConfirmedAt: new Date(),
+      totpBackupCodes: null,
+    });
+    findCoreByIdMock.mockResolvedValue(userCore('local'));
+    // Kill-switch off: the feature is disabled org-wide, so nothing is required even for an enrolled
+    // applicable user.
+    generalSettingsGetMock.mockResolvedValue({ enableTotp: false, enforceTotp: true });
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/auth/2fa/status',
+      headers: sessionHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      enabled: true,
+      applicable: true,
+      featureEnabled: false,
+      required: false,
+    });
   });
 
   test('200: { enabled: false, applicable: false } for an oidc user', async () => {
@@ -849,7 +949,14 @@ describe('GET /api/auth/2fa/status', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ enabled: false, applicable: false });
+    // SSO users are never applicable and never required (their IdP owns MFA), but the org feature
+    // can still be enabled.
+    expect(JSON.parse(res.body)).toEqual({
+      enabled: false,
+      applicable: false,
+      featureEnabled: true,
+      required: false,
+    });
   });
 
   test('401 without a session token', async () => {

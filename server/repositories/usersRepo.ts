@@ -325,43 +325,50 @@ export const rotatePasswordAndBumpSession = async (
 };
 
 // Revokes only the non-interactive credentials — PAT/MCP tokens (token_version) — of each
-// local/ldap user who can act as an admin via a built-in admin/top-manager role or any custom role
-// flagged `is_admin`, whether as their primary role or an assigned (multi-)role, but who has NOT
-// enrolled in TOTP. Called when the admin-2FA policy is switched on. Interactive sessions
-// (session_version) are deliberately left intact: those traverse the login 2FA gate, so an
-// unenrolled admin is routed into mandatory enrollment on their next sign-in (see auth.ts) and
-// blocked from switching into an admin role meanwhile — enforcing without abruptly logging anyone
-// out (which, for the admin who just toggled the policy, would silently break the app). PAT/MCP
-// tokens key off token_version and never reach the login gate, so they alone are rotated here:
-// otherwise a pre-existing token would keep exercising admin privileges over the API with no second
-// factor. Affected admins must re-issue any personal-access/MCP tokens after enrolling.
-// Returns the number of admins whose tokens were revoked.
-export const revokeTokensForUnenrolledAdmins = async (exec: DbExecutor = db): Promise<number> => {
+// local/ldap user who is subject to the 2FA mandate (their primary role or any assigned/(multi-)role
+// is in `enforcedRoleIds`, OR `enforcedRoleIds` is empty which means "everyone"), is NOT carved out
+// by `exemptRoleIds` (exempt wins — holding any exempt role spares the user), and has NOT enrolled in
+// TOTP. Called when enforcement is switched on or its role scope is broadened. Interactive sessions
+// (session_version) are deliberately left intact: those traverse the login 2FA gate, so an unenrolled
+// enforced user is routed into mandatory enrollment on their next sign-in (see auth.ts) and blocked
+// from switching into an enforced role meanwhile — enforcing without abruptly logging anyone out
+// (which, for the admin who just toggled the policy, would silently break the app). PAT/MCP tokens key
+// off token_version and never reach the login gate, so they alone are rotated here. Affected users
+// must re-issue any personal-access/MCP tokens after enrolling.
+// Returns the number of users whose tokens were revoked.
+export const revokeTokensForUnenrolledEnforcedUsers = async (
+  enforcedRoleIds: string[],
+  exemptRoleIds: string[],
+  exec: DbExecutor = db,
+): Promise<number> => {
+  const inList = (ids: string[]) =>
+    sql.join(
+      ids.map((id) => sql`${id}`),
+      sql`, `,
+    );
+
+  const conditions = [sql`totp_enabled = false`, sql`auth_method IN ('local', 'ldap')`];
+
+  // Exempt wins: skip users whose primary role OR any assigned role is exempt. Omitted when the
+  // exempt list is empty (an empty `NOT IN ()` is invalid SQL and would exclude no one anyway).
+  if (exemptRoleIds.length > 0) {
+    conditions.push(sql`role NOT IN (${inList(exemptRoleIds)})`);
+    conditions.push(
+      sql`NOT EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = users.id AND ur.role_id IN (${inList(exemptRoleIds)}))`,
+    );
+  }
+
+  // Enforced scope: a non-empty list restricts to its members (primary or assigned role); an empty
+  // list means "everyone" (local/ldap, minus the exempt carve-out above), so no clause is added.
+  if (enforcedRoleIds.length > 0) {
+    conditions.push(
+      sql`(role IN (${inList(enforcedRoleIds)}) OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = users.id AND ur.role_id IN (${inList(enforcedRoleIds)})))`,
+    );
+  }
+
   const rows = await executeRows<{ id: string }>(
     exec,
-    sql`
-      UPDATE users
-      SET token_version = token_version + 1
-      WHERE totp_enabled = false
-        AND auth_method IN ('local', 'ldap')
-        AND (
-          role = ${ADMIN_ROLE_ID}
-          OR role = ${TOP_MANAGER_ROLE_ID}
-          OR role IN (SELECT id FROM roles WHERE is_admin = true)
-          OR EXISTS (
-            SELECT 1
-            FROM user_roles ur
-            LEFT JOIN roles r ON r.id = ur.role_id
-            WHERE ur.user_id = users.id
-              AND (
-                ur.role_id = ${ADMIN_ROLE_ID}
-                OR ur.role_id = ${TOP_MANAGER_ROLE_ID}
-                OR r.is_admin = true
-              )
-          )
-        )
-      RETURNING id
-    `,
+    sql`UPDATE users SET token_version = token_version + 1 WHERE ${sql.join(conditions, sql` AND `)} RETURNING id`,
   );
   return rows.length;
 };

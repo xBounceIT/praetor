@@ -171,7 +171,12 @@ export interface GeneralSettings {
   rilLunchBreakMinutes?: number;
   rilNoteOptions?: RilNoteOption[];
   rilTransferOptions?: string[];
-  enforceTotpForAdmins: boolean;
+  // 2FA org policy. `enableTotp` is the global feature switch; `enforceTotp` the master enforcement
+  // switch; the role-id lists scope enforcement (empty enforced list = everyone; exempt wins).
+  enableTotp: boolean;
+  enforceTotp: boolean;
+  totpEnforcedRoleIds: string[];
+  totpExemptRoleIds: string[];
 }
 
 // App-wide branding shown in the sidebar and on the login screen. `companyName` replaces

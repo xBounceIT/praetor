@@ -512,6 +512,13 @@
       "when": 1780518873755,
       "tag": "0072_add_user_totp_and_totp_enforcement",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1780613472247,
+      "tag": "0073_rainy_valkyrie",
+      "breakpoints": true
     }
   ]
 }
