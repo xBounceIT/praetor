@@ -1541,6 +1541,9 @@ const AppContent: React.FC = () => {
           ...equivalentPermissionsFor('projects.tasks', 'view'),
           buildPermission('sales.client_quotes', 'view'),
           buildPermission('sales.client_offers', 'view'),
+          // Supplier quotes carry an optional Cliente link (#759), so this view needs the client
+          // list too. The backend /clients list route already authorizes this permission.
+          buildPermission('sales.supplier_quotes', 'view'),
           buildPermission('accounting.clients_orders', 'view'),
           buildPermission('accounting.clients_invoices', 'view'),
           buildPermission('catalog.internal_listing', 'view'),
