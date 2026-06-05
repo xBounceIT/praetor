@@ -113,7 +113,8 @@ import { formatDateOnlyForLocale, getLocalDateString } from './utils/date';
 import { getTechnicalDocsViewFromPathname } from './utils/docsRoutes';
 import { getErrorMessage } from './utils/errors';
 import {
-  canonicalizeLegacyHash,
+  type ParsedViewHash,
+  parseViewHash,
   resolveHashChange,
   stripHashPrefix,
 } from './utils/hashCanonicalization';
@@ -851,10 +852,19 @@ const AppContent: React.FC = () => {
     [],
   );
 
+  // Parsed once at mount: a quick-view link opened in a fresh tab arrives as a
+  // deep link (`#/<view>?filterId=<id>`). The view + filter id are seeded into
+  // state below so the target page renders pre-filtered with no 404 flash. The
+  // hash-sync effect later normalizes the query out of the address bar.
+  const initialViewHashRef = useRef<ParsedViewHash | null>(null);
+  if (initialViewHashRef.current === null) {
+    initialViewHashRef.current = parseViewHash(window.location.hash);
+  }
+  const initialViewHash = initialViewHashRef.current;
+
   const [activeView, setActiveViewState] = useState<View | '404'>(() => {
     const technicalDocsView = getTechnicalDocsViewFromPathname(window.location.pathname);
     if (technicalDocsView) return technicalDocsView;
-    const rawHash = stripHashPrefix(window.location.hash);
     // We can't use the memoized VALID_VIEWS here because this runs before the initial render
     // So we define the list once for initialization
     const validViews: View[] = [
@@ -893,7 +903,7 @@ const AppContent: React.FC = () => {
       'docs/api',
       'docs/frontend',
     ];
-    const canonicalHash = canonicalizeLegacyHash(rawHash);
+    const canonicalHash = initialViewHash.path;
     const hash = canonicalHash as View;
     return validViews.includes(hash)
       ? hash
@@ -903,8 +913,13 @@ const AppContent: React.FC = () => {
   });
   const [clientQuoteFilterId, setClientQuoteFilterId] = useState<string | null>(null);
   const [clientOfferFilterId, setClientOfferFilterId] = useState<string | null>(null);
-  const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(null);
+  const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(() =>
+    initialViewHash.path === 'sales/supplier-quotes' ? initialViewHash.filterId : null,
+  );
   const [clientsOrderFilterId, setClientsOrderFilterId] = useState<string | null>(null);
+  const [productFilterId, setProductFilterId] = useState<string | null>(() =>
+    initialViewHash.path === 'catalog/internal-listing' ? initialViewHash.filterId : null,
+  );
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   // Navigation-aware setter: clears any *FilterId state that isn't valid for
@@ -944,6 +959,9 @@ const AppContent: React.FC = () => {
     }
     if (resolved !== 'accounting/clients-orders') {
       setClientsOrderFilterId(null);
+    }
+    if (resolved !== 'catalog/internal-listing') {
+      setProductFilterId(null);
     }
     if (resolved !== 'projects/detail') {
       setSelectedProjectId(null);
@@ -2657,6 +2675,7 @@ const AppContent: React.FC = () => {
               activeView === 'catalog/internal-listing' && (
                 <InternalListingView
                   products={products}
+                  productFilterId={productFilterId}
                   onAddProduct={addProduct}
                   onUpdateProduct={handleUpdateProduct}
                   onDeleteProduct={handleDeleteProduct}

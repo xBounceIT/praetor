@@ -33,6 +33,9 @@ import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 export interface InternalListingViewProps {
   products: Product[];
+  // When set (via a quick-view deep link), the products table opens pre-filtered
+  // to this product id so the referenced record is the only row shown.
+  productFilterId?: string | null;
   onAddProduct: (productData: Partial<Product>) => Promise<void>;
   onUpdateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
   onDeleteProduct: (id: string) => void;
@@ -70,6 +73,7 @@ const getDisplayTypeName = (typeName: string) =>
 
 const InternalListingView: React.FC<InternalListingViewProps> = ({
   products,
+  productFilterId,
   onAddProduct,
   onUpdateProduct,
   onDeleteProduct,
@@ -85,6 +89,13 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   onDeleteInternalSubcategory,
 }) => {
   const { t, i18n } = useTranslation(['crm', 'common']);
+
+  // Seeds the products table filter when arriving via a quick-view deep link, so
+  // only the referenced product is shown. Matches the hidden `id` column below.
+  const tableInitialFilterState = useMemo(
+    () => (productFilterId ? { id: [productFilterId] } : undefined),
+    [productFilterId],
+  );
 
   // Product Types State
   const [productTypes, setProductTypes] = useState<InternalProductType[]>([]);
@@ -1511,7 +1522,15 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             : 'hover:bg-zinc-50/50'
         }
         onRowClick={openEditModal}
+        initialFilterState={tableInitialFilterState}
         columns={[
+          {
+            // Hidden filter-only column: lets a quick-view deep link target a
+            // single product by id without showing a code column to users.
+            header: 'id',
+            accessorKey: 'id',
+            hidden: true,
+          },
           {
             header: t('crm:internalListing.productCode'),
             accessorKey: 'productCode',
