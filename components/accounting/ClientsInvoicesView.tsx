@@ -10,6 +10,7 @@ import type { Client, Invoice, InvoiceItem, Product } from '../../types';
 import { addDaysToDateOnly, formatDateOnlyForLocale, getLocalDateString } from '../../utils/date';
 import { calcProductSalePrice } from '../../utils/numbers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
+import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
@@ -628,14 +629,11 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     <FieldLabel htmlFor="client-invoice-issue-date">
                       {t('accounting:clientsInvoices.issueDate')}
                     </FieldLabel>
-                    <Input
+                    <DateField
                       id="client-invoice-issue-date"
-                      type="date"
                       required
                       value={formData.issueDate}
-                      onChange={(event) =>
-                        setFormData((prev) => ({ ...prev, issueDate: event.target.value }))
-                      }
+                      onChange={(value) => setFormData((prev) => ({ ...prev, issueDate: value }))}
                       aria-invalid={Boolean(errors.issueDate)}
                     />
                     <FieldError className="text-xs">{errors.issueDate}</FieldError>
@@ -644,14 +642,11 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     <FieldLabel htmlFor="client-invoice-due-date">
                       {t('accounting:clientsInvoices.dueDate')}
                     </FieldLabel>
-                    <Input
+                    <DateField
                       id="client-invoice-due-date"
-                      type="date"
                       required
                       value={formData.dueDate}
-                      onChange={(event) =>
-                        setFormData((prev) => ({ ...prev, dueDate: event.target.value }))
-                      }
+                      onChange={(value) => setFormData((prev) => ({ ...prev, dueDate: value }))}
                       aria-invalid={Boolean(errors.dueDate)}
                     />
                     <FieldError className="text-xs">{errors.dueDate}</FieldError>

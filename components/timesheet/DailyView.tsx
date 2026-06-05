@@ -11,6 +11,7 @@ import TaskFormModal, {
   type TaskFormDetails,
 } from '../projects/TaskFormModal';
 import CustomRepeatModal from '../shared/CustomRepeatModal';
+import DateField from '../shared/DateField';
 import SelectControl from '../shared/SelectControl';
 import { Button } from '../ui/button';
 import { Field, FieldLabel } from '../ui/field';
@@ -240,10 +241,9 @@ const DailyRepeatControls: React.FC<{
             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider whitespace-nowrap">
               {t('entry.until')}
             </span>
-            <Input
-              type="date"
+            <DateField
               value={recurrenceEndDate}
-              onChange={(event) => onRecurrenceEndDateChange(event.target.value)}
+              onChange={(value) => onRecurrenceEndDateChange(value)}
               aria-invalid={!!recurrenceEndDateError}
               className="text-xs font-medium shrink-0 w-auto"
             />

@@ -40,6 +40,7 @@ import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
+import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import FieldTooltip from '../shared/FieldTooltip';
 import HeaderAddButton from '../shared/HeaderAddButton';
@@ -1443,13 +1444,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       <FieldLabel htmlFor="client-quote-expiration-date">
                         {t('sales:clientQuotes.expirationDateLabel')}
                       </FieldLabel>
-                      <Input
+                      <DateField
                         id="client-quote-expiration-date"
-                        type="date"
                         required
                         value={formData.expirationDate}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, expirationDate: e.target.value }))
+                        onChange={(value) =>
+                          setFormData((prev) => ({ ...prev, expirationDate: value }))
                         }
                         disabled={isReadOnly}
                       />

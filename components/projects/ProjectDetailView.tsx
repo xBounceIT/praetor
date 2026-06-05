@@ -55,6 +55,7 @@ import type {
 import { formatInsertDate } from '../../utils/date';
 import { calculatePricingTotals } from '../../utils/numbers';
 import { hasPermission, hasScopedActionPermission } from '../../utils/permissions';
+import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import SelectControl from '../shared/SelectControl';
 import StatusBadge from '../shared/StatusBadge';
@@ -1030,14 +1031,13 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               <FieldLabel htmlFor="detail-start-date">
                 {t('projects:projects.startDate')} {project.startDate && <RequiredMark />}
               </FieldLabel>
-              <Input
+              <DateField
                 id="detail-start-date"
-                type="date"
                 value={startDate}
                 disabled={!canUpdateProjects}
                 aria-invalid={Boolean(errors.startDate || errors.dateRange)}
-                onChange={(e) => {
-                  setStartDate(e.target.value);
+                onChange={(value) => {
+                  setStartDate(value);
                   if (errors.startDate || errors.dateRange) {
                     setErrors((prev) => ({ ...prev, startDate: '', dateRange: '' }));
                   }
@@ -1049,14 +1049,13 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               <FieldLabel htmlFor="detail-end-date">
                 {t('projects:projects.endDate')} {project.endDate && <RequiredMark />}
               </FieldLabel>
-              <Input
+              <DateField
                 id="detail-end-date"
-                type="date"
                 value={endDate}
                 disabled={!canUpdateProjects}
                 aria-invalid={Boolean(errors.endDate || errors.dateRange)}
-                onChange={(e) => {
-                  setEndDate(e.target.value);
+                onChange={(value) => {
+                  setEndDate(value);
                   if (errors.endDate || errors.dateRange) {
                     setErrors((prev) => ({ ...prev, endDate: '', dateRange: '' }));
                   }

@@ -22,6 +22,7 @@ import type {
 import { formatInsertDate } from '../../utils/date';
 import { calculatePricingTotals } from '../../utils/numbers';
 import { buildPermission, hasPermission, hasScopedActionPermission } from '../../utils/permissions';
+import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
@@ -771,14 +772,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       <FieldLabel htmlFor="project-start-date">
                         {t('projects:projects.startDate')} <RequiredMark />
                       </FieldLabel>
-                      <Input
+                      <DateField
                         id="project-start-date"
-                        type="date"
                         required
                         value={startDate}
                         aria-invalid={Boolean(errors.startDate || errors.dateRange)}
-                        onChange={(e) => {
-                          setStartDate(e.target.value);
+                        onChange={(value) => {
+                          setStartDate(value);
                           if (errors.startDate || errors.dateRange) {
                             setErrors((prev) => ({ ...prev, startDate: '', dateRange: '' }));
                           }
@@ -790,14 +790,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       <FieldLabel htmlFor="project-end-date">
                         {t('projects:projects.endDate')} <RequiredMark />
                       </FieldLabel>
-                      <Input
+                      <DateField
                         id="project-end-date"
-                        type="date"
                         required
                         value={endDate}
                         aria-invalid={Boolean(errors.endDate || errors.dateRange)}
-                        onChange={(e) => {
-                          setEndDate(e.target.value);
+                        onChange={(value) => {
+                          setEndDate(value);
                           if (errors.endDate || errors.dateRange) {
                             setErrors((prev) => ({ ...prev, endDate: '', dateRange: '' }));
                           }

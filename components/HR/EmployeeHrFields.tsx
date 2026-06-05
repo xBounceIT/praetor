@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import DateField from '../shared/DateField';
 import {
   CONTRACT_TYPE_OPTIONS,
   EMPLOYMENT_STATUS_OPTIONS,
@@ -204,11 +205,10 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
 
           <Field>
             <FieldLabel htmlFor={`${prefix}-hire-date`}>{t('employeeProfile.hireDate')}</FieldLabel>
-            <Input
+            <DateField
               id={`${prefix}-hire-date`}
-              type="date"
               value={formData.hireDate}
-              onChange={(e) => setField('hireDate', e.target.value)}
+              onChange={(value) => setField('hireDate', value)}
             />
           </Field>
 
@@ -216,11 +216,10 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
             <FieldLabel htmlFor={`${prefix}-termination-date`}>
               {t('employeeProfile.terminationDate')}
             </FieldLabel>
-            <Input
+            <DateField
               id={`${prefix}-termination-date`}
-              type="date"
               value={formData.terminationDate}
-              onChange={(e) => setField('terminationDate', e.target.value)}
+              onChange={(value) => setField('terminationDate', value)}
               aria-invalid={Boolean(errors.terminationDate)}
             />
             <FieldError className="text-xs">{errors.terminationDate}</FieldError>

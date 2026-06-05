@@ -3,11 +3,11 @@ import { useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
 import type { ProjectTask } from '../../types';
 import { getLocalDateString } from '../../utils/date';
 import { formatRecurrencePattern } from '../../utils/recurrence';
 import CustomRepeatModal from '../shared/CustomRepeatModal';
+import DateField from '../shared/DateField';
 import Modal from '../shared/Modal';
 import {
   ModalBody,
@@ -167,21 +167,19 @@ const RecurringTaskEditModal: React.FC<RecurringTaskEditModalProps> = ({
               <FieldGroup className="grid grid-cols-2 gap-4">
                 <Field>
                   <FieldLabel htmlFor="recurring-start-date">{t('recurring.startDate')}</FieldLabel>
-                  <Input
+                  <DateField
                     id="recurring-start-date"
-                    type="date"
                     value={startDate}
-                    onChange={(e) => dispatch({ type: 'setStartDate', startDate: e.target.value })}
+                    onChange={(value) => dispatch({ type: 'setStartDate', startDate: value })}
                   />
                 </Field>
                 <Field data-invalid={Boolean(dateError)}>
                   <FieldLabel htmlFor="recurring-end-date">{t('recurring.endDate')}</FieldLabel>
-                  <Input
+                  <DateField
                     id="recurring-end-date"
-                    type="date"
                     value={endDate}
                     aria-invalid={Boolean(dateError)}
-                    onChange={(e) => dispatch({ type: 'setEndDate', endDate: e.target.value })}
+                    onChange={(value) => dispatch({ type: 'setEndDate', endDate: value })}
                   />
                 </Field>
               </FieldGroup>

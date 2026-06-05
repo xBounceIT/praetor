@@ -89,7 +89,8 @@
     "clearFilters": "Clear filters",
     "searchPlaceholder": "Search...",
     "rowsPerPage": "Rows per page",
-    "actions": "Actions"
+    "actions": "Actions",
+    "selectDate": "Select date"
   },
   "validation": {
     "required": "This field is required",
