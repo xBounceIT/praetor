@@ -56,6 +56,7 @@ import {
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
+import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import ProductSelectOrFallback from './ProductSelectOrFallback';
@@ -1647,6 +1648,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                       displayValue={getSupplierQuoteItemDisplayValue(
                                         item.supplierQuoteItemId,
                                       )}
+                                      displayValueIsPlaceholder={!item.supplierQuoteItemId}
                                       searchable={true}
                                       disabled={isReadOnly}
                                       className="min-w-0 flex-1"
@@ -1772,6 +1774,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
                                     {currency}
                                   </span>
+                                  {isLinkedToSupplierQuote && <SupplierQuoteCostHint />}
                                 </div>
                               </div>
                               <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
@@ -1851,6 +1854,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                     displayValue={getSupplierQuoteItemDisplayValue(
                                       item.supplierQuoteItemId,
                                     )}
+                                    displayValueIsPlaceholder={!item.supplierQuoteItemId}
                                     searchable={true}
                                     disabled={isReadOnly}
                                     className="min-w-0 flex-1"
@@ -1917,11 +1921,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                   </div>
                                 </div>
                                 <div className="col-span-1 flex flex-col items-center justify-center gap-1">
-                                  {isLinkedToSupplierQuote && (
-                                    <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[8px] font-black uppercase tracking-wider">
-                                      {t('sales:clientQuotes.supplierQuoteBadge')}
-                                    </span>
-                                  )}
                                   <div className="flex items-center gap-1 w-full">
                                     <ValidatedNumberInput
                                       value={cost}
@@ -1933,6 +1932,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                     <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
                                       {currency}
                                     </span>
+                                    {isLinkedToSupplierQuote && <SupplierQuoteCostHint />}
                                   </div>
                                 </div>
                                 <div className="col-span-1 flex items-center justify-center gap-1">

@@ -83,6 +83,40 @@ describe('<SelectControl />', () => {
     expect(onChange).toHaveBeenCalledWith('b');
   });
 
+  test('searchable combobox renders displayValue with muted placeholder styling when displayValueIsPlaceholder is set', () => {
+    render(
+      <SelectControl
+        options={[{ id: 'none', name: 'No supplier quote' }, ...options]}
+        value="none"
+        onChange={() => {}}
+        searchable
+        displayValue="No supplier quote"
+        displayValueIsPlaceholder
+      />,
+    );
+
+    const label = screen.getByText('No supplier quote');
+    expect(label).toHaveClass('text-muted-foreground');
+    expect(label).not.toHaveClass('font-semibold');
+  });
+
+  test('searchable combobox renders displayValue with full-contrast styling once a real value is selected', () => {
+    render(
+      <SelectControl
+        options={[{ id: 'none', name: 'No supplier quote' }, ...options]}
+        value="a"
+        onChange={() => {}}
+        searchable
+        displayValue="Apple"
+        displayValueIsPlaceholder={false}
+      />,
+    );
+
+    const label = screen.getByText('Apple');
+    expect(label).toHaveClass('font-semibold', 'text-foreground');
+    expect(label).not.toHaveClass('text-muted-foreground');
+  });
+
   test('searchable popover content renders above the shared modal layer', () => {
     render(<SelectControl options={options} value="" onChange={() => {}} searchable />);
 

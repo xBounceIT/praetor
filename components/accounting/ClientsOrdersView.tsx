@@ -48,6 +48,7 @@ import {
 import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
+import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import OrderVersionsPanel from './OrderVersionsPanel';
@@ -1134,11 +1135,6 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                     {t('crm:internalListing.cost')}
                                   </FieldLabel>
                                   <div className="flex min-h-9 flex-col items-center justify-center gap-1">
-                                    {item.supplierQuoteItemId && (
-                                      <span className={`${pillBadgeClass} bg-emerald-600`}>
-                                        {t('sales:clientQuotes.supplierQuoteBadge')}
-                                      </span>
-                                    )}
                                     {item.supplierSaleId && (
                                       <span className={`${pillBadgeClass} bg-blue-600`}>
                                         {t('accounting:clientsOrders.supplierOrderBadge', {
@@ -1157,6 +1153,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                       <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
                                         {currency}
                                       </span>
+                                      {item.supplierQuoteItemId && <SupplierQuoteCostHint />}
                                     </div>
                                   </div>
                                 </div>
