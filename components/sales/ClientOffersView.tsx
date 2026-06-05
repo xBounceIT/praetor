@@ -1269,6 +1269,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     displayValue={getSupplierQuoteItemDisplayValue(
                                       item.supplierQuoteItemId,
                                     )}
+                                    displayValueIsPlaceholder={!item.supplierQuoteItemId}
                                     searchable={true}
                                     disabled={isReadOnly}
                                     className="min-w-0"
@@ -1448,6 +1449,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     displayValue={getSupplierQuoteItemDisplayValue(
                                       item.supplierQuoteItemId,
                                     )}
+                                    displayValueIsPlaceholder={!item.supplierQuoteItemId}
                                     searchable={true}
                                     disabled={isReadOnly}
                                     className="min-w-0"

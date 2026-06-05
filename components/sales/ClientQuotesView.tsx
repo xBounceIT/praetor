@@ -1588,6 +1588,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                     displayValue={getSupplierQuoteItemDisplayValue(
                                       item.supplierQuoteItemId,
                                     )}
+                                    displayValueIsPlaceholder={!item.supplierQuoteItemId}
                                     searchable={true}
                                     disabled={isReadOnly}
                                     className="min-w-0"
@@ -1777,6 +1778,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                     displayValue={getSupplierQuoteItemDisplayValue(
                                       item.supplierQuoteItemId,
                                     )}
+                                    displayValueIsPlaceholder={!item.supplierQuoteItemId}
                                     searchable={true}
                                     disabled={isReadOnly}
                                     className="min-w-0"
