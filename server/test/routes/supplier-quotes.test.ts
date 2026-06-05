@@ -420,6 +420,39 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     );
   });
 
+  test('200 preserves the stored clientName when an edit resubmits the unchanged clientId (#759)', async () => {
+    // Quote linked to cli-1 with a name captured before the client was later renamed. The edit
+    // form resubmits the unchanged clientId alongside the real change (notes).
+    sqFindByIdMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      clientId: 'cli-1',
+      clientName: 'Name At Link Time',
+    });
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      clientId: 'cli-1',
+      clientName: 'Name At Link Time',
+      notes: 'edited',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { clientId: 'cli-1', notes: 'edited' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // Unchanged link → no client lookup and no clientName/clientId in the patch, so the repo
+    // leaves the denormalized name untouched.
+    expect(clientsFindNameMock).not.toHaveBeenCalled();
+    const patch = sqUpdateMock.mock.calls[0]?.[1];
+    expect(patch).toEqual(expect.objectContaining({ notes: 'edited' }));
+    expect(patch).not.toHaveProperty('clientId');
+    expect(patch).not.toHaveProperty('clientName');
+  });
+
   test('400 when clientId does not reference an existing client', async () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);

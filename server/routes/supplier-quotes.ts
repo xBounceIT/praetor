@@ -492,13 +492,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (supplierNameResult.value !== null) patch.supplierName = supplierNameResult.value;
       }
 
-      // clientId is the source of truth; clientName is resolved from it (or both cleared).
-      // Writing both keys (incl. explicit null) lets the repo distinguish clear-vs-keep.
+      // Validate the clientId format here, but resolve/write the link later and only when it
+      // actually changes (see below). The edit form resubmits the existing clientId on every
+      // save, so re-resolving each time would overwrite the stored historical clientName after a
+      // client rename (#759).
+      let clientIdProvided = false;
+      let incomingClientId: string | null = null;
       if (clientId !== undefined) {
-        const clientLink = await resolveClientLink(clientId, reply);
-        if (!clientLink) return;
-        patch.clientId = clientLink.clientId;
-        patch.clientName = clientLink.clientName;
+        const clientIdResult = optionalNonEmptyString(clientId, 'clientId');
+        if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
+        clientIdProvided = true;
+        incomingClientId = clientIdResult.value;
       }
 
       let nextIdValue: string | null = null;
@@ -573,6 +577,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           details: { secondaryLabel: 'duplicate_id' },
         });
       }
+
+      // Touch the customer link only when it actually changes. An unchanged clientId (the edit
+      // form resubmits it on every save) leaves the stored clientName intact so it survives later
+      // client renames; a changed link re-resolves the canonical name (or clears both on null).
+      if (clientIdProvided && incomingClientId !== current.clientId) {
+        if (incomingClientId === null) {
+          patch.clientId = null;
+          patch.clientName = null;
+        } else {
+          const clientName = await clientsRepo.findName(incomingClientId);
+          if (clientName === null) {
+            return badRequest(reply, 'clientId does not reference an existing client');
+          }
+          patch.clientId = incomingClientId;
+          patch.clientName = clientName;
+        }
+      }
+
       let updated: supplierQuotesRepo.SupplierQuote | null;
       let resultItems: supplierQuotesRepo.SupplierQuoteItem[];
       try {
