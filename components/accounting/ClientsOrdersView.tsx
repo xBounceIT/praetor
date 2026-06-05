@@ -970,12 +970,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
                         value={formData.clientId || ''}
                         onChange={(val) => handleClientChange(val as string)}
-                        label={
-                          <>
-                            {t('accounting:clientsOrders.client')}{' '}
-                            <span className="text-red-500">*</span>
-                          </>
-                        }
+                        label={t('accounting:clientsOrders.client')}
+                        required
                         placeholder={t('sales:clientQuotes.selectAClient')}
                         searchable={true}
                         disabled={isReadOnly}

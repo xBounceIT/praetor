@@ -337,8 +337,8 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
 
         <form className="space-y-5" onSubmit={handleSubmit}>
           <Field data-invalid={!!errors.name}>
-            <FieldLabel htmlFor="project-rule-name">
-              {t('projects:detail.rules.form.name')} <span className="text-red-500">*</span>
+            <FieldLabel htmlFor="project-rule-name" required>
+              {t('projects:detail.rules.form.name')}
             </FieldLabel>
             <Input
               id="project-rule-name"
@@ -446,9 +446,12 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
                       className={`${CONDITION_GRID_CLASSNAME} p-3`}
                     >
                       <Field data-invalid={!!fieldError}>
-                        <FieldLabel className="md:sr-only" htmlFor={`project-rule-field-${index}`}>
-                          {t('projects:detail.rules.form.field')}{' '}
-                          <span className="text-red-500">*</span>
+                        <FieldLabel
+                          className="md:sr-only"
+                          htmlFor={`project-rule-field-${index}`}
+                          required
+                        >
+                          {t('projects:detail.rules.form.field')}
                         </FieldLabel>
                         <Select
                           value={condition.field}
@@ -479,9 +482,9 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
                         <FieldLabel
                           className="md:sr-only"
                           htmlFor={`project-rule-operator-${index}`}
+                          required
                         >
-                          {t('projects:detail.rules.form.operator')}{' '}
-                          <span className="text-red-500">*</span>
+                          {t('projects:detail.rules.form.operator')}
                         </FieldLabel>
                         <Select
                           value={condition.operator}
@@ -538,13 +541,16 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
                       </Field>
 
                       <Field data-invalid={!!valueError}>
-                        <FieldLabel className="md:sr-only" htmlFor={`project-rule-value-${index}`}>
+                        <FieldLabel
+                          className="md:sr-only"
+                          htmlFor={`project-rule-value-${index}`}
+                          required
+                        >
                           {t(
                             valueType === 'field'
                               ? 'projects:detail.rules.form.targetField'
                               : 'projects:detail.rules.form.value',
-                          )}{' '}
-                          <span className="text-red-500">*</span>
+                          )}
                         </FieldLabel>
                         {valueType === 'field' ? (
                           <Select

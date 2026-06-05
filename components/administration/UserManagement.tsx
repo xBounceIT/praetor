@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { RequiredMark } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -1280,7 +1281,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                    {t('hr:workforce.name')} <span className="text-red-500">*</span>
+                    {t('hr:workforce.name')} {!editIdentityReadOnly && <RequiredMark />}
                   </label>
                   <input
                     type="text"

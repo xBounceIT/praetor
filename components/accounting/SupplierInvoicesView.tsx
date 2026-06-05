@@ -456,9 +456,8 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     />
                   </Field>
                   <Field>
-                    <FieldLabel htmlFor="supplier-invoice-number">
-                      {t('accounting:supplierInvoices.invoiceNumber')}{' '}
-                      <span className="text-red-500">*</span>
+                    <FieldLabel htmlFor="supplier-invoice-number" required>
+                      {t('accounting:supplierInvoices.invoiceNumber')}
                     </FieldLabel>
                     <Input
                       id="supplier-invoice-number"
@@ -473,9 +472,8 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     />
                   </Field>
                   <Field>
-                    <FieldLabel htmlFor="supplier-invoice-issue-date">
-                      {t('accounting:supplierInvoices.issueDate')}{' '}
-                      <span className="text-red-500">*</span>
+                    <FieldLabel htmlFor="supplier-invoice-issue-date" required>
+                      {t('accounting:supplierInvoices.issueDate')}
                     </FieldLabel>
                     <DateField
                       id="supplier-invoice-issue-date"
@@ -487,9 +485,8 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     />
                   </Field>
                   <Field>
-                    <FieldLabel htmlFor="supplier-invoice-due-date">
-                      {t('accounting:supplierInvoices.dueDate')}{' '}
-                      <span className="text-red-500">*</span>
+                    <FieldLabel htmlFor="supplier-invoice-due-date" required>
+                      {t('accounting:supplierInvoices.dueDate')}
                     </FieldLabel>
                     <DateField
                       id="supplier-invoice-due-date"

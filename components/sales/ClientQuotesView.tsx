@@ -1461,20 +1461,16 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         placeholder={t('sales:clientQuotes.selectAClient')}
                         searchable={true}
                         disabled={isReadOnly}
-                        label={
-                          <>
-                            {t('sales:clientQuotes.client')} <span className="text-red-500">*</span>
-                          </>
-                        }
+                        label={t('sales:clientQuotes.client')}
+                        required
                         buttonClassName="h-9"
                         className={errors.clientId ? 'border-red-300' : ''}
                       />
                       <FieldError className="text-xs">{errors.clientId}</FieldError>
                     </Field>
                     <Field data-invalid={Boolean(errors.id)}>
-                      <FieldLabel htmlFor="client-quote-code">
-                        {t('sales:clientQuotes.quoteCode', { defaultValue: 'Quote Code' })}{' '}
-                        <span className="text-red-500">*</span>
+                      <FieldLabel htmlFor="client-quote-code" required>
+                        {t('sales:clientQuotes.quoteCode', { defaultValue: 'Quote Code' })}
                       </FieldLabel>
                       <Input
                         id="client-quote-code"
@@ -1515,9 +1511,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       />
                     </Field>
                     <Field>
-                      <FieldLabel htmlFor="client-quote-expiration-date">
-                        {t('sales:clientQuotes.expirationDateLabel')}{' '}
-                        <span className="text-red-500">*</span>
+                      <FieldLabel htmlFor="client-quote-expiration-date" required>
+                        {t('sales:clientQuotes.expirationDateLabel')}
                       </FieldLabel>
                       <DateField
                         id="client-quote-expiration-date"

@@ -11,7 +11,7 @@ describe('InternalListingView modal styling', () => {
 
     expectSourceContainsAll(source, [
       "import { Button } from '@/components/ui/button';",
-      "import { FieldLabel } from '@/components/ui/field';",
+      "import { FieldLabel, RequiredMark } from '@/components/ui/field';",
       "import { Input } from '@/components/ui/input';",
       "import { Textarea } from '@/components/ui/textarea';",
       '<ModalContent size="2xl" className="max-h-[90vh]">',

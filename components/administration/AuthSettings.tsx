@@ -746,7 +746,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                     value={draft.issuerUrl || ''}
                     error={errors[`${prefix}issuerUrl`]}
                     monospace
-                    required
+                    required={!!draft.enabled}
                     onChange={(issuerUrl) => updateProviderDraft(protocol, { issuerUrl })}
                   />
                   <Field
@@ -754,7 +754,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                     value={draft.clientId || ''}
                     error={errors[`${prefix}clientId`]}
                     monospace
-                    required
+                    required={!!draft.enabled}
                     onChange={(clientId) => updateProviderDraft(protocol, { clientId })}
                   />
                   <SecretField
@@ -922,7 +922,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 value={draft.usernameAttribute || ''}
                 error={errors[`${prefix}usernameAttribute`]}
                 monospace
-                required={protocol === 'oidc'}
+                required={protocol === 'oidc' && !!draft.enabled}
                 onChange={(usernameAttribute) =>
                   updateProviderDraft(protocol, { usernameAttribute })
                 }
@@ -1183,7 +1183,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   value={ldapForm.serverUrl}
                   error={errors.serverUrl}
                   monospace
-                  required
+                  required={ldapForm.enabled}
                   onChange={(serverUrl) => setLdapForm((prev) => ({ ...prev, serverUrl }))}
                 />
                 <Field
@@ -1191,7 +1191,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   value={ldapForm.baseDn}
                   error={errors.baseDn}
                   monospace
-                  required
+                  required={ldapForm.enabled}
                   onChange={(baseDn) => setLdapForm((prev) => ({ ...prev, baseDn }))}
                 />
                 <Field
@@ -1199,7 +1199,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   value={ldapForm.userFilter}
                   error={errors.userFilter}
                   monospace
-                  required
+                  required={ldapForm.enabled}
                   onChange={(userFilter) => setLdapForm((prev) => ({ ...prev, userFilter }))}
                 />
                 <Field
@@ -1228,7 +1228,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   value={ldapForm.groupBaseDn}
                   error={errors.groupBaseDn}
                   monospace
-                  required
+                  required={ldapForm.enabled}
                   onChange={(groupBaseDn) => setLdapForm((prev) => ({ ...prev, groupBaseDn }))}
                 />
                 <Field
@@ -1236,7 +1236,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   value={ldapForm.groupFilter}
                   error={errors.groupFilter}
                   monospace
-                  required
+                  required={ldapForm.enabled}
                   onChange={(groupFilter) => setLdapForm((prev) => ({ ...prev, groupFilter }))}
                 />
               </CardContent>
@@ -1645,14 +1645,8 @@ const Field: React.FC<FieldProps> = ({
   const id = useId();
   return (
     <UIField>
-      <FieldLabel htmlFor={id}>
+      <FieldLabel htmlFor={id} required={required}>
         {label}
-        {required && (
-          <>
-            {' '}
-            <span className="text-red-500">*</span>
-          </>
-        )}
       </FieldLabel>
       <Input
         id={id}

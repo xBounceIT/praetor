@@ -102,8 +102,8 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
         </h3>
         <div className="grid gap-4 md:grid-cols-3">
           <Field data-invalid={Boolean(errors.name)}>
-            <FieldLabel htmlFor={`${prefix}-name`}>
-              {t(`${section}.name`)} <span className="text-red-500">*</span>
+            <FieldLabel htmlFor={`${prefix}-name`} required>
+              {t(`${section}.name`)}
             </FieldLabel>
             <Input
               id={`${prefix}-name`}

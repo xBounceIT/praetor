@@ -31,7 +31,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
-import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Field, FieldError, FieldLabel, RequiredMark } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -105,12 +105,6 @@ const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
 
 const toStoredBillingType = (value: BillingType | undefined): StoredBillingType =>
   value === 'retainer' ? 'retainer' : 'time_and_materials';
-
-const RequiredMark = () => (
-  <span className="text-destructive" aria-hidden="true">
-    *
-  </span>
-);
 
 const billingTypeOptions = [
   { id: 'time_and_materials', name: 'projects:projects.billingTypes.timeAndMaterials' },

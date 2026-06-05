@@ -15,7 +15,7 @@ import CustomRepeatModal from '../shared/CustomRepeatModal';
 import DateField from '../shared/DateField';
 import SelectControl from '../shared/SelectControl';
 import { Button } from '../ui/button';
-import { Field, FieldLabel } from '../ui/field';
+import { Field, FieldLabel, RequiredMark } from '../ui/field';
 import { Input } from '../ui/input';
 import { Separator } from '../ui/separator';
 import EntryCatalogSelector from './EntryCatalogSelector';
@@ -407,7 +407,7 @@ const DailyView: React.FC<DailyViewProps> = ({
     () => (
       <Field className="min-w-0">
         <FieldLabel htmlFor="daily-entry-hours">
-          {t('entry.hours')} <span className="text-destructive">*</span>
+          {t('entry.hours')} <RequiredMark />
         </FieldLabel>
         <Input
           id="daily-entry-hours"
