@@ -557,6 +557,19 @@ describe('normalizeQuoteItem', () => {
     expect(result.note).toBe('Test note');
   });
 
+  test('coerces durationMonths and defaults a missing/invalid value to 1', () => {
+    expect(
+      normalizeQuoteItem(make<QuoteItem>(baseQuoteItem, { durationMonths: '12' })).durationMonths,
+    ).toBe(12);
+    expect(
+      normalizeQuoteItem(make<QuoteItem>(baseQuoteItem, { durationMonths: undefined }))
+        .durationMonths,
+    ).toBe(1);
+    expect(
+      normalizeQuoteItem(make<QuoteItem>(baseQuoteItem, { durationMonths: 0 })).durationMonths,
+    ).toBe(1);
+  });
+
   test('defaults missing/null fields to 0 / null / empty string', () => {
     const item = make<QuoteItem>(baseQuoteItem, {
       quantity: undefined,

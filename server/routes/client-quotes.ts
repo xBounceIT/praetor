@@ -18,6 +18,7 @@ import {
   badRequest,
   optionalDateString,
   optionalLocalizedNonNegativeNumber,
+  optionalLocalizedPositiveNumber,
   optionalNonEmptyString,
   parseDateString,
   parseLocalizedNonNegativeNumber,
@@ -37,6 +38,7 @@ type IncomingQuoteItem = {
   discount: number;
   note?: string | null;
   unitType?: UnitType;
+  durationMonths: number;
 };
 
 type QuoteItemSnapshot = {
@@ -97,6 +99,15 @@ const normalizeQuoteItems = (
     if (!productMolPercentageResult.ok) {
       return { ok: false, message: productMolPercentageResult.message };
     }
+    // Duration in months: a positive whole number, defaulting to 1 (one-off line item).
+    const durationMonthsResult = optionalLocalizedPositiveNumber(
+      item.durationMonths,
+      `items[${i}].durationMonths`,
+    );
+    if (!durationMonthsResult.ok) return { ok: false, message: durationMonthsResult.message };
+    if (durationMonthsResult.value !== null && !Number.isInteger(durationMonthsResult.value)) {
+      return { ok: false, message: `items[${i}].durationMonths must be a whole number of months` };
+    }
     result.push({
       id: normalizeNullableString(item.id) ?? undefined,
       productId: productIdValue,
@@ -109,13 +120,19 @@ const normalizeQuoteItems = (
       discount: itemDiscountResult.value || 0,
       note: normalizeNullableString(item.note),
       unitType: normalizeUnitType(item.unitType),
+      durationMonths: durationMonthsResult.value ?? 1,
     });
   }
   return { ok: true, items: result };
 };
 
 const calculateQuoteTotals = (
-  items: Array<{ quantity: number; unitPrice: number; discount?: number }>,
+  items: Array<{
+    quantity: number;
+    unitPrice: number;
+    discount?: number;
+    durationMonths?: number;
+  }>,
   globalDiscount: number,
   discountType: 'percentage' | 'currency' = 'percentage',
 ) => {
@@ -126,17 +143,21 @@ const calculateQuoteTotals = (
     const quantity = Number(item.quantity);
     const unitPrice = Number(item.unitPrice);
     const itemDiscount = Number(item.discount ?? 0);
+    const durationMonths = Number(item.durationMonths ?? 1);
     if (
       !Number.isFinite(quantity) ||
       !Number.isFinite(unitPrice) ||
-      !Number.isFinite(itemDiscount)
+      !Number.isFinite(itemDiscount) ||
+      !Number.isFinite(durationMonths)
     ) {
       return {
         total: Number.NaN,
         subtotal: Number.NaN,
       };
     }
-    const lineSubtotal = quantity * unitPrice;
+    // Duration is a multiplier on the line revenue (issue #757); guard against a
+    // non-positive value falling through to zero out the gate.
+    const lineSubtotal = quantity * unitPrice * (durationMonths > 0 ? durationMonths : 1);
     const lineDiscount = lineSubtotal * (itemDiscount / 100);
     const lineNet = lineSubtotal - lineDiscount;
     subtotal += lineNet;
@@ -297,6 +318,7 @@ const quoteItemSchema = {
     discount: { type: 'number' },
     note: { type: ['string', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
+    durationMonths: { type: 'number' },
   },
   required: [
     'id',
@@ -356,6 +378,7 @@ const quoteItemBodySchema = {
     discount: { type: 'number' },
     note: { type: 'string' },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
+    durationMonths: { type: 'number' },
   },
   required: ['productId', 'productName', 'quantity', 'unitPrice'],
 } as const;
@@ -410,6 +433,7 @@ const buildItemsForInsert = (items: ResolvedQuoteItem[]): clientQuotesRepo.NewCl
     supplierQuoteSupplierName: item.supplierQuoteSupplierName ?? null,
     supplierQuoteUnitPrice: item.supplierQuoteUnitPrice ?? null,
     unitType: item.unitType ?? 'hours',
+    durationMonths: item.durationMonths ?? 1,
   }));
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -841,6 +865,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             quantity: 0,
             unitPrice: 0,
             discount: 0,
+            // Placeholder: this stub only feeds the cost/MOL "unchanged" comparison below;
+            // durationMonths always comes from the incoming item, never from this snapshot.
+            durationMonths: 1,
             productCost: snap.productCost,
             productMolPercentage: snap.productMolPercentage,
             supplierQuoteId: snap.supplierQuoteId,

@@ -280,6 +280,7 @@ export const normalizeProject = (p: Project): Project => ({
 
 export const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({
   ...normalizePricingItemFields(item),
+  durationMonths: Number(item.durationMonths ?? 1) || 1,
   note: item.note || '',
 });
 

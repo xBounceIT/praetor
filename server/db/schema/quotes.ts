@@ -3,6 +3,7 @@ import {
   check,
   date,
   index,
+  integer,
   numeric,
   pgTable,
   text,
@@ -71,10 +72,15 @@ export const quoteItems = pgTable(
     discount: numeric('discount', { precision: 5, scale: 2 }).default('0'),
     note: text('note'),
     unitType: varchar('unit_type', { length: 10 }).default('hours'),
+    // Number of months the line item's service runs. Acts as a multiplier alongside
+    // `quantity` for both cost and revenue (see issue #757). Defaults to 1 (one-off item),
+    // which keeps totals identical to the pre-duration behavior.
+    durationMonths: integer('duration_months').notNull().default(1),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index('idx_quote_items_quote_id').on(table.quoteId),
     check('chk_quote_items_unit_type', sql`${table.unitType} IN ('hours', 'days', 'unit')`),
+    check('chk_quote_items_duration_months', sql`${table.durationMonths} >= 1`),
   ],
 );

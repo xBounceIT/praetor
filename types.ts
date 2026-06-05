@@ -504,6 +504,7 @@ export interface QuoteItem {
   discount?: number; // item-level discount percentage
   note?: string;
   unitType?: SupplierUnitType;
+  durationMonths?: number; // months the service runs; multiplies cost & revenue (issue #757)
 }
 
 export interface Quote {

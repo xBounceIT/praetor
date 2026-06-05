@@ -383,6 +383,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         ...item,
         unitPrice: item.unitPrice,
         discount: item.discount ? item.discount : 0,
+        durationMonths: Number(item.durationMonths ?? 1) || 1,
         productCost: Number(item.productCost ?? 0),
         productMolPercentage:
           item.productMolPercentage === undefined || item.productMolPercentage === null
@@ -566,6 +567,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       productId: '',
       productName: '',
       quantity: 1,
+      durationMonths: 1,
       unitType: 'hours',
       unitPrice: 0,
       productCost: 0,
@@ -784,6 +786,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       unitPrice: adjustedPrice,
     };
     setFormData((prev) => ({ ...prev, items: newItems }));
+  };
+
+  // Duration in whole months (issue #757). Empty/invalid input falls back to 1 (one-off line).
+  const handleDurationChange = (index: number, value: string) => {
+    if (isReadOnly) return;
+    const parsed = Number.parseInt(value, 10);
+    const months = value === '' || Number.isNaN(parsed) ? 1 : Math.max(1, parsed);
+    updateProductRow(index, 'durationMonths', months);
   };
 
   // Column definitions for StandardTable
@@ -1482,7 +1492,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
                   {formData.items && formData.items.length > 0 && (
                     <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                      <div className="flex-1 min-w-0 grid grid-cols-13 gap-2">
+                      <div className="flex-1 min-w-0 grid grid-cols-14 gap-2">
                         <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
                           {t('sales:clientQuotes.supplierQuoteColumn')}
                         </div>
@@ -1491,6 +1501,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         </div>
                         <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
                           {t('sales:clientQuotes.qty')}
+                        </div>
+                        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
+                          {t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
                         </div>
                         <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
                           {t('crm:internalListing.cost')}
@@ -1520,11 +1533,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                           molPercentage,
                           lineCost,
                           quantity,
+                          durationMonths,
                         } = getItemPricingContext(item);
                         const product = products.find((p) => p.id === item.productId);
                         const isSupply = product?.type === 'supply';
                         const unitSalePrice = Number(item.unitPrice || 0);
-                        const lineSalePrice = unitSalePrice * quantity;
+                        const lineSalePrice = unitSalePrice * quantity * durationMonths;
                         const lineMargin = lineSalePrice - lineCost;
 
                         const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
@@ -1634,7 +1648,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 <span className="sr-only">{t('common:buttons.delete')}</span>
                               </Button>
                             </div>
-                            <div className="grid grid-cols-2 gap-3 md:grid-cols-6 lg:hidden">
+                            <div className="grid grid-cols-2 gap-3 md:grid-cols-7 lg:hidden">
                               <div>
                                 <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
                                   {t('sales:clientQuotes.qty')}
@@ -1674,6 +1688,36 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                     quantity={Number(item.quantity) || 0}
                                     disabled={isReadOnly || isLinkedToSupplierQuote}
                                   />
+                                </div>
+                              </div>
+                              <div>
+                                <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
+                                  {t('sales:clientQuotes.durationColumn', {
+                                    defaultValue: 'Duration',
+                                  })}
+                                  <FieldTooltip
+                                    description={t('sales:fieldInfo.duration', {
+                                      defaultValue: 'Number of months the service runs',
+                                    })}
+                                    status={readOnlyStatus}
+                                    statusLabel={statusLabel}
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <ValidatedNumberInput
+                                    step="1"
+                                    min="1"
+                                    placeholder={t('sales:clientQuotes.durationColumn', {
+                                      defaultValue: 'Duration',
+                                    })}
+                                    value={durationMonths}
+                                    onValueChange={(value) => handleDurationChange(index, value)}
+                                    disabled={isReadOnly}
+                                    className="w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
+                                  />
+                                  <span className="text-xs font-semibold text-zinc-400 shrink-0">
+                                    {t('sales:clientQuotes.durationUnit', { defaultValue: 'mo' })}
+                                  </span>
                                 </div>
                               </div>
                               <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
@@ -1752,7 +1796,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               </div>
                             </div>
                             <div className="hidden lg:flex gap-2 items-center">
-                              <div className="flex-1 min-w-0 grid grid-cols-13 gap-2 items-center">
+                              <div className="flex-1 min-w-0 grid grid-cols-14 gap-2 items-center">
                                 <div className="col-span-3 min-w-0">
                                   <SelectControl
                                     options={[
@@ -1829,6 +1873,22 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                       disabled={isReadOnly || isLinkedToSupplierQuote}
                                     />
                                   </div>
+                                </div>
+                                <div className="col-span-1 flex items-center justify-center gap-1">
+                                  <ValidatedNumberInput
+                                    step="1"
+                                    min="1"
+                                    placeholder={t('sales:clientQuotes.durationColumn', {
+                                      defaultValue: 'Duration',
+                                    })}
+                                    value={durationMonths}
+                                    onValueChange={(value) => handleDurationChange(index, value)}
+                                    disabled={isReadOnly}
+                                    className="w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                  />
+                                  <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
+                                    {t('sales:clientQuotes.durationUnit', { defaultValue: 'mo' })}
+                                  </span>
                                 </div>
                                 <div className="col-span-1 flex flex-col items-center justify-center gap-1">
                                   {isLinkedToSupplierQuote && (

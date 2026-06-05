@@ -52,6 +52,10 @@ export interface PricingItem {
   unitType?: SupplierUnitType;
   quantity?: number;
   productMolPercentage?: number | null;
+  // Number of months the line runs (issue #757). Multiplies cost and revenue alongside
+  // quantity. Absent/invalid → 1, so items that never set it (offers, orders, invoices)
+  // keep their existing totals.
+  durationMonths?: number;
 }
 
 export const getEffectiveCost = (item: PricingItem): number => {
@@ -63,11 +67,17 @@ export const getEffectiveMol = (item: PricingItem): number => {
   return item.productMolPercentage ? Number(item.productMolPercentage) : 0;
 };
 
+export const getEffectiveDurationMonths = (item: PricingItem): number => {
+  const months = Number(item.durationMonths ?? 1);
+  return Number.isFinite(months) && months > 0 ? months : 1;
+};
+
 export interface ItemPricingContext {
   baseCost: number;
   unitCost: number;
   molPercentage: number;
   quantity: number;
+  durationMonths: number;
   lineCost: number;
 }
 
@@ -79,8 +89,9 @@ export const getItemPricingContext = (
   const unitCost = convertUnitPrice(baseCost, 'hours', item.unitType || defaultUnitType);
   const molPercentage = getEffectiveMol(item);
   const quantity = Number(item.quantity || 0);
-  const lineCost = unitCost * quantity;
-  return { baseCost, unitCost, molPercentage, quantity, lineCost };
+  const durationMonths = getEffectiveDurationMonths(item);
+  const lineCost = unitCost * quantity * durationMonths;
+  return { baseCost, unitCost, molPercentage, quantity, durationMonths, lineCost };
 };
 
 export interface PricingTotals {
@@ -102,14 +113,16 @@ export const calculatePricingTotals = (
   let totalCost = 0;
 
   items.forEach((item) => {
-    const lineSubtotal = Number(item.quantity || 0) * Number(item.unitPrice || 0);
+    const durationMonths = getEffectiveDurationMonths(item);
+    const lineSubtotal = Number(item.quantity || 0) * Number(item.unitPrice || 0) * durationMonths;
     const lineDiscount = (lineSubtotal * (item.discount || 0)) / 100;
     subtotal += lineSubtotal - lineDiscount;
 
     const cost = getEffectiveCost(item);
     totalCost +=
       Number(item.quantity || 0) *
-      convertUnitPrice(cost, 'hours', item.unitType || defaultUnitType);
+      convertUnitPrice(cost, 'hours', item.unitType || defaultUnitType) *
+      durationMonths;
   });
 
   const discountAmount =

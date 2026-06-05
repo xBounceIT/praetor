@@ -262,6 +262,7 @@ describe('clientQuotesRepo.replaceItems', () => {
     supplierQuoteSupplierName: null,
     supplierQuoteUnitPrice: null,
     unitType: 'unit' as const,
+    durationMonths: 1,
   };
 
   test('failed INSERT leaves prior items intact', async () => {

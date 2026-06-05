@@ -9,6 +9,8 @@ sidebar:
 
 I preventivi e le offerte raccolgono prodotti, quantità, prezzi, sconti e condizioni. Usa il catalogo per partire da dati coerenti e controlla sempre totali, margini e validità prima di inviare il documento.
 
+Ogni riga del preventivo include la colonna **Durata** (in mesi), posizionata tra **Quantità** e **Costo**: indica per quanti mesi è valido il servizio. La durata si comporta come un moltiplicatore insieme alla quantità, quindi sia il **Costo Totale** sia i **Ricavi** della riga sono calcolati come *valore unitario × Quantità × Durata (mesi)*. Per le voci una tantum lascia **Durata = 1**, così i totali restano identici al comportamento precedente.
+
 La lista dei preventivi mostra codice, data di inserimento, cliente, subtotale, sconto percentuale, sconto assoluto, totale scontato, margine, MOL, termini di pagamento, scadenza e stato per controllare rapidamente i valori principali senza aprire ogni record.
 
 Nel riepilogo delle offerte, la riga **Sconto** mostra sempre la percentuale equivalente tra parentesi, anche quando lo sconto globale è inserito come importo fisso. L'importo dello sconto resta visibile in valuta sulla destra.

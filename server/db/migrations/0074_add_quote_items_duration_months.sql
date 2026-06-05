@@ -1,0 +1,2 @@
+ALTER TABLE "quote_items" ADD COLUMN "duration_months" integer DEFAULT 1 NOT NULL;--> statement-breakpoint
+ALTER TABLE "quote_items" ADD CONSTRAINT "chk_quote_items_duration_months" CHECK ("quote_items"."duration_months" >= 1);

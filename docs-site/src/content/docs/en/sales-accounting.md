@@ -9,6 +9,8 @@ sidebar:
 
 Quotes and offers include products, quantities, prices, discounts, and terms. Use the catalog to start from consistent data and always check totals, margins, and validity before sending a document.
 
+Each quote line includes a **Duration** column (in months), placed between **Quantity** and **Cost**: it sets how many months the service runs. Duration acts as a multiplier alongside quantity, so both the line's **Total cost** and **Revenue** are computed as *unit value × Quantity × Duration (months)*. For one-off items leave **Duration = 1** so totals stay identical to the previous behavior.
+
 The quote list shows code, insertion date, client, subtotal, discount percentage, absolute discount, discounted total, margin, MOL, payment terms, due date, and status so the main values can be checked without opening each record.
 
 In offer summaries, the **Discount** row always shows the equivalent percentage in parentheses, even when the global discount is entered as a fixed amount. The discount amount remains visible in currency on the right.

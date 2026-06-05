@@ -5,6 +5,7 @@ import {
   convertUnitPrice,
   formatDiscountValue,
   getEffectiveCost,
+  getEffectiveDurationMonths,
   getEffectiveMol,
   getItemPricingContext,
   type PricingItem,
@@ -100,6 +101,22 @@ describe('getEffectiveCost / getEffectiveMol', () => {
   });
 });
 
+describe('getEffectiveDurationMonths', () => {
+  test('defaults to 1 when durationMonths is absent', () => {
+    expect(getEffectiveDurationMonths({})).toBe(1);
+  });
+
+  test('returns the numeric value when a valid positive duration is set', () => {
+    expect(getEffectiveDurationMonths({ durationMonths: 12 })).toBe(12);
+  });
+
+  test('falls back to 1 for zero, negative, or non-finite durations', () => {
+    expect(getEffectiveDurationMonths({ durationMonths: 0 })).toBe(1);
+    expect(getEffectiveDurationMonths({ durationMonths: -3 })).toBe(1);
+    expect(getEffectiveDurationMonths({ durationMonths: Number.NaN })).toBe(1);
+  });
+});
+
 describe('getItemPricingContext', () => {
   test('computes line cost in the item unitType when explicit', () => {
     const item: PricingItem = { productCost: 80, unitType: 'days', quantity: 2 };
@@ -107,7 +124,20 @@ describe('getItemPricingContext', () => {
     expect(ctx.baseCost).toBe(80);
     expect(ctx.unitCost).toBe(640); // 80/h × 8 = 640/day
     expect(ctx.quantity).toBe(2);
+    expect(ctx.durationMonths).toBe(1);
     expect(ctx.lineCost).toBe(1280);
+  });
+
+  test('multiplies line cost by durationMonths (issue #757)', () => {
+    const item: PricingItem = { productCost: 50, quantity: 2, durationMonths: 12 };
+    const ctx = getItemPricingContext(item, 'hours');
+    expect(ctx.durationMonths).toBe(12);
+    expect(ctx.lineCost).toBe(1200); // 50 × 2 × 12
+  });
+
+  test('treats an absent durationMonths as 1 (unchanged from pre-duration behavior)', () => {
+    const item: PricingItem = { productCost: 50, quantity: 2 };
+    expect(getItemPricingContext(item, 'hours').lineCost).toBe(100);
   });
 
   test('falls back to defaultUnitType when item has no unitType', () => {
@@ -138,6 +168,30 @@ describe('calculatePricingTotals', () => {
   test('applies a per-line percentage discount', () => {
     const items: PricingItem[] = [{ unitPrice: 100, quantity: 1, discount: 10 }];
     expect(calculatePricingTotals(items, 0).subtotal).toBe(90);
+  });
+
+  test('multiplies both revenue and cost by durationMonths (issue #757)', () => {
+    const items: PricingItem[] = [
+      { unitPrice: 100, quantity: 2, productCost: 60, durationMonths: 12 },
+    ];
+    const t = calculatePricingTotals(items, 0);
+    expect(t.subtotal).toBe(2400); // 100 × 2 × 12
+    expect(t.totalCost).toBe(1440); // 60 × 2 × 12
+    expect(t.margin).toBe(960); // 2400 − 1440
+  });
+
+  test('applies the per-line discount on top of the duration-scaled revenue', () => {
+    const items: PricingItem[] = [{ unitPrice: 100, quantity: 1, discount: 10, durationMonths: 3 }];
+    // 100 × 1 × 3 = 300, then −10% = 270
+    expect(calculatePricingTotals(items, 0).subtotal).toBe(270);
+  });
+
+  test('leaves totals unchanged when durationMonths is 1 or absent', () => {
+    const withDuration: PricingItem[] = [
+      { unitPrice: 100, quantity: 2, productCost: 60, durationMonths: 1 },
+    ];
+    const without: PricingItem[] = [{ unitPrice: 100, quantity: 2, productCost: 60 }];
+    expect(calculatePricingTotals(withDuration, 0)).toEqual(calculatePricingTotals(without, 0));
   });
 
   test('applies a global percentage discount on top of per-line discounts', () => {
