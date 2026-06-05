@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import type { Product } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
@@ -68,7 +68,19 @@ describe('<InternalListingView /> productFilterId', () => {
   test('pre-filters the table to the deep-linked product id', () => {
     render(<InternalListingView {...baseProps} products={products} productFilterId="prod-2" />);
     // Only the referenced product is shown; the other row is filtered out.
-    expect(screen.getByText('Wind Turbine')).toBeInTheDocument();
+    expect(screen.getAllByText('Wind Turbine').length).toBeGreaterThan(0);
     expect(screen.queryByText('Solar Panel')).not.toBeInTheDocument();
+  });
+
+  test('shows a clearable filtered-view banner for the deep-linked product', () => {
+    render(<InternalListingView {...baseProps} products={products} productFilterId="prod-2" />);
+    // The banner makes the otherwise-invisible (hidden id column) filter obvious.
+    expect(screen.getByText('common:table.filteredView')).toBeInTheDocument();
+    const clearButton = screen.getByRole('button', { name: 'common:table.showAllRecords' });
+
+    // Clearing the filter restores the full list and removes the banner.
+    fireEvent.click(clearButton);
+    expect(screen.getByText('Solar Panel')).toBeInTheDocument();
+    expect(screen.queryByText('common:table.filteredView')).not.toBeInTheDocument();
   });
 });

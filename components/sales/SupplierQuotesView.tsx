@@ -118,12 +118,20 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     [suppliers],
   );
 
-  const tableInitialFilterState = useMemo(() => {
-    if (quoteFilterId) {
-      return { id: [quoteFilterId] };
-    }
-    return undefined;
-  }, [quoteFilterId]);
+  // `quoteFilterId` arrives from a quick-view deep link or a cross-view "view
+  // quote" action. Surface a dismissible banner so the filtered view is obvious
+  // and clearable; the local flag lets "show all" drop the filter without losing
+  // the incoming prop. (The id only changes across mounts, so no reset needed.)
+  const [quoteFilterCleared, setQuoteFilterCleared] = useState(false);
+  const activeQuoteFilterId = quoteFilterCleared ? null : (quoteFilterId ?? null);
+  const tableInitialFilterState = useMemo(
+    () => (activeQuoteFilterId ? { id: [activeQuoteFilterId] } : undefined),
+    [activeQuoteFilterId],
+  );
+  const deepLinkedQuote = useMemo(
+    () => (activeQuoteFilterId ? (quotes.find((q) => q.id === activeQuoteFilterId) ?? null) : null),
+    [activeQuoteFilterId, quotes],
+  );
 
   const [editingQuote, setEditingQuote] = useState<SupplierQuote | null>(null);
   const [quoteToDelete, setQuoteToDelete] = useState<SupplierQuote | null>(null);
@@ -1280,6 +1288,22 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           </HeaderAddButton>
         </div>
       </div>
+
+      {deepLinkedQuote && (
+        <LinkedRecordBanner
+          icon="fa-filter"
+          label={t('common:table.filteredView')}
+          value={
+            deepLinkedQuote.supplierName
+              ? `${deepLinkedQuote.id} · ${deepLinkedQuote.supplierName}`
+              : deepLinkedQuote.id
+          }
+          action={{
+            label: t('common:table.showAllRecords'),
+            onClick: () => setQuoteFilterCleared(true),
+          }}
+        />
+      )}
 
       <StandardTable<SupplierQuote>
         title={t('sales:supplierQuotes.activeQuotes', { defaultValue: 'Active Quotes' })}

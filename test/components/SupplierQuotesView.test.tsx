@@ -108,3 +108,24 @@ describe('<SupplierQuotesView /> read-only gating', () => {
     expect(screen.queryByText('sales:supplierQuotes.readOnlyStatus')).not.toBeInTheDocument();
   });
 });
+
+describe('<SupplierQuotesView /> deep-link filter banner', () => {
+  test('shows a clearable filtered-view banner and pre-filters the table', () => {
+    render(<SupplierQuotesView {...baseProps} quoteFilterId="SQ-SENT" />);
+
+    // Banner surfaces the active filter; the table is reduced to the linked quote.
+    expect(screen.getByText('common:table.filteredView')).toBeInTheDocument();
+    expect(screen.getAllByText('SQ-SENT · Acme Supplies').length).toBeGreaterThan(0);
+    expect(screen.queryByText('SQ-DRAFT')).not.toBeInTheDocument();
+
+    // "Show all" clears the filter and dismisses the banner.
+    fireEvent.click(screen.getByRole('button', { name: 'common:table.showAllRecords' }));
+    expect(screen.getByText('SQ-DRAFT')).toBeInTheDocument();
+    expect(screen.queryByText('common:table.filteredView')).not.toBeInTheDocument();
+  });
+
+  test('renders no banner when there is no filter', () => {
+    render(<SupplierQuotesView {...baseProps} />);
+    expect(screen.queryByText('common:table.filteredView')).not.toBeInTheDocument();
+  });
+});

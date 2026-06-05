@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
 import { FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -90,11 +91,21 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 }) => {
   const { t, i18n } = useTranslation(['crm', 'common']);
 
-  // Seeds the products table filter when arriving via a quick-view deep link, so
-  // only the referenced product is shown. Matches the hidden `id` column below.
+  // A quick-view deep link filters the products table to a single id via the
+  // hidden `id` column below — which has no visible filter chip. Surface a
+  // dismissible banner so the active filter is obvious and clearable; the local
+  // flag lets "show all" drop the filter without losing the incoming prop.
+  // (productFilterId only arrives at mount, so no reset-on-change is needed.)
+  const [productFilterCleared, setProductFilterCleared] = useState(false);
+  const activeProductFilterId = productFilterCleared ? null : (productFilterId ?? null);
   const tableInitialFilterState = useMemo(
-    () => (productFilterId ? { id: [productFilterId] } : undefined),
-    [productFilterId],
+    () => (activeProductFilterId ? { id: [activeProductFilterId] } : undefined),
+    [activeProductFilterId],
+  );
+  const deepLinkedProduct = useMemo(
+    () =>
+      activeProductFilterId ? (products.find((p) => p.id === activeProductFilterId) ?? null) : null,
+    [activeProductFilterId, products],
   );
 
   // Product Types State
@@ -1511,6 +1522,18 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
           </HeaderAddButton>
         </div>
       </div>
+
+      {deepLinkedProduct && (
+        <LinkedRecordBanner
+          icon="fa-filter"
+          label={t('common:table.filteredView')}
+          value={deepLinkedProduct.name}
+          action={{
+            label: t('common:table.showAllRecords'),
+            onClick: () => setProductFilterCleared(true),
+          }}
+        />
+      )}
 
       <StandardTable<Product>
         title={t('crm:internalListing.title')}

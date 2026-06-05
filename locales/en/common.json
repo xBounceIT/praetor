@@ -247,6 +247,8 @@
     "selectAll": "Select All",
     "noResults": "No results found",
     "clearFilter": "Clear Filter",
+    "filteredView": "Filtered view",
+    "showAllRecords": "Show all",
     "increaseFont": "Increase font size",
     "decreaseFont": "Decrease font size",
     "columnSettings": "Column settings",

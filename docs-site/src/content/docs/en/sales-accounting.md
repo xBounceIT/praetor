@@ -11,7 +11,7 @@ Quotes and offers include products, quantities, prices, discounts, and terms. Us
 
 The quote list shows code, insertion date, client, subtotal, discount percentage, absolute discount, discounted total, margin, MOL, payment terms, due date, and status so the main values can be checked without opening each record.
 
-When creating or editing a quote, each **Products / Services** row that references a **Supplier Quote** or a **product** shows a quick-view icon: open it to inspect the linked record on its pre-filtered page in a new browser tab, without closing or changing the quote in progress. The icon only appears when the row actually references a linked record.
+When creating or editing a quote, each **Products / Services** row that references a **Supplier Quote** or a **product** shows a quick-view icon: open it to inspect the linked record on its pre-filtered page in a new browser tab, without closing or changing the quote in progress. The icon only appears when the row actually references a linked record. The destination page shows a **Filtered view** banner with a **Show all** action to clear the filter and return to the full list.
 
 In offer summaries, the **Discount** row always shows the equivalent percentage in parentheses, even when the global discount is entered as a fixed amount. The discount amount remains visible in currency on the right.
 
