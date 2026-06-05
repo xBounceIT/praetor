@@ -229,12 +229,9 @@ export const update = async (
       supplierId: sql`COALESCE(${patch.supplierId ?? null}, ${supplierQuotes.supplierId})`,
       supplierName: sql`COALESCE(${patch.supplierName ?? null}, ${supplierQuotes.supplierName})`,
       // Direct write (not COALESCE) so an explicit null clears the link; `undefined` keeps it.
-      clientId:
-        patch.clientId === undefined ? sql`${supplierQuotes.clientId}` : (patch.clientId ?? null),
+      clientId: patch.clientId === undefined ? sql`${supplierQuotes.clientId}` : patch.clientId,
       clientName:
-        patch.clientName === undefined
-          ? sql`${supplierQuotes.clientName}`
-          : (patch.clientName ?? null),
+        patch.clientName === undefined ? sql`${supplierQuotes.clientName}` : patch.clientName,
       paymentTerms: sql`COALESCE(${patch.paymentTerms ?? null}, ${supplierQuotes.paymentTerms})`,
       status: sql`COALESCE(${patch.status ?? null}, ${supplierQuotes.status})`,
       expirationDate: sql`COALESCE(${patch.expirationDate ?? null}::date, ${supplierQuotes.expirationDate})`,

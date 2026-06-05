@@ -117,8 +117,8 @@ const supplierQuoteCreateBodySchema = {
     id: { type: 'string' },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
+    // clientName is resolved server-side from clientId; the body only carries the id.
     clientId: { type: ['string', 'null'] },
-    clientName: { type: ['string', 'null'] },
     items: { type: 'array', items: supplierQuoteItemBodySchema },
     paymentTerms: { type: 'string' },
     status: { type: 'string' },
@@ -134,8 +134,8 @@ const supplierQuoteUpdateBodySchema = {
     id: { type: 'string' },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
+    // clientName is resolved server-side from clientId; the body only carries the id.
     clientId: { type: ['string', 'null'] },
-    clientName: { type: ['string', 'null'] },
     items: { type: 'array', items: supplierQuoteItemBodySchema },
     paymentTerms: { type: 'string' },
     status: { type: 'string' },

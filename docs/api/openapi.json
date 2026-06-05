@@ -32466,12 +32466,6 @@
                       "null"
                     ]
                   },
-                  "clientName": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
                   "items": {
                     "type": "array",
                     "items": {
@@ -32812,12 +32806,6 @@
                     "type": "string"
                   },
                   "clientId": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "clientName": {
                     "type": [
                       "string",
                       "null"
