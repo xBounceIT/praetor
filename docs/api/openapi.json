@@ -1714,6 +1714,26 @@
                           "external"
                         ]
                       },
+                      "firstName": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "lastName": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "phone": {
                         "anyOf": [
                           {
@@ -2101,6 +2121,26 @@
                       "external"
                     ]
                   },
+                  "firstName": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lastName": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "phone": {
                     "anyOf": [
                       {
@@ -2290,6 +2330,26 @@
                         "app_user",
                         "internal",
                         "external"
+                      ]
+                    },
+                    "firstName": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lastName": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
                       ]
                     },
                     "phone": {
@@ -2795,6 +2855,26 @@
                   "email": {
                     "type": "string"
                   },
+                  "firstName": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lastName": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "phone": {
                     "anyOf": [
                       {
@@ -2991,6 +3071,26 @@
                         "app_user",
                         "internal",
                         "external"
+                      ]
+                    },
+                    "firstName": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lastName": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
                       ]
                     },
                     "phone": {
@@ -3409,6 +3509,26 @@
                         "app_user",
                         "internal",
                         "external"
+                      ]
+                    },
+                    "firstName": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lastName": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
                       ]
                     },
                     "phone": {
@@ -13201,7 +13321,7 @@
         "tags": [
           "entries"
         ],
-        "description": "Creates one time entry. Returns 409 when the target user already has an entry for the same date, project, and task.",
+        "description": "Creates one time entry. Returns 409 when the target user already has an entry for the same date, project, and task. Returns 403 when the selected project is expired and the role lacks timesheets.expired_projects.create.",
         "requestBody": {
           "required": true,
           "content": {
@@ -14122,7 +14242,7 @@
         "tags": [
           "entries"
         ],
-        "description": "Walks the active recurring task templates assigned to the target user (or the authenticated user if `userId` is omitted) and inserts a placeholder time entry for every matching day in `[fromDate, toDate]` that does not already have an entry for the same (date, project, task) tuple. Idempotent.",
+        "description": "Walks the active recurring task templates assigned to the target user (or the authenticated user if `userId` is omitted) and inserts a placeholder time entry for every matching day in `[fromDate, toDate]` that does not already have an entry for the same (date, project, task) tuple. Expired projects are skipped unless the role has timesheets.expired_projects.create. Idempotent.",
         "requestBody": {
           "required": true,
           "content": {
@@ -14424,6 +14544,670 @@
         }
       }
     },
+    "/api/ril-drafts/{monthKey}": {
+      "get": {
+        "summary": "Get RIL draft for a month",
+        "tags": [
+          "ril"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "userId",
+            "required": false,
+            "description": "RIL owner whose draft to read/write. Defaults to self."
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+            },
+            "in": "path",
+            "name": "monthKey",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "monthKey": {
+                      "type": "string"
+                    },
+                    "rows": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "entrance": {
+                            "type": "string",
+                            "maxLength": 16
+                          },
+                          "exit": {
+                            "type": "string",
+                            "maxLength": 16
+                          },
+                          "notes": {
+                            "type": "string",
+                            "maxLength": 64
+                          },
+                          "transfer": {
+                            "type": "string",
+                            "maxLength": 64
+                          },
+                          "code": {
+                            "type": "string",
+                            "maxLength": 16
+                          }
+                        },
+                        "required": [
+                          "entrance",
+                          "exit",
+                          "notes",
+                          "transfer",
+                          "code"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "updatedAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "monthKey",
+                    "rows",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Save RIL draft for a month",
+        "tags": [
+          "ril"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rows": {
+                    "type": "object",
+                    "maxProperties": 31,
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "entrance": {
+                          "type": "string",
+                          "maxLength": 16
+                        },
+                        "exit": {
+                          "type": "string",
+                          "maxLength": 16
+                        },
+                        "notes": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
+                        "transfer": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
+                        "code": {
+                          "type": "string",
+                          "maxLength": 16
+                        }
+                      },
+                      "required": [
+                        "entrance",
+                        "exit",
+                        "notes",
+                        "transfer",
+                        "code"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "rows"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "userId",
+            "required": false,
+            "description": "RIL owner whose draft to read/write. Defaults to self."
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+            },
+            "in": "path",
+            "name": "monthKey",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "monthKey": {
+                      "type": "string"
+                    },
+                    "rows": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "entrance": {
+                            "type": "string",
+                            "maxLength": 16
+                          },
+                          "exit": {
+                            "type": "string",
+                            "maxLength": 16
+                          },
+                          "notes": {
+                            "type": "string",
+                            "maxLength": 64
+                          },
+                          "transfer": {
+                            "type": "string",
+                            "maxLength": 64
+                          },
+                          "code": {
+                            "type": "string",
+                            "maxLength": 16
+                          }
+                        },
+                        "required": [
+                          "entrance",
+                          "exit",
+                          "notes",
+                          "transfer",
+                          "code"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "updatedAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "monthKey",
+                    "rows",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete RIL draft for a month",
+        "tags": [
+          "ril"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "userId",
+            "required": false,
+            "description": "RIL owner whose draft to read/write. Defaults to self."
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+            },
+            "in": "path",
+            "name": "monthKey",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Default Response"
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/": {
       "get": {
         "summary": "Get current user settings",
@@ -14451,12 +15235,39 @@
                         "it",
                         "auto"
                       ]
+                    },
+                    "rilWeekdayTransferDefaults": {
+                      "type": "object",
+                      "properties": {
+                        "monday": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
+                        "tuesday": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
+                        "wednesday": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
+                        "thursday": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
+                        "friday": {
+                          "type": "string",
+                          "maxLength": 64
+                        }
+                      },
+                      "additionalProperties": false
                     }
                   },
                   "required": [
                     "fullName",
                     "email",
-                    "language"
+                    "language",
+                    "rilWeekdayTransferDefaults"
                   ]
                 }
               }
@@ -14636,6 +15447,32 @@
                       "it",
                       "auto"
                     ]
+                  },
+                  "rilWeekdayTransferDefaults": {
+                    "type": "object",
+                    "properties": {
+                      "monday": {
+                        "type": "string",
+                        "maxLength": 64
+                      },
+                      "tuesday": {
+                        "type": "string",
+                        "maxLength": 64
+                      },
+                      "wednesday": {
+                        "type": "string",
+                        "maxLength": 64
+                      },
+                      "thursday": {
+                        "type": "string",
+                        "maxLength": 64
+                      },
+                      "friday": {
+                        "type": "string",
+                        "maxLength": 64
+                      }
+                    },
+                    "additionalProperties": false
                   }
                 }
               }
@@ -14663,12 +15500,39 @@
                         "it",
                         "auto"
                       ]
+                    },
+                    "rilWeekdayTransferDefaults": {
+                      "type": "object",
+                      "properties": {
+                        "monday": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
+                        "tuesday": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
+                        "wednesday": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
+                        "thursday": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
+                        "friday": {
+                          "type": "string",
+                          "maxLength": 64
+                        }
+                      },
+                      "additionalProperties": false
                     }
                   },
                   "required": [
                     "fullName",
                     "email",
-                    "language"
+                    "language",
+                    "rilWeekdayTransferDefaults"
                   ]
                 }
               }
@@ -17512,6 +18376,15 @@
                     "userFilter": {
                       "type": "string"
                     },
+                    "firstNameAttribute": {
+                      "type": "string"
+                    },
+                    "lastNameAttribute": {
+                      "type": "string"
+                    },
+                    "emailAttribute": {
+                      "type": "string"
+                    },
                     "groupBaseDn": {
                       "type": "string"
                     },
@@ -17553,6 +18426,9 @@
                     "bindDn",
                     "bindPassword",
                     "userFilter",
+                    "firstNameAttribute",
+                    "lastNameAttribute",
+                    "emailAttribute",
                     "groupBaseDn",
                     "groupFilter",
                     "roleMappings",
@@ -17743,6 +18619,15 @@
                   "userFilter": {
                     "type": "string"
                   },
+                  "firstNameAttribute": {
+                    "type": "string"
+                  },
+                  "lastNameAttribute": {
+                    "type": "string"
+                  },
+                  "emailAttribute": {
+                    "type": "string"
+                  },
                   "groupBaseDn": {
                     "type": "string"
                   },
@@ -17811,6 +18696,15 @@
                     "userFilter": {
                       "type": "string"
                     },
+                    "firstNameAttribute": {
+                      "type": "string"
+                    },
+                    "lastNameAttribute": {
+                      "type": "string"
+                    },
+                    "emailAttribute": {
+                      "type": "string"
+                    },
                     "groupBaseDn": {
                       "type": "string"
                     },
@@ -17852,6 +18746,9 @@
                     "bindDn",
                     "bindPassword",
                     "userFilter",
+                    "firstNameAttribute",
+                    "lastNameAttribute",
+                    "emailAttribute",
                     "groupBaseDn",
                     "groupFilter",
                     "roleMappings",
@@ -18063,6 +18960,15 @@
                       "type": "string"
                     },
                     "userDn": {
+                      "type": "string"
+                    },
+                    "firstName": {
+                      "type": "string"
+                    },
+                    "lastName": {
+                      "type": "string"
+                    },
+                    "email": {
                       "type": "string"
                     },
                     "groups": {
@@ -19065,6 +19971,87 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/branding/": {
+      "get": {
+        "summary": "Get public app branding",
+        "tags": [
+          "branding"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update the company display name",
+        "tags": [
+          "branding"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "companyName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 120
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/branding/logo": {
+      "get": {
+        "summary": "Get the uploaded company logo image",
+        "tags": [
+          "branding"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "summary": "Upload the company logo",
+        "tags": [
+          "branding"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove the company logo",
+        "tags": [
+          "branding"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
           }
         }
       }
@@ -41249,6 +42236,7 @@
               "enum": [
                 "auth",
                 "route",
+                "app_branding",
                 "client",
                 "client_offer",
                 "client_order",
@@ -41528,39 +42516,6 @@
                   },
                   "required": [
                     "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/health": {
-      "get": {
-        "summary": "Health check",
-        "tags": [
-          "health"
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string"
-                    },
-                    "timestamp": {
-                      "type": "string",
-                      "format": "date-time"
-                    }
-                  },
-                  "required": [
-                    "status",
-                    "timestamp"
                   ]
                 }
               }

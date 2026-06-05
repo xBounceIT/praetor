@@ -28,6 +28,21 @@ const betaCatalog = {
   ] satisfies ProjectTask[],
 };
 
+const expiredCatalog = {
+  clients: [{ id: 'client-expired', name: 'Expired Client' }] satisfies Client[],
+  projects: [
+    {
+      id: 'project-expired',
+      name: 'Expired Project',
+      clientId: 'client-expired',
+      endDate: '2000-01-01',
+    },
+  ] satisfies Project[],
+  projectTasks: [
+    { id: 'task-expired', name: 'Expired Task', projectId: 'project-expired' },
+  ] satisfies ProjectTask[],
+};
+
 // onAddCustomTask + currency are required on DailyView. Tests that never exercise the modal
 // don't care about their values; provide harmless defaults so callers can spread these into
 // the test's props.
@@ -243,5 +258,43 @@ describe('<DailyView /> RBAC catalog sync', () => {
 
     fireEvent.change(hoursInput, { target: { value: '' } });
     expect(submitButton).toBeDisabled();
+  });
+
+  test('hides expired projects without the expired-project override permission', async () => {
+    render(
+      <DailyView
+        onAdd={mock(() => {})}
+        selectedDate="2026-05-11"
+        permissions={[]}
+        dailyGoal={8}
+        currentDayTotal={0}
+        {...defaultModalProps}
+        {...expiredCatalog}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(document.body).not.toHaveTextContent('Expired Project');
+      expect(document.body).not.toHaveTextContent('Expired Task');
+    });
+  });
+
+  test('shows expired projects with the expired-project override permission', async () => {
+    render(
+      <DailyView
+        onAdd={mock(() => {})}
+        selectedDate="2026-05-11"
+        permissions={['timesheets.expired_projects.create']}
+        dailyGoal={8}
+        currentDayTotal={0}
+        {...defaultModalProps}
+        {...expiredCatalog}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(document.body).toHaveTextContent('Expired Project');
+      expect(document.body).toHaveTextContent('Expired Task');
+    });
   });
 });

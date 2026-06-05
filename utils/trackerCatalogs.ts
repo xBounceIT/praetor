@@ -1,4 +1,6 @@
 import type { Client, Project, ProjectTask } from '../types';
+import { isDateOnlyBeforeToday } from './date';
+import { hasPermission } from './permissions';
 
 export type TrackerAssignments = {
   clientIds: string[];
@@ -17,6 +19,32 @@ export type TrackerCatalogs = {
   clients: Client[];
   projects: Project[];
   projectTasks: ProjectTask[];
+};
+
+export const EXPIRED_PROJECT_TIME_ENTRY_PERMISSION = 'timesheets.expired_projects.create';
+
+export const isProjectExpiredForTimeEntries = (project: Pick<Project, 'endDate'>): boolean =>
+  !!project.endDate && isDateOnlyBeforeToday(project.endDate);
+
+export const filterTrackerEntrySelectableCatalogs = ({
+  clients,
+  projects,
+  projectTasks,
+  permissions,
+}: TrackerCatalogs & { permissions: string[] }): TrackerCatalogs => {
+  if (hasPermission(permissions, EXPIRED_PROJECT_TIME_ENTRY_PERMISSION)) {
+    return { clients, projects, projectTasks };
+  }
+
+  const selectableProjects = projects.filter((project) => !isProjectExpiredForTimeEntries(project));
+  const selectableProjectIds = new Set(selectableProjects.map((project) => project.id));
+  const selectableClientIds = new Set(selectableProjects.map((project) => project.clientId));
+
+  return {
+    clients: clients.filter((client) => selectableClientIds.has(client.id)),
+    projects: selectableProjects,
+    projectTasks: projectTasks.filter((task) => selectableProjectIds.has(task.projectId)),
+  };
 };
 
 const activeOnly = ({ clients, projects, projectTasks }: TrackerCatalogs): TrackerCatalogs => {

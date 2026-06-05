@@ -20,6 +20,7 @@ import { downloadCsv } from '../../utils/csv';
 import { dateOnlyStringToLocalDate, getLocalDateString } from '../../utils/date';
 import { isItalianHoliday } from '../../utils/holidays';
 import { toastError } from '../../utils/toast';
+import { filterTrackerEntrySelectableCatalogs } from '../../utils/trackerCatalogs';
 import Calendar from '../shared/Calendar';
 import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
@@ -276,10 +277,15 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     [entries, viewingUserId],
   );
 
+  const selectableCatalogs = useMemo(
+    () => filterTrackerEntrySelectableCatalogs({ clients, projects, projectTasks, permissions }),
+    [clients, projects, projectTasks, permissions],
+  );
+
   const selection = useCatalogSelection({
-    clients,
-    projects,
-    projectTasks,
+    clients: selectableCatalogs.clients,
+    projects: selectableCatalogs.projects,
+    projectTasks: selectableCatalogs.projectTasks,
     defaultLocation,
   });
 
@@ -734,8 +740,8 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
           errors={errors}
           onWeekNoteChange={setWeekNote}
           onClearError={clearError}
-          clients={clients}
-          projects={projects}
+          clients={selectableCatalogs.clients}
+          projects={selectableCatalogs.projects}
           permissions={permissions}
           currency={currency}
           onAddCustomTask={onAddCustomTask}

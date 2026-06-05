@@ -59,7 +59,9 @@ const entriesExistsForEntryKeyMock = mock();
 const entriesDecodeCursorMock = mock();
 const entriesEncodeCursorMock = mock((c: unknown) => `enc:${JSON.stringify(c)}`);
 const projectsFindClientIdMock = mock();
+const projectsFindClientIdAndEndDateMock = mock();
 const projectsFindClientIdAndNameMock = mock();
+const projectsFindEndDateByIdMock = mock();
 const projectsListNamesByIdsMock = mock();
 const clientsFindNameMock = mock();
 const isClientAssignedToUserMock = mock();
@@ -116,7 +118,9 @@ beforeAll(async () => {
   mock.module('../../repositories/projectsRepo.ts', () => ({
     ...projectsRepoSnap,
     findClientId: projectsFindClientIdMock,
+    findClientIdAndEndDate: projectsFindClientIdAndEndDateMock,
     findClientIdAndName: projectsFindClientIdAndNameMock,
+    findEndDateById: projectsFindEndDateByIdMock,
     listNamesByIds: projectsListNamesByIdsMock,
   }));
   mock.module('../../repositories/clientsRepo.ts', () => ({
@@ -249,7 +253,9 @@ const allMocks = [
   entriesExistsForEntryKeyMock,
   entriesDecodeCursorMock,
   projectsFindClientIdMock,
+  projectsFindClientIdAndEndDateMock,
   projectsFindClientIdAndNameMock,
+  projectsFindEndDateByIdMock,
   projectsListNamesByIdsMock,
   clientsFindNameMock,
   isClientAssignedToUserMock,
@@ -277,7 +283,13 @@ beforeEach(async () => {
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(TRACKER_PERMS);
   projectsFindClientIdMock.mockResolvedValue('c1');
-  projectsFindClientIdAndNameMock.mockResolvedValue({ clientId: 'c1', name: 'Project' });
+  projectsFindClientIdAndEndDateMock.mockResolvedValue({ clientId: 'c1', endDate: null });
+  projectsFindClientIdAndNameMock.mockResolvedValue({
+    clientId: 'c1',
+    name: 'Project',
+    endDate: null,
+  });
+  projectsFindEndDateByIdMock.mockResolvedValue(null);
   clientsFindNameMock.mockResolvedValue('Client');
   entriesExistsForEntryKeyMock.mockResolvedValue(false);
   isClientAssignedToUserMock.mockResolvedValue(true);
@@ -831,7 +843,10 @@ describe('POST /api/entries', () => {
   });
 
   test('400 when project belongs to a different client', async () => {
-    projectsFindClientIdMock.mockResolvedValue('other-client');
+    projectsFindClientIdAndEndDateMock.mockResolvedValue({
+      clientId: 'other-client',
+      endDate: null,
+    });
 
     const res = await testApp.inject({
       method: 'POST',
@@ -848,7 +863,7 @@ describe('POST /api/entries', () => {
   });
 
   test('400 when project does not exist', async () => {
-    projectsFindClientIdMock.mockResolvedValue(null);
+    projectsFindClientIdAndEndDateMock.mockResolvedValue(null);
 
     const res = await testApp.inject({
       method: 'POST',
@@ -860,6 +875,128 @@ describe('POST /api/entries', () => {
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body)).toEqual({ error: 'Project not found' });
     expect(entriesCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('403 when creating on an expired project without the override permission', async () => {
+    projectsFindClientIdAndEndDateMock.mockResolvedValue({ clientId: 'c1', endDate: '2000-01-01' });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: validBody,
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Project is expired' });
+    expect(entriesCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('201 creates on an expired project with the override permission', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      ...TRACKER_PERMS,
+      'timesheets.expired_projects.create',
+    ]);
+    projectsFindClientIdAndEndDateMock.mockResolvedValue({ clientId: 'c1', endDate: '2000-01-01' });
+    findCostPerHourMock.mockResolvedValue(50);
+    findIdByProjectAndNameMock.mockResolvedValue('t1');
+    entriesCreateMock.mockImplementation(async (entry: Record<string, unknown>) => ({
+      ...entry,
+      createdAt: 1_700_000_000_000,
+      version: 1,
+    }));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: validBody,
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(entriesCreateMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('403 cross-user create on an expired project still requires managed-user scope', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      ...TRACKER_PERMS,
+      'timesheets.expired_projects.create',
+    ]);
+    projectsFindClientIdAndEndDateMock.mockResolvedValue({ clientId: 'c1', endDate: '2000-01-01' });
+    isUserManagedByMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: { ...validBody, userId: 'u2' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Not authorized to create entries for this user',
+    });
+    expect(entriesCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('201 cross-user create on an expired project is allowed with the override and managed-user scope', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      ...TRACKER_PERMS,
+      'timesheets.expired_projects.create',
+    ]);
+    projectsFindClientIdAndEndDateMock.mockResolvedValue({ clientId: 'c1', endDate: '2000-01-01' });
+    isUserManagedByMock.mockResolvedValue(true);
+    findCostPerHourMock.mockResolvedValue(60);
+    findIdByProjectAndNameMock.mockResolvedValue('t1');
+    entriesCreateMock.mockImplementation(async (entry: Record<string, unknown>) => ({
+      ...entry,
+      createdAt: 1_700_000_000_000,
+      version: 1,
+    }));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: { ...validBody, userId: 'u2' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(entriesCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u2', projectId: 'p1', task: 'Dev' }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('201 tracker_all create on an expired project is allowed with the expiry override', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      ...TRACKER_PERMS,
+      'timesheets.tracker_all.create',
+      'timesheets.expired_projects.create',
+    ]);
+    projectsFindClientIdAndEndDateMock.mockResolvedValue({ clientId: 'c1', endDate: '2000-01-01' });
+    findCostPerHourMock.mockResolvedValue(60);
+    findIdByProjectAndNameMock.mockResolvedValue('t1');
+    entriesCreateMock.mockImplementation(async (entry: Record<string, unknown>) => ({
+      ...entry,
+      createdAt: 1_700_000_000_000,
+      version: 1,
+    }));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: { ...validBody, userId: 'u2' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(isUserManagedByMock).not.toHaveBeenCalled();
+    expect(isClientAssignedToUserMock).not.toHaveBeenCalled();
+    expect(entriesCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u2', projectId: 'p1', task: 'Dev' }),
+      TX_SENTINEL,
+    );
   });
 
   test('403 when target user is not assigned to submitted project scope', async () => {
@@ -1277,6 +1414,164 @@ describe('PUT /api/entries/:id', () => {
     expect(patch.duration).toBe(7);
   });
 
+  test('200 non-catalog edits on an expired project do not require the expired-project override', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+    entriesUpdateMock.mockResolvedValue({ ...SAMPLE_ENTRY, duration: 7, notes: 'kept' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: versionedPatch({ duration: 7, notes: 'kept', location: 'office' }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(projectsFindEndDateByIdMock).not.toHaveBeenCalled();
+    expect(entriesUpdateMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('200 unchanged catalog fields on an expired project do not require the expired-project override', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+    projectsFindClientIdAndNameMock.mockResolvedValue({
+      clientId: 'c1',
+      name: 'Project',
+      endDate: '2000-01-01',
+    });
+    entriesUpdateMock.mockResolvedValue({ ...SAMPLE_ENTRY, duration: 6 });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: versionedPatch({
+        clientId: 'c1',
+        projectId: 'p1',
+        task: 'Dev',
+        duration: 6,
+      }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(projectsFindEndDateByIdMock).not.toHaveBeenCalled();
+    expect(entriesUpdateMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('403 date change on an expired project requires the expired-project override', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+    projectsFindEndDateByIdMock.mockResolvedValue('2000-01-01');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: versionedPatch({ date: '2025-06-03' }),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Project is expired' });
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 date change on an expired project is allowed with the expired-project override', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      ...TRACKER_PERMS,
+      'timesheets.expired_projects.create',
+    ]);
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+    projectsFindEndDateByIdMock.mockResolvedValue('2000-01-01');
+    entriesUpdateMock.mockResolvedValue({ ...SAMPLE_ENTRY, date: '2025-06-03' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: versionedPatch({ date: '2025-06-03' }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(entriesUpdateMock).toHaveBeenCalledWith(
+      'te-1',
+      expect.objectContaining({ date: '2025-06-03' }),
+    );
+  });
+
+  test('403 date change with unchanged catalog fields still requires the expired-project override', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+    projectsFindClientIdAndNameMock.mockResolvedValue({
+      clientId: 'c1',
+      name: 'Project',
+      endDate: '2000-01-01',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: versionedPatch({
+        date: '2025-06-03',
+        clientId: 'c1',
+        projectId: 'p1',
+        task: 'Dev',
+      }),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Project is expired' });
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('403 changing task within the same expired project requires the expired-project override', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+    projectsFindClientIdAndNameMock.mockResolvedValue({
+      clientId: 'c1',
+      name: 'Project',
+      endDate: '2000-01-01',
+    });
+    findIdByProjectAndNameMock.mockResolvedValue('t2');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: versionedPatch({
+        clientId: 'c1',
+        projectId: 'p1',
+        task: 'QA',
+      }),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Project is expired' });
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('403 reassigning to an expired project requires the expired-project override', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+    projectsFindClientIdAndNameMock.mockResolvedValue({
+      clientId: 'c2',
+      name: 'Expired',
+      endDate: '2000-01-01',
+    });
+    clientsFindNameMock.mockResolvedValue('Other');
+    findIdByProjectAndNameMock.mockResolvedValue('t2');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: {
+        version: SAMPLE_ENTRY.version,
+        clientId: 'c2',
+        projectId: 'p2',
+        task: 'QA',
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Project is expired' });
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
+  });
+
   test.each([
     ['task without projectId/clientId', { task: 'QA' }],
     ['clientId without projectId/task', { clientId: 'c2', clientName: 'Other' }],
@@ -1437,7 +1732,7 @@ describe('POST /api/entries/recurring/generate', () => {
   };
 
   const happyProjectsMap = new Map([
-    ['p1', { projectName: 'Project One', clientId: 'c1', clientName: 'Client One' }],
+    ['p1', { projectName: 'Project One', clientId: 'c1', clientName: 'Client One', endDate: null }],
   ]);
 
   const setupHappyPath = () => {
@@ -1646,6 +1941,66 @@ describe('POST /api/entries/recurring/generate', () => {
       range: { fromDate: '2025-06-02', toDate: '2025-06-06' },
     });
     expect(entriesCreateManyMock).not.toHaveBeenCalled();
+  });
+
+  test('200: skips recurring templates for expired projects without the override permission', async () => {
+    setupHappyPath();
+    projectsListNamesByIdsMock.mockResolvedValue(
+      new Map([
+        [
+          'p1',
+          {
+            projectName: 'Expired Project',
+            clientId: 'c1',
+            clientName: 'Client One',
+            endDate: '2000-01-01',
+          },
+        ],
+      ]),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-09', toDate: '2025-06-13' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toMatchObject({ generatedCount: 0, skippedExistingCount: 0 });
+    expect(entriesCreateManyMock).not.toHaveBeenCalled();
+  });
+
+  test('200: includes recurring templates for expired projects with the override permission', async () => {
+    setupHappyPath();
+    getRolePermissionsMock.mockResolvedValue([
+      ...RECURRING_PERMS,
+      'timesheets.expired_projects.create',
+    ]);
+    projectsListNamesByIdsMock.mockResolvedValue(
+      new Map([
+        [
+          'p1',
+          {
+            projectName: 'Expired Project',
+            clientId: 'c1',
+            clientName: 'Client One',
+            endDate: '2000-01-01',
+          },
+        ],
+      ]),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-09', toDate: '2025-06-13' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).generatedCount).toBe(5);
+    expect(entriesCreateManyMock).toHaveBeenCalledTimes(1);
   });
 
   test('400: fromDate after toDate', async () => {

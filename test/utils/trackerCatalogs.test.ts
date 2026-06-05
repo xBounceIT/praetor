@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import type { Client, Project, ProjectTask } from '../../types';
-import { filterTrackerCatalogs, type TrackerAssignmentState } from '../../utils/trackerCatalogs';
+import {
+  EXPIRED_PROJECT_TIME_ENTRY_PERMISSION,
+  filterTrackerCatalogs,
+  filterTrackerEntrySelectableCatalogs,
+  isProjectExpiredForTimeEntries,
+  type TrackerAssignmentState,
+} from '../../utils/trackerCatalogs';
 
 const clients: Client[] = [
   { id: 'client-a', name: 'Client A' },
@@ -30,6 +36,19 @@ const projectTasks: ProjectTask[] = [
   { id: 'task-disabled', name: 'Disabled Task', projectId: 'project-a', isDisabled: true },
   { id: 'task-disabled-project', name: 'Task Disabled Project', projectId: 'project-disabled' },
 ];
+
+const expiredProject: Project = {
+  id: 'project-expired',
+  name: 'Expired Project',
+  clientId: 'client-a',
+  endDate: '2000-01-01',
+};
+
+const expiredProjectTask: ProjectTask = {
+  id: 'task-expired',
+  name: 'Expired Task',
+  projectId: 'project-expired',
+};
 
 const loadingState: TrackerAssignmentState = {
   userId: 'user-b',
@@ -147,5 +166,37 @@ describe('filterTrackerCatalogs', () => {
     expect(result.clients.map((client) => client.id)).toEqual(['client-b']);
     expect(result.projects.map((project) => project.id)).toEqual(['project-b']);
     expect(result.projectTasks.map((task) => task.id)).toEqual(['task-b']);
+  });
+});
+
+describe('filterTrackerEntrySelectableCatalogs', () => {
+  test('detects project expiry from endDate before today', () => {
+    expect(isProjectExpiredForTimeEntries({ endDate: '2000-01-01' })).toBe(true);
+    expect(isProjectExpiredForTimeEntries({ endDate: '2999-01-01' })).toBe(false);
+    expect(isProjectExpiredForTimeEntries({ endDate: null })).toBe(false);
+  });
+
+  test('removes expired projects and their tasks without the override permission', () => {
+    const result = filterTrackerEntrySelectableCatalogs({
+      clients,
+      projects: [...projects, expiredProject],
+      projectTasks: [...projectTasks, expiredProjectTask],
+      permissions: [],
+    });
+
+    expect(result.projects.map((project) => project.id)).not.toContain('project-expired');
+    expect(result.projectTasks.map((task) => task.id)).not.toContain('task-expired');
+  });
+
+  test('keeps expired projects with the override permission', () => {
+    const result = filterTrackerEntrySelectableCatalogs({
+      clients,
+      projects: [...projects, expiredProject],
+      projectTasks: [...projectTasks, expiredProjectTask],
+      permissions: [EXPIRED_PROJECT_TIME_ENTRY_PERMISSION],
+    });
+
+    expect(result.projects.map((project) => project.id)).toContain('project-expired');
+    expect(result.projectTasks.map((task) => task.id)).toContain('task-expired');
   });
 });

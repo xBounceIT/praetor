@@ -1862,6 +1862,13 @@ VALUES
     ('top_manager', 'projects.assignments.update')
 ON CONFLICT DO NOTHING;
 
+-- Seed expired-project time-entry override for manager and top_manager roles.
+INSERT INTO role_permissions (role_id, permission)
+VALUES
+    ('manager', 'timesheets.expired_projects.create'),
+    ('top_manager', 'timesheets.expired_projects.create')
+ON CONFLICT DO NOTHING;
+
 -- Internal product categories table
 CREATE TABLE IF NOT EXISTS internal_product_categories (
     id VARCHAR(50) PRIMARY KEY,

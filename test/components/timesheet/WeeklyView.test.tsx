@@ -28,6 +28,26 @@ const betaCatalog = {
   ] satisfies ProjectTask[],
 };
 
+const weeklyExpiredCatalog = {
+  clients: [
+    { id: 'client-active', name: 'Active Client' },
+    { id: 'client-expired', name: 'Expired Client' },
+  ] satisfies Client[],
+  projects: [
+    { id: 'project-active', name: 'Active Project', clientId: 'client-active' },
+    {
+      id: 'project-expired',
+      name: 'Expired Project',
+      clientId: 'client-expired',
+      endDate: '2000-01-01',
+    },
+  ] satisfies Project[],
+  projectTasks: [
+    { id: 'task-active', name: 'Active Task', projectId: 'project-active' },
+    { id: 'task-expired', name: 'Expired Task', projectId: 'project-expired' },
+  ] satisfies ProjectTask[],
+};
+
 const todayDateOnly = () => {
   const date = new Date();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
@@ -133,6 +153,35 @@ describe('<WeeklyView /> RBAC catalog scoping', () => {
       const inputs = document.body.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"]');
       const prefilled = Array.from(inputs).some((input) => input.value === '3.5');
       expect(prefilled).toBe(true);
+    });
+  });
+
+  test('keeps existing expired-project rows visible while new-entry selection uses active projects', async () => {
+    const entries: TimeEntry[] = [
+      {
+        id: 'entry-expired',
+        userId: 'user-a',
+        date: todayDateOnly(),
+        clientId: 'client-expired',
+        clientName: 'Expired Client',
+        projectId: 'project-expired',
+        projectName: 'Expired Project',
+        task: 'Expired Task',
+        duration: 2,
+        hourlyCost: 0,
+        createdAt: 1700000000,
+        version: 1,
+        location: 'remote',
+      },
+    ];
+
+    render(<WeeklyView entries={entries} {...weeklyExpiredCatalog} {...sharedProps} />);
+
+    await waitFor(() => {
+      expect(document.body).toHaveTextContent('Expired Project');
+      expect(document.body).toHaveTextContent('Expired Task');
+      expect(document.body).toHaveTextContent('Active Project');
+      expect(document.body).toHaveTextContent('Active Task');
     });
   });
 });

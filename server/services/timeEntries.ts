@@ -73,6 +73,21 @@ const hasTrackerPermission = (
   action: 'view' | 'create' | 'update' | 'delete',
 ) => hasScopedActionPermission(actor.permissions, 'timesheets.tracker', action);
 
+const canWriteExpiredProjectEntries = (actor: AuthenticatedActor) =>
+  hasPermission(actor, 'timesheets.expired_projects.create');
+
+const isProjectExpired = (endDate: string | null | undefined): boolean =>
+  !!endDate && endDate < todayLocalDateOnly();
+
+const enforceProjectNotExpired = (
+  actor: AuthenticatedActor,
+  endDate: string | null | undefined,
+) => {
+  if (!canWriteExpiredProjectEntries(actor) && isProjectExpired(endDate)) {
+    fail(403, 'Project is expired');
+  }
+};
+
 const canReadTrackerEntries = (actor: AuthenticatedActor) => hasTrackerPermission(actor, 'view');
 
 const isFullCalendarMonthRange = (fromDate: string | null, toDate: string | null): boolean => {
@@ -264,15 +279,16 @@ export const createTimeEntry = async (
     }
   }
 
-  const [hourlyCost, resolvedTaskId, projectClientId] = await Promise.all([
+  const [hourlyCost, resolvedTaskId, projectHeader] = await Promise.all([
     usersRepo.findCostPerHour(targetUserId),
     tasksRepo.findIdByProjectAndName(projectId, task),
-    projectsRepo.findClientId(projectId),
+    projectsRepo.findClientIdAndEndDate(projectId),
   ]);
-  if (projectClientId === null) badRequest('Project not found');
-  if (projectClientId !== clientId) {
+  if (projectHeader === null) return badRequest('Project not found');
+  if (projectHeader.clientId !== clientId) {
     badRequest('Project does not belong to the selected client');
   }
+  enforceProjectNotExpired(actor, projectHeader.endDate);
 
   if (!hasPermission(actor, 'timesheets.tracker_all.create')) {
     const [clientAllowed, projectAllowed, taskAllowed] = await Promise.all([
@@ -387,6 +403,7 @@ export const updateTimeEntry = async (
     }
   }
 
+  const dateChanging = date !== undefined && date !== context.date;
   let resolvedTaskId: string | null | undefined;
   // Names are derived server-side from the IDs to keep the denormalized display fields
   // consistent with the FK targets — any clientName/projectName the caller sent is ignored.
@@ -409,6 +426,14 @@ export const updateTimeEntry = async (
       badRequest('Project does not belong to the selected client');
     }
 
+    const catalogChangedFromContext =
+      effectiveClientId !== context.clientId ||
+      effectiveProjectId !== context.projectId ||
+      effectiveTask !== context.task;
+    if (catalogChangedFromContext || dateChanging) {
+      enforceProjectNotExpired(actor, projectHeader.endDate);
+    }
+
     resolvedTaskId = taskFkLookup ?? null;
     resolvedProjectName = projectHeader.name;
     resolvedClientName = clientNameLookup;
@@ -428,6 +453,10 @@ export const updateTimeEntry = async (
   } else if (context.taskId === null) {
     const backfill = await tasksRepo.findIdByProjectAndName(context.projectId, context.task);
     if (backfill) resolvedTaskId = backfill;
+  }
+
+  if (dateChanging && !catalogChanging) {
+    enforceProjectNotExpired(actor, await projectsRepo.findEndDateById(context.projectId));
   }
 
   const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
@@ -590,23 +619,30 @@ export const generateRecurringEntries = async (
   // outlive a revoked client/project assignment. Re-apply the same per-row checks
   // `createTimeEntry` runs so the recurring path can't escape an assignment downgrade.
   let allowedTasks = recurringTasks;
+  if (!canWriteExpiredProjectEntries(actor)) {
+    allowedTasks = allowedTasks.filter((task) => {
+      const project = projectsByProjectId.get(task.projectId);
+      return project !== undefined && !isProjectExpired(project.endDate);
+    });
+  }
   if (!hasPermission(actor, 'timesheets.tracker_all.create')) {
     const uniqueClientIds = Array.from(
       new Set(
-        recurringTasks
+        allowedTasks
           .map((t) => projectsByProjectId.get(t.projectId)?.clientId)
           .filter((id): id is string => id !== undefined),
       ),
     );
+    const allowedProjectIds = Array.from(new Set(allowedTasks.map((t) => t.projectId)));
     const [assignedClients, assignedProjects, assignedTasks] = await Promise.all([
       userAssignmentsRepo.filterAssignedClientIds(targetUserId, uniqueClientIds),
-      userAssignmentsRepo.filterAssignedProjectIds(targetUserId, uniqueProjectIds),
+      userAssignmentsRepo.filterAssignedProjectIds(targetUserId, allowedProjectIds),
       userAssignmentsRepo.filterAssignedTaskIds(
         targetUserId,
-        recurringTasks.map((t) => t.id),
+        allowedTasks.map((t) => t.id),
       ),
     ]);
-    allowedTasks = recurringTasks.filter((t) => {
+    allowedTasks = allowedTasks.filter((t) => {
       const clientId = projectsByProjectId.get(t.projectId)?.clientId;
       return (
         clientId !== undefined &&
