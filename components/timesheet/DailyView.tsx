@@ -243,7 +243,7 @@ const DailyRepeatControls: React.FC<{
             </span>
             <DateField
               value={recurrenceEndDate}
-              onChange={(value) => onRecurrenceEndDateChange(value)}
+              onChange={onRecurrenceEndDateChange}
               aria-invalid={!!recurrenceEndDateError}
               className="text-xs font-medium shrink-0 w-auto"
             />
