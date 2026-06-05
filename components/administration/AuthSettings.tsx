@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  Building2,
   Check,
   CircleAlert,
   FileUp,
@@ -12,7 +13,6 @@ import {
   Save,
   Server,
   ShieldCheck,
-  Smartphone,
   Trash2,
 } from 'lucide-react';
 import type React from 'react';
@@ -1026,7 +1026,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
         <AuthTabButton
           tab="saml"
           activeTab={activeTab}
-          icon={<ShieldCheck aria-hidden="true" className="size-4" />}
+          icon={<Building2 aria-hidden="true" className="size-4" />}
           label={t('admin.tabs.saml', 'SAML')}
           onSelect={handleActiveTabSelect}
         />
@@ -1034,7 +1034,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
           <AuthTabButton
             tab="mfa"
             activeTab={activeTab}
-            icon={<Smartphone aria-hidden="true" className="size-4" />}
+            icon={<ShieldCheck aria-hidden="true" className="size-4" />}
             label={t('admin.tabs.mfa', 'Multi-Factor Auth')}
             onSelect={handleActiveTabSelect}
           />
@@ -1046,7 +1046,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
           <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
             <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
               <CardTitle className="flex items-center gap-3 text-base">
-                <Smartphone aria-hidden="true" className="size-4 text-praetor" />
+                <ShieldCheck aria-hidden="true" className="size-4 text-praetor" />
                 {t('mfa.enable.label', 'Enable two-factor authentication')}
               </CardTitle>
               <CardDescription>
