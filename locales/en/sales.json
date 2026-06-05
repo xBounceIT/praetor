@@ -119,6 +119,7 @@
     "days": "Days",
     "unit": "Unit",
     "units": "Units",
+    "supplierQuoteCostTooltip": "Cost from supplier quote",
     "createYourFirstQuote": "Create your first quote",
     "quotesTitle": "Quotes",
     "quotesSubtitle": "Manage client quotes and proposals",

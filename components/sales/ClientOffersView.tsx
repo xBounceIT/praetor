@@ -1503,18 +1503,25 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                   </div>
                                 </div>
                                 <div className="col-span-1 flex flex-col items-center justify-center gap-1">
-                                  <div className="flex items-center gap-1 w-full">
-                                    <ValidatedNumberInput
-                                      value={cost}
-                                      formatDecimals={2}
-                                      onValueChange={handleCostChange}
-                                      disabled={isReadOnly || isLinkedToSupplierQuote}
-                                      className="w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                    />
-                                    <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
-                                      {currency}
-                                    </span>
-                                  </div>
+                                  <Tooltip disabled={!isLinkedToSupplierQuote}>
+                                    <TooltipTrigger asChild>
+                                      <div className="flex items-center gap-1 w-full">
+                                        <ValidatedNumberInput
+                                          value={cost}
+                                          formatDecimals={2}
+                                          onValueChange={handleCostChange}
+                                          disabled={isReadOnly || isLinkedToSupplierQuote}
+                                          className="w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                        />
+                                        <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
+                                          {currency}
+                                        </span>
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      {t('sales:clientQuotes.supplierQuoteCostTooltip')}
+                                    </TooltipContent>
+                                  </Tooltip>
                                 </div>
                                 <div className="col-span-1 flex items-center justify-center gap-1">
                                   <ValidatedNumberInput

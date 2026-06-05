@@ -1141,18 +1141,25 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                         })}
                                       </span>
                                     )}
-                                    <div className="flex items-center gap-1">
-                                      <ValidatedNumberInput
-                                        value={unitCost}
-                                        formatDecimals={2}
-                                        onValueChange={handleCostChange}
-                                        disabled={isReadOnly}
-                                        className={compactInputClass}
-                                      />
-                                      <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
-                                        {currency}
-                                      </span>
-                                    </div>
+                                    <Tooltip disabled={!item.supplierQuoteItemId}>
+                                      <TooltipTrigger asChild>
+                                        <div className="flex items-center gap-1">
+                                          <ValidatedNumberInput
+                                            value={unitCost}
+                                            formatDecimals={2}
+                                            onValueChange={handleCostChange}
+                                            disabled={isReadOnly}
+                                            className={compactInputClass}
+                                          />
+                                          <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
+                                            {currency}
+                                          </span>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        {t('sales:clientQuotes.supplierQuoteCostTooltip')}
+                                      </TooltipContent>
+                                    </Tooltip>
                                   </div>
                                 </div>
                                 <div className="space-y-1 lg:col-span-1 lg:space-y-0">
