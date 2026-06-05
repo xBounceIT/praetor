@@ -788,6 +788,16 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     return options;
   }, [acceptedSupplierQuotes]);
 
+  // O(1) lookup from a supplier-quote item id to its parent quote id, so the
+  // quick-view shortcut doesn't scan the options array per row on every render.
+  const quoteIdBySupplierQuoteItemId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const option of supplierQuoteItemOptions) {
+      map.set(option.id, option.quoteId);
+    }
+    return map;
+  }, [supplierQuoteItemOptions]);
+
   const getSupplierQuoteItemDisplayValue = (itemId?: string | null) => {
     if (!itemId) return t('sales:clientQuotes.noSupplierQuote');
     const option = supplierQuoteItemOptions.find((o) => o.id === itemId);
@@ -799,10 +809,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
   // Parent supplier-quote id for a row, used to deep-link the quick-view shortcut.
   // Prefers the snapshot stored on the item, falling back to the selected option.
-  const getLinkedSupplierQuoteId = (item: QuoteItem): string | null =>
-    item.supplierQuoteId ||
-    supplierQuoteItemOptions.find((o) => o.id === item.supplierQuoteItemId)?.quoteId ||
-    null;
+  const getLinkedSupplierQuoteId = (item: QuoteItem): string | null => {
+    if (item.supplierQuoteId) return item.supplierQuoteId;
+    if (item.supplierQuoteItemId) {
+      return quoteIdBySupplierQuoteItemId.get(item.supplierQuoteItemId) ?? null;
+    }
+    return null;
+  };
 
   const updateProductSelection = (index: number, productId: string) => {
     updateProductRow(index, 'productId', productId);
