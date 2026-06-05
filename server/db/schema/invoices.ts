@@ -3,6 +3,7 @@ import {
   check,
   date,
   index,
+  integer,
   numeric,
   pgTable,
   text,
@@ -68,7 +69,13 @@ export const invoiceItems = pgTable(
     unitPrice: numeric('unit_price', { precision: 15, scale: 2 }).notNull().default('0'),
     discount: numeric('discount', { precision: 5, scale: 2 }).default('0'),
     taxRate: numeric('tax_rate', { precision: 5, scale: 2 }).notNull().default('0'),
+    // Months the line's service runs (issue #757); multiplies the taxable line amount.
+    // Default 1 keeps totals identical to pre-duration behavior.
+    durationMonths: integer('duration_months').notNull().default(1),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [index('idx_invoice_items_invoice_id').on(table.invoiceId)],
+  (table) => [
+    index('idx_invoice_items_invoice_id').on(table.invoiceId),
+    check('chk_invoice_items_duration_months', sql`${table.durationMonths} >= 1`),
+  ],
 );

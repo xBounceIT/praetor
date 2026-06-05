@@ -137,6 +137,31 @@ describe('<ClientOffersView /> list', () => {
     expect(screen.getByText('crm:paymentTerms.30gg')).toBeInTheDocument();
   });
 
+  test('scales offer-row totals by a line item duration (issue #757)', () => {
+    const durationOffer = buildOffer({
+      id: 'O-DURATION',
+      items: [
+        {
+          id: 'dur-item',
+          offerId: 'O-DURATION',
+          productId: 'p-1',
+          productName: 'Service',
+          quantity: 2,
+          unitPrice: 100,
+          productCost: 60,
+          productMolPercentage: 40,
+          unitType: 'unit',
+          durationMonths: 3,
+        },
+      ],
+    });
+    render(<ClientOffersView {...baseProps} offers={[durationOffer]} />);
+    // Subtotal (revenue) = 100 × 2 × 3 = 600 (would be 200 without duration).
+    expect(screen.getAllByText('600.00 EUR').length).toBeGreaterThan(0);
+    // Margin = 600 − (60 × 2 × 3 = 360) = 240, which only holds when both scale by duration.
+    expect(screen.getAllByText('240.00 EUR').length).toBeGreaterThan(0);
+  });
+
   test('renders fixed discounts as equivalent percentages in offer rows', () => {
     const fixedDiscountOffer = buildOffer({
       id: 'O-FIXED-DISCOUNT',

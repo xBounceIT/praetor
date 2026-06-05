@@ -572,6 +572,7 @@ export interface ClientOfferItem {
   discount?: number;
   note?: string;
   unitType?: SupplierUnitType;
+  durationMonths?: number; // months the service runs; multiplies cost & revenue (issue #757)
 }
 
 export interface ClientOffer {
@@ -642,6 +643,7 @@ export interface ClientsOrderItem {
   discount?: number;
   note?: string;
   unitType?: SupplierUnitType;
+  durationMonths?: number; // months the service runs; multiplies cost & revenue (issue #757)
 }
 
 export interface ClientsOrder {
@@ -793,6 +795,7 @@ export interface InvoiceItem {
   discount?: number;
   // Per-item Italian VAT (IVA) rate in percent. 0 for exempt or pre-tax-feature data.
   taxRate?: number;
+  durationMonths?: number; // months the service runs; multiplies the taxable amount (issue #757)
 }
 
 export interface Invoice {

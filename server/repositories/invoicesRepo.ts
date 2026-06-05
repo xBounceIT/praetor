@@ -33,6 +33,8 @@ export type InvoiceItem = {
   discount: number;
   // Per-item VAT (IVA) rate in percent. 0 for exempt/legacy rows.
   taxRate: number;
+  // Months the line's service runs; multiplies the taxable amount (issue #757).
+  durationMonths: number;
 };
 
 export type InvoiceWithItems = Invoice & { items: InvoiceItem[] };
@@ -64,6 +66,7 @@ const mapItem = (row: typeof invoiceItems.$inferSelect): InvoiceItem => ({
   unitPrice: parseDbNumber(row.unitPrice, 0),
   discount: parseDbNumber(row.discount, 0),
   taxRate: parseDbNumber(row.taxRate, 0),
+  durationMonths: row.durationMonths ?? 1,
 });
 
 export const generateNextId = async (year: string, exec: DbExecutor = db): Promise<string> => {
@@ -316,6 +319,7 @@ export type NewInvoiceItem = {
   unitPrice: number;
   discount: number;
   taxRate: number;
+  durationMonths: number;
 };
 
 export const insertItems = async (
@@ -337,6 +341,7 @@ export const insertItems = async (
         unitPrice: numericForDb(item.unitPrice),
         discount: numericForDb(item.discount),
         taxRate: numericForDb(item.taxRate),
+        durationMonths: item.durationMonths ?? 1,
       })),
     )
     .returning();

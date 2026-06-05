@@ -16,6 +16,7 @@ import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
   optionalDateString,
+  optionalDurationMonths,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   parseDateString,
@@ -52,6 +53,7 @@ const invoiceItemSchema = {
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
     taxRate: { type: 'number' },
+    durationMonths: { type: 'number' },
   },
   required: [
     'id',
@@ -111,6 +113,7 @@ const invoiceItemBodySchema = {
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
     taxRate: { type: 'number' },
+    durationMonths: { type: 'number' },
   },
   required: ['description', 'unitOfMeasure', 'quantity', 'unitPrice'],
 } as const;
@@ -156,6 +159,7 @@ type NormalizedInvoiceItemInput = {
   unitPrice: number;
   discount: number;
   taxRate: number;
+  durationMonths: number;
 };
 
 const validateAndNormalizeItems = (
@@ -231,6 +235,15 @@ const validateAndNormalizeItems = (
       return null;
     }
 
+    const durationMonthsResult = optionalDurationMonths(
+      item.durationMonths,
+      `items[${i}].durationMonths`,
+    );
+    if (!durationMonthsResult.ok) {
+      badRequest(reply, durationMonthsResult.message);
+      return null;
+    }
+
     normalizedItems.push({
       productId: productIdResult.value || null,
       description: descriptionResult.value,
@@ -239,6 +252,7 @@ const validateAndNormalizeItems = (
       unitPrice: roundCurrency(unitPriceResult.value),
       discount: roundCurrency(discountResult.value || 0),
       taxRate: roundCurrency(taxRateResult.value || 0),
+      durationMonths: durationMonthsResult.value ?? 1,
     });
   }
 
@@ -255,6 +269,7 @@ const buildItemsForInsert = (items: NormalizedInvoiceItemInput[]): invoicesRepo.
     unitPrice: item.unitPrice,
     discount: item.discount,
     taxRate: item.taxRate,
+    durationMonths: item.durationMonths,
   }));
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {

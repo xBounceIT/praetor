@@ -57,4 +57,16 @@ describe('ClientsInvoicesView modal styling', () => {
       "{t('common:labels.discount')}%",
     ]);
   });
+
+  test('exposes a Durata column and folds duration into the taxable line amount (issue #757)', async () => {
+    const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
+
+    expectSourceContainsAll(source, [
+      // The Durata column header + per-row duration input wired to updateItemRow.
+      "{t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}",
+      "'durationMonths',",
+      // The taxable amount (and therefore subtotal/tax/total) multiplies by the line duration.
+      'item.quantity * item.unitPrice * getLineDuration(item) * (1 - Number(item.discount || 0) / 100)',
+    ]);
+  });
 });

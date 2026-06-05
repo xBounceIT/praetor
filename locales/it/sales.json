@@ -208,6 +208,8 @@
     "product": "Prodotto",
     "selectProduct": "Seleziona prodotto",
     "qty": "Quantità",
+    "durationColumn": "Durata",
+    "durationUnit": "mesi",
     "unitPrice": "Prezzo Unitario",
     "note": "Nota",
     "discount": "Sconto %",

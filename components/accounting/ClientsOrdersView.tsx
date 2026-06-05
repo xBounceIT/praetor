@@ -340,6 +340,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         ...item,
         unitPrice: item.unitPrice,
         discount: item.discount ? item.discount : 0,
+        durationMonths: Number(item.durationMonths ?? 1) || 1,
         productCost: Number(item.productCost ?? 0),
         productMolPercentage:
           item.productMolPercentage === undefined || item.productMolPercentage === null
@@ -414,6 +415,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       productId: '',
       productName: '',
       quantity: 1,
+      durationMonths: 1,
       unitType: DEFAULT_UNIT_TYPE,
       unitPrice: 0,
       productCost: 0,
@@ -480,6 +482,14 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       unitPrice: adjustedPrice,
     };
     setFormData((prev) => ({ ...prev, items: newItems }));
+  };
+
+  // Duration in whole months (issue #757). Empty/invalid input falls back to 1 (one-off line).
+  const handleDurationChange = (index: number, value: string) => {
+    if (isReadOnly) return;
+    const parsed = Number.parseInt(value, 10);
+    const months = value === '' || Number.isNaN(parsed) ? 1 : Math.max(1, parsed);
+    updateProductRow(index, 'durationMonths', months);
   };
 
   const activeClients = useMemo(() => clients.filter((c) => !c.isDisabled), [clients]);
@@ -989,7 +999,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
 
                   {formData.items && formData.items.length > 0 && (
                     <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                      <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      <div className="grid flex-1 grid-cols-13 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                         <div className="col-span-2">
                           {t('accounting:clientsOrders.supplierOrderColumn', {
                             defaultValue: 'Supplier Order',
@@ -997,6 +1007,9 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         </div>
                         <div className="col-span-2">{t('sales:clientQuotes.productsServices')}</div>
                         <div className="col-span-2 text-center">{t('sales:clientQuotes.qty')}</div>
+                        <div className="col-span-1 text-center whitespace-nowrap">
+                          {t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
+                        </div>
                         <div className="col-span-1 text-center">
                           {t('crm:internalListing.cost')}
                         </div>
@@ -1021,10 +1034,10 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     <div className="space-y-3">
                       {formData.items.map((item, index) => {
                         const product = products.find((p) => p.id === item.productId);
-                        const { unitCost, molPercentage, lineCost, quantity } =
+                        const { unitCost, molPercentage, lineCost, quantity, durationMonths } =
                           getItemPricingContext(item, DEFAULT_UNIT_TYPE);
                         const salePrice = Number(item.unitPrice || 0);
-                        const lineSalePrice = salePrice * quantity;
+                        const lineSalePrice = salePrice * quantity * durationMonths;
                         const margin = lineSalePrice - lineCost;
                         const isSupply = product?.type === 'supply';
 
@@ -1048,7 +1061,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                             className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
                           >
                             <div className="flex items-start gap-2 lg:items-center">
-                              <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12 lg:items-center">
+                              <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-13 lg:items-center">
                                 <div className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('accounting:clientsOrders.supplierOrderColumn', {
@@ -1127,6 +1140,29 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                       disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
                                       i18nPrefix="sales:clientQuotes"
                                     />
+                                  </div>
+                                </div>
+                                <div className="space-y-1 lg:col-span-1 lg:space-y-0">
+                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                                    {t('sales:clientQuotes.durationColumn', {
+                                      defaultValue: 'Duration',
+                                    })}
+                                  </FieldLabel>
+                                  <div className="flex h-9 items-center justify-center gap-1">
+                                    <ValidatedNumberInput
+                                      step="1"
+                                      min="1"
+                                      placeholder={t('sales:clientQuotes.durationColumn', {
+                                        defaultValue: 'Duration',
+                                      })}
+                                      value={durationMonths}
+                                      onValueChange={(value) => handleDurationChange(index, value)}
+                                      disabled={isReadOnly}
+                                      className={compactInputClass}
+                                    />
+                                    <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
+                                      {t('sales:clientQuotes.durationUnit', { defaultValue: 'mo' })}
+                                    </span>
                                   </div>
                                 </div>
                                 <div className="space-y-1 lg:col-span-1 lg:space-y-0">

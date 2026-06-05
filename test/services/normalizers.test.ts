@@ -654,6 +654,21 @@ describe('normalizeClientOfferItem', () => {
     expect(result.productCost).toBe(0);
     expect(result.productMolPercentage).toBeNull();
   });
+
+  test('coerces durationMonths and defaults missing/invalid values to 1 (issue #757)', () => {
+    expect(
+      normalizeClientOfferItem(make<ClientOfferItem>(baseOfferItem, { durationMonths: '12' }))
+        .durationMonths,
+    ).toBe(12);
+    expect(
+      normalizeClientOfferItem(make<ClientOfferItem>(baseOfferItem, { durationMonths: undefined }))
+        .durationMonths,
+    ).toBe(1);
+    expect(
+      normalizeClientOfferItem(make<ClientOfferItem>(baseOfferItem, { durationMonths: 0 }))
+        .durationMonths,
+    ).toBe(1);
+  });
 });
 
 describe('normalizeClientOffer', () => {
@@ -697,6 +712,23 @@ describe('normalizeClientsOrderItem', () => {
     expect(result.supplierSaleId).toBeNull();
     expect(result.supplierSaleItemId).toBeNull();
     expect(result.supplierSaleSupplierName).toBeNull();
+  });
+
+  test('coerces durationMonths and defaults missing/invalid values to 1 (issue #757)', () => {
+    expect(
+      normalizeClientsOrderItem(
+        make<ClientsOrderItem>(baseClientsOrderItem, { durationMonths: '12' }),
+      ).durationMonths,
+    ).toBe(12);
+    expect(
+      normalizeClientsOrderItem(
+        make<ClientsOrderItem>(baseClientsOrderItem, { durationMonths: undefined }),
+      ).durationMonths,
+    ).toBe(1);
+    expect(
+      normalizeClientsOrderItem(make<ClientsOrderItem>(baseClientsOrderItem, { durationMonths: 0 }))
+        .durationMonths,
+    ).toBe(1);
   });
 
   test('preserves provided supplier sale fields', () => {
@@ -948,6 +980,21 @@ describe('normalizeInvoiceItem', () => {
   test('falls back to "unit" for unknown unitOfMeasure (kg)', () => {
     const item = make<InvoiceItem>(baseInvoiceItem, { unitOfMeasure: 'kg' });
     expect(normalizeInvoiceItem(item).unitOfMeasure).toBe('unit');
+  });
+
+  test('coerces durationMonths and defaults missing/invalid values to 1 (issue #757)', () => {
+    expect(
+      normalizeInvoiceItem(make<InvoiceItem>(baseInvoiceItem, { durationMonths: '12' }))
+        .durationMonths,
+    ).toBe(12);
+    expect(
+      normalizeInvoiceItem(make<InvoiceItem>(baseInvoiceItem, { durationMonths: undefined }))
+        .durationMonths,
+    ).toBe(1);
+    expect(
+      normalizeInvoiceItem(make<InvoiceItem>(baseInvoiceItem, { durationMonths: 0 }))
+        .durationMonths,
+    ).toBe(1);
   });
 
   test('falls back to "unit" for unknown unitOfMeasure (days)', () => {

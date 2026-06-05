@@ -208,6 +208,8 @@
     "product": "Product",
     "selectProduct": "Select product",
     "qty": "Quantity",
+    "durationColumn": "Duration",
+    "durationUnit": "mo",
     "unitPrice": "Unit Price",
     "note": "Note",
     "discount": "Discount %",

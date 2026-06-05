@@ -17,8 +17,8 @@ import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
   optionalDateString,
+  optionalDurationMonths,
   optionalLocalizedNonNegativeNumber,
-  optionalLocalizedPositiveNumber,
   optionalNonEmptyString,
   parseDateString,
   parseLocalizedNonNegativeNumber,
@@ -100,14 +100,11 @@ const normalizeQuoteItems = (
       return { ok: false, message: productMolPercentageResult.message };
     }
     // Duration in months: a positive whole number, defaulting to 1 (one-off line item).
-    const durationMonthsResult = optionalLocalizedPositiveNumber(
+    const durationMonthsResult = optionalDurationMonths(
       item.durationMonths,
       `items[${i}].durationMonths`,
     );
     if (!durationMonthsResult.ok) return { ok: false, message: durationMonthsResult.message };
-    if (durationMonthsResult.value !== null && !Number.isInteger(durationMonthsResult.value)) {
-      return { ok: false, message: `items[${i}].durationMonths must be a whole number of months` };
-    }
     result.push({
       id: normalizeNullableString(item.id) ?? undefined,
       productId: productIdValue,

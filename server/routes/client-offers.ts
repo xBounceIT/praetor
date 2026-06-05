@@ -18,6 +18,7 @@ import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
   optionalDateString,
+  optionalDurationMonths,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   parseDateString,
@@ -64,6 +65,7 @@ const offerItemSchema = {
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
+    durationMonths: { type: 'number' },
   },
   required: ['id', 'offerId', 'productName', 'quantity', 'unitPrice', 'productCost', 'discount'],
 } as const;
@@ -117,6 +119,7 @@ const offerItemBodySchema = {
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     discount: { type: 'number' },
     note: { type: 'string' },
+    durationMonths: { type: 'number' },
   },
   required: ['productName', 'quantity', 'unitPrice'],
 } as const;
@@ -180,6 +183,7 @@ type OfferItemInput = {
   unitType?: UnitType;
   discount?: string | number;
   note?: string;
+  durationMonths?: string | number;
 };
 
 type NormalizedOfferItem = {
@@ -196,6 +200,7 @@ type NormalizedOfferItem = {
   unitType: UnitType;
   discount: number;
   note: string | null;
+  durationMonths: number;
 };
 
 const normalizeItems = (
@@ -231,6 +236,14 @@ const normalizeItems = (
       badRequest(reply, itemDiscountResult.message);
       return null;
     }
+    const durationMonthsResult = optionalDurationMonths(
+      item.durationMonths,
+      `items[${i}].durationMonths`,
+    );
+    if (!durationMonthsResult.ok) {
+      badRequest(reply, durationMonthsResult.message);
+      return null;
+    }
     normalizedItems.push({
       productId: item.productId || null,
       productName: productNameResult.value,
@@ -260,6 +273,7 @@ const normalizeItems = (
       unitType: normalizeUnitType(item.unitType),
       discount: itemDiscountResult.value || 0,
       note: item.note || null,
+      durationMonths: durationMonthsResult.value ?? 1,
     });
   }
 
@@ -282,6 +296,7 @@ const buildItemsForInsert = (items: NormalizedOfferItem[]): clientOffersRepo.New
     supplierQuoteSupplierName: item.supplierQuoteSupplierName,
     supplierQuoteUnitPrice: item.supplierQuoteUnitPrice,
     unitType: item.unitType,
+    durationMonths: item.durationMonths,
   }));
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {

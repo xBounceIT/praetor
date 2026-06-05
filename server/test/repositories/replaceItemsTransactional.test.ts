@@ -186,6 +186,7 @@ describe('invoicesRepo.replaceItems', () => {
     unitPrice: 5,
     discount: 0,
     taxRate: 0,
+    durationMonths: 1,
   };
 
   test('failed INSERT leaves prior items intact (DELETE rolled back)', async () => {
@@ -224,6 +225,7 @@ describe('clientOffersRepo.replaceItems', () => {
     supplierQuoteSupplierName: null,
     supplierQuoteUnitPrice: null,
     unitType: 'unit' as const,
+    durationMonths: 1,
   };
 
   test('failed INSERT leaves prior items intact', async () => {
@@ -304,6 +306,7 @@ describe('clientsOrdersRepo.replaceItems', () => {
     supplierSaleItemId: null,
     supplierSaleSupplierName: null,
     unitType: 'unit' as const,
+    durationMonths: 1,
   };
 
   test('failed INSERT leaves prior items intact', async () => {

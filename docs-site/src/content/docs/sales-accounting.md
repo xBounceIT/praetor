@@ -11,6 +11,8 @@ I preventivi e le offerte raccolgono prodotti, quantità, prezzi, sconti e condi
 
 Ogni riga del preventivo include la colonna **Durata** (in mesi), posizionata tra **Quantità** e **Costo**: indica per quanti mesi è valido il servizio. La durata si comporta come un moltiplicatore insieme alla quantità, quindi sia il **Costo Totale** sia i **Ricavi** della riga sono calcolati come *valore unitario × Quantità × Durata (mesi)*. Per le voci una tantum lascia **Durata = 1**, così i totali restano identici al comportamento precedente.
 
+La **Durata** segue l'intera catena documentale: quando converti un preventivo in offerta e poi in ordine di vendita, le righe mantengono i mesi impostati, così i totali del documento derivato coincidono con quelli del preventivo. Anche le **fatture clienti** hanno la colonna Durata sulle righe e moltiplicano l'imponibile (e quindi IVA e totale) per i mesi indicati; sulle fatture la durata si imposta manualmente, dato che le righe non vengono copiate automaticamente da un ordine.
+
 La lista dei preventivi mostra codice, data di inserimento, cliente, subtotale, sconto percentuale, sconto assoluto, totale scontato, margine, MOL, termini di pagamento, scadenza e stato per controllare rapidamente i valori principali senza aprire ogni record.
 
 Nel riepilogo delle offerte, la riga **Sconto** mostra sempre la percentuale equivalente tra parentesi, anche quando lo sconto globale è inserito come importo fisso. L'importo dello sconto resta visibile in valuta sulla destra.

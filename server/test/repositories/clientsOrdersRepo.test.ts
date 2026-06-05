@@ -33,7 +33,8 @@ const orderRow = (overrides: Record<number, unknown> = {}) => makeRow(ORDER_BASE
 // id, sale_id, product_id, product_name, quantity, unit_price, product_cost,
 // product_mol_percentage, discount, unit_type, note, supplier_quote_id,
 // supplier_quote_item_id, supplier_quote_supplier_name, supplier_quote_unit_price,
-// supplier_sale_id, supplier_sale_item_id, supplier_sale_supplier_name, created_at
+// supplier_sale_id, supplier_sale_item_id, supplier_sale_supplier_name, duration_months,
+// created_at
 const ITEM_BASE: readonly unknown[] = [
   'si-1',
   'co-1',
@@ -53,6 +54,7 @@ const ITEM_BASE: readonly unknown[] = [
   null,
   null,
   null,
+  1,
   new Date('2026-04-01T00:00:00Z'),
 ];
 const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, overrides);
@@ -201,6 +203,7 @@ describe('insertItems / replaceItems', () => {
     supplierSaleItemId: null,
     supplierSaleSupplierName: null,
     unitType: 'unit',
+    durationMonths: 1,
   };
 
   test('insertItems issues a single bulk INSERT', async () => {
@@ -360,6 +363,13 @@ describe('listAllItems', () => {
     expect(result[0].id).toBe('si-1');
     expect(result[0].orderId).toBe('co-1');
     expect(result[0].quantity).toBe(2);
+    expect(result[0].durationMonths).toBe(1);
+  });
+
+  test('maps a multi-month duration through to durationMonths (issue #757)', async () => {
+    exec.enqueue({ rows: [itemRow({ 18: 12 })] });
+    const result = await repo.listAllItems(testDb);
+    expect(result[0].durationMonths).toBe(12);
   });
 });
 

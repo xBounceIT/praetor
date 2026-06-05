@@ -9,6 +9,7 @@ import {
   optionalArrayOfStrings,
   optionalBoolean,
   optionalDateString,
+  optionalDurationMonths,
   optionalEmail,
   optionalEnum,
   optionalLocalizedNonNegativeNumber,
@@ -449,6 +450,30 @@ describe('optionalLocalizedPositiveNumber', () => {
     const result = optionalLocalizedPositiveNumber(0, 'amount');
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toContain('amount');
+  });
+});
+
+describe('optionalDurationMonths', () => {
+  test('absent/empty → null (caller defaults to 1)', () => {
+    expect(optionalDurationMonths('')).toEqual({ ok: true, value: null });
+    expect(optionalDurationMonths(null)).toEqual({ ok: true, value: null });
+    expect(optionalDurationMonths(undefined)).toEqual({ ok: true, value: null });
+  });
+
+  test('accepts a positive whole number of months', () => {
+    expect(optionalDurationMonths(12)).toEqual({ ok: true, value: 12 });
+    expect(optionalDurationMonths('3')).toEqual({ ok: true, value: 3 });
+  });
+
+  test('rejects a fractional duration with a whole-months message', () => {
+    const result = optionalDurationMonths(2.5, 'items[0].durationMonths');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain('whole number of months');
+  });
+
+  test('rejects zero or negative durations (must be positive)', () => {
+    expect(optionalDurationMonths(0).ok).toBe(false);
+    expect(optionalDurationMonths(-3).ok).toBe(false);
   });
 });
 

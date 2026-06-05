@@ -292,6 +292,7 @@ export const normalizeQuote = (q: Quote): Quote => ({
 
 export const normalizeClientOfferItem = (item: ClientOfferItem): ClientOfferItem => ({
   ...normalizePricingItemFields(item),
+  durationMonths: Number(item.durationMonths ?? 1) || 1,
   note: item.note || '',
 });
 
@@ -304,6 +305,7 @@ export const normalizeClientOffer = (offer: ClientOffer): ClientOffer => ({
 
 export const normalizeClientsOrderItem = (item: ClientsOrderItem): ClientsOrderItem => ({
   ...normalizePricingItemFields(item),
+  durationMonths: Number(item.durationMonths ?? 1) || 1,
 });
 
 export const normalizeClientsOrder = (o: ClientsOrder): ClientsOrder => ({
@@ -399,6 +401,8 @@ export const normalizeInvoiceItem = (item: InvoiceItem): InvoiceItem => ({
   discount: Number(item.discount || 0),
   // Default 0 keeps legacy items (pre-tax feature) rendering with no VAT.
   taxRate: Number(item.taxRate || 0),
+  // Default 1 keeps legacy items (pre-duration feature) at their original totals.
+  durationMonths: Number(item.durationMonths ?? 1) || 1,
 });
 
 export const normalizeInvoice = (i: Invoice): Invoice => ({

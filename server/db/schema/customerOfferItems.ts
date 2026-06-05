@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { check, index, numeric, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
+import {
+  check,
+  index,
+  integer,
+  numeric,
+  pgTable,
+  text,
+  timestamp,
+  varchar,
+} from 'drizzle-orm/pg-core';
 import type { UnitType } from '../../utils/unit-type.ts';
 import { customerOffers } from './customerOffers.ts';
 import { products } from './products.ts';
@@ -27,6 +36,9 @@ export const customerOfferItems = pgTable(
     supplierQuoteItemId: varchar('supplier_quote_item_id', { length: 50 }),
     supplierQuoteSupplierName: varchar('supplier_quote_supplier_name', { length: 255 }),
     supplierQuoteUnitPrice: numeric('supplier_quote_unit_price', { precision: 15, scale: 2 }),
+    // Months the line's service runs (issue #757); multiplies cost & revenue alongside quantity.
+    // Default 1 (one-off) keeps totals identical to pre-duration behavior.
+    durationMonths: integer('duration_months').notNull().default(1),
   },
   (table) => [
     index('idx_customer_offer_items_offer_id').on(table.offerId),
@@ -34,5 +46,6 @@ export const customerOfferItems = pgTable(
       'chk_customer_offer_items_unit_type',
       sql`${table.unitType} IN ('hours', 'days', 'unit')`,
     ),
+    check('chk_customer_offer_items_duration_months', sql`${table.durationMonths} >= 1`),
   ],
 );

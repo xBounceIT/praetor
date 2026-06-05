@@ -39,8 +39,15 @@ export interface ClientsInvoicesViewProps {
 // Italian standard VAT rate, used as the per-line default.
 const DEFAULT_TAX_RATE = 22;
 
+// Months the line's service runs (issue #757); multiplies the taxable amount. Absent/invalid → 1
+// so pre-duration invoices keep their totals. Mirrors the backend `computeInvoiceTotals`.
+const getLineDuration = (item: InvoiceItem) => {
+  const months = Number(item.durationMonths ?? 1);
+  return Number.isFinite(months) && months > 0 ? months : 1;
+};
+
 const getLineTaxable = (item: InvoiceItem) =>
-  item.quantity * item.unitPrice * (1 - Number(item.discount || 0) / 100);
+  item.quantity * item.unitPrice * getLineDuration(item) * (1 - Number(item.discount || 0) / 100);
 
 const getLineTotal = (item: InvoiceItem) =>
   getLineTaxable(item) * (1 + Number(item.taxRate || 0) / 100);
@@ -296,6 +303,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       description: '',
       unitOfMeasure: 'unit',
       quantity: 1,
+      durationMonths: 1,
       unitPrice: 0,
       discount: 0,
       taxRate: DEFAULT_TAX_RATE,
@@ -380,6 +388,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       unitPrice: Number(item.unitPrice ?? 0),
       discount: Number(item.discount || 0),
       taxRate: Number(item.taxRate || 0),
+      durationMonths: Number(item.durationMonths ?? 1) || 1,
     }));
 
     const { subtotal, taxTotal, total } = calculateTotals(roundedItems);
@@ -413,7 +422,9 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
   const { subtotal, taxTotal, total } = calculateTotals(formData.items || []);
   const totalDiscount = (formData.items || []).reduce(
-    (sum, item) => sum + item.quantity * item.unitPrice * (Number(item.discount || 0) / 100),
+    (sum, item) =>
+      sum +
+      item.quantity * item.unitPrice * getLineDuration(item) * (Number(item.discount || 0) / 100),
     0,
   );
   const grossSubtotal = subtotal + totalDiscount;
@@ -689,9 +700,12 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
                 {formData.items && formData.items.length > 0 && (
                   <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
-                    <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    <div className="grid flex-1 grid-cols-13 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                       <div className="col-span-3">{t('common:labels.product')}</div>
                       <div className="col-span-2">{t('common:labels.quantity')}</div>
+                      <div className="col-span-1 whitespace-nowrap">
+                        {t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
+                      </div>
                       <div className="col-span-2">{t('common:labels.price')}</div>
                       <div className="col-span-1">{t('common:labels.discount')}</div>
                       <div className="col-span-2">
@@ -713,7 +727,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                         className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
                       >
                         <div className="flex items-start gap-2">
-                          <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12">
+                          <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-13">
                             <div className="space-y-1 lg:col-span-3 min-w-0">
                               <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                 {t('common:labels.product')}
@@ -763,6 +777,34 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                                 <span className="shrink-0 text-xs font-medium text-muted-foreground">
                                   {unitOptions.find((u) => u.id === (item.unitOfMeasure || 'unit'))
                                     ?.name || t('accounting:clientsInvoices.unit')}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="space-y-1 lg:col-span-1">
+                              <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                                {t('sales:clientQuotes.durationColumn', {
+                                  defaultValue: 'Duration',
+                                })}
+                              </FieldLabel>
+                              <div className="flex items-center gap-1">
+                                <ValidatedNumberInput
+                                  min="1"
+                                  step="1"
+                                  value={item.durationMonths ?? 1}
+                                  onValueChange={(value) => {
+                                    const parsed = Number.parseInt(value, 10);
+                                    updateItemRow(
+                                      index,
+                                      'durationMonths',
+                                      value === '' || Number.isNaN(parsed)
+                                        ? 1
+                                        : Math.max(1, parsed),
+                                    );
+                                  }}
+                                  className="min-w-0"
+                                />
+                                <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                  {t('sales:clientQuotes.durationUnit', { defaultValue: 'mo' })}
                                 </span>
                               </div>
                             </div>

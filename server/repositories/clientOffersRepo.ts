@@ -39,6 +39,7 @@ export type ClientOfferItem = {
   unitType: UnitType;
   note: string | null;
   discount: number;
+  durationMonths: number;
 };
 
 const mapOffer = (row: typeof customerOffers.$inferSelect): ClientOffer => ({
@@ -73,6 +74,7 @@ const mapItem = (row: typeof customerOfferItems.$inferSelect): ClientOfferItem =
   unitType: normalizeUnitType(row.unitType),
   note: row.note,
   discount: parseDbNumber(row.discount, 0),
+  durationMonths: row.durationMonths ?? 1,
 });
 
 export const listAll = async (exec: DbExecutor = db): Promise<ClientOffer[]> => {
@@ -366,6 +368,7 @@ export type NewClientOfferItem = {
   supplierQuoteSupplierName: string | null;
   supplierQuoteUnitPrice: number | null;
   unitType: UnitType;
+  durationMonths: number;
 };
 
 export const insertItems = async (
@@ -393,6 +396,7 @@ export const insertItems = async (
         supplierQuoteSupplierName: item.supplierQuoteSupplierName,
         supplierQuoteUnitPrice: numericForDb(item.supplierQuoteUnitPrice),
         unitType: item.unitType,
+        durationMonths: item.durationMonths ?? 1,
       })),
     )
     .returning();

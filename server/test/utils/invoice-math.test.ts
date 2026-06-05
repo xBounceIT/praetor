@@ -142,6 +142,35 @@ describe('computeInvoiceTotals', () => {
     ]);
     expect(result.total).toBe(roundCurrency(result.subtotal + result.taxTotal));
   });
+
+  test('durationMonths multiplies the taxable amount and tax (issue #757)', () => {
+    // taxable = 2 × 50 × 12 = 1200; 22% VAT = 264; total 1464
+    expect(
+      computeInvoiceTotals([
+        { quantity: 2, unitPrice: 50, discount: 0, taxRate: 22, durationMonths: 12 },
+      ]),
+    ).toEqual({ subtotal: 1200, taxTotal: 264, total: 1464 });
+  });
+
+  test('durationMonths applies after the line discount', () => {
+    // taxable = 10 × 100 × 0.9 × 3 = 2700
+    expect(
+      computeInvoiceTotals([{ quantity: 10, unitPrice: 100, discount: 10, durationMonths: 3 }]),
+    ).toEqual({ subtotal: 2700, taxTotal: 0, total: 2700 });
+  });
+
+  test('absent / zero / negative durationMonths falls back to 1 (unchanged totals)', () => {
+    const baseline = computeInvoiceTotals([{ quantity: 2, unitPrice: 50, discount: 0 }]);
+    expect(computeInvoiceTotals([{ quantity: 2, unitPrice: 50, durationMonths: 1 }])).toEqual(
+      baseline,
+    );
+    expect(computeInvoiceTotals([{ quantity: 2, unitPrice: 50, durationMonths: 0 }])).toEqual(
+      baseline,
+    );
+    expect(computeInvoiceTotals([{ quantity: 2, unitPrice: 50, durationMonths: -4 }])).toEqual(
+      baseline,
+    );
+  });
 });
 
 describe('roundCurrency', () => {
