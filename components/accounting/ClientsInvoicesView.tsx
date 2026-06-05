@@ -8,7 +8,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Client, Invoice, InvoiceItem, Product } from '../../types';
 import { addDaysToDateOnly, formatDateOnlyForLocale, getLocalDateString } from '../../utils/date';
-import { calcProductSalePrice } from '../../utils/numbers';
+import {
+  calcProductSalePrice,
+  getEffectiveDurationMonths,
+  parseDurationMonthsInput,
+} from '../../utils/numbers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
@@ -39,15 +43,14 @@ export interface ClientsInvoicesViewProps {
 // Italian standard VAT rate, used as the per-line default.
 const DEFAULT_TAX_RATE = 22;
 
-// Months the line's service runs (issue #757); multiplies the taxable amount. Absent/invalid → 1
-// so pre-duration invoices keep their totals. Mirrors the backend `computeInvoiceTotals`.
-const getLineDuration = (item: InvoiceItem) => {
-  const months = Number(item.durationMonths ?? 1);
-  return Number.isFinite(months) && months > 0 ? months : 1;
-};
-
+// Months the line's service runs (issue #757); multiplies the taxable amount. The shared
+// `getEffectiveDurationMonths` clamps absent/invalid values to 1, so pre-duration invoices keep
+// their totals — matching the backend `computeInvoiceTotals`.
 const getLineTaxable = (item: InvoiceItem) =>
-  item.quantity * item.unitPrice * getLineDuration(item) * (1 - Number(item.discount || 0) / 100);
+  item.quantity *
+  item.unitPrice *
+  getEffectiveDurationMonths(item) *
+  (1 - Number(item.discount || 0) / 100);
 
 const getLineTotal = (item: InvoiceItem) =>
   getLineTaxable(item) * (1 + Number(item.taxRate || 0) / 100);
@@ -424,7 +427,10 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   const totalDiscount = (formData.items || []).reduce(
     (sum, item) =>
       sum +
-      item.quantity * item.unitPrice * getLineDuration(item) * (Number(item.discount || 0) / 100),
+      item.quantity *
+        item.unitPrice *
+        getEffectiveDurationMonths(item) *
+        (Number(item.discount || 0) / 100),
     0,
   );
   const grossSubtotal = subtotal + totalDiscount;
@@ -790,17 +796,14 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                                 <ValidatedNumberInput
                                   min="1"
                                   step="1"
-                                  value={item.durationMonths ?? 1}
-                                  onValueChange={(value) => {
-                                    const parsed = Number.parseInt(value, 10);
+                                  value={getEffectiveDurationMonths(item)}
+                                  onValueChange={(value) =>
                                     updateItemRow(
                                       index,
                                       'durationMonths',
-                                      value === '' || Number.isNaN(parsed)
-                                        ? 1
-                                        : Math.max(1, parsed),
-                                    );
-                                  }}
+                                      parseDurationMonthsInput(value),
+                                    )
+                                  }
                                   className="min-w-0"
                                 />
                                 <span className="shrink-0 text-xs font-medium text-muted-foreground">

@@ -34,6 +34,7 @@ import {
   convertUnitPrice,
   formatDiscountValue,
   getItemPricingContext,
+  parseDurationMonthsInput,
   parseNumberInputValue,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
@@ -791,9 +792,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   // Duration in whole months (issue #757). Empty/invalid input falls back to 1 (one-off line).
   const handleDurationChange = (index: number, value: string) => {
     if (isReadOnly) return;
-    const parsed = Number.parseInt(value, 10);
-    const months = value === '' || Number.isNaN(parsed) ? 1 : Math.max(1, parsed);
-    updateProductRow(index, 'durationMonths', months);
+    updateProductRow(index, 'durationMonths', parseDurationMonthsInput(value));
   };
 
   // Column definitions for StandardTable

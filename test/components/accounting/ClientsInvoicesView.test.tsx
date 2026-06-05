@@ -62,11 +62,13 @@ describe('ClientsInvoicesView modal styling', () => {
     const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
 
     expectSourceContainsAll(source, [
-      // The Durata column header + per-row duration input wired to updateItemRow.
+      // The Durata column header + per-row duration input wired through the shared parser.
       "{t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}",
       "'durationMonths',",
-      // The taxable amount (and therefore subtotal/tax/total) multiplies by the line duration.
-      'item.quantity * item.unitPrice * getLineDuration(item) * (1 - Number(item.discount || 0) / 100)',
+      'parseDurationMonthsInput(value)',
+      // The taxable amount (and therefore subtotal/tax/total) multiplies by the line duration
+      // via the shared clamp helper.
+      'getEffectiveDurationMonths(item)',
     ]);
   });
 });

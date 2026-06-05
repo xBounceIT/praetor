@@ -9,6 +9,7 @@ import {
   getEffectiveMol,
   getItemPricingContext,
   type PricingItem,
+  parseDurationMonthsInput,
   parseNumberInputValue,
   roundCurrency,
 } from '../../utils/numbers';
@@ -114,6 +115,23 @@ describe('getEffectiveDurationMonths', () => {
     expect(getEffectiveDurationMonths({ durationMonths: 0 })).toBe(1);
     expect(getEffectiveDurationMonths({ durationMonths: -3 })).toBe(1);
     expect(getEffectiveDurationMonths({ durationMonths: Number.NaN })).toBe(1);
+  });
+});
+
+describe('parseDurationMonthsInput', () => {
+  test('parses a whole number of months', () => {
+    expect(parseDurationMonthsInput('12')).toBe(12);
+  });
+
+  test('truncates to an integer', () => {
+    expect(parseDurationMonthsInput('2.9')).toBe(2);
+  });
+
+  test('clamps below 1 and empty/invalid input to 1', () => {
+    expect(parseDurationMonthsInput('')).toBe(1);
+    expect(parseDurationMonthsInput('0')).toBe(1);
+    expect(parseDurationMonthsInput('-4')).toBe(1);
+    expect(parseDurationMonthsInput('abc')).toBe(1);
   });
 });
 

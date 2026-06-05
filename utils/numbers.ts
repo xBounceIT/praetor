@@ -72,6 +72,14 @@ export const getEffectiveDurationMonths = (item: PricingItem): number => {
   return Number.isFinite(months) && months > 0 ? months : 1;
 };
 
+// Parse a duration-input string into a whole number of months ≥ 1 (issue #757). Empty/invalid
+// input falls back to 1 (one-off line). Shared by the quote/offer/order/invoice line-item rows
+// so the parse-and-clamp rule lives in one place.
+export const parseDurationMonthsInput = (value: string): number => {
+  const parsed = Number.parseInt(value, 10);
+  return value === '' || Number.isNaN(parsed) ? 1 : Math.max(1, parsed);
+};
+
 export interface ItemPricingContext {
   baseCost: number;
   unitCost: number;
