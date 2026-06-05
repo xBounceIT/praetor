@@ -25,6 +25,7 @@ import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
   optionalDateString,
+  optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   parseDateString,
   parseLocalizedNonNegativeNumber,
@@ -153,9 +154,6 @@ type ItemBody = {
   unitType?: 'hours' | 'days' | 'unit';
 };
 
-const isProvided = (value: unknown): boolean =>
-  value !== undefined && value !== null && value !== '';
-
 const validateAndNormalizeItems = (
   items: ItemBody[],
   reply: FastifyReply,
@@ -175,40 +173,48 @@ const validateAndNormalizeItems = (
     }
     // List price drives the pricing chain. Legacy callers that only send unitPrice fall back to
     // it as the list price (with no discount) so existing integrations keep working.
-    const listPriceSource = isProvided(item.listPrice) ? item.listPrice : item.unitPrice;
-    const listPriceResult = parseLocalizedNonNegativeNumber(
-      listPriceSource,
+    const listPriceResult = optionalLocalizedNonNegativeNumber(
+      item.listPrice,
       `items[${i}].listPrice`,
     );
     if (!listPriceResult.ok) {
       badRequest(reply, listPriceResult.message);
       return null;
     }
-    let discountPercent = 0;
-    if (isProvided(item.discountPercent)) {
-      const discountResult = parseLocalizedNonNegativeNumber(
-        item.discountPercent,
-        `items[${i}].discountPercent`,
+    let listPrice = listPriceResult.value;
+    if (listPrice === null) {
+      const unitPriceResult = parseLocalizedNonNegativeNumber(
+        item.unitPrice,
+        `items[${i}].unitPrice`,
       );
-      if (!discountResult.ok) {
-        badRequest(reply, discountResult.message);
+      if (!unitPriceResult.ok) {
+        badRequest(reply, unitPriceResult.message);
         return null;
       }
-      if (discountResult.value > 100) {
-        badRequest(reply, `items[${i}].discountPercent must be between 0 and 100`);
-        return null;
-      }
-      discountPercent = discountResult.value;
+      listPrice = unitPriceResult.value;
     }
+    const discountResult = optionalLocalizedNonNegativeNumber(
+      item.discountPercent,
+      `items[${i}].discountPercent`,
+    );
+    if (!discountResult.ok) {
+      badRequest(reply, discountResult.message);
+      return null;
+    }
+    if (discountResult.value !== null && discountResult.value > 100) {
+      badRequest(reply, `items[${i}].discountPercent must be between 0 and 100`);
+      return null;
+    }
+    const discountPercent = discountResult.value ?? 0;
     // Costo unitario is derived server-side so it can never drift from list price × discount,
     // regardless of what the client computed. Totals downstream read this net unit price.
-    const unitPrice = roundCurrency(listPriceResult.value * (1 - discountPercent / 100));
+    const unitPrice = roundCurrency(listPrice * (1 - discountPercent / 100));
     result.push({
       id: generatePrefixedId(ITEM_ID_PREFIXES.supplierQuoteItem),
       productId: item.productId || null,
       productName: productNameResult.value,
       quantity: quantityResult.value,
-      listPrice: listPriceResult.value,
+      listPrice,
       discountPercent,
       unitPrice,
       note: item.note || null,

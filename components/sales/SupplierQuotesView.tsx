@@ -258,7 +258,15 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       if (isReadOnly) return;
       setFormData((prev) => {
         const items = [...(prev.items || [])];
-        items[index] = { ...items[index], [field]: value };
+        const current = items[index];
+        if (!current) return prev;
+        const next = { ...current, [field]: value };
+        // Prezzo listino / Sconto a noi edits re-derive Costo unitario (unitPrice) in the same
+        // update so the net cost — and every total that reads it — stays in lockstep.
+        if (field === 'listPrice' || field === 'discountPercent') {
+          next.unitPrice = computeNetUnitPrice(next.listPrice, next.discountPercent);
+        }
+        items[index] = next;
         return { ...prev, items };
       });
     },
@@ -285,30 +293,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       ],
     }));
   }, [editingQuote?.id, isReadOnly]);
-
-  // Prezzo listino / Sconto a noi edits both recompute Costo unitario (unitPrice) in the same
-  // update so the derived net cost — and every total that reads it — stays in lockstep.
-  const updateItemPricing = useCallback(
-    (index: number, field: 'listPrice' | 'discountPercent', value: number) => {
-      if (isReadOnly) return;
-      setFormData((prev) => {
-        const items = [...(prev.items || [])];
-        const current = items[index];
-        if (!current) return prev;
-        const nextListPrice =
-          field === 'listPrice' ? value : (current.listPrice ?? current.unitPrice ?? 0);
-        const nextDiscount = field === 'discountPercent' ? value : (current.discountPercent ?? 0);
-        items[index] = {
-          ...current,
-          listPrice: nextListPrice,
-          discountPercent: nextDiscount,
-          unitPrice: computeNetUnitPrice(nextListPrice, nextDiscount),
-        };
-        return { ...prev, items };
-      });
-    },
-    [isReadOnly],
-  );
 
   const removeItem = useCallback(
     (index: number) => {
@@ -1084,11 +1068,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                     value={itemListPrice}
                                     formatDecimals={2}
                                     onValueChange={(value) =>
-                                      updateItemPricing(
-                                        index,
-                                        'listPrice',
-                                        parseNumberInputValue(value),
-                                      )
+                                      updateItem(index, 'listPrice', parseNumberInputValue(value))
                                     }
                                     disabled={isReadOnly}
                                     className="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1108,7 +1088,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                   <ValidatedNumberInput
                                     value={itemDiscountPercent}
                                     onValueChange={(value) =>
-                                      updateItemPricing(
+                                      updateItem(
                                         index,
                                         'discountPercent',
                                         parseNumberInputValue(value),
@@ -1161,11 +1141,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                     value={itemListPrice}
                                     formatDecimals={2}
                                     onValueChange={(value) =>
-                                      updateItemPricing(
-                                        index,
-                                        'listPrice',
-                                        parseNumberInputValue(value),
-                                      )
+                                      updateItem(index, 'listPrice', parseNumberInputValue(value))
                                     }
                                     disabled={isReadOnly}
                                     className={`${itemInputClassName} flex-1`}
@@ -1178,7 +1154,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                   <ValidatedNumberInput
                                     value={itemDiscountPercent}
                                     onValueChange={(value) =>
-                                      updateItemPricing(
+                                      updateItem(
                                         index,
                                         'discountPercent',
                                         parseNumberInputValue(value),
