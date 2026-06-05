@@ -24,6 +24,7 @@ export const installAuthMiddlewareMock = () => {
   mock.module('../../middleware/auth.ts', () => ({
     ...middlewareSnap,
     authenticateToken: wrapHook(middlewareSnap.authenticateToken),
+    requireEnrollOrSession: wrapHook(middlewareSnap.requireEnrollOrSession),
     requireRole: (...args: Parameters<typeof middlewareSnap.requireRole>) =>
       wrapHook(middlewareSnap.requireRole(...args)),
     requirePermission: (...args: Parameters<typeof middlewareSnap.requirePermission>) =>

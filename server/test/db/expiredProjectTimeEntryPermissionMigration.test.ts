@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readMigrationFile } from '../helpers/schemaFiles.ts';
 
-const MIGRATION_SQL = readMigrationFile('0072_grant_expired_project_time_entry_permission.sql');
+const MIGRATION_SQL = readMigrationFile('0074_grant_expired_project_time_entry_permission.sql');
 const SCHEMA_SQL = readFileSync(join(import.meta.dirname, '..', '..', 'db', 'schema.sql'), 'utf-8');
 
 const EXPECTED_SCHEMA_VALUES = [

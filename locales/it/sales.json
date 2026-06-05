@@ -119,7 +119,7 @@
     "days": "Giorni",
     "unit": "Unità",
     "units": "Unità",
-    "supplierQuoteBadge": "Fornitore",
+    "supplierQuoteCostTooltip": "Costo da preventivo fornitore",
     "createYourFirstQuote": "Crea il tuo primo preventivo",
     "quotesTitle": "Preventivi",
     "quotesSubtitle": "Gestisci i preventivi e le proposte cliente",

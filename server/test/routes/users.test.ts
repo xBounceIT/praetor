@@ -3,6 +3,8 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
 import * as realClientsRepo from '../../repositories/clientsRepo.ts';
 import * as realExternalIdentitiesRepo from '../../repositories/externalIdentitiesRepo.ts';
+import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
+import * as realPersonalAccessTokensRepo from '../../repositories/personalAccessTokensRepo.ts';
 import * as realProjectsRepo from '../../repositories/projectsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSettingsRepo from '../../repositories/settingsRepo.ts';
@@ -24,9 +26,16 @@ import { signToken } from '../helpers/jwt.ts';
 import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
+// authenticateToken's PAT path hashes the token via getHmacKey(), which needs ENCRYPTION_KEY.
+// Set it so a forged personal-access token reaches the session-only guard instead of failing to
+// hash (which would 403 as "Invalid or expired token" before requireSessionAuth runs).
+process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'test-encryption-key-32-bytes-long!!';
+
 const usersRepoSnap = { ...realUsersRepo };
 const clientsRepoSnap = { ...realClientsRepo };
 const externalIdentitiesRepoSnap = { ...realExternalIdentitiesRepo };
+const generalSettingsRepoSnap = { ...realGeneralSettingsRepo };
+const personalAccessTokensRepoSnap = { ...realPersonalAccessTokensRepo };
 const projectsRepoSnap = { ...realProjectsRepo };
 const tasksRepoSnap = { ...realTasksRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -43,6 +52,10 @@ const drizzleSnap = { ...realDrizzle };
 const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
+// PAT auth path — lets a test forge a VALID personal-access token so authenticateToken sets
+// request.auth.source = 'personalAccessToken' and the session-only guard is what rejects it.
+const findPatByTokenHashMock = mock();
+const markPatUsedMock = mock(async () => undefined);
 
 // usersRepo
 const listAllForAdminMock = mock();
@@ -60,6 +73,17 @@ const setPrimaryRoleMock = mock();
 const getUserRoleIdsMock = mock();
 const canManageUserMock = mock();
 const getAssignmentsMock = mock();
+const disableTotpMock = mock();
+const revokeUserCredentialsMock = mock();
+const getTotpStateMock = mock();
+const generalSettingsGetMock = mock<
+  () => Promise<{
+    enableTotp?: boolean;
+    enforceTotp?: boolean;
+    totpEnforcedRoleIds?: string[];
+    totpExemptRoleIds?: string[];
+  } | null>
+>(async () => null);
 
 // tracker catalog repos
 const listClientsMock = mock();
@@ -71,6 +95,9 @@ const listTasksForUserMock = mock();
 // rolesRepo
 const rolesFindByIdMock = mock();
 const rolesFindExistingIdsMock = mock();
+// totpEnforcement (real service) gathers a user's assignable roles via this lookup; mock it so the
+// 2FA-enforcement decision is driven by the test's primary role/policy fixtures, not the live DB.
+const rolesListAvailableRolesForUserMock = mock();
 
 // ssoProvidersRepo
 const ssoFindByIdMock = mock();
@@ -125,6 +152,14 @@ beforeAll(async () => {
     getUserRoleIds: getUserRoleIdsMock,
     canManageUser: canManageUserMock,
     getAssignments: getAssignmentsMock,
+    disableTotp: disableTotpMock,
+    revokeUserCredentials: revokeUserCredentialsMock,
+    getTotpState: getTotpStateMock,
+  }));
+  mock.module('../../repositories/personalAccessTokensRepo.ts', () => ({
+    ...personalAccessTokensRepoSnap,
+    findByTokenHash: findPatByTokenHashMock,
+    markUsed: markPatUsedMock,
   }));
   mock.module('../../repositories/clientsRepo.ts', () => ({
     ...clientsRepoSnap,
@@ -149,6 +184,11 @@ beforeAll(async () => {
     userHasRole: userHasRoleMock,
     findById: rolesFindByIdMock,
     findExistingIds: rolesFindExistingIdsMock,
+    listAvailableRolesForUser: rolesListAvailableRolesForUserMock,
+  }));
+  mock.module('../../repositories/generalSettingsRepo.ts', () => ({
+    ...generalSettingsRepoSnap,
+    get: generalSettingsGetMock,
   }));
   mock.module('../../repositories/settingsRepo.ts', () => ({
     ...settingsRepoSnap,
@@ -205,6 +245,8 @@ afterAll(() => {
   mock.module('../../repositories/projectsRepo.ts', () => projectsRepoSnap);
   mock.module('../../repositories/tasksRepo.ts', () => tasksRepoSnap);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
+  mock.module('../../repositories/generalSettingsRepo.ts', () => generalSettingsRepoSnap);
+  mock.module('../../repositories/personalAccessTokensRepo.ts', () => personalAccessTokensRepoSnap);
   mock.module('../../repositories/settingsRepo.ts', () => settingsRepoSnap);
   mock.module('../../repositories/ssoProvidersRepo.ts', () => ssoProvidersRepoSnap);
   mock.module('../../repositories/userAssignmentsRepo.ts', () => userAssignmentsRepoSnap);
@@ -331,6 +373,10 @@ const allMocks = [
   getUserRoleIdsMock,
   canManageUserMock,
   getAssignmentsMock,
+  disableTotpMock,
+  revokeUserCredentialsMock,
+  getTotpStateMock,
+  generalSettingsGetMock,
   listClientsMock,
   listClientsByIdsMock,
   listProjectsForUserMock,
@@ -338,6 +384,7 @@ const allMocks = [
   listTasksForUserMock,
   rolesFindByIdMock,
   rolesFindExistingIdsMock,
+  rolesListAvailableRolesForUserMock,
   ssoFindByIdMock,
   settingsUpsertForUserMock,
   userHasTopManagerRoleMock,
@@ -356,6 +403,8 @@ const allMocks = [
   deleteAllForUserMock,
   logAuditMock,
   withDbTransactionMock,
+  findPatByTokenHashMock,
+  markPatUsedMock,
 ];
 
 let testApp: FastifyInstance;
@@ -369,6 +418,10 @@ beforeEach(async () => {
   getRolePermissionsMock.mockResolvedValue(ALL_USER_PERMS);
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
+  getTotpStateMock.mockResolvedValue(null);
+  generalSettingsGetMock.mockResolvedValue(null);
+  // No extra assignable roles by default — enforcement is driven by the user's primary role.
+  rolesListAvailableRolesForUserMock.mockResolvedValue([]);
   filterAssignedClientIdsMock.mockResolvedValue(new Set(['c1']));
   filterAssignedProjectIdsMock.mockResolvedValue(new Set(['p1']));
   filterAssignedTaskIdsMock.mockResolvedValue(new Set(['t1']));
@@ -385,6 +438,16 @@ beforeEach(async () => {
   // diagnostic override with mockResolvedValue(true).
   externalGroupsYieldNoKnownRoleMock.mockResolvedValue(false);
   deleteAllForUserMock.mockResolvedValue(0);
+  // A forged-but-VALID PAT for the admin caller (tokenVersionAtIssue undefined → version check
+  // skipped, since ADMIN_USER has no tokenVersion), so authenticateToken accepts it and the
+  // session-only guard is what rejects it. Only consulted when a praetor_pat_ token is sent.
+  findPatByTokenHashMock.mockResolvedValue({
+    userId: ADMIN_USER.id,
+    tokenVersionAtIssue: undefined,
+    lastUsedAt: null,
+    updatedAt: new Date(),
+  });
+  markPatUsedMock.mockResolvedValue(undefined);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/users');
 });
@@ -396,6 +459,9 @@ afterEach(async () => {
 const adminAuth = () => ({ authorization: `Bearer ${signToken({ userId: ADMIN_USER.id })}` });
 const managerAuth = () => ({ authorization: `Bearer ${signToken({ userId: MANAGER_USER.id })}` });
 const userAuth = () => ({ authorization: `Bearer ${signToken({ userId: REGULAR_USER.id })}` });
+// A personal-access-token bearer header (praetor_pat_ prefix → authenticateToken's PAT path); the
+// default findPatByTokenHashMock makes it a valid PAT for the admin caller.
+const patHeader = () => ({ authorization: 'Bearer praetor_pat_forged-test-token' });
 
 // =========================================================================
 // GET /api/users - list users
@@ -1314,6 +1380,45 @@ describe('PUT /api/users/:id', () => {
     );
   });
 
+  test('200 promoting to an admin role via PUT /:id revokes sessions when 2FA is enforced', async () => {
+    // The legacy single-role update path must also revoke a newly-admin user's sessions under
+    // enforcement — otherwise their pre-existing token keeps admin access without enrolling.
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    rolesFindByIdMock.mockResolvedValue({
+      id: 'admin',
+      name: 'Admin',
+      isSystem: true,
+      isAdmin: true,
+    });
+    updateUserDynamicMock.mockResolvedValue({ ...SAMPLE_USER_CORE, role: 'admin' });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, role: 'admin' });
+    generalSettingsGetMock.mockResolvedValue({
+      enableTotp: true,
+      enforceTotp: true,
+      totpEnforcedRoleIds: ['admin'],
+      totpExemptRoleIds: [],
+    });
+    getTotpStateMock.mockResolvedValue({
+      totpSecret: null,
+      totpEnabled: false,
+      totpConfirmedAt: null,
+      totpBackupCodes: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { role: 'admin' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(replaceUserRolesMock).toHaveBeenCalledWith('u-target', ['admin'], TX_SENTINEL);
+    // Revocation runs inside the role-grant transaction (shared TX sentinel) so the grant and the
+    // credential revocation commit or roll back together.
+    expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+  });
+
   test('403 cannot change own role (audits the denial)', async () => {
     findCoreByIdMock.mockResolvedValue({
       ...SAMPLE_USER_CORE,
@@ -2026,6 +2131,8 @@ describe('PUT /api/users/:id/auth-method', () => {
       'u-target',
       ['cn=managers,ou=groups,dc=test,dc=com'],
       [{ externalGroup: 'managers', role: 'manager' }],
+      // Role mapping now applies inside the auth-method transaction (shared TX sentinel).
+      TX_SENTINEL,
     );
     const body = JSON.parse(res.body);
     expect(body.authMethod).toBe('ldap');
@@ -2309,6 +2416,144 @@ describe('PUT /api/users/:id/auth-method', () => {
     expect(updateAuthMethodMock).not.toHaveBeenCalled();
   });
 
+  describe('admin-2FA enforcement on auth-method change', () => {
+    test('200 switching an admin-capable user from OIDC to local revokes credentials when 2FA is enforced', async () => {
+      // OIDC/SAML admins are exempt from app TOTP; switching one to a TOTP-applicable method while
+      // the mandate is on makes it START applying. Their pre-existing session AND PAT/MCP tokens
+      // must be revoked, or they keep admin access without ever hitting the login enrollment gate.
+      findCoreByIdMock.mockResolvedValue({
+        ...SAMPLE_USER_CORE,
+        authMethod: 'oidc',
+        authProviderId: 'sso-1',
+        role: 'admin',
+      });
+      updateAuthMethodMock.mockResolvedValue({
+        ...SAMPLE_USER_ROW,
+        authMethod: 'local',
+        role: 'admin',
+      });
+      rolesFindByIdMock.mockResolvedValue({
+        id: 'admin',
+        name: 'Admin',
+        isSystem: true,
+        isAdmin: true,
+      });
+      generalSettingsGetMock.mockResolvedValue({
+        enableTotp: true,
+        enforceTotp: true,
+        totpEnforcedRoleIds: ['admin'],
+        totpExemptRoleIds: [],
+      });
+      getTotpStateMock.mockResolvedValue({
+        totpSecret: null,
+        totpEnabled: false,
+        totpConfirmedAt: null,
+        totpBackupCodes: null,
+      });
+
+      const res = await testApp.inject({
+        method: 'PUT',
+        url: '/api/users/u-target/auth-method',
+        headers: adminAuth(),
+        payload: { authMethod: 'local' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(updateAuthMethodMock).toHaveBeenCalledWith('u-target', 'local', null, TX_SENTINEL);
+      // Revocation now runs inside the auth-method transaction (shared TX sentinel), atomic with
+      // the auth-method write.
+      expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+    });
+
+    test('200 the same switch does NOT revoke when admin-2FA enforcement is off', async () => {
+      findCoreByIdMock.mockResolvedValue({
+        ...SAMPLE_USER_CORE,
+        authMethod: 'oidc',
+        authProviderId: 'sso-1',
+        role: 'admin',
+      });
+      updateAuthMethodMock.mockResolvedValue({
+        ...SAMPLE_USER_ROW,
+        authMethod: 'local',
+        role: 'admin',
+      });
+      // generalSettingsGetMock defaults to null (enforcement off) — the mandate never applies.
+      getTotpStateMock.mockResolvedValue({
+        totpSecret: null,
+        totpEnabled: false,
+        totpConfirmedAt: null,
+        totpBackupCodes: null,
+      });
+
+      const res = await testApp.inject({
+        method: 'PUT',
+        url: '/api/users/u-target/auth-method',
+        headers: adminAuth(),
+        payload: { authMethod: 'local' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(revokeUserCredentialsMock).not.toHaveBeenCalled();
+    });
+
+    test('200 LDAP role-map elevation to admin revokes credentials even when the auth method is unchanged', async () => {
+      // authStateChanged is false (already LDAP, no provider switch), but the LDAP role mapping
+      // elevates the user to an admin role while enforced — their pre-existing session/PAT must
+      // still be revoked, or they keep newly-gained admin access without hitting the enroll gate.
+      findCoreByIdMock.mockResolvedValue({
+        ...SAMPLE_USER_CORE,
+        authMethod: 'ldap',
+        authProviderId: null,
+        role: 'user',
+      });
+      updateAuthMethodMock.mockResolvedValue({
+        ...SAMPLE_USER_ROW,
+        authMethod: 'ldap',
+        role: 'user',
+      });
+      ldapLookupUserGroupsMock.mockResolvedValue({
+        groups: ['cn=admins,ou=groups,dc=test,dc=com'],
+        roleMappings: [{ externalGroup: 'admins', role: 'admin' }],
+      });
+      // Mapping promotes them to admin: updated.role becomes 'admin', mappedRoleIds is set.
+      applyExternalRolesForUserIfMatchedMock.mockResolvedValue({
+        applied: true,
+        roleIds: ['admin'],
+      });
+      rolesFindByIdMock.mockResolvedValue({
+        id: 'admin',
+        name: 'Admin',
+        isSystem: true,
+        isAdmin: true,
+      });
+      generalSettingsGetMock.mockResolvedValue({
+        enableTotp: true,
+        enforceTotp: true,
+        totpEnforcedRoleIds: ['admin'],
+        totpExemptRoleIds: [],
+      });
+      getTotpStateMock.mockResolvedValue({
+        totpSecret: null,
+        totpEnabled: false,
+        totpConfirmedAt: null,
+        totpBackupCodes: null,
+      });
+
+      const res = await testApp.inject({
+        method: 'PUT',
+        url: '/api/users/u-target/auth-method',
+        headers: adminAuth(),
+        payload: { authMethod: 'ldap' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body).role).toBe('admin');
+      // The provider/method did not change (authStateChanged === false); only the role mapping did.
+      // Revocation runs inside the same transaction as the role mapping (shared TX sentinel).
+      expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+    });
+  });
+
   // Regression: spawned follow-up from PR #659 review. Stale external_identities rows
   // from a prior SSO binding must be wiped when an admin changes the auth method or
   // provider, or an A → B → A flip will silently re-authenticate via the original
@@ -2431,6 +2676,174 @@ describe('PUT /api/users/:id/auth-method', () => {
 });
 
 // =========================================================================
+// POST /api/users/:id/2fa/reset
+// =========================================================================
+
+describe('POST /api/users/:id/2fa/reset', () => {
+  test('200 admin with all-scope resets TOTP: disables + revokes all credentials atomically', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    disableTotpMock.mockResolvedValue(undefined);
+    revokeUserCredentialsMock.mockResolvedValue(undefined);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users/u-target/2fa/reset',
+      headers: adminAuth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ ok: true });
+
+    // Recovery clears the target's enrollment AND revokes every live credential — both interactive
+    // sessions and PAT/MCP tokens (revokeUserCredentials bumps session_version AND token_version),
+    // so a surviving token can't keep admin API access if the reset leaves an enforced admin
+    // unenrolled. Both run inside the same withDbTransaction, landing with the shared TX sentinel.
+    expect(disableTotpMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+    expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+
+    // Caller already holds administration.user_management_all.view, so the
+    // manager-scope fallback is short-circuited.
+    expect(canManageUserMock).not.toHaveBeenCalled();
+
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'user.totp_reset',
+        entityType: 'user',
+        entityId: 'u-target',
+        details: expect.objectContaining({ secondaryLabel: 'admin_reset' }),
+      }),
+    );
+  });
+
+  test('200 manager with scope over the target can reset (canManageUser consulted)', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    // No administration.user_management_all.view → falls through to canManageUser.
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management.view',
+    ]);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    canManageUserMock.mockResolvedValue(true);
+    disableTotpMock.mockResolvedValue(undefined);
+    revokeUserCredentialsMock.mockResolvedValue(undefined);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users/u-target/2fa/reset',
+      headers: managerAuth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ ok: true });
+    expect(canManageUserMock).toHaveBeenCalledWith('u-target', MANAGER_USER.id);
+    expect(disableTotpMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+    expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+  });
+
+  test('404 when the target user does not exist', async () => {
+    findCoreByIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users/missing/2fa/reset',
+      headers: adminAuth(),
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(disableTotpMock).not.toHaveBeenCalled();
+    expect(revokeUserCredentialsMock).not.toHaveBeenCalled();
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'user.totp_reset.not_found',
+        entityType: 'user',
+        entityId: 'missing',
+      }),
+    );
+  });
+
+  test('403 caller lacking administration.user_management.update permission', async () => {
+    getRolePermissionsMock.mockResolvedValue(['administration.user_management.view']);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users/u-target/2fa/reset',
+      headers: adminAuth(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    // Permission gate (requirePermission) rejects before the handler body runs.
+    expect(findCoreByIdMock).not.toHaveBeenCalled();
+    expect(disableTotpMock).not.toHaveBeenCalled();
+    expect(revokeUserCredentialsMock).not.toHaveBeenCalled();
+  });
+
+  test('403 non-all-scope caller without canManageUser over the target', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.update',
+      'administration.user_management.view',
+    ]);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    canManageUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users/u-target/2fa/reset',
+      headers: managerAuth(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(disableTotpMock).not.toHaveBeenCalled();
+    expect(revokeUserCredentialsMock).not.toHaveBeenCalled();
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'user.totp_reset.denied',
+        entityType: 'user',
+        entityId: 'u-target',
+        details: expect.objectContaining({ secondaryLabel: 'cannot_manage_user' }),
+      }),
+    );
+  });
+
+  test('400 cannot reset your own two-factor authentication', async () => {
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, id: ADMIN_USER.id });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: `/api/users/${ADMIN_USER.id}/2fa/reset`,
+      headers: adminAuth(),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('Cannot reset your own two-factor authentication');
+    expect(disableTotpMock).not.toHaveBeenCalled();
+    expect(revokeUserCredentialsMock).not.toHaveBeenCalled();
+  });
+
+  test('401 missing token', async () => {
+    const res = await testApp.inject({ method: 'POST', url: '/api/users/u-target/2fa/reset' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  test('403 (PAT): a personal-access token cannot reset another user’s 2FA — session auth required', async () => {
+    // Clearing a target's second factor is a sensitive 2FA management action; a leaked PAT with
+    // user-management update permission must not be able to do it (mirrors /2fa/disable + regen).
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users/u-target/2fa/reset',
+      headers: patHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error).toBe('Session authentication required');
+    expect(disableTotpMock).not.toHaveBeenCalled();
+    expect(revokeUserCredentialsMock).not.toHaveBeenCalled();
+  });
+});
+
+// =========================================================================
 // GET /api/users/:id/roles
 // =========================================================================
 
@@ -2500,6 +2913,59 @@ describe('PUT /api/users/:id/roles', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'user.roles_updated' }),
     );
+  });
+
+  test('200 granting an admin role to an unenrolled user revokes sessions when 2FA is enforced', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    rolesFindExistingIdsMock.mockResolvedValue(new Set(['user', 'admin']));
+    generalSettingsGetMock.mockResolvedValue({
+      enableTotp: true,
+      enforceTotp: true,
+      totpEnforcedRoleIds: ['admin'],
+      totpExemptRoleIds: [],
+    });
+    getTotpStateMock.mockResolvedValue({
+      totpSecret: null,
+      totpEnabled: false,
+      totpConfirmedAt: null,
+      totpBackupCodes: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/roles',
+      headers: adminAuth(),
+      payload: { roleIds: ['user', 'admin'], primaryRoleId: 'admin' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(replaceUserRolesMock).toHaveBeenCalledWith('u-target', ['user', 'admin'], TX_SENTINEL);
+    // Primary role is now admin, the mandate is on, and they have no TOTP → revoke their
+    // credentials. This runs inside the same transaction as the role replacement (shared TX
+    // sentinel) so the grant and revocation commit or roll back together.
+    expect(revokeUserCredentialsMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+  });
+
+  test('200 role change without enforcement does not revoke sessions', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    rolesFindExistingIdsMock.mockResolvedValue(new Set(['user', 'admin']));
+    // generalSettingsGetMock defaults to null (enforcement off) — no revocation.
+    getTotpStateMock.mockResolvedValue({
+      totpSecret: null,
+      totpEnabled: false,
+      totpConfirmedAt: null,
+      totpBackupCodes: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/roles',
+      headers: adminAuth(),
+      payload: { roleIds: ['user', 'admin'], primaryRoleId: 'admin' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(revokeUserCredentialsMock).not.toHaveBeenCalled();
   });
 
   test('403 cannot edit own roles', async () => {

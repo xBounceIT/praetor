@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
 import type {
+  TotpBackupCode,
   UserAuthMethod,
   UserContractType,
   UserEmploymentStatus,
@@ -13,6 +14,13 @@ import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 
 export type EmployeeType = 'app_user' | 'internal' | 'external';
 export type AuthMethod = UserAuthMethod;
+
+// Whether app-level TOTP 2FA applies to a given auth method. OIDC/SAML users authenticate at their
+// identity provider (which owns MFA) and never reach the local password gate, so app TOTP governs
+// only local and LDAP logins. Single source of truth for the login gate, the enrollment endpoints,
+// and the status check — keep the 2FA predicate from drifting across those call sites.
+export const isTotpApplicable = (authMethod: AuthMethod): boolean =>
+  authMethod === 'local' || authMethod === 'ldap';
 export type ContractType = UserContractType;
 export type EmploymentStatus = UserEmploymentStatus;
 export type WorkLocation = UserWorkLocation;
@@ -40,6 +48,7 @@ export type AuthUser = {
   username: string;
   role: string;
   avatarInitials: string;
+  authMethod: AuthMethod;
   isDisabled: boolean;
   sessionVersion: number;
   tokenVersion: number;
@@ -52,6 +61,7 @@ export type LoginUser = AuthUser & {
 export type LoginUserWithAuth = LoginUser & {
   authMethod: AuthMethod;
   authProviderId: string | null;
+  totpEnabled: boolean;
 };
 
 const LOGIN_USER_PROJECTION = {
@@ -67,6 +77,7 @@ const LOGIN_USER_PROJECTION = {
   authProviderId: users.authProviderId,
   sessionVersion: users.sessionVersion,
   tokenVersion: users.tokenVersion,
+  totpEnabled: users.totpEnabled,
 } as const;
 
 type LoginUserRow = {
@@ -82,6 +93,7 @@ type LoginUserRow = {
   authProviderId: string | null;
   sessionVersion: number;
   tokenVersion: number;
+  totpEnabled: boolean | null;
 };
 
 const mapLoginUserRow = (row: LoginUserRow): LoginUserWithAuth => ({
@@ -97,6 +109,7 @@ const mapLoginUserRow = (row: LoginUserRow): LoginUserWithAuth => ({
   authProviderId: row.authProviderId ?? null,
   sessionVersion: row.sessionVersion,
   tokenVersion: row.tokenVersion,
+  totpEnabled: row.totpEnabled ?? false,
 });
 
 export const findAuthUserById = async (
@@ -110,6 +123,7 @@ export const findAuthUserById = async (
       username: users.username,
       role: users.role,
       avatarInitials: users.avatarInitials,
+      authMethod: users.authMethod,
       isDisabled: users.isDisabled,
       sessionVersion: users.sessionVersion,
       tokenVersion: users.tokenVersion,
@@ -123,6 +137,7 @@ export const findAuthUserById = async (
     username: rows[0].username,
     role: rows[0].role,
     avatarInitials: rows[0].avatarInitials,
+    authMethod: rows[0].authMethod ?? 'local',
     isDisabled: rows[0].isDisabled ?? false,
     sessionVersion: rows[0].sessionVersion,
     tokenVersion: rows[0].tokenVersion,
@@ -134,6 +149,147 @@ export const bumpSessionVersion = async (userId: string, exec: DbExecutor = db):
     .update(users)
     .set({ sessionVersion: sql`${users.sessionVersion} + 1` })
     .where(eq(users.id, userId));
+};
+
+// Revokes BOTH of a single user's credential generations in one statement — session_version (the
+// interactive session JWT) AND token_version (personal-access + MCP tokens). Use wherever a
+// privilege or second-factor change must invalidate everything the user currently holds: an
+// unenrolled user promoted into an admin role while the 2FA mandate is on (a pre-existing PAT would
+// otherwise keep admin API access with no second factor, since PAT/MCP auth keys off token_version
+// and never traverses the login 2FA gate), or an admin-initiated 2FA reset. For a logout or a
+// self-service action that should only end interactive sessions, use bumpSessionVersion instead.
+export const revokeUserCredentials = async (
+  userId: string,
+  exec: DbExecutor = db,
+): Promise<void> => {
+  await exec
+    .update(users)
+    .set({
+      sessionVersion: sql`${users.sessionVersion} + 1`,
+      tokenVersion: sql`${users.tokenVersion} + 1`,
+    })
+    .where(eq(users.id, userId));
+};
+
+// ===========================================================================
+// TOTP two-factor authentication state
+// ===========================================================================
+
+// Raw enrollment state for the 2FA verification/setup flows. `totpSecret` is the AES-256-GCM
+// ciphertext exactly as stored (callers decrypt via crypto.ts only to verify a code); the
+// backup codes carry their bcrypt hashes and redemption timestamps. A read-verify-write
+// (e.g. redeeming a backup code) wraps getTotpState + markBackupCodeUsed in one transaction.
+export type UserTotpState = {
+  totpSecret: string | null;
+  totpEnabled: boolean;
+  totpConfirmedAt: Date | null;
+  totpBackupCodes: TotpBackupCode[] | null;
+};
+
+export const getTotpState = async (
+  userId: string,
+  exec: DbExecutor = db,
+  opts: { forUpdate?: boolean } = {},
+): Promise<UserTotpState | null> => {
+  // `forUpdate` takes a row lock so a concurrent backup-code redemption blocks until this
+  // transaction commits and then re-reads the (now-stamped) code — preventing a single code from
+  // being spent twice under READ COMMITTED. Only meaningful inside a transaction (redeemBackupCode).
+  const query = exec
+    .select({
+      totpSecret: users.totpSecret,
+      totpEnabled: users.totpEnabled,
+      totpConfirmedAt: users.totpConfirmedAt,
+      totpBackupCodes: users.totpBackupCodes,
+    })
+    .from(users)
+    .where(eq(users.id, userId));
+  const rows = await (opts.forUpdate ? query.for('update') : query);
+  if (!rows[0]) return null;
+  return {
+    totpSecret: rows[0].totpSecret ?? null,
+    totpEnabled: rows[0].totpEnabled,
+    totpConfirmedAt: rows[0].totpConfirmedAt ?? null,
+    totpBackupCodes: rows[0].totpBackupCodes ?? null,
+  };
+};
+
+// Stores a fresh (unconfirmed) enrollment: the encrypted secret plus the freshly-hashed backup
+// codes. `totpEnabled` stays false and `totpConfirmedAt` stays null until the user proves
+// possession by confirming a code (see enableTotp). Overwrites any prior pending enrollment.
+export const setTotpEnrollment = async (
+  userId: string,
+  args: { encryptedSecret: string; backupCodeHashes: string[] },
+  exec: DbExecutor = db,
+): Promise<void> => {
+  const backupCodes: TotpBackupCode[] = args.backupCodeHashes.map((hash) => ({
+    hash,
+    usedAt: null,
+  }));
+  await exec
+    .update(users)
+    .set({
+      totpSecret: args.encryptedSecret,
+      totpBackupCodes: backupCodes,
+      totpEnabled: false,
+      totpConfirmedAt: null,
+    })
+    .where(eq(users.id, userId));
+};
+
+// Flips a pending enrollment live. The `totp_secret IS NOT NULL` guard means a stray confirm
+// for a user who never ran setup is a no-op; the boolean return lets the route distinguish a
+// genuine activation from that case.
+export const enableTotp = async (
+  userId: string,
+  expectedSecret: string,
+  exec: DbExecutor = db,
+): Promise<boolean> => {
+  // Compare-and-swap on the exact pending ciphertext the caller just decrypted and verified. A
+  // concurrent /setup can rotate totp_secret between that verify and this write; matching the
+  // stored value (AES-GCM ciphertext is unique per encryption) pins the enable to the specific
+  // enrollment whose code was proven, so a racing /setup can't get an unverified secret enabled.
+  // The `totp_enabled = false` guard additionally makes a double-confirm a no-op.
+  const rows = await exec
+    .update(users)
+    .set({ totpEnabled: true, totpConfirmedAt: sql`CURRENT_TIMESTAMP` })
+    .where(
+      sql`${users.id} = ${userId} AND ${users.totpSecret} = ${expectedSecret} AND ${users.totpEnabled} = false`,
+    )
+    .returning({ id: users.id });
+  return rows.length > 0;
+};
+
+// Full teardown: clears the secret, backup codes and confirmation stamp and turns 2FA off.
+// Used by self-service disable and the admin reset endpoint.
+export const disableTotp = async (userId: string, exec: DbExecutor = db): Promise<void> => {
+  await exec
+    .update(users)
+    .set({
+      totpSecret: null,
+      totpBackupCodes: null,
+      totpEnabled: false,
+      totpConfirmedAt: null,
+    })
+    .where(eq(users.id, userId));
+};
+
+// Overwrites the backup-codes jsonb after a code is redeemed (the caller stamps `usedAt` on the
+// matching entry). Paired with getTotpState inside a transaction so the read-verify-write is atomic.
+export const markBackupCodeUsed = async (
+  userId: string,
+  codes: TotpBackupCode[],
+  exec: DbExecutor = db,
+): Promise<void> => {
+  await exec.update(users).set({ totpBackupCodes: codes }).where(eq(users.id, userId));
+};
+
+// Overwrites the backup-codes jsonb wholesale, e.g. when the user regenerates their codes.
+export const setBackupCodes = async (
+  userId: string,
+  codes: TotpBackupCode[],
+  exec: DbExecutor = db,
+): Promise<void> => {
+  await exec.update(users).set({ totpBackupCodes: codes }).where(eq(users.id, userId));
 };
 
 // Subquery resolving the user's current token_version inside an INSERT, so the
@@ -166,6 +322,55 @@ export const rotatePasswordAndBumpSession = async (
     .returning({ sessionVersion: users.sessionVersion });
   if (!rows[0]) throw new NotFoundError('User');
   return rows[0].sessionVersion;
+};
+
+// Revokes only the non-interactive credentials — PAT/MCP tokens (token_version) — of each
+// local/ldap user who is subject to the 2FA mandate (their primary role or any assigned/(multi-)role
+// is in `enforcedRoleIds`, OR `enforcedRoleIds` is empty which means "everyone"), is NOT carved out
+// by `exemptRoleIds` (exempt wins — holding any exempt role spares the user), and has NOT enrolled in
+// TOTP. Called when enforcement is switched on or its role scope is broadened. Interactive sessions
+// (session_version) are deliberately left intact: those traverse the login 2FA gate, so an unenrolled
+// enforced user is routed into mandatory enrollment on their next sign-in (see auth.ts) and blocked
+// from switching into an enforced role meanwhile — enforcing without abruptly logging anyone out
+// (which, for the admin who just toggled the policy, would silently break the app). PAT/MCP tokens key
+// off token_version and never reach the login gate, so they alone are rotated here. Affected users
+// must re-issue any personal-access/MCP tokens after enrolling.
+// Returns the number of users whose tokens were revoked.
+export const revokeTokensForUnenrolledEnforcedUsers = async (
+  enforcedRoleIds: string[],
+  exemptRoleIds: string[],
+  exec: DbExecutor = db,
+): Promise<number> => {
+  const inList = (ids: string[]) =>
+    sql.join(
+      ids.map((id) => sql`${id}`),
+      sql`, `,
+    );
+
+  const conditions = [sql`totp_enabled = false`, sql`auth_method IN ('local', 'ldap')`];
+
+  // Exempt wins: skip users whose primary role OR any assigned role is exempt. Omitted when the
+  // exempt list is empty (an empty `NOT IN ()` is invalid SQL and would exclude no one anyway).
+  if (exemptRoleIds.length > 0) {
+    conditions.push(sql`role NOT IN (${inList(exemptRoleIds)})`);
+    conditions.push(
+      sql`NOT EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = users.id AND ur.role_id IN (${inList(exemptRoleIds)}))`,
+    );
+  }
+
+  // Enforced scope: a non-empty list restricts to its members (primary or assigned role); an empty
+  // list means "everyone" (local/ldap, minus the exempt carve-out above), so no clause is added.
+  if (enforcedRoleIds.length > 0) {
+    conditions.push(
+      sql`(role IN (${inList(enforcedRoleIds)}) OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = users.id AND ur.role_id IN (${inList(enforcedRoleIds)})))`,
+    );
+  }
+
+  const rows = await executeRows<{ id: string }>(
+    exec,
+    sql`UPDATE users SET token_version = token_version + 1 WHERE ${sql.join(conditions, sql` AND `)} RETURNING id`,
+  );
+  return rows.length;
 };
 
 export const findLoginUserByNormalizedUsername = async (

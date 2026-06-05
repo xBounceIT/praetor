@@ -509,8 +509,22 @@
     {
       "idx": 72,
       "version": "7",
+      "when": 1780518873755,
+      "tag": "0072_add_user_totp_and_totp_enforcement",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1780613472247,
+      "tag": "0073_rainy_valkyrie",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
       "when": 1780617600000,
-      "tag": "0072_grant_expired_project_time_entry_permission",
+      "tag": "0074_grant_expired_project_time_entry_permission",
       "breakpoints": true
     }
   ]

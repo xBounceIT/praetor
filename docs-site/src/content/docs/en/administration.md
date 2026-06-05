@@ -68,6 +68,27 @@ The two switches are independent: turning both off (combined with manual user cr
 
 If a user cannot sign in, check credentials, user status, assigned role, and authentication logs.
 
+### Two-factor authentication (2FA)
+
+Praetor supports TOTP-based two-factor authentication (authenticator apps such as Google Authenticator, Authy, or 1Password) for accounts with local or LDAP credentials. Each user enables 2FA from their own **Settings → Security**. For security, enrolling from a logged-in session first requires re-entering the account password (so a hijacked session alone cannot register a second factor); Praetor then shows a QR code (and a key for manual entry) to scan with the authenticator app, asks for a six-digit code to confirm, and finally displays a set of single-use **backup codes** to store safely. Backup codes are shown only once; you can regenerate them at any time — invalidating the previous ones — by entering a valid code. Enabling 2FA also signs you out of your other devices and revokes your existing API tokens, so nothing issued before enrollment can keep bypassing the new second factor (the device you enrolled from stays signed in).
+
+When 2FA is enabled and available, after username and password sign-in requires a code from the authenticator app (or one of the backup codes, each usable once). Disabling it requires re-authentication: local users enter their current password **and** a valid code, LDAP users a valid code. Disabling revokes the user's other active sessions.
+
+**The MFA policy.** The 2FA policy lives on a dedicated **MFA** tab in the **Authentication** settings and exposes four controls. Because these settings are saved through the general settings, the tab is shown only to administrators who hold the general-settings update permission.
+
+- **Enable 2FA** — a global on/off switch for the whole feature. When off, 2FA is unavailable org-wide: no one can enroll, and even users who were previously enrolled are no longer challenged for a code at sign-in and are never forced into 2FA. Use it as a kill-switch to suspend two-factor authentication entirely.
+- **Enforce 2FA** — the master enforcement switch. It is available only while **Enable 2FA** is on. When off, 2FA stays optional (users may enroll voluntarily); when on, the role controls below decide who is actually required to use it.
+- **Enforce for roles** — a multi-select of the roles whose users must use 2FA. Leaving it empty means **everyone** with local or LDAP credentials is required. Selecting one or more roles narrows enforcement to users who hold any of those roles, considering both the primary role and any additional assigned roles, not just the active one.
+- **Exempt roles** — a multi-select of roles that are never required to use 2FA. Exemption **wins over enforcement**: a user who holds an exempt role is never forced, even if they also hold an enforced role.
+
+A user is required to use 2FA only when **Enable 2FA** and **Enforce 2FA** are both on, the account uses local or LDAP credentials, none of the user's roles is in **Exempt roles**, and either **Enforce for roles** is empty or one of the user's roles is listed there.
+
+When a user is required to use 2FA and has not yet set it up, they are routed into enrollment on their next sign-in and only receive a session once it is completed. Turning enforcement on (or broadening it to cover more users) does not log anyone out: existing browser sessions of affected users stay active and the policy takes hold the next time they sign in, while attempting to switch into a required role without a second factor is blocked. It does, however, revoke those users' API tokens (personal access tokens and MCP tokens) — in the same transaction that saves the policy — because such tokens never pass through the login enrollment step and would otherwise keep API access with no second factor. Credentials are revoked the same way whenever a user who is unenrolled becomes subject to the mandate — by being promoted into an enforced role or by having their authentication method changed to a TOTP-applicable one (local or LDAP). A user subject to the mandate cannot disable their own 2FA from settings; only an admin reset can remove it.
+
+**OIDC/SAML providers.** Users who sign in through an external provider (OIDC or SAML) do not use Praetor's 2FA: the second factor is handled by their identity provider. Enrollment is not offered to these users and the enforcement policy never applies to them, whatever the role selection.
+
+**Recovery.** If a user loses access to their authenticator, an administrator can reset the user's 2FA from the row actions menu in the user list (**Reset 2FA**). This disables the user's 2FA and revokes their active credentials — both sessions and API tokens (personal access tokens and MCP tokens), since a reset is a recovery action and a surviving token would otherwise keep access without 2FA; on next sign-in the user uses only their password (and, if the policy still requires 2FA for that user, they will be prompted to set it up again).
+
 ## General and email settings
 
 General settings control cross-cutting features such as AI reporting and application preferences. Email settings are used for sending messages and notifications.

@@ -3025,6 +3025,7 @@ const AppContent: React.FC = () => {
                   onUpdateUser={handleUpdateUser}
                   onUpdateUserRoles={handleUpdateUserRoles}
                   onUpdateUserAuthMethod={handleUpdateUserAuthMethod}
+                  onResetUserTotp={(userId) => api.users.resetTotp(userId).then(() => undefined)}
                   currentUserId={currentUser.id}
                   permissions={currentUser.permissions || []}
                   roles={roles}
@@ -3071,6 +3072,22 @@ const AppContent: React.FC = () => {
                   ssoProviders={ssoProviders}
                   onSaveSsoProvider={handleSaveSsoProvider}
                   onDeleteSsoProvider={handleDeleteSsoProvider}
+                  enableTotp={generalSettings.enableTotp}
+                  onSetEnableTotp={(value) => handleUpdateGeneralSettings({ enableTotp: value })}
+                  enforceTotp={generalSettings.enforceTotp}
+                  onSetEnforceTotp={(value) => handleUpdateGeneralSettings({ enforceTotp: value })}
+                  enforcedRoleIds={generalSettings.totpEnforcedRoleIds}
+                  onSetEnforcedRoleIds={(value) =>
+                    handleUpdateGeneralSettings({ totpEnforcedRoleIds: value })
+                  }
+                  exemptRoleIds={generalSettings.totpExemptRoleIds}
+                  onSetExemptRoleIds={(value) =>
+                    handleUpdateGeneralSettings({ totpExemptRoleIds: value })
+                  }
+                  canManageMfa={hasPermission(
+                    currentUser.permissions,
+                    'administration.general.update',
+                  )}
                 />
               )}
 
@@ -3124,6 +3141,11 @@ const AppContent: React.FC = () => {
                 }
                 onUpdate={handleUpdateUserSettings}
                 onUpdatePassword={handleUpdateUserPassword}
+                onTotpSetup={(password: string) => api.auth.totpSetup(undefined, password)}
+                onTotpConfirm={(code) => api.auth.totpConfirm(code).then(() => undefined)}
+                onTotpDisable={(payload) => api.auth.totpDisable(payload).then(() => undefined)}
+                onRegenerateTotpBackupCodes={(code) => api.auth.regenerateTotpBackupCodes(code)}
+                onGetTotpStatus={() => api.auth.getTotpStatus()}
                 onListMcpTokens={handleListMcpTokens}
                 onCreateMcpToken={handleCreateMcpToken}
                 onRevokeMcpToken={handleRevokeMcpToken}

@@ -109,6 +109,15 @@ const renderAuthSettings = (overrides: Partial<ComponentProps<typeof AuthSetting
     ssoProviders: [],
     onSaveSsoProvider: defaultOnSaveSsoProvider,
     onDeleteSsoProvider: mock(async () => {}),
+    enableTotp: true,
+    onSetEnableTotp: mock((_value: boolean) => {}),
+    enforceTotp: false,
+    onSetEnforceTotp: mock((_value: boolean) => {}),
+    enforcedRoleIds: [],
+    onSetEnforcedRoleIds: mock((_value: string[]) => {}),
+    exemptRoleIds: [],
+    onSetExemptRoleIds: mock((_value: string[]) => {}),
+    canManageMfa: true,
     ...overrides,
   };
 
@@ -198,6 +207,84 @@ describe('<AuthSettings />', () => {
     const submitted = onSave.mock.calls[0]?.[0] as LdapConfig;
     expect(submitted.provisionOnLogin).toBe(false);
     expect(submitted.autoProvisionAll).toBe(true);
+  });
+
+  describe('2FA org policy (MFA tab)', () => {
+    const openMfaTab = () => {
+      fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.mfa' }));
+    };
+
+    test('shows the MFA tab when canManageMfa is true and reveals the Enable/Enforce switches on click', () => {
+      renderAuthSettings();
+
+      // The MFA controls live behind their own tab, so they are not visible until navigated to.
+      expect(document.getElementById('enable-totp')).toBeNull();
+      expect(document.getElementById('enforce-totp')).toBeNull();
+
+      openMfaTab();
+
+      // The Enable switch reflects enableTotp=true and the Enforce switch reflects enforceTotp=false.
+      const enableSwitch = document.getElementById('enable-totp') as HTMLInputElement;
+      const enforceSwitch = document.getElementById('enforce-totp') as HTMLInputElement;
+      expect(enableSwitch).toBeTruthy();
+      expect(enforceSwitch).toBeTruthy();
+      expect(enableSwitch.getAttribute('aria-checked')).toBe('true');
+      expect(enforceSwitch.getAttribute('aria-checked')).toBe('false');
+
+      // The role multi-selects are present too.
+      expect(document.getElementById('totp-enforced-roles')).toBeTruthy();
+      expect(document.getElementById('totp-exempt-roles')).toBeTruthy();
+    });
+
+    test('reflects enforceTotp=true on the Enforce switch', () => {
+      renderAuthSettings({ enforceTotp: true });
+      openMfaTab();
+
+      const enforceSwitch = document.getElementById('enforce-totp') as HTMLInputElement;
+      expect(enforceSwitch.getAttribute('aria-checked')).toBe('true');
+    });
+
+    test('toggling the Enable switch calls onSetEnableTotp(false)', () => {
+      const onSetEnableTotp = mock((_value: boolean) => {});
+      renderAuthSettings({ enableTotp: true, onSetEnableTotp });
+      openMfaTab();
+
+      const enableSwitch = document.getElementById('enable-totp') as HTMLInputElement;
+      fireEvent.click(enableSwitch);
+
+      expect(onSetEnableTotp).toHaveBeenCalledTimes(1);
+      expect(onSetEnableTotp).toHaveBeenCalledWith(false);
+    });
+
+    test('toggling the Enforce switch calls onSetEnforceTotp(true)', () => {
+      const onSetEnforceTotp = mock((_value: boolean) => {});
+      renderAuthSettings({ enableTotp: true, enforceTotp: false, onSetEnforceTotp });
+      openMfaTab();
+
+      const enforceSwitch = document.getElementById('enforce-totp') as HTMLInputElement;
+      fireEvent.click(enforceSwitch);
+
+      expect(onSetEnforceTotp).toHaveBeenCalledTimes(1);
+      expect(onSetEnforceTotp).toHaveBeenCalledWith(true);
+    });
+
+    test('disables the Enforce switch while the feature kill-switch is off', () => {
+      renderAuthSettings({ enableTotp: false });
+      openMfaTab();
+
+      const enforceSwitch = document.getElementById('enforce-totp') as HTMLInputElement;
+      expect(enforceSwitch).toBeDisabled();
+    });
+
+    test('hides the MFA tab when the user lacks general-settings update permission', () => {
+      // The policy persists via the general-settings endpoint; a user who can view auth settings
+      // but not update general settings must not see controls that would 403 on save.
+      renderAuthSettings({ canManageMfa: false });
+
+      expect(screen.queryByRole('button', { name: 'admin.tabs.mfa' })).not.toBeInTheDocument();
+      expect(document.getElementById('enable-totp')).toBeNull();
+      expect(document.getElementById('enforce-totp')).toBeNull();
+    });
   });
 
   test('Attribute Mapping inputs render the configured values and round-trip to onSave', async () => {

@@ -5,6 +5,7 @@ import {
   date,
   index,
   integer,
+  jsonb,
   numeric,
   pgTable,
   text,
@@ -14,6 +15,11 @@ import {
 } from 'drizzle-orm/pg-core';
 import { roles } from './roles.ts';
 import { ssoProviders } from './ssoProviders.ts';
+
+// A single TOTP backup (recovery) code as stored in `users.totp_backup_codes`. The plaintext
+// code is shown to the user once at generation time; only the bcrypt `hash` is persisted, and
+// `usedAt` is stamped (ISO string) when a code is redeemed so it cannot be reused.
+export type TotpBackupCode = { hash: string; usedAt: string | null };
 
 export type UserAuthMethod = 'local' | 'ldap' | 'oidc' | 'saml';
 export type UserContractType =
@@ -69,6 +75,14 @@ export const users = pgTable(
     // the user's current `token_version` has moved past it — same mechanism as
     // `session_version` provides for JWTs, but on the long-lived API credentials.
     tokenVersion: integer('token_version').notNull().default(1),
+    // TOTP two-factor authentication. The secret is stored as AES-256-GCM ciphertext (same
+    // `crypto.ts` helper as `sso_providers.client_secret`) and decrypted only to verify a code;
+    // null means the user has not enrolled. `totp_enabled` flips true only after the user
+    // confirms a code during setup, at which point `totp_confirmed_at` is stamped.
+    totpSecret: text('totp_secret'),
+    totpEnabled: boolean('totp_enabled').notNull().default(false),
+    totpConfirmedAt: timestamp('totp_confirmed_at'),
+    totpBackupCodes: jsonb('totp_backup_codes').$type<TotpBackupCode[]>(),
   },
   (table) => [
     check(

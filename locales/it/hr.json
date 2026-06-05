@@ -90,6 +90,14 @@
     },
     "failedToLoadAssignments": "Impossibile caricare le assegnazioni. Salvare ora potrebbe sovrascrivere i dati esistenti — chiudi e riprova."
   },
+  "totpReset": {
+    "action": "Reimposta 2FA",
+    "confirmTitle": "Reimpostare l'autenticazione a due fattori?",
+    "confirmDescription": "Questa operazione disattiva l'autenticazione a due fattori per {{name}}. Dovrà configurarla di nuovo al prossimo accesso.",
+    "confirm": "Reimposta 2FA",
+    "success": "L'autenticazione a due fattori è stata reimpostata.",
+    "cannotSelf": "Non puoi reimpostare qui la tua autenticazione a due fattori."
+  },
   "competenceCenters": {
     "title": "Competence Center",
     "subtitle": "Gestisci i team di implementazione e le loro assegnazioni",

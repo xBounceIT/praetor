@@ -375,6 +375,10 @@ export const normalizeGeneralSettings = (s: GeneralSettings): GeneralSettings =>
   rilLunchBreakMinutes: Number(s.rilLunchBreakMinutes ?? 60),
   rilNoteOptions: normalizeRilNoteOptions(s.rilNoteOptions),
   rilTransferOptions: normalizeRilTransferOptions(s.rilTransferOptions),
+  enableTotp: s.enableTotp ?? true,
+  enforceTotp: s.enforceTotp ?? false,
+  totpEnforcedRoleIds: Array.isArray(s.totpEnforcedRoleIds) ? s.totpEnforcedRoleIds : [],
+  totpExemptRoleIds: Array.isArray(s.totpExemptRoleIds) ? s.totpExemptRoleIds : [],
 });
 
 // Allowlist mirroring the server's UNIT_OF_MEASURE_VALUES (server/routes/invoices.ts).
