@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { type DbExecutor, withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as clientsRepo from '../repositories/clientsRepo.ts';
 import * as productsRepo from '../repositories/productsRepo.ts';
 import * as supplierQuoteAttachmentsRepo from '../repositories/supplierQuoteAttachmentsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
@@ -83,6 +84,8 @@ const supplierQuoteSchema = {
     id: { type: 'string' },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
+    clientId: { type: ['string', 'null'] },
+    clientName: { type: ['string', 'null'] },
     paymentTerms: { type: ['string', 'null'] },
     status: { type: 'string' },
     expirationDate: { type: ['string', 'null'], format: 'date' },
@@ -114,6 +117,8 @@ const supplierQuoteCreateBodySchema = {
     id: { type: 'string' },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
+    clientId: { type: ['string', 'null'] },
+    clientName: { type: ['string', 'null'] },
     items: { type: 'array', items: supplierQuoteItemBodySchema },
     paymentTerms: { type: 'string' },
     status: { type: 'string' },
@@ -129,6 +134,8 @@ const supplierQuoteUpdateBodySchema = {
     id: { type: 'string' },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
+    clientId: { type: ['string', 'null'] },
+    clientName: { type: ['string', 'null'] },
     items: { type: 'array', items: supplierQuoteItemBodySchema },
     paymentTerms: { type: 'string' },
     status: { type: 'string' },
@@ -182,6 +189,32 @@ const validateAndNormalizeItems = (
     });
   }
   return result;
+};
+
+// Resolves the optional customer association (issue #759) from the request's `clientId`.
+// An empty/absent id clears the link (both columns null); a non-empty id is validated against
+// the clients table and the canonical name is denormalized onto the quote so it survives later
+// client renames (mirroring how `supplierName` is snapshotted). Sends a 400 and returns null on
+// an invalid or unknown client id.
+const resolveClientLink = async (
+  rawClientId: unknown,
+  reply: FastifyReply,
+): Promise<{ clientId: string | null; clientName: string | null } | null> => {
+  const clientIdResult = optionalNonEmptyString(rawClientId, 'clientId');
+  if (!clientIdResult.ok) {
+    badRequest(reply, clientIdResult.message);
+    return null;
+  }
+  if (clientIdResult.value === null) {
+    return { clientId: null, clientName: null };
+  }
+  // findName doubles as an existence check (null ⇒ unknown client) and yields the canonical name.
+  const clientName = await clientsRepo.findName(clientIdResult.value);
+  if (clientName === null) {
+    badRequest(reply, 'clientId does not reference an existing client');
+    return null;
+  }
+  return { clientId: clientIdResult.value, clientName };
 };
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -283,6 +316,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         id: nextId,
         supplierId,
         supplierName,
+        clientId,
         items,
         paymentTerms,
         status,
@@ -292,6 +326,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         id?: string;
         supplierId?: string;
         supplierName?: string;
+        clientId?: string | null;
         items?: ItemBody[];
         paymentTerms?: string;
         status?: string;
@@ -317,6 +352,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const expirationDateResult = parseDateString(expirationDate, 'expirationDate');
       if (!expirationDateResult.ok) return badRequest(reply, expirationDateResult.message);
 
+      const clientLink = await resolveClientLink(clientId, reply);
+      if (!clientLink) return;
+
       let result: {
         quote: supplierQuotesRepo.SupplierQuote;
         items: supplierQuotesRepo.SupplierQuoteItem[];
@@ -328,6 +366,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               id: nextIdResult.value,
               supplierId: supplierIdResult.value,
               supplierName: supplierNameResult.value,
+              clientId: clientLink.clientId,
+              clientName: clientLink.clientName,
               paymentTerms: paymentTerms || 'immediate',
               status: status || 'draft',
               expirationDate: expirationDateResult.value,
@@ -390,6 +430,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         id: nextId,
         supplierId,
         supplierName,
+        clientId,
         items,
         paymentTerms,
         status,
@@ -399,6 +440,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         id?: string;
         supplierId?: string;
         supplierName?: string;
+        clientId?: string | null;
         items?: ItemBody[];
         paymentTerms?: string;
         status?: string;
@@ -417,6 +459,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const hasNonStatusOrIdUpdates =
         supplierId !== undefined ||
         supplierName !== undefined ||
+        clientId !== undefined ||
         items !== undefined ||
         paymentTerms !== undefined ||
         expirationDate !== undefined ||
@@ -435,6 +478,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const supplierNameResult = optionalNonEmptyString(supplierName, 'supplierName');
         if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
         if (supplierNameResult.value !== null) patch.supplierName = supplierNameResult.value;
+      }
+
+      // clientId is the source of truth; clientName is resolved from it (or both cleared).
+      // Writing both keys (incl. explicit null) lets the repo distinguish clear-vs-keep.
+      if (clientId !== undefined) {
+        const clientLink = await resolveClientLink(clientId, reply);
+        if (!clientLink) return;
+        patch.clientId = clientLink.clientId;
+        patch.clientName = clientLink.clientName;
       }
 
       let nextIdValue: string | null = null;
@@ -791,6 +843,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           {
             supplierId: version.snapshot.quote.supplierId,
             supplierName: version.snapshot.quote.supplierName,
+            // `?? null` tolerates pre-#759 snapshots that predate the customer columns.
+            clientId: version.snapshot.quote.clientId ?? null,
+            clientName: version.snapshot.quote.clientName ?? null,
             paymentTerms: version.snapshot.quote.paymentTerms ?? 'immediate',
             status: version.snapshot.quote.status,
             expirationDate: snapshotExpirationDate,
