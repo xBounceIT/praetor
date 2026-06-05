@@ -137,6 +137,8 @@ const SAMPLE_ITEM = {
   productId: 'p-1',
   productName: 'Service',
   quantity: 2,
+  listPrice: 100,
+  discountPercent: 0,
   unitPrice: 100,
   note: null,
   unitType: 'unit' as const,
@@ -359,5 +361,65 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     expect(res.statusCode).toBe(404);
     expect(JSON.parse(res.body)).toEqual({ error: 'Supplier quote not found' });
     expect(sqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 derives net unit cost (Costo unitario) from list price and discount', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [{ productName: 'Service', quantity: 2, listPrice: 200, discountPercent: 10 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sqReplaceItemsMock).toHaveBeenCalledTimes(1);
+    const itemsArg = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    expect(itemsArg[0]).toEqual(
+      expect.objectContaining({ listPrice: 200, discountPercent: 10, unitPrice: 180 }),
+    );
+  });
+
+  test('200 falls back to legacy unitPrice as list price when no list price is sent', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { items: [{ productName: 'Service', quantity: 1, unitPrice: 42 }] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const itemsArg = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    expect(itemsArg[0]).toEqual(
+      expect.objectContaining({ listPrice: 42, discountPercent: 0, unitPrice: 42 }),
+    );
+  });
+
+  test('400 rejects an item discount above 100', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [{ productName: 'Service', quantity: 1, listPrice: 100, discountPercent: 150 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(sqReplaceItemsMock).not.toHaveBeenCalled();
   });
 });

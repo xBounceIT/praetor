@@ -33,6 +33,9 @@ const QUOTE_LIST_BASE: readonly unknown[] = [...QUOTE_BASE, null];
 const quoteListRow = (overrides: Record<number, unknown> = {}) =>
   makeRow(QUOTE_LIST_BASE, overrides);
 
+// Column order in db/schema/supplierQuotes.ts (supplier_quote_items):
+//   [id, quoteId, productId, productName, quantity, unitPrice, note, createdAt, unitType,
+//    listPrice, discountPercent]
 const ITEM_BASE: readonly unknown[] = [
   'sqi-1',
   'q-1',
@@ -43,6 +46,8 @@ const ITEM_BASE: readonly unknown[] = [
   null,
   new Date(1735689600000),
   'unit',
+  '21',
+  '50',
 ];
 
 const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, overrides);
@@ -72,6 +77,8 @@ describe('listAllItems', () => {
     expect(exec.calls[0].sql).toContain('order by "supplier_quote_items"."created_at" asc');
     expect(result[0].quantity).toBe(2);
     expect(result[0].unitPrice).toBe(10.5);
+    expect(result[0].listPrice).toBe(21);
+    expect(result[0].discountPercent).toBe(50);
     expect(result[0].unitType).toBe('unit');
   });
 
@@ -169,6 +176,8 @@ describe('replaceItems', () => {
         productId: null,
         productName: 'A',
         quantity: 1,
+        listPrice: 5,
+        discountPercent: 0,
         unitPrice: 5,
         note: null,
         unitType: 'unit',
@@ -178,6 +187,8 @@ describe('replaceItems', () => {
         productId: null,
         productName: 'B',
         quantity: 2,
+        listPrice: 8,
+        discountPercent: 25,
         unitPrice: 6,
         note: null,
         unitType: 'unit',

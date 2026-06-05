@@ -56,10 +56,17 @@ export const supplierQuoteItems = pgTable(
     }),
     productName: varchar('product_name', { length: 255 }).notNull(),
     quantity: numeric('quantity', { precision: 10, scale: 2 }).notNull().default('1'),
+    // `unit_price` is the net unit cost (Costo unitario) = list_price * (1 - discount_percent/100),
+    // kept as the authoritative pricing column so downstream snapshots/orders read it directly.
     unitPrice: numeric('unit_price', { precision: 15, scale: 2 }).notNull().default('0'),
     note: text('note'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
     unitType: varchar('unit_type', { length: 10 }).default('hours'),
+    // Supplier list/catalog price per unit (Prezzo listino) and the discount the supplier grants
+    // us (Sconto a noi, %). Both default to '0'; the 0070-era backfill seeds list_price from the
+    // pre-existing unit_price so legacy rows keep their net cost (discount_percent = 0).
+    listPrice: numeric('list_price', { precision: 15, scale: 2 }).notNull().default('0'),
+    discountPercent: numeric('discount_percent', { precision: 5, scale: 2 }).notNull().default('0'),
   },
   (table) => [
     index('idx_supplier_quote_items_quote_id').on(table.quoteId),
@@ -68,6 +75,10 @@ export const supplierQuoteItems = pgTable(
     check(
       'chk_supplier_quote_items_unit_type',
       sql`${table.unitType} IN ('hours', 'days', 'unit')`,
+    ),
+    check(
+      'chk_supplier_quote_items_discount_percent',
+      sql`${table.discountPercent} >= 0 AND ${table.discountPercent} <= 100`,
     ),
   ],
 );

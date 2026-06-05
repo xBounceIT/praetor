@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen } from '@testing-library/react';
 import type { Product, Supplier, SupplierQuote } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
@@ -25,6 +25,8 @@ const buildQuote = (overrides: Partial<SupplierQuote>): SupplierQuote => ({
       quoteId: overrides.id ?? 'SQ-base',
       productName: 'Widget',
       quantity: 1,
+      listPrice: 100,
+      discountPercent: 0,
       unitPrice: 100,
       unitType: 'unit',
     },
@@ -106,5 +108,38 @@ describe('<SupplierQuotesView /> read-only gating', () => {
     // Linked-order copy wins over the generic non-draft copy.
     expect(screen.getByText('sales:supplierQuotes.readOnlyLinked')).toBeInTheDocument();
     expect(screen.queryByText('sales:supplierQuotes.readOnlyStatus')).not.toBeInTheDocument();
+  });
+});
+
+describe('<SupplierQuotesView /> supplier pricing chain', () => {
+  test('renders the list-price, discount, and unit-cost columns on a draft quote', () => {
+    render(<SupplierQuotesView {...baseProps} />);
+    fireEvent.click(screen.getByText('SQ-DRAFT'));
+    expect(screen.getAllByText('sales:supplierQuotes.listPrice').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('sales:supplierQuotes.discountToUs').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('sales:supplierQuotes.unitCost').length).toBeGreaterThan(0);
+  });
+
+  test('editing list price and discount recomputes the net unit cost in the submit payload', async () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+    render(<SupplierQuotesView {...baseProps} onUpdateQuote={onUpdateQuote} />);
+    fireEvent.click(screen.getByText('SQ-DRAFT'));
+
+    // List price starts at 100 (formatted to 2 decimals); there is one input per layout.
+    const listPriceInputs = screen.getAllByDisplayValue('100.00');
+    fireEvent.change(listPriceInputs[0], { target: { value: '200' } });
+    // Discount starts at 0; qty shows "1", so "0" uniquely matches the discount inputs.
+    const discountInputs = screen.getAllByDisplayValue('0');
+    fireEvent.change(discountInputs[0], { target: { value: '10' } });
+
+    fireEvent.click(screen.getByText('common:buttons.update'));
+
+    expect(onUpdateQuote).toHaveBeenCalledTimes(1);
+    const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
+    const item = updates.items?.[0];
+    expect(item?.listPrice).toBe(200);
+    expect(item?.discountPercent).toBe(10);
+    // 200 * (1 - 10/100) = 180
+    expect(item?.unitPrice).toBe(180);
   });
 });

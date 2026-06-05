@@ -837,6 +837,11 @@ export interface SupplierQuoteItem {
   productId?: string;
   productName: string;
   quantity: number;
+  // Supplier list/catalog price per unit (Prezzo listino).
+  listPrice: number;
+  // Discount the supplier grants us, as a percentage (Sconto a noi %).
+  discountPercent: number;
+  // Net unit cost (Costo unitario) = listPrice * (1 - discountPercent / 100).
   unitPrice: number;
   note?: string;
   unitType?: SupplierUnitType;
