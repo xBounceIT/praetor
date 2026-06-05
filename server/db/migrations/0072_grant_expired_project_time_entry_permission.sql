@@ -2,7 +2,7 @@
 -- The permission only bypasses project expiry; normal tracker create scope and
 -- target-user assignment checks still apply in the service layer.
 INSERT INTO role_permissions (role_id, permission)
-VALUES
-    ('manager', 'timesheets.expired_projects.create'),
-    ('top_manager', 'timesheets.expired_projects.create')
+SELECT roles.id, 'timesheets.expired_projects.create'
+FROM roles
+WHERE roles.id IN ('manager', 'top_manager')
 ON CONFLICT DO NOTHING;
