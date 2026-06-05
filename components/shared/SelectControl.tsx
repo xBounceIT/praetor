@@ -44,6 +44,11 @@ export interface SelectControlProps {
   isMulti?: boolean;
   buttonClassName?: string;
   displayValue?: string;
+  /**
+   * When `displayValue` represents an empty/placeholder state (e.g. a "none"
+   * sentinel) rather than a real selection, set this so the label is rendered
+   * with muted placeholder styling instead of the full-contrast selected style.
+   */
   displayValueIsPlaceholder?: boolean;
 }
 
@@ -215,11 +220,9 @@ const SearchableSelectControl = ({
   const buttonLabel = isMulti
     ? getMultiButtonLabel({ displayValue, placeholder, selectedOptions, t })
     : displayValue || selectedOption?.name || placeholder || t('select.placeholder');
-  const isPlaceholder = displayValueIsPlaceholder
-    ? true
-    : isMulti
-      ? selectedOptions.length === 0 && !displayValue
-      : !selectedOption && !displayValue;
+  const isPlaceholder =
+    Boolean(displayValueIsPlaceholder) ||
+    (isMulti ? selectedOptions.length === 0 && !displayValue : !selectedOption && !displayValue);
 
   if (disabled && open) {
     dispatch({ type: 'close' });
