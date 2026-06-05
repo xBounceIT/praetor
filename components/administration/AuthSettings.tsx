@@ -136,7 +136,7 @@ const ProviderIcon: React.FC<{ protocol: SsoProtocol; className?: string }> = ({
   protocol === 'oidc' ? (
     <OpenIdIcon className={className} />
   ) : (
-    <ShieldCheck aria-hidden="true" className={className} />
+    <Building2 aria-hidden="true" className={className} />
   );
 
 const AuthTabButton: React.FC<{
