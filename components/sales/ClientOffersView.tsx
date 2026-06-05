@@ -1503,11 +1503,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                   </div>
                                 </div>
                                 <div className="col-span-1 flex flex-col items-center justify-center gap-1">
-                                  {isLinkedToSupplierQuote && (
-                                    <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[8px] font-black uppercase tracking-wider">
-                                      {t('sales:clientQuotes.supplierQuoteBadge')}
-                                    </span>
-                                  )}
                                   <div className="flex items-center gap-1 w-full">
                                     <ValidatedNumberInput
                                       value={cost}

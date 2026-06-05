@@ -1134,11 +1134,6 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                     {t('crm:internalListing.cost')}
                                   </FieldLabel>
                                   <div className="flex min-h-9 flex-col items-center justify-center gap-1">
-                                    {item.supplierQuoteItemId && (
-                                      <span className={`${pillBadgeClass} bg-emerald-600`}>
-                                        {t('sales:clientQuotes.supplierQuoteBadge')}
-                                      </span>
-                                    )}
                                     {item.supplierSaleId && (
                                       <span className={`${pillBadgeClass} bg-blue-600`}>
                                         {t('accounting:clientsOrders.supplierOrderBadge', {
