@@ -76,4 +76,7 @@ export const usersApi = {
       method: 'PUT',
       body: JSON.stringify({ authMethod, authProviderId: authProviderId ?? null }),
     }).then(normalizeUser),
+
+  resetTotp: (userId: string): Promise<{ ok: true }> =>
+    fetchApi<{ ok: true }>(`/users/${userId}/2fa/reset`, { method: 'POST' }),
 };

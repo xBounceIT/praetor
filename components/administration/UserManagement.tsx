@@ -32,7 +32,7 @@ import type {
   UserAuthMethod,
 } from '../../types';
 import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
-import { toastError } from '../../utils/toast';
+import { toastError, toastSuccess } from '../../utils/toast';
 import Checkbox from '../shared/Checkbox';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
@@ -128,6 +128,7 @@ export interface UserManagementProps {
     authMethod: UserAuthMethod,
     authProviderId?: string | null,
   ) => Promise<void>;
+  onResetUserTotp: (userId: string) => Promise<void>;
   currentUserId: string;
   permissions: string[];
   roles: Role[];
@@ -145,6 +146,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
   onUpdateUser,
   onUpdateUserRoles,
   onUpdateUserAuthMethod,
+  onResetUserTotp,
   currentUserId,
   permissions,
   roles,
@@ -229,6 +231,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
   const [authProviderDraft, setAuthProviderDraft] = useState<string>('');
   const [authMethodError, setAuthMethodError] = useState('');
   const [isSavingAuthMethod, setIsSavingAuthMethod] = useState(false);
+  const [totpResetUser, setTotpResetUser] = useState<User | null>(null);
+  const [totpResetError, setTotpResetError] = useState('');
+  const [isResettingTotp, setIsResettingTotp] = useState(false);
 
   const canCreateUsers = hasPermission(
     permissions,
@@ -563,6 +568,32 @@ const UserManagement: React.FC<UserManagementProps> = ({
       setAuthMethodError((err as Error).message || t('common:messages.errorOccurred'));
     } finally {
       setIsSavingAuthMethod(false);
+    }
+  };
+
+  const openTotpResetDialog = (user: User) => {
+    setTotpResetUser(user);
+    setTotpResetError('');
+  };
+
+  const closeTotpResetDialog = () => {
+    if (isResettingTotp) return;
+    setTotpResetUser(null);
+    setTotpResetError('');
+  };
+
+  const confirmTotpReset = async () => {
+    if (!totpResetUser) return;
+    setIsResettingTotp(true);
+    setTotpResetError('');
+    try {
+      await onResetUserTotp(totpResetUser.id);
+      setTotpResetUser(null);
+      toastSuccess(t('hr:totpReset.success'));
+    } catch (err) {
+      setTotpResetError((err as Error).message || t('common:messages.errorOccurred'));
+    } finally {
+      setIsResettingTotp(false);
     }
   };
 
@@ -978,6 +1009,27 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     <TooltipContent>{t('hr:workforce.authMethod.changeAction')}</TooltipContent>
                   </Tooltip>
                 )}
+                {row.employeeType === 'app_user' && !isProviderManagedIdentity(row) && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex">
+                        <button
+                          type="button"
+                          aria-label={t('hr:totpReset.action')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openTotpResetDialog(row);
+                          }}
+                          disabled={row.id === currentUserId}
+                          className="text-zinc-400 hover:text-praetor disabled:opacity-0 transition-colors p-2"
+                        >
+                          <i className="fa-solid fa-shield-halved"></i>
+                        </button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{t('hr:totpReset.action')}</TooltipContent>
+                  </Tooltip>
+                )}
                 {row.isDisabled ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -1171,6 +1223,35 @@ const UserManagement: React.FC<UserManagementProps> = ({
             </Button>
             <Button type="button" onClick={saveAuthMethod} disabled={isSavingAuthMethod}>
               {isSavingAuthMethod ? t('common:buttons.saving') : t('common:buttons.save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!totpResetUser}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeTotpResetDialog();
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('hr:totpReset.confirmTitle')}</DialogTitle>
+            <DialogDescription>
+              {t('hr:totpReset.confirmDescription', { name: totpResetUser?.name })}
+            </DialogDescription>
+          </DialogHeader>
+
+          {totpResetError && <p className="text-sm text-destructive">{totpResetError}</p>}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeTotpResetDialog}>
+              {t('common:buttons.cancel')}
+            </Button>
+            <Button type="button" onClick={confirmTotpReset} disabled={isResettingTotp}>
+              {isResettingTotp ? t('common:buttons.saving') : t('hr:totpReset.confirm')}
             </Button>
           </DialogFooter>
         </DialogContent>

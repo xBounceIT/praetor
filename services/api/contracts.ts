@@ -5,6 +5,35 @@ export interface LoginResponse {
   user: User;
 }
 
+export type LoginResult =
+  | LoginResponse
+  | { totpRequired: true; challengeToken: string }
+  | { totpEnrollmentRequired: true; enrollToken: string };
+
+export interface TotpSetupResponse {
+  secret: string;
+  otpauthUri: string;
+  qrDataUri: string;
+  backupCodes: string[];
+}
+
+export interface TotpConfirmResponse {
+  enabled: true;
+  token?: string;
+  user?: User;
+}
+
+export interface TotpStatusResponse {
+  enabled: boolean;
+  applicable: boolean;
+  featureEnabled: boolean;
+  required: boolean;
+}
+
+export interface TotpBackupCodesResponse {
+  backupCodes: string[];
+}
+
 // Lowercase English weekday names — the only days a RIL row can be filled in.
 export type RilWeekday = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday';
 

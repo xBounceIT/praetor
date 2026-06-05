@@ -253,6 +253,10 @@ const baseGeneralSettings: GeneralSettings = {
   startOfWeek: 'Monday',
   treatSaturdayAsHoliday: false,
   enableAiReporting: false,
+  enableTotp: true,
+  enforceTotp: false,
+  totpEnforcedRoleIds: [],
+  totpExemptRoleIds: [],
   allowWeekendSelection: false,
   rilCompanyName: '',
   rilDefaultStartTime: '09:00',
@@ -876,6 +880,36 @@ describe('normalizeGeneralSettings', () => {
     expect(normalizeGeneralSettings(settings)).toMatchObject({
       rilNoteOptions: [{ value: 'P', label: 'Paid leave' }],
       rilTransferOptions: ['Office', 'Remote'],
+    });
+  });
+
+  test('preserves provided 2FA policy fields', () => {
+    const settings = make<GeneralSettings>(baseGeneralSettings, {
+      enableTotp: false,
+      enforceTotp: true,
+      totpEnforcedRoleIds: ['admin'],
+      totpExemptRoleIds: ['service-account'],
+    });
+    expect(normalizeGeneralSettings(settings)).toMatchObject({
+      enableTotp: false,
+      enforceTotp: true,
+      totpEnforcedRoleIds: ['admin'],
+      totpExemptRoleIds: ['service-account'],
+    });
+  });
+
+  test('defaults missing 2FA policy fields (enableTotp true, enforceTotp false, role lists [])', () => {
+    const settings = make<GeneralSettings>(baseGeneralSettings, {
+      enableTotp: undefined,
+      enforceTotp: undefined,
+      totpEnforcedRoleIds: undefined,
+      totpExemptRoleIds: undefined,
+    });
+    expect(normalizeGeneralSettings(settings)).toMatchObject({
+      enableTotp: true,
+      enforceTotp: false,
+      totpEnforcedRoleIds: [],
+      totpExemptRoleIds: [],
     });
   });
 });

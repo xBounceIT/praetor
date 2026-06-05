@@ -2,7 +2,12 @@ import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { withDbTransaction } from '../db/drizzle.ts';
-import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
+import {
+  authenticateToken,
+  requireAnyPermission,
+  requirePermission,
+  requireSessionAuth,
+} from '../middleware/auth.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
 import * as externalIdentitiesRepo from '../repositories/externalIdentitiesRepo.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
@@ -21,6 +26,7 @@ import {
   applyExternalRolesForUserIfMatched,
   externalGroupsYieldNoKnownRole,
 } from '../services/external-auth.ts';
+import { requiresTotpEnrollment } from '../services/totpEnforcement.ts';
 import { getAuditChangedFields, getAuditCounts, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
@@ -1158,6 +1164,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               if (roleValue !== null) {
                 await usersRepo.replaceUserRoles(idResult.value, [roleValue], tx);
                 await userAssignmentsRepo.syncTopManagerAssignmentsForUser(idResult.value, tx);
+                // Atomic with the role grant: if the new role makes this an unenrolled admin under
+                // the mandate, revoke their live credentials (sessions + PAT/MCP tokens) in the same
+                // transaction, so a crash can't leave the admin role granted with credentials still
+                // valid. The enforcement lookups read via `tx`, seeing the just-written role.
+                const totpState = await usersRepo.getTotpState(idResult.value, tx);
+                if (
+                  await requiresTotpEnrollment(
+                    {
+                      id: idResult.value,
+                      role: roleValue,
+                      authMethod: targetUser.authMethod,
+                      totpEnabled: totpState?.totpEnabled ?? false,
+                    },
+                    tx,
+                  )
+                ) {
+                  await usersRepo.revokeUserCredentials(idResult.value, tx);
+                }
               }
             }
             if (needsSettingsUpsert) {
@@ -1249,6 +1273,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           toValue: role !== undefined ? fullUser.role : undefined,
         },
       });
+
       return maskUserForRequest(request, fullUser);
     },
   );
@@ -1339,17 +1364,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'authProviderId is allowed only for OIDC or SAML');
       }
 
-      // Changing auth method or provider invalidates any prior external_identities rows:
-      // those rows are keyed on the IdP subject that was bound *before* the switch, and
-      // would silently re-authenticate the same user if the admin ever flips back to the
-      // original provider (A → B → A). Wipe them inside the same transaction as the user
-      // update so the auth-method change either fully succeeds (clean slate) or rolls back
-      // (no orphaned writes).
       const authStateChanged =
         targetUser.authMethod !== methodResult.value ||
         targetUser.authProviderId !== resolvedProviderId;
 
-      const updated = await withDbTransaction(async (tx) => {
+      // The LDAP directory lookup is a network call, so it runs BEFORE the transaction — a tx must
+      // not be held open across network I/O. Its result (null = directory unavailable or user not
+      // found) feeds the role mapping applied inside the transaction below. updateAuthMethod never
+      // changes the username, so targetUser.username is the right lookup key.
+      const ldapService =
+        methodResult.value === 'ldap' ? (await import('../services/ldap.ts')).default : null;
+      const ldapLookup = ldapService
+        ? await ldapService.lookupUserGroups(targetUser.username)
+        : null;
+
+      // Everything below commits in ONE transaction: the auth-method write, the external_identities
+      // cleanup (those rows are keyed on the IdP subject bound *before* the switch and would
+      // silently re-authenticate the same user on an A → B → A flip), the LDAP role mapping, and the
+      // resulting credential revocation. Bundling them is what makes the revocation atomic with the
+      // capability change — otherwise a crash between a committed auth-method/role change and the
+      // revocation would leave the user local/LDAP and admin-capable while a pre-change
+      // session/PAT/MCP token stays valid, bypassing the admin-2FA mandate until it expires.
+      const txOutcome = await withDbTransaction(async (tx) => {
         const result = await usersRepo.updateAuthMethod(
           idResult.value,
           methodResult.value,
@@ -1360,9 +1396,60 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (authStateChanged) {
           await externalIdentitiesRepo.deleteAllForUser(idResult.value, tx);
         }
-        return result;
+
+        // Role mapping at bind time only writes when LDAP groups actually map to an existing role.
+        // If no group matches (or the lookup was unavailable), the user's admin-assigned roles are
+        // preserved — the bind does not silently demote them to DEFAULT_ROLE_ID.
+        let mappedRoleIds: string[] | null = null;
+        let noKnownRoleMapping = false;
+        if (ldapLookup) {
+          const applied = await applyExternalRolesForUserIfMatched(
+            result.id,
+            ldapLookup.groups,
+            ldapLookup.roleMappings,
+            tx,
+          );
+          if (applied.applied) {
+            mappedRoleIds = applied.roleIds;
+            result.role = applied.roleIds[0];
+          } else {
+            // Read-only diagnostic over the immutable `roles` table — no need to run in `tx`.
+            noKnownRoleMapping = await externalGroupsYieldNoKnownRole(
+              ldapLookup.groups,
+              ldapLookup.roleMappings,
+            );
+          }
+        }
+
+        // Revoke live credentials when this change newly subjects an unenrolled user to the mandate:
+        //   1. authStateChanged — an admin-capable OIDC/SAML user (exempt from app TOTP) switched to
+        //      a TOTP-applicable method (local/ldap).
+        //   2. mappedRoleIds — the LDAP role mapping elevated `result.role` into an admin role, even
+        //      when the auth method/provider was unchanged.
+        // requiresTotpEnrollment no-ops for SSO targets, enforcement-off, non-admins, and
+        // enrolled users. In-transaction so it's atomic with the writes above; the lookups read via
+        // `tx`, seeing the just-written auth method and roles.
+        if (authStateChanged || mappedRoleIds !== null) {
+          const totpState = await usersRepo.getTotpState(result.id, tx);
+          if (
+            await requiresTotpEnrollment(
+              {
+                id: result.id,
+                role: result.role,
+                authMethod: methodResult.value,
+                totpEnabled: totpState?.totpEnabled ?? false,
+              },
+              tx,
+            )
+          ) {
+            await usersRepo.revokeUserCredentials(result.id, tx);
+          }
+        }
+
+        return { updated: result, mappedRoleIds, noKnownRoleMapping };
       });
-      if (!updated) {
+
+      if (!txOutcome) {
         return replyError(request, reply, {
           statusCode: 404,
           message: 'User not found',
@@ -1371,45 +1458,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
         });
       }
+      const { updated, mappedRoleIds, noKnownRoleMapping } = txOutcome;
 
-      // Role mapping at bind time only writes when LDAP groups actually map to an
-      // existing role. If no group matches (or the LDAP lookup is unavailable), the
-      // user's admin-assigned roles are preserved — the bind action does not silently
-      // demote them to DEFAULT_ROLE_ID.
-      let mappedRoleIds: string[] | null = null;
+      // LDAP bind diagnostics are emitted after commit — logging must not influence the transaction.
+      // Symmetric with the LDAP login/sync diagnostics so an admin debugging "why didn't my LDAP
+      // group assign the role at bind" gets a consistent breadcrumb; the no-known-role warning is
+      // suppressed when no mappings are configured (decided inside externalGroupsYieldNoKnownRole).
       if (methodResult.value === 'ldap') {
-        const ldapService = (await import('../services/ldap.ts')).default;
-        const lookup = await ldapService.lookupUserGroups(updated.username);
-        if (lookup) {
-          const applied = await applyExternalRolesForUserIfMatched(
-            updated.id,
-            lookup.groups,
-            lookup.roleMappings,
-          );
-          if (applied.applied) {
-            mappedRoleIds = applied.roleIds;
-            updated.role = applied.roleIds[0];
-          } else if (await externalGroupsYieldNoKnownRole(lookup.groups, lookup.roleMappings)) {
-            // Symmetric with the LDAP login and sync diagnostics: log when the bind
-            // lookup ran successfully but yielded no known role mapping, so an admin
-            // debugging "why did my LDAP group not assign the role at bind" has a
-            // breadcrumb. The helper short-circuits when no role mappings are configured
-            // at all, so an admin who deliberately doesn't use mappings doesn't get
-            // spurious warnings on every bind.
-            fastify.log.warn(
-              {
-                userId: updated.id,
-                username: updated.username,
-                groups: lookup.groups,
-                currentRole: updated.role,
-              },
-              'LDAP bind: LDAP groups did not resolve to any known role mapping — preserving existing role',
-            );
-          }
-        } else {
+        if (!ldapLookup) {
           fastify.log.warn(
             { userId: updated.id, username: updated.username },
             'LDAP role mapping skipped: directory lookup unavailable or user not found',
+          );
+        } else if (noKnownRoleMapping) {
+          fastify.log.warn(
+            {
+              userId: updated.id,
+              username: updated.username,
+              groups: ldapLookup.groups,
+              currentRole: updated.role,
+            },
+            'LDAP bind: LDAP groups did not resolve to any known role mapping — preserving existing role',
           );
         }
       }
@@ -1429,6 +1498,90 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
 
       return maskUserForRequest(request, updated);
+    },
+  );
+
+  // POST /:id/2fa/reset - Admin recovery: clear another user's two-factor enrollment.
+  // Recovery implies the account may be compromised, so we also bump the target's
+  // session version to invalidate every live session (the rotated sessionVersion no
+  // longer matches the tokens they hold).
+  fastify.post(
+    '/:id/2fa/reset',
+    {
+      // requireSessionAuth: clearing another user's second factor is a security-sensitive action,
+      // so it must use an interactive session — a leaked PAT/MCP token with user-management update
+      // permission must not be able to strip a target's 2FA (mirrors /2fa/disable + regenerate).
+      onRequest: [
+        authenticateToken,
+        requireSessionAuth,
+        requirePermission('administration.user_management.update'),
+      ],
+      schema: {
+        tags: ['users'],
+        summary: "Reset another user's two-factor authentication",
+        params: idParamSchema,
+        response: {
+          200: {
+            type: 'object',
+            properties: { ok: { type: 'boolean' } },
+            required: ['ok'],
+          },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const targetUser = await usersRepo.findCoreById(idResult.value);
+      if (!targetUser) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'User not found',
+          action: 'user.totp_reset.not_found',
+          entityType: 'user',
+          entityId: idResult.value,
+        });
+      }
+      if (
+        !hasPermission(request, 'administration.user_management_all.view') &&
+        idResult.value !== request.user?.id &&
+        !(await usersRepo.canManageUser(idResult.value, request.user?.id ?? ''))
+      ) {
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'user.totp_reset.denied',
+          entityType: 'user',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'cannot_manage_user' },
+        });
+      }
+      if (idResult.value === request.user?.id) {
+        return badRequest(reply, 'Cannot reset your own two-factor authentication');
+      }
+
+      // Disabling 2FA and revoking the user's live credentials commit together. Both sessions AND
+      // PAT/MCP tokens are revoked: a 2FA reset is a recovery/possible-compromise action, and if the
+      // mandate is on this leaves the target an unenrolled admin — a surviving PAT (keyed off
+      // token_version) would otherwise keep admin API access with no second factor.
+      await withDbTransaction(async (tx) => {
+        await usersRepo.disableTotp(idResult.value, tx);
+        await usersRepo.revokeUserCredentials(idResult.value, tx);
+      });
+
+      await logAudit({
+        request,
+        action: 'user.totp_reset',
+        entityType: 'user',
+        entityId: idResult.value,
+        details: { targetLabel: targetUser.name, secondaryLabel: 'admin_reset' },
+      });
+
+      return { ok: true };
     },
   );
 
@@ -1544,7 +1697,31 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // Sync runs inside the transaction so the role updates and the resulting
         // top-manager auto-assignments commit (or roll back) together.
         await userAssignmentsRepo.syncTopManagerAssignmentsForUser(idResult.value, tx);
+
+        // If the new role set makes this user an admin without 2FA while the mandate is on, revoke
+        // their live credentials so they must re-login and enrol before acting as an admin — the
+        // login gate can't catch an admin role granted to an already authenticated user. Sessions
+        // AND PAT/MCP tokens are revoked (a pre-existing token keys off token_version and would
+        // otherwise keep admin API access with no second factor). This runs INSIDE the transaction
+        // so the role grant and the revocation commit (or roll back) together — a crash between
+        // them must not leave the new admin role granted with credentials still valid. The
+        // enforcement lookups read via `tx`, so they see the just-written role set.
+        const rolesTotpState = await usersRepo.getTotpState(idResult.value, tx);
+        if (
+          await requiresTotpEnrollment(
+            {
+              id: idResult.value,
+              role: primaryRoleIdResult.value,
+              authMethod: user.authMethod,
+              totpEnabled: rolesTotpState?.totpEnabled ?? false,
+            },
+            tx,
+          )
+        ) {
+          await usersRepo.revokeUserCredentials(idResult.value, tx);
+        }
       });
+
       await logAudit({
         request,
         action: 'user.roles_updated',

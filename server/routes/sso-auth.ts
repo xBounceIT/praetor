@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { generateToken } from '../middleware/auth.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { authUserSchema } from '../services/sessionResponse.ts';
 import * as ssoService from '../services/sso.ts';
 import { logAudit } from '../utils/audit.ts';
 import { buildFrontendUrl } from '../utils/frontend-url.ts';
@@ -18,32 +19,6 @@ const consumeBodySchema = {
   type: 'object',
   properties: { ticket: { type: 'string' } },
   required: ['ticket'],
-} as const;
-
-const authUserSchema = {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    name: { type: 'string' },
-    username: { type: 'string' },
-    role: { type: 'string' },
-    avatarInitials: { type: 'string' },
-    permissions: { type: 'array', items: { type: 'string' } },
-    availableRoles: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          id: { type: 'string' },
-          name: { type: 'string' },
-          isSystem: { type: 'boolean' },
-          isAdmin: { type: 'boolean' },
-        },
-        required: ['id', 'name', 'isSystem', 'isAdmin'],
-      },
-    },
-  },
-  required: ['id', 'name', 'username', 'role', 'avatarInitials', 'permissions', 'availableRoles'],
 } as const;
 
 const loginResponseSchema = {

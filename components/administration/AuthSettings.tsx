@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  Building2,
   Check,
   CircleAlert,
   FileUp,
@@ -62,6 +63,21 @@ export interface AuthSettingsProps {
   ssoProviders: SsoProvider[];
   onSaveSsoProvider: (provider: Partial<SsoProvider>) => Promise<SsoProvider>;
   onDeleteSsoProvider: (id: string) => Promise<void>;
+  // 2FA org policy (all persisted through the general-settings endpoint). `enableTotp` is the global
+  // feature switch; `enforceTotp` the master enforcement switch; the role-id lists scope enforcement.
+  enableTotp: boolean;
+  onSetEnableTotp: (value: boolean) => void | Promise<void>;
+  enforceTotp: boolean;
+  onSetEnforceTotp: (value: boolean) => void | Promise<void>;
+  enforcedRoleIds: string[];
+  onSetEnforcedRoleIds: (value: string[]) => void | Promise<void>;
+  exemptRoleIds: string[];
+  onSetExemptRoleIds: (value: string[]) => void | Promise<void>;
+  // The 2FA policy persists through the general-settings endpoint (administration.general.update).
+  // The controls live on this auth page for discoverability, so we hide the MFA tab from users who
+  // can view auth settings but lack general.update — otherwise they would see controls that 403 on
+  // save. Visible iff usable.
+  canManageMfa: boolean;
 }
 
 const DEFAULT_LDAP_CONFIG: LdapConfig = {
@@ -120,15 +136,15 @@ const ProviderIcon: React.FC<{ protocol: SsoProtocol; className?: string }> = ({
   protocol === 'oidc' ? (
     <OpenIdIcon className={className} />
   ) : (
-    <ShieldCheck aria-hidden="true" className={className} />
+    <Building2 aria-hidden="true" className={className} />
   );
 
 const AuthTabButton: React.FC<{
-  tab: 'ldap' | SsoProtocol;
-  activeTab: 'ldap' | SsoProtocol;
+  tab: 'ldap' | 'mfa' | SsoProtocol;
+  activeTab: 'ldap' | 'mfa' | SsoProtocol;
   icon: React.ReactNode;
   label: string;
-  onSelect: (tab: 'ldap' | SsoProtocol) => void;
+  onSelect: (tab: 'ldap' | 'mfa' | SsoProtocol) => void;
 }> = ({ tab, activeTab, icon, label, onSelect }) => (
   <Button
     type="button"
@@ -177,9 +193,18 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   ssoProviders,
   onSaveSsoProvider,
   onDeleteSsoProvider,
+  enableTotp,
+  onSetEnableTotp,
+  enforceTotp,
+  onSetEnforceTotp,
+  enforcedRoleIds,
+  onSetEnforcedRoleIds,
+  exemptRoleIds,
+  onSetExemptRoleIds,
+  canManageMfa,
 }) => {
   const { t } = useTranslation('auth');
-  const [activeTab, setActiveTab] = useState<'ldap' | SsoProtocol>('ldap');
+  const [activeTab, setActiveTab] = useState<'ldap' | 'mfa' | SsoProtocol>('ldap');
   const [ldapForm, setLdapForm] = useState<LdapConfig>(DEFAULT_LDAP_CONFIG);
   const loadedLdapConfigRef = useRef<LdapConfig | null | undefined>(null);
   const hasLoadedLdapConfigRef = useRef(false);
@@ -220,7 +245,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     setLdapForm(config || DEFAULT_LDAP_CONFIG);
   }
 
-  const handleActiveTabSelect = (tab: 'ldap' | SsoProtocol) => {
+  const handleActiveTabSelect = (tab: 'ldap' | 'mfa' | SsoProtocol) => {
     setActiveTab(tab);
     // Re-entering the SAML tab after a transient failure resets the state to 'loading' so the
     // fetch effect below retries. Without this, a one-off 503/network error would permanently
@@ -1001,11 +1026,124 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
         <AuthTabButton
           tab="saml"
           activeTab={activeTab}
-          icon={<ShieldCheck aria-hidden="true" className="size-4" />}
+          icon={<Building2 aria-hidden="true" className="size-4" />}
           label={t('admin.tabs.saml', 'SAML')}
           onSelect={handleActiveTabSelect}
         />
+        {canManageMfa && (
+          <AuthTabButton
+            tab="mfa"
+            activeTab={activeTab}
+            icon={<ShieldCheck aria-hidden="true" className="size-4" />}
+            label={t('admin.tabs.mfa', 'Multi-Factor Auth')}
+            onSelect={handleActiveTabSelect}
+          />
+        )}
       </div>
+
+      {activeTab === 'mfa' && canManageMfa && (
+        <div className="space-y-8">
+          <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+            <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+              <CardTitle className="flex items-center gap-3 text-base">
+                <ShieldCheck aria-hidden="true" className="size-4 text-praetor" />
+                {t('mfa.enable.label', 'Enable two-factor authentication')}
+              </CardTitle>
+              <CardDescription>
+                {t(
+                  'mfa.enable.description',
+                  'Allow users with local or LDAP credentials to secure their account with an authenticator app. When off, 2FA is unavailable org-wide and no one is challenged at sign-in.',
+                )}
+              </CardDescription>
+              <CardAction>
+                <Switch
+                  id="enable-totp"
+                  checked={enableTotp}
+                  onCheckedChange={onSetEnableTotp}
+                  aria-label={t('mfa.enable.label', 'Enable two-factor authentication')}
+                />
+              </CardAction>
+            </CardHeader>
+            <CardContent className="p-6">
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  'mfa.ssoNote',
+                  'Users signing in through SSO (OIDC or SAML) are governed by their identity provider and are never subject to Praetor 2FA.',
+                )}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+            <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+              <CardTitle className="flex items-center gap-3 text-base">
+                <ShieldCheck aria-hidden="true" className="size-4 text-praetor" />
+                {t('mfa.enforce.label', 'Enforce two-factor authentication')}
+              </CardTitle>
+              <CardDescription>
+                {t(
+                  'mfa.enforce.description',
+                  'Require enrolled 2FA for the selected roles. Affected users without 2FA are guided through setup at their next sign-in.',
+                )}
+              </CardDescription>
+              <CardAction>
+                <Switch
+                  id="enforce-totp"
+                  checked={enforceTotp}
+                  disabled={!enableTotp}
+                  onCheckedChange={onSetEnforceTotp}
+                  aria-label={t('mfa.enforce.label', 'Enforce two-factor authentication')}
+                />
+              </CardAction>
+            </CardHeader>
+            <CardContent className="space-y-6 p-6">
+              <UIField>
+                <FieldLabel htmlFor="totp-enforced-roles">
+                  {t('mfa.enforcedRoles.label', 'Enforce 2FA for these roles')}
+                </FieldLabel>
+                <FieldDescription>
+                  {t(
+                    'mfa.enforcedRoles.description',
+                    'Users holding any selected role must use 2FA. Leave empty to require it for everyone (local/LDAP).',
+                  )}
+                </FieldDescription>
+                <SelectControl
+                  id="totp-enforced-roles"
+                  isMulti
+                  searchable
+                  disabled={!enableTotp || !enforceTotp}
+                  options={roleOptions}
+                  value={enforcedRoleIds}
+                  onChange={(value) => onSetEnforcedRoleIds(Array.isArray(value) ? value : [value])}
+                  placeholder={t('mfa.enforcedRoles.placeholder', 'Everyone (local/LDAP)')}
+                />
+              </UIField>
+
+              <UIField>
+                <FieldLabel htmlFor="totp-exempt-roles">
+                  {t('mfa.exemptRoles.label', 'Exempt these roles from 2FA')}
+                </FieldLabel>
+                <FieldDescription>
+                  {t(
+                    'mfa.exemptRoles.description',
+                    'Users holding any selected role are never required to use 2FA, even if another of their roles is enforced.',
+                  )}
+                </FieldDescription>
+                <SelectControl
+                  id="totp-exempt-roles"
+                  isMulti
+                  searchable
+                  disabled={!enableTotp || !enforceTotp}
+                  options={roleOptions}
+                  value={exemptRoleIds}
+                  onChange={(value) => onSetExemptRoleIds(Array.isArray(value) ? value : [value])}
+                  placeholder={t('mfa.exemptRoles.placeholder', 'No exemptions')}
+                />
+              </UIField>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {activeTab === 'ldap' && (
         <div className="space-y-8">

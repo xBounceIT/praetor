@@ -20,6 +20,17 @@ mock.module('../../../services/api/users', () => ({
   usersApi: usersApiMock,
 }));
 
+// confirmTotpReset() fires a success toast on resolve; stub sonner-backed toast
+// helpers so the success path doesn't touch the real notification system in jsdom.
+const toastSuccessMock = mock(() => {});
+const toastErrorMock = mock(() => {});
+
+mock.module('../../../utils/toast', () => ({
+  toastSuccess: toastSuccessMock,
+  toastError: toastErrorMock,
+  toast: { success: toastSuccessMock, error: toastErrorMock },
+}));
+
 clearSpyStateAfterAll();
 
 const UserManagement = (await import('../../../components/administration/UserManagement')).default;
@@ -61,6 +72,7 @@ const renderUserManagement = (overrides: Partial<ComponentProps<typeof UserManag
     onUpdateUser: mock(() => {}),
     onUpdateUserRoles: mock(async () => {}),
     onUpdateUserAuthMethod: mock(async () => {}),
+    onResetUserTotp: mock(async () => {}),
     currentUserId: 'u1',
     permissions: [updatePermission, deletePermission],
     roles: [],
@@ -349,6 +361,128 @@ describe('<UserManagement />', () => {
     expect(await screen.findByText('hr:workforce.authMethod.providerLabel')).toBeInTheDocument();
   });
 
+  describe('reset 2FA row action', () => {
+    // Row actions live behind the StandardTable overflow ("table.rowActions")
+    // trigger and are portalled into the open menu, mirroring the auth-method
+    // action tests above.
+    test('exposes the Reset 2FA action for a local app_user that is not the current user', async () => {
+      // current user is u1 (Alice); Bob (u2) is a local app_user, so the action
+      // is both present and enabled.
+      const user = userEvent.setup();
+      renderUserManagement();
+      const trigger = getRowFor('Bob Brown').querySelector('[aria-label="table.rowActions"]');
+      if (!trigger) throw new Error('No row-actions trigger for Bob Brown');
+      await user.click(trigger);
+
+      const action = await screen.findByRole('button', { name: 'hr:totpReset.action' });
+      expect(action).not.toBeDisabled();
+    });
+
+    test('confirming the dialog calls onResetUserTotp with the row id', async () => {
+      const user = userEvent.setup();
+      const props = renderUserManagement();
+      const trigger = getRowFor('Bob Brown').querySelector('[aria-label="table.rowActions"]');
+      if (!trigger) throw new Error('No row-actions trigger for Bob Brown');
+      await user.click(trigger);
+
+      await user.click(await screen.findByRole('button', { name: 'hr:totpReset.action' }));
+
+      // The confirm dialog surfaces the hr:totpReset.* keys.
+      expect(await screen.findByText('hr:totpReset.confirmTitle')).toBeInTheDocument();
+      expect(screen.getByText('hr:totpReset.confirmDescription')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'hr:totpReset.confirm' }));
+
+      expect(props.onResetUserTotp).toHaveBeenCalledTimes(1);
+      expect(props.onResetUserTotp).toHaveBeenCalledWith('u2');
+      await waitFor(() =>
+        expect(screen.queryByText('hr:totpReset.confirmTitle')).not.toBeInTheDocument(),
+      );
+    });
+
+    test('cancelling the dialog does not call onResetUserTotp', async () => {
+      const user = userEvent.setup();
+      const props = renderUserManagement();
+      const trigger = getRowFor('Bob Brown').querySelector('[aria-label="table.rowActions"]');
+      if (!trigger) throw new Error('No row-actions trigger for Bob Brown');
+      await user.click(trigger);
+
+      await user.click(await screen.findByRole('button', { name: 'hr:totpReset.action' }));
+      await screen.findByText('hr:totpReset.confirmTitle');
+
+      await user.click(screen.getByRole('button', { name: 'common:buttons.cancel' }));
+
+      expect(props.onResetUserTotp).not.toHaveBeenCalled();
+    });
+
+    test('hides the Reset 2FA action for provider-managed (oidc/saml) users', async () => {
+      const user = userEvent.setup();
+      renderUserManagement({
+        users: [
+          {
+            id: 'u-oidc',
+            name: 'Oscar OIDC',
+            role: 'user',
+            avatarInitials: 'OO',
+            username: 'oscar.oidc',
+            employeeType: 'app_user',
+            authMethod: 'oidc',
+            authProviderName: 'Keycloak',
+          },
+          {
+            id: 'u-saml',
+            name: 'Sara SAML',
+            role: 'user',
+            avatarInitials: 'SS',
+            username: 'sara.saml',
+            employeeType: 'app_user',
+            authMethod: 'saml',
+            authProviderName: 'Okta',
+          },
+        ],
+      });
+
+      for (const name of ['Oscar OIDC', 'Sara SAML']) {
+        const trigger = getRowFor(name).querySelector('[aria-label="table.rowActions"]');
+        if (!trigger) throw new Error(`No row-actions trigger for ${name}`);
+        await user.click(trigger);
+        // The menu is open (the auth-method action proves it mounted), but the
+        // provider-managed identity means the reset action is omitted.
+        await screen.findByRole('button', { name: 'hr:workforce.authMethod.changeAction' });
+        expect(
+          screen.queryByRole('button', { name: 'hr:totpReset.action' }),
+        ).not.toBeInTheDocument();
+        await user.keyboard('{Escape}');
+      }
+    });
+
+    test('disables the Reset 2FA action for the current user', async () => {
+      // Render with Bob (u2) as the current user: an admin cannot reset their own
+      // 2FA from this table, so the action is rendered disabled.
+      const user = userEvent.setup();
+      renderUserManagement({ currentUserId: 'u2' });
+      const trigger = getRowFor('Bob Brown').querySelector('[aria-label="table.rowActions"]');
+      if (!trigger) throw new Error('No row-actions trigger for Bob Brown');
+      await user.click(trigger);
+
+      const action = await screen.findByRole('button', { name: 'hr:totpReset.action' });
+      expect(action).toBeDisabled();
+    });
+
+    test('does not render the Reset 2FA action without update permission', async () => {
+      // Without update rights the reset action is gone; the delete action keeps
+      // the overflow menu populated so it still opens.
+      const user = userEvent.setup();
+      renderUserManagement({ permissions: [deletePermission] });
+      const trigger = getRowFor('Bob Brown').querySelector('[aria-label="table.rowActions"]');
+      if (!trigger) throw new Error('No row-actions trigger for Bob Brown');
+      await user.click(trigger);
+
+      await screen.findByRole('button', { name: 'hr:workforce.deleteUser' });
+      expect(screen.queryByRole('button', { name: 'hr:totpReset.action' })).not.toBeInTheDocument();
+    });
+  });
+
   const openCreateUserModal = async () => {
     const user = userEvent.setup();
     renderUserManagement({
@@ -483,6 +617,7 @@ describe('<UserManagement />', () => {
         onUpdateUser,
         onUpdateUserRoles: mock(async () => {}),
         onUpdateUserAuthMethod: mock(async () => {}),
+        onResetUserTotp: mock(async () => {}),
         permissions: [updatePermission, 'hr.costs.update'], // No view-all.
         roles: [],
         ssoProviders: [],

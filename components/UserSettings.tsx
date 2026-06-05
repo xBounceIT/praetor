@@ -1,3 +1,4 @@
+import { REGEXP_ONLY_DIGITS } from 'input-otp';
 import {
   AlertCircle,
   Check,
@@ -14,6 +15,7 @@ import {
   RefreshCw,
   Save,
   Shield,
+  ShieldCheck,
   Sun,
   SunMoon,
   Trash2,
@@ -23,6 +25,9 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { siModelcontextprotocol } from 'simple-icons';
+import TotpSetupWizard from '@/components/TotpSetupWizard';
+import { Alert, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -46,6 +51,7 @@ import {
 } from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import {
   Select,
   SelectContent,
@@ -55,6 +61,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { ApiError } from '@/services/api/client';
 import praetorFaviconUrl from '../praetor-favicon.png';
 import type {
   CreatedMcpToken,
@@ -66,6 +73,7 @@ import type {
   Settings,
 } from '../services/api';
 import type { UserAuthMethod } from '../types';
+import { downloadTextFile } from '../utils/download';
 import { applyLanguagePreference } from '../utils/language';
 import { applyTheme, getTheme, THEMES, type Theme } from '../utils/theme';
 
@@ -79,12 +87,32 @@ export interface UserSettingsProps {
   rilTransferOptions?: string[];
   onUpdate: (updates: Partial<Settings>) => void;
   onUpdatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  // Takes the account password for step-up re-auth (a logged-in caller must re-confirm their
+  // identity before enrolling a second factor). The enroll-token path in Login.tsx does not use
+  // this prop.
+  onTotpSetup: (password: string) => Promise<{
+    secret: string;
+    otpauthUri: string;
+    qrDataUri: string;
+    backupCodes: string[];
+  }>;
+  onTotpConfirm: (code: string) => Promise<void>;
+  onTotpDisable: (payload: { password?: string; code?: string }) => Promise<void>;
+  onRegenerateTotpBackupCodes: (code: string) => Promise<{ backupCodes: string[] }>;
+  onGetTotpStatus: () => Promise<{
+    enabled: boolean;
+    applicable: boolean;
+    featureEnabled: boolean;
+    required: boolean;
+  }>;
   onListMcpTokens: () => Promise<McpToken[]>;
   onCreateMcpToken: (name: string, scope: McpTokenScope) => Promise<CreatedMcpToken>;
   onRevokeMcpToken: (id: string) => Promise<unknown>;
   onGetPersonalAccessToken: () => Promise<PersonalAccessToken>;
   onRenewPersonalAccessToken: () => Promise<PersonalAccessToken>;
 }
+
+const TOTP_CODE_LENGTH = 6;
 
 type LanguagePreference = NonNullable<Settings['language']>;
 type ThemeSwatchVariant = 'default' | 'praetor';
@@ -224,6 +252,11 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   rilTransferOptions = EMPTY_RIL_TRANSFER_OPTIONS,
   onUpdate,
   onUpdatePassword,
+  onTotpSetup,
+  onTotpConfirm,
+  onTotpDisable,
+  onRegenerateTotpBackupCodes,
+  onGetTotpStatus,
   onListMcpTokens,
   onCreateMcpToken,
   onRevokeMcpToken,
@@ -319,6 +352,37 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   const tokenLoadInFlightRef = useRef(false);
   const isMountedRef = useRef(true);
 
+  // Two-factor authentication state. Status is loaded lazily when the Security
+  // tab opens (mirroring the PAT loader below).
+  const [totpStatus, setTotpStatus] = useState<{
+    enabled: boolean;
+    applicable: boolean;
+    featureEnabled: boolean;
+    required: boolean;
+  } | null>(null);
+  const [isLoadingTotpStatus, setIsLoadingTotpStatus] = useState(false);
+  const [totpStatusError, setTotpStatusError] = useState('');
+  const totpStatusInFlightRef = useRef(false);
+  const [isTotpSetupOpen, setIsTotpSetupOpen] = useState(false);
+  // Step-up re-auth gate shown before the setup wizard: a logged-in caller must re-enter their
+  // account password before a new second factor is enrolled (blocks a stolen-session 2FA implant).
+  const [totpSetupPassword, setTotpSetupPassword] = useState('');
+  const [totpSetupReauthDone, setTotpSetupReauthDone] = useState(false);
+
+  // Disable flow (re-auth dialog collecting password and/or a current code).
+  const [isDisableDialogOpen, setIsDisableDialogOpen] = useState(false);
+  const [disablePassword, setDisablePassword] = useState('');
+  const [disableCode, setDisableCode] = useState('');
+  const [isDisablingTotp, setIsDisablingTotp] = useState(false);
+  const [disableError, setDisableError] = useState('');
+
+  // Regenerate-backup-codes flow (collect a current code, then show new codes).
+  const [isRegenerateDialogOpen, setIsRegenerateDialogOpen] = useState(false);
+  const [regenerateCode, setRegenerateCode] = useState('');
+  const [isRegeneratingCodes, setIsRegeneratingCodes] = useState(false);
+  const [regenerateError, setRegenerateError] = useState('');
+  const [regeneratedBackupCodes, setRegeneratedBackupCodes] = useState<string[] | null>(null);
+
   useEffect(
     () => () => {
       isMountedRef.current = false;
@@ -353,6 +417,107 @@ const UserSettings: React.FC<UserSettingsProps> = ({
 
     void loadToken();
   }, [activeTab, onGetPersonalAccessToken, personalAccessToken]);
+
+  const loadTotpStatus = useCallback(async () => {
+    if (totpStatusInFlightRef.current) return;
+    totpStatusInFlightRef.current = true;
+    setIsLoadingTotpStatus(true);
+    setTotpStatusError('');
+    try {
+      const status = await onGetTotpStatus();
+      if (isMountedRef.current) setTotpStatus(status);
+    } catch (err: unknown) {
+      console.error('Failed to load two-factor status:', err);
+      if (isMountedRef.current) {
+        setTotpStatusError(
+          (err as Error).message || translateRef.current('security.tokenLoadFailed'),
+        );
+      }
+    } finally {
+      totpStatusInFlightRef.current = false;
+      if (isMountedRef.current) setIsLoadingTotpStatus(false);
+    }
+  }, [onGetTotpStatus]);
+
+  // Lazily load the 2FA status the first time the Security tab is opened.
+  useEffect(() => {
+    if (activeTab !== 'security' || totpStatus || totpStatusInFlightRef.current) return;
+    void loadTotpStatus();
+  }, [activeTab, totpStatus, loadTotpStatus]);
+
+  const handleTotpSetupFinished = useCallback(() => {
+    setIsTotpSetupOpen(false);
+    setTotpStatus((prev) => (prev ? { ...prev, enabled: true } : prev));
+    void loadTotpStatus();
+  }, [loadTotpStatus]);
+
+  const handleDisableTotp = useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault();
+      if (isDisablingTotp) return;
+      setIsDisablingTotp(true);
+      setDisableError('');
+      const payload: { password?: string; code?: string } = {};
+      const trimmedPassword = disablePassword.trim();
+      const trimmedCode = disableCode.trim();
+      if (trimmedPassword) payload.password = trimmedPassword;
+      if (trimmedCode) payload.code = trimmedCode;
+      try {
+        await onTotpDisable(payload);
+        if (!isMountedRef.current) return;
+        setIsDisableDialogOpen(false);
+        setDisablePassword('');
+        setDisableCode('');
+        setTotpStatus((prev) => (prev ? { ...prev, enabled: false } : prev));
+        void loadTotpStatus();
+      } catch (err: unknown) {
+        console.error('Failed to disable two-factor authentication:', err);
+        if (!isMountedRef.current) return;
+        const isInvalidCode = err instanceof ApiError && err.errorCode === 'invalid_totp_code';
+        setDisableError(
+          isInvalidCode
+            ? t('twoFactor.invalidCode')
+            : (err as Error).message || t('common:messages.errorOccurred'),
+        );
+      } finally {
+        if (isMountedRef.current) setIsDisablingTotp(false);
+      }
+    },
+    [disableCode, disablePassword, isDisablingTotp, loadTotpStatus, onTotpDisable, t],
+  );
+
+  const handleRegenerateBackupCodes = useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault();
+      if (isRegeneratingCodes) return;
+      if (regenerateCode.length !== TOTP_CODE_LENGTH) return;
+      setIsRegeneratingCodes(true);
+      setRegenerateError('');
+      try {
+        const result = await onRegenerateTotpBackupCodes(regenerateCode);
+        if (isMountedRef.current) setRegeneratedBackupCodes(result.backupCodes);
+      } catch (err: unknown) {
+        console.error('Failed to regenerate backup codes:', err);
+        if (!isMountedRef.current) return;
+        const isInvalidCode = err instanceof ApiError && err.errorCode === 'invalid_totp_code';
+        setRegenerateError(
+          isInvalidCode
+            ? t('twoFactor.invalidCode')
+            : (err as Error).message || t('common:messages.errorOccurred'),
+        );
+        setRegenerateCode('');
+      } finally {
+        if (isMountedRef.current) setIsRegeneratingCodes(false);
+      }
+    },
+    [isRegeneratingCodes, onRegenerateTotpBackupCodes, regenerateCode, t],
+  );
+
+  const downloadBackupCodes = useCallback((codes: string[]) => {
+    if (codes.length === 0) return;
+    downloadTextFile('praetor-backup-codes.txt', `${codes.join('\n')}\n`);
+  }, []);
+
   const handleThemeChange = (theme: Theme) => {
     if (theme === currentTheme) return;
     setCurrentTheme(theme);
@@ -940,6 +1105,441 @@ const UserSettings: React.FC<UserSettingsProps> = ({
               </CardContent>
             )}
           </Card>
+
+          {(() => {
+            const isIdpManagedTotp =
+              authMethod === 'oidc' || authMethod === 'saml' || totpStatus?.applicable === false;
+            const isTotpEnabled = totpStatus?.enabled === true;
+            // Org policy reflected from /status: the feature can be turned off org-wide (no
+            // enrollment, no challenge), and 2FA can be required for this user's role (then the
+            // server forbids self-disable, so the Disable action is hidden).
+            const isFeatureDisabled = totpStatus?.featureEnabled === false;
+            const isTotpRequired = totpStatus?.required === true;
+
+            return (
+              <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+                <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+                  <CardTitle className="flex items-center gap-3 text-base">
+                    <ShieldCheck aria-hidden="true" className="size-4 text-praetor" />
+                    {t('twoFactor.title')}
+                  </CardTitle>
+                  <CardDescription>{t('twoFactor.description')}</CardDescription>
+                  {totpStatus && !isIdpManagedTotp && !isFeatureDisabled && (
+                    <CardAction>
+                      <Badge variant={isTotpEnabled ? 'default' : 'secondary'}>
+                        {isTotpEnabled
+                          ? t('twoFactor.statusEnabled')
+                          : t('twoFactor.statusDisabled')}
+                      </Badge>
+                    </CardAction>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-4 p-6">
+                  {isIdpManagedTotp ? (
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      className="flex items-start gap-3 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground"
+                    >
+                      <Lock aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                      <div className="space-y-1">
+                        <p className="font-medium text-foreground">
+                          {t('twoFactor.idpManagedTitle')}
+                        </p>
+                        <p>{t('twoFactor.idpManagedDescription')}</p>
+                      </div>
+                    </div>
+                  ) : isLoadingTotpStatus && !totpStatus ? (
+                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                      <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+                      {t('common:states.loading')}
+                    </div>
+                  ) : totpStatusError ? (
+                    <div className="space-y-3">
+                      <div className="rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
+                        {totpStatusError}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void loadTotpStatus()}
+                        disabled={isLoadingTotpStatus}
+                      >
+                        <RefreshCw
+                          aria-hidden="true"
+                          className={isLoadingTotpStatus ? 'animate-spin' : undefined}
+                        />
+                        {t('common:buttons.retry', { defaultValue: 'Retry' })}
+                      </Button>
+                    </div>
+                  ) : isFeatureDisabled ? (
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      className="flex items-start gap-3 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground"
+                    >
+                      <Lock aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                      <div className="space-y-1">
+                        <p className="font-medium text-foreground">
+                          {t('twoFactor.disabledByAdminTitle', 'Two-factor authentication is off')}
+                        </p>
+                        <p>
+                          {t(
+                            'twoFactor.disabledByAdminDescription',
+                            'Two-factor authentication is currently turned off for your organization. It cannot be set up until an administrator enables it.',
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  ) : isTotpEnabled ? (
+                    <div className="space-y-4">
+                      {isTotpRequired && (
+                        <p className="text-sm text-muted-foreground">
+                          {t(
+                            'twoFactor.requiredByOrg',
+                            'Two-factor authentication is required for your role. You can regenerate backup codes, but it cannot be turned off.',
+                          )}
+                        </p>
+                      )}
+                      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                        {/* Disable (hidden when 2FA is mandatory for this user — the server forbids it). */}
+                        {!isTotpRequired && (
+                          <Dialog
+                            open={isDisableDialogOpen}
+                            onOpenChange={(open) => {
+                              setIsDisableDialogOpen(open);
+                              if (!open) {
+                                setDisablePassword('');
+                                setDisableCode('');
+                                setDisableError('');
+                              }
+                            }}
+                          >
+                            <DialogTrigger asChild>
+                              <Button type="button" variant="destructive">
+                                <Lock aria-hidden="true" />
+                                {t('twoFactor.disable')}
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <form onSubmit={handleDisableTotp}>
+                                <DialogHeader>
+                                  <DialogTitle>{t('twoFactor.disableTitle')}</DialogTitle>
+                                  <DialogDescription>
+                                    {t('twoFactor.disableDescription')}
+                                  </DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4 py-4">
+                                  {disableError && (
+                                    <Alert variant="destructive">
+                                      <AlertCircle aria-hidden="true" />
+                                      <AlertTitle>{disableError}</AlertTitle>
+                                    </Alert>
+                                  )}
+                                  {isLocalAuth && (
+                                    <Field>
+                                      <FieldLabel htmlFor="totp-disable-password">
+                                        {t('twoFactor.disablePasswordLabel')}
+                                      </FieldLabel>
+                                      <Input
+                                        id="totp-disable-password"
+                                        type="password"
+                                        value={disablePassword}
+                                        onChange={(e) => {
+                                          setDisablePassword(e.target.value);
+                                          if (disableError) setDisableError('');
+                                        }}
+                                        placeholder="••••••••"
+                                        autoComplete="current-password"
+                                      />
+                                    </Field>
+                                  )}
+                                  <Field>
+                                    <FieldLabel htmlFor="totp-disable-code">
+                                      {t('twoFactor.disableCodeLabel')}
+                                    </FieldLabel>
+                                    <Input
+                                      id="totp-disable-code"
+                                      autoComplete="one-time-code"
+                                      value={disableCode}
+                                      onChange={(e) => {
+                                        setDisableCode(e.target.value);
+                                        if (disableError) setDisableError('');
+                                      }}
+                                      placeholder="123456"
+                                      className="font-mono tracking-[0.3em]"
+                                    />
+                                  </Field>
+                                </div>
+                                <DialogFooter>
+                                  <DialogClose asChild>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      disabled={isDisablingTotp}
+                                    >
+                                      {t('twoFactor.cancel')}
+                                    </Button>
+                                  </DialogClose>
+                                  <Button
+                                    type="submit"
+                                    variant="destructive"
+                                    disabled={
+                                      isDisablingTotp ||
+                                      !disableCode.trim() ||
+                                      (isLocalAuth && !disablePassword.trim())
+                                    }
+                                  >
+                                    {isDisablingTotp ? (
+                                      <>
+                                        <Loader2 aria-hidden="true" className="animate-spin" />
+                                        {t('twoFactor.verifying')}
+                                      </>
+                                    ) : (
+                                      t('twoFactor.confirmDisable')
+                                    )}
+                                  </Button>
+                                </DialogFooter>
+                              </form>
+                            </DialogContent>
+                          </Dialog>
+                        )}
+
+                        {/* Regenerate backup codes: collect a current code, then display new codes. */}
+                        <Dialog
+                          open={isRegenerateDialogOpen}
+                          onOpenChange={(open) => {
+                            setIsRegenerateDialogOpen(open);
+                            if (!open) {
+                              setRegenerateCode('');
+                              setRegenerateError('');
+                              setRegeneratedBackupCodes(null);
+                            }
+                          }}
+                        >
+                          <DialogTrigger asChild>
+                            <Button type="button" variant="outline">
+                              <RefreshCw aria-hidden="true" />
+                              {t('twoFactor.regenerateBackupCodes')}
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            {regeneratedBackupCodes ? (
+                              <>
+                                <DialogHeader>
+                                  <DialogTitle className="flex items-center gap-2">
+                                    <ShieldCheck
+                                      aria-hidden="true"
+                                      className="size-5 text-primary"
+                                    />
+                                    {t('twoFactor.backupTitle')}
+                                  </DialogTitle>
+                                  <DialogDescription>
+                                    {t('twoFactor.backupInstructions')}
+                                  </DialogDescription>
+                                </DialogHeader>
+                                <ul className="my-2 grid grid-cols-2 gap-2 rounded-lg border border-border bg-muted/40 p-4">
+                                  {regeneratedBackupCodes.map((backupCode) => (
+                                    <li
+                                      key={backupCode}
+                                      className="rounded-md border border-border bg-background px-3 py-2 text-center font-mono text-sm tracking-[0.15em] text-foreground"
+                                    >
+                                      {backupCode}
+                                    </li>
+                                  ))}
+                                </ul>
+                                <DialogFooter>
+                                  <CopyButton
+                                    variant="outline"
+                                    value={regeneratedBackupCodes.join('\n')}
+                                    label={t('twoFactor.copyCodes')}
+                                    copiedLabel={t('twoFactor.copyCodes')}
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => downloadBackupCodes(regeneratedBackupCodes)}
+                                  >
+                                    {t('twoFactor.downloadCodes')}
+                                  </Button>
+                                  <DialogClose asChild>
+                                    <Button type="button">{t('twoFactor.done')}</Button>
+                                  </DialogClose>
+                                </DialogFooter>
+                              </>
+                            ) : (
+                              <form onSubmit={handleRegenerateBackupCodes}>
+                                <DialogHeader>
+                                  <DialogTitle>{t('twoFactor.regenerateBackupCodes')}</DialogTitle>
+                                  <DialogDescription>
+                                    {t('twoFactor.enterCodeLabel')}
+                                  </DialogDescription>
+                                </DialogHeader>
+                                <div className="flex flex-col items-center gap-4 py-4">
+                                  <InputOTP
+                                    maxLength={TOTP_CODE_LENGTH}
+                                    value={regenerateCode}
+                                    onChange={(value) => {
+                                      setRegenerateCode(value);
+                                      if (regenerateError) setRegenerateError('');
+                                    }}
+                                    pattern={REGEXP_ONLY_DIGITS}
+                                    disabled={isRegeneratingCodes}
+                                    aria-invalid={regenerateError ? true : undefined}
+                                    aria-label={t('twoFactor.enterCodeLabel')}
+                                    containerClassName="justify-center"
+                                  >
+                                    <InputOTPGroup>
+                                      {Array.from({ length: TOTP_CODE_LENGTH }, (_, index) => (
+                                        <InputOTPSlot
+                                          key={index}
+                                          index={index}
+                                          aria-invalid={regenerateError ? true : undefined}
+                                        />
+                                      ))}
+                                    </InputOTPGroup>
+                                  </InputOTP>
+                                  {regenerateError && (
+                                    <Alert variant="destructive">
+                                      <AlertCircle aria-hidden="true" />
+                                      <AlertTitle>{regenerateError}</AlertTitle>
+                                    </Alert>
+                                  )}
+                                </div>
+                                <DialogFooter>
+                                  <DialogClose asChild>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      disabled={isRegeneratingCodes}
+                                    >
+                                      {t('twoFactor.cancel')}
+                                    </Button>
+                                  </DialogClose>
+                                  <Button
+                                    type="submit"
+                                    disabled={
+                                      isRegeneratingCodes ||
+                                      regenerateCode.length !== TOTP_CODE_LENGTH
+                                    }
+                                  >
+                                    {isRegeneratingCodes ? (
+                                      <>
+                                        <Loader2 aria-hidden="true" className="animate-spin" />
+                                        {t('twoFactor.verifying')}
+                                      </>
+                                    ) : (
+                                      t('twoFactor.regenerate')
+                                    )}
+                                  </Button>
+                                </DialogFooter>
+                              </form>
+                            )}
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-sm text-muted-foreground">
+                        {isTotpRequired
+                          ? t(
+                              'twoFactor.requiredByOrgSetup',
+                              'Two-factor authentication is required for your role. Set it up now — you will be asked to complete it at your next sign-in otherwise.',
+                            )
+                          : t('twoFactor.scanInstructions')}
+                      </p>
+                      <Dialog
+                        open={isTotpSetupOpen}
+                        onOpenChange={(open) => {
+                          // Block dismissal while the setup dialog is mid-flow only via the
+                          // wizard's own controls; closing here just resets local UI state.
+                          setIsTotpSetupOpen(open);
+                          if (!open) {
+                            setTotpSetupPassword('');
+                            setTotpSetupReauthDone(false);
+                          }
+                        }}
+                      >
+                        <DialogTrigger asChild>
+                          <Button type="button">
+                            <ShieldCheck aria-hidden="true" />
+                            {t('twoFactor.setUp')}
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-md">
+                          {isTotpSetupOpen && !totpSetupReauthDone ? (
+                            // Step-up re-auth gate: confirm the account password before the wizard
+                            // generates a secret. The wizard's onSetup then carries this password to
+                            // /setup, which re-verifies it server-side.
+                            <form
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                if (!totpSetupPassword.trim()) return;
+                                setTotpSetupReauthDone(true);
+                              }}
+                            >
+                              <DialogHeader>
+                                <DialogTitle>{t('twoFactor.reauthTitle')}</DialogTitle>
+                                <DialogDescription>
+                                  {t('twoFactor.reauthDescription')}
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4 py-4">
+                                <Field>
+                                  <FieldLabel htmlFor="totp-setup-password">
+                                    {t('twoFactor.reauthPasswordLabel')}
+                                  </FieldLabel>
+                                  <Input
+                                    id="totp-setup-password"
+                                    type="password"
+                                    value={totpSetupPassword}
+                                    onChange={(e) => setTotpSetupPassword(e.target.value)}
+                                    placeholder="••••••••"
+                                    autoComplete="current-password"
+                                  />
+                                </Field>
+                              </div>
+                              <DialogFooter>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => setIsTotpSetupOpen(false)}
+                                >
+                                  {t('twoFactor.cancel')}
+                                </Button>
+                                <Button type="submit" disabled={!totpSetupPassword.trim()}>
+                                  {t('twoFactor.continue')}
+                                </Button>
+                              </DialogFooter>
+                            </form>
+                          ) : (
+                            <>
+                              <DialogHeader className="sr-only">
+                                <DialogTitle>{t('twoFactor.setupTitle')}</DialogTitle>
+                                <DialogDescription>
+                                  {t('twoFactor.scanInstructions')}
+                                </DialogDescription>
+                              </DialogHeader>
+                              {isTotpSetupOpen && (
+                                <TotpSetupWizard
+                                  onSetup={() => onTotpSetup(totpSetupPassword)}
+                                  onConfirm={onTotpConfirm}
+                                  onFinished={handleTotpSetupFinished}
+                                  onCancel={() => setIsTotpSetupOpen(false)}
+                                />
+                              )}
+                            </>
+                          )}
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
             <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
