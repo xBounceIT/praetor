@@ -250,13 +250,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       ),
     );
 
-    const [supplier, products] = await Promise.all([
+    // The optional client link lives only in JSON history; its FK isn't enforced on the snapshot.
+    // A since-deleted client (the live link may have been cleared/changed, freeing the RESTRICT FK)
+    // would otherwise surface as a 500 FK violation on restore instead of this clean 409.
+    const clientId =
+      typeof snapshot.quote.clientId === 'string' && snapshot.quote.clientId.length > 0
+        ? snapshot.quote.clientId
+        : null;
+
+    const [supplier, clientExists, products] = await Promise.all([
       suppliersRepo.findById(snapshot.quote.supplierId),
+      clientId ? clientsRepo.existsById(clientId) : Promise.resolve(true),
       productIds.length > 0 ? productsRepo.getSnapshots(productIds) : Promise.resolve(null),
     ]);
 
     if (!supplier) {
       return `Snapshot supplier "${snapshot.quote.supplierId}" no longer exists`;
+    }
+    if (clientId && !clientExists) {
+      return `Snapshot client "${clientId}" no longer exists`;
     }
     if (!products) return null;
 
