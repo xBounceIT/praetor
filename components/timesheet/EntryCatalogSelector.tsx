@@ -75,7 +75,11 @@ const EntryCatalogSelector: React.FC<EntryCatalogSelectorProps> = ({
     <div className={gridClass}>
       <div className="min-w-0">
         <SelectControl
-          label={t('entry.client')}
+          label={
+            <>
+              {t('entry.client')} <span className="text-red-500">*</span>
+            </>
+          }
           options={clientOptions}
           value={selectedClientId}
           onChange={(val) => onClientChange(val as string)}
@@ -89,7 +93,11 @@ const EntryCatalogSelector: React.FC<EntryCatalogSelectorProps> = ({
 
       <div className="min-w-0">
         <SelectControl
-          label={t('entry.project')}
+          label={
+            <>
+              {t('entry.project')} <span className="text-red-500">*</span>
+            </>
+          }
           options={projectOptions}
           value={selectedProjectId}
           onChange={(val) => onProjectChange(val as string)}
@@ -106,7 +114,11 @@ const EntryCatalogSelector: React.FC<EntryCatalogSelectorProps> = ({
 
       <div className="min-w-0">
         <SelectControl
-          label={t('entry.task')}
+          label={
+            <>
+              {t('entry.task')} <span className="text-red-500">*</span>
+            </>
+          }
           options={taskOptions}
           value={selectedTaskId}
           onChange={(val) => onTaskChange(val as string)}

@@ -299,13 +299,13 @@ describe('<UserSettings /> Security tab', () => {
     fireEvent.click(screen.getByText('security.title'));
 
     const samePassword = 'same-pw-1234';
-    fireEvent.change(screen.getByLabelText('password.currentPassword'), {
+    fireEvent.change(screen.getByLabelText('password.currentPassword', { exact: false }), {
       target: { value: samePassword },
     });
-    fireEvent.change(screen.getByLabelText('password.newPassword'), {
+    fireEvent.change(screen.getByLabelText('password.newPassword', { exact: false }), {
       target: { value: samePassword },
     });
-    fireEvent.change(screen.getByLabelText('password.confirmNewPassword'), {
+    fireEvent.change(screen.getByLabelText('password.confirmNewPassword', { exact: false }), {
       target: { value: samePassword },
     });
 
@@ -646,9 +646,15 @@ describe('<UserSettings /> non-local auth', () => {
 
     expect(await screen.findByText('password.lockedBanner')).toBeInTheDocument();
 
-    expect(screen.queryByLabelText('password.currentPassword')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('password.newPassword')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('password.confirmNewPassword')).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText('password.currentPassword', { exact: false }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText('password.newPassword', { exact: false }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText('password.confirmNewPassword', { exact: false }),
+    ).not.toBeInTheDocument();
 
     await waitFor(() => expect(onGetPersonalAccessToken).toHaveBeenCalled());
     expect(screen.getByText('security.personalAccessToken.title')).toBeInTheDocument();

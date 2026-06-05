@@ -1148,7 +1148,12 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         })}
                         searchable={true}
                         disabled={isReadOnly || isClientLocked}
-                        label={t('sales:clientOffers.client', { defaultValue: 'Client' })}
+                        label={
+                          <>
+                            {t('sales:clientOffers.client', { defaultValue: 'Client' })}{' '}
+                            <span className="text-red-500">*</span>
+                          </>
+                        }
                         buttonClassName="h-9"
                         className={errors.clientId ? 'border-red-300' : ''}
                       />
@@ -1156,7 +1161,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                     </Field>
                     <Field data-invalid={Boolean(errors.id)}>
                       <FieldLabel htmlFor="client-offer-code">
-                        {t('sales:clientOffers.offerCode', { defaultValue: 'Offer code' })}
+                        {t('sales:clientOffers.offerCode', { defaultValue: 'Offer code' })}{' '}
+                        <span className="text-red-500">*</span>
                       </FieldLabel>
                       <Input
                         id="client-offer-code"
@@ -1195,7 +1201,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                       <FieldLabel htmlFor="client-offer-expiration-date">
                         {t('sales:clientOffers.expirationDate', {
                           defaultValue: 'Expiration date',
-                        })}
+                        })}{' '}
+                        <span className="text-red-500">*</span>
                       </FieldLabel>
                       <DateField
                         id="client-offer-expiration-date"

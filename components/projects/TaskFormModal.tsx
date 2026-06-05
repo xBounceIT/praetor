@@ -445,7 +445,11 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
                       billing: isEditing ? undefined : deriveBillingFromProject(nextProject),
                     });
                   }}
-                  label={t('tasks.project')}
+                  label={
+                    <>
+                      {t('tasks.project')} <span className="text-red-500">*</span>
+                    </>
+                  }
                   placeholder={t('common:labels.selectOption')}
                   searchable={true}
                   disabled={projectLocked}
@@ -453,7 +457,9 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
                 />
 
                 <Field>
-                  <FieldLabel htmlFor="task-name">{t('tasks.name')}</FieldLabel>
+                  <FieldLabel htmlFor="task-name">
+                    {t('tasks.name')} <span className="text-red-500">*</span>
+                  </FieldLabel>
                   <Input
                     id="task-name"
                     type="text"

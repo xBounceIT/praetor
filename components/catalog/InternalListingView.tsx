@@ -1265,7 +1265,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <FieldLabel>{t('crm:internalListing.productName')}</FieldLabel>
+                    <FieldLabel>
+                      {t('crm:internalListing.productName')} <span className="text-red-500">*</span>
+                    </FieldLabel>
                     <Input
                       type="text"
                       value={formData.name}
@@ -1282,7 +1284,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    <FieldLabel>{t('crm:internalListing.productCode')}</FieldLabel>
+                    <FieldLabel>
+                      {t('crm:internalListing.productCode')} <span className="text-red-500">*</span>
+                    </FieldLabel>
                     <Input
                       type="text"
                       value={formData.productCode}
@@ -1318,7 +1322,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
                   <div className="space-y-1.5">
                     <div className="flex min-h-6 items-center justify-between gap-2">
-                      <FieldLabel>{t('crm:internalListing.type')}</FieldLabel>
+                      <FieldLabel>
+                        {t('crm:internalListing.type')} <span className="text-red-500">*</span>
+                      </FieldLabel>
                       <Button
                         type="button"
                         variant="ghost"
@@ -1421,7 +1427,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <FieldLabel>
-                      {t('crm:internalListing.cost')}
+                      {t('crm:internalListing.cost')} <span className="text-red-500">*</span>
                       <span className="text-zinc-400 font-semibold">
                         /
                         {formData.costUnit === 'hours'
@@ -1443,7 +1449,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    <FieldLabel>{t('crm:internalListing.mol')}</FieldLabel>
+                    <FieldLabel>
+                      {t('crm:internalListing.mol')} <span className="text-red-500">*</span>
+                    </FieldLabel>
                     <div className="flex gap-2">
                       <ValidatedNumberInput
                         value={formData.molPercentage ?? ''}

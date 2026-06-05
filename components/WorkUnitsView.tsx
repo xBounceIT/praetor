@@ -134,7 +134,9 @@ const WorkUnitFormModal = ({
 
           <ModalBody className="space-y-4">
             <Field data-invalid={Boolean(errors.name)}>
-              <FieldLabel htmlFor={nameInputId}>{t('hr:competenceCenters.unitName')}</FieldLabel>
+              <FieldLabel htmlFor={nameInputId}>
+                {t('hr:competenceCenters.unitName')} <span className="text-red-500">*</span>
+              </FieldLabel>
               <Input
                 id={nameInputId}
                 type="text"
@@ -155,7 +157,11 @@ const WorkUnitFormModal = ({
             <div className="space-y-2">
               <SelectControl
                 id={managersInputId}
-                label={t('hr:competenceCenters.managers')}
+                label={
+                  <>
+                    {t('hr:competenceCenters.managers')} <span className="text-red-500">*</span>
+                  </>
+                }
                 options={managerOptions}
                 value={selectedManagerIds}
                 onChange={(val) => {

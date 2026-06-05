@@ -563,7 +563,9 @@ const RoleCreateModal: React.FC<
             </ModalHeader>
             <ModalBody className="flex-1 space-y-6">
               <Field>
-                <FieldLabel htmlFor="role-create-name">{t('common:labels.name')}</FieldLabel>
+                <FieldLabel htmlFor="role-create-name">
+                  {t('common:labels.name')} <span className="text-red-500">*</span>
+                </FieldLabel>
                 <Input
                   id="role-create-name"
                   value={roleName}
@@ -630,7 +632,9 @@ const RoleRenameModal: React.FC<{
             </ModalHeader>
             <ModalBody className="space-y-4">
               <Field>
-                <FieldLabel htmlFor="role-rename-name">{t('common:labels.name')}</FieldLabel>
+                <FieldLabel htmlFor="role-rename-name">
+                  {t('common:labels.name')} <span className="text-red-500">*</span>
+                </FieldLabel>
                 <Input
                   id="role-rename-name"
                   value={roleName}

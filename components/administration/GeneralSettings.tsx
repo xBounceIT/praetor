@@ -742,7 +742,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
                     <FieldLabel htmlFor="general-ai-api-key">
                       {aiProvider === 'gemini'
                         ? t('general.geminiApiKey')
-                        : t('general.openrouterApiKey')}
+                        : t('general.openrouterApiKey')}{' '}
+                      <span className="text-red-500">*</span>
                     </FieldLabel>
                     <Input
                       id="general-ai-api-key"
@@ -789,7 +790,9 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
                   </Field>
 
                   <Field data-invalid={isModelMissing() || isModelNotFound ? 'true' : undefined}>
-                    <FieldLabel htmlFor="general-ai-model">{t('general.modelIdLabel')}</FieldLabel>
+                    <FieldLabel htmlFor="general-ai-model">
+                      {t('general.modelIdLabel')} <span className="text-red-500">*</span>
+                    </FieldLabel>
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <Input
                         id="general-ai-model"

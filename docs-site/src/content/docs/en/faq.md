@@ -11,7 +11,7 @@ Module visibility depends on role permissions and some global settings. Ask an a
 
 ## I cannot save a document
 
-Check required fields, numeric values, and dates. In commercial documents, also verify that rows, quantities, prices, and records are complete.
+Check required fields, numeric values, and dates. In forms, required fields are marked with a red asterisk (*) next to the label. In commercial documents, also verify that rows, quantities, prices, and records are complete.
 
 ## Totals are not what I expected
 

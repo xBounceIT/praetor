@@ -408,7 +408,7 @@ const Login: React.FC<LoginProps> = ({
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
                       <FieldLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                        {t('common:labels.username')}
+                        {t('common:labels.username')} <span className="text-red-500">*</span>
                       </FieldLabel>
                       <Input
                         {...field}
@@ -429,7 +429,7 @@ const Login: React.FC<LoginProps> = ({
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
                       <FieldLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                        {t('common:labels.password')}
+                        {t('common:labels.password')} <span className="text-red-500">*</span>
                       </FieldLabel>
                       <div className="relative">
                         <Input

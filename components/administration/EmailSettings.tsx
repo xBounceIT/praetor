@@ -331,7 +331,9 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
           >
             <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
               <Field className="md:col-span-2">
-                <FieldLabel htmlFor="email-smtp-host">{t('email.host', 'SMTP Host')}</FieldLabel>
+                <FieldLabel htmlFor="email-smtp-host">
+                  {t('email.host', 'SMTP Host')} <span className="text-red-500">*</span>
+                </FieldLabel>
                 <Input
                   id="email-smtp-host"
                   type="text"
@@ -348,7 +350,9 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
               </Field>
 
               <Field>
-                <FieldLabel htmlFor="email-smtp-port">{t('email.port', 'Port')}</FieldLabel>
+                <FieldLabel htmlFor="email-smtp-port">
+                  {t('email.port', 'Port')} <span className="text-red-500">*</span>
+                </FieldLabel>
                 <Input
                   id="email-smtp-port"
                   type="number"
@@ -458,7 +462,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="email-from-email">
-                  {t('email.fromEmail', 'From Email')}
+                  {t('email.fromEmail', 'From Email')} <span className="text-red-500">*</span>
                 </FieldLabel>
                 <Input
                   id="email-from-email"
@@ -538,7 +542,8 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
             <form onSubmit={handleTest} className="space-y-4">
               <Field>
                 <FieldLabel htmlFor="email-test-recipient">
-                  {t('email.recipientEmail', 'Recipient Email')}
+                  {t('email.recipientEmail', 'Recipient Email')}{' '}
+                  <span className="text-red-500">*</span>
                 </FieldLabel>
                 <Input
                   id="email-test-recipient"

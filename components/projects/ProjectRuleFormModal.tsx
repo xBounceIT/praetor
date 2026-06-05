@@ -338,7 +338,7 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
         <form className="space-y-5" onSubmit={handleSubmit}>
           <Field data-invalid={!!errors.name}>
             <FieldLabel htmlFor="project-rule-name">
-              {t('projects:detail.rules.form.name')}
+              {t('projects:detail.rules.form.name')} <span className="text-red-500">*</span>
             </FieldLabel>
             <Input
               id="project-rule-name"
@@ -447,7 +447,8 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
                     >
                       <Field data-invalid={!!fieldError}>
                         <FieldLabel className="md:sr-only" htmlFor={`project-rule-field-${index}`}>
-                          {t('projects:detail.rules.form.field')}
+                          {t('projects:detail.rules.form.field')}{' '}
+                          <span className="text-red-500">*</span>
                         </FieldLabel>
                         <Select
                           value={condition.field}
@@ -479,7 +480,8 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
                           className="md:sr-only"
                           htmlFor={`project-rule-operator-${index}`}
                         >
-                          {t('projects:detail.rules.form.operator')}
+                          {t('projects:detail.rules.form.operator')}{' '}
+                          <span className="text-red-500">*</span>
                         </FieldLabel>
                         <Select
                           value={condition.operator}
@@ -541,7 +543,8 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
                             valueType === 'field'
                               ? 'projects:detail.rules.form.targetField'
                               : 'projects:detail.rules.form.value',
-                          )}
+                          )}{' '}
+                          <span className="text-red-500">*</span>
                         </FieldLabel>
                         {valueType === 'field' ? (
                           <Select

@@ -658,7 +658,12 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                       }))}
                       value={formData.clientId || ''}
                       onChange={(value) => handleClientChange(value as string)}
-                      label={t('accounting:clientsInvoices.client')}
+                      label={
+                        <>
+                          {t('accounting:clientsInvoices.client')}{' '}
+                          <span className="text-red-500">*</span>
+                        </>
+                      }
                       placeholder={t('accounting:clientsInvoices.allClients')}
                       searchable={true}
                       buttonClassName={errors.clientId ? 'h-9 border-destructive' : 'h-9'}
@@ -667,7 +672,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                   </Field>
                   <Field data-invalid={Boolean(errors.id)}>
                     <FieldLabel htmlFor="client-invoice-number">
-                      {t('accounting:clientsInvoices.invoiceNumber')}
+                      {t('accounting:clientsInvoices.invoiceNumber')}{' '}
+                      <span className="text-red-500">*</span>
                     </FieldLabel>
                     <Input
                       id="client-invoice-number"
@@ -685,7 +691,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                   </Field>
                   <Field data-invalid={Boolean(errors.issueDate)}>
                     <FieldLabel htmlFor="client-invoice-issue-date">
-                      {t('accounting:clientsInvoices.issueDate')}
+                      {t('accounting:clientsInvoices.issueDate')}{' '}
+                      <span className="text-red-500">*</span>
                     </FieldLabel>
                     <DateField
                       id="client-invoice-issue-date"
@@ -698,7 +705,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                   </Field>
                   <Field data-invalid={Boolean(errors.dueDate)}>
                     <FieldLabel htmlFor="client-invoice-due-date">
-                      {t('accounting:clientsInvoices.dueDate')}
+                      {t('accounting:clientsInvoices.dueDate')}{' '}
+                      <span className="text-red-500">*</span>
                     </FieldLabel>
                     <DateField
                       id="client-invoice-due-date"
@@ -817,7 +825,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                             </div>
                             <div className="space-y-1 lg:col-span-2">
                               <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-                                {t('common:labels.quantity')}
+                                {t('common:labels.quantity')}{' '}
+                                <span className="text-red-500">*</span>
                               </FieldLabel>
                               <div className="flex items-center justify-center gap-1">
                                 <ValidatedNumberInput
@@ -880,7 +889,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                             </div>
                             <div className="space-y-1 lg:col-span-2">
                               <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-                                {t('common:labels.price')}
+                                {t('common:labels.price')} <span className="text-red-500">*</span>
                               </FieldLabel>
                               <div className="flex items-center gap-1">
                                 <ValidatedNumberInput
@@ -982,7 +991,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                             htmlFor={`client-invoice-item-description-${index}`}
                             className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
                           >
-                            {t('common:labels.description')}
+                            {t('common:labels.description')} <span className="text-red-500">*</span>
                           </FieldLabel>
                           <Input
                             id={`client-invoice-item-description-${index}`}
