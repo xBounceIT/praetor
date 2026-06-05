@@ -48,6 +48,7 @@ import {
 import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
+import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import OrderVersionsPanel from './OrderVersionsPanel';
@@ -1141,14 +1142,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                         })}
                                       </span>
                                     )}
-                                    <div
-                                      className="flex items-center gap-1"
-                                      title={
-                                        item.supplierQuoteItemId
-                                          ? t('sales:clientQuotes.supplierQuoteCostTooltip')
-                                          : undefined
-                                      }
-                                    >
+                                    <div className="flex items-center gap-1">
                                       <ValidatedNumberInput
                                         value={unitCost}
                                         formatDecimals={2}
@@ -1159,6 +1153,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                       <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
                                         {currency}
                                       </span>
+                                      {item.supplierQuoteItemId && <SupplierQuoteCostHint />}
                                     </div>
                                   </div>
                                 </div>

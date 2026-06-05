@@ -54,6 +54,7 @@ import {
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
+import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import OfferVersionsPanel from './OfferVersionsPanel';
@@ -1379,6 +1380,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                   <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
                                     {currency}
                                   </span>
+                                  {isLinkedToSupplierQuote && <SupplierQuoteCostHint />}
                                 </div>
                               </div>
                               <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
@@ -1503,14 +1505,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                   </div>
                                 </div>
                                 <div className="col-span-1 flex flex-col items-center justify-center gap-1">
-                                  <div
-                                    className="flex items-center gap-1 w-full"
-                                    title={
-                                      isLinkedToSupplierQuote
-                                        ? t('sales:clientQuotes.supplierQuoteCostTooltip')
-                                        : undefined
-                                    }
-                                  >
+                                  <div className="flex items-center gap-1 w-full">
                                     <ValidatedNumberInput
                                       value={cost}
                                       formatDecimals={2}
@@ -1521,6 +1516,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
                                       {currency}
                                     </span>
+                                    {isLinkedToSupplierQuote && <SupplierQuoteCostHint />}
                                   </div>
                                 </div>
                                 <div className="col-span-1 flex items-center justify-center gap-1">
