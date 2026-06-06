@@ -13,6 +13,8 @@ The **Users** page stays focused on application access: username, role, permissi
 
 Permission rows marked **All** grant cross-record access for the same area, such as all clients, suppliers, projects, tasks, time entries, or competence centers. **View** opens the matching view and allows reading every matching record; when selected, **Create**, **Update**, and **Delete** are real write permissions and can operate on records that are not assigned to the user. Non-**All** permissions keep the user's assigned-record scope.
 
+The `timesheets.expired_projects.create` permission allows time entry logging on expired projects. The built-in **Manager** and **Top Manager** roles receive it by default; grant it to other roles only when they need late timesheet corrections or operational logging on completed projects.
+
 The built-in **Top Manager** role includes every competence-center permission, including the **All** scope for view, create, update, and delete. Other roles cannot receive competence-center permissions.
 
 When changing a role, consider the impact on every assigned user. Praetor blocks deletion of any role still assigned to a user, either as the primary role or as an additional role. After major changes, verify access with a test profile or representative user.

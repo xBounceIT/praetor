@@ -15,6 +15,8 @@ Praetor does not allow a second entry for the same user, date, project, and task
 
 Single-entry duration is capped at 24 hours: both `POST /api/entries` and `PUT /api/entries/:id` reject any `duration` greater than `24`. Split work across separate dates instead of recording impossibly long durations.
 
+Projects whose end date is before today are considered expired. Without the `timesheets.expired_projects.create` permission, they are hidden from the daily and weekly selections and the server rejects new entries or moves into those projects with `403`. Existing entries already logged on expired projects can still be edited for non-catalog fields such as duration, notes, location, and placeholder state.
+
 When an entry is edited, Praetor uses the API-returned `version` field to prevent concurrent overwrites. If the same entry was saved elsewhere meanwhile, `PUT /api/entries/:id` returns `409` and the entry must be reloaded before retrying.
 
 ## Weekly view
@@ -57,6 +59,8 @@ Each recurring template is defined on a project task and includes:
 For `monthly` recurrences, if the start-date day does not exist in a shorter month, the occurrence is generated on that month's final day.
 
 Sundays, Saturdays (when the _Treat Saturday as holiday_ setting is enabled), and Italian holidays are always skipped.
+
+Recurring tasks linked to expired projects are skipped during generation unless the role has `timesheets.expired_projects.create`.
 
 ### Server-side generation
 
