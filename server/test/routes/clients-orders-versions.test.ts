@@ -358,6 +358,28 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     coReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
   };
 
+  test('carries a non-default snapshot durationMonths through to replaceItems (issue #757)', async () => {
+    setupHappyPath();
+    ovFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [{ ...SAMPLE_ITEM, durationMonths: 12, durationUnit: 'years' }],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders/o-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const replacedItems = coReplaceItemsMock.mock.calls[0]?.[1];
+    expect(replacedItems[0].durationMonths).toBe(12);
+    expect(replacedItems[0].durationUnit).toBe('years');
+  });
+
   test('200 happy path snapshots current then applies version atomically', async () => {
     setupHappyPath();
 

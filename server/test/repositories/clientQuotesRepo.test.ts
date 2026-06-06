@@ -33,7 +33,7 @@ const quoteRow = (overrides: Record<number, unknown> = {}) => makeRow(QUOTE_BASE
 // id, quote_id, product_id, product_name, quantity, unit_price, product_cost,
 // product_mol_percentage, supplier_quote_id, supplier_quote_item_id,
 // supplier_quote_supplier_name, supplier_quote_unit_price, discount, note, unit_type,
-// created_at
+// duration_months, duration_unit, created_at
 const ITEM_BASE: readonly unknown[] = [
   'qi-1',
   'cq-1',
@@ -50,6 +50,8 @@ const ITEM_BASE: readonly unknown[] = [
   '0',
   null,
   'unit',
+  1,
+  'months',
   new Date('2026-04-01T00:00:00Z'),
 ];
 const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, overrides);
@@ -73,6 +75,20 @@ describe('listAllItems', () => {
     expect(result[0].quantity).toBe(2);
     expect(result[0].productCost).toBe(5);
     expect(result[0].productMolPercentage).toBe(20);
+    expect(result[0].durationMonths).toBe(1);
+    expect(result[0].durationUnit).toBe('months');
+  });
+
+  test('maps a multi-month duration through to durationMonths', async () => {
+    exec.enqueue({ rows: [itemRow({ 15: 12 })] });
+    const result = await clientQuotesRepo.listAllItems(testDb);
+    expect(result[0].durationMonths).toBe(12);
+  });
+
+  test('maps duration_unit through to durationUnit (issue #757)', async () => {
+    exec.enqueue({ rows: [itemRow({ 16: 'years' })] });
+    const result = await clientQuotesRepo.listAllItems(testDb);
+    expect(result[0].durationUnit).toBe('years');
   });
 
   test('null productMolPercentage stays null in output', async () => {
@@ -183,17 +199,17 @@ describe('findItemSnapshotsForQuote', () => {
 });
 
 describe('findItemTotals', () => {
-  test('returns parsed numeric totals', async () => {
+  test('returns parsed numeric totals including durationMonths', async () => {
     exec.enqueue({
       rows: [
-        ['2', '10', '5'],
-        [1, 20, null],
+        ['2', '10', '5', 12],
+        [1, 20, null, null],
       ],
     });
     const result = await clientQuotesRepo.findItemTotals('cq-1', testDb);
     expect(result).toEqual([
-      { quantity: 2, unitPrice: 10, discount: 5 },
-      { quantity: 1, unitPrice: 20, discount: 0 },
+      { quantity: 2, unitPrice: 10, discount: 5, durationMonths: 12 },
+      { quantity: 1, unitPrice: 20, discount: 0, durationMonths: 1 },
     ]);
   });
 });
@@ -330,6 +346,8 @@ describe('replaceItems', () => {
         supplierQuoteSupplierName: null,
         supplierQuoteUnitPrice: null,
         unitType: 'unit',
+        durationMonths: 1,
+        durationUnit: 'months',
       },
       {
         id: 'b',
@@ -346,6 +364,8 @@ describe('replaceItems', () => {
         supplierQuoteSupplierName: 'Vendor',
         supplierQuoteUnitPrice: 4,
         unitType: 'hours',
+        durationMonths: 6,
+        durationUnit: 'months',
       },
     ];
     const result = await clientQuotesRepo.replaceItems('cq-1', items, testDb);

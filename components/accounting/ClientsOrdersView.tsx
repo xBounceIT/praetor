@@ -11,6 +11,7 @@ import type {
   Client,
   ClientsOrder,
   ClientsOrderItem,
+  DurationUnit,
   OrderVersion,
   Product,
   SupplierUnitType,
@@ -26,16 +27,23 @@ import {
   calcProductSalePrice,
   calculatePricingTotals,
   convertUnitPrice,
+  durationValueToMonths,
   formatDiscountValue,
+  getDurationDisplayValue,
   getItemPricingContext,
+  isUnitLine,
+  normalizeDurationUnit,
   type PricingTotals,
+  parseDurationValueToMonths,
   parseNumberInputValue,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
+import { buildProductQuickViewHref } from '../../utils/quickViewLinks';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import DurationUnitSelector from '../shared/DurationUnitSelector';
 import Modal from '../shared/Modal';
 import {
   ModalBody,
@@ -45,6 +53,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
+import QuickViewLinkButton from '../shared/QuickViewLinkButton';
 import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -62,6 +71,7 @@ export interface ClientsOrdersViewProps {
   onOrderRestored?: (order: ClientsOrder) => void;
   onViewOffer?: (offerId: string) => void;
   currency: string;
+  canViewInternalListing?: boolean;
   offerFilterId?: string | null;
   orderFilterId?: string | null;
 }
@@ -209,6 +219,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   onOrderRestored,
   onViewOffer,
   currency,
+  canViewInternalListing = true,
   offerFilterId,
   orderFilterId,
 }) => {
@@ -337,10 +348,14 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     }
 
     const itemsWithSnapshots = (formData.items || []).map((item) => {
+      // Unit-measured lines cannot carry a duration — coerce to a single month.
+      const unitLine = isUnitLine(item);
       return {
         ...item,
         unitPrice: item.unitPrice,
         discount: item.discount ? item.discount : 0,
+        durationMonths: unitLine ? 1 : Number(item.durationMonths ?? 1) || 1,
+        durationUnit: normalizeDurationUnit(unitLine ? 'months' : item.durationUnit),
         productCost: Number(item.productCost ?? 0),
         productMolPercentage:
           item.productMolPercentage === undefined || item.productMolPercentage === null
@@ -415,6 +430,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       productId: '',
       productName: '',
       quantity: 1,
+      durationMonths: 1,
+      durationUnit: 'months',
       unitType: DEFAULT_UNIT_TYPE,
       unitPrice: 0,
       productCost: 0,
@@ -483,8 +500,35 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     setFormData((prev) => ({ ...prev, items: newItems }));
   };
 
+  // Duration value entered in the item's chosen unit (issue #757). Stored canonically as whole
+  // months; 'years' multiplies by 12. Empty/invalid input falls back to 1 of the chosen unit.
+  const handleDurationValueChange = (index: number, value: string) => {
+    if (isReadOnly) return;
+    const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
+    updateProductRow(index, 'durationMonths', parseDurationValueToMonths(value, unit));
+  };
+
+  // Switching months↔years keeps the displayed number and reinterprets it under the new unit
+  // (e.g. "2" months → "2" years = 24 months), mirroring how the quantity unit selector behaves.
+  const handleDurationUnitChange = (index: number, newUnit: DurationUnit) => {
+    if (isReadOnly) return;
+    const item = formData.items?.[index];
+    if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
+    const displayValue = getDurationDisplayValue(item);
+    const newItems = [...(formData.items || [])];
+    newItems[index] = {
+      ...newItems[index],
+      durationUnit: newUnit,
+      durationMonths: durationValueToMonths(displayValue, newUnit),
+    };
+    setFormData((prev) => ({ ...prev, items: newItems }));
+  };
+
   const activeClients = useMemo(() => clients.filter((c) => !c.isDisabled), [clients]);
   const activeProducts = useMemo(() => products.filter((p) => !p.isDisabled), [products]);
+  // All product ids (incl. archived) so the quick-view shortcut on a line that
+  // references a now-disabled product still deep-links to that record.
+  const allProductIds = useMemo(() => new Set(products.map((p) => p.id)), [products]);
 
   // A draft order is always editable — including one created from an offer. The order is the
   // live downstream document, so an upstream offer link must not lock it (mirrors the offers
@@ -990,7 +1034,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
 
                   {formData.items && formData.items.length > 0 && (
                     <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                      <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      <div className="grid flex-1 grid-cols-14 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                         <div className="col-span-2">
                           {t('accounting:clientsOrders.supplierOrderColumn', {
                             defaultValue: 'Supplier Order',
@@ -998,6 +1042,9 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         </div>
                         <div className="col-span-2">{t('sales:clientQuotes.productsServices')}</div>
                         <div className="col-span-2 text-center">{t('sales:clientQuotes.qty')}</div>
+                        <div className="col-span-2 text-center whitespace-nowrap">
+                          {t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
+                        </div>
                         <div className="col-span-1 text-center">
                           {t('crm:internalListing.cost')}
                         </div>
@@ -1022,12 +1069,20 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                     <div className="space-y-3">
                       {formData.items.map((item, index) => {
                         const product = products.find((p) => p.id === item.productId);
-                        const { unitCost, molPercentage, lineCost, quantity } =
+                        const { unitCost, molPercentage, lineCost, quantity, durationMonths } =
                           getItemPricingContext(item, DEFAULT_UNIT_TYPE);
+                        const durationUnit = normalizeDurationUnit(item.durationUnit);
+                        const durationValue = getDurationDisplayValue(item);
+                        // "Unit"-measured lines can't carry a duration → Durata shows N/A.
+                        const isUnitDurationLine = isUnitLine(item);
                         const salePrice = Number(item.unitPrice || 0);
-                        const lineSalePrice = salePrice * quantity;
+                        const lineSalePrice = salePrice * quantity * durationMonths;
                         const margin = lineSalePrice - lineCost;
                         const isSupply = product?.type === 'supply';
+                        const productHref = buildProductQuickViewHref(
+                          item.productId,
+                          allProductIds,
+                        );
 
                         const handleCostChange = (value: string) => {
                           if (isReadOnly) return;
@@ -1049,7 +1104,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                             className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
                           >
                             <div className="flex items-start gap-2 lg:items-center">
-                              <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12 lg:items-center">
+                              <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center lg:pt-5">
                                 <div className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('accounting:clientsOrders.supplierOrderColumn', {
@@ -1075,29 +1130,42 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('sales:clientQuotes.productsServices')}
                                   </FieldLabel>
-                                  <SelectControl
-                                    options={activeProducts.map((p) => ({
-                                      id: p.id,
-                                      name: p.name,
-                                    }))}
-                                    value={item.productId}
-                                    onChange={(val) =>
-                                      updateProductRow(index, 'productId', val as string)
-                                    }
-                                    placeholder={t('sales:clientQuotes.selectProduct')}
-                                    searchable={true}
-                                    // Supplier-quote-backed lines have a fixed product (the backend
-                                    // rejects product/quantity changes on supplier-order-backed
-                                    // rows), so lock the selector just like the quantity control.
-                                    disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
-                                    buttonClassName="h-9"
-                                  />
+                                  <div className="relative flex items-center gap-1">
+                                    <SelectControl
+                                      options={activeProducts.map((p) => ({
+                                        id: p.id,
+                                        name: p.name,
+                                      }))}
+                                      value={item.productId}
+                                      onChange={(val) =>
+                                        updateProductRow(index, 'productId', val as string)
+                                      }
+                                      placeholder={t('sales:clientQuotes.selectProduct')}
+                                      searchable={true}
+                                      // Supplier-quote-backed lines have a fixed product (the backend
+                                      // rejects product/quantity changes on supplier-order-backed
+                                      // rows), so lock the selector just like the quantity control.
+                                      disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+                                      className="min-w-0 flex-1"
+                                      buttonClassName="h-9"
+                                    />
+                                    {canViewInternalListing && (
+                                      <QuickViewLinkButton
+                                        href={productHref}
+                                        label={t('sales:clientQuotes.openProductInNewTab')}
+                                        disabledLabel={t(
+                                          'sales:clientQuotes.productShortcutUnavailable',
+                                        )}
+                                        floating
+                                      />
+                                    )}
+                                  </div>
                                 </div>
                                 <div className="space-y-1 lg:col-span-2 lg:space-y-0">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('sales:clientQuotes.qty')}
                                   </FieldLabel>
-                                  <div className="flex h-9 items-center gap-1">
+                                  <div className="flex h-9 items-center justify-center gap-1">
                                     <ValidatedNumberInput
                                       step="0.01"
                                       min="0"
@@ -1113,7 +1181,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                         );
                                       }}
                                       disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
-                                      className="flex-1 text-center"
+                                      className="flex-1 max-w-[5rem] text-center"
                                     />
                                     <span className="shrink-0 text-xs font-medium text-muted-foreground">
                                       /
@@ -1128,6 +1196,45 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                       disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
                                       i18nPrefix="sales:clientQuotes"
                                     />
+                                  </div>
+                                </div>
+                                <div className="space-y-1 lg:col-span-2 lg:space-y-0">
+                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                                    {t('sales:clientQuotes.durationColumn', {
+                                      defaultValue: 'Duration',
+                                    })}
+                                  </FieldLabel>
+                                  <div className="flex h-9 items-center justify-center gap-1">
+                                    {isUnitDurationLine ? (
+                                      <span className="text-sm font-medium text-muted-foreground">
+                                        {t('common:labels.notApplicable')}
+                                      </span>
+                                    ) : (
+                                      <>
+                                        <ValidatedNumberInput
+                                          step="1"
+                                          min="1"
+                                          placeholder={t('sales:clientQuotes.durationColumn', {
+                                            defaultValue: 'Duration',
+                                          })}
+                                          value={durationValue}
+                                          onValueChange={(value) =>
+                                            handleDurationValueChange(index, value)
+                                          }
+                                          disabled={isReadOnly}
+                                          className={`${compactInputClass} max-w-[5rem]`}
+                                        />
+                                        <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
+                                          /
+                                        </span>
+                                        <DurationUnitSelector
+                                          value={durationUnit}
+                                          onChange={(val) => handleDurationUnitChange(index, val)}
+                                          count={durationValue}
+                                          disabled={isReadOnly}
+                                        />
+                                      </>
+                                    )}
                                   </div>
                                 </div>
                                 <div className="space-y-1 lg:col-span-1 lg:space-y-0">

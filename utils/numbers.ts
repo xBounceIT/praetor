@@ -1,6 +1,11 @@
-import type { DiscountType, SupplierUnitType } from '../types';
+import type { DiscountType, DurationUnit, SupplierUnitType } from '../types';
 
 const CURRENCY_DECIMAL_PLACES = 2;
+
+// Duration display units (issue #757). `durationMonths` is the canonical pricing multiplier
+// (always whole months); `durationUnit` only controls how that value is shown/entered.
+export const DURATION_UNITS: readonly DurationUnit[] = ['months', 'years'];
+const MONTHS_PER_YEAR = 12;
 
 const shiftDecimal = (value: number, decimalPlaces: number): number => {
   const [coefficient, exponent = '0'] = value.toString().split('e');
@@ -50,9 +55,26 @@ export interface PricingItem {
   supplierQuoteUnitPrice?: number | null;
   productCost?: number;
   unitType?: SupplierUnitType;
+  // Invoices store the line unit as `unitOfMeasure` ('unit' | 'hours') instead of `unitType`.
+  // Either field being 'unit' marks a countable line that cannot carry a duration.
+  unitOfMeasure?: 'unit' | 'hours';
   quantity?: number;
   productMolPercentage?: number | null;
+  // Number of months the line runs (issue #757). Multiplies cost and revenue alongside
+  // quantity. Absent/invalid → 1, so items that never set it (offers, orders, invoices)
+  // keep their existing totals.
+  durationMonths?: number;
+  // Display unit for the duration value: 'months' (default) or 'years'. Pricing always uses
+  // `durationMonths`; this only affects how the value is rendered/entered in the UI.
+  durationUnit?: DurationUnit;
 }
+
+// A "unit"-measured line is a countable quantity (e.g. 40 units), not a service that runs over
+// a period, so a duration makes no sense for it and is forbidden. Quotes/offers/orders carry the
+// unit in `unitType`, invoices in `unitOfMeasure`; either being 'unit' marks the line. ('days'
+// and 'hours' are time-based and keep their duration.)
+export const isUnitLine = (item: Pick<PricingItem, 'unitType' | 'unitOfMeasure'>): boolean =>
+  item.unitType === 'unit' || item.unitOfMeasure === 'unit';
 
 export const getEffectiveCost = (item: PricingItem): number => {
   if (item.supplierQuoteItemId) return Number(item.supplierQuoteUnitPrice ?? 0);
@@ -63,11 +85,50 @@ export const getEffectiveMol = (item: PricingItem): number => {
   return item.productMolPercentage ? Number(item.productMolPercentage) : 0;
 };
 
+export const getEffectiveDurationMonths = (item: PricingItem): number => {
+  // Unit-measured lines never run for a period, so they always price as a single month —
+  // regardless of any (legacy or stale) stored value.
+  if (isUnitLine(item)) return 1;
+  const months = Number(item.durationMonths ?? 1);
+  return Number.isFinite(months) && months > 0 ? months : 1;
+};
+
+// Coerce an arbitrary value to a valid duration unit, defaulting to 'months' (issue #757).
+export const normalizeDurationUnit = (value: unknown): DurationUnit =>
+  value === 'years' ? 'years' : 'months';
+
+// Convert a value entered in `unit` into canonical whole months ≥ 1. Years are multiplied by 12;
+// the result is rounded so the integer `duration_months` column never sees a fractional value.
+export const durationValueToMonths = (value: number, unit: DurationUnit): number => {
+  const months = unit === 'years' ? value * MONTHS_PER_YEAR : value;
+  return Number.isFinite(months) && months > 0 ? Math.round(months) : 1;
+};
+
+// The number to show in the duration input for the item's chosen unit. Canonical storage is
+// always months; 'years' is derived as months / 12.
+export const getDurationDisplayValue = (item: PricingItem): number => {
+  const months = getEffectiveDurationMonths(item);
+  return normalizeDurationUnit(item.durationUnit) === 'years' ? months / MONTHS_PER_YEAR : months;
+};
+
+// Parse a duration-input string (expressed in `unit`) into canonical whole months ≥ 1 (issue
+// #757). Empty/invalid input falls back to one of the chosen unit (1 month / 1 year). Shared by
+// the quote/offer/order/invoice line-item rows so the parse-and-clamp rule lives in one place.
+// Parses with parseFloat (not parseInt): in 'years' a non-multiple of 12 months renders as a
+// fractional year (e.g. 18 months → 1.5), and that decimal must survive editing — `durationValueToMonths`
+// then folds it back to canonical whole months (1.5 × 12 = 18), so the value round-trips.
+export const parseDurationValueToMonths = (value: string, unit: DurationUnit): number => {
+  const parsed = Number.parseFloat(value);
+  if (value === '' || Number.isNaN(parsed)) return durationValueToMonths(1, unit);
+  return durationValueToMonths(Math.max(1, parsed), unit);
+};
+
 export interface ItemPricingContext {
   baseCost: number;
   unitCost: number;
   molPercentage: number;
   quantity: number;
+  durationMonths: number;
   lineCost: number;
 }
 
@@ -79,8 +140,9 @@ export const getItemPricingContext = (
   const unitCost = convertUnitPrice(baseCost, 'hours', item.unitType || defaultUnitType);
   const molPercentage = getEffectiveMol(item);
   const quantity = Number(item.quantity || 0);
-  const lineCost = unitCost * quantity;
-  return { baseCost, unitCost, molPercentage, quantity, lineCost };
+  const durationMonths = getEffectiveDurationMonths(item);
+  const lineCost = unitCost * quantity * durationMonths;
+  return { baseCost, unitCost, molPercentage, quantity, durationMonths, lineCost };
 };
 
 export interface PricingTotals {
@@ -102,14 +164,16 @@ export const calculatePricingTotals = (
   let totalCost = 0;
 
   items.forEach((item) => {
-    const lineSubtotal = Number(item.quantity || 0) * Number(item.unitPrice || 0);
+    const durationMonths = getEffectiveDurationMonths(item);
+    const lineSubtotal = Number(item.quantity || 0) * Number(item.unitPrice || 0) * durationMonths;
     const lineDiscount = (lineSubtotal * (item.discount || 0)) / 100;
     subtotal += lineSubtotal - lineDiscount;
 
     const cost = getEffectiveCost(item);
     totalCost +=
       Number(item.quantity || 0) *
-      convertUnitPrice(cost, 'hours', item.unitType || defaultUnitType);
+      convertUnitPrice(cost, 'hours', item.unitType || defaultUnitType) *
+      durationMonths;
   });
 
   const discountAmount =

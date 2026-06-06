@@ -10,6 +10,11 @@ import { standardErrorResponses, standardRateLimitedErrorResponses } from '../sc
 import { logAudit } from '../utils/audit.ts';
 import { todayLocalDateOnly } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
+import {
+  coerceUnitLineDuration,
+  type DurationUnit,
+  isUnitMeasure,
+} from '../utils/duration-unit.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -18,6 +23,8 @@ import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
   optionalDateString,
+  optionalDurationMonths,
+  optionalDurationUnit,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   parseDateString,
@@ -64,6 +71,8 @@ const offerItemSchema = {
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
+    durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years'] },
   },
   required: ['id', 'offerId', 'productName', 'quantity', 'unitPrice', 'productCost', 'discount'],
 } as const;
@@ -117,6 +126,8 @@ const offerItemBodySchema = {
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     discount: { type: 'number' },
     note: { type: 'string' },
+    durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years'] },
   },
   required: ['productName', 'quantity', 'unitPrice'],
 } as const;
@@ -180,6 +191,8 @@ type OfferItemInput = {
   unitType?: UnitType;
   discount?: string | number;
   note?: string;
+  durationMonths?: string | number;
+  durationUnit?: string;
 };
 
 type NormalizedOfferItem = {
@@ -196,6 +209,8 @@ type NormalizedOfferItem = {
   unitType: UnitType;
   discount: number;
   note: string | null;
+  durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 const normalizeItems = (
@@ -231,6 +246,26 @@ const normalizeItems = (
       badRequest(reply, itemDiscountResult.message);
       return null;
     }
+    const durationMonthsResult = optionalDurationMonths(
+      item.durationMonths,
+      `items[${i}].durationMonths`,
+    );
+    if (!durationMonthsResult.ok) {
+      badRequest(reply, durationMonthsResult.message);
+      return null;
+    }
+    const durationUnitResult = optionalDurationUnit(item.durationUnit, `items[${i}].durationUnit`);
+    if (!durationUnitResult.ok) {
+      badRequest(reply, durationUnitResult.message);
+      return null;
+    }
+    const unitType = normalizeUnitType(item.unitType);
+    // A "unit"-measured line can't run for a period, so its duration is forced to a single month.
+    const { durationMonths, durationUnit } = coerceUnitLineDuration(
+      isUnitMeasure(unitType),
+      durationMonthsResult.value ?? 1,
+      durationUnitResult.value ?? 'months',
+    );
     normalizedItems.push({
       productId: item.productId || null,
       productName: productNameResult.value,
@@ -257,9 +292,11 @@ const normalizeItems = (
         item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
           ? null
           : Number(item.supplierQuoteUnitPrice),
-      unitType: normalizeUnitType(item.unitType),
+      unitType,
       discount: itemDiscountResult.value || 0,
       note: item.note || null,
+      durationMonths,
+      durationUnit,
     });
   }
 
@@ -282,6 +319,8 @@ const buildItemsForInsert = (items: NormalizedOfferItem[]): clientOffersRepo.New
     supplierQuoteSupplierName: item.supplierQuoteSupplierName,
     supplierQuoteUnitPrice: item.supplierQuoteUnitPrice,
     unitType: item.unitType,
+    durationMonths: item.durationMonths,
+    durationUnit: item.durationUnit,
   }));
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {

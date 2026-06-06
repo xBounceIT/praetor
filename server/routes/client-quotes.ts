@@ -10,6 +10,11 @@ import { standardErrorResponses, standardRateLimitedErrorResponses } from '../sc
 import { logAudit } from '../utils/audit.ts';
 import { isPastLocalDate } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
+import {
+  coerceUnitLineDuration,
+  type DurationUnit,
+  isUnitMeasure,
+} from '../utils/duration-unit.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -17,6 +22,8 @@ import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
   optionalDateString,
+  optionalDurationMonths,
+  optionalDurationUnit,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   parseDateString,
@@ -37,6 +44,8 @@ type IncomingQuoteItem = {
   discount: number;
   note?: string | null;
   unitType?: UnitType;
+  durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 type QuoteItemSnapshot = {
@@ -97,6 +106,21 @@ const normalizeQuoteItems = (
     if (!productMolPercentageResult.ok) {
       return { ok: false, message: productMolPercentageResult.message };
     }
+    // Duration in months: a positive whole number, defaulting to 1 (one-off line item).
+    const durationMonthsResult = optionalDurationMonths(
+      item.durationMonths,
+      `items[${i}].durationMonths`,
+    );
+    if (!durationMonthsResult.ok) return { ok: false, message: durationMonthsResult.message };
+    const durationUnitResult = optionalDurationUnit(item.durationUnit, `items[${i}].durationUnit`);
+    if (!durationUnitResult.ok) return { ok: false, message: durationUnitResult.message };
+    const unitType = normalizeUnitType(item.unitType);
+    // A "unit"-measured line can't run for a period, so its duration is forced to a single month.
+    const { durationMonths, durationUnit } = coerceUnitLineDuration(
+      isUnitMeasure(unitType),
+      durationMonthsResult.value ?? 1,
+      durationUnitResult.value ?? 'months',
+    );
     result.push({
       id: normalizeNullableString(item.id) ?? undefined,
       productId: productIdValue,
@@ -108,14 +132,21 @@ const normalizeQuoteItems = (
       productMolPercentage: productMolPercentageResult.value,
       discount: itemDiscountResult.value || 0,
       note: normalizeNullableString(item.note),
-      unitType: normalizeUnitType(item.unitType),
+      unitType,
+      durationMonths,
+      durationUnit,
     });
   }
   return { ok: true, items: result };
 };
 
 const calculateQuoteTotals = (
-  items: Array<{ quantity: number; unitPrice: number; discount?: number }>,
+  items: Array<{
+    quantity: number;
+    unitPrice: number;
+    discount?: number;
+    durationMonths?: number;
+  }>,
   globalDiscount: number,
   discountType: 'percentage' | 'currency' = 'percentage',
 ) => {
@@ -126,17 +157,21 @@ const calculateQuoteTotals = (
     const quantity = Number(item.quantity);
     const unitPrice = Number(item.unitPrice);
     const itemDiscount = Number(item.discount ?? 0);
+    const durationMonths = Number(item.durationMonths ?? 1);
     if (
       !Number.isFinite(quantity) ||
       !Number.isFinite(unitPrice) ||
-      !Number.isFinite(itemDiscount)
+      !Number.isFinite(itemDiscount) ||
+      !Number.isFinite(durationMonths)
     ) {
       return {
         total: Number.NaN,
         subtotal: Number.NaN,
       };
     }
-    const lineSubtotal = quantity * unitPrice;
+    // Duration is a multiplier on the line revenue (issue #757); guard against a
+    // non-positive value falling through to zero out the gate.
+    const lineSubtotal = quantity * unitPrice * (durationMonths > 0 ? durationMonths : 1);
     const lineDiscount = lineSubtotal * (itemDiscount / 100);
     const lineNet = lineSubtotal - lineDiscount;
     subtotal += lineNet;
@@ -297,6 +332,8 @@ const quoteItemSchema = {
     discount: { type: 'number' },
     note: { type: ['string', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
+    durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years'] },
   },
   required: [
     'id',
@@ -356,6 +393,8 @@ const quoteItemBodySchema = {
     discount: { type: 'number' },
     note: { type: 'string' },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
+    durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years'] },
   },
   required: ['productId', 'productName', 'quantity', 'unitPrice'],
 } as const;
@@ -410,6 +449,8 @@ const buildItemsForInsert = (items: ResolvedQuoteItem[]): clientQuotesRepo.NewCl
     supplierQuoteSupplierName: item.supplierQuoteSupplierName ?? null,
     supplierQuoteUnitPrice: item.supplierQuoteUnitPrice ?? null,
     unitType: item.unitType ?? 'hours',
+    durationMonths: item.durationMonths ?? 1,
+    durationUnit: item.durationUnit ?? 'months',
   }));
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -841,6 +882,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             quantity: 0,
             unitPrice: 0,
             discount: 0,
+            // Placeholder: this stub only feeds the cost/MOL "unchanged" comparison below;
+            // duration always comes from the incoming item, never from this snapshot.
+            durationMonths: 1,
+            durationUnit: 'months',
             productCost: snap.productCost,
             productMolPercentage: snap.productMolPercentage,
             supplierQuoteId: snap.supplierQuoteId,

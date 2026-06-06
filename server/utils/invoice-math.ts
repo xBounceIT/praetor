@@ -4,6 +4,9 @@ type ItemMath = {
   discount?: number;
   // Per-item Italian VAT (IVA) rate in percent. Optional so pre-tax-feature data still computes.
   taxRate?: number;
+  // Months the line's service runs (issue #757). Multiplies the taxable amount alongside
+  // quantity. Absent/invalid → 1, so pre-duration rows keep their totals.
+  durationMonths?: number;
 };
 
 const CURRENCY_DECIMAL_PLACES = 2;
@@ -37,8 +40,11 @@ export const computeInvoiceTotals = (
     const quantity = item.quantity ?? 0;
     const unitPrice = item.unitPrice ?? 0;
     const discount = item.discount ?? 0;
+    const durationMonths = Number(item.durationMonths ?? 1);
+    const effectiveDuration =
+      Number.isFinite(durationMonths) && durationMonths > 0 ? durationMonths : 1;
     const discountFactor = 1 - discount / 100;
-    const taxableAmount = quantity * unitPrice * discountFactor;
+    const taxableAmount = quantity * unitPrice * discountFactor * effectiveDuration;
     const taxRate = item.taxRate ?? 0;
     subtotalRaw += taxableAmount;
     taxTotalRaw += (taxableAmount * taxRate) / 100;

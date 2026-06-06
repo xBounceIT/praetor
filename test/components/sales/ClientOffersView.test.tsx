@@ -137,6 +137,61 @@ describe('<ClientOffersView /> list', () => {
     expect(screen.getByText('crm:paymentTerms.30gg')).toBeInTheDocument();
   });
 
+  test('scales offer-row totals by a line item duration (issue #757)', () => {
+    const durationOffer = buildOffer({
+      id: 'O-DURATION',
+      items: [
+        {
+          id: 'dur-item',
+          offerId: 'O-DURATION',
+          productId: 'p-1',
+          productName: 'Service',
+          quantity: 2,
+          unitPrice: 100,
+          productCost: 60,
+          productMolPercentage: 40,
+          // Duration applies only to non-unit lines (hours/days), so this fixture is hours-based.
+          unitType: 'hours',
+          durationMonths: 3,
+        },
+      ],
+    });
+    render(<ClientOffersView {...baseProps} offers={[durationOffer]} />);
+    // Subtotal (revenue) = 100 × 2 × 3 = 600 (would be 200 without duration).
+    expect(screen.getAllByText('600.00 EUR').length).toBeGreaterThan(0);
+    // Margin = 600 − (60 × 2 × 3 = 360) = 240, which only holds when both scale by duration.
+    expect(screen.getAllByText('240.00 EUR').length).toBeGreaterThan(0);
+  });
+
+  test('a years duration prices off the canonical months, matching the months equivalent (issue #757)', () => {
+    // durationUnit is display-only; pricing always uses the canonical durationMonths (24). So
+    // "2 years" (24 months) must total the same as a 24-month line.
+    const yearsOffer = buildOffer({
+      id: 'O-YEARS',
+      items: [
+        {
+          id: 'years-item',
+          offerId: 'O-YEARS',
+          productId: 'p-1',
+          productName: 'Service',
+          quantity: 2,
+          unitPrice: 100,
+          productCost: 60,
+          productMolPercentage: 40,
+          // Duration applies only to non-unit lines (hours/days), so this fixture is hours-based.
+          unitType: 'hours',
+          durationMonths: 24,
+          durationUnit: 'years',
+        },
+      ],
+    });
+    render(<ClientOffersView {...baseProps} offers={[yearsOffer]} />);
+    // Subtotal (revenue) = 100 × 2 × 24 = 4800.
+    expect(screen.getAllByText('4800.00 EUR').length).toBeGreaterThan(0);
+    // Margin = 4800 − (60 × 2 × 24 = 2880) = 1920.
+    expect(screen.getAllByText('1920.00 EUR').length).toBeGreaterThan(0);
+  });
+
   test('renders fixed discounts as equivalent percentages in offer rows', () => {
     const fixedDiscountOffer = buildOffer({
       id: 'O-FIXED-DISCOUNT',
@@ -344,5 +399,146 @@ describe('<ClientOffersView /> source-quote banner', () => {
 
     await user.click(viewButton);
     expect(onViewQuote).toHaveBeenCalledWith('Q0001');
+  });
+});
+
+describe('<ClientOffersView /> quick-view shortcuts', () => {
+  const linkedProducts: Product[] = [
+    {
+      id: 'prod-off',
+      name: 'Solar Panel',
+      productCode: 'SP-100',
+      costo: 50,
+      molPercentage: 20,
+      costUnit: 'unit',
+      type: 'supply',
+    },
+  ];
+  const linkedSupplierQuote: SupplierQuote = {
+    id: 'SQ-OFF',
+    supplierId: 'sup-1',
+    supplierName: 'Acme Supplies',
+    items: [
+      {
+        id: 'sqi-off',
+        quoteId: 'SQ-OFF',
+        productId: 'prod-off',
+        productName: 'Solar Panel',
+        quantity: 1,
+        listPrice: 60,
+        discountPercent: 0,
+        unitPrice: 60,
+        unitType: 'unit',
+      },
+    ],
+    paymentTerms: 'immediate',
+    status: 'accepted',
+    expirationDate: '2099-12-31',
+    createdAt: 1_700_000_000_000,
+    updatedAt: 1_700_000_000_000,
+  };
+  const linkedOffer = buildOffer({
+    id: 'O-SHORTCUT',
+    items: [
+      {
+        id: 'item-link',
+        offerId: 'O-SHORTCUT',
+        productId: 'prod-off',
+        productName: 'Solar Panel',
+        quantity: 1,
+        unitPrice: 100,
+        productCost: 60,
+        productMolPercentage: 40,
+        unitType: 'unit',
+        supplierQuoteId: 'SQ-OFF',
+        supplierQuoteItemId: 'sqi-off',
+      },
+    ],
+  });
+
+  test('opens the referenced supplier quote and product on their pre-filtered pages', () => {
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[linkedOffer]}
+        products={linkedProducts}
+        supplierQuotes={[linkedSupplierQuote]}
+      />,
+    );
+    // Clicking the row opens the edit dialog that hosts the line-item shortcuts.
+    fireEvent.click(screen.getByText('O-SHORTCUT'));
+
+    const supplierLinks = screen.getAllByRole('link', {
+      name: 'sales:clientQuotes.openSupplierQuoteInNewTab',
+    });
+    expect(supplierLinks.length).toBeGreaterThan(0);
+    for (const link of supplierLinks) {
+      expect(link).toHaveAttribute('href', '#/sales/supplier-quotes?filterId=SQ-OFF');
+      expect(link).toHaveAttribute('target', '_blank');
+    }
+
+    const productLinks = screen.getAllByRole('link', {
+      name: 'sales:clientQuotes.openProductInNewTab',
+    });
+    expect(productLinks.length).toBeGreaterThan(0);
+    for (const link of productLinks) {
+      expect(link).toHaveAttribute('href', '#/catalog/internal-listing?filterId=prod-off');
+      expect(link).toHaveAttribute('target', '_blank');
+    }
+
+    // The desktop grid floats its shortcut above the field (the `floating` variant);
+    // both selectors render so at least one of each is the absolute-positioned copy.
+    expect(supplierLinks.some((link) => link.className.includes('absolute'))).toBe(true);
+    expect(productLinks.some((link) => link.className.includes('absolute'))).toBe(true);
+  });
+
+  test('hides each shortcut when the user cannot access the referenced view', () => {
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[linkedOffer]}
+        products={linkedProducts}
+        supplierQuotes={[linkedSupplierQuote]}
+        canViewSupplierQuotes={false}
+        canViewInternalListing={false}
+      />,
+    );
+    fireEvent.click(screen.getByText('O-SHORTCUT'));
+
+    // No access → hidden entirely (no active link and no disabled placeholder).
+    expect(
+      screen.queryAllByRole('link', { name: 'sales:clientQuotes.openSupplierQuoteInNewTab' }),
+    ).toHaveLength(0);
+    expect(
+      screen.queryAllByRole('link', { name: 'sales:clientQuotes.openProductInNewTab' }),
+    ).toHaveLength(0);
+    expect(
+      screen.queryAllByRole('button', {
+        name: 'sales:clientQuotes.supplierQuoteShortcutUnavailable',
+      }),
+    ).toHaveLength(0);
+    expect(
+      screen.queryAllByRole('button', { name: 'sales:clientQuotes.productShortcutUnavailable' }),
+    ).toHaveLength(0);
+  });
+
+  test('keeps the shortcut visible but disabled when the line references nothing', () => {
+    // Base offer line: productId 'p-1' (not in the empty products list) and no
+    // supplier-quote link → both shortcuts render disabled, never as active links.
+    render(<ClientOffersView {...baseProps} offers={[acmeDraft]} />);
+    fireEvent.click(screen.getByText('O-ACME-DRAFT'));
+
+    expect(
+      screen.queryAllByRole('link', { name: 'sales:clientQuotes.openProductInNewTab' }),
+    ).toHaveLength(0);
+    expect(
+      screen.getAllByRole('button', { name: 'sales:clientQuotes.productShortcutUnavailable' })
+        .length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole('button', {
+        name: 'sales:clientQuotes.supplierQuoteShortcutUnavailable',
+      }).length,
+    ).toBeGreaterThan(0);
   });
 });

@@ -14,6 +14,7 @@ import type {
   ClientOffer,
   ClientOfferItem,
   DiscountType,
+  DurationUnit,
   OfferVersion,
   Product,
   SupplierQuote,
@@ -32,14 +33,26 @@ import {
   calcProductSalePrice,
   calculatePricingTotals,
   convertUnitPrice,
+  durationValueToMonths,
+  getDurationDisplayValue,
   getItemPricingContext,
+  isUnitLine,
+  normalizeDurationUnit,
+  parseDurationValueToMonths,
   parseNumberInputValue,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
+import {
+  buildProductQuickViewHref,
+  buildQuoteIdBySupplierQuoteItemId,
+  buildSupplierQuoteQuickViewHref,
+  resolveLinkedSupplierQuoteId,
+} from '../../utils/quickViewLinks';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import DurationUnitSelector from '../shared/DurationUnitSelector';
 import FieldTooltip from '../shared/FieldTooltip';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
@@ -51,6 +64,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
+import QuickViewLinkButton from '../shared/QuickViewLinkButton';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -75,6 +89,8 @@ export interface ClientOffersViewProps {
   onViewQuote?: (quoteId: string) => void;
   canRevertTerminalStatus?: boolean;
   currency: string;
+  canViewSupplierQuotes?: boolean;
+  canViewInternalListing?: boolean;
   quoteFilterId?: string | null;
   offerFilterId?: string | null;
 }
@@ -146,6 +162,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   onViewQuote,
   canRevertTerminalStatus = false,
   currency,
+  canViewSupplierQuotes = true,
+  canViewInternalListing = true,
   quoteFilterId,
   offerFilterId,
 }) => {
@@ -220,6 +238,20 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
   const isLinkedProductMissing = (item: ClientOfferItem) =>
     Boolean(item.supplierQuoteItemId && (!item.productId || !activeProductIds.has(item.productId)));
+
+  // Deep-link target id sets, built from ALL records (not just the active/accepted
+  // options) so a quick-view shortcut on a line that references a now-archived
+  // supplier quote / product still lands on the referenced record instead of the
+  // full listing.
+  const allProductIds = useMemo(() => new Set(products.map((p) => p.id)), [products]);
+  const allSupplierQuoteIds = useMemo(
+    () => new Set(supplierQuotes.map((q) => q.id)),
+    [supplierQuotes],
+  );
+  const quoteIdBySupplierQuoteItemId = useMemo(
+    () => buildQuoteIdBySupplierQuoteItemId(supplierQuotes),
+    [supplierQuotes],
+  );
 
   const updateProductSelection = (index: number, productId: string) => {
     updateItem(index, 'productId', productId);
@@ -834,6 +866,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       productId: '',
       productName: '',
       quantity: 1,
+      durationMonths: 1,
+      durationUnit: 'months',
       unitType: 'hours',
       unitPrice: 0,
       productCost: 0,
@@ -937,6 +971,32 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     });
   };
 
+  // Duration value entered in the item's chosen unit (issue #757). Stored canonically as whole
+  // months; 'years' multiplies by 12. Empty/invalid input falls back to 1 of the chosen unit.
+  const handleDurationValueChange = (index: number, value: string) => {
+    if (isReadOnly) return;
+    const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
+    updateItem(index, 'durationMonths', parseDurationValueToMonths(value, unit));
+  };
+
+  // Switching months↔years keeps the displayed number and reinterprets it under the new unit
+  // (e.g. "2" months → "2" years = 24 months), mirroring how the quantity unit selector behaves.
+  const handleDurationUnitChange = (index: number, newUnit: DurationUnit) => {
+    if (isReadOnly) return;
+    setFormData((prev) => {
+      const items = [...(prev.items || [])];
+      const item = items[index];
+      if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return prev;
+      const displayValue = getDurationDisplayValue(item);
+      items[index] = {
+        ...items[index],
+        durationUnit: newUnit,
+        durationMonths: durationValueToMonths(displayValue, newUnit),
+      };
+      return { ...prev, items };
+    });
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (isSubmitting) return;
@@ -966,6 +1026,9 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         ...item,
         unitPrice: Number(item.unitPrice ?? 0),
         productCost: Number(item.productCost ?? 0),
+        // Unit-measured lines cannot carry a duration — coerce to a single month.
+        durationMonths: isUnitLine(item) ? 1 : Number(item.durationMonths ?? 1) || 1,
+        durationUnit: normalizeDurationUnit(isUnitLine(item) ? 'months' : item.durationUnit),
       })),
     };
 
@@ -1172,7 +1235,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
                   {formData.items && formData.items.length > 0 && (
                     <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                      <div className="flex-1 min-w-0 grid grid-cols-13 gap-2">
+                      <div className="flex-1 min-w-0 grid grid-cols-16 gap-2">
                         <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
                           {t('sales:clientQuotes.supplierQuoteColumn')}
                         </div>
@@ -1182,7 +1245,10 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
                           {t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
                         </div>
-                        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
+                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
+                          {t('sales:clientOffers.durationColumn', { defaultValue: 'Duration' })}
+                        </div>
+                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
                           {t('crm:internalListing.cost')}
                         </div>
                         <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
@@ -1213,12 +1279,26 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                           molPercentage,
                           lineCost,
                           quantity,
+                          durationMonths,
                         } = getItemPricingContext(item);
+                        // Duration is stored as canonical months; show it in the item's unit.
+                        const durationUnit = normalizeDurationUnit(item.durationUnit);
+                        const durationValue = getDurationDisplayValue(item);
+                        // "Unit"-measured lines can't carry a duration → Durata shows N/A.
+                        const isUnitDurationLine = isUnitLine(item);
                         const unitSalePrice = Number(item.unitPrice || 0);
-                        const lineSalePrice = unitSalePrice * quantity;
+                        const lineSalePrice = unitSalePrice * quantity * durationMonths;
                         const lineMargin = lineSalePrice - lineCost;
 
                         const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
+                        const supplierQuoteHref = buildSupplierQuoteQuickViewHref(
+                          resolveLinkedSupplierQuoteId(item, quoteIdBySupplierQuoteItemId),
+                          allSupplierQuoteIds,
+                        );
+                        const productHref = buildProductQuickViewHref(
+                          item.productId,
+                          allProductIds,
+                        );
                         const linkedFieldStatus = getLinkedFieldStatus({
                           isReadOnly,
                           isLinkedToSupplierQuote,
@@ -1256,26 +1336,37 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                       statusLabel={statusLabel}
                                     />
                                   </div>
-                                  <SelectControl
-                                    options={supplierQuoteSelectOptions}
-                                    value={item.supplierQuoteItemId || 'none'}
-                                    onChange={(val) =>
-                                      updateItem(
-                                        index,
-                                        'supplierQuoteItemId',
-                                        val === 'none' ? '' : (val as string),
-                                      )
-                                    }
-                                    placeholder={t('sales:clientQuotes.selectSupplierQuote')}
-                                    displayValue={getSupplierQuoteItemDisplayValue(
-                                      item.supplierQuoteItemId,
+                                  <div className="flex items-center gap-1">
+                                    <SelectControl
+                                      options={supplierQuoteSelectOptions}
+                                      value={item.supplierQuoteItemId || 'none'}
+                                      onChange={(val) =>
+                                        updateItem(
+                                          index,
+                                          'supplierQuoteItemId',
+                                          val === 'none' ? '' : (val as string),
+                                        )
+                                      }
+                                      placeholder={t('sales:clientQuotes.selectSupplierQuote')}
+                                      displayValue={getSupplierQuoteItemDisplayValue(
+                                        item.supplierQuoteItemId,
+                                      )}
+                                      displayValueIsPlaceholder={!item.supplierQuoteItemId}
+                                      searchable={true}
+                                      disabled={isReadOnly}
+                                      className="min-w-0 flex-1"
+                                      buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
+                                    />
+                                    {canViewSupplierQuotes && (
+                                      <QuickViewLinkButton
+                                        href={supplierQuoteHref}
+                                        label={t('sales:clientQuotes.openSupplierQuoteInNewTab')}
+                                        disabledLabel={t(
+                                          'sales:clientQuotes.supplierQuoteShortcutUnavailable',
+                                        )}
+                                      />
                                     )}
-                                    displayValueIsPlaceholder={!item.supplierQuoteItemId}
-                                    searchable={true}
-                                    disabled={isReadOnly}
-                                    className="min-w-0"
-                                    buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
-                                  />
+                                  </div>
                                 </div>
                                 <div className="min-w-0">
                                   <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
@@ -1289,22 +1380,33 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                       statusLabel={statusLabel}
                                     />
                                   </div>
-                                  <ProductSelectOrFallback
-                                    item={item}
-                                    index={index}
-                                    options={productOptions}
-                                    isProductMissing={isLinkedProductMissing(item)}
-                                    isReadOnly={isReadOnly}
-                                    ariaLabel={t('sales:clientOffers.selectProduct', {
-                                      defaultValue: 'Select product',
-                                    })}
-                                    placeholder={t('sales:clientOffers.selectProduct', {
-                                      defaultValue: 'Select product',
-                                    })}
-                                    onProductChange={updateProductSelection}
-                                    className="min-w-0"
-                                    buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
-                                  />
+                                  <div className="flex items-center gap-1">
+                                    <ProductSelectOrFallback
+                                      item={item}
+                                      index={index}
+                                      options={productOptions}
+                                      isProductMissing={isLinkedProductMissing(item)}
+                                      isReadOnly={isReadOnly}
+                                      ariaLabel={t('sales:clientOffers.selectProduct', {
+                                        defaultValue: 'Select product',
+                                      })}
+                                      placeholder={t('sales:clientOffers.selectProduct', {
+                                        defaultValue: 'Select product',
+                                      })}
+                                      onProductChange={updateProductSelection}
+                                      className="min-w-0 flex-1"
+                                      buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
+                                    />
+                                    {canViewInternalListing && (
+                                      <QuickViewLinkButton
+                                        href={productHref}
+                                        label={t('sales:clientQuotes.openProductInNewTab')}
+                                        disabledLabel={t(
+                                          'sales:clientQuotes.productShortcutUnavailable',
+                                        )}
+                                      />
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                               <Button
@@ -1319,7 +1421,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                 <span className="sr-only">{t('common:buttons.delete')}</span>
                               </Button>
                             </div>
-                            <div className="grid grid-cols-2 gap-3 md:grid-cols-6 lg:hidden">
+                            <div className="grid grid-cols-2 gap-3 md:grid-cols-7 lg:hidden">
                               <div>
                                 <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
                                   {t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
@@ -1356,6 +1458,52 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     quantity={Number(item.quantity) || 0}
                                     disabled={isReadOnly || isLinkedToSupplierQuote}
                                   />
+                                </div>
+                              </div>
+                              <div>
+                                <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
+                                  {t('sales:clientOffers.durationColumn', {
+                                    defaultValue: 'Duration',
+                                  })}
+                                  <FieldTooltip
+                                    description={t('sales:fieldInfo.duration', {
+                                      defaultValue: 'Number of months the service runs',
+                                    })}
+                                    status={readOnlyStatus}
+                                    statusLabel={statusLabel}
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {isUnitDurationLine ? (
+                                    <span className="text-sm font-medium text-zinc-400">
+                                      {t('common:labels.notApplicable')}
+                                    </span>
+                                  ) : (
+                                    <>
+                                      <ValidatedNumberInput
+                                        step="1"
+                                        min="1"
+                                        placeholder={t('sales:clientOffers.durationColumn', {
+                                          defaultValue: 'Duration',
+                                        })}
+                                        value={durationValue}
+                                        onValueChange={(value) =>
+                                          handleDurationValueChange(index, value)
+                                        }
+                                        disabled={isReadOnly}
+                                        className="w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
+                                      />
+                                      <span className="text-xs font-semibold text-zinc-400 shrink-0">
+                                        /
+                                      </span>
+                                      <DurationUnitSelector
+                                        value={durationUnit}
+                                        onChange={(val) => handleDurationUnitChange(index, val)}
+                                        count={durationValue}
+                                        disabled={isReadOnly}
+                                      />
+                                    </>
+                                  )}
                                 </div>
                               </div>
                               <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
@@ -1435,8 +1583,18 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                               </div>
                             </div>
                             <div className="hidden lg:flex gap-2 items-center">
-                              <div className="flex-1 min-w-0 grid grid-cols-13 gap-2 items-center">
-                                <div className="col-span-3 min-w-0">
+                              <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center pt-5">
+                                <div className="relative col-span-3 min-w-0">
+                                  {canViewSupplierQuotes && (
+                                    <QuickViewLinkButton
+                                      href={supplierQuoteHref}
+                                      label={t('sales:clientQuotes.openSupplierQuoteInNewTab')}
+                                      disabledLabel={t(
+                                        'sales:clientQuotes.supplierQuoteShortcutUnavailable',
+                                      )}
+                                      floating
+                                    />
+                                  )}
                                   <SelectControl
                                     options={supplierQuoteSelectOptions}
                                     value={item.supplierQuoteItemId || 'none'}
@@ -1454,11 +1612,21 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     displayValueIsPlaceholder={!item.supplierQuoteItemId}
                                     searchable={true}
                                     disabled={isReadOnly}
-                                    className="min-w-0"
+                                    className="w-full min-w-0"
                                     buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
                                   />
                                 </div>
-                                <div className="col-span-3 min-w-0">
+                                <div className="relative col-span-3 min-w-0">
+                                  {canViewInternalListing && (
+                                    <QuickViewLinkButton
+                                      href={productHref}
+                                      label={t('sales:clientQuotes.openProductInNewTab')}
+                                      disabledLabel={t(
+                                        'sales:clientQuotes.productShortcutUnavailable',
+                                      )}
+                                      floating
+                                    />
+                                  )}
                                   <ProductSelectOrFallback
                                     item={item}
                                     index={index}
@@ -1472,12 +1640,12 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                       defaultValue: 'Select product',
                                     })}
                                     onProductChange={updateProductSelection}
-                                    className="min-w-0"
+                                    className="w-full min-w-0"
                                     buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
                                   />
                                 </div>
                                 <div className="col-span-2">
-                                  <div className="flex items-center gap-1">
+                                  <div className="flex items-center justify-center gap-1">
                                     <ValidatedNumberInput
                                       step="0.01"
                                       min="0"
@@ -1490,7 +1658,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                         updateItem(index, 'quantity', parseNumberInputValue(value))
                                       }
                                       disabled={isReadOnly || isLinkedToSupplierQuote}
-                                      className="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                      className="w-full max-w-[5rem] text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                     />
                                     <span className="text-xs font-semibold text-zinc-400 shrink-0">
                                       /
@@ -1504,7 +1672,44 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     />
                                   </div>
                                 </div>
-                                <div className="col-span-1 flex flex-col items-center justify-center gap-1">
+                                <div className="col-span-2 flex items-center justify-center gap-1">
+                                  {isUnitDurationLine ? (
+                                    <span className="text-sm font-medium text-zinc-400">
+                                      {t('common:labels.notApplicable')}
+                                    </span>
+                                  ) : (
+                                    <>
+                                      <ValidatedNumberInput
+                                        step="1"
+                                        min="1"
+                                        placeholder={t('sales:clientOffers.durationColumn', {
+                                          defaultValue: 'Duration',
+                                        })}
+                                        value={durationValue}
+                                        onValueChange={(value) =>
+                                          handleDurationValueChange(index, value)
+                                        }
+                                        disabled={isReadOnly}
+                                        className="w-full max-w-[5rem] text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                      />
+                                      <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
+                                        /
+                                      </span>
+                                      <DurationUnitSelector
+                                        value={durationUnit}
+                                        onChange={(val) => handleDurationUnitChange(index, val)}
+                                        count={durationValue}
+                                        disabled={isReadOnly}
+                                      />
+                                    </>
+                                  )}
+                                </div>
+                                <div className="relative col-span-2 flex flex-col items-center justify-center gap-1">
+                                  {isLinkedToSupplierQuote && (
+                                    <div className="absolute right-0.5 -top-1 z-10 -translate-y-full">
+                                      <SupplierQuoteCostHint />
+                                    </div>
+                                  )}
                                   <div className="flex items-center gap-1 w-full">
                                     <ValidatedNumberInput
                                       value={cost}
@@ -1516,7 +1721,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
                                       {currency}
                                     </span>
-                                    {isLinkedToSupplierQuote && <SupplierQuoteCostHint />}
                                   </div>
                                 </div>
                                 <div className="col-span-1 flex items-center justify-center gap-1">

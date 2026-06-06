@@ -6,11 +6,21 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { Client, Invoice, InvoiceItem, Product } from '../../types';
+import type { Client, DurationUnit, Invoice, InvoiceItem, Product } from '../../types';
 import { addDaysToDateOnly, formatDateOnlyForLocale, getLocalDateString } from '../../utils/date';
-import { calcProductSalePrice } from '../../utils/numbers';
+import {
+  calcProductSalePrice,
+  durationValueToMonths,
+  getDurationDisplayValue,
+  getEffectiveDurationMonths,
+  isUnitLine,
+  normalizeDurationUnit,
+  parseDurationValueToMonths,
+} from '../../utils/numbers';
+import { buildProductQuickViewHref } from '../../utils/quickViewLinks';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import DurationUnitSelector from '../shared/DurationUnitSelector';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
 import {
@@ -21,6 +31,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
+import QuickViewLinkButton from '../shared/QuickViewLinkButton';
 import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -34,13 +45,20 @@ export interface ClientsInvoicesViewProps {
   onUpdateInvoice: (id: string, updates: Partial<Invoice>) => void;
   onDeleteInvoice: (id: string) => void;
   currency: string;
+  canViewInternalListing?: boolean;
 }
 
 // Italian standard VAT rate, used as the per-line default.
 const DEFAULT_TAX_RATE = 22;
 
+// Months the line's service runs (issue #757); multiplies the taxable amount. The shared
+// `getEffectiveDurationMonths` clamps absent/invalid values to 1, so pre-duration invoices keep
+// their totals — matching the backend `computeInvoiceTotals`.
 const getLineTaxable = (item: InvoiceItem) =>
-  item.quantity * item.unitPrice * (1 - Number(item.discount || 0) / 100);
+  item.quantity *
+  item.unitPrice *
+  getEffectiveDurationMonths(item) *
+  (1 - Number(item.discount || 0) / 100);
 
 const getLineTotal = (item: InvoiceItem) =>
   getLineTaxable(item) * (1 + Number(item.taxRate || 0) / 100);
@@ -132,6 +150,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   onUpdateInvoice,
   onDeleteInvoice,
   currency,
+  canViewInternalListing = true,
 }) => {
   const { t } = useTranslation(['accounting', 'sales', 'common']);
   const [invoiceState, dispatchInvoiceState] = useReducer(
@@ -185,6 +204,9 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     () => products.filter((product) => !product.isDisabled),
     [products],
   );
+  // All product ids (incl. archived) so the quick-view shortcut on a line that
+  // references a now-disabled product still deep-links to that record.
+  const allProductIds = useMemo(() => new Set(products.map((p) => p.id)), [products]);
 
   const generateInvoiceId = () => {
     const year = new Date().getFullYear();
@@ -296,6 +318,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       description: '',
       unitOfMeasure: 'unit',
       quantity: 1,
+      durationMonths: 1,
+      durationUnit: 'months',
       unitPrice: 0,
       discount: 0,
       taxRate: DEFAULT_TAX_RATE,
@@ -352,6 +376,28 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     clearItemsError();
   };
 
+  // Duration value entered in the item's chosen unit (issue #757). Stored canonically as whole
+  // months; 'years' multiplies by 12. Empty/invalid input falls back to 1 of the chosen unit.
+  const handleDurationValueChange = (index: number, value: string) => {
+    const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
+    updateItemRow(index, 'durationMonths', parseDurationValueToMonths(value, unit));
+  };
+
+  // Switching months↔years keeps the displayed number and reinterprets it under the new unit
+  // (e.g. "2" months → "2" years = 24 months), mirroring how the quantity unit selector behaves.
+  const handleDurationUnitChange = (index: number, newUnit: DurationUnit) => {
+    const item = formData.items?.[index];
+    if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
+    const displayValue = getDurationDisplayValue(item);
+    const nextItems = [...(formData.items || [])];
+    nextItems[index] = {
+      ...nextItems[index],
+      durationUnit: newUnit,
+      durationMonths: durationValueToMonths(displayValue, newUnit),
+    };
+    setFormData((prev) => ({ ...prev, items: nextItems }));
+  };
+
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
 
@@ -373,14 +419,21 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       return;
     }
 
-    const roundedItems = (formData.items || []).map((item) => ({
-      ...item,
-      unitOfMeasure: normalizeUnitOfMeasure(item.unitOfMeasure),
-      quantity: Number(item.quantity ?? 0),
-      unitPrice: Number(item.unitPrice ?? 0),
-      discount: Number(item.discount || 0),
-      taxRate: Number(item.taxRate || 0),
-    }));
+    const roundedItems = (formData.items || []).map((item) => {
+      const unitOfMeasure = normalizeUnitOfMeasure(item.unitOfMeasure);
+      // Unit-measured lines cannot carry a duration — coerce to a single month.
+      const unitLine = unitOfMeasure === 'unit';
+      return {
+        ...item,
+        unitOfMeasure,
+        quantity: Number(item.quantity ?? 0),
+        unitPrice: Number(item.unitPrice ?? 0),
+        discount: Number(item.discount || 0),
+        taxRate: Number(item.taxRate || 0),
+        durationMonths: unitLine ? 1 : Number(item.durationMonths ?? 1) || 1,
+        durationUnit: normalizeDurationUnit(unitLine ? 'months' : item.durationUnit),
+      };
+    });
 
     const { subtotal, taxTotal, total } = calculateTotals(roundedItems);
     const payload = {
@@ -413,7 +466,12 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
   const { subtotal, taxTotal, total } = calculateTotals(formData.items || []);
   const totalDiscount = (formData.items || []).reduce(
-    (sum, item) => sum + item.quantity * item.unitPrice * (Number(item.discount || 0) / 100),
+    (sum, item) =>
+      sum +
+      item.quantity *
+        item.unitPrice *
+        getEffectiveDurationMonths(item) *
+        (Number(item.discount || 0) / 100),
     0,
   );
   const grossSubtotal = subtotal + totalDiscount;
@@ -689,9 +747,12 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
                 {formData.items && formData.items.length > 0 && (
                   <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
-                    <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    <div className="grid flex-1 grid-cols-14 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                       <div className="col-span-3">{t('common:labels.product')}</div>
                       <div className="col-span-2">{t('common:labels.quantity')}</div>
+                      <div className="col-span-2 whitespace-nowrap">
+                        {t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
+                      </div>
                       <div className="col-span-2">{t('common:labels.price')}</div>
                       <div className="col-span-1">{t('common:labels.discount')}</div>
                       <div className="col-span-2">
@@ -706,6 +767,11 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                 <div className="space-y-3">
                   {formData.items?.map((item, index) => {
                     const lineTotal = getLineTotal(item);
+                    const durationUnit = normalizeDurationUnit(item.durationUnit);
+                    const durationValue = getDurationDisplayValue(item);
+                    // "Unit"-measured lines can't carry a duration → Durata shows N/A.
+                    const isUnitDurationLine = isUnitLine(item);
+                    const productHref = buildProductQuickViewHref(item.productId, allProductIds);
 
                     return (
                       <div
@@ -713,35 +779,52 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                         className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
                       >
                         <div className="flex items-start gap-2">
-                          <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12">
+                          <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:pt-5">
                             <div className="space-y-1 lg:col-span-3 min-w-0">
                               <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                 {t('common:labels.product')}
                               </FieldLabel>
-                              <SelectControl
-                                options={[
-                                  { id: '', name: t('accounting:clientsInvoices.customItem') },
-                                  ...activeProducts.map((product) => ({
-                                    id: product.id,
-                                    name: product.name,
-                                  })),
-                                ]}
-                                value={item.productId || ''}
-                                onChange={(value) =>
-                                  updateItemRow(index, 'productId', (value as string) || undefined)
-                                }
-                                placeholder={t(
-                                  'accounting:clientsInvoices.selectProductPlaceholder',
+                              <div className="relative flex items-center gap-1">
+                                <SelectControl
+                                  options={[
+                                    { id: '', name: t('accounting:clientsInvoices.customItem') },
+                                    ...activeProducts.map((product) => ({
+                                      id: product.id,
+                                      name: product.name,
+                                    })),
+                                  ]}
+                                  value={item.productId || ''}
+                                  onChange={(value) =>
+                                    updateItemRow(
+                                      index,
+                                      'productId',
+                                      (value as string) || undefined,
+                                    )
+                                  }
+                                  placeholder={t(
+                                    'accounting:clientsInvoices.selectProductPlaceholder',
+                                  )}
+                                  searchable={true}
+                                  className="min-w-0 flex-1"
+                                  buttonClassName="h-9"
+                                />
+                                {canViewInternalListing && (
+                                  <QuickViewLinkButton
+                                    href={productHref}
+                                    label={t('sales:clientQuotes.openProductInNewTab')}
+                                    disabledLabel={t(
+                                      'sales:clientQuotes.productShortcutUnavailable',
+                                    )}
+                                    floating
+                                  />
                                 )}
-                                searchable={true}
-                                buttonClassName="h-9"
-                              />
+                              </div>
                             </div>
                             <div className="space-y-1 lg:col-span-2">
                               <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                 {t('common:labels.quantity')}
                               </FieldLabel>
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center justify-center gap-1">
                                 <ValidatedNumberInput
                                   min="0"
                                   step="0.01"
@@ -755,7 +838,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                                       value === '' || Number.isNaN(parsed) ? 0 : parsed,
                                     );
                                   }}
-                                  className="min-w-0"
+                                  className="min-w-0 max-w-[5rem]"
                                 />
                                 <span className="shrink-0 text-xs font-medium text-muted-foreground">
                                   /
@@ -764,6 +847,40 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                                   {unitOptions.find((u) => u.id === (item.unitOfMeasure || 'unit'))
                                     ?.name || t('accounting:clientsInvoices.unit')}
                                 </span>
+                              </div>
+                            </div>
+                            <div className="space-y-1 lg:col-span-2">
+                              <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                                {t('sales:clientQuotes.durationColumn', {
+                                  defaultValue: 'Duration',
+                                })}
+                              </FieldLabel>
+                              <div className="flex items-center justify-center gap-1">
+                                {isUnitDurationLine ? (
+                                  <span className="text-sm font-medium text-muted-foreground">
+                                    {t('common:labels.notApplicable')}
+                                  </span>
+                                ) : (
+                                  <>
+                                    <ValidatedNumberInput
+                                      min="1"
+                                      step="1"
+                                      value={durationValue}
+                                      onValueChange={(value) =>
+                                        handleDurationValueChange(index, value)
+                                      }
+                                      className="min-w-0 max-w-[5rem]"
+                                    />
+                                    <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                      /
+                                    </span>
+                                    <DurationUnitSelector
+                                      value={durationUnit}
+                                      onChange={(val) => handleDurationUnitChange(index, val)}
+                                      count={durationValue}
+                                    />
+                                  </>
+                                )}
                               </div>
                             </div>
                             <div className="space-y-1 lg:col-span-2">

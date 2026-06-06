@@ -4,6 +4,12 @@ import { customerOfferItems } from '../db/schema/customerOfferItems.ts';
 import { customerOffers } from '../db/schema/customerOffers.ts';
 import { sales } from '../db/schema/sales.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
+import {
+  coerceUnitLineDuration,
+  type DurationUnit,
+  isUnitMeasure,
+  normalizeDurationUnit,
+} from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber, parseNullableDbNumber } from '../utils/parse.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 
@@ -39,6 +45,8 @@ export type ClientOfferItem = {
   unitType: UnitType;
   note: string | null;
   discount: number;
+  durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 const mapOffer = (row: typeof customerOffers.$inferSelect): ClientOffer => ({
@@ -73,6 +81,8 @@ const mapItem = (row: typeof customerOfferItems.$inferSelect): ClientOfferItem =
   unitType: normalizeUnitType(row.unitType),
   note: row.note,
   discount: parseDbNumber(row.discount, 0),
+  durationMonths: row.durationMonths ?? 1,
+  durationUnit: normalizeDurationUnit(row.durationUnit),
 });
 
 export const listAll = async (exec: DbExecutor = db): Promise<ClientOffer[]> => {
@@ -366,6 +376,8 @@ export type NewClientOfferItem = {
   supplierQuoteSupplierName: string | null;
   supplierQuoteUnitPrice: number | null;
   unitType: UnitType;
+  durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 export const insertItems = async (
@@ -393,6 +405,13 @@ export const insertItems = async (
         supplierQuoteSupplierName: item.supplierQuoteSupplierName,
         supplierQuoteUnitPrice: numericForDb(item.supplierQuoteUnitPrice),
         unitType: item.unitType,
+        // Final guard: a "unit"-measured line can't carry a duration (covers POST/PUT and the
+        // snapshot-driven version restore that bypasses route normalization).
+        ...coerceUnitLineDuration(
+          isUnitMeasure(item.unitType),
+          item.durationMonths ?? 1,
+          item.durationUnit ?? 'months',
+        ),
       })),
     )
     .returning();

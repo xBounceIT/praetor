@@ -14,7 +14,12 @@ const modalSizeClassName = {
   xl: 'max-w-2xl',
   '2xl': 'max-w-4xl',
   '6xl': 'max-w-6xl',
-  full: 'max-w-7xl',
+  // Widest tier, used by the document line-item modals (quotes/offers/orders/invoices and the
+  // supplier equivalents). The cap is intentionally wide (1600px) so the dense line-item grid —
+  // notably the narrow numeric columns like Costo / Costo Totale — has room to render full values
+  // on large displays. `ModalContent` is `w-full` inside a `max-w-[calc(100vw-2rem)]` wrapper, so
+  // it still shrinks to fit smaller viewports and never overflows the screen.
+  full: 'max-w-[100rem]',
 } as const;
 
 export type ModalLayoutSize = keyof typeof modalSizeClassName;

@@ -3,6 +3,12 @@ import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { customerOffers } from '../db/schema/customerOffers.ts';
 import { saleItems, sales } from '../db/schema/sales.ts';
 import { supplierSaleItems, supplierSales } from '../db/schema/supplierSales.ts';
+import {
+  coerceUnitLineDuration,
+  type DurationUnit,
+  isUnitMeasure,
+  normalizeDurationUnit,
+} from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber, parseNullableDbNumber } from '../utils/parse.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 
@@ -40,6 +46,8 @@ export type ClientOrderItem = {
   unitType: UnitType;
   note: string | null;
   discount: number;
+  durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 const mapOrder = (row: typeof sales.$inferSelect): ClientOrder => ({
@@ -77,6 +85,8 @@ const mapItem = (row: typeof saleItems.$inferSelect): ClientOrderItem => ({
   unitType: normalizeUnitType(row.unitType),
   note: row.note,
   discount: parseDbNumber(row.discount, 0),
+  durationMonths: row.durationMonths ?? 1,
+  durationUnit: normalizeDurationUnit(row.durationUnit),
 });
 
 export const listAll = async (exec: DbExecutor = db): Promise<ClientOrder[]> => {
@@ -393,6 +403,8 @@ export type NewClientOrderItem = {
   supplierSaleItemId: string | null;
   supplierSaleSupplierName: string | null;
   unitType: UnitType;
+  durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 export const insertItems = async (
@@ -423,6 +435,13 @@ export const insertItems = async (
         supplierSaleItemId: item.supplierSaleItemId,
         supplierSaleSupplierName: item.supplierSaleSupplierName,
         unitType: item.unitType,
+        // Final guard: a "unit"-measured line can't carry a duration (covers POST/PUT and the
+        // snapshot-driven version restore that bypasses route normalization).
+        ...coerceUnitLineDuration(
+          isUnitMeasure(item.unitType),
+          item.durationMonths ?? 1,
+          item.durationUnit ?? 'months',
+        ),
       })),
     )
     .returning();

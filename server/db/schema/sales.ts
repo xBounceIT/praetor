@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   check,
   index,
+  integer,
   numeric,
   pgTable,
   text,
@@ -84,11 +85,19 @@ export const saleItems = pgTable(
     supplierSaleId: varchar('supplier_sale_id', { length: 100 }),
     supplierSaleItemId: varchar('supplier_sale_item_id', { length: 50 }),
     supplierSaleSupplierName: varchar('supplier_sale_supplier_name', { length: 255 }),
+    // Months the line's service runs (issue #757); multiplies cost & revenue alongside quantity.
+    // Default 1 (one-off) keeps totals identical to pre-duration behavior.
+    durationMonths: integer('duration_months').notNull().default(1),
+    // Display unit for `durationMonths` (issue #757): 'months' (default) or 'years'. Pricing
+    // always uses `durationMonths`; this only controls how the value is shown/entered.
+    durationUnit: text('duration_unit').notNull().default('months'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index('idx_sale_items_sale_id').on(table.saleId),
     index('idx_sale_items_supplier_sale_id').on(table.supplierSaleId),
     check('chk_sale_items_unit_type', sql`${table.unitType} IN ('hours', 'days', 'unit')`),
+    check('chk_sale_items_duration_months', sql`${table.durationMonths} >= 1`),
+    check('chk_sale_items_duration_unit', sql`${table.durationUnit} IN ('months', 'years')`),
   ],
 );

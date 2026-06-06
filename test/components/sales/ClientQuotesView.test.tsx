@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import type { Client, Quote } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
@@ -112,5 +112,178 @@ describe('<ClientQuotesView />', () => {
     ]);
     expect(screen.getByText('33.3%')).toBeInTheDocument();
     expect(screen.getByText('12.5%')).toBeInTheDocument();
+  });
+
+  test('exposes a Durata column and per-row duration input in the create dialog (issue #757)', () => {
+    render(
+      <ClientQuotesView
+        quotes={[]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
+    fireEvent.click(screen.getByText('sales:clientQuotes.addProduct'));
+
+    // The Durata column header renders once a line item exists...
+    expect(screen.getAllByText('sales:clientQuotes.durationColumn').length).toBeGreaterThan(0);
+    // ...and the row carries a duration input defaulting to 1 month (one-off).
+    const durationInputs = screen
+      .getAllByPlaceholderText('sales:clientQuotes.durationColumn')
+      .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
+    expect(durationInputs.length).toBeGreaterThan(0);
+    expect(durationInputs[0].value).toBe('1');
+  });
+
+  test('scales line totals by a line item duration in the quote list (issue #757)', () => {
+    const durationQuote: Quote = {
+      id: 'Q-DUR',
+      clientId: 'client-1',
+      clientName: 'Helios Energy Services',
+      items: [
+        {
+          id: 'item-dur',
+          quoteId: 'Q-DUR',
+          productId: 'product-1',
+          productName: 'Consulting',
+          quantity: 2,
+          unitPrice: 100,
+          productCost: 60,
+          productMolPercentage: 40,
+          durationMonths: 3,
+        },
+      ],
+      paymentTerms: '30gg',
+      discount: 0,
+      discountType: 'percentage',
+      status: 'draft',
+      expirationDate: '2026-06-30',
+      createdAt: Date.UTC(2026, 4, 14),
+      updatedAt: Date.UTC(2026, 4, 14),
+    };
+
+    render(
+      <ClientQuotesView
+        quotes={[durationQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    // Subtotal (revenue) = unitPrice 100 × quantity 2 × durationMonths 3 = 600.00
+    // (without the duration multiplier it would be 200.00).
+    expect(screen.getAllByText('600.00 EUR').length).toBeGreaterThan(0);
+    // Margin = revenue 600 − cost (60 × 2 × 3 = 360) = 240.00, which only holds when BOTH
+    // revenue and cost are scaled by duration.
+    expect(screen.getAllByText('240.00 EUR').length).toBeGreaterThan(0);
+  });
+
+  test('shows N/A instead of a duration field for "unit"-measured lines', async () => {
+    const unitQuote: Quote = {
+      id: 'Q-UNIT',
+      clientId: 'client-1',
+      clientName: 'Helios Energy Services',
+      items: [
+        {
+          id: 'item-unit',
+          quoteId: 'Q-UNIT',
+          productId: 'product-1',
+          productName: 'Widget',
+          quantity: 5,
+          unitPrice: 100,
+          productCost: 60,
+          productMolPercentage: 40,
+          // Countable "unit" line — duration is forbidden, so the Durata field shows N/A.
+          unitType: 'unit',
+          durationMonths: 1,
+        },
+      ],
+      paymentTerms: '30gg',
+      discount: 0,
+      discountType: 'percentage',
+      status: 'draft',
+      expirationDate: '2026-06-30',
+      createdAt: Date.UTC(2026, 4, 14),
+      updatedAt: Date.UTC(2026, 4, 14),
+    };
+
+    render(
+      <ClientQuotesView
+        quotes={[unitQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+    fireEvent.click(screen.getByText('Q-UNIT'));
+    await screen.findByRole('dialog');
+
+    // The Durata cell renders N/A (no number input, no unit selector) for the unit line.
+    expect(screen.getAllByText('common:labels.notApplicable').length).toBeGreaterThan(0);
+    expect(screen.queryAllByPlaceholderText('sales:clientQuotes.durationColumn')).toHaveLength(0);
+  });
+
+  test('a years duration prices off the canonical months, matching the months equivalent (issue #757)', () => {
+    // durationUnit only changes how the duration is displayed/entered; pricing always uses the
+    // canonical durationMonths (24). So 24 months shown as "2 years" must total the same as
+    // 24 months shown as months.
+    const yearsItem = {
+      id: 'item-years',
+      quoteId: 'Q-YEARS',
+      productId: 'product-1',
+      productName: 'Consulting',
+      quantity: 2,
+      unitPrice: 100,
+      productCost: 60,
+      productMolPercentage: 40,
+      durationMonths: 24,
+      durationUnit: 'years' as const,
+    };
+    const yearsQuote: Quote = {
+      id: 'Q-YEARS',
+      clientId: 'client-1',
+      clientName: 'Helios Energy Services',
+      items: [yearsItem],
+      paymentTerms: '30gg',
+      discount: 0,
+      discountType: 'percentage',
+      status: 'draft',
+      expirationDate: '2026-06-30',
+      createdAt: Date.UTC(2026, 4, 14),
+      updatedAt: Date.UTC(2026, 4, 14),
+    };
+
+    render(
+      <ClientQuotesView
+        quotes={[yearsQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    // Subtotal (revenue) = 100 × 2 × 24 = 4800.00 — identical to a 24-month item.
+    expect(screen.getAllByText('4800.00 EUR').length).toBeGreaterThan(0);
+    // Margin = 4800 − (60 × 2 × 24 = 2880) = 1920.00.
+    expect(screen.getAllByText('1920.00 EUR').length).toBeGreaterThan(0);
   });
 });

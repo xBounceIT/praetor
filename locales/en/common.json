@@ -38,6 +38,7 @@
   },
   "labels": {
     "name": "Name",
+    "notApplicable": "N/A",
     "fullName": "Full Name",
     "email": "Email",
     "date": "Date",

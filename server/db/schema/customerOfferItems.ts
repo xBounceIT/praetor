@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { check, index, numeric, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
+import {
+  check,
+  index,
+  integer,
+  numeric,
+  pgTable,
+  text,
+  timestamp,
+  varchar,
+} from 'drizzle-orm/pg-core';
 import type { UnitType } from '../../utils/unit-type.ts';
 import { customerOffers } from './customerOffers.ts';
 import { products } from './products.ts';
@@ -27,12 +36,23 @@ export const customerOfferItems = pgTable(
     supplierQuoteItemId: varchar('supplier_quote_item_id', { length: 50 }),
     supplierQuoteSupplierName: varchar('supplier_quote_supplier_name', { length: 255 }),
     supplierQuoteUnitPrice: numeric('supplier_quote_unit_price', { precision: 15, scale: 2 }),
+    // Months the line's service runs (issue #757); multiplies cost & revenue alongside quantity.
+    // Default 1 (one-off) keeps totals identical to pre-duration behavior.
+    durationMonths: integer('duration_months').notNull().default(1),
+    // Display unit for `durationMonths` (issue #757): 'months' (default) or 'years'. Pricing
+    // always uses `durationMonths`; this only controls how the value is shown/entered.
+    durationUnit: text('duration_unit').notNull().default('months'),
   },
   (table) => [
     index('idx_customer_offer_items_offer_id').on(table.offerId),
     check(
       'chk_customer_offer_items_unit_type',
       sql`${table.unitType} IN ('hours', 'days', 'unit')`,
+    ),
+    check('chk_customer_offer_items_duration_months', sql`${table.durationMonths} >= 1`),
+    check(
+      'chk_customer_offer_items_duration_unit',
+      sql`${table.durationUnit} IN ('months', 'years')`,
     ),
   ],
 );

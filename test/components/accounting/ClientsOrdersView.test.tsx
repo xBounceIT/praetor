@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import type { Client, ClientsOrder } from '../../../types';
+import type { Client, ClientsOrder, Product } from '../../../types';
 import { render } from '../../helpers/render';
 import {
   expectSourceContainsAll,
@@ -123,6 +123,95 @@ describe('<ClientsOrdersView />', () => {
     expect(screen.queryByText('accounting:clientsOrders.itemsCount')).toBeNull();
   });
 
+  test('scales order-row totals by a line item duration (issue #757)', () => {
+    const durationOrder: ClientsOrder = {
+      id: 'dm_so_dur',
+      clientId: 'client-1',
+      clientName: 'Helios Energy Services',
+      items: [
+        {
+          id: 'item-dur',
+          orderId: 'dm_so_dur',
+          productId: 'product-1',
+          productName: 'Consulting',
+          quantity: 2,
+          unitPrice: 100,
+          productCost: 60,
+          productMolPercentage: 40,
+          durationMonths: 3,
+        },
+      ],
+      paymentTerms: '30gg',
+      discount: 0,
+      discountType: 'percentage',
+      status: 'draft',
+      createdAt: Date.UTC(2026, 3, 24),
+      updatedAt: Date.UTC(2026, 3, 24),
+    };
+
+    render(
+      <ClientsOrdersView
+        orders={[durationOrder]}
+        clients={clients}
+        products={[]}
+        currency="EUR"
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+      />,
+    );
+
+    // Subtotal (revenue) = 100 × 2 × 3 = 600 (would be 200 without duration).
+    expect(screen.getAllByText('600.00 EUR').length).toBeGreaterThan(0);
+    // Margin = 600 − (60 × 2 × 3 = 360) = 240, only correct when both scale by duration.
+    expect(screen.getAllByText('240.00 EUR').length).toBeGreaterThan(0);
+  });
+
+  test('a years duration prices off the canonical months, matching the months equivalent (issue #757)', () => {
+    // durationUnit only controls display; pricing always uses the canonical durationMonths (24),
+    // so "2 years" (24 months) totals the same as a 24-month line.
+    const yearsOrder: ClientsOrder = {
+      id: 'dm_so_years',
+      clientId: 'client-1',
+      clientName: 'Helios Energy Services',
+      items: [
+        {
+          id: 'item-years',
+          orderId: 'dm_so_years',
+          productId: 'product-1',
+          productName: 'Consulting',
+          quantity: 2,
+          unitPrice: 100,
+          productCost: 60,
+          productMolPercentage: 40,
+          durationMonths: 24,
+          durationUnit: 'years',
+        },
+      ],
+      paymentTerms: '30gg',
+      discount: 0,
+      discountType: 'percentage',
+      status: 'draft',
+      createdAt: Date.UTC(2026, 3, 24),
+      updatedAt: Date.UTC(2026, 3, 24),
+    };
+
+    render(
+      <ClientsOrdersView
+        orders={[yearsOrder]}
+        clients={clients}
+        products={[]}
+        currency="EUR"
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+      />,
+    );
+
+    // Subtotal (revenue) = 100 × 2 × 24 = 4800.
+    expect(screen.getAllByText('4800.00 EUR').length).toBeGreaterThan(0);
+    // Margin = 4800 − (60 × 2 × 24 = 2880) = 1920.
+    expect(screen.getAllByText('1920.00 EUR').length).toBeGreaterThan(0);
+  });
+
   test('edit modal uses the shared shadcn modal layout and form primitives', async () => {
     const source = await readComponentSource('accounting/ClientsOrdersView.tsx');
 
@@ -151,10 +240,11 @@ describe('<ClientsOrdersView />', () => {
 
     expectSourceContainsAll(source, [
       'className="flex items-start gap-2 lg:items-center"',
-      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-12 lg:items-center"',
+      // lg:pt-5 reserves the top gutter the floated product quick-view shortcut sits in (desktop).
+      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center lg:pt-5"',
       'className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0"',
       'className="flex h-9 items-center rounded-md border border-border bg-background px-3"',
-      'className="flex h-9 items-center gap-1"',
+      // Quantity and duration controls both center their compact value input + unit selector.
       'className="flex h-9 items-center justify-center gap-1"',
       'className="flex h-9 items-center justify-end whitespace-nowrap px-3 text-sm font-bold text-foreground"',
     ]);
@@ -308,5 +398,75 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
     expect(isDisabled(within(dialog).getByRole('button', { name: 'common:buttons.delete' }))).toBe(
       false,
     );
+  });
+});
+
+describe('<ClientsOrdersView /> product quick-view shortcut', () => {
+  const productsWithLink: Product[] = [
+    {
+      id: 'product-1',
+      name: 'Consulting',
+      productCode: 'C-1',
+      costo: 1200,
+      molPercentage: 40,
+      costUnit: 'unit',
+      type: 'supply',
+    },
+  ];
+
+  const openModal = (extraProps: Record<string, unknown> = {}) => {
+    render(
+      <ClientsOrdersView
+        orders={orders}
+        clients={clients}
+        products={productsWithLink}
+        currency="EUR"
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+        {...extraProps}
+      />,
+    );
+    fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
+    return screen.findByRole('dialog');
+  };
+
+  test('opens the referenced product on its pre-filtered page', async () => {
+    const dialog = await openModal();
+    const productLinks = within(dialog).getAllByRole('link', {
+      name: 'sales:clientQuotes.openProductInNewTab',
+    });
+    expect(productLinks.length).toBeGreaterThan(0);
+    for (const link of productLinks) {
+      expect(link).toHaveAttribute('href', '#/catalog/internal-listing?filterId=product-1');
+      expect(link).toHaveAttribute('target', '_blank');
+    }
+    // The shortcut floats above the field on desktop (lg:absolute), matching quotes/offers.
+    expect(productLinks.some((link) => link.className.includes('lg:absolute'))).toBe(true);
+  });
+
+  test('hides the product shortcut entirely without internal-listing access', async () => {
+    const dialog = await openModal({ canViewInternalListing: false });
+    expect(
+      within(dialog).queryAllByRole('link', { name: 'sales:clientQuotes.openProductInNewTab' }),
+    ).toHaveLength(0);
+    expect(
+      within(dialog).queryAllByRole('button', {
+        name: 'sales:clientQuotes.productShortcutUnavailable',
+      }),
+    ).toHaveLength(0);
+  });
+
+  test('keeps the shortcut visible but disabled when the product is not loaded', async () => {
+    // Same order line (productId 'product-1') but the product list is empty, so the
+    // shortcut has nothing to open and renders disabled rather than as a link.
+    const dialog = await openModal({ products: [] });
+    expect(
+      within(dialog).queryAllByRole('link', { name: 'sales:clientQuotes.openProductInNewTab' }),
+    ).toHaveLength(0);
+    expect(
+      within(dialog).getAllByRole('button', {
+        name: 'sales:clientQuotes.productShortcutUnavailable',
+      }).length,
+    ).toBeGreaterThan(0);
   });
 });

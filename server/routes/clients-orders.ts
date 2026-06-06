@@ -11,6 +11,11 @@ import { standardErrorResponses, standardRateLimitedErrorResponses } from '../sc
 import { logAudit } from '../utils/audit.ts';
 import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
 import {
+  coerceUnitLineDuration,
+  type DurationUnit,
+  isUnitMeasure,
+} from '../utils/duration-unit.ts';
+import {
   generateClientOrderId,
   generatePrefixedId,
   generateSupplierOrderId,
@@ -21,6 +26,8 @@ import { replyError } from '../utils/replyError.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
+  optionalDurationMonths,
+  optionalDurationUnit,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   parseLocalizedNonNegativeNumber,
@@ -57,6 +64,8 @@ const clientOrderItemSchema = {
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
+    durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years'] },
   },
   required: ['id', 'orderId', 'productName', 'quantity', 'unitPrice', 'productCost', 'discount'],
 } as const;
@@ -112,6 +121,8 @@ const clientOrderItemBodySchema = {
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     discount: { type: 'number' },
     note: { type: 'string' },
+    durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years'] },
   },
   required: ['productId', 'productName', 'quantity', 'unitPrice'],
 } as const;
@@ -168,6 +179,8 @@ type NormalizedOrderItem = {
   unitType: UnitType;
   note: string | null;
   discount: number;
+  durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 const normalizeIncomingItems = (
@@ -208,10 +221,30 @@ const normalizeIncomingItems = (
       badRequest(reply, itemDiscountResult.message);
       return null;
     }
+    const durationMonthsResult = optionalDurationMonths(
+      item.durationMonths,
+      `items[${i}].durationMonths`,
+    );
+    if (!durationMonthsResult.ok) {
+      badRequest(reply, durationMonthsResult.message);
+      return null;
+    }
+    const durationUnitResult = optionalDurationUnit(item.durationUnit, `items[${i}].durationUnit`);
+    if (!durationUnitResult.ok) {
+      badRequest(reply, durationUnitResult.message);
+      return null;
+    }
     const toNullableString = (value: unknown) =>
       value === null || value === undefined ? null : String(value);
     const toNullableNumber = (value: unknown) =>
       value === null || value === undefined ? null : Number(value);
+    const unitType = normalizeUnitType(item.unitType);
+    // A "unit"-measured line can't run for a period, so its duration is forced to a single month.
+    const { durationMonths, durationUnit } = coerceUnitLineDuration(
+      isUnitMeasure(unitType),
+      durationMonthsResult.value ?? 1,
+      durationUnitResult.value ?? 'months',
+    );
     normalized.push({
       id: typeof item.id === 'string' ? item.id : undefined,
       productId: productIdResult.value,
@@ -227,9 +260,11 @@ const normalizeIncomingItems = (
       supplierSaleId: toNullableString(item.supplierSaleId),
       supplierSaleItemId: toNullableString(item.supplierSaleItemId),
       supplierSaleSupplierName: toNullableString(item.supplierSaleSupplierName),
-      unitType: normalizeUnitType(item.unitType),
+      unitType,
       note: toNullableString(item.note),
       discount: itemDiscountResult.value || 0,
+      durationMonths,
+      durationUnit,
     });
   }
   return normalized;
@@ -256,6 +291,8 @@ const buildItemsForInsert = (
     supplierSaleItemId: item.supplierSaleItemId,
     supplierSaleSupplierName: item.supplierSaleSupplierName,
     unitType: item.unitType,
+    durationMonths: item.durationMonths,
+    durationUnit: item.durationUnit,
   }));
 
 const normalizeNotesValue = (value: unknown) => String(value ?? '');
@@ -321,6 +358,8 @@ const snapshotItemFingerprint = (item: {
   supplierSaleId?: string | null;
   supplierSaleItemId?: string | null;
   supplierSaleSupplierName?: string | null;
+  durationMonths?: number | null;
+  durationUnit?: string | null;
 }) =>
   [
     item.id ?? '',
@@ -340,6 +379,8 @@ const snapshotItemFingerprint = (item: {
     item.supplierSaleId ?? '',
     item.supplierSaleItemId ?? '',
     item.supplierSaleSupplierName ?? '',
+    item.durationMonths == null ? 1 : Number(item.durationMonths),
+    item.durationUnit ?? 'months',
   ].join('|');
 
 const itemsChangedForSnapshot = (

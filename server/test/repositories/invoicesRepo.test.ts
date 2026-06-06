@@ -33,7 +33,7 @@ const invoiceRow = (overrides: Record<number, unknown> = {}) => makeRow(INVOICE_
 
 // `invoice_items` columns:
 // id, invoice_id, product_id, description, unit_of_measure, quantity, unit_price, discount,
-// tax_rate, created_at
+// tax_rate, duration_months, duration_unit, created_at
 const ITEM_BASE: readonly unknown[] = [
   'inv-item-1',
   'INV-2026-0001',
@@ -44,6 +44,8 @@ const ITEM_BASE: readonly unknown[] = [
   '50',
   '0',
   '22',
+  1,
+  'months',
   new Date('2026-04-01T00:00:00Z'),
 ];
 const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, overrides);
@@ -113,12 +115,26 @@ describe('listAllItems', () => {
     expect(result[0].quantity).toBe(2);
     expect(result[0].unitPrice).toBe(50);
     expect(result[0].taxRate).toBe(22);
+    expect(result[0].durationMonths).toBe(1);
+    expect(result[0].durationUnit).toBe('months');
   });
 
   test('falls back to unit when unitOfMeasure is unknown', async () => {
     exec.enqueue({ rows: [itemRow({ 4: 'gallons' })] });
     const result = await invoicesRepo.listAllItems(testDb);
     expect(result[0].unitOfMeasure).toBe('unit');
+  });
+
+  test('maps a multi-month duration through to durationMonths (issue #757)', async () => {
+    exec.enqueue({ rows: [itemRow({ 9: 12 })] });
+    const result = await invoicesRepo.listAllItems(testDb);
+    expect(result[0].durationMonths).toBe(12);
+  });
+
+  test('maps duration_unit through to durationUnit (issue #757)', async () => {
+    exec.enqueue({ rows: [itemRow({ 10: 'years' })] });
+    const result = await invoicesRepo.listAllItems(testDb);
+    expect(result[0].durationUnit).toBe('years');
   });
 });
 
@@ -374,6 +390,8 @@ describe('replaceItems', () => {
         unitPrice: 5,
         discount: 0,
         taxRate: 22,
+        durationMonths: 1,
+        durationUnit: 'months' as const,
       },
       {
         id: 'b',
@@ -384,6 +402,8 @@ describe('replaceItems', () => {
         unitPrice: 6,
         discount: 1,
         taxRate: 10,
+        durationMonths: 6,
+        durationUnit: 'months' as const,
       },
     ];
     const result = await invoicesRepo.replaceItems('INV-1', items, testDb);

@@ -4,6 +4,7 @@
  */
 
 import type { FastifyReply } from 'fastify';
+import { DURATION_UNITS, type DurationUnit } from './duration-unit.ts';
 
 /**
  * Check if value is a non-empty string after trimming
@@ -288,6 +289,33 @@ export function optionalLocalizedPositiveNumber(
     return { ok: false, message: result.message };
   }
   return result;
+}
+
+/**
+ * Duration in whole months (issue #757): an optional positive integer. Absent/empty → null so
+ * the caller can default to 1 (a one-off line). Fractional values are rejected because the
+ * `duration_months` columns are integers. Shared by the quote/offer/order/invoice line-item
+ * validators so the rule stays identical across the document chain.
+ */
+export function optionalDurationMonths(
+  value: unknown,
+  fieldName: string = 'durationMonths',
+): { ok: true; value: number | null } | { ok: false; message: string } {
+  const result = optionalLocalizedPositiveNumber(value, fieldName);
+  if (!result.ok) return result;
+  if (result.value !== null && !Number.isInteger(result.value)) {
+    return { ok: false, message: `${fieldName} must be a whole number of months` };
+  }
+  return result;
+}
+
+// Display unit for a line-item duration (issue #757). Absent/empty → null so the caller can
+// default to 'months'. The unit allow-list lives in `duration-unit.ts` (shared with the repos).
+export function optionalDurationUnit(
+  value: unknown,
+  fieldName: string = 'durationUnit',
+): { ok: true; value: DurationUnit | null } | { ok: false; message: string } {
+  return optionalEnum(value, DURATION_UNITS, fieldName);
 }
 
 const TRUE_STRINGS = new Set(['true', '1', 'yes']);

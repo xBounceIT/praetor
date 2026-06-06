@@ -3,11 +3,17 @@ import {
   calcProductSalePrice,
   calculatePricingTotals,
   convertUnitPrice,
+  durationValueToMonths,
   formatDiscountValue,
+  getDurationDisplayValue,
   getEffectiveCost,
+  getEffectiveDurationMonths,
   getEffectiveMol,
   getItemPricingContext,
+  isUnitLine,
+  normalizeDurationUnit,
   type PricingItem,
+  parseDurationValueToMonths,
   parseNumberInputValue,
   roundCurrency,
 } from '../../utils/numbers';
@@ -100,6 +106,169 @@ describe('getEffectiveCost / getEffectiveMol', () => {
   });
 });
 
+describe('getEffectiveDurationMonths', () => {
+  test('defaults to 1 when durationMonths is absent', () => {
+    expect(getEffectiveDurationMonths({})).toBe(1);
+  });
+
+  test('returns the numeric value when a valid positive duration is set', () => {
+    expect(getEffectiveDurationMonths({ durationMonths: 12 })).toBe(12);
+  });
+
+  test('falls back to 1 for zero, negative, or non-finite durations', () => {
+    expect(getEffectiveDurationMonths({ durationMonths: 0 })).toBe(1);
+    expect(getEffectiveDurationMonths({ durationMonths: -3 })).toBe(1);
+    expect(getEffectiveDurationMonths({ durationMonths: Number.NaN })).toBe(1);
+  });
+
+  test('forces 1 for "unit"-measured lines regardless of stored value', () => {
+    // unitType 'unit' (quotes/offers/orders) and unitOfMeasure 'unit' (invoices) both override.
+    expect(getEffectiveDurationMonths({ unitType: 'unit', durationMonths: 12 })).toBe(1);
+    expect(getEffectiveDurationMonths({ unitOfMeasure: 'unit', durationMonths: 12 })).toBe(1);
+    // hours/days lines keep their duration.
+    expect(getEffectiveDurationMonths({ unitType: 'hours', durationMonths: 12 })).toBe(12);
+    expect(getEffectiveDurationMonths({ unitType: 'days', durationMonths: 6 })).toBe(6);
+  });
+});
+
+describe('isUnitLine', () => {
+  test('is true only when the line is unit-measured', () => {
+    expect(isUnitLine({ unitType: 'unit' })).toBe(true);
+    expect(isUnitLine({ unitOfMeasure: 'unit' })).toBe(true);
+    expect(isUnitLine({ unitType: 'hours' })).toBe(false);
+    expect(isUnitLine({ unitType: 'days' })).toBe(false);
+    expect(isUnitLine({ unitOfMeasure: 'hours' })).toBe(false);
+    expect(isUnitLine({})).toBe(false);
+  });
+});
+
+describe('normalizeDurationUnit', () => {
+  test("returns 'years' only when the value is exactly 'years'", () => {
+    expect(normalizeDurationUnit('years')).toBe('years');
+  });
+
+  test("defaults to 'months' for 'months', unknown strings, and nullish values", () => {
+    expect(normalizeDurationUnit('months')).toBe('months');
+    expect(normalizeDurationUnit('weeks')).toBe('months');
+    expect(normalizeDurationUnit('')).toBe('months');
+    expect(normalizeDurationUnit(undefined)).toBe('months');
+    expect(normalizeDurationUnit(null)).toBe('months');
+    expect(normalizeDurationUnit(12)).toBe('months');
+  });
+});
+
+describe('durationValueToMonths', () => {
+  test('passes months through unchanged (rounded to a whole month)', () => {
+    expect(durationValueToMonths(3, 'months')).toBe(3);
+    expect(durationValueToMonths(2.4, 'months')).toBe(2);
+  });
+
+  test('multiplies years by 12 to get canonical months', () => {
+    expect(durationValueToMonths(2, 'years')).toBe(24);
+    expect(durationValueToMonths(1, 'years')).toBe(12);
+    // 1.5 years × 12 = 18 months.
+    expect(durationValueToMonths(1.5, 'years')).toBe(18);
+  });
+
+  test('falls back to 1 month for zero, negative, or non-finite values', () => {
+    expect(durationValueToMonths(0, 'months')).toBe(1);
+    expect(durationValueToMonths(-3, 'years')).toBe(1);
+    expect(durationValueToMonths(Number.NaN, 'years')).toBe(1);
+    expect(durationValueToMonths(Number.POSITIVE_INFINITY, 'months')).toBe(1);
+  });
+});
+
+describe('getDurationDisplayValue', () => {
+  test('shows the raw months when the unit is months (or defaulted)', () => {
+    expect(getDurationDisplayValue({ durationMonths: 6, durationUnit: 'months' })).toBe(6);
+    // Absent unit defaults to months.
+    expect(getDurationDisplayValue({ durationMonths: 6 })).toBe(6);
+  });
+
+  test('shows months / 12 when the unit is years', () => {
+    expect(getDurationDisplayValue({ durationMonths: 24, durationUnit: 'years' })).toBe(2);
+    expect(getDurationDisplayValue({ durationMonths: 12, durationUnit: 'years' })).toBe(1);
+  });
+
+  test('clamps an absent/invalid durationMonths to 1 before converting', () => {
+    // getEffectiveDurationMonths floors invalid durations to 1, so years shows 1/12.
+    expect(getDurationDisplayValue({ durationUnit: 'months' })).toBe(1);
+    expect(getDurationDisplayValue({ durationMonths: 0, durationUnit: 'years' })).toBe(1 / 12);
+  });
+});
+
+describe('parseDurationValueToMonths', () => {
+  test('parses a months input string into whole months', () => {
+    expect(parseDurationValueToMonths('3', 'months')).toBe(3);
+    expect(parseDurationValueToMonths('12', 'months')).toBe(12);
+  });
+
+  test('parses a years input string into canonical months (× 12)', () => {
+    expect(parseDurationValueToMonths('2', 'years')).toBe(24);
+    expect(parseDurationValueToMonths('1', 'years')).toBe(12);
+  });
+
+  test('clamps a sub-1 value up to 1 of the chosen unit', () => {
+    expect(parseDurationValueToMonths('0', 'months')).toBe(1);
+    expect(parseDurationValueToMonths('-4', 'months')).toBe(1);
+    // 1 year, not 1 month, when the unit is years.
+    expect(parseDurationValueToMonths('0', 'years')).toBe(12);
+  });
+
+  test('falls back to 1 of the chosen unit for empty or non-numeric input', () => {
+    expect(parseDurationValueToMonths('', 'months')).toBe(1);
+    expect(parseDurationValueToMonths('abc', 'months')).toBe(1);
+    // Empty/invalid input under years means one year = 12 months.
+    expect(parseDurationValueToMonths('', 'years')).toBe(12);
+    expect(parseDurationValueToMonths('abc', 'years')).toBe(12);
+  });
+
+  test('round-trips a fractional year (non-multiple of 12 months) without truncating', () => {
+    // 18 months displays as 1.5 years; editing that decimal must save 18 months, not 12.
+    expect(parseDurationValueToMonths('1.5', 'years')).toBe(18);
+    expect(getDurationDisplayValue({ durationUnit: 'years', durationMonths: 18 })).toBe(1.5);
+    expect(parseDurationValueToMonths('2.5', 'years')).toBe(30);
+    // Fractional months round to the nearest whole month (the canonical integer column).
+    expect(parseDurationValueToMonths('1.5', 'months')).toBe(2);
+  });
+});
+
+describe('pricing helpers ignore durationUnit and multiply by canonical durationMonths (issue #757)', () => {
+  test('getItemPricingContext scales line cost by durationMonths regardless of the display unit', () => {
+    const monthsItem: PricingItem = {
+      productCost: 50,
+      quantity: 2,
+      durationMonths: 24,
+      durationUnit: 'months',
+    };
+    const yearsItem: PricingItem = { ...monthsItem, durationUnit: 'years' };
+
+    // Both report 24 canonical months and the same line cost (50 × 2 × 24 = 2400).
+    expect(getItemPricingContext(monthsItem, 'hours').durationMonths).toBe(24);
+    expect(getItemPricingContext(yearsItem, 'hours').durationMonths).toBe(24);
+    expect(getItemPricingContext(yearsItem, 'hours').lineCost).toBe(2400);
+    expect(getItemPricingContext(yearsItem, 'hours').lineCost).toBe(
+      getItemPricingContext(monthsItem, 'hours').lineCost,
+    );
+  });
+
+  test('calculatePricingTotals produces identical totals for months vs years display units', () => {
+    const monthsItems: PricingItem[] = [
+      { unitPrice: 100, quantity: 2, productCost: 60, durationMonths: 24, durationUnit: 'months' },
+    ];
+    const yearsItems: PricingItem[] = [{ ...monthsItems[0], durationUnit: 'years' }];
+
+    const monthsTotals = calculatePricingTotals(monthsItems, 0);
+    const yearsTotals = calculatePricingTotals(yearsItems, 0);
+
+    // Revenue 100 × 2 × 24 = 4800; cost 60 × 2 × 24 = 2880; margin 1920 — same for both units.
+    expect(yearsTotals.subtotal).toBe(4800);
+    expect(yearsTotals.totalCost).toBe(2880);
+    expect(yearsTotals.margin).toBe(1920);
+    expect(yearsTotals).toEqual(monthsTotals);
+  });
+});
+
 describe('getItemPricingContext', () => {
   test('computes line cost in the item unitType when explicit', () => {
     const item: PricingItem = { productCost: 80, unitType: 'days', quantity: 2 };
@@ -107,7 +276,20 @@ describe('getItemPricingContext', () => {
     expect(ctx.baseCost).toBe(80);
     expect(ctx.unitCost).toBe(640); // 80/h × 8 = 640/day
     expect(ctx.quantity).toBe(2);
+    expect(ctx.durationMonths).toBe(1);
     expect(ctx.lineCost).toBe(1280);
+  });
+
+  test('multiplies line cost by durationMonths (issue #757)', () => {
+    const item: PricingItem = { productCost: 50, quantity: 2, durationMonths: 12 };
+    const ctx = getItemPricingContext(item, 'hours');
+    expect(ctx.durationMonths).toBe(12);
+    expect(ctx.lineCost).toBe(1200); // 50 × 2 × 12
+  });
+
+  test('treats an absent durationMonths as 1 (unchanged from pre-duration behavior)', () => {
+    const item: PricingItem = { productCost: 50, quantity: 2 };
+    expect(getItemPricingContext(item, 'hours').lineCost).toBe(100);
   });
 
   test('falls back to defaultUnitType when item has no unitType', () => {
@@ -138,6 +320,30 @@ describe('calculatePricingTotals', () => {
   test('applies a per-line percentage discount', () => {
     const items: PricingItem[] = [{ unitPrice: 100, quantity: 1, discount: 10 }];
     expect(calculatePricingTotals(items, 0).subtotal).toBe(90);
+  });
+
+  test('multiplies both revenue and cost by durationMonths (issue #757)', () => {
+    const items: PricingItem[] = [
+      { unitPrice: 100, quantity: 2, productCost: 60, durationMonths: 12 },
+    ];
+    const t = calculatePricingTotals(items, 0);
+    expect(t.subtotal).toBe(2400); // 100 × 2 × 12
+    expect(t.totalCost).toBe(1440); // 60 × 2 × 12
+    expect(t.margin).toBe(960); // 2400 − 1440
+  });
+
+  test('applies the per-line discount on top of the duration-scaled revenue', () => {
+    const items: PricingItem[] = [{ unitPrice: 100, quantity: 1, discount: 10, durationMonths: 3 }];
+    // 100 × 1 × 3 = 300, then −10% = 270
+    expect(calculatePricingTotals(items, 0).subtotal).toBe(270);
+  });
+
+  test('leaves totals unchanged when durationMonths is 1 or absent', () => {
+    const withDuration: PricingItem[] = [
+      { unitPrice: 100, quantity: 2, productCost: 60, durationMonths: 1 },
+    ];
+    const without: PricingItem[] = [{ unitPrice: 100, quantity: 2, productCost: 60 }];
+    expect(calculatePricingTotals(withDuration, 0)).toEqual(calculatePricingTotals(without, 0));
   });
 
   test('applies a global percentage discount on top of per-line discounts', () => {

@@ -4,6 +4,12 @@ import { customerOffers } from '../db/schema/customerOffers.ts';
 import { quoteItems, quotes } from '../db/schema/quotes.ts';
 import { sales } from '../db/schema/sales.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
+import {
+  coerceUnitLineDuration,
+  type DurationUnit,
+  isUnitMeasure,
+  normalizeDurationUnit,
+} from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber, parseNullableDbNumber } from '../utils/parse.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 
@@ -38,6 +44,8 @@ export type ClientQuoteItem = {
   discount: number;
   note: string | null;
   unitType: UnitType;
+  durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 // Correlated subquery used by list/find projections. create/update use `null::varchar`
@@ -129,6 +137,8 @@ const mapItem = (row: typeof quoteItems.$inferSelect): ClientQuoteItem => ({
   discount: parseDbNumber(row.discount, 0),
   note: row.note,
   unitType: normalizeUnitType(row.unitType),
+  durationMonths: row.durationMonths ?? 1,
+  durationUnit: normalizeDurationUnit(row.durationUnit),
 });
 
 export const listAll = async (exec: DbExecutor = db): Promise<ClientQuote[]> => {
@@ -316,12 +326,15 @@ export const findItemSnapshotsForQuote = async (
 export const findItemTotals = async (
   quoteId: string,
   exec: DbExecutor = db,
-): Promise<Array<{ quantity: number; unitPrice: number; discount: number }>> => {
+): Promise<
+  Array<{ quantity: number; unitPrice: number; discount: number; durationMonths: number }>
+> => {
   const rows = await exec
     .select({
       quantity: quoteItems.quantity,
       unitPrice: quoteItems.unitPrice,
       discount: quoteItems.discount,
+      durationMonths: quoteItems.durationMonths,
     })
     .from(quoteItems)
     .where(eq(quoteItems.quoteId, quoteId));
@@ -329,6 +342,7 @@ export const findItemTotals = async (
     quantity: parseDbNumber(row.quantity, 0),
     unitPrice: parseDbNumber(row.unitPrice, 0),
     discount: parseDbNumber(row.discount, 0),
+    durationMonths: row.durationMonths ?? 1,
   }));
 };
 
@@ -488,6 +502,8 @@ export type NewClientQuoteItem = {
   supplierQuoteSupplierName: string | null;
   supplierQuoteUnitPrice: number | null;
   unitType: UnitType;
+  durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 export const insertItems = async (
@@ -515,6 +531,14 @@ export const insertItems = async (
         supplierQuoteSupplierName: item.supplierQuoteSupplierName,
         supplierQuoteUnitPrice: numericForDb(item.supplierQuoteUnitPrice),
         unitType: item.unitType,
+        // Final guard: a "unit"-measured line can't carry a duration. Covers POST/PUT (already
+        // coerced in the route) and version-restore (which rebuilds items straight from a snapshot,
+        // bypassing route normalization).
+        ...coerceUnitLineDuration(
+          isUnitMeasure(item.unitType),
+          item.durationMonths ?? 1,
+          item.durationUnit ?? 'months',
+        ),
       })),
     )
     .returning();

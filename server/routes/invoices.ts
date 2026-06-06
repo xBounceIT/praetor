@@ -9,6 +9,11 @@ import {
   getForeignKeyViolation,
   getUniqueViolation,
 } from '../utils/db-errors.ts';
+import {
+  coerceUnitLineDuration,
+  type DurationUnit,
+  isUnitMeasure,
+} from '../utils/duration-unit.ts';
 import { computeInvoiceTotals, roundCurrency } from '../utils/invoice-math.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -16,6 +21,8 @@ import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
   optionalDateString,
+  optionalDurationMonths,
+  optionalDurationUnit,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   parseDateString,
@@ -52,6 +59,8 @@ const invoiceItemSchema = {
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
     taxRate: { type: 'number' },
+    durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years'] },
   },
   required: [
     'id',
@@ -111,6 +120,8 @@ const invoiceItemBodySchema = {
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
     taxRate: { type: 'number' },
+    durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years'] },
   },
   required: ['description', 'unitOfMeasure', 'quantity', 'unitPrice'],
 } as const;
@@ -156,6 +167,8 @@ type NormalizedInvoiceItemInput = {
   unitPrice: number;
   discount: number;
   taxRate: number;
+  durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 const validateAndNormalizeItems = (
@@ -231,14 +244,40 @@ const validateAndNormalizeItems = (
       return null;
     }
 
+    const durationMonthsResult = optionalDurationMonths(
+      item.durationMonths,
+      `items[${i}].durationMonths`,
+    );
+    if (!durationMonthsResult.ok) {
+      badRequest(reply, durationMonthsResult.message);
+      return null;
+    }
+
+    const durationUnitResult = optionalDurationUnit(item.durationUnit, `items[${i}].durationUnit`);
+    if (!durationUnitResult.ok) {
+      badRequest(reply, durationUnitResult.message);
+      return null;
+    }
+
+    const unitOfMeasure = unitOfMeasureResult.value as 'unit' | 'hours';
+    // A "unit"-measured line can't run for a period, so its duration is forced to a single month —
+    // applied before computeInvoiceTotals below so the (server-authoritative) totals stay correct.
+    const { durationMonths, durationUnit } = coerceUnitLineDuration(
+      isUnitMeasure(unitOfMeasure),
+      durationMonthsResult.value ?? 1,
+      durationUnitResult.value ?? 'months',
+    );
+
     normalizedItems.push({
       productId: productIdResult.value || null,
       description: descriptionResult.value,
-      unitOfMeasure: unitOfMeasureResult.value as 'unit' | 'hours',
+      unitOfMeasure,
       quantity: roundCurrency(quantityResult.value),
       unitPrice: roundCurrency(unitPriceResult.value),
       discount: roundCurrency(discountResult.value || 0),
       taxRate: roundCurrency(taxRateResult.value || 0),
+      durationMonths,
+      durationUnit,
     });
   }
 
@@ -255,6 +294,8 @@ const buildItemsForInsert = (items: NormalizedInvoiceItemInput[]): invoicesRepo.
     unitPrice: item.unitPrice,
     discount: item.discount,
     taxRate: item.taxRate,
+    durationMonths: item.durationMonths,
+    durationUnit: item.durationUnit,
   }));
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {

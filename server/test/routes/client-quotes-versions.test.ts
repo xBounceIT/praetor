@@ -48,9 +48,12 @@ const cqUpdateMock = mock();
 const cqRenameMock = mock();
 const cqRestoreSnapshotQuoteMock = mock();
 const cqReplaceItemsMock = mock();
+const cqCreateMock = mock();
+const cqInsertItemsMock = mock();
 
 const clientsExistsByIdMock = mock();
 const productsGetSnapshotsMock = mock();
+const sqGetQuoteItemSnapshotsMock = mock();
 
 const qvListForQuoteMock = mock();
 const qvFindByIdMock = mock();
@@ -97,6 +100,8 @@ beforeAll(async () => {
     rename: cqRenameMock,
     restoreSnapshotQuote: cqRestoreSnapshotQuoteMock,
     replaceItems: cqReplaceItemsMock,
+    create: cqCreateMock,
+    insertItems: cqInsertItemsMock,
   }));
   mock.module('../../repositories/productsRepo.ts', () => ({
     ...productsRepoSnap,
@@ -111,6 +116,7 @@ beforeAll(async () => {
   }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
+    getQuoteItemSnapshots: sqGetQuoteItemSnapshotsMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
@@ -186,6 +192,8 @@ const SAMPLE_ITEM = {
   discount: 0,
   note: null,
   unitType: 'hours' as const,
+  durationMonths: 1,
+  durationUnit: 'months' as const,
 };
 
 const SAMPLE_SNAPSHOT = {
@@ -222,8 +230,11 @@ const allMocks = [
   cqRenameMock,
   cqRestoreSnapshotQuoteMock,
   cqReplaceItemsMock,
+  cqCreateMock,
+  cqInsertItemsMock,
   clientsExistsByIdMock,
   productsGetSnapshotsMock,
+  sqGetQuoteItemSnapshotsMock,
   qvListForQuoteMock,
   qvFindByIdMock,
   qvInsertMock,
@@ -250,6 +261,8 @@ beforeEach(async () => {
   cqFindItemsForQuoteMock.mockResolvedValue([SAMPLE_ITEM]);
   cqFindIdConflictMock.mockResolvedValue(false);
   cqFindAnyLinkedSaleMock.mockResolvedValue(null);
+  // Product-only items resolve no supplier snapshots; default to an empty map.
+  sqGetQuoteItemSnapshotsMock.mockResolvedValue(new Map());
 
   testApp = await buildRouteTestApp(routePlugin, '/api/sales/client-quotes');
 });
@@ -611,5 +624,153 @@ describe('PUT /api/sales/client-quotes/:id snapshots pre-update state', () => {
     // PK rename goes through the dedicated repo call (issue #621), not the generic update().
     expect(cqRenameMock).toHaveBeenCalledWith('q-1', 'q-1-renamed', TX_SENTINEL);
     expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+});
+
+// Duration column (issue #757): the route owns its own validation (whole-number / positive /
+// default-to-1) and feeds durationMonths into the persisted line items. (Offers, orders, and
+// invoices validate/coerce duration the same way; invoices additionally fold it into their
+// server-authoritative totals.) Exercise the quote variant here.
+describe('POST /api/sales/client-quotes - duration handling (issue #757)', () => {
+  const createBody = (itemOverrides: Record<string, unknown> = {}) => ({
+    id: 'q-new',
+    clientId: 'c1',
+    clientName: 'Client',
+    expirationDate: '2026-12-31',
+    items: [
+      {
+        productId: 'prod-1',
+        productName: 'Service',
+        quantity: 2,
+        unitPrice: 10,
+        productCost: 5,
+        ...itemOverrides,
+      },
+    ],
+  });
+
+  const setupCreateMocks = () => {
+    productsGetSnapshotsMock.mockResolvedValue(
+      new Map([['prod-1', { productCost: 5, productMolPercentage: null }]]),
+    );
+    cqCreateMock.mockResolvedValue(SAMPLE_QUOTE);
+    cqInsertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+  };
+
+  test('201 persists a multi-month duration: it reaches insertItems unchanged', async () => {
+    setupCreateMocks();
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes',
+      headers: authHeader(),
+      payload: createBody({ durationMonths: 12, durationUnit: 'years' }),
+    });
+
+    expect(res.statusCode).toBe(201);
+    const insertedItems = cqInsertItemsMock.mock.calls[0][1];
+    expect(insertedItems).toHaveLength(1);
+    expect(insertedItems[0].durationMonths).toBe(12);
+    expect(insertedItems[0].durationUnit).toBe('years');
+  });
+
+  test('201 forces a "unit"-measured line to a single month (duration is forbidden)', async () => {
+    setupCreateMocks();
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes',
+      headers: authHeader(),
+      payload: createBody({ unitType: 'unit', durationMonths: 12, durationUnit: 'years' }),
+    });
+
+    expect(res.statusCode).toBe(201);
+    const insertedItems = cqInsertItemsMock.mock.calls[0][1];
+    expect(insertedItems[0].unitType).toBe('unit');
+    // Countable "unit" line: the route coerces the 12-year duration down to a single month.
+    expect(insertedItems[0].durationMonths).toBe(1);
+    expect(insertedItems[0].durationUnit).toBe('months');
+  });
+
+  test('201 defaults an omitted durationMonths to 1 (one-off line)', async () => {
+    setupCreateMocks();
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes',
+      headers: authHeader(),
+      payload: createBody(),
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(cqInsertItemsMock.mock.calls[0][1][0].durationMonths).toBe(1);
+    expect(cqInsertItemsMock.mock.calls[0][1][0].durationUnit).toBe('months');
+  });
+
+  test('400 rejects a fractional durationMonths with a whole-months message', async () => {
+    setupCreateMocks();
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes',
+      headers: authHeader(),
+      payload: createBody({ durationMonths: 2.5 }),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain('whole number of months');
+    expect(cqInsertItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('400 rejects a zero or negative durationMonths', async () => {
+    setupCreateMocks();
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes',
+      headers: authHeader(),
+      payload: createBody({ durationMonths: 0 }),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(cqInsertItemsMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore - duration round-trip', () => {
+  test('carries a non-default snapshot durationMonths through to replaceItems (issue #757)', async () => {
+    cqLockCurrentByIdMock.mockResolvedValue({
+      status: 'draft',
+      discount: 0,
+      discountType: 'percentage',
+    });
+    cqFindLinkedOfferIdMock.mockResolvedValue(null);
+    cqFindNonDraftLinkedSaleMock.mockResolvedValue(null);
+    clientsExistsByIdMock.mockResolvedValue(true);
+    productsGetSnapshotsMock.mockResolvedValue(
+      new Map([['p-1', { productCost: 1, productMolPercentage: null }]]),
+    );
+    cqDeleteDraftSalesForQuoteMock.mockResolvedValue(undefined);
+    cqRestoreSnapshotQuoteMock.mockResolvedValue(SAMPLE_QUOTE);
+    cqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+    qvFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION_ROW,
+      snapshot: {
+        schemaVersion: 1,
+        quote: { ...SAMPLE_QUOTE },
+        items: [{ ...SAMPLE_ITEM, durationMonths: 12, durationUnit: 'years' }],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes/q-1/versions/qv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const replacedItems = cqReplaceItemsMock.mock.calls[0][1];
+    expect(replacedItems[0].durationMonths).toBe(12);
+    expect(replacedItems[0].durationUnit).toBe('years');
   });
 });
