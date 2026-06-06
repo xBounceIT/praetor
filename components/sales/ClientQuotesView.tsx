@@ -760,6 +760,15 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     () => new Set(activeProducts.map((p) => p.id)),
     [activeProducts],
   );
+  // All linkable record ids (including disabled products / non-accepted quotes),
+  // so a quick-view link only renders when its target still exists — a stale id
+  // left on a quote line by a hard-deleted record would otherwise dead-end on the
+  // full listing instead of the referenced record.
+  const allProductIds = useMemo(() => new Set(products.map((p) => p.id)), [products]);
+  const allSupplierQuoteIds = useMemo(
+    () => new Set(supplierQuotes.map((q) => q.id)),
+    [supplierQuotes],
+  );
   const today = getLocalDateString();
 
   const acceptedSupplierQuotes = useMemo(
@@ -1589,11 +1598,15 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
                         const linkedSupplierQuoteId = getLinkedSupplierQuoteId(item);
                         const supplierQuoteHref =
-                          canViewSupplierQuotes && linkedSupplierQuoteId
+                          canViewSupplierQuotes &&
+                          linkedSupplierQuoteId &&
+                          allSupplierQuoteIds.has(linkedSupplierQuoteId)
                             ? buildViewDeepLink('sales/supplier-quotes', linkedSupplierQuoteId)
                             : null;
                         const productHref =
-                          canViewInternalListing && item.productId
+                          canViewInternalListing &&
+                          item.productId &&
+                          allProductIds.has(item.productId)
                             ? buildViewDeepLink('catalog/internal-listing', item.productId)
                             : null;
                         const linkedFieldStatus = getLinkedFieldStatus({

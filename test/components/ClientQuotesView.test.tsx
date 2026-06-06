@@ -204,6 +204,56 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
     expect(screen.getAllByRole('link', { name: SUPPLIER_QUOTE_LINK }).length).toBeGreaterThan(0);
   });
 
+  test('hides the product shortcut when the linked product no longer exists', () => {
+    const quote = buildQuote({
+      id: 'Q-STALE-PRODUCT',
+      items: [
+        {
+          id: 'qi-stale-1',
+          quoteId: 'Q-STALE-PRODUCT',
+          productId: 'deleted-product',
+          productName: 'Removed Product',
+          quantity: 1,
+          unitPrice: 80,
+          supplierQuoteId: 'SQ-1',
+          supplierQuoteItemId: 'sqi-1',
+        },
+      ],
+    });
+
+    render(<ClientQuotesView {...baseProps} quotes={[quote]} />);
+    fireEvent.click(screen.getByText('Q-STALE-PRODUCT'));
+
+    // A stale product id (hard-deleted) would dead-end on the full listing, so the
+    // link must be hidden; the still-existing supplier-quote link remains.
+    expect(screen.queryAllByRole('link', { name: PRODUCT_LINK })).toHaveLength(0);
+    expect(screen.getAllByRole('link', { name: SUPPLIER_QUOTE_LINK }).length).toBeGreaterThan(0);
+  });
+
+  test('hides the supplier-quote shortcut when the linked quote no longer exists', () => {
+    const quote = buildQuote({
+      id: 'Q-STALE-SQ',
+      items: [
+        {
+          id: 'qi-stale-2',
+          quoteId: 'Q-STALE-SQ',
+          productId: 'prod-1',
+          productName: 'Solar Panel',
+          quantity: 1,
+          unitPrice: 80,
+          supplierQuoteId: 'deleted-sq',
+          supplierQuoteItemId: 'sqi-x',
+        },
+      ],
+    });
+
+    render(<ClientQuotesView {...baseProps} quotes={[quote]} />);
+    fireEvent.click(screen.getByText('Q-STALE-SQ'));
+
+    expect(screen.queryAllByRole('link', { name: SUPPLIER_QUOTE_LINK })).toHaveLength(0);
+    expect(screen.getAllByRole('link', { name: PRODUCT_LINK }).length).toBeGreaterThan(0);
+  });
+
   test('hides the supplier-quote shortcut when the row has no supplier quote', () => {
     const quote = buildQuote({
       id: 'Q-PRODUCT-ONLY',
