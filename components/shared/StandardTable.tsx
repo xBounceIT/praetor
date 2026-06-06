@@ -634,6 +634,12 @@ const StandardTable = <T extends object>({
   const isServerBacked = viewKey != null;
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
+  // A non-empty `initialFilterState` is a programmatic filter (a quick-view deep
+  // link or a cross-view "view X" navigation). It must win over a persisted saved
+  // view, which would otherwise overwrite the filter once views hydrate after
+  // mount — and since the prop identity never changes, the sync effect wouldn't
+  // re-apply it. So when one is present, don't hydrate the saved active view.
+  const hasInitialFilter = initialFilterState != null && Object.keys(initialFilterState).length > 0;
   const [tableViewState, dispatchTableView] = useReducer(
     tableViewReducer,
     null,
@@ -642,7 +648,7 @@ const StandardTable = <T extends object>({
       filterState: initialFilterState ?? {},
       hiddenColIds: new Set<string>(),
       activeViewId:
-        typeof window === 'undefined'
+        typeof window === 'undefined' || hasInitialFilter
           ? null
           : localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.activeView)),
     }),

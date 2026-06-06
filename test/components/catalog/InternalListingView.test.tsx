@@ -56,7 +56,15 @@ const products: Product[] = [
 
 afterEach(() => {
   document.body.style.overflow = '';
+  // StandardTable persists saved views / active view per table title; clear so
+  // state set in one test can't leak into the next.
+  localStorage.clear();
 });
+
+// localStorage keys StandardTable derives from the products table title
+// (`t('crm:internalListing.title')` -> identity mock -> slugified).
+const PRODUCTS_VIEWS_KEY = 'praetor_table_customviews_crm_internallisting_title';
+const PRODUCTS_ACTIVE_VIEW_KEY = 'praetor_table_activeview_crm_internallisting_title';
 
 describe('<InternalListingView /> productFilterId', () => {
   test('shows every product when no filter is supplied', () => {
@@ -92,5 +100,29 @@ describe('<InternalListingView /> productFilterId', () => {
     expect(
       screen.getByRole('button', { name: /table\.filters .*labels\.name/i }),
     ).toBeInTheDocument();
+  });
+
+  test('overrides a persisted saved table view (deep-link filter wins)', () => {
+    // Regression (PR #766 review): a saved active view that filters to a
+    // different product would otherwise overwrite the deep-link filter once
+    // views hydrate after mount. The quick-view filter must win.
+    localStorage.setItem(
+      PRODUCTS_VIEWS_KEY,
+      JSON.stringify([
+        {
+          id: 'saved-1',
+          name: 'Only Solar',
+          hiddenColIds: [],
+          sortState: null,
+          filterState: { productCode: ['SP-100'] },
+        },
+      ]),
+    );
+    localStorage.setItem(PRODUCTS_ACTIVE_VIEW_KEY, 'saved-1');
+
+    render(<InternalListingView {...baseProps} products={products} productFilterId="prod-2" />);
+    // The deep-linked product (WT-200) wins over the saved view's SP-100 filter.
+    expect(screen.getByText('Wind Turbine')).toBeInTheDocument();
+    expect(screen.queryByText('Solar Panel')).not.toBeInTheDocument();
   });
 });
