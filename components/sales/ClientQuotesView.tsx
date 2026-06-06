@@ -29,7 +29,6 @@ import {
   normalizeDateOnlyString,
 } from '../../utils/date';
 import { getLinkedFieldStatus } from '../../utils/fieldStatus';
-import { buildViewDeepLink } from '../../utils/hashCanonicalization';
 import {
   calcProductSalePrice,
   calculatePricingTotals,
@@ -44,6 +43,12 @@ import {
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
+import {
+  buildProductQuickViewHref,
+  buildQuoteIdBySupplierQuoteItemId,
+  buildSupplierQuoteQuickViewHref,
+  resolveLinkedSupplierQuoteId,
+} from '../../utils/quickViewLinks';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -786,15 +791,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     return options;
   }, [acceptedSupplierQuotes]);
 
-  // O(1) lookup from a supplier-quote item id to its parent quote id, so the
-  // quick-view shortcut doesn't scan the options array per row on every render.
-  const quoteIdBySupplierQuoteItemId = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const option of supplierQuoteItemOptions) {
-      map.set(option.id, option.quoteId);
-    }
-    return map;
-  }, [supplierQuoteItemOptions]);
+  // O(1) lookup from a supplier-quote item id to its parent quote id, across all
+  // supplier quotes (not just the accepted/selectable ones), so the quick-view
+  // shortcut resolves even a line referencing a now-unaccepted but extant quote.
+  const quoteIdBySupplierQuoteItemId = useMemo(
+    () => buildQuoteIdBySupplierQuoteItemId(supplierQuotes),
+    [supplierQuotes],
+  );
 
   const getSupplierQuoteItemDisplayValue = (itemId?: string | null) => {
     if (!itemId) return t('sales:clientQuotes.noSupplierQuote');
@@ -804,16 +807,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
   const isLinkedProductMissing = (item: QuoteItem) =>
     Boolean(item.supplierQuoteItemId && (!item.productId || !activeProductIds.has(item.productId)));
-
-  // Parent supplier-quote id for a row, used to deep-link the quick-view shortcut.
-  // Prefers the snapshot stored on the item, falling back to the selected option.
-  const getLinkedSupplierQuoteId = (item: QuoteItem): string | null => {
-    if (item.supplierQuoteId) return item.supplierQuoteId;
-    if (item.supplierQuoteItemId) {
-      return quoteIdBySupplierQuoteItemId.get(item.supplierQuoteItemId) ?? null;
-    }
-    return null;
-  };
 
   const updateProductSelection = (index: number, productId: string) => {
     updateProductRow(index, 'productId', productId);
@@ -1608,19 +1601,16 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         const lineMargin = lineSalePrice - lineCost;
 
                         const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
-                        const linkedSupplierQuoteId = getLinkedSupplierQuoteId(item);
-                        const supplierQuoteHref =
-                          canViewSupplierQuotes &&
-                          linkedSupplierQuoteId &&
-                          allSupplierQuoteIds.has(linkedSupplierQuoteId)
-                            ? buildViewDeepLink('sales/supplier-quotes', linkedSupplierQuoteId)
-                            : null;
-                        const productHref =
-                          canViewInternalListing &&
-                          item.productId &&
-                          allProductIds.has(item.productId)
-                            ? buildViewDeepLink('catalog/internal-listing', item.productId)
-                            : null;
+                        const supplierQuoteHref = buildSupplierQuoteQuickViewHref(
+                          resolveLinkedSupplierQuoteId(item, quoteIdBySupplierQuoteItemId),
+                          allSupplierQuoteIds,
+                          canViewSupplierQuotes,
+                        );
+                        const productHref = buildProductQuickViewHref(
+                          item.productId,
+                          allProductIds,
+                          canViewInternalListing,
+                        );
                         const linkedFieldStatus = getLinkedFieldStatus({
                           isReadOnly,
                           isLinkedToSupplierQuote,
@@ -1907,8 +1897,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                     <QuickViewLinkButton
                                       href={supplierQuoteHref}
                                       label={t('sales:clientQuotes.openSupplierQuoteInNewTab')}
-                                      className="absolute right-1 -top-1 z-10 h-6 w-6 -translate-y-full"
-                                      iconClassName="text-[10px]"
+                                      floating
                                     />
                                   )}
                                   <SelectControl
@@ -1946,8 +1935,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                     <QuickViewLinkButton
                                       href={productHref}
                                       label={t('sales:clientQuotes.openProductInNewTab')}
-                                      className="absolute right-1 -top-1 z-10 h-6 w-6 -translate-y-full"
-                                      iconClassName="text-[10px]"
+                                      floating
                                     />
                                   )}
                                   <ProductSelectOrFallback

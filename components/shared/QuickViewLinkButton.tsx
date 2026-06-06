@@ -9,15 +9,16 @@ import { cn } from '@/lib/utils';
  * in-progress document dialog stays open and untouched. Render it only when the
  * row actually references a record (i.e. the caller resolved a non-null href).
  *
- * `className` / `iconClassName` let each call site restyle/reposition the button
- * (e.g. float it above a field's top-right corner) without forking the markup.
+ * `floating` lifts the button into the field's top-right gutter (above the
+ * control, consuming no inline width) for the dense desktop line-item grids;
+ * omit it for the inline placement used in stacked/mobile layouts. The owning
+ * cell must be `position: relative` and reserve top room (e.g. `pt-5`).
  */
 const QuickViewLinkButton: React.FC<{
   href: string;
   label: string;
-  className?: string;
-  iconClassName?: string;
-}> = ({ href, label, className, iconClassName }) => (
+  floating?: boolean;
+}> = ({ href, label, floating }) => (
   <Tooltip>
     <TooltipTrigger asChild>
       <Button
@@ -26,7 +27,10 @@ const QuickViewLinkButton: React.FC<{
         variant="ghost"
         size="icon-sm"
         aria-label={label}
-        className={cn('shrink-0 text-muted-foreground hover:text-primary', className)}
+        className={cn(
+          'shrink-0 text-muted-foreground hover:text-primary',
+          floating && 'absolute right-1 -top-1 z-10 h-6 w-6 -translate-y-full',
+        )}
       >
         <a
           href={href}
@@ -36,7 +40,10 @@ const QuickViewLinkButton: React.FC<{
           onClick={(e) => e.stopPropagation()}
         >
           <i
-            className={cn('fa-solid fa-up-right-from-square text-[11px]', iconClassName)}
+            className={cn(
+              'fa-solid fa-up-right-from-square',
+              floating ? 'text-[10px]' : 'text-[11px]',
+            )}
             aria-hidden="true"
           ></i>
           <span className="sr-only">{label}</span>

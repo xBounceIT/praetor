@@ -23,7 +23,6 @@ import {
   formatInsertDateTime,
   getLocalDateString,
 } from '../../utils/date';
-import { buildViewDeepLink } from '../../utils/hashCanonicalization';
 import {
   calcProductSalePrice,
   calculatePricingTotals,
@@ -39,6 +38,7 @@ import {
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
+import { buildProductQuickViewHref } from '../../utils/quickViewLinks';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -1074,12 +1074,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         const lineSalePrice = salePrice * quantity * durationMonths;
                         const margin = lineSalePrice - lineCost;
                         const isSupply = product?.type === 'supply';
-                        const productHref =
-                          canViewInternalListing &&
-                          item.productId &&
-                          allProductIds.has(item.productId)
-                            ? buildViewDeepLink('catalog/internal-listing', item.productId)
-                            : null;
+                        const productHref = buildProductQuickViewHref(
+                          item.productId,
+                          allProductIds,
+                          canViewInternalListing,
+                        );
 
                         const handleCostChange = (value: string) => {
                           if (isReadOnly) return;

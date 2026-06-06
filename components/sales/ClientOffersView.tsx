@@ -29,7 +29,6 @@ import {
   normalizeDateOnlyString,
 } from '../../utils/date';
 import { getLinkedFieldStatus } from '../../utils/fieldStatus';
-import { buildViewDeepLink } from '../../utils/hashCanonicalization';
 import {
   calcProductSalePrice,
   calculatePricingTotals,
@@ -43,6 +42,12 @@ import {
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
+import {
+  buildProductQuickViewHref,
+  buildQuoteIdBySupplierQuoteItemId,
+  buildSupplierQuoteQuickViewHref,
+  resolveLinkedSupplierQuoteId,
+} from '../../utils/quickViewLinks';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -242,24 +247,10 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     () => new Set(supplierQuotes.map((q) => q.id)),
     [supplierQuotes],
   );
-  // O(1) lookup from a supplier-quote item id to its parent quote id, so the
-  // quick-view shortcut deep-links without rescanning the quotes per row.
-  const quoteIdBySupplierQuoteItemId = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const quote of supplierQuotes) {
-      for (const item of quote.items) map.set(item.id, quote.id);
-    }
-    return map;
-  }, [supplierQuotes]);
-  // Parent supplier-quote id for a row. Prefers the snapshot stored on the item,
-  // falling back to the linked option's parent quote.
-  const getLinkedSupplierQuoteId = (item: ClientOfferItem): string | null => {
-    if (item.supplierQuoteId) return item.supplierQuoteId;
-    if (item.supplierQuoteItemId) {
-      return quoteIdBySupplierQuoteItemId.get(item.supplierQuoteItemId) ?? null;
-    }
-    return null;
-  };
+  const quoteIdBySupplierQuoteItemId = useMemo(
+    () => buildQuoteIdBySupplierQuoteItemId(supplierQuotes),
+    [supplierQuotes],
+  );
 
   const updateProductSelection = (index: number, productId: string) => {
     updateItem(index, 'productId', productId);
@@ -1296,19 +1287,16 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         const lineMargin = lineSalePrice - lineCost;
 
                         const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
-                        const linkedSupplierQuoteId = getLinkedSupplierQuoteId(item);
-                        const supplierQuoteHref =
-                          canViewSupplierQuotes &&
-                          linkedSupplierQuoteId &&
-                          allSupplierQuoteIds.has(linkedSupplierQuoteId)
-                            ? buildViewDeepLink('sales/supplier-quotes', linkedSupplierQuoteId)
-                            : null;
-                        const productHref =
-                          canViewInternalListing &&
-                          item.productId &&
-                          allProductIds.has(item.productId)
-                            ? buildViewDeepLink('catalog/internal-listing', item.productId)
-                            : null;
+                        const supplierQuoteHref = buildSupplierQuoteQuickViewHref(
+                          resolveLinkedSupplierQuoteId(item, quoteIdBySupplierQuoteItemId),
+                          allSupplierQuoteIds,
+                          canViewSupplierQuotes,
+                        );
+                        const productHref = buildProductQuickViewHref(
+                          item.productId,
+                          allProductIds,
+                          canViewInternalListing,
+                        );
                         const linkedFieldStatus = getLinkedFieldStatus({
                           isReadOnly,
                           isLinkedToSupplierQuote,
@@ -1585,8 +1573,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     <QuickViewLinkButton
                                       href={supplierQuoteHref}
                                       label={t('sales:clientQuotes.openSupplierQuoteInNewTab')}
-                                      className="absolute right-1 -top-1 z-10 h-6 w-6 -translate-y-full"
-                                      iconClassName="text-[10px]"
+                                      floating
                                     />
                                   )}
                                   <SelectControl
@@ -1615,8 +1602,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     <QuickViewLinkButton
                                       href={productHref}
                                       label={t('sales:clientQuotes.openProductInNewTab')}
-                                      className="absolute right-1 -top-1 z-10 h-6 w-6 -translate-y-full"
-                                      iconClassName="text-[10px]"
+                                      floating
                                     />
                                   )}
                                   <ProductSelectOrFallback

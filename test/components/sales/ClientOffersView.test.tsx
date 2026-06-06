@@ -483,6 +483,11 @@ describe('<ClientOffersView /> quick-view shortcuts', () => {
       expect(link).toHaveAttribute('href', '#/catalog/internal-listing?filterId=prod-off');
       expect(link).toHaveAttribute('target', '_blank');
     }
+
+    // The desktop grid floats its shortcut above the field (the `floating` variant);
+    // both selectors render so at least one of each is the absolute-positioned copy.
+    expect(supplierLinks.some((link) => link.className.includes('absolute'))).toBe(true);
+    expect(productLinks.some((link) => link.className.includes('absolute'))).toBe(true);
   });
 
   test('hides each shortcut when the user cannot access the referenced view', () => {

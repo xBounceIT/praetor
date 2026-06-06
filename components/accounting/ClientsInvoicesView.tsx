@@ -8,7 +8,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Client, DurationUnit, Invoice, InvoiceItem, Product } from '../../types';
 import { addDaysToDateOnly, formatDateOnlyForLocale, getLocalDateString } from '../../utils/date';
-import { buildViewDeepLink } from '../../utils/hashCanonicalization';
 import {
   calcProductSalePrice,
   durationValueToMonths,
@@ -17,6 +16,7 @@ import {
   normalizeDurationUnit,
   parseDurationValueToMonths,
 } from '../../utils/numbers';
+import { buildProductQuickViewHref } from '../../utils/quickViewLinks';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import DurationUnitSelector from '../shared/DurationUnitSelector';
@@ -763,10 +763,11 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     const lineTotal = getLineTotal(item);
                     const durationUnit = normalizeDurationUnit(item.durationUnit);
                     const durationValue = getDurationDisplayValue(item);
-                    const productHref =
-                      canViewInternalListing && item.productId && allProductIds.has(item.productId)
-                        ? buildViewDeepLink('catalog/internal-listing', item.productId)
-                        : null;
+                    const productHref = buildProductQuickViewHref(
+                      item.productId,
+                      allProductIds,
+                      canViewInternalListing,
+                    );
 
                     return (
                       <div
