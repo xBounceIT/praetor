@@ -18,11 +18,11 @@ import {
   openSupplierQuoteAttachment,
   saveSupplierQuoteAttachment,
 } from '../utils/fileStorage.ts';
-import { roundCurrency } from '../utils/invoice-math.ts';
 import { createChildLogger } from '../utils/logger.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
+import { deriveSupplierLinePricing } from '../utils/supplier-quote-pricing.ts';
 import {
   badRequest,
   optionalDateString,
@@ -213,17 +213,19 @@ const validateAndNormalizeItems = (
       return null;
     }
     const discountPercent = discountResult.value ?? 0;
-    // Costo unitario is derived server-side so it can never drift from list price × discount,
-    // regardless of what the client computed. Totals downstream read this net unit price.
-    const unitPrice = roundCurrency(listPrice * (1 - discountPercent / 100));
+    // Round both inputs to the persisted DB scale and derive the net cost (Costo unitario) from the
+    // rounded values, so the stored row always satisfies unitPrice = listPrice × (1 − discount/100)
+    // even when a caller submits more than two decimals. Derived server-side so it can never drift
+    // from what the client computed; totals downstream read this net unit price.
+    const pricing = deriveSupplierLinePricing(listPrice, discountPercent);
     result.push({
       id: generatePrefixedId(ITEM_ID_PREFIXES.supplierQuoteItem),
       productId: item.productId || null,
       productName: productNameResult.value,
       quantity: quantityResult.value,
-      listPrice,
-      discountPercent,
-      unitPrice,
+      listPrice: pricing.listPrice,
+      discountPercent: pricing.discountPercent,
+      unitPrice: pricing.unitPrice,
       note: item.note || null,
       unitType: normalizeUnitType(item.unitType),
     });
@@ -900,17 +902,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const snapshotItems: supplierQuotesRepo.NewSupplierQuoteItem[] = version.snapshot.items.map(
         ({ quoteId: _q, ...rest }) => {
-          // Restore the snapshot's stored values verbatim. Snapshots taken before list price /
-          // discount existed lack those keys, so seed list price from the net unit price (no
-          // discount) to keep the restored Costo unitario identical to what was saved.
-          const unitPrice = Number(rest.unitPrice ?? 0);
+          // Snapshots taken before list price / discount existed lack those keys, so seed list price
+          // from the net unit price (no discount) to keep the restored Costo unitario identical to
+          // what was saved. Re-derive through the shared helper — mirroring validateAndNormalizeItems
+          // — so every restored row satisfies unitPrice = listPrice × (1 − discount/100). For current
+          // snapshots (already at scale 2) this is a no-op; for a pre-fix snapshot it heals any drift.
+          const snapshotUnitPrice = Number(rest.unitPrice ?? 0);
+          const pricing = deriveSupplierLinePricing(
+            Number(rest.listPrice ?? snapshotUnitPrice),
+            Number(rest.discountPercent ?? 0),
+          );
           return {
             ...rest,
             id: generatePrefixedId(ITEM_ID_PREFIXES.supplierQuoteItem),
             productId: rest.productId || null,
-            listPrice: Number(rest.listPrice ?? unitPrice),
-            discountPercent: Number(rest.discountPercent ?? 0),
-            unitPrice,
+            listPrice: pricing.listPrice,
+            discountPercent: pricing.discountPercent,
+            unitPrice: pricing.unitPrice,
             unitType: rest.unitType ?? 'unit',
             note: rest.note ?? null,
           };

@@ -396,6 +396,36 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     );
   });
 
+  test('200 rounds list price/discount to DB scale before deriving net cost (no formula drift)', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    // listPrice 10.005 would persist as 10.01 in NUMERIC(_, 2); deriving the net cost from the raw
+    // 10.005 (→ 9.00) would leave the stored row violating unitPrice = listPrice × (1 − discount/100).
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [{ productName: 'Service', quantity: 1, listPrice: 10.005, discountPercent: 10 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const itemsArg = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    const item = itemsArg[0] as { listPrice: number; discountPercent: number; unitPrice: number };
+    // Inputs are rounded to the persisted scale, and the net cost is derived from those rounded
+    // values: 10.01 × (1 − 10/100) = 9.009 → 9.01.
+    expect(item).toEqual(
+      expect.objectContaining({ listPrice: 10.01, discountPercent: 10, unitPrice: 9.01 }),
+    );
+    // The persisted row must satisfy the pricing formula at DB scale.
+    const expectedNet = Math.round(item.listPrice * (1 - item.discountPercent / 100) * 100) / 100;
+    expect(item.unitPrice).toBe(expectedNet);
+  });
+
   test('200 falls back to legacy unitPrice as list price when no list price is sent', async () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
