@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import type { View } from '../../types';
-import { canonicalizeLegacyHash, resolveHashChange } from '../../utils/hashCanonicalization';
+import {
+  buildViewDeepLink,
+  canonicalizeLegacyHash,
+  parseViewHash,
+  resolveHashChange,
+} from '../../utils/hashCanonicalization';
 
 describe('canonicalizeLegacyHash', () => {
   test('maps each legacy alias to its current view', () => {
@@ -45,6 +50,68 @@ describe('canonicalizeLegacyHash', () => {
       const twice = canonicalizeLegacyHash(once);
       expect(twice).toBe(once);
     }
+  });
+});
+
+describe('parseViewHash', () => {
+  test('parses a plain view hash with no query', () => {
+    expect(parseViewHash('#/sales/supplier-quotes')).toEqual({
+      path: 'sales/supplier-quotes',
+      filterId: null,
+    });
+  });
+
+  test('extracts the filterId deep-link param', () => {
+    expect(parseViewHash('#/sales/supplier-quotes?filterId=SQ-001')).toEqual({
+      path: 'sales/supplier-quotes',
+      filterId: 'SQ-001',
+    });
+  });
+
+  test('canonicalizes legacy aliases while reading the param', () => {
+    expect(parseViewHash('#/suppliers/quotes?filterId=SQ-7')).toEqual({
+      path: 'sales/supplier-quotes',
+      filterId: 'SQ-7',
+    });
+  });
+
+  test('decodes percent-encoded filter ids', () => {
+    expect(parseViewHash('#/catalog/internal-listing?filterId=a%2Fb%20c')).toEqual({
+      path: 'catalog/internal-listing',
+      filterId: 'a/b c',
+    });
+  });
+
+  test('ignores unrelated query params and treats an empty filterId as null', () => {
+    expect(parseViewHash('#/catalog/internal-listing?foo=bar')).toEqual({
+      path: 'catalog/internal-listing',
+      filterId: null,
+    });
+    expect(parseViewHash('#/catalog/internal-listing?filterId=')).toEqual({
+      path: 'catalog/internal-listing',
+      filterId: null,
+    });
+  });
+});
+
+describe('buildViewDeepLink', () => {
+  test('builds a plain hash href without a filter', () => {
+    expect(buildViewDeepLink('catalog/internal-listing')).toBe('#/catalog/internal-listing');
+    expect(buildViewDeepLink('catalog/internal-listing', null)).toBe('#/catalog/internal-listing');
+  });
+
+  test('appends and encodes the filterId param', () => {
+    expect(buildViewDeepLink('sales/supplier-quotes', 'SQ-001')).toBe(
+      '#/sales/supplier-quotes?filterId=SQ-001',
+    );
+    expect(buildViewDeepLink('catalog/internal-listing', 'a/b c')).toBe(
+      '#/catalog/internal-listing?filterId=a%2Fb+c',
+    );
+  });
+
+  test('round-trips through parseViewHash', () => {
+    const href = buildViewDeepLink('sales/supplier-quotes', 'SQ-42');
+    expect(parseViewHash(href)).toEqual({ path: 'sales/supplier-quotes', filterId: 'SQ-42' });
   });
 });
 
@@ -163,6 +230,31 @@ describe('resolveHashChange', () => {
     expect(
       resolveHashChange({
         rawHash: 'unknown/route',
+        activeView: 'timesheets/tracker',
+        validViews,
+        hasUser: true,
+      }),
+    ).toEqual({ kind: 'set-view', view: '404' });
+  });
+
+  test('a quick-view deep-link hash resolves to its view once the query is parsed out', () => {
+    // Regression: the live hashchange handler parses the query (parseViewHash)
+    // before resolving, so pressing Back onto `#/<view>?filterId=...` maps to the
+    // view instead of 404. Without the strip, the raw query-bearing hash 404s.
+    const parsedPath = parseViewHash('#/sales/supplier-quotes?filterId=SQ-1').path;
+    expect(
+      resolveHashChange({
+        rawHash: parsedPath,
+        activeView: 'timesheets/tracker',
+        validViews,
+        hasUser: true,
+      }),
+    ).toEqual({ kind: 'set-view', view: 'sales/supplier-quotes' });
+
+    // The pre-fix behavior (raw hash, query intact) would route to 404.
+    expect(
+      resolveHashChange({
+        rawHash: 'sales/supplier-quotes?filterId=SQ-1',
         activeView: 'timesheets/tracker',
         validViews,
         hasUser: true,

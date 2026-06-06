@@ -28,6 +28,7 @@ import {
   normalizeDateOnlyString,
 } from '../../utils/date';
 import { getLinkedFieldStatus } from '../../utils/fieldStatus';
+import { buildViewDeepLink } from '../../utils/hashCanonicalization';
 import {
   calcProductSalePrice,
   calculatePricingTotals,
@@ -78,6 +79,11 @@ export interface ClientQuotesViewProps {
   onViewOffers?: (quoteId: string) => void;
   currency: string;
   offers?: ClientOffer[];
+  // Whether the current user can open the quick-view targets. The destination
+  // views are guarded by their own permissions, so a quick link to a view the
+  // user can't access would dead-end on a 404 — gate (hide) the link instead.
+  canViewSupplierQuotes?: boolean;
+  canViewInternalListing?: boolean;
 }
 
 const EMPTY_OFFERS: ClientOffer[] = [];
@@ -108,6 +114,36 @@ const quoteToFormData = (quote: Quote): Partial<Quote> => ({
   notes: quote.notes || '',
 });
 
+// Per-line quick-view shortcut: opens the referenced supplier quote / product on
+// its own pre-filtered page in a new browser tab, so the in-progress quote dialog
+// stays open and untouched. Rendered only when the row actually references a record.
+const QuickViewLinkButton: React.FC<{ href: string; label: string }> = ({ href, label }) => (
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Button
+        asChild
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label={label}
+        className="shrink-0 text-muted-foreground hover:text-primary"
+      >
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={label}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <i className="fa-solid fa-up-right-from-square text-[11px]" aria-hidden="true"></i>
+          <span className="sr-only">{label}</span>
+        </a>
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent side="top">{label}</TooltipContent>
+  </Tooltip>
+);
+
 const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   quotes,
   clients,
@@ -126,6 +162,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   currency,
   // biome-ignore lint/correctness/noUnusedFunctionParameters: part of public API
   offers = EMPTY_OFFERS,
+  canViewSupplierQuotes = true,
+  canViewInternalListing = true,
 }) => {
   const { t, i18n } = useTranslation(['sales', 'crm', 'common', 'form']);
 
@@ -722,6 +760,15 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     () => new Set(activeProducts.map((p) => p.id)),
     [activeProducts],
   );
+  // All linkable record ids (including disabled products / non-accepted quotes),
+  // so a quick-view link only renders when its target still exists — a stale id
+  // left on a quote line by a hard-deleted record would otherwise dead-end on the
+  // full listing instead of the referenced record.
+  const allProductIds = useMemo(() => new Set(products.map((p) => p.id)), [products]);
+  const allSupplierQuoteIds = useMemo(
+    () => new Set(supplierQuotes.map((q) => q.id)),
+    [supplierQuotes],
+  );
   const today = getLocalDateString();
 
   const acceptedSupplierQuotes = useMemo(
@@ -758,6 +805,16 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     return options;
   }, [acceptedSupplierQuotes]);
 
+  // O(1) lookup from a supplier-quote item id to its parent quote id, so the
+  // quick-view shortcut doesn't scan the options array per row on every render.
+  const quoteIdBySupplierQuoteItemId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const option of supplierQuoteItemOptions) {
+      map.set(option.id, option.quoteId);
+    }
+    return map;
+  }, [supplierQuoteItemOptions]);
+
   const getSupplierQuoteItemDisplayValue = (itemId?: string | null) => {
     if (!itemId) return t('sales:clientQuotes.noSupplierQuote');
     const option = supplierQuoteItemOptions.find((o) => o.id === itemId);
@@ -766,6 +823,16 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
   const isLinkedProductMissing = (item: QuoteItem) =>
     Boolean(item.supplierQuoteItemId && (!item.productId || !activeProductIds.has(item.productId)));
+
+  // Parent supplier-quote id for a row, used to deep-link the quick-view shortcut.
+  // Prefers the snapshot stored on the item, falling back to the selected option.
+  const getLinkedSupplierQuoteId = (item: QuoteItem): string | null => {
+    if (item.supplierQuoteId) return item.supplierQuoteId;
+    if (item.supplierQuoteItemId) {
+      return quoteIdBySupplierQuoteItemId.get(item.supplierQuoteItemId) ?? null;
+    }
+    return null;
+  };
 
   const updateProductSelection = (index: number, productId: string) => {
     updateProductRow(index, 'productId', productId);
@@ -1529,6 +1596,19 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         const lineMargin = lineSalePrice - lineCost;
 
                         const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
+                        const linkedSupplierQuoteId = getLinkedSupplierQuoteId(item);
+                        const supplierQuoteHref =
+                          canViewSupplierQuotes &&
+                          linkedSupplierQuoteId &&
+                          allSupplierQuoteIds.has(linkedSupplierQuoteId)
+                            ? buildViewDeepLink('sales/supplier-quotes', linkedSupplierQuoteId)
+                            : null;
+                        const productHref =
+                          canViewInternalListing &&
+                          item.productId &&
+                          allProductIds.has(item.productId)
+                            ? buildViewDeepLink('catalog/internal-listing', item.productId)
+                            : null;
                         const linkedFieldStatus = getLinkedFieldStatus({
                           isReadOnly,
                           isLinkedToSupplierQuote,
@@ -1566,35 +1646,43 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                       statusLabel={statusLabel}
                                     />
                                   </div>
-                                  <SelectControl
-                                    options={[
-                                      {
-                                        id: 'none',
-                                        name: t('sales:clientQuotes.noSupplierQuote'),
-                                      },
-                                      ...supplierQuoteItemOptions.map((o) => ({
-                                        id: o.id,
-                                        name: o.name,
-                                      })),
-                                    ]}
-                                    value={item.supplierQuoteItemId || 'none'}
-                                    onChange={(val) =>
-                                      updateProductRow(
-                                        index,
-                                        'supplierQuoteItemId',
-                                        val === 'none' ? '' : (val as string),
-                                      )
-                                    }
-                                    placeholder={t('sales:clientQuotes.selectSupplierQuote')}
-                                    displayValue={getSupplierQuoteItemDisplayValue(
-                                      item.supplierQuoteItemId,
+                                  <div className="flex items-center gap-1">
+                                    <SelectControl
+                                      options={[
+                                        {
+                                          id: 'none',
+                                          name: t('sales:clientQuotes.noSupplierQuote'),
+                                        },
+                                        ...supplierQuoteItemOptions.map((o) => ({
+                                          id: o.id,
+                                          name: o.name,
+                                        })),
+                                      ]}
+                                      value={item.supplierQuoteItemId || 'none'}
+                                      onChange={(val) =>
+                                        updateProductRow(
+                                          index,
+                                          'supplierQuoteItemId',
+                                          val === 'none' ? '' : (val as string),
+                                        )
+                                      }
+                                      placeholder={t('sales:clientQuotes.selectSupplierQuote')}
+                                      displayValue={getSupplierQuoteItemDisplayValue(
+                                        item.supplierQuoteItemId,
+                                      )}
+                                      displayValueIsPlaceholder={!item.supplierQuoteItemId}
+                                      searchable={true}
+                                      disabled={isReadOnly}
+                                      className="min-w-0 flex-1"
+                                      buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
+                                    />
+                                    {supplierQuoteHref && (
+                                      <QuickViewLinkButton
+                                        href={supplierQuoteHref}
+                                        label={t('sales:clientQuotes.openSupplierQuoteInNewTab')}
+                                      />
                                     )}
-                                    displayValueIsPlaceholder={!item.supplierQuoteItemId}
-                                    searchable={true}
-                                    disabled={isReadOnly}
-                                    className="min-w-0"
-                                    buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
-                                  />
+                                  </div>
                                 </div>
                                 <div className="min-w-0">
                                   <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
@@ -1608,20 +1696,28 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                       statusLabel={statusLabel}
                                     />
                                   </div>
-                                  <ProductSelectOrFallback
-                                    item={item}
-                                    index={index}
-                                    options={activeProductOptions}
-                                    isProductMissing={isLinkedProductMissing(item)}
-                                    isReadOnly={isReadOnly}
-                                    ariaLabel={t('sales:clientQuotes.selectProduct', {
-                                      defaultValue: 'Select product',
-                                    })}
-                                    placeholder={t('sales:clientQuotes.selectProduct')}
-                                    onProductChange={updateProductSelection}
-                                    className="min-w-0"
-                                    buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
-                                  />
+                                  <div className="flex items-center gap-1">
+                                    <ProductSelectOrFallback
+                                      item={item}
+                                      index={index}
+                                      options={activeProductOptions}
+                                      isProductMissing={isLinkedProductMissing(item)}
+                                      isReadOnly={isReadOnly}
+                                      ariaLabel={t('sales:clientQuotes.selectProduct', {
+                                        defaultValue: 'Select product',
+                                      })}
+                                      placeholder={t('sales:clientQuotes.selectProduct')}
+                                      onProductChange={updateProductSelection}
+                                      className="min-w-0 flex-1"
+                                      buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
+                                    />
+                                    {productHref && (
+                                      <QuickViewLinkButton
+                                        href={productHref}
+                                        label={t('sales:clientQuotes.openProductInNewTab')}
+                                      />
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                               <Button
@@ -1756,7 +1852,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             </div>
                             <div className="hidden lg:flex gap-2 items-center">
                               <div className="flex-1 min-w-0 grid grid-cols-13 gap-2 items-center">
-                                <div className="col-span-3 min-w-0">
+                                <div className="col-span-3 min-w-0 flex items-center gap-1">
                                   <SelectControl
                                     options={[
                                       {
@@ -1783,11 +1879,17 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                     displayValueIsPlaceholder={!item.supplierQuoteItemId}
                                     searchable={true}
                                     disabled={isReadOnly}
-                                    className="min-w-0"
+                                    className="min-w-0 flex-1"
                                     buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
                                   />
+                                  {supplierQuoteHref && (
+                                    <QuickViewLinkButton
+                                      href={supplierQuoteHref}
+                                      label={t('sales:clientQuotes.openSupplierQuoteInNewTab')}
+                                    />
+                                  )}
                                 </div>
-                                <div className="col-span-3 min-w-0">
+                                <div className="col-span-3 min-w-0 flex items-center gap-1">
                                   <ProductSelectOrFallback
                                     item={item}
                                     index={index}
@@ -1799,9 +1901,15 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                     })}
                                     placeholder={t('sales:clientQuotes.selectProduct')}
                                     onProductChange={updateProductSelection}
-                                    className="min-w-0"
+                                    className="min-w-0 flex-1"
                                     buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
                                   />
+                                  {productHref && (
+                                    <QuickViewLinkButton
+                                      href={productHref}
+                                      label={t('sales:clientQuotes.openProductInNewTab')}
+                                    />
+                                  )}
                                 </div>
                                 <div className="col-span-2">
                                   <div className="flex items-center gap-1">

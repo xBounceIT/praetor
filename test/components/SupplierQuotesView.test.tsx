@@ -115,6 +115,26 @@ describe('<SupplierQuotesView /> read-only gating', () => {
   });
 });
 
+describe('<SupplierQuotesView /> deep-link filter', () => {
+  test('pre-filters the table to the linked quote via the visible Codice column', () => {
+    render(<SupplierQuotesView {...baseProps} quoteFilterId="SQ-SENT" />);
+
+    // Only the linked quote is shown; the filter targets the visible id column
+    // so the native column-filter funnel is rendered and stays clearable.
+    expect(screen.getByText('SQ-SENT')).toBeInTheDocument();
+    expect(screen.queryByText('SQ-DRAFT')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /table\.filters .*supplierQuotes\.quoteCode/i }),
+    ).toBeInTheDocument();
+  });
+
+  test('shows every quote when there is no filter', () => {
+    render(<SupplierQuotesView {...baseProps} />);
+    expect(screen.getByText('SQ-DRAFT')).toBeInTheDocument();
+    expect(screen.getByText('SQ-SENT')).toBeInTheDocument();
+  });
+});
+
 describe('<SupplierQuotesView /> optional customer association (issue #759)', () => {
   test('renders the Customer field in the add-quote dialog', () => {
     render(<SupplierQuotesView {...baseProps} />);
