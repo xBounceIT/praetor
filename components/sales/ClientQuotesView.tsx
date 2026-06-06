@@ -79,6 +79,11 @@ export interface ClientQuotesViewProps {
   onViewOffers?: (quoteId: string) => void;
   currency: string;
   offers?: ClientOffer[];
+  // Whether the current user can open the quick-view targets. The destination
+  // views are guarded by their own permissions, so a quick link to a view the
+  // user can't access would dead-end on a 404 — gate (hide) the link instead.
+  canViewSupplierQuotes?: boolean;
+  canViewInternalListing?: boolean;
 }
 
 const EMPTY_OFFERS: ClientOffer[] = [];
@@ -157,6 +162,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   currency,
   // biome-ignore lint/correctness/noUnusedFunctionParameters: part of public API
   offers = EMPTY_OFFERS,
+  canViewSupplierQuotes = true,
+  canViewInternalListing = true,
 }) => {
   const { t, i18n } = useTranslation(['sales', 'crm', 'common', 'form']);
 
@@ -1581,12 +1588,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
                         const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
                         const linkedSupplierQuoteId = getLinkedSupplierQuoteId(item);
-                        const supplierQuoteHref = linkedSupplierQuoteId
-                          ? buildViewDeepLink('sales/supplier-quotes', linkedSupplierQuoteId)
-                          : null;
-                        const productHref = item.productId
-                          ? buildViewDeepLink('catalog/internal-listing', item.productId)
-                          : null;
+                        const supplierQuoteHref =
+                          canViewSupplierQuotes && linkedSupplierQuoteId
+                            ? buildViewDeepLink('sales/supplier-quotes', linkedSupplierQuoteId)
+                            : null;
+                        const productHref =
+                          canViewInternalListing && item.productId
+                            ? buildViewDeepLink('catalog/internal-listing', item.productId)
+                            : null;
                         const linkedFieldStatus = getLinkedFieldStatus({
                           isReadOnly,
                           isLinkedToSupplierQuote,

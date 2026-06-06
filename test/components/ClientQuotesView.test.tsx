@@ -154,6 +154,56 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
     }
   });
 
+  test('hides the supplier-quote shortcut when the user cannot access that view', () => {
+    const quote = buildQuote({
+      id: 'Q-NO-SQ-PERM',
+      items: [
+        {
+          id: 'qi-perm-1',
+          quoteId: 'Q-NO-SQ-PERM',
+          productId: 'prod-1',
+          productName: 'Solar Panel',
+          quantity: 1,
+          unitPrice: 80,
+          supplierQuoteId: 'SQ-1',
+          supplierQuoteItemId: 'sqi-1',
+        },
+      ],
+    });
+
+    render(<ClientQuotesView {...baseProps} quotes={[quote]} canViewSupplierQuotes={false} />);
+    fireEvent.click(screen.getByText('Q-NO-SQ-PERM'));
+
+    // The supplier-quote view is permission-gated; its dead link must not render,
+    // while the still-accessible product link remains.
+    expect(screen.queryAllByRole('link', { name: SUPPLIER_QUOTE_LINK })).toHaveLength(0);
+    expect(screen.getAllByRole('link', { name: PRODUCT_LINK }).length).toBeGreaterThan(0);
+  });
+
+  test('hides the product shortcut when the user cannot access the listing view', () => {
+    const quote = buildQuote({
+      id: 'Q-NO-PROD-PERM',
+      items: [
+        {
+          id: 'qi-perm-2',
+          quoteId: 'Q-NO-PROD-PERM',
+          productId: 'prod-1',
+          productName: 'Solar Panel',
+          quantity: 1,
+          unitPrice: 80,
+          supplierQuoteId: 'SQ-1',
+          supplierQuoteItemId: 'sqi-1',
+        },
+      ],
+    });
+
+    render(<ClientQuotesView {...baseProps} quotes={[quote]} canViewInternalListing={false} />);
+    fireEvent.click(screen.getByText('Q-NO-PROD-PERM'));
+
+    expect(screen.queryAllByRole('link', { name: PRODUCT_LINK })).toHaveLength(0);
+    expect(screen.getAllByRole('link', { name: SUPPLIER_QUOTE_LINK }).length).toBeGreaterThan(0);
+  });
+
   test('hides the supplier-quote shortcut when the row has no supplier quote', () => {
     const quote = buildQuote({
       id: 'Q-PRODUCT-ONLY',

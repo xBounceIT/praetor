@@ -2742,6 +2742,14 @@ const AppContent: React.FC = () => {
                   quoteIdsWithOffers={quoteIdsWithOffers}
                   quoteOfferStatuses={quoteOfferStatuses}
                   currency={generalSettings.currency}
+                  canViewSupplierQuotes={hasViewAccess(
+                    currentUser.permissions,
+                    'sales/supplier-quotes',
+                  )}
+                  canViewInternalListing={hasViewAccess(
+                    currentUser.permissions,
+                    'catalog/internal-listing',
+                  )}
                   onViewOffers={(quoteId) => {
                     setClientOfferFilterId(null);
                     setClientQuoteFilterId(quoteId);
