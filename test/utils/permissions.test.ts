@@ -52,6 +52,7 @@ describe('PERMISSION_DEFINITIONS / ALL_PERMISSIONS', () => {
     expect(ALL_PERMISSIONS).toContain('projects.rules.update');
     expect(ALL_PERMISSIONS).toContain('projects.rules.delete');
     expect(ALL_PERMISSIONS).toContain('timesheets.tracker_all.delete');
+    expect(ALL_PERMISSIONS).toContain('timesheets.expired_projects.create');
     expect(ALL_PERMISSIONS).toContain('hr.work_units.delete');
     expect(ALL_PERMISSIONS).toContain('hr.work_units_all.delete');
     expect(ALL_PERMISSIONS).toContain('administration.roles.update');
@@ -75,6 +76,13 @@ describe('PERMISSION_DEFINITIONS / ALL_PERMISSIONS', () => {
     expect(ALL_PERMISSIONS).not.toContain('timesheets.ril.create');
     expect(ALL_PERMISSIONS).not.toContain('timesheets.ril.update');
     expect(ALL_PERMISSIONS).not.toContain('timesheets.ril.delete');
+  });
+
+  test('timesheets.expired_projects has only the create override action', () => {
+    expect(ALL_PERMISSIONS).toContain('timesheets.expired_projects.create');
+    expect(ALL_PERMISSIONS).not.toContain('timesheets.expired_projects.view');
+    expect(ALL_PERMISSIONS).not.toContain('timesheets.expired_projects.update');
+    expect(ALL_PERMISSIONS).not.toContain('timesheets.expired_projects.delete');
   });
 });
 
@@ -137,6 +145,7 @@ describe('formatPermissionLabel', () => {
 
   test('replaces underscores with spaces and title-cases each word', () => {
     expect(formatPermissionLabel('administration.user_management')).toBe('User Management');
+    expect(formatPermissionLabel('timesheets.expired_projects')).toBe('Expired Projects');
   });
 
   test('formats _all scope suffix as " (All)"', () => {

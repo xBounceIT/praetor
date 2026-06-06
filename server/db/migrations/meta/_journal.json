@@ -530,15 +530,15 @@
     {
       "idx": 75,
       "version": "7",
-      "when": 1780705408766,
-      "tag": "0075_add_duration_months_to_line_items",
+      "when": 1780691412647,
+      "tag": "0075_grant_expired_project_time_entry_permission",
       "breakpoints": true
     },
     {
       "idx": 76,
       "version": "7",
-      "when": 1780706919478,
-      "tag": "0076_add_duration_unit_to_line_items",
+      "when": 1780761024805,
+      "tag": "0076_add_duration_to_line_items",
       "breakpoints": true
     }
   ]

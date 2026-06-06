@@ -157,16 +157,19 @@ export const listByIds = async (
 export const listNamesByIds = async (
   ids: string[],
   exec: DbExecutor = db,
-): Promise<Map<string, { projectName: string; clientId: string; clientName: string }>> => {
+): Promise<
+  Map<string, { projectName: string; clientId: string; clientName: string; endDate: string | null }>
+> => {
   if (ids.length === 0) return new Map();
   const rows = await executeRows<{
     id: string;
     name: string;
     client_id: string;
     client_name: string;
+    end_date: string | null;
   }>(
     exec,
-    sql`SELECT p.id, p.name, p.client_id, c.name AS client_name
+    sql`SELECT p.id, p.name, p.client_id, c.name AS client_name, p.end_date::text AS end_date
           FROM projects p
           INNER JOIN clients c ON c.id = p.client_id
          WHERE p.id = ANY(${sql.param(ids)}::text[])`,
@@ -174,7 +177,12 @@ export const listNamesByIds = async (
   return new Map(
     rows.map((row) => [
       row.id,
-      { projectName: row.name, clientId: row.client_id, clientName: row.client_name },
+      {
+        projectName: row.name,
+        clientId: row.client_id,
+        clientName: row.client_name,
+        endDate: row.end_date,
+      },
     ]),
   );
 };
@@ -187,15 +195,37 @@ export const findClientId = async (id: string, exec: DbExecutor = db): Promise<s
   return rows[0]?.clientId ?? null;
 };
 
-export const findClientIdAndName = async (
+export const findClientIdAndEndDate = async (
   id: string,
   exec: DbExecutor = db,
-): Promise<{ clientId: string; name: string } | null> => {
+): Promise<{ clientId: string; endDate: string | null } | null> => {
   const rows = await exec
-    .select({ clientId: projects.clientId, name: projects.name })
+    .select({ clientId: projects.clientId, endDate: projects.endDate })
     .from(projects)
     .where(eq(projects.id, id));
   return rows[0] ?? null;
+};
+
+export const findClientIdAndName = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<{ clientId: string; name: string; endDate: string | null } | null> => {
+  const rows = await exec
+    .select({ clientId: projects.clientId, name: projects.name, endDate: projects.endDate })
+    .from(projects)
+    .where(eq(projects.id, id));
+  return rows[0] ?? null;
+};
+
+export const findEndDateById = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<string | null> => {
+  const rows = await exec
+    .select({ endDate: projects.endDate })
+    .from(projects)
+    .where(eq(projects.id, id));
+  return rows[0]?.endDate ?? null;
 };
 
 export const lockClientIdById = async (

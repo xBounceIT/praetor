@@ -287,7 +287,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'Create time entry',
         description:
           'Creates one time entry. Returns 409 when the target user already has an entry ' +
-          'for the same date, project, and task.',
+          'for the same date, project, and task. Returns 403 when the selected project is ' +
+          'expired and the role lacks timesheets.expired_projects.create.',
         body: entryCreateBodySchema,
         response: {
           201: entrySchema,
@@ -384,7 +385,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           'Walks the active recurring task templates assigned to the target user (or the ' +
           'authenticated user if `userId` is omitted) and inserts a placeholder time entry ' +
           'for every matching day in `[fromDate, toDate]` that does not already have an ' +
-          'entry for the same (date, project, task) tuple. Idempotent.',
+          'entry for the same (date, project, task) tuple. Expired projects are skipped ' +
+          'unless the role has timesheets.expired_projects.create. Idempotent.',
         body: recurringGenerateBodySchema,
         response: {
           200: recurringGenerateResponseSchema,

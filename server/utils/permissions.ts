@@ -27,6 +27,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'timesheets.ril', actions: VIEW_ONLY },
   { id: 'timesheets.recurring', actions: CRUD },
   { id: 'timesheets.tracker_all', actions: CRUD, isScope: true },
+  { id: 'timesheets.expired_projects', actions: ['create'] },
 
   // CRM
   { id: 'crm.clients', actions: CRUD },

@@ -30,6 +30,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'timesheets.ril', actions: VIEW_ONLY, module: 'timesheets' },
   { id: 'timesheets.recurring', actions: CRUD, module: 'timesheets' },
   { id: 'timesheets.tracker_all', actions: CRUD, isScope: true, module: 'timesheets' },
+  { id: 'timesheets.expired_projects', actions: ['create'], module: 'timesheets' },
 
   // CRM
   { id: 'crm.clients', actions: CRUD, module: 'crm' },

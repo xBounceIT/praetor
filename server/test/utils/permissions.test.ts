@@ -51,6 +51,7 @@ describe('PERMISSION_DEFINITIONS / ALL_PERMISSIONS', () => {
     expect(ALL_PERMISSIONS).toContain('projects.rules.update');
     expect(ALL_PERMISSIONS).toContain('projects.rules.delete');
     expect(ALL_PERMISSIONS).toContain('timesheets.tracker_all.update');
+    expect(ALL_PERMISSIONS).toContain('timesheets.expired_projects.create');
     expect(ALL_PERMISSIONS).toContain('hr.work_units.delete');
     expect(ALL_PERMISSIONS).toContain('hr.work_units_all.delete');
     expect(ALL_PERMISSIONS).toContain('hr.costs.view');
@@ -73,6 +74,13 @@ describe('PERMISSION_DEFINITIONS / ALL_PERMISSIONS', () => {
     expect(ALL_PERMISSIONS).not.toContain('timesheets.ril.create');
     expect(ALL_PERMISSIONS).not.toContain('timesheets.ril.update');
     expect(ALL_PERMISSIONS).not.toContain('timesheets.ril.delete');
+  });
+
+  test('timesheets.expired_projects has only the create override action', () => {
+    expect(ALL_PERMISSIONS).toContain('timesheets.expired_projects.create');
+    expect(ALL_PERMISSIONS).not.toContain('timesheets.expired_projects.view');
+    expect(ALL_PERMISSIONS).not.toContain('timesheets.expired_projects.update');
+    expect(ALL_PERMISSIONS).not.toContain('timesheets.expired_projects.delete');
   });
 
   test('hr.costs is view+update only — no create/delete on either scope', () => {
