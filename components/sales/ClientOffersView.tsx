@@ -1290,12 +1290,10 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         const supplierQuoteHref = buildSupplierQuoteQuickViewHref(
                           resolveLinkedSupplierQuoteId(item, quoteIdBySupplierQuoteItemId),
                           allSupplierQuoteIds,
-                          canViewSupplierQuotes,
                         );
                         const productHref = buildProductQuickViewHref(
                           item.productId,
                           allProductIds,
-                          canViewInternalListing,
                         );
                         const linkedFieldStatus = getLinkedFieldStatus({
                           isReadOnly,
@@ -1355,10 +1353,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                       className="min-w-0 flex-1"
                                       buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
                                     />
-                                    {supplierQuoteHref && (
+                                    {canViewSupplierQuotes && (
                                       <QuickViewLinkButton
                                         href={supplierQuoteHref}
                                         label={t('sales:clientQuotes.openSupplierQuoteInNewTab')}
+                                        disabledLabel={t(
+                                          'sales:clientQuotes.supplierQuoteShortcutUnavailable',
+                                        )}
                                       />
                                     )}
                                   </div>
@@ -1392,10 +1393,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                       className="min-w-0 flex-1"
                                       buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
                                     />
-                                    {productHref && (
+                                    {canViewInternalListing && (
                                       <QuickViewLinkButton
                                         href={productHref}
                                         label={t('sales:clientQuotes.openProductInNewTab')}
+                                        disabledLabel={t(
+                                          'sales:clientQuotes.productShortcutUnavailable',
+                                        )}
                                       />
                                     )}
                                   </div>
@@ -1569,10 +1573,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                             <div className="hidden lg:flex gap-2 items-center">
                               <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center pt-5">
                                 <div className="relative col-span-3 min-w-0">
-                                  {supplierQuoteHref && (
+                                  {canViewSupplierQuotes && (
                                     <QuickViewLinkButton
                                       href={supplierQuoteHref}
                                       label={t('sales:clientQuotes.openSupplierQuoteInNewTab')}
+                                      disabledLabel={t(
+                                        'sales:clientQuotes.supplierQuoteShortcutUnavailable',
+                                      )}
                                       floating
                                     />
                                   )}
@@ -1598,10 +1605,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                   />
                                 </div>
                                 <div className="relative col-span-3 min-w-0">
-                                  {productHref && (
+                                  {canViewInternalListing && (
                                     <QuickViewLinkButton
                                       href={productHref}
                                       label={t('sales:clientQuotes.openProductInNewTab')}
+                                      disabledLabel={t(
+                                        'sales:clientQuotes.productShortcutUnavailable',
+                                      )}
                                       floating
                                     />
                                   )}

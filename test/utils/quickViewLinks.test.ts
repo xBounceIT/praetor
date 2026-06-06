@@ -49,38 +49,33 @@ describe('resolveLinkedSupplierQuoteId', () => {
 describe('buildSupplierQuoteQuickViewHref', () => {
   const ids = new Set(['SQ-1']);
 
-  test('builds a pre-filtered deep link when allowed and the quote is loaded', () => {
-    expect(buildSupplierQuoteQuickViewHref('SQ-1', ids, true)).toBe(
+  test('builds a pre-filtered deep link when the quote is loaded', () => {
+    expect(buildSupplierQuoteQuickViewHref('SQ-1', ids)).toBe(
       '#/sales/supplier-quotes?filterId=SQ-1',
     );
   });
 
-  test('returns null when the user cannot view supplier quotes', () => {
-    expect(buildSupplierQuoteQuickViewHref('SQ-1', ids, false)).toBeNull();
-  });
-
+  // Permission is the caller's concern (it hides the whole shortcut), so the
+  // builder only guards reference existence — a missing/unloaded quote yields null
+  // and the shortcut renders disabled instead of dead-ending.
   test('returns null for a missing id or a quote no longer loaded', () => {
-    expect(buildSupplierQuoteQuickViewHref(null, ids, true)).toBeNull();
-    expect(buildSupplierQuoteQuickViewHref('SQ-GONE', ids, true)).toBeNull();
+    expect(buildSupplierQuoteQuickViewHref(null, ids)).toBeNull();
+    expect(buildSupplierQuoteQuickViewHref('SQ-GONE', ids)).toBeNull();
   });
 });
 
 describe('buildProductQuickViewHref', () => {
   const ids = new Set(['prod-1']);
 
-  test('builds a pre-filtered deep link when allowed and the product is loaded', () => {
-    expect(buildProductQuickViewHref('prod-1', ids, true)).toBe(
+  test('builds a pre-filtered deep link when the product is loaded', () => {
+    expect(buildProductQuickViewHref('prod-1', ids)).toBe(
       '#/catalog/internal-listing?filterId=prod-1',
     );
   });
 
-  test('returns null without internal-listing access', () => {
-    expect(buildProductQuickViewHref('prod-1', ids, false)).toBeNull();
-  });
-
   test('returns null for an empty/absent or unloaded product id', () => {
-    expect(buildProductQuickViewHref(undefined, ids, true)).toBeNull();
-    expect(buildProductQuickViewHref('', ids, true)).toBeNull();
-    expect(buildProductQuickViewHref('prod-gone', ids, true)).toBeNull();
+    expect(buildProductQuickViewHref(undefined, ids)).toBeNull();
+    expect(buildProductQuickViewHref('', ids)).toBeNull();
+    expect(buildProductQuickViewHref('prod-gone', ids)).toBeNull();
   });
 });

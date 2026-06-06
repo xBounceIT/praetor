@@ -763,11 +763,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     const lineTotal = getLineTotal(item);
                     const durationUnit = normalizeDurationUnit(item.durationUnit);
                     const durationValue = getDurationDisplayValue(item);
-                    const productHref = buildProductQuickViewHref(
-                      item.productId,
-                      allProductIds,
-                      canViewInternalListing,
-                    );
+                    const productHref = buildProductQuickViewHref(item.productId, allProductIds);
 
                     return (
                       <div
@@ -804,10 +800,13 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                                   className="min-w-0 flex-1"
                                   buttonClassName="h-9"
                                 />
-                                {productHref && (
+                                {canViewInternalListing && (
                                   <QuickViewLinkButton
                                     href={productHref}
                                     label={t('sales:clientQuotes.openProductInNewTab')}
+                                    disabledLabel={t(
+                                      'sales:clientQuotes.productShortcutUnavailable',
+                                    )}
                                   />
                                 )}
                               </div>

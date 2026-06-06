@@ -115,6 +115,8 @@
     "selectProduct": "Select product...",
     "openSupplierQuoteInNewTab": "Open supplier quote in a new tab",
     "openProductInNewTab": "Open product in a new tab",
+    "supplierQuoteShortcutUnavailable": "No linked supplier quote to open",
+    "productShortcutUnavailable": "No linked product to open",
     "qty": "Quantity",
     "durationColumn": "Duration",
     "month": "Month",

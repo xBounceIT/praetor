@@ -503,11 +503,40 @@ describe('<ClientOffersView /> quick-view shortcuts', () => {
     );
     fireEvent.click(screen.getByText('O-SHORTCUT'));
 
+    // No access → hidden entirely (no active link and no disabled placeholder).
     expect(
       screen.queryAllByRole('link', { name: 'sales:clientQuotes.openSupplierQuoteInNewTab' }),
     ).toHaveLength(0);
     expect(
       screen.queryAllByRole('link', { name: 'sales:clientQuotes.openProductInNewTab' }),
     ).toHaveLength(0);
+    expect(
+      screen.queryAllByRole('button', {
+        name: 'sales:clientQuotes.supplierQuoteShortcutUnavailable',
+      }),
+    ).toHaveLength(0);
+    expect(
+      screen.queryAllByRole('button', { name: 'sales:clientQuotes.productShortcutUnavailable' }),
+    ).toHaveLength(0);
+  });
+
+  test('keeps the shortcut visible but disabled when the line references nothing', () => {
+    // Base offer line: productId 'p-1' (not in the empty products list) and no
+    // supplier-quote link → both shortcuts render disabled, never as active links.
+    render(<ClientOffersView {...baseProps} offers={[acmeDraft]} />);
+    fireEvent.click(screen.getByText('O-ACME-DRAFT'));
+
+    expect(
+      screen.queryAllByRole('link', { name: 'sales:clientQuotes.openProductInNewTab' }),
+    ).toHaveLength(0);
+    expect(
+      screen.getAllByRole('button', { name: 'sales:clientQuotes.productShortcutUnavailable' })
+        .length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole('button', {
+        name: 'sales:clientQuotes.supplierQuoteShortcutUnavailable',
+      }).length,
+    ).toBeGreaterThan(0);
   });
 });

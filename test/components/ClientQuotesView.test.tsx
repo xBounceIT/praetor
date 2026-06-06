@@ -112,6 +112,10 @@ const baseProps = {
 
 const SUPPLIER_QUOTE_LINK = 'sales:clientQuotes.openSupplierQuoteInNewTab';
 const PRODUCT_LINK = 'sales:clientQuotes.openProductInNewTab';
+// The shortcut is always rendered (so it reserves a stable slot); when there is
+// nothing to open it renders disabled with these tooltips instead of navigating.
+const SUPPLIER_QUOTE_DISABLED = 'sales:clientQuotes.supplierQuoteShortcutUnavailable';
+const PRODUCT_DISABLED = 'sales:clientQuotes.productShortcutUnavailable';
 
 afterEach(() => {
   // Modal locks body scroll while open; reset between tests.
@@ -181,9 +185,11 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
     render(<ClientQuotesView {...baseProps} quotes={[quote]} canViewSupplierQuotes={false} />);
     fireEvent.click(screen.getByText('Q-NO-SQ-PERM'));
 
-    // The supplier-quote view is permission-gated; its dead link must not render,
-    // while the still-accessible product link remains.
+    // The supplier-quote view is permission-gated: the shortcut is hidden entirely
+    // (no link AND no disabled placeholder), while the still-accessible product
+    // shortcut remains active.
     expect(screen.queryAllByRole('link', { name: SUPPLIER_QUOTE_LINK })).toHaveLength(0);
+    expect(screen.queryAllByRole('button', { name: SUPPLIER_QUOTE_DISABLED })).toHaveLength(0);
     expect(screen.getAllByRole('link', { name: PRODUCT_LINK }).length).toBeGreaterThan(0);
   });
 
@@ -207,11 +213,13 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
     render(<ClientQuotesView {...baseProps} quotes={[quote]} canViewInternalListing={false} />);
     fireEvent.click(screen.getByText('Q-NO-PROD-PERM'));
 
+    // No internal-listing access → the product shortcut is hidden entirely.
     expect(screen.queryAllByRole('link', { name: PRODUCT_LINK })).toHaveLength(0);
+    expect(screen.queryAllByRole('button', { name: PRODUCT_DISABLED })).toHaveLength(0);
     expect(screen.getAllByRole('link', { name: SUPPLIER_QUOTE_LINK }).length).toBeGreaterThan(0);
   });
 
-  test('hides the product shortcut when the linked product no longer exists', () => {
+  test('disables (does not hide) the product shortcut when the linked product no longer exists', () => {
     const quote = buildQuote({
       id: 'Q-STALE-PRODUCT',
       items: [
@@ -232,12 +240,14 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
     fireEvent.click(screen.getByText('Q-STALE-PRODUCT'));
 
     // A stale product id (hard-deleted) would dead-end on the full listing, so the
-    // link must be hidden; the still-existing supplier-quote link remains.
+    // shortcut renders disabled (present but non-navigating) rather than as a link;
+    // the still-existing supplier-quote link stays active.
     expect(screen.queryAllByRole('link', { name: PRODUCT_LINK })).toHaveLength(0);
+    expect(screen.getAllByRole('button', { name: PRODUCT_DISABLED }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: SUPPLIER_QUOTE_LINK }).length).toBeGreaterThan(0);
   });
 
-  test('hides the supplier-quote shortcut when the linked quote no longer exists', () => {
+  test('disables the supplier-quote shortcut when the linked quote no longer exists', () => {
     const quote = buildQuote({
       id: 'Q-STALE-SQ',
       items: [
@@ -258,10 +268,13 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
     fireEvent.click(screen.getByText('Q-STALE-SQ'));
 
     expect(screen.queryAllByRole('link', { name: SUPPLIER_QUOTE_LINK })).toHaveLength(0);
+    expect(screen.getAllByRole('button', { name: SUPPLIER_QUOTE_DISABLED }).length).toBeGreaterThan(
+      0,
+    );
     expect(screen.getAllByRole('link', { name: PRODUCT_LINK }).length).toBeGreaterThan(0);
   });
 
-  test('hides the supplier-quote shortcut when the row has no supplier quote', () => {
+  test('disables the supplier-quote shortcut when the row has no supplier quote', () => {
     const quote = buildQuote({
       id: 'Q-PRODUCT-ONLY',
       items: [
@@ -280,10 +293,13 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
     fireEvent.click(screen.getByText('Q-PRODUCT-ONLY'));
 
     expect(screen.queryAllByRole('link', { name: SUPPLIER_QUOTE_LINK })).toHaveLength(0);
+    expect(screen.getAllByRole('button', { name: SUPPLIER_QUOTE_DISABLED }).length).toBeGreaterThan(
+      0,
+    );
     expect(screen.getAllByRole('link', { name: PRODUCT_LINK }).length).toBeGreaterThan(0);
   });
 
-  test('renders no quick-view shortcuts for an unreferenced row', () => {
+  test('renders both shortcuts disabled (not navigating) for an unreferenced row', () => {
     const quote = buildQuote({
       id: 'Q-EMPTY',
       items: [
@@ -301,7 +317,13 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
     render(<ClientQuotesView {...baseProps} quotes={[quote]} />);
     fireEvent.click(screen.getByText('Q-EMPTY'));
 
+    // Nothing to open on either field, but the shortcuts still occupy their slot —
+    // both render as disabled placeholders, neither as an active link.
     expect(screen.queryAllByRole('link', { name: SUPPLIER_QUOTE_LINK })).toHaveLength(0);
     expect(screen.queryAllByRole('link', { name: PRODUCT_LINK })).toHaveLength(0);
+    expect(screen.getAllByRole('button', { name: SUPPLIER_QUOTE_DISABLED }).length).toBeGreaterThan(
+      0,
+    );
+    expect(screen.getAllByRole('button', { name: PRODUCT_DISABLED }).length).toBeGreaterThan(0);
   });
 });

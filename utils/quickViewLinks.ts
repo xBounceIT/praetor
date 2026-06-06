@@ -33,26 +33,25 @@ export const resolveLinkedSupplierQuoteId = (
   return null;
 };
 
-// Deep-link href to a supplier quote's pre-filtered page, or null when the
-// shortcut must not render: the user lacks access, the line references nothing,
-// or the referenced quote is no longer loaded (so the link would dead-end on the
-// full listing instead of the record).
+// Deep-link href to a supplier quote's pre-filtered page, or null when there is
+// nothing to open: the line references no quote, or the referenced quote is no
+// longer loaded (so a link would dead-end on the full listing). View-permission
+// gating is the caller's concern — the shortcut renders disabled rather than
+// navigating, so the caller hides it entirely only when access is missing.
 export const buildSupplierQuoteQuickViewHref = (
   linkedSupplierQuoteId: string | null,
   supplierQuoteIds: ReadonlySet<string>,
-  canView: boolean,
 ): string | null =>
-  canView && linkedSupplierQuoteId && supplierQuoteIds.has(linkedSupplierQuoteId)
+  linkedSupplierQuoteId && supplierQuoteIds.has(linkedSupplierQuoteId)
     ? buildViewDeepLink('sales/supplier-quotes', linkedSupplierQuoteId)
     : null;
 
-// Deep-link href to a product's pre-filtered page, gated/guarded like
+// Deep-link href to a product's pre-filtered page, guarded like
 // buildSupplierQuoteQuickViewHref above.
 export const buildProductQuickViewHref = (
   productId: string | null | undefined,
   productIds: ReadonlySet<string>,
-  canView: boolean,
 ): string | null =>
-  canView && productId && productIds.has(productId)
+  productId && productIds.has(productId)
     ? buildViewDeepLink('catalog/internal-listing', productId)
     : null;

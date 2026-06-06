@@ -247,10 +247,29 @@ describe('<ClientsInvoicesView /> product quick-view shortcut', () => {
     }
   });
 
-  test('hides the product shortcut without internal-listing access', async () => {
+  test('hides the product shortcut entirely without internal-listing access', async () => {
     const dialog = await open({ canViewInternalListing: false });
     expect(
       within(dialog).queryAllByRole('link', { name: 'sales:clientQuotes.openProductInNewTab' }),
     ).toHaveLength(0);
+    expect(
+      within(dialog).queryAllByRole('button', {
+        name: 'sales:clientQuotes.productShortcutUnavailable',
+      }),
+    ).toHaveLength(0);
+  });
+
+  test('keeps the shortcut visible but disabled when the product is not loaded', async () => {
+    // Same invoice line (productId 'product-1') but the product list is empty → the
+    // shortcut has nothing to open and renders disabled rather than as a link.
+    const dialog = await open({ products: [] });
+    expect(
+      within(dialog).queryAllByRole('link', { name: 'sales:clientQuotes.openProductInNewTab' }),
+    ).toHaveLength(0);
+    expect(
+      within(dialog).getAllByRole('button', {
+        name: 'sales:clientQuotes.productShortcutUnavailable',
+      }).length,
+    ).toBeGreaterThan(0);
   });
 });

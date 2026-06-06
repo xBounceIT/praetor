@@ -1077,7 +1077,6 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         const productHref = buildProductQuickViewHref(
                           item.productId,
                           allProductIds,
-                          canViewInternalListing,
                         );
 
                         const handleCostChange = (value: string) => {
@@ -1145,10 +1144,13 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                       className="min-w-0 flex-1"
                                       buttonClassName="h-9"
                                     />
-                                    {productHref && (
+                                    {canViewInternalListing && (
                                       <QuickViewLinkButton
                                         href={productHref}
                                         label={t('sales:clientQuotes.openProductInNewTab')}
+                                        disabledLabel={t(
+                                          'sales:clientQuotes.productShortcutUnavailable',
+                                        )}
                                       />
                                     )}
                                   </div>

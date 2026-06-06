@@ -115,6 +115,8 @@
     "selectProduct": "Seleziona prodotto...",
     "openSupplierQuoteInNewTab": "Apri il preventivo fornitore in una nuova scheda",
     "openProductInNewTab": "Apri il prodotto in una nuova scheda",
+    "supplierQuoteShortcutUnavailable": "Nessun preventivo fornitore collegato da aprire",
+    "productShortcutUnavailable": "Nessun prodotto collegato da aprire",
     "qty": "Quantità",
     "durationColumn": "Durata",
     "month": "Mese",
