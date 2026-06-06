@@ -126,6 +126,51 @@ describe('<SelectControl />', () => {
     expect(popoverContent?.className).toContain('z-[90]');
   });
 
+  test('searchable popover content sizes to fit its options instead of clipping to the trigger width', () => {
+    render(<SelectControl options={options} value="" onChange={() => {}} searchable />);
+
+    fireEvent.click(screen.getByRole('button'));
+
+    const popoverContent = document.querySelector('[data-slot="popover-content"]');
+    // Grows to fit the widest option (no truncated supplier names)...
+    expect(popoverContent?.className).toContain('w-fit');
+    // ...but never narrower than the trigger...
+    expect(popoverContent?.className).toContain(
+      'min-w-[max(12rem,var(--radix-popover-trigger-width))]',
+    );
+    // ...and never wider than the available viewport space (stays on screen).
+    expect(popoverContent?.className).toContain(
+      'max-w-[var(--radix-popover-content-available-width)]',
+    );
+    // The old behaviour hard-pinned the panel to the trigger width, clipping content.
+    expect(popoverContent?.className).not.toContain('w-[var(--radix-popover-trigger-width)]');
+  });
+
+  test('searchable combobox stays non-modal on a plain page so it never locks page scroll', () => {
+    render(<SelectControl options={options} value="" onChange={() => {}} searchable />);
+
+    fireEvent.click(screen.getByRole('button'));
+
+    // A non-modal popover leaves the rest of the page interactive.
+    expect(document.body.style.pointerEvents).not.toBe('none');
+  });
+
+  test('searchable combobox becomes modal inside a dialog so the option list scrolls with the wheel', () => {
+    // Inside a modal dialog, Radix's scroll-lock whitelists only the dialog's own
+    // subtree, so wheel events over this portaled popover are swallowed. Promoting
+    // it to modal gives it its own scroll-lock; Radix signals modality by disabling
+    // outside pointer events.
+    render(
+      <div data-slot="dialog-content">
+        <SelectControl options={options} value="" onChange={() => {}} searchable />
+      </div>,
+    );
+
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(document.body.style.pointerEvents).toBe('none');
+  });
+
   test('multi combobox toggles selected values and renders chips', () => {
     const onChange = mock((_value: string | string[]) => {});
     const { rerender } = render(
