@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Client, DurationUnit, Invoice, InvoiceItem, Product } from '../../types';
 import { addDaysToDateOnly, formatDateOnlyForLocale, getLocalDateString } from '../../utils/date';
+import { buildViewDeepLink } from '../../utils/hashCanonicalization';
 import {
   calcProductSalePrice,
   durationValueToMonths,
@@ -29,6 +30,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
+import QuickViewLinkButton from '../shared/QuickViewLinkButton';
 import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -42,6 +44,7 @@ export interface ClientsInvoicesViewProps {
   onUpdateInvoice: (id: string, updates: Partial<Invoice>) => void;
   onDeleteInvoice: (id: string) => void;
   currency: string;
+  canViewInternalListing?: boolean;
 }
 
 // Italian standard VAT rate, used as the per-line default.
@@ -146,6 +149,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   onUpdateInvoice,
   onDeleteInvoice,
   currency,
+  canViewInternalListing = true,
 }) => {
   const { t } = useTranslation(['accounting', 'sales', 'common']);
   const [invoiceState, dispatchInvoiceState] = useReducer(
@@ -199,6 +203,9 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     () => products.filter((product) => !product.isDisabled),
     [products],
   );
+  // All product ids (incl. archived) so the quick-view shortcut on a line that
+  // references a now-disabled product still deep-links to that record.
+  const allProductIds = useMemo(() => new Set(products.map((p) => p.id)), [products]);
 
   const generateInvoiceId = () => {
     const year = new Date().getFullYear();
@@ -756,6 +763,10 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     const lineTotal = getLineTotal(item);
                     const durationUnit = normalizeDurationUnit(item.durationUnit);
                     const durationValue = getDurationDisplayValue(item);
+                    const productHref =
+                      canViewInternalListing && item.productId && allProductIds.has(item.productId)
+                        ? buildViewDeepLink('catalog/internal-listing', item.productId)
+                        : null;
 
                     return (
                       <div
@@ -768,24 +779,37 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                 {t('common:labels.product')}
                               </FieldLabel>
-                              <SelectControl
-                                options={[
-                                  { id: '', name: t('accounting:clientsInvoices.customItem') },
-                                  ...activeProducts.map((product) => ({
-                                    id: product.id,
-                                    name: product.name,
-                                  })),
-                                ]}
-                                value={item.productId || ''}
-                                onChange={(value) =>
-                                  updateItemRow(index, 'productId', (value as string) || undefined)
-                                }
-                                placeholder={t(
-                                  'accounting:clientsInvoices.selectProductPlaceholder',
+                              <div className="flex items-center gap-1">
+                                <SelectControl
+                                  options={[
+                                    { id: '', name: t('accounting:clientsInvoices.customItem') },
+                                    ...activeProducts.map((product) => ({
+                                      id: product.id,
+                                      name: product.name,
+                                    })),
+                                  ]}
+                                  value={item.productId || ''}
+                                  onChange={(value) =>
+                                    updateItemRow(
+                                      index,
+                                      'productId',
+                                      (value as string) || undefined,
+                                    )
+                                  }
+                                  placeholder={t(
+                                    'accounting:clientsInvoices.selectProductPlaceholder',
+                                  )}
+                                  searchable={true}
+                                  className="min-w-0 flex-1"
+                                  buttonClassName="h-9"
+                                />
+                                {productHref && (
+                                  <QuickViewLinkButton
+                                    href={productHref}
+                                    label={t('sales:clientQuotes.openProductInNewTab')}
+                                  />
                                 )}
-                                searchable={true}
-                                buttonClassName="h-9"
-                              />
+                              </div>
                             </div>
                             <div className="space-y-1 lg:col-span-2">
                               <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">

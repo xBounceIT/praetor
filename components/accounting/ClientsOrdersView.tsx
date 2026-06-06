@@ -23,6 +23,7 @@ import {
   formatInsertDateTime,
   getLocalDateString,
 } from '../../utils/date';
+import { buildViewDeepLink } from '../../utils/hashCanonicalization';
 import {
   calcProductSalePrice,
   calculatePricingTotals,
@@ -51,6 +52,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
+import QuickViewLinkButton from '../shared/QuickViewLinkButton';
 import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -68,6 +70,7 @@ export interface ClientsOrdersViewProps {
   onOrderRestored?: (order: ClientsOrder) => void;
   onViewOffer?: (offerId: string) => void;
   currency: string;
+  canViewInternalListing?: boolean;
   offerFilterId?: string | null;
   orderFilterId?: string | null;
 }
@@ -215,6 +218,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   onOrderRestored,
   onViewOffer,
   currency,
+  canViewInternalListing = true,
   offerFilterId,
   orderFilterId,
 }) => {
@@ -519,6 +523,9 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
 
   const activeClients = useMemo(() => clients.filter((c) => !c.isDisabled), [clients]);
   const activeProducts = useMemo(() => products.filter((p) => !p.isDisabled), [products]);
+  // All product ids (incl. archived) so the quick-view shortcut on a line that
+  // references a now-disabled product still deep-links to that record.
+  const allProductIds = useMemo(() => new Set(products.map((p) => p.id)), [products]);
 
   // A draft order is always editable — including one created from an offer. The order is the
   // live downstream document, so an upstream offer link must not lock it (mirrors the offers
@@ -1067,6 +1074,12 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         const lineSalePrice = salePrice * quantity * durationMonths;
                         const margin = lineSalePrice - lineCost;
                         const isSupply = product?.type === 'supply';
+                        const productHref =
+                          canViewInternalListing &&
+                          item.productId &&
+                          allProductIds.has(item.productId)
+                            ? buildViewDeepLink('catalog/internal-listing', item.productId)
+                            : null;
 
                         const handleCostChange = (value: string) => {
                           if (isReadOnly) return;
@@ -1114,23 +1127,32 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('sales:clientQuotes.productsServices')}
                                   </FieldLabel>
-                                  <SelectControl
-                                    options={activeProducts.map((p) => ({
-                                      id: p.id,
-                                      name: p.name,
-                                    }))}
-                                    value={item.productId}
-                                    onChange={(val) =>
-                                      updateProductRow(index, 'productId', val as string)
-                                    }
-                                    placeholder={t('sales:clientQuotes.selectProduct')}
-                                    searchable={true}
-                                    // Supplier-quote-backed lines have a fixed product (the backend
-                                    // rejects product/quantity changes on supplier-order-backed
-                                    // rows), so lock the selector just like the quantity control.
-                                    disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
-                                    buttonClassName="h-9"
-                                  />
+                                  <div className="flex items-center gap-1">
+                                    <SelectControl
+                                      options={activeProducts.map((p) => ({
+                                        id: p.id,
+                                        name: p.name,
+                                      }))}
+                                      value={item.productId}
+                                      onChange={(val) =>
+                                        updateProductRow(index, 'productId', val as string)
+                                      }
+                                      placeholder={t('sales:clientQuotes.selectProduct')}
+                                      searchable={true}
+                                      // Supplier-quote-backed lines have a fixed product (the backend
+                                      // rejects product/quantity changes on supplier-order-backed
+                                      // rows), so lock the selector just like the quantity control.
+                                      disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+                                      className="min-w-0 flex-1"
+                                      buttonClassName="h-9"
+                                    />
+                                    {productHref && (
+                                      <QuickViewLinkButton
+                                        href={productHref}
+                                        label={t('sales:clientQuotes.openProductInNewTab')}
+                                      />
+                                    )}
+                                  </div>
                                 </div>
                                 <div className="space-y-1 lg:col-span-2 lg:space-y-0">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">

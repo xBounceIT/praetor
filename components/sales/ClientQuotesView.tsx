@@ -7,7 +7,6 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
 import { normalizeQuoteItem } from '../../services/api/normalizers';
 import type {
   Client,
@@ -60,6 +59,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
+import QuickViewLinkButton from '../shared/QuickViewLinkButton';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -120,44 +120,6 @@ const quoteToFormData = (quote: Quote): Partial<Quote> => ({
   expirationDate: quote.expirationDate ? normalizeDateOnlyString(quote.expirationDate) : '',
   notes: quote.notes || '',
 });
-
-// Per-line quick-view shortcut: opens the referenced supplier quote / product on
-// its own pre-filtered page in a new browser tab, so the in-progress quote dialog
-// stays open and untouched. Rendered only when the row actually references a record.
-const QuickViewLinkButton: React.FC<{
-  href: string;
-  label: string;
-  className?: string;
-  iconClassName?: string;
-}> = ({ href, label, className, iconClassName }) => (
-  <Tooltip>
-    <TooltipTrigger asChild>
-      <Button
-        asChild
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label={label}
-        className={cn('shrink-0 text-muted-foreground hover:text-primary', className)}
-      >
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={label}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <i
-            className={cn('fa-solid fa-up-right-from-square text-[11px]', iconClassName)}
-            aria-hidden="true"
-          ></i>
-          <span className="sr-only">{label}</span>
-        </a>
-      </Button>
-    </TooltipTrigger>
-    <TooltipContent side="top">{label}</TooltipContent>
-  </Tooltip>
-);
 
 const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   quotes,

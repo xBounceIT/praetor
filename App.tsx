@@ -2782,6 +2782,14 @@ const AppContent: React.FC = () => {
                     setActiveView('sales/client-quotes');
                   }}
                   currency={generalSettings.currency}
+                  canViewSupplierQuotes={hasViewAccess(
+                    currentUser.permissions,
+                    'sales/supplier-quotes',
+                  )}
+                  canViewInternalListing={hasViewAccess(
+                    currentUser.permissions,
+                    'catalog/internal-listing',
+                  )}
                   quoteFilterId={clientQuoteFilterId}
                   offerFilterId={clientOfferFilterId}
                 />
@@ -2831,6 +2839,10 @@ const AppContent: React.FC = () => {
                     );
                   }}
                   currency={generalSettings.currency}
+                  canViewInternalListing={hasViewAccess(
+                    currentUser.permissions,
+                    'catalog/internal-listing',
+                  )}
                   onViewOffer={(offerId) => {
                     setClientQuoteFilterId(null);
                     setClientOfferFilterId(offerId);
@@ -2854,6 +2866,10 @@ const AppContent: React.FC = () => {
                   onUpdateInvoice={handleUpdateInvoice}
                   onDeleteInvoice={handleDeleteInvoice}
                   currency={generalSettings.currency}
+                  canViewInternalListing={hasViewAccess(
+                    currentUser.permissions,
+                    'catalog/internal-listing',
+                  )}
                 />
               )}
 

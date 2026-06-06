@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, within } from '@testing-library/react';
-import type { Client, Invoice } from '../../../types';
+import type { Client, Invoice, Product } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
 import {
@@ -169,5 +169,88 @@ describe('ClientsInvoicesView modal styling', () => {
     ]);
     // The old months-only parser is gone now that the unit is selectable.
     expectSourceOmitsAll(source, ['parseDurationMonthsInput']);
+  });
+});
+
+describe('<ClientsInvoicesView /> product quick-view shortcut', () => {
+  afterEach(() => {
+    document.body.style.overflow = '';
+  });
+
+  const productsWithLink: Product[] = [
+    {
+      id: 'product-1',
+      name: 'Consulting',
+      productCode: 'C-1',
+      costo: 50,
+      molPercentage: 20,
+      costUnit: 'unit',
+      type: 'supply',
+    },
+  ];
+
+  const invoiceWithProduct: Invoice = {
+    id: 'INV-LINK',
+    clientId: 'client-1',
+    clientName: 'Helios Energy Services',
+    issueDate: '2026-01-01',
+    dueDate: '2026-02-01',
+    status: 'draft',
+    subtotal: 0,
+    taxTotal: 0,
+    total: 0,
+    amountPaid: 0,
+    notes: '',
+    items: [
+      {
+        id: 'item-1',
+        invoiceId: 'INV-LINK',
+        productId: 'product-1',
+        description: 'Consulting',
+        unitOfMeasure: 'unit',
+        quantity: 1,
+        unitPrice: 100,
+        discount: 0,
+        taxRate: 0,
+      },
+    ],
+    createdAt: Date.UTC(2026, 0, 1),
+    updatedAt: Date.UTC(2026, 0, 1),
+  };
+
+  const open = (extraProps: Record<string, unknown> = {}) => {
+    render(
+      <ClientsInvoicesView
+        invoices={[invoiceWithProduct]}
+        clients={clients}
+        products={productsWithLink}
+        onAddInvoice={mock(() => {})}
+        onUpdateInvoice={mock(() => {})}
+        onDeleteInvoice={mock(() => {})}
+        currency="EUR"
+        {...extraProps}
+      />,
+    );
+    fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
+    return screen.findByRole('dialog');
+  };
+
+  test('opens the referenced product on its pre-filtered page', async () => {
+    const dialog = await open();
+    const productLinks = within(dialog).getAllByRole('link', {
+      name: 'sales:clientQuotes.openProductInNewTab',
+    });
+    expect(productLinks.length).toBeGreaterThan(0);
+    for (const link of productLinks) {
+      expect(link).toHaveAttribute('href', '#/catalog/internal-listing?filterId=product-1');
+      expect(link).toHaveAttribute('target', '_blank');
+    }
+  });
+
+  test('hides the product shortcut without internal-listing access', async () => {
+    const dialog = await open({ canViewInternalListing: false });
+    expect(
+      within(dialog).queryAllByRole('link', { name: 'sales:clientQuotes.openProductInNewTab' }),
+    ).toHaveLength(0);
   });
 });

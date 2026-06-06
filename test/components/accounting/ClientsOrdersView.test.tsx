@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import type { Client, ClientsOrder } from '../../../types';
+import type { Client, ClientsOrder, Product } from '../../../types';
 import { render } from '../../helpers/render';
 import {
   expectSourceContainsAll,
@@ -397,5 +397,54 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
     expect(isDisabled(within(dialog).getByRole('button', { name: 'common:buttons.delete' }))).toBe(
       false,
     );
+  });
+});
+
+describe('<ClientsOrdersView /> product quick-view shortcut', () => {
+  const productsWithLink: Product[] = [
+    {
+      id: 'product-1',
+      name: 'Consulting',
+      productCode: 'C-1',
+      costo: 1200,
+      molPercentage: 40,
+      costUnit: 'unit',
+      type: 'supply',
+    },
+  ];
+
+  const openModal = (extraProps: Record<string, unknown> = {}) => {
+    render(
+      <ClientsOrdersView
+        orders={orders}
+        clients={clients}
+        products={productsWithLink}
+        currency="EUR"
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+        {...extraProps}
+      />,
+    );
+    fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
+    return screen.findByRole('dialog');
+  };
+
+  test('opens the referenced product on its pre-filtered page', async () => {
+    const dialog = await openModal();
+    const productLinks = within(dialog).getAllByRole('link', {
+      name: 'sales:clientQuotes.openProductInNewTab',
+    });
+    expect(productLinks.length).toBeGreaterThan(0);
+    for (const link of productLinks) {
+      expect(link).toHaveAttribute('href', '#/catalog/internal-listing?filterId=product-1');
+      expect(link).toHaveAttribute('target', '_blank');
+    }
+  });
+
+  test('hides the product shortcut without internal-listing access', async () => {
+    const dialog = await openModal({ canViewInternalListing: false });
+    expect(
+      within(dialog).queryAllByRole('link', { name: 'sales:clientQuotes.openProductInNewTab' }),
+    ).toHaveLength(0);
   });
 });

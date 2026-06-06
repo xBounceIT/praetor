@@ -399,3 +399,110 @@ describe('<ClientOffersView /> source-quote banner', () => {
     expect(onViewQuote).toHaveBeenCalledWith('Q0001');
   });
 });
+
+describe('<ClientOffersView /> quick-view shortcuts', () => {
+  const linkedProducts: Product[] = [
+    {
+      id: 'prod-off',
+      name: 'Solar Panel',
+      productCode: 'SP-100',
+      costo: 50,
+      molPercentage: 20,
+      costUnit: 'unit',
+      type: 'supply',
+    },
+  ];
+  const linkedSupplierQuote: SupplierQuote = {
+    id: 'SQ-OFF',
+    supplierId: 'sup-1',
+    supplierName: 'Acme Supplies',
+    items: [
+      {
+        id: 'sqi-off',
+        quoteId: 'SQ-OFF',
+        productId: 'prod-off',
+        productName: 'Solar Panel',
+        quantity: 1,
+        listPrice: 60,
+        discountPercent: 0,
+        unitPrice: 60,
+        unitType: 'unit',
+      },
+    ],
+    paymentTerms: 'immediate',
+    status: 'accepted',
+    expirationDate: '2099-12-31',
+    createdAt: 1_700_000_000_000,
+    updatedAt: 1_700_000_000_000,
+  };
+  const linkedOffer = buildOffer({
+    id: 'O-SHORTCUT',
+    items: [
+      {
+        id: 'item-link',
+        offerId: 'O-SHORTCUT',
+        productId: 'prod-off',
+        productName: 'Solar Panel',
+        quantity: 1,
+        unitPrice: 100,
+        productCost: 60,
+        productMolPercentage: 40,
+        unitType: 'unit',
+        supplierQuoteId: 'SQ-OFF',
+        supplierQuoteItemId: 'sqi-off',
+      },
+    ],
+  });
+
+  test('opens the referenced supplier quote and product on their pre-filtered pages', () => {
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[linkedOffer]}
+        products={linkedProducts}
+        supplierQuotes={[linkedSupplierQuote]}
+      />,
+    );
+    // Clicking the row opens the edit dialog that hosts the line-item shortcuts.
+    fireEvent.click(screen.getByText('O-SHORTCUT'));
+
+    const supplierLinks = screen.getAllByRole('link', {
+      name: 'sales:clientQuotes.openSupplierQuoteInNewTab',
+    });
+    expect(supplierLinks.length).toBeGreaterThan(0);
+    for (const link of supplierLinks) {
+      expect(link).toHaveAttribute('href', '#/sales/supplier-quotes?filterId=SQ-OFF');
+      expect(link).toHaveAttribute('target', '_blank');
+    }
+
+    const productLinks = screen.getAllByRole('link', {
+      name: 'sales:clientQuotes.openProductInNewTab',
+    });
+    expect(productLinks.length).toBeGreaterThan(0);
+    for (const link of productLinks) {
+      expect(link).toHaveAttribute('href', '#/catalog/internal-listing?filterId=prod-off');
+      expect(link).toHaveAttribute('target', '_blank');
+    }
+  });
+
+  test('hides each shortcut when the user cannot access the referenced view', () => {
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[linkedOffer]}
+        products={linkedProducts}
+        supplierQuotes={[linkedSupplierQuote]}
+        canViewSupplierQuotes={false}
+        canViewInternalListing={false}
+      />,
+    );
+    fireEvent.click(screen.getByText('O-SHORTCUT'));
+
+    expect(
+      screen.queryAllByRole('link', { name: 'sales:clientQuotes.openSupplierQuoteInNewTab' }),
+    ).toHaveLength(0);
+    expect(
+      screen.queryAllByRole('link', { name: 'sales:clientQuotes.openProductInNewTab' }),
+    ).toHaveLength(0);
+  });
+});
