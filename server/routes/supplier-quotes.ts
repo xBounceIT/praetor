@@ -22,9 +22,11 @@ import { createChildLogger } from '../utils/logger.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
+import { deriveSupplierLinePricing, MAX_LINE_AMOUNT } from '../utils/supplier-quote-pricing.ts';
 import {
   badRequest,
   optionalDateString,
+  optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   parseDateString,
   parseLocalizedNonNegativeNumber,
@@ -71,6 +73,8 @@ const supplierQuoteItemSchema = {
     productId: { type: ['string', 'null'] },
     productName: { type: 'string' },
     quantity: { type: 'number' },
+    listPrice: { type: 'number' },
+    discountPercent: { type: 'number' },
     unitPrice: { type: 'number' },
     note: { type: ['string', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
@@ -104,11 +108,13 @@ const supplierQuoteItemBodySchema = {
     productId: { type: 'string' },
     productName: { type: 'string' },
     quantity: { type: 'number' },
+    listPrice: { type: 'number' },
+    discountPercent: { type: 'number' },
     unitPrice: { type: 'number' },
     note: { type: 'string' },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
   },
-  required: ['productName', 'quantity', 'unitPrice'],
+  required: ['productName', 'quantity'],
 } as const;
 
 const supplierQuoteCreateBodySchema = {
@@ -148,6 +154,8 @@ type ItemBody = {
   productId?: string;
   productName?: string;
   quantity?: string | number;
+  listPrice?: string | number;
+  discountPercent?: string | number;
   unitPrice?: string | number;
   note?: string;
   unitType?: 'hours' | 'days' | 'unit';
@@ -170,12 +178,51 @@ const validateAndNormalizeItems = (
       badRequest(reply, quantityResult.message);
       return null;
     }
-    const unitPriceResult = parseLocalizedNonNegativeNumber(
-      item.unitPrice,
-      `items[${i}].unitPrice`,
+    // List price drives the pricing chain. Legacy callers that only send unitPrice fall back to
+    // it as the list price (with no discount) so existing integrations keep working.
+    const listPriceResult = optionalLocalizedNonNegativeNumber(
+      item.listPrice,
+      `items[${i}].listPrice`,
     );
-    if (!unitPriceResult.ok) {
-      badRequest(reply, unitPriceResult.message);
+    if (!listPriceResult.ok) {
+      badRequest(reply, listPriceResult.message);
+      return null;
+    }
+    let listPrice = listPriceResult.value;
+    if (listPrice === null) {
+      const unitPriceResult = parseLocalizedNonNegativeNumber(
+        item.unitPrice,
+        `items[${i}].unitPrice`,
+      );
+      if (!unitPriceResult.ok) {
+        badRequest(reply, unitPriceResult.message);
+        return null;
+      }
+      listPrice = unitPriceResult.value;
+    }
+    const discountResult = optionalLocalizedNonNegativeNumber(
+      item.discountPercent,
+      `items[${i}].discountPercent`,
+    );
+    if (!discountResult.ok) {
+      badRequest(reply, discountResult.message);
+      return null;
+    }
+    if (discountResult.value !== null && discountResult.value > 100) {
+      badRequest(reply, `items[${i}].discountPercent must be between 0 and 100`);
+      return null;
+    }
+    const discountPercent = discountResult.value ?? 0;
+    // Round both inputs to the persisted DB scale and derive the net cost (Costo unitario) from the
+    // rounded values, so the stored row always satisfies unitPrice = listPrice × (1 − discount/100)
+    // even when a caller submits more than two decimals. Derived server-side so it can never drift
+    // from what the client computed; totals downstream read this net unit price.
+    const pricing = deriveSupplierLinePricing(listPrice, discountPercent);
+    // Reject amounts that would overflow the NUMERIC(15,2) columns so the caller gets a clean 400
+    // instead of a 500-level database error on INSERT. (unitPrice ≤ listPrice, but check both so a
+    // future formula change can't quietly slip an out-of-range net cost through.)
+    if (pricing.listPrice > MAX_LINE_AMOUNT || pricing.unitPrice > MAX_LINE_AMOUNT) {
+      badRequest(reply, `items[${i}].listPrice must not exceed ${MAX_LINE_AMOUNT}`);
       return null;
     }
     result.push({
@@ -183,7 +230,9 @@ const validateAndNormalizeItems = (
       productId: item.productId || null,
       productName: productNameResult.value,
       quantity: quantityResult.value,
-      unitPrice: unitPriceResult.value,
+      listPrice: pricing.listPrice,
+      discountPercent: pricing.discountPercent,
+      unitPrice: pricing.unitPrice,
       note: item.note || null,
       unitType: normalizeUnitType(item.unitType),
     });
@@ -859,13 +908,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const snapshotItems: supplierQuotesRepo.NewSupplierQuoteItem[] = version.snapshot.items.map(
-        ({ quoteId: _q, ...rest }) => ({
-          ...rest,
-          id: generatePrefixedId(ITEM_ID_PREFIXES.supplierQuoteItem),
-          productId: rest.productId || null,
-          unitType: rest.unitType ?? 'unit',
-          note: rest.note ?? null,
-        }),
+        ({ quoteId: _q, ...rest }) => {
+          // Snapshots taken before list price / discount existed lack those keys, so seed list price
+          // from the net unit price (no discount) to keep the restored Costo unitario identical to
+          // what was saved. Re-derive through the shared helper — mirroring validateAndNormalizeItems
+          // — so every restored row satisfies unitPrice = listPrice × (1 − discount/100). For current
+          // snapshots (already at scale 2) this is a no-op; for a pre-fix snapshot it heals any drift.
+          const snapshotUnitPrice = Number(rest.unitPrice ?? 0);
+          const pricing = deriveSupplierLinePricing(
+            Number(rest.listPrice ?? snapshotUnitPrice),
+            Number(rest.discountPercent ?? 0),
+          );
+          return {
+            ...rest,
+            id: generatePrefixedId(ITEM_ID_PREFIXES.supplierQuoteItem),
+            productId: rest.productId || null,
+            listPrice: pricing.listPrice,
+            discountPercent: pricing.discountPercent,
+            unitPrice: pricing.unitPrice,
+            unitType: rest.unitType ?? 'unit',
+            note: rest.note ?? null,
+          };
+        },
       );
 
       const restored = await withDbTransaction(async (tx) => {

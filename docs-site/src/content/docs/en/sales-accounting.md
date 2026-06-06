@@ -31,6 +31,8 @@ Supplier quotes help compare purchase costs and conditions. Link rows to the cor
 
 In the **Supplier Information** section of the **New Supplier Quote** dialog you can optionally link a **Customer**: use it when the quote relates to a specific customer engagement. The association is optional — a supplier quote with no customer is a valid state and saves without errors — and can be removed at any time by selecting *No customer*. When set, the linked customer is visible both in the quote detail and in the **Customer** column of the list.
 
+The **Items** table makes the purchase pricing chain explicit with the **Product**, **List Price**, **Discount to Us (%)**, **Unit Cost**, **Qty**, and **Total** columns. Enter the supplier's list price and the discount percentage they grant you (capped at 0–100%, since a larger discount would push the cost below zero): Praetor derives the **Unit Cost** as `List Price × (1 − Discount to Us / 100)`, while the row **Total** stays `Unit Cost × Qty`. The Unit Cost field is read-only because it is derived. In the **Summary**, the **Subtotal** sums the list prices (`List Price × Qty`), the **Discount** row highlights the total discount granted by the suppliers, and the **Total** reports the net cost (`Unit Cost × Qty`). The Discount row appears only when at least one line has a discount.
+
 ## Orders
 
 Customer and supplier orders consolidate operational information. Before confirming, check the record, rows, discounts, payment terms, and links to previous documents.

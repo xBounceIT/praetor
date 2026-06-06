@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, within } from '@testing-library/react';
 import type { Client, Product, Supplier, SupplierQuote } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
@@ -30,6 +30,8 @@ const buildQuote = (overrides: Partial<SupplierQuote>): SupplierQuote => ({
       quoteId: overrides.id ?? 'SQ-base',
       productName: 'Widget',
       quantity: 1,
+      listPrice: 100,
+      discountPercent: 0,
       unitPrice: 100,
       unitType: 'unit',
     },
@@ -112,6 +114,116 @@ describe('<SupplierQuotesView /> read-only gating', () => {
     // Linked-order copy wins over the generic non-draft copy.
     expect(screen.getByText('sales:supplierQuotes.readOnlyLinked')).toBeInTheDocument();
     expect(screen.queryByText('sales:supplierQuotes.readOnlyStatus')).not.toBeInTheDocument();
+  });
+});
+
+describe('<SupplierQuotesView /> supplier pricing chain', () => {
+  test('renders the list-price, discount, and unit-cost columns on a draft quote', () => {
+    render(<SupplierQuotesView {...baseProps} />);
+    fireEvent.click(screen.getByText('SQ-DRAFT'));
+    expect(screen.getAllByText('sales:supplierQuotes.listPrice').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('sales:supplierQuotes.discountToUs').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('sales:supplierQuotes.unitCost').length).toBeGreaterThan(0);
+  });
+
+  test('editing list price and discount recomputes the net unit cost in the submit payload', async () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+    render(<SupplierQuotesView {...baseProps} onUpdateQuote={onUpdateQuote} />);
+    fireEvent.click(screen.getByText('SQ-DRAFT'));
+
+    // List price starts at 100 (formatted to 2 decimals); there is one input per layout.
+    const listPriceInputs = screen.getAllByDisplayValue('100.00');
+    fireEvent.change(listPriceInputs[0], { target: { value: '200' } });
+    // Discount starts at 0; qty shows "1", so "0" uniquely matches the discount inputs.
+    const discountInputs = screen.getAllByDisplayValue('0');
+    fireEvent.change(discountInputs[0], { target: { value: '10' } });
+
+    fireEvent.click(screen.getByText('common:buttons.update'));
+
+    expect(onUpdateQuote).toHaveBeenCalledTimes(1);
+    const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
+    const item = updates.items?.[0];
+    expect(item?.listPrice).toBe(200);
+    expect(item?.discountPercent).toBe(10);
+    // 200 * (1 - 10/100) = 180
+    expect(item?.unitPrice).toBe(180);
+  });
+
+  test('clamps a discount typed above 100% to 100 so the net cost never goes negative', () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+    render(<SupplierQuotesView {...baseProps} onUpdateQuote={onUpdateQuote} />);
+    fireEvent.click(screen.getByText('SQ-DRAFT'));
+
+    // SQ-DRAFT starts at listPrice 100, discount 0; "0" uniquely matches the discount inputs.
+    const discountInputs = screen.getAllByDisplayValue('0');
+    fireEvent.change(discountInputs[0], { target: { value: '150' } });
+
+    fireEvent.click(screen.getByText('common:buttons.update'));
+
+    expect(onUpdateQuote).toHaveBeenCalledTimes(1);
+    const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
+    const item = updates.items?.[0];
+    // The 150% entry is blocked at 100%, and 100 * (1 - 100/100) = 0 (never negative).
+    expect(item?.discountPercent).toBe(100);
+    expect(item?.unitPrice).toBe(0);
+  });
+
+  test('rounds list price/discount to DB scale so the submitted net cost matches the server', () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+    render(<SupplierQuotesView {...baseProps} onUpdateQuote={onUpdateQuote} />);
+    fireEvent.click(screen.getByText('SQ-DRAFT'));
+
+    // A list price with >2 decimals must be rounded to the persisted scale (NUMERIC(_,2)) before
+    // deriving the net cost, exactly as the server does — otherwise the UI would show/submit a net
+    // cost the server would not store.
+    const listPriceInputs = screen.getAllByDisplayValue('100.00');
+    fireEvent.change(listPriceInputs[0], { target: { value: '10.005' } });
+    const discountInputs = screen.getAllByDisplayValue('0');
+    fireEvent.change(discountInputs[0], { target: { value: '10' } });
+
+    fireEvent.click(screen.getByText('common:buttons.update'));
+
+    const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
+    const item = updates.items?.[0];
+    // 10.005 → 10.01 at scale 2; 10.01 × (1 − 10/100) = 9.009 → 9.01 (matches deriveSupplierLinePricing).
+    expect(item?.listPrice).toBe(10.01);
+    expect(item?.discountPercent).toBe(10);
+    expect(item?.unitPrice).toBe(9.01);
+  });
+});
+
+describe('<SupplierQuotesView /> summary discount line', () => {
+  const discountedQuote = buildQuote({
+    id: 'SQ-DISCOUNT',
+    status: 'draft',
+    items: [
+      {
+        id: 'sqi-disc',
+        quoteId: 'SQ-DISCOUNT',
+        productName: 'Widget',
+        quantity: 1,
+        listPrice: 500,
+        discountPercent: 15,
+        unitPrice: 425,
+        unitType: 'unit',
+      },
+    ],
+  });
+
+  test('shows the Sconto a noi line in the Riepilogo when a line has a discount', () => {
+    render(<SupplierQuotesView {...baseProps} quotes={[discountedQuote]} />);
+    fireEvent.click(screen.getByText('SQ-DISCOUNT'));
+    // Discount row label renders only when the aggregate discount is > 0.
+    expect(screen.getByText('sales:supplierQuotes.discountAmount')).toBeInTheDocument();
+    // Subtotale = gross 500, Sconto = 75, Totale = net 425.
+    expect(screen.getByText('-75.00 EUR')).toBeInTheDocument();
+  });
+
+  test('omits the discount line when no line has a discount', () => {
+    render(<SupplierQuotesView {...baseProps} />);
+    // SQ-DRAFT: listPrice 100, discount 0 → gross == net, no discount.
+    fireEvent.click(screen.getByText('SQ-DRAFT'));
+    expect(screen.queryByText('sales:supplierQuotes.discountAmount')).not.toBeInTheDocument();
   });
 });
 

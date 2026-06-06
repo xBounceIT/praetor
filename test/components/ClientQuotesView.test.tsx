@@ -72,6 +72,8 @@ const supplierQuote: SupplierQuote = {
       productId: 'prod-1',
       productName: 'Solar Panel',
       quantity: 1,
+      listPrice: 60,
+      discountPercent: 0,
       unitPrice: 60,
       unitType: 'unit',
     },

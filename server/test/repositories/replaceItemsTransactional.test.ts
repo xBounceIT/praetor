@@ -400,6 +400,8 @@ describe('supplierQuotesRepo.replaceItems', () => {
     productId: null,
     productName: 'Product',
     quantity: 1,
+    listPrice: 5,
+    discountPercent: 0,
     unitPrice: 5,
     note: null,
     unitType: 'unit',

@@ -26,6 +26,8 @@ export type SupplierQuoteItem = {
   productId: string | null;
   productName: string;
   quantity: number;
+  listPrice: number;
+  discountPercent: number;
   unitPrice: number;
   note: string | null;
   unitType: string;
@@ -54,6 +56,8 @@ const mapItem = (row: typeof supplierQuoteItems.$inferSelect): SupplierQuoteItem
   productId: row.productId,
   productName: row.productName,
   quantity: parseDbNumber(row.quantity, 0),
+  listPrice: parseDbNumber(row.listPrice, 0),
+  discountPercent: parseDbNumber(row.discountPercent, 0),
   unitPrice: parseDbNumber(row.unitPrice, 0),
   note: row.note,
   unitType: row.unitType ?? 'unit',
@@ -309,6 +313,8 @@ export type NewSupplierQuoteItem = {
   productId: string | null;
   productName: string;
   quantity: number;
+  listPrice: number;
+  discountPercent: number;
   unitPrice: number;
   note: string | null;
   unitType: string;
@@ -375,6 +381,8 @@ export const insertItems = async (
         productId: item.productId,
         productName: item.productName,
         quantity: numericForDb(item.quantity),
+        listPrice: numericForDb(item.listPrice),
+        discountPercent: numericForDb(item.discountPercent),
         unitPrice: numericForDb(item.unitPrice),
         note: item.note,
         unitType: item.unitType,

@@ -1,5 +1,5 @@
 {
-  "id": "be6ae654-7189-4083-af86-8bd2b9114b6d",
+  "id": "c3bd095b-6c73-483d-8625-c283e367b9cc",
   "prevId": "64299d56-80bc-40b5-9bb6-cecd89966693",
   "version": "7",
   "dialect": "postgresql",
@@ -708,20 +708,6 @@
           "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false
-        },
-        "duration_months": {
-          "name": "duration_months",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "duration_unit": {
-          "name": "duration_unit",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'months'"
         }
       },
       "indexes": {
@@ -768,14 +754,6 @@
         "chk_customer_offer_items_unit_type": {
           "name": "chk_customer_offer_items_unit_type",
           "value": "\"customer_offer_items\".\"unit_type\" IN ('hours', 'days', 'unit')"
-        },
-        "chk_customer_offer_items_duration_months": {
-          "name": "chk_customer_offer_items_duration_months",
-          "value": "\"customer_offer_items\".\"duration_months\" >= 1"
-        },
-        "chk_customer_offer_items_duration_unit": {
-          "name": "chk_customer_offer_items_duration_unit",
-          "value": "\"customer_offer_items\".\"duration_unit\" IN ('months', 'years')"
         }
       },
       "isRLSEnabled": false
@@ -1342,20 +1320,6 @@
           "notNull": true,
           "default": "'0'"
         },
-        "duration_months": {
-          "name": "duration_months",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "duration_unit": {
-          "name": "duration_unit",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'months'"
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -1404,16 +1368,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "chk_invoice_items_duration_months": {
-          "name": "chk_invoice_items_duration_months",
-          "value": "\"invoice_items\".\"duration_months\" >= 1"
-        },
-        "chk_invoice_items_duration_unit": {
-          "name": "chk_invoice_items_duration_unit",
-          "value": "\"invoice_items\".\"duration_unit\" IN ('months', 'years')"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.invoices": {
@@ -3205,20 +3160,6 @@
           "notNull": false,
           "default": "'hours'"
         },
-        "duration_months": {
-          "name": "duration_months",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "duration_unit": {
-          "name": "duration_unit",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'months'"
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -3271,14 +3212,6 @@
         "chk_quote_items_unit_type": {
           "name": "chk_quote_items_unit_type",
           "value": "\"quote_items\".\"unit_type\" IN ('hours', 'days', 'unit')"
-        },
-        "chk_quote_items_duration_months": {
-          "name": "chk_quote_items_duration_months",
-          "value": "\"quote_items\".\"duration_months\" >= 1"
-        },
-        "chk_quote_items_duration_unit": {
-          "name": "chk_quote_items_duration_unit",
-          "value": "\"quote_items\".\"duration_unit\" IN ('months', 'years')"
         }
       },
       "isRLSEnabled": false
@@ -4065,20 +3998,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "duration_months": {
-          "name": "duration_months",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "duration_unit": {
-          "name": "duration_unit",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'months'"
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -4146,14 +4065,6 @@
         "chk_sale_items_unit_type": {
           "name": "chk_sale_items_unit_type",
           "value": "\"sale_items\".\"unit_type\" IN ('hours', 'days', 'unit')"
-        },
-        "chk_sale_items_duration_months": {
-          "name": "chk_sale_items_duration_months",
-          "value": "\"sale_items\".\"duration_months\" >= 1"
-        },
-        "chk_sale_items_duration_unit": {
-          "name": "chk_sale_items_duration_unit",
-          "value": "\"sale_items\".\"duration_unit\" IN ('months', 'years')"
         }
       },
       "isRLSEnabled": false
@@ -5870,6 +5781,20 @@
           "primaryKey": false,
           "notNull": false,
           "default": "'hours'"
+        },
+        "list_price": {
+          "name": "list_price",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "discount_percent": {
+          "name": "discount_percent",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
         }
       },
       "indexes": {
@@ -5916,6 +5841,10 @@
         "chk_supplier_quote_items_unit_type": {
           "name": "chk_supplier_quote_items_unit_type",
           "value": "\"supplier_quote_items\".\"unit_type\" IN ('hours', 'days', 'unit')"
+        },
+        "chk_supplier_quote_items_discount_percent": {
+          "name": "chk_supplier_quote_items_discount_percent",
+          "value": "\"supplier_quote_items\".\"discount_percent\" >= 0 AND \"supplier_quote_items\".\"discount_percent\" <= 100"
         }
       },
       "isRLSEnabled": false

@@ -537,8 +537,15 @@
     {
       "idx": 76,
       "version": "7",
-      "when": 1780761024805,
-      "tag": "0076_add_duration_to_line_items",
+      "when": 1780706497671,
+      "tag": "0076_add_supplier_quote_item_list_price_discount",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1780772883549,
+      "tag": "0077_add_duration_to_line_items",
       "breakpoints": true
     }
   ]
