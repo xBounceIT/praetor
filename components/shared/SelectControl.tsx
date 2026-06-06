@@ -313,7 +313,7 @@ const SearchableSelectControl = ({
           </Button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-[var(--radix-popover-trigger-width)] min-w-[12rem] p-0"
+          className="w-fit min-w-[max(12rem,var(--radix-popover-trigger-width))] max-w-[var(--radix-popover-content-available-width)] p-0"
           align="start"
         >
           <Command shouldFilter={false}>
