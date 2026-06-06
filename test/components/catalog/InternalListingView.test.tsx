@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import type { Product } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
@@ -65,22 +65,32 @@ describe('<InternalListingView /> productFilterId', () => {
     expect(screen.getByText('Wind Turbine')).toBeInTheDocument();
   });
 
-  test('pre-filters the table to the deep-linked product id', () => {
+  test("pre-filters the table to the linked product's code (visible Codice column)", () => {
     render(<InternalListingView {...baseProps} products={products} productFilterId="prod-2" />);
-    // Only the referenced product is shown; the other row is filtered out.
-    expect(screen.getAllByText('Wind Turbine').length).toBeGreaterThan(0);
+    // The deep-linked product (resolved to its code) is the only row shown, and
+    // the filter lives on the visible "Codice" column so it stays clearable via
+    // the native column-filter dropdown.
+    expect(screen.getByText('Wind Turbine')).toBeInTheDocument();
+    expect(screen.getByText('WT-200')).toBeInTheDocument();
     expect(screen.queryByText('Solar Panel')).not.toBeInTheDocument();
+    // The native funnel control for the Codice column is rendered (not hidden).
+    expect(
+      screen.getByRole('button', { name: /table\.filters .*productCode/i }),
+    ).toBeInTheDocument();
   });
 
-  test('shows a clearable filtered-view banner for the deep-linked product', () => {
-    render(<InternalListingView {...baseProps} products={products} productFilterId="prod-2" />);
-    // The banner makes the otherwise-invisible (hidden id column) filter obvious.
-    expect(screen.getByText('common:table.filteredView')).toBeInTheDocument();
-    const clearButton = screen.getByRole('button', { name: 'common:table.showAllRecords' });
-
-    // Clearing the filter restores the full list and removes the banner.
-    fireEvent.click(clearButton);
-    expect(screen.getByText('Solar Panel')).toBeInTheDocument();
-    expect(screen.queryByText('common:table.filteredView')).not.toBeInTheDocument();
+  test('falls back to the name column when the linked product has no code', () => {
+    const codeless: Product[] = [
+      buildProduct({ id: 'prod-1', name: 'Solar Panel', productCode: 'SP-100' }),
+      buildProduct({ id: 'prod-3', name: 'Codeless Widget', productCode: '' }),
+    ];
+    render(<InternalListingView {...baseProps} products={codeless} productFilterId="prod-3" />);
+    expect(screen.getByText('Codeless Widget')).toBeInTheDocument();
+    expect(screen.queryByText('Solar Panel')).not.toBeInTheDocument();
+    // The fallback filter must also land on a VISIBLE column (the name column),
+    // so it stays clearable via the native funnel — same invariant as above.
+    expect(
+      screen.getByRole('button', { name: /table\.filters .*labels\.name/i }),
+    ).toBeInTheDocument();
   });
 });

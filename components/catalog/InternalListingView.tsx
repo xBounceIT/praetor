@@ -1,7 +1,6 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
 import { FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -91,22 +90,19 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 }) => {
   const { t, i18n } = useTranslation(['crm', 'common']);
 
-  // A quick-view deep link filters the products table to a single id via the
-  // hidden `id` column below — which has no visible filter chip. Surface a
-  // dismissible banner so the active filter is obvious and clearable; the local
-  // flag lets "show all" drop the filter without losing the incoming prop.
-  // (productFilterId only arrives at mount, so no reset-on-change is needed.)
-  const [productFilterCleared, setProductFilterCleared] = useState(false);
-  const activeProductFilterId = productFilterCleared ? null : (productFilterId ?? null);
-  const tableInitialFilterState = useMemo(
-    () => (activeProductFilterId ? { id: [activeProductFilterId] } : undefined),
-    [activeProductFilterId],
-  );
-  const deepLinkedProduct = useMemo(
-    () =>
-      activeProductFilterId ? (products.find((p) => p.id === activeProductFilterId) ?? null) : null,
-    [activeProductFilterId, products],
-  );
+  // A quick-view deep link arrives as a product id. Resolve it to a *visible*
+  // column value — the "Codice" (productCode) column, falling back to the name —
+  // so the table opens with the native column filter active (a highlighted,
+  // clearable filter chip) instead of an invisible hidden-column filter.
+  const tableInitialFilterState = useMemo<Record<string, string[]> | undefined>(() => {
+    if (!productFilterId) return undefined;
+    const product = products.find((p) => p.id === productFilterId);
+    if (!product) return undefined;
+    // Prefer the visible "Codice" column; fall back to the name when codeless.
+    const column = product.productCode ? 'productCode' : 'name';
+    const value = product.productCode || product.name;
+    return value ? { [column]: [value] } : undefined;
+  }, [productFilterId, products]);
 
   // Product Types State
   const [productTypes, setProductTypes] = useState<InternalProductType[]>([]);
@@ -1523,18 +1519,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
         </div>
       </div>
 
-      {deepLinkedProduct && (
-        <LinkedRecordBanner
-          icon="fa-filter"
-          label={t('common:table.filteredView')}
-          value={deepLinkedProduct.name}
-          action={{
-            label: t('common:table.showAllRecords'),
-            onClick: () => setProductFilterCleared(true),
-          }}
-        />
-      )}
-
       <StandardTable<Product>
         title={t('crm:internalListing.title')}
         defaultRowsPerPage={5}
@@ -1547,13 +1531,6 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
         onRowClick={openEditModal}
         initialFilterState={tableInitialFilterState}
         columns={[
-          {
-            // Hidden filter-only column: lets a quick-view deep link target a
-            // single product by id without showing a code column to users.
-            header: 'id',
-            accessorKey: 'id',
-            hidden: true,
-          },
           {
             header: t('crm:internalListing.productCode'),
             accessorKey: 'productCode',

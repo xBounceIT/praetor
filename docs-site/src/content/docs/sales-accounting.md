@@ -11,7 +11,7 @@ I preventivi e le offerte raccolgono prodotti, quantità, prezzi, sconti e condi
 
 La lista dei preventivi mostra codice, data di inserimento, cliente, subtotale, sconto percentuale, sconto assoluto, totale scontato, margine, MOL, termini di pagamento, scadenza e stato per controllare rapidamente i valori principali senza aprire ogni record.
 
-Quando crei o modifichi un preventivo, ogni riga di **Prodotti / Servizi** che fa riferimento a un **Preventivo Fornitore** o a un **prodotto** mostra un'icona di apertura rapida: aprila per consultare il record collegato nella sua pagina già filtrata in una nuova scheda del browser, senza chiudere né modificare il preventivo in corso. L'icona compare solo quando la riga ha effettivamente un riferimento collegato. La pagina di destinazione mostra un banner **Vista filtrata** con un'azione **Mostra tutti** per rimuovere il filtro e tornare all'elenco completo.
+Quando crei o modifichi un preventivo, ogni riga di **Prodotti / Servizi** che fa riferimento a un **Preventivo Fornitore** o a un **prodotto** mostra un'icona di apertura rapida: aprila per consultare il record collegato nella sua pagina già filtrata in una nuova scheda del browser, senza chiudere né modificare il preventivo in corso. L'icona compare solo quando la riga ha effettivamente un riferimento collegato. Sulla pagina di destinazione il filtro è applicato tramite il filtro nativo della colonna (**Codice**), così resta visibile e puoi rimuoverlo dal menu del filtro per tornare all'elenco completo.
 
 Nel riepilogo delle offerte, la riga **Sconto** mostra sempre la percentuale equivalente tra parentesi, anche quando lo sconto globale è inserito come importo fisso. L'importo dello sconto resta visibile in valuta sulla destra.
 
