@@ -15,6 +15,8 @@ Each quote line includes a **Duration** column, placed between **Quantity** and 
 
 The quote list shows code, insertion date, client, subtotal, discount percentage, absolute discount, discounted total, margin, MOL, payment terms, due date, and status so the main values can be checked without opening each record.
 
+When creating or editing a quote, each **Products / Services** row that references a **Supplier Quote** or a **product** shows a quick-view icon: open it to inspect the linked record on its pre-filtered page in a new browser tab, without closing or changing the quote in progress. The icon only appears when the row actually references a linked record. On the destination page the filter is applied through the column's native filter (**Code**), so it stays visible and you can clear it from the filter menu to return to the full list.
+
 In offer summaries, the **Discount** row always shows the equivalent percentage in parentheses, even when the global discount is entered as a fixed amount. The discount amount remains visible in currency on the right.
 
 In the **Customer Offers** list, the visible date is the **Delivery Date**: it is set when an offer moves to sent status and no longer represents the technical record creation date. The table also shows subtotal, discount percent, absolute discount, discounted total, margin, MOL, and payment terms so offers can be compared without opening each record.

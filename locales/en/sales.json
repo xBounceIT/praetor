@@ -113,6 +113,8 @@
     "noSupplierQuote": "No Supplier Quote",
     "selectSupplierQuote": "Select supplier quote...",
     "selectProduct": "Select product...",
+    "openSupplierQuoteInNewTab": "Open supplier quote in a new tab",
+    "openProductInNewTab": "Open product in a new tab",
     "qty": "Quantity",
     "durationColumn": "Duration",
     "month": "Month",
