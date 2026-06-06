@@ -791,7 +791,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                 {t('common:labels.quantity')}
                               </FieldLabel>
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center justify-center gap-1">
                                 <ValidatedNumberInput
                                   min="0"
                                   step="0.01"
@@ -805,7 +805,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                                       value === '' || Number.isNaN(parsed) ? 0 : parsed,
                                     );
                                   }}
-                                  className="min-w-0"
+                                  className="min-w-0 max-w-[5rem]"
                                 />
                                 <span className="shrink-0 text-xs font-medium text-muted-foreground">
                                   /
@@ -822,13 +822,13 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                                   defaultValue: 'Duration',
                                 })}
                               </FieldLabel>
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center justify-center gap-1">
                                 <ValidatedNumberInput
                                   min="1"
                                   step="1"
                                   value={durationValue}
                                   onValueChange={(value) => handleDurationValueChange(index, value)}
-                                  className="min-w-0"
+                                  className="min-w-0 max-w-[5rem]"
                                 />
                                 <span className="shrink-0 text-xs font-medium text-muted-foreground">
                                   /

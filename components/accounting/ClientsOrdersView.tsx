@@ -1136,7 +1136,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('sales:clientQuotes.qty')}
                                   </FieldLabel>
-                                  <div className="flex h-9 items-center gap-1">
+                                  <div className="flex h-9 items-center justify-center gap-1">
                                     <ValidatedNumberInput
                                       step="0.01"
                                       min="0"
@@ -1152,7 +1152,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                         );
                                       }}
                                       disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
-                                      className="flex-1 text-center"
+                                      className="flex-1 max-w-[5rem] text-center"
                                     />
                                     <span className="shrink-0 text-xs font-medium text-muted-foreground">
                                       /
@@ -1187,7 +1187,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                         handleDurationValueChange(index, value)
                                       }
                                       disabled={isReadOnly}
-                                      className={compactInputClass}
+                                      className={`${compactInputClass} max-w-[5rem]`}
                                     />
                                     <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
                                       /

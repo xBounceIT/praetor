@@ -243,7 +243,7 @@ describe('<ClientsOrdersView />', () => {
       'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center"',
       'className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0"',
       'className="flex h-9 items-center rounded-md border border-border bg-background px-3"',
-      'className="flex h-9 items-center gap-1"',
+      // Quantity and duration controls both center their compact value input + unit selector.
       'className="flex h-9 items-center justify-center gap-1"',
       'className="flex h-9 items-center justify-end whitespace-nowrap px-3 text-sm font-bold text-foreground"',
     ]);
