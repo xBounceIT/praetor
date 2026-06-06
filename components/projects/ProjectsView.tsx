@@ -2,7 +2,7 @@ import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Field, FieldError, FieldLabel, RequiredMark } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -76,13 +76,6 @@ const billingFrequencyOptions = [
 
 const toStoredBillingType = (value: BillingType | undefined): StoredBillingType =>
   value === 'retainer' ? 'retainer' : 'time_and_materials';
-
-// `aria-hidden` — screen readers get the requirement signal from the input's `required` attr.
-const RequiredMark = () => (
-  <span className="text-destructive" aria-hidden="true">
-    *
-  </span>
-);
 
 type RevenueSource = 'activities' | 'order' | 'manual';
 type RevenueLike = { revenue?: number | string | null };

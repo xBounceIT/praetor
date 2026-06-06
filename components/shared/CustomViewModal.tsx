@@ -89,7 +89,9 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
 
           <ModalBody className="space-y-4">
             <Field>
-              <FieldLabel htmlFor="custom-view-name">{t('table.viewName')}</FieldLabel>
+              <FieldLabel htmlFor="custom-view-name" required>
+                {t('table.viewName')}
+              </FieldLabel>
               <Input
                 id="custom-view-name"
                 type="text"

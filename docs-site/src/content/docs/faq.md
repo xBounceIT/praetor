@@ -11,7 +11,7 @@ La visibilità dei moduli dipende dai permessi del ruolo e da alcune impostazion
 
 ## Non riesco a salvare un documento
 
-Controlla i campi obbligatori, i valori numerici e le date. Nei documenti commerciali verifica anche che righe, quantità, prezzi e anagrafica siano completi.
+Controlla i campi obbligatori, i valori numerici e le date. Nei moduli, i campi obbligatori sono contrassegnati da un asterisco rosso (*) accanto all'etichetta. Nei documenti commerciali verifica anche che righe, quantità, prezzi e anagrafica siano completi.
 
 ## I totali non sono quelli attesi
 

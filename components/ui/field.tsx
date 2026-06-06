@@ -23,12 +23,23 @@ function FieldGroup({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
+function RequiredMark() {
+  return (
+    <span className="text-destructive" aria-hidden="true">
+      *
+    </span>
+  );
+}
+
 function FieldLabel({
   className,
   asChild = false,
+  required = false,
+  children,
   ...props
 }: React.ComponentProps<typeof LabelPrimitive.Root> & {
   asChild?: boolean;
+  required?: boolean;
 }) {
   const Comp = asChild ? Slot.Root : LabelPrimitive.Root;
 
@@ -41,7 +52,15 @@ function FieldLabel({
         className,
       )}
       {...props}
-    />
+    >
+      {children}
+      {required && !asChild && (
+        <>
+          {' '}
+          <RequiredMark />
+        </>
+      )}
+    </Comp>
   );
 }
 
@@ -147,4 +166,5 @@ export {
   FieldSeparator,
   FieldSet,
   FieldTitle,
+  RequiredMark,
 };

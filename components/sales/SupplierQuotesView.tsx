@@ -939,6 +939,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         searchable={true}
                         disabled={isReadOnly}
                         label={t('sales:supplierQuotes.supplier', { defaultValue: 'Supplier' })}
+                        required
                         buttonClassName="h-9"
                         className={errors.supplierId ? 'border-red-300' : ''}
                       />
@@ -960,7 +961,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       />
                     </Field>
                     <Field data-invalid={Boolean(errors.id)}>
-                      <FieldLabel htmlFor="supplier-quote-code">
+                      <FieldLabel htmlFor="supplier-quote-code" required>
                         {t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' })}
                       </FieldLabel>
                       <Input

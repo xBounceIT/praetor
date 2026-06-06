@@ -446,6 +446,7 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
                     });
                   }}
                   label={t('tasks.project')}
+                  required
                   placeholder={t('common:labels.selectOption')}
                   searchable={true}
                   disabled={projectLocked}
@@ -453,7 +454,9 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
                 />
 
                 <Field>
-                  <FieldLabel htmlFor="task-name">{t('tasks.name')}</FieldLabel>
+                  <FieldLabel htmlFor="task-name" required>
+                    {t('tasks.name')}
+                  </FieldLabel>
                   <Input
                     id="task-name"
                     type="text"

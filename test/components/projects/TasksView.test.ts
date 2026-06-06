@@ -21,7 +21,7 @@ describe('TasksView', () => {
       expect(source).toContain('<ModalFooter className="sm:justify-between">');
       expect(source).toContain('<div className="grid gap-4 md:grid-cols-2">');
       expect(source).toContain('<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">');
-      expect(source).toContain('<FieldLabel htmlFor="task-name">');
+      expect(source).toContain('<FieldLabel htmlFor="task-name" required>');
       expect(source).toContain('<FieldLabel htmlFor="task-description">');
       expect(source).toContain('<FieldLabel htmlFor="task-notes">');
       expect(source).toContain('<Input');

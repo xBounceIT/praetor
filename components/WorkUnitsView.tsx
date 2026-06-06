@@ -79,6 +79,7 @@ interface WorkUnitFormModalProps {
   titleIconClassName: string;
   submitLabel: React.ReactNode;
   submitDisabled?: boolean;
+  managersRequired?: boolean;
   nameInputId: string;
   managersInputId: string;
   descriptionInputId: string;
@@ -103,6 +104,7 @@ const WorkUnitFormModal = ({
   titleIconClassName,
   submitLabel,
   submitDisabled = false,
+  managersRequired = false,
   nameInputId,
   managersInputId,
   descriptionInputId,
@@ -134,7 +136,9 @@ const WorkUnitFormModal = ({
 
           <ModalBody className="space-y-4">
             <Field data-invalid={Boolean(errors.name)}>
-              <FieldLabel htmlFor={nameInputId}>{t('hr:competenceCenters.unitName')}</FieldLabel>
+              <FieldLabel htmlFor={nameInputId} required>
+                {t('hr:competenceCenters.unitName')}
+              </FieldLabel>
               <Input
                 id={nameInputId}
                 type="text"
@@ -156,6 +160,7 @@ const WorkUnitFormModal = ({
               <SelectControl
                 id={managersInputId}
                 label={t('hr:competenceCenters.managers')}
+                required={managersRequired}
                 options={managerOptions}
                 value={selectedManagerIds}
                 onChange={(val) => {
@@ -627,6 +632,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
         titleIconClassName="fa-plus"
         submitLabel={t('hr:competenceCenters.createUnit')}
         submitDisabled={selectedManagerIds.length === 0}
+        managersRequired
         nameInputId="work-unit-create-name"
         managersInputId="work-unit-create-managers"
         descriptionInputId="work-unit-create-description"

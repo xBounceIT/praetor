@@ -3,7 +3,7 @@ import type React from 'react';
 import { useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { Field, FieldLabel } from '@/components/ui/field';
+import { Field, FieldLabel, RequiredMark } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import type { Client, Project, ProjectTask, TimeEntry } from '../../types';
@@ -279,7 +279,7 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
               </Field>
               <Field className="min-w-0">
                 <FieldLabel htmlFor="entry-edit-hours">
-                  {t('entry.hours')} <span className="text-destructive">*</span>
+                  {t('entry.hours')} <RequiredMark />
                 </FieldLabel>
                 <Input
                   id="entry-edit-hours"

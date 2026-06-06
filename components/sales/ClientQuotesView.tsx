@@ -1462,13 +1462,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         searchable={true}
                         disabled={isReadOnly}
                         label={t('sales:clientQuotes.client')}
+                        required
                         buttonClassName="h-9"
                         className={errors.clientId ? 'border-red-300' : ''}
                       />
                       <FieldError className="text-xs">{errors.clientId}</FieldError>
                     </Field>
                     <Field data-invalid={Boolean(errors.id)}>
-                      <FieldLabel htmlFor="client-quote-code">
+                      <FieldLabel htmlFor="client-quote-code" required>
                         {t('sales:clientQuotes.quoteCode', { defaultValue: 'Quote Code' })}
                       </FieldLabel>
                       <Input
@@ -1510,7 +1511,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       />
                     </Field>
                     <Field>
-                      <FieldLabel htmlFor="client-quote-expiration-date">
+                      <FieldLabel htmlFor="client-quote-expiration-date" required>
                         {t('sales:clientQuotes.expirationDateLabel')}
                       </FieldLabel>
                       <DateField

@@ -2,7 +2,7 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Field, FieldError, FieldLabel, RequiredMark } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -1144,7 +1144,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-zinc-500 ml-1">
-                      {t('crm:clients.clientCode')} <span className="text-red-500">*</span>
+                      {t('crm:clients.clientCode')} <RequiredMark />
                     </label>
                     <Input
                       type="text"
@@ -1164,7 +1164,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-zinc-500 ml-1">
-                      {t('crm:clients.name')} <span className="text-red-500">*</span>
+                      {t('crm:clients.name')} <RequiredMark />
                     </label>
                     <Input
                       type="text"
@@ -1347,7 +1347,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-zinc-50 rounded-xl border border-zinc-200">
                           <div className="space-y-1.5">
                             <label className="text-xs font-bold text-zinc-500 ml-1">
-                              {t('crm:clients.fullName')} <span className="text-red-500">*</span>
+                              {t('crm:clients.fullName')} <RequiredMark />
                             </label>
                             <Input
                               type="text"
@@ -1444,7 +1444,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-zinc-500 ml-1">
-                      {t('crm:clients.fiscalCode')} <span className="text-red-500">*</span>
+                      {t('crm:clients.fiscalCode')} <RequiredMark />
                     </label>
                     <Input
                       type="text"

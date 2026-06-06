@@ -837,7 +837,9 @@ const UserSettings: React.FC<UserSettingsProps> = ({
               )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Field>
-                  <FieldLabel htmlFor="profile-full-name">{t('userProfile.fullName')}</FieldLabel>
+                  <FieldLabel htmlFor="profile-full-name" required={isLocalAuth}>
+                    {t('userProfile.fullName')}
+                  </FieldLabel>
                   <Input
                     id="profile-full-name"
                     type="text"
@@ -850,7 +852,9 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                   />
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="profile-email">{t('userProfile.email')}</FieldLabel>
+                  <FieldLabel htmlFor="profile-email" required={isLocalAuth}>
+                    {t('userProfile.email')}
+                  </FieldLabel>
                   <Input
                     id="profile-email"
                     type="email"
@@ -1024,7 +1028,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <Field>
-                      <FieldLabel htmlFor="security-current-password">
+                      <FieldLabel htmlFor="security-current-password" required>
                         {t('password.currentPassword')}
                       </FieldLabel>
                       <Input
@@ -1037,7 +1041,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                       />
                     </Field>
                     <Field className="md:col-start-1">
-                      <FieldLabel htmlFor="security-new-password">
+                      <FieldLabel htmlFor="security-new-password" required>
                         {t('password.newPassword')}
                       </FieldLabel>
                       <Input
@@ -1050,7 +1054,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                       />
                     </Field>
                     <Field>
-                      <FieldLabel htmlFor="security-confirm-password">
+                      <FieldLabel htmlFor="security-confirm-password" required>
                         {t('password.confirmNewPassword')}
                       </FieldLabel>
                       <Input
@@ -1239,7 +1243,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                                   )}
                                   {isLocalAuth && (
                                     <Field>
-                                      <FieldLabel htmlFor="totp-disable-password">
+                                      <FieldLabel htmlFor="totp-disable-password" required>
                                         {t('twoFactor.disablePasswordLabel')}
                                       </FieldLabel>
                                       <Input
@@ -1256,7 +1260,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                                     </Field>
                                   )}
                                   <Field>
-                                    <FieldLabel htmlFor="totp-disable-code">
+                                    <FieldLabel htmlFor="totp-disable-code" required>
                                       {t('twoFactor.disableCodeLabel')}
                                     </FieldLabel>
                                     <Input
@@ -1488,7 +1492,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                               </DialogHeader>
                               <div className="space-y-4 py-4">
                                 <Field>
-                                  <FieldLabel htmlFor="totp-setup-password">
+                                  <FieldLabel htmlFor="totp-setup-password" required>
                                     {t('twoFactor.reauthPasswordLabel')}
                                   </FieldLabel>
                                   <Input
@@ -1676,7 +1680,9 @@ const UserSettings: React.FC<UserSettingsProps> = ({
               className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_minmax(10rem,auto)_auto]"
             >
               <Field>
-                <FieldLabel htmlFor="mcp-token-name">{t('mcp.nameLabel')}</FieldLabel>
+                <FieldLabel htmlFor="mcp-token-name" required>
+                  {t('mcp.nameLabel')}
+                </FieldLabel>
                 <Input
                   id="mcp-token-name"
                   type="text"

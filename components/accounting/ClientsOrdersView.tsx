@@ -971,6 +971,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         value={formData.clientId || ''}
                         onChange={(val) => handleClientChange(val as string)}
                         label={t('accounting:clientsOrders.client')}
+                        required
                         placeholder={t('sales:clientQuotes.selectAClient')}
                         searchable={true}
                         disabled={isReadOnly}

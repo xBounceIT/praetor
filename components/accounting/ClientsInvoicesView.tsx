@@ -659,6 +659,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                       value={formData.clientId || ''}
                       onChange={(value) => handleClientChange(value as string)}
                       label={t('accounting:clientsInvoices.client')}
+                      required
                       placeholder={t('accounting:clientsInvoices.allClients')}
                       searchable={true}
                       buttonClassName={errors.clientId ? 'h-9 border-destructive' : 'h-9'}
@@ -666,7 +667,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     <FieldError className="text-xs">{errors.clientId}</FieldError>
                   </Field>
                   <Field data-invalid={Boolean(errors.id)}>
-                    <FieldLabel htmlFor="client-invoice-number">
+                    <FieldLabel htmlFor="client-invoice-number" required>
                       {t('accounting:clientsInvoices.invoiceNumber')}
                     </FieldLabel>
                     <Input
@@ -684,7 +685,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     <FieldError className="text-xs">{errors.id}</FieldError>
                   </Field>
                   <Field data-invalid={Boolean(errors.issueDate)}>
-                    <FieldLabel htmlFor="client-invoice-issue-date">
+                    <FieldLabel htmlFor="client-invoice-issue-date" required>
                       {t('accounting:clientsInvoices.issueDate')}
                     </FieldLabel>
                     <DateField
@@ -697,7 +698,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     <FieldError className="text-xs">{errors.issueDate}</FieldError>
                   </Field>
                   <Field data-invalid={Boolean(errors.dueDate)}>
-                    <FieldLabel htmlFor="client-invoice-due-date">
+                    <FieldLabel htmlFor="client-invoice-due-date" required>
                       {t('accounting:clientsInvoices.dueDate')}
                     </FieldLabel>
                     <DateField
@@ -816,7 +817,10 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               </div>
                             </div>
                             <div className="space-y-1 lg:col-span-2">
-                              <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                              <FieldLabel
+                                className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden"
+                                required
+                              >
                                 {t('common:labels.quantity')}
                               </FieldLabel>
                               <div className="flex items-center justify-center gap-1">
@@ -879,7 +883,10 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                               </div>
                             </div>
                             <div className="space-y-1 lg:col-span-2">
-                              <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+                              <FieldLabel
+                                className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden"
+                                required
+                              >
                                 {t('common:labels.price')}
                               </FieldLabel>
                               <div className="flex items-center gap-1">
@@ -981,6 +988,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                           <FieldLabel
                             htmlFor={`client-invoice-item-description-${index}`}
                             className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+                            required
                           >
                             {t('common:labels.description')}
                           </FieldLabel>

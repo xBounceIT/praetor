@@ -482,7 +482,9 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Field data-invalid={Boolean(errors.supplierCode)}>
-                    <FieldLabel htmlFor="supplier-code">{t('crm:suppliers.code')}</FieldLabel>
+                    <FieldLabel htmlFor="supplier-code" required>
+                      {t('crm:suppliers.code')}
+                    </FieldLabel>
                     <Input
                       id="supplier-code"
                       type="text"
@@ -497,7 +499,9 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
                     <FieldError className="text-xs">{errors.supplierCode}</FieldError>
                   </Field>
                   <Field data-invalid={Boolean(errors.name)}>
-                    <FieldLabel htmlFor="supplier-name">{t('crm:suppliers.name')}</FieldLabel>
+                    <FieldLabel htmlFor="supplier-name" required>
+                      {t('crm:suppliers.name')}
+                    </FieldLabel>
                     <Input
                       id="supplier-name"
                       type="text"
@@ -583,7 +587,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Field data-invalid={Boolean(errors.vatNumber)}>
-                    <FieldLabel htmlFor="supplier-vat-number">
+                    <FieldLabel htmlFor="supplier-vat-number" required={!editingSupplier}>
                       {t('crm:suppliers.vatNumber')}
                     </FieldLabel>
                     <Input

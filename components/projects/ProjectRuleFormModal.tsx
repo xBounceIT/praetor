@@ -337,7 +337,7 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
 
         <form className="space-y-5" onSubmit={handleSubmit}>
           <Field data-invalid={!!errors.name}>
-            <FieldLabel htmlFor="project-rule-name">
+            <FieldLabel htmlFor="project-rule-name" required>
               {t('projects:detail.rules.form.name')}
             </FieldLabel>
             <Input
@@ -446,7 +446,11 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
                       className={`${CONDITION_GRID_CLASSNAME} p-3`}
                     >
                       <Field data-invalid={!!fieldError}>
-                        <FieldLabel className="md:sr-only" htmlFor={`project-rule-field-${index}`}>
+                        <FieldLabel
+                          className="md:sr-only"
+                          htmlFor={`project-rule-field-${index}`}
+                          required
+                        >
                           {t('projects:detail.rules.form.field')}
                         </FieldLabel>
                         <Select
@@ -478,6 +482,7 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
                         <FieldLabel
                           className="md:sr-only"
                           htmlFor={`project-rule-operator-${index}`}
+                          required
                         >
                           {t('projects:detail.rules.form.operator')}
                         </FieldLabel>
@@ -536,7 +541,11 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
                       </Field>
 
                       <Field data-invalid={!!valueError}>
-                        <FieldLabel className="md:sr-only" htmlFor={`project-rule-value-${index}`}>
+                        <FieldLabel
+                          className="md:sr-only"
+                          htmlFor={`project-rule-value-${index}`}
+                          required
+                        >
                           {t(
                             valueType === 'field'
                               ? 'projects:detail.rules.form.targetField'

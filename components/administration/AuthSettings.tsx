@@ -725,6 +725,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 label={t('admin.sso.name', 'Name')}
                 value={draft.name || ''}
                 error={errors[`${prefix}name`]}
+                required
                 onChange={(name) => updateProviderDraft(protocol, { name })}
               />
               <Field
@@ -732,6 +733,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 value={draft.slug || ''}
                 error={errors[`${prefix}slug`]}
                 monospace
+                required
                 onChange={(slug) => updateProviderDraft(protocol, { slug: slug.toLowerCase() })}
               />
             </div>
@@ -744,6 +746,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                     value={draft.issuerUrl || ''}
                     error={errors[`${prefix}issuerUrl`]}
                     monospace
+                    required={!!draft.enabled}
                     onChange={(issuerUrl) => updateProviderDraft(protocol, { issuerUrl })}
                   />
                   <Field
@@ -751,6 +754,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                     value={draft.clientId || ''}
                     error={errors[`${prefix}clientId`]}
                     monospace
+                    required={!!draft.enabled}
                     onChange={(clientId) => updateProviderDraft(protocol, { clientId })}
                   />
                   <SecretField
@@ -918,6 +922,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                 value={draft.usernameAttribute || ''}
                 error={errors[`${prefix}usernameAttribute`]}
                 monospace
+                required={protocol === 'oidc' && !!draft.enabled}
                 onChange={(usernameAttribute) =>
                   updateProviderDraft(protocol, { usernameAttribute })
                 }
@@ -1178,6 +1183,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   value={ldapForm.serverUrl}
                   error={errors.serverUrl}
                   monospace
+                  required={ldapForm.enabled}
                   onChange={(serverUrl) => setLdapForm((prev) => ({ ...prev, serverUrl }))}
                 />
                 <Field
@@ -1185,6 +1191,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   value={ldapForm.baseDn}
                   error={errors.baseDn}
                   monospace
+                  required={ldapForm.enabled}
                   onChange={(baseDn) => setLdapForm((prev) => ({ ...prev, baseDn }))}
                 />
                 <Field
@@ -1192,6 +1199,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   value={ldapForm.userFilter}
                   error={errors.userFilter}
                   monospace
+                  required={ldapForm.enabled}
                   onChange={(userFilter) => setLdapForm((prev) => ({ ...prev, userFilter }))}
                 />
                 <Field
@@ -1220,6 +1228,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   value={ldapForm.groupBaseDn}
                   error={errors.groupBaseDn}
                   monospace
+                  required={ldapForm.enabled}
                   onChange={(groupBaseDn) => setLdapForm((prev) => ({ ...prev, groupBaseDn }))}
                 />
                 <Field
@@ -1227,6 +1236,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   value={ldapForm.groupFilter}
                   error={errors.groupFilter}
                   monospace
+                  required={ldapForm.enabled}
                   onChange={(groupFilter) => setLdapForm((prev) => ({ ...prev, groupFilter }))}
                 />
               </CardContent>
@@ -1489,6 +1499,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   label={t('admin.ldap.testUsername')}
                   value={testUsername}
                   error={testErrors.testUsername}
+                  required
                   onChange={(value) => {
                     setTestUsername(value);
                     if (testErrors.testUsername)
@@ -1500,6 +1511,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                   value={testPassword}
                   type="password"
                   error={testErrors.testPassword}
+                  required
                   onChange={(value) => {
                     setTestPassword(value);
                     if (testErrors.testPassword)
@@ -1618,6 +1630,7 @@ type FieldProps = {
   error?: string;
   type?: string;
   monospace?: boolean;
+  required?: boolean;
 };
 
 const Field: React.FC<FieldProps> = ({
@@ -1627,11 +1640,14 @@ const Field: React.FC<FieldProps> = ({
   error,
   type = 'text',
   monospace,
+  required,
 }) => {
   const id = useId();
   return (
     <UIField>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <FieldLabel htmlFor={id} required={required}>
+        {label}
+      </FieldLabel>
       <Input
         id={id}
         type={type}

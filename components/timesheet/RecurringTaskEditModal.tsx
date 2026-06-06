@@ -149,6 +149,7 @@ const RecurringTaskEditModal: React.FC<RecurringTaskEditModalProps> = ({
                 <SelectControl
                   id="recurring-pattern"
                   label={t('recurring.pattern')}
+                  required
                   options={[
                     { id: 'daily', name: t('entry.recurrencePatterns.daily') },
                     { id: 'weekly', name: t('entry.recurrencePatterns.weekly') },
@@ -166,7 +167,9 @@ const RecurringTaskEditModal: React.FC<RecurringTaskEditModalProps> = ({
 
               <FieldGroup className="grid grid-cols-2 gap-4">
                 <Field>
-                  <FieldLabel htmlFor="recurring-start-date">{t('recurring.startDate')}</FieldLabel>
+                  <FieldLabel htmlFor="recurring-start-date" required>
+                    {t('recurring.startDate')}
+                  </FieldLabel>
                   <DateField
                     id="recurring-start-date"
                     value={startDate}

@@ -37,6 +37,7 @@ export interface SelectControlProps {
   value: string | string[];
   onChange: (value: string | string[]) => void;
   label?: React.ReactNode;
+  required?: boolean;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -94,9 +95,21 @@ const getMultiButtonLabel = ({
   return `${selectedOptions.length} ${t('select.selected').toLowerCase()}`;
 };
 
-const SelectLabel = ({ id, label }: { id?: string; label?: React.ReactNode }) => {
+const SelectLabel = ({
+  id,
+  label,
+  required,
+}: {
+  id?: string;
+  label?: React.ReactNode;
+  required?: boolean;
+}) => {
   if (!label) return null;
-  return <FieldLabel htmlFor={id}>{label}</FieldLabel>;
+  return (
+    <FieldLabel htmlFor={id} required={required}>
+      {label}
+    </FieldLabel>
+  );
 };
 
 const TriggerLabel = ({ isPlaceholder, label }: { isPlaceholder: boolean; label: string }) => {
@@ -155,6 +168,7 @@ const PlainSelectControl = ({
   displayValueIsPlaceholder,
   id,
   label,
+  required,
   onChange,
   options,
   placeholder,
@@ -169,7 +183,7 @@ const PlainSelectControl = ({
 
   return (
     <Field className={cn('relative min-w-0', className)}>
-      <SelectLabel id={id} label={label} />
+      <SelectLabel id={id} label={label} required={required} />
       <Select
         disabled={disabled}
         value={selectValue}
@@ -212,6 +226,7 @@ const SearchableSelectControl = ({
   id,
   isMulti = false,
   label,
+  required,
   onChange,
   options,
   placeholder,
@@ -278,7 +293,7 @@ const SearchableSelectControl = ({
 
   return (
     <Field className={cn('relative min-w-0', className)}>
-      <SelectLabel id={id} label={label} />
+      <SelectLabel id={id} label={label} required={required} />
       <Popover
         open={open}
         modal={modal}

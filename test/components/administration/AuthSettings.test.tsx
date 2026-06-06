@@ -140,7 +140,7 @@ const fillMinimalOidcProvider = () => {
 
   const getInputByLabel = (labelText: string) => {
     const label = [...form.querySelectorAll('label')].find(
-      (element) => element.textContent === labelText,
+      (element) => element.textContent?.replace(/\s*\*$/, '') === labelText,
     );
     const input = label?.parentElement?.querySelector('input');
     if (!input) throw new Error(`Input for "${labelText}" not found`);
@@ -423,7 +423,7 @@ describe('<AuthSettings />', () => {
     fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
     const form = screen.getByText('admin.sso.newProvider').closest('form') as HTMLFormElement;
     const slugLabel = [...form.querySelectorAll('label')].find(
-      (el) => el.textContent === 'admin.sso.slug',
+      (el) => el.textContent?.replace(/\s*\*$/, '') === 'admin.sso.slug',
     );
     const slugInput = slugLabel?.parentElement?.querySelector('input') as HTMLInputElement;
     fireEvent.change(slugInput, { target: { value: 'okta' } });
@@ -463,7 +463,7 @@ describe('<AuthSettings />', () => {
     // And the retry produces a usable URL.
     const form = screen.getByText('admin.sso.newProvider').closest('form') as HTMLFormElement;
     const slugLabel = [...form.querySelectorAll('label')].find(
-      (el) => el.textContent === 'admin.sso.slug',
+      (el) => el.textContent?.replace(/\s*\*$/, '') === 'admin.sso.slug',
     );
     const slugInput = slugLabel?.parentElement?.querySelector('input') as HTMLInputElement;
     fireEvent.change(slugInput, { target: { value: 'okta' } });
@@ -495,7 +495,7 @@ describe('<AuthSettings />', () => {
     // Wait for the error UI so we know the first attempt resolved into the 'error' state.
     const form = screen.getByText('admin.sso.newProvider').closest('form') as HTMLFormElement;
     const slugLabel = [...form.querySelectorAll('label')].find(
-      (el) => el.textContent === 'admin.sso.slug',
+      (el) => el.textContent?.replace(/\s*\*$/, '') === 'admin.sso.slug',
     );
     const slugInput = slugLabel?.parentElement?.querySelector('input') as HTMLInputElement;
     fireEvent.change(slugInput, { target: { value: 'okta' } });
@@ -534,7 +534,7 @@ describe('<AuthSettings />', () => {
     fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
     const form = screen.getByText('admin.sso.newProvider').closest('form') as HTMLFormElement;
     const slugLabel = [...form.querySelectorAll('label')].find(
-      (el) => el.textContent === 'admin.sso.slug',
+      (el) => el.textContent?.replace(/\s*\*$/, '') === 'admin.sso.slug',
     );
     const slugInput = slugLabel?.parentElement?.querySelector('input') as HTMLInputElement;
     fireEvent.change(slugInput, { target: { value: 'okta' } });
