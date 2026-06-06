@@ -48,7 +48,11 @@ import SupplierQuoteAttachmentsSection from './SupplierQuoteAttachmentsSection';
 import SupplierQuoteVersionsPanel from './SupplierQuoteVersionsPanel';
 
 interface TotalsBreakdown {
+  // Gross list total: Σ(Prezzo listino × Qtà), before the supplier discount.
   subtotal: number;
+  // Total "Sconto a noi" granted across all lines: subtotal − total.
+  discountAmount: number;
+  // Net total: Σ(Costo unitario × Qtà).
   total: number;
 }
 
@@ -59,11 +63,18 @@ const computeNetUnitPrice = (listPrice: number, discountPercent: number): number
   roundCurrency((listPrice || 0) * (1 - (discountPercent || 0) / 100));
 
 const calculateTotals = (items: SupplierQuoteItem[]): TotalsBreakdown => {
-  let subtotal = 0;
+  let grossListTotal = 0;
+  let netTotal = 0;
   items.forEach((item) => {
-    subtotal += item.quantity * item.unitPrice;
+    // Legacy fallback: rows/snapshots that predate list price use the net unit price as the
+    // list price (no discount), so gross == net and no discount surfaces for them.
+    const listPrice = item.listPrice ?? item.unitPrice ?? 0;
+    grossListTotal += item.quantity * listPrice;
+    netTotal += item.quantity * item.unitPrice;
   });
-  return { subtotal, total: subtotal };
+  const subtotal = roundCurrency(grossListTotal);
+  const total = roundCurrency(netTotal);
+  return { subtotal, total, discountAmount: roundCurrency(subtotal - total) };
 };
 
 export interface SupplierQuotesViewProps {
@@ -1301,6 +1312,12 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       subtotalLabel={t('sales:supplierQuotes.subtotal', {
                         defaultValue: 'Subtotal',
                       })}
+                      discountRow={{
+                        label: t('sales:supplierQuotes.discountAmount', {
+                          defaultValue: 'Discount',
+                        }),
+                        amount: totalsBreakdown.discountAmount,
+                      }}
                       totalLabel={t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
                     />
                   </div>

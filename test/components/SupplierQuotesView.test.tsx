@@ -143,3 +143,38 @@ describe('<SupplierQuotesView /> supplier pricing chain', () => {
     expect(item?.unitPrice).toBe(180);
   });
 });
+
+describe('<SupplierQuotesView /> summary discount line', () => {
+  const discountedQuote = buildQuote({
+    id: 'SQ-DISCOUNT',
+    status: 'draft',
+    items: [
+      {
+        id: 'sqi-disc',
+        quoteId: 'SQ-DISCOUNT',
+        productName: 'Widget',
+        quantity: 1,
+        listPrice: 500,
+        discountPercent: 15,
+        unitPrice: 425,
+        unitType: 'unit',
+      },
+    ],
+  });
+
+  test('shows the Sconto a noi line in the Riepilogo when a line has a discount', () => {
+    render(<SupplierQuotesView {...baseProps} quotes={[discountedQuote]} />);
+    fireEvent.click(screen.getByText('SQ-DISCOUNT'));
+    // Discount row label renders only when the aggregate discount is > 0.
+    expect(screen.getByText('sales:supplierQuotes.discountAmount')).toBeInTheDocument();
+    // Subtotale = gross 500, Sconto = 75, Totale = net 425.
+    expect(screen.getByText('-75.00 EUR')).toBeInTheDocument();
+  });
+
+  test('omits the discount line when no line has a discount', () => {
+    render(<SupplierQuotesView {...baseProps} />);
+    // SQ-DRAFT: listPrice 100, discount 0 → gross == net, no discount.
+    fireEvent.click(screen.getByText('SQ-DRAFT'));
+    expect(screen.queryByText('sales:supplierQuotes.discountAmount')).not.toBeInTheDocument();
+  });
+});

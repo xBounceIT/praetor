@@ -23,7 +23,7 @@ Customer offers in **Accepted** or **Denied** status can be moved back to **Draf
 
 Supplier quotes help compare purchase costs and conditions. Link rows to the correct products when possible so data remains traceable in later workflows.
 
-The **Items** table makes the purchase pricing chain explicit with the **Product**, **List Price**, **Discount to Us (%)**, **Unit Cost**, **Qty**, and **Total** columns. Enter the supplier's list price and the discount percentage they grant you: Praetor derives the **Unit Cost** as `List Price × (1 − Discount to Us / 100)`, while the row **Total** stays `Unit Cost × Qty`. The Unit Cost field is read-only because it is derived. The **Summary** keeps adding up the line totals into **Subtotal** and **Total**.
+The **Items** table makes the purchase pricing chain explicit with the **Product**, **List Price**, **Discount to Us (%)**, **Unit Cost**, **Qty**, and **Total** columns. Enter the supplier's list price and the discount percentage they grant you: Praetor derives the **Unit Cost** as `List Price × (1 − Discount to Us / 100)`, while the row **Total** stays `Unit Cost × Qty`. The Unit Cost field is read-only because it is derived. In the **Summary**, the **Subtotal** sums the list prices (`List Price × Qty`), the **Discount** row highlights the total discount granted by the suppliers, and the **Total** reports the net cost (`Unit Cost × Qty`). The Discount row appears only when at least one line has a discount.
 
 ## Orders
 

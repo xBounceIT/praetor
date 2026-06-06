@@ -23,7 +23,7 @@ Le offerte clienti in stato **Accettata** o **Rifiutata** possono essere riporta
 
 I preventivi fornitori aiutano a confrontare costi e condizioni d'acquisto. Associa le righe ai prodotti corretti quando possibile, così i dati restano tracciabili nei flussi successivi.
 
-La tabella **Articoli** rende esplicita la catena di prezzo d'acquisto con le colonne **Prodotto**, **Prezzo listino**, **Sconto a noi (%)**, **Costo unitario**, **Qtà** e **Totale**. Inserisci il prezzo di listino del fornitore e la percentuale di sconto che ti concede: Praetor calcola il **Costo unitario** come `Prezzo listino × (1 − Sconto a noi / 100)`, mentre il **Totale** di riga resta `Costo unitario × Qtà`. Il campo Costo unitario è in sola lettura perché derivato. Il **Riepilogo** continua a sommare i totali di riga in **Subtotale** e **Totale**.
+La tabella **Articoli** rende esplicita la catena di prezzo d'acquisto con le colonne **Prodotto**, **Prezzo listino**, **Sconto a noi (%)**, **Costo unitario**, **Qtà** e **Totale**. Inserisci il prezzo di listino del fornitore e la percentuale di sconto che ti concede: Praetor calcola il **Costo unitario** come `Prezzo listino × (1 − Sconto a noi / 100)`, mentre il **Totale** di riga resta `Costo unitario × Qtà`. Il campo Costo unitario è in sola lettura perché derivato. Nel **Riepilogo**, il **Subtotale** somma i prezzi di listino (`Prezzo listino × Qtà`), la riga **Sconto** evidenzia lo sconto totale concesso dai fornitori e il **Totale** riporta il costo netto (`Costo unitario × Qtà`). La riga Sconto compare solo quando almeno una riga ha uno sconto.
 
 ## Ordini
 
