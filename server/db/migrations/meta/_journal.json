@@ -526,6 +526,13 @@
       "when": 1780691412646,
       "tag": "0074_add_supplier_quote_client",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1780705408766,
+      "tag": "0075_add_duration_months_to_line_items",
+      "breakpoints": true
     }
   ]
 }
