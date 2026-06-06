@@ -135,7 +135,7 @@ describe('listByIds', () => {
 describe('listNamesByIds', () => {
   test('returns project/client display names and binds ids as one array parameter', async () => {
     exec.enqueue({
-      rows: [{ id: 'p-1', name: 'Alpha', client_id: 'c-1', client_name: 'Acme' }],
+      rows: [{ id: 'p-1', name: 'Alpha', client_id: 'c-1', client_name: 'Acme', end_date: null }],
     });
 
     const result = await projectsRepo.listNamesByIds(['p-1', 'p-2'], testDb);
@@ -146,6 +146,7 @@ describe('listNamesByIds', () => {
       projectName: 'Alpha',
       clientId: 'c-1',
       clientName: 'Acme',
+      endDate: null,
     });
   });
 

@@ -15,6 +15,8 @@ Praetor non consente di creare una seconda registrazione per lo stesso utente, d
 
 La durata di una singola registrazione è limitata a 24 ore: sia `POST /api/entries` sia `PUT /api/entries/:id` rifiutano qualsiasi `duration` superiore a `24`. Suddividi il lavoro su più date invece di registrare durate impossibili.
 
+I progetti con data fine precedente alla data odierna sono considerati scaduti. Senza il permesso `timesheets.expired_projects.create`, non compaiono nelle selezioni della vista giornaliera e settimanale e il server rifiuta nuove registrazioni o spostamenti verso quei progetti con `403`. Le registrazioni già presenti su progetti scaduti restano modificabili per campi non catalogo come durata, note, luogo e segnaposto.
+
 Quando una registrazione viene modificata, Praetor usa il campo `version` restituito dall'API per impedire sovrascritture concorrenti. Se la stessa registrazione è stata salvata altrove nel frattempo, `PUT /api/entries/:id` risponde con `409` e occorre ricaricare la registrazione prima di riprovare.
 
 ## Vista settimanale
@@ -57,6 +59,8 @@ Ogni template ricorrente è definito sull'attività di progetto e include:
 Per le ricorrenze `monthly`, se il giorno della data di inizio non esiste in un mese più corto, l'occorrenza viene generata nell'ultimo giorno di quel mese.
 
 I giorni che cadono di domenica, di sabato (se l'impostazione _Tratta il sabato come festivo_ è attiva) e quelli che coincidono con festività italiane vengono sempre saltati.
+
+Le attività ricorrenti collegate a progetti scaduti vengono saltate durante la generazione, salvo che il ruolo abbia `timesheets.expired_projects.create`.
 
 ### Generazione lato server
 

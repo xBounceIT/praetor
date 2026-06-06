@@ -6,6 +6,7 @@ import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from 
 import { getLocalDateString } from '../../utils/date';
 import { hasScopedActionPermission } from '../../utils/permissions';
 import { formatRecurrencePattern } from '../../utils/recurrence';
+import { filterTrackerEntrySelectableCatalogs } from '../../utils/trackerCatalogs';
 import TaskFormModal, {
   type RecurringConfig,
   type TaskFormDetails,
@@ -273,6 +274,10 @@ const DailyView: React.FC<DailyViewProps> = ({
 }) => {
   const { t } = useTranslation('timesheets');
   const canCreateCustomTask = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
+  const selectableCatalogs = useMemo(
+    () => filterTrackerEntrySelectableCatalogs({ clients, projects, projectTasks, permissions }),
+    [clients, projects, projectTasks, permissions],
+  );
 
   const loadedSelectedDateRef = useRef<string | null>(null);
   const [form, dispatchForm] = useReducer(dailyEntryFormReducer, initialDailyEntryFormState);
@@ -289,9 +294,9 @@ const DailyView: React.FC<DailyViewProps> = ({
   } = form;
 
   const selection = useCatalogSelection({
-    clients,
-    projects,
-    projectTasks,
+    clients: selectableCatalogs.clients,
+    projects: selectableCatalogs.projects,
+    projectTasks: selectableCatalogs.projectTasks,
     defaultLocation,
   });
 
@@ -334,8 +339,8 @@ const DailyView: React.FC<DailyViewProps> = ({
       return;
     }
 
-    const project = projects.find((p) => p.id === selection.projectId);
-    const client = clients.find((c) => c.id === selection.clientId);
+    const project = selectableCatalogs.projects.find((p) => p.id === selection.projectId);
+    const client = selectableCatalogs.clients.find((c) => c.id === selection.clientId);
 
     onAdd({
       date,
@@ -425,7 +430,7 @@ const DailyView: React.FC<DailyViewProps> = ({
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <EntryCatalogSelector
-          clients={clients}
+          clients={selectableCatalogs.clients}
           filteredProjects={selection.filteredProjects}
           filteredTasks={selection.filteredTasks}
           selectedClientId={selection.clientId}
@@ -507,8 +512,8 @@ const DailyView: React.FC<DailyViewProps> = ({
         isOpen={isAddTaskModalOpen}
         onClose={() => dispatchForm({ type: 'setAddTaskModalOpen', isOpen: false })}
         mode="add"
-        projects={projects}
-        clients={clients}
+        projects={selectableCatalogs.projects}
+        clients={selectableCatalogs.clients}
         currency={currency}
         permissions={{
           canCreate: canCreateCustomTask,
