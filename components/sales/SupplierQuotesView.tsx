@@ -24,7 +24,7 @@ import {
   getLocalDateString,
   normalizeDateOnlyString,
 } from '../../utils/date';
-import { convertUnitPrice, parseNumberInputValue } from '../../utils/numbers';
+import { convertUnitPrice, parseNumberInputValue, roundCurrency } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
@@ -49,16 +49,43 @@ import SupplierQuoteAttachmentsSection from './SupplierQuoteAttachmentsSection';
 import SupplierQuoteVersionsPanel from './SupplierQuoteVersionsPanel';
 
 interface TotalsBreakdown {
+  // Gross list total: Σ(Prezzo listino × Qtà), before the supplier discount.
   subtotal: number;
+  // Total "Sconto a noi" granted across all lines: subtotal − total.
+  discountAmount: number;
+  // Net total: Σ(Costo unitario × Qtà).
   total: number;
 }
 
+// Derive a line's persisted-scale pricing. Mirrors the server helper
+// (server/utils/supplier-quote-pricing.ts → deriveSupplierLinePricing): round Prezzo listino and
+// Sconto a noi to the DB scale (NUMERIC(_,2)) FIRST, then derive Costo unitario from the rounded
+// values. Keeping the modal in lockstep with the server means the previewed and submitted line
+// totals match the saved quote even when the user types more than two decimals. The discount is also
+// clamped into [0, 100] so the net cost can never go negative from a legacy/out-of-range value.
+const deriveLinePricing = (
+  listPrice: number,
+  discountPercent: number,
+): { listPrice: number; discountPercent: number; unitPrice: number } => {
+  const roundedListPrice = roundCurrency(listPrice || 0);
+  const roundedDiscountPercent = Math.min(100, Math.max(0, roundCurrency(discountPercent || 0)));
+  const unitPrice = roundCurrency(roundedListPrice * (1 - roundedDiscountPercent / 100));
+  return { listPrice: roundedListPrice, discountPercent: roundedDiscountPercent, unitPrice };
+};
+
 const calculateTotals = (items: SupplierQuoteItem[]): TotalsBreakdown => {
-  let subtotal = 0;
+  let grossListTotal = 0;
+  let netTotal = 0;
   items.forEach((item) => {
-    subtotal += item.quantity * item.unitPrice;
+    // Legacy fallback: rows/snapshots that predate list price use the net unit price as the
+    // list price (no discount), so gross == net and no discount surfaces for them.
+    const listPrice = item.listPrice ?? item.unitPrice ?? 0;
+    grossListTotal += item.quantity * listPrice;
+    netTotal += item.quantity * item.unitPrice;
   });
-  return { subtotal, total: subtotal };
+  const subtotal = roundCurrency(grossListTotal);
+  const total = roundCurrency(netTotal);
+  return { subtotal, total, discountAmount: roundCurrency(subtotal - total) };
 };
 
 export interface SupplierQuotesViewProps {
@@ -292,7 +319,19 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       if (isReadOnly) return;
       setFormData((prev) => {
         const items = [...(prev.items || [])];
-        items[index] = { ...items[index], [field]: value };
+        const current = items[index];
+        if (!current) return prev;
+        const next = { ...current, [field]: value };
+        // Prezzo listino / Sconto a noi edits re-derive the whole line at the persisted DB scale in
+        // the same update, so the rounded list price/discount and the net cost — and every total that
+        // reads them — stay in lockstep with what the server will store.
+        if (field === 'listPrice' || field === 'discountPercent') {
+          const pricing = deriveLinePricing(next.listPrice, next.discountPercent);
+          next.listPrice = pricing.listPrice;
+          next.discountPercent = pricing.discountPercent;
+          next.unitPrice = pricing.unitPrice;
+        }
+        items[index] = next;
         return { ...prev, items };
       });
     },
@@ -310,6 +349,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           quoteId: editingQuote?.id || '',
           productName: '',
           quantity: 1,
+          listPrice: 0,
+          discountPercent: 0,
           unitPrice: 0,
           unitType: 'unit' as const,
           note: '',
@@ -336,12 +377,17 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     if (!item) return;
     const oldType = item.unitType || 'unit';
     if (oldType === newType) return;
-    const adjustedPrice = convertUnitPrice(item.unitPrice, oldType, newType);
+    // Convert the list price (the base of the pricing chain), then re-derive Costo unitario.
+    const baseListPrice = item.listPrice ?? item.unitPrice ?? 0;
+    const adjustedListPrice = convertUnitPrice(baseListPrice, oldType, newType);
+    const pricing = deriveLinePricing(adjustedListPrice, item.discountPercent ?? 0);
     const newItems = [...(formData.items || [])];
     newItems[index] = {
       ...newItems[index],
       unitType: newType,
-      unitPrice: adjustedPrice,
+      listPrice: pricing.listPrice,
+      discountPercent: pricing.discountPercent,
+      unitPrice: pricing.unitPrice,
     };
     setFormData((prev) => ({ ...prev, items: newItems }));
   };
@@ -760,7 +806,12 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       ...formData,
       items: (formData.items || []).map((item) => ({
         ...item,
-        unitPrice: Number(item.unitPrice ?? 0),
+        // Submit the same persisted-scale pricing the server derives, so what the user reviewed is
+        // exactly what gets saved (legacy rows fall back to the net price as the list price).
+        ...deriveLinePricing(
+          Number(item.listPrice ?? item.unitPrice ?? 0),
+          Number(item.discountPercent ?? 0),
+        ),
       })),
     };
 
@@ -999,14 +1050,22 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   {formData.items && formData.items.length > 0 && (
                     <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
                       <div className="flex-1 min-w-0 grid grid-cols-12 gap-3">
-                        <div className="col-span-7 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
+                        <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
                           {t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
+                        </div>
+                        <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
+                          {t('sales:supplierQuotes.listPrice', { defaultValue: 'List Price' })}
+                        </div>
+                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
+                          {t('sales:supplierQuotes.discountToUs', {
+                            defaultValue: 'Discount to Us (%)',
+                          })}
+                        </div>
+                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
+                          {t('sales:supplierQuotes.unitCost', { defaultValue: 'Unit Cost' })}
                         </div>
                         <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
                           {t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
-                        </div>
-                        <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
-                          {t('sales:supplierQuotes.unitPrice', { defaultValue: 'Unit Price' })}
                         </div>
                       </div>
                       <div className="w-24 shrink-0 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-right">
@@ -1019,7 +1078,12 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   {formData.items && formData.items.length > 0 ? (
                     <div className="space-y-3">
                       {formData.items.map((item, index) => {
-                        const lineTotal = item.quantity * item.unitPrice;
+                        // Display with legacy fallbacks: rows/snapshots that predate list price use
+                        // the stored net unit price as the list price (with no discount).
+                        const itemListPrice = item.listPrice ?? item.unitPrice ?? 0;
+                        const itemDiscountPercent = item.discountPercent ?? 0;
+                        const itemUnitCost = item.unitPrice ?? 0;
+                        const lineTotal = item.quantity * itemUnitCost;
                         const itemProduct = item.productId
                           ? products.find((p) => p.id === item.productId)
                           : undefined;
@@ -1089,16 +1153,16 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                             <div className="grid grid-cols-2 gap-3 lg:hidden">
                               <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
                                 <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
-                                  {t('sales:supplierQuotes.unitPrice', {
-                                    defaultValue: 'Unit Price',
+                                  {t('sales:supplierQuotes.listPrice', {
+                                    defaultValue: 'List Price',
                                   })}
                                 </div>
                                 <div className="flex items-center gap-1">
                                   <ValidatedNumberInput
-                                    value={item.unitPrice}
+                                    value={itemListPrice}
                                     formatDecimals={2}
                                     onValueChange={(value) =>
-                                      updateItem(index, 'unitPrice', parseNumberInputValue(value))
+                                      updateItem(index, 'listPrice', parseNumberInputValue(value))
                                     }
                                     disabled={isReadOnly}
                                     className="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1106,6 +1170,42 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                   <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
                                     {currency}
                                   </span>
+                                </div>
+                              </div>
+                              <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
+                                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
+                                  {t('sales:supplierQuotes.discountToUs', {
+                                    defaultValue: 'Discount to Us (%)',
+                                  })}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <ValidatedNumberInput
+                                    value={itemDiscountPercent}
+                                    min={0}
+                                    max={100}
+                                    onValueChange={(value) =>
+                                      updateItem(
+                                        index,
+                                        'discountPercent',
+                                        parseNumberInputValue(value),
+                                      )
+                                    }
+                                    disabled={isReadOnly}
+                                    className="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                  />
+                                  <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
+                                    %
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
+                                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
+                                  {t('sales:supplierQuotes.unitCost', {
+                                    defaultValue: 'Unit Cost',
+                                  })}
+                                </div>
+                                <div className="text-xs font-bold text-zinc-700 whitespace-nowrap">
+                                  {itemUnitCost.toFixed(2)} {currency}
                                 </div>
                               </div>
                               <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
@@ -1119,7 +1219,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                             </div>
                             <div className="hidden lg:flex gap-2 items-center">
                               <div className="flex-1 min-w-0 grid grid-cols-12 gap-3 items-center">
-                                <div className="col-span-7">
+                                <div className="col-span-3">
                                   <Input
                                     type="text"
                                     value={item.productName || ''}
@@ -1131,6 +1231,47 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                       defaultValue: 'Product',
                                     })}
                                   />
+                                </div>
+                                <div className="col-span-3 flex items-center gap-1.5">
+                                  <ValidatedNumberInput
+                                    value={itemListPrice}
+                                    formatDecimals={2}
+                                    onValueChange={(value) =>
+                                      updateItem(index, 'listPrice', parseNumberInputValue(value))
+                                    }
+                                    disabled={isReadOnly}
+                                    className={`${itemInputClassName} flex-1`}
+                                  />
+                                  <span className="text-xs font-semibold text-zinc-400 shrink-0 whitespace-nowrap">
+                                    {currency}
+                                  </span>
+                                </div>
+                                <div className="col-span-2 flex items-center gap-1">
+                                  <ValidatedNumberInput
+                                    value={itemDiscountPercent}
+                                    min={0}
+                                    max={100}
+                                    onValueChange={(value) =>
+                                      updateItem(
+                                        index,
+                                        'discountPercent',
+                                        parseNumberInputValue(value),
+                                      )
+                                    }
+                                    disabled={isReadOnly}
+                                    className={`${itemInputClassName} text-center flex-1`}
+                                  />
+                                  <span className="text-xs font-semibold text-zinc-400 shrink-0">
+                                    %
+                                  </span>
+                                </div>
+                                <div className="col-span-2 flex items-center justify-end gap-1.5">
+                                  <span className="flex-1 text-right text-sm font-semibold text-zinc-700 whitespace-nowrap tabular-nums">
+                                    {itemUnitCost.toFixed(2)}
+                                  </span>
+                                  <span className="text-xs font-semibold text-zinc-400 shrink-0 whitespace-nowrap">
+                                    {currency}
+                                  </span>
                                 </div>
                                 <div className="col-span-2 flex items-center gap-1">
                                   <ValidatedNumberInput
@@ -1152,20 +1293,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                     disabled={isReadOnly}
                                     i18nPrefix="sales:supplierQuotes"
                                   />
-                                </div>
-                                <div className="col-span-3 flex items-center gap-1.5">
-                                  <ValidatedNumberInput
-                                    value={item.unitPrice}
-                                    formatDecimals={2}
-                                    onValueChange={(value) =>
-                                      updateItem(index, 'unitPrice', parseNumberInputValue(value))
-                                    }
-                                    disabled={isReadOnly}
-                                    className={`${itemInputClassName} flex-1`}
-                                  />
-                                  <span className="text-xs font-semibold text-zinc-400 shrink-0 whitespace-nowrap">
-                                    {currency}
-                                  </span>
                                 </div>
                               </div>
                               <div className="w-24 shrink-0 flex items-center justify-end">
@@ -1272,6 +1399,12 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       subtotalLabel={t('sales:supplierQuotes.subtotal', {
                         defaultValue: 'Subtotal',
                       })}
+                      discountRow={{
+                        label: t('sales:supplierQuotes.discountAmount', {
+                          defaultValue: 'Discount',
+                        }),
+                        amount: totalsBreakdown.discountAmount,
+                      }}
                       totalLabel={t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
                     />
                   </div>

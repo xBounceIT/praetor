@@ -409,12 +409,19 @@ export const normalizeInvoice = (i: Invoice): Invoice => ({
   items: (i.items || []).map(normalizeInvoiceItem),
 });
 
-export const normalizeSupplierQuoteItem = (item: SupplierQuoteItem): SupplierQuoteItem => ({
-  ...item,
-  quantity: Number(item.quantity || 0),
-  unitPrice: Number(item.unitPrice || 0),
-  note: item.note || '',
-});
+export const normalizeSupplierQuoteItem = (item: SupplierQuoteItem): SupplierQuoteItem => {
+  const unitPrice = Number(item.unitPrice || 0);
+  return {
+    ...item,
+    quantity: Number(item.quantity || 0),
+    // Older payloads predate list price / discount; fall back to the net unit price so the
+    // pricing chain stays consistent (list price = net cost, no discount).
+    listPrice: Number(item.listPrice ?? unitPrice),
+    discountPercent: Number(item.discountPercent || 0),
+    unitPrice,
+    note: item.note || '',
+  };
+};
 
 export const normalizeSupplierQuote = (q: SupplierQuote): SupplierQuote => ({
   ...q,

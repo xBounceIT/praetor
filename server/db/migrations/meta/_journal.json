@@ -533,6 +533,13 @@
       "when": 1780691412647,
       "tag": "0075_grant_expired_project_time_entry_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1780706497671,
+      "tag": "0076_add_supplier_quote_item_list_price_discount",
+      "breakpoints": true
     }
   ]
 }

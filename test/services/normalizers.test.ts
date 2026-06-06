@@ -166,6 +166,8 @@ const baseSupplierQuoteItem: SupplierQuoteItem = {
   quoteId: 'sq-1',
   productName: 'Widget',
   quantity: 1,
+  listPrice: 5,
+  discountPercent: 0,
   unitPrice: 5,
 };
 
@@ -1020,11 +1022,15 @@ describe('normalizeSupplierQuoteItem', () => {
   test('parses numbers and preserves note', () => {
     const item = make<SupplierQuoteItem>(baseSupplierQuoteItem, {
       quantity: '4',
+      listPrice: '20',
+      discountPercent: '10',
       unitPrice: '7.5',
       note: 'Important',
     });
     const result = normalizeSupplierQuoteItem(item);
     expect(result.quantity).toBe(4);
+    expect(result.listPrice).toBe(20);
+    expect(result.discountPercent).toBe(10);
     expect(result.unitPrice).toBe(7.5);
     expect(result.note).toBe('Important');
   });
@@ -1032,13 +1038,29 @@ describe('normalizeSupplierQuoteItem', () => {
   test('defaults missing fields safely', () => {
     const item = make<SupplierQuoteItem>(baseSupplierQuoteItem, {
       quantity: undefined,
+      listPrice: undefined,
+      discountPercent: undefined,
       unitPrice: undefined,
       note: undefined,
     });
     const result = normalizeSupplierQuoteItem(item);
     expect(result.quantity).toBe(0);
+    expect(result.listPrice).toBe(0);
+    expect(result.discountPercent).toBe(0);
     expect(result.unitPrice).toBe(0);
     expect(result.note).toBe('');
+  });
+
+  test('falls back to net unit price as list price for legacy items', () => {
+    const item = make<SupplierQuoteItem>(baseSupplierQuoteItem, {
+      listPrice: undefined,
+      discountPercent: undefined,
+      unitPrice: '9',
+    });
+    const result = normalizeSupplierQuoteItem(item);
+    expect(result.listPrice).toBe(9);
+    expect(result.discountPercent).toBe(0);
+    expect(result.unitPrice).toBe(9);
   });
 });
 

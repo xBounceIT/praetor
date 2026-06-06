@@ -30,11 +30,28 @@ const ValidatedNumberInput = ({
   onFocus,
   onBlur,
   formatDecimals,
+  min,
+  max,
   ref,
   ...rest
 }: ValidatedNumberInputProps) => {
   const [internalValue, setInternalValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+
+  // Keep partial entries ('', '.', trailing-dot) editable; only clamp once the
+  // string parses to a finite number so bounded fields (e.g. a 0–100 percentage)
+  // can never hold an out-of-range value. min/max arrive from the native input
+  // attributes as string | number, so coerce before comparing.
+  const clampToBounds = (val: string): string => {
+    if (val === '') return val;
+    const n = Number(val);
+    if (!Number.isFinite(n)) return val;
+    const maxNum = max === undefined ? Number.NaN : Number(max);
+    const minNum = min === undefined ? Number.NaN : Number(min);
+    if (Number.isFinite(maxNum) && n > maxNum) return String(maxNum);
+    if (Number.isFinite(minNum) && n < minNum) return String(minNum);
+    return val;
+  };
 
   const displayValue = isFocused ? internalValue : formatForDisplay(value, formatDecimals);
 
@@ -80,7 +97,7 @@ const ValidatedNumberInput = ({
   const updateNumberValue = (event: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = event.target.value;
     if (rawValue !== '' && !numberInputPattern.test(rawValue)) return;
-    const normalizedValue = normalizeNumberInput(rawValue);
+    const normalizedValue = clampToBounds(normalizeNumberInput(rawValue));
     setInternalValue(normalizedValue);
     onValueChange(normalizedValue);
   };

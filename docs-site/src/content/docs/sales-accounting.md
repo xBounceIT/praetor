@@ -27,6 +27,8 @@ I preventivi fornitori aiutano a confrontare costi e condizioni d'acquisto. Asso
 
 Nella sezione **Informazioni Fornitore** del dialog **Nuovo Preventivo Fornitore** puoi collegare facoltativamente un **Cliente**: usalo quando il preventivo si riferisce alla commessa di un cliente specifico. L'associazione è opzionale — un preventivo fornitore senza cliente è uno stato valido e si salva senza errori — e può essere rimossa in qualsiasi momento selezionando *Nessun cliente*. Quando è valorizzato, il cliente collegato è visibile sia nel dettaglio del preventivo sia nella colonna **Cliente** della lista.
 
+La tabella **Articoli** rende esplicita la catena di prezzo d'acquisto con le colonne **Prodotto**, **Prezzo listino**, **Sconto a noi (%)**, **Costo unitario**, **Qtà** e **Totale**. Inserisci il prezzo di listino del fornitore e la percentuale di sconto che ti concede (limitata a 0–100%, perché uno sconto superiore porterebbe il costo sotto zero): Praetor calcola il **Costo unitario** come `Prezzo listino × (1 − Sconto a noi / 100)`, mentre il **Totale** di riga resta `Costo unitario × Qtà`. Il campo Costo unitario è in sola lettura perché derivato. Nel **Riepilogo**, il **Subtotale** somma i prezzi di listino (`Prezzo listino × Qtà`), la riga **Sconto** evidenzia lo sconto totale concesso dai fornitori e il **Totale** riporta il costo netto (`Costo unitario × Qtà`). La riga Sconto compare solo quando almeno una riga ha uno sconto.
+
 ## Ordini
 
 Gli ordini clienti e fornitori consolidano le informazioni operative. Prima di confermare, verifica anagrafica, righe, sconti, condizioni di pagamento e collegamenti con documenti precedenti.
