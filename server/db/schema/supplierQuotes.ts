@@ -9,6 +9,7 @@ import {
   timestamp,
   varchar,
 } from 'drizzle-orm/pg-core';
+import { clients } from './clients.ts';
 import { products } from './products.ts';
 import { suppliers } from './suppliers.ts';
 
@@ -24,6 +25,14 @@ export const supplierQuotes = pgTable(
       .notNull()
       .references(() => suppliers.id, { onDelete: 'restrict' }),
     supplierName: varchar('supplier_name', { length: 255 }).notNull(),
+    // Optional customer association (issue #759). Nullable: a supplier quote with no linked
+    // customer is a valid state. RESTRICT so a client with linked supplier quotes can't be
+    // silently deleted, mirroring the supplier FK above. `client_name` is denormalized for
+    // display, matching the `quotes` table convention.
+    clientId: varchar('client_id', { length: 50 }).references(() => clients.id, {
+      onDelete: 'restrict',
+    }),
+    clientName: varchar('client_name', { length: 255 }),
     paymentTerms: varchar('payment_terms', { length: 20 }).notNull().default('immediate'),
     status: varchar('status', { length: 20 }).notNull().default('draft'),
     expirationDate: date('expiration_date', { mode: 'string' }).notNull(),
@@ -33,6 +42,7 @@ export const supplierQuotes = pgTable(
   },
   (table) => [
     index('idx_supplier_quotes_supplier_id').on(table.supplierId),
+    index('idx_supplier_quotes_client_id').on(table.clientId),
     index('idx_supplier_quotes_status').on(table.status),
     index('idx_supplier_quotes_created_at').on(table.createdAt),
     check(

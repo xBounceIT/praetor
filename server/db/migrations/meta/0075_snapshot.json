@@ -1,6 +1,6 @@
 {
-  "id": "64299d56-80bc-40b5-9bb6-cecd89966693",
-  "prevId": "6e7ab31b-15bc-4dc6-a352-1cb88822fa5d",
+  "id": "35bd6a33-bc01-472a-b748-9c1d17ac6dff",
+  "prevId": "64299d56-80bc-40b5-9bb6-cecd89966693",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -5781,6 +5781,20 @@
           "primaryKey": false,
           "notNull": false,
           "default": "'hours'"
+        },
+        "list_price": {
+          "name": "list_price",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "discount_percent": {
+          "name": "discount_percent",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
         }
       },
       "indexes": {
@@ -5827,6 +5841,10 @@
         "chk_supplier_quote_items_unit_type": {
           "name": "chk_supplier_quote_items_unit_type",
           "value": "\"supplier_quote_items\".\"unit_type\" IN ('hours', 'days', 'unit')"
+        },
+        "chk_supplier_quote_items_discount_percent": {
+          "name": "chk_supplier_quote_items_discount_percent",
+          "value": "\"supplier_quote_items\".\"discount_percent\" >= 0 AND \"supplier_quote_items\".\"discount_percent\" <= 100"
         }
       },
       "isRLSEnabled": false

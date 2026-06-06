@@ -11,12 +11,15 @@ beforeEach(() => {
 });
 
 // Builder fixtures match the column order in db/schema/supplierQuotes.ts:
-//   [id, supplierId, supplierName, paymentTerms, status, expirationDate, notes, createdAt, updatedAt]
-// `listAll` adds the linkedOrderId correlated subquery as a 10th projection column.
+//   [id, supplierId, supplierName, clientId, clientName, paymentTerms, status,
+//    expirationDate, notes, createdAt, updatedAt]
+// `listAll` adds the linkedOrderId correlated subquery as a 12th projection column.
 const QUOTE_BASE: readonly unknown[] = [
   'q-1',
   's-1',
   'Acme',
+  null,
+  null,
   'net30',
   'draft',
   '2026-06-01',
@@ -27,7 +30,7 @@ const QUOTE_BASE: readonly unknown[] = [
 
 const quoteRow = (overrides: Record<number, unknown> = {}) => makeRow(QUOTE_BASE, overrides);
 
-// listAll's projection appends linkedOrderId at position 9.
+// listAll's projection appends linkedOrderId at position 11.
 const QUOTE_LIST_BASE: readonly unknown[] = [...QUOTE_BASE, null];
 
 const quoteListRow = (overrides: Record<number, unknown> = {}) =>
@@ -54,7 +57,7 @@ const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, 
 
 describe('listAll', () => {
   test('issues a query with linkedOrderId correlated subquery', async () => {
-    exec.enqueue({ rows: [quoteListRow({ 9: 'so-1' })] });
+    exec.enqueue({ rows: [quoteListRow({ 11: 'so-1' })] });
     const result = await supplierQuotesRepo.listAll(testDb);
     const sql = exec.calls[0].sql;
     expect(sql).toContain('FROM supplier_sales');
@@ -335,6 +338,8 @@ describe('create', () => {
         id: 'q-1',
         supplierId: 's-1',
         supplierName: 'Acme',
+        clientId: null,
+        clientName: null,
         paymentTerms: 'net30',
         status: 'draft',
         expirationDate: '2026-06-01',
@@ -348,6 +353,28 @@ describe('create', () => {
     expect(exec.calls[0].params).toContain('2026-06-01');
     expect(result.id).toBe('q-1');
   });
+
+  test('persists the optional client link when provided', async () => {
+    exec.enqueue({ rows: [quoteRow({ 3: 'c-1', 4: 'Globex' })] });
+    const result = await supplierQuotesRepo.create(
+      {
+        id: 'q-1',
+        supplierId: 's-1',
+        supplierName: 'Acme',
+        clientId: 'c-1',
+        clientName: 'Globex',
+        paymentTerms: 'net30',
+        status: 'draft',
+        expirationDate: '2026-06-01',
+        notes: null,
+      },
+      testDb,
+    );
+    expect(exec.calls[0].params).toContain('c-1');
+    expect(exec.calls[0].params).toContain('Globex');
+    expect(result.clientId).toBe('c-1');
+    expect(result.clientName).toBe('Globex');
+  });
 });
 
 describe('restoreSnapshotQuote', () => {
@@ -358,6 +385,8 @@ describe('restoreSnapshotQuote', () => {
       {
         supplierId: 's-1',
         supplierName: 'Acme',
+        clientId: null,
+        clientName: null,
         paymentTerms: 'net30',
         status: 'sent',
         expirationDate: '2026-06-01',
@@ -380,6 +409,8 @@ describe('restoreSnapshotQuote', () => {
       {
         supplierId: 's-1',
         supplierName: 'Acme',
+        clientId: null,
+        clientName: null,
         paymentTerms: 'net30',
         status: 'draft',
         expirationDate: '2026-06-01',

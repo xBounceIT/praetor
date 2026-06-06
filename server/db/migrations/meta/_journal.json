@@ -523,8 +523,15 @@
     {
       "idx": 74,
       "version": "7",
-      "when": 1780691625133,
-      "tag": "0074_add_supplier_quote_item_list_price_discount",
+      "when": 1780691412646,
+      "tag": "0074_add_supplier_quote_client",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1780705537755,
+      "tag": "0075_add_supplier_quote_item_list_price_discount",
       "breakpoints": true
     }
   ]

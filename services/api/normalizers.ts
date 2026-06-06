@@ -425,6 +425,8 @@ export const normalizeSupplierQuoteItem = (item: SupplierQuoteItem): SupplierQuo
 
 export const normalizeSupplierQuote = (q: SupplierQuote): SupplierQuote => ({
   ...q,
+  clientId: q.clientId ?? null,
+  clientName: q.clientName ?? null,
   items: (q.items || []).map(normalizeSupplierQuoteItem),
 });
 
