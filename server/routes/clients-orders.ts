@@ -10,6 +10,7 @@ import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
+import type { DurationUnit } from '../utils/duration-unit.ts';
 import {
   generateClientOrderId,
   generatePrefixedId,
@@ -22,6 +23,7 @@ import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
   optionalDurationMonths,
+  optionalDurationUnit,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   parseLocalizedNonNegativeNumber,
@@ -59,6 +61,7 @@ const clientOrderItemSchema = {
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
     durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years'] },
   },
   required: ['id', 'orderId', 'productName', 'quantity', 'unitPrice', 'productCost', 'discount'],
 } as const;
@@ -115,6 +118,7 @@ const clientOrderItemBodySchema = {
     discount: { type: 'number' },
     note: { type: 'string' },
     durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years'] },
   },
   required: ['productId', 'productName', 'quantity', 'unitPrice'],
 } as const;
@@ -172,6 +176,7 @@ type NormalizedOrderItem = {
   note: string | null;
   discount: number;
   durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 const normalizeIncomingItems = (
@@ -220,6 +225,11 @@ const normalizeIncomingItems = (
       badRequest(reply, durationMonthsResult.message);
       return null;
     }
+    const durationUnitResult = optionalDurationUnit(item.durationUnit, `items[${i}].durationUnit`);
+    if (!durationUnitResult.ok) {
+      badRequest(reply, durationUnitResult.message);
+      return null;
+    }
     const toNullableString = (value: unknown) =>
       value === null || value === undefined ? null : String(value);
     const toNullableNumber = (value: unknown) =>
@@ -243,6 +253,7 @@ const normalizeIncomingItems = (
       note: toNullableString(item.note),
       discount: itemDiscountResult.value || 0,
       durationMonths: durationMonthsResult.value ?? 1,
+      durationUnit: durationUnitResult.value ?? 'months',
     });
   }
   return normalized;
@@ -270,6 +281,7 @@ const buildItemsForInsert = (
     supplierSaleSupplierName: item.supplierSaleSupplierName,
     unitType: item.unitType,
     durationMonths: item.durationMonths,
+    durationUnit: item.durationUnit,
   }));
 
 const normalizeNotesValue = (value: unknown) => String(value ?? '');
@@ -336,6 +348,7 @@ const snapshotItemFingerprint = (item: {
   supplierSaleItemId?: string | null;
   supplierSaleSupplierName?: string | null;
   durationMonths?: number | null;
+  durationUnit?: string | null;
 }) =>
   [
     item.id ?? '',
@@ -356,6 +369,7 @@ const snapshotItemFingerprint = (item: {
     item.supplierSaleItemId ?? '',
     item.supplierSaleSupplierName ?? '',
     item.durationMonths == null ? 1 : Number(item.durationMonths),
+    item.durationUnit ?? 'months',
   ].join('|');
 
 const itemsChangedForSnapshot = (

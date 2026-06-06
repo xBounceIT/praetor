@@ -4,6 +4,7 @@
  */
 
 import type { FastifyReply } from 'fastify';
+import { DURATION_UNITS, type DurationUnit } from './duration-unit.ts';
 
 /**
  * Check if value is a non-empty string after trimming
@@ -306,6 +307,15 @@ export function optionalDurationMonths(
     return { ok: false, message: `${fieldName} must be a whole number of months` };
   }
   return result;
+}
+
+// Display unit for a line-item duration (issue #757). Absent/empty → null so the caller can
+// default to 'months'. The unit allow-list lives in `duration-unit.ts` (shared with the repos).
+export function optionalDurationUnit(
+  value: unknown,
+  fieldName: string = 'durationUnit',
+): { ok: true; value: DurationUnit | null } | { ok: false; message: string } {
+  return optionalEnum(value, DURATION_UNITS, fieldName);
 }
 
 const TRUE_STRINGS = new Set(['true', '1', 'yes']);

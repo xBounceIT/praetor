@@ -162,6 +162,34 @@ describe('<ClientOffersView /> list', () => {
     expect(screen.getAllByText('240.00 EUR').length).toBeGreaterThan(0);
   });
 
+  test('a years duration prices off the canonical months, matching the months equivalent (issue #757)', () => {
+    // durationUnit is display-only; pricing always uses the canonical durationMonths (24). So
+    // "2 years" (24 months) must total the same as a 24-month line.
+    const yearsOffer = buildOffer({
+      id: 'O-YEARS',
+      items: [
+        {
+          id: 'years-item',
+          offerId: 'O-YEARS',
+          productId: 'p-1',
+          productName: 'Service',
+          quantity: 2,
+          unitPrice: 100,
+          productCost: 60,
+          productMolPercentage: 40,
+          unitType: 'unit',
+          durationMonths: 24,
+          durationUnit: 'years',
+        },
+      ],
+    });
+    render(<ClientOffersView {...baseProps} offers={[yearsOffer]} />);
+    // Subtotal (revenue) = 100 × 2 × 24 = 4800.
+    expect(screen.getAllByText('4800.00 EUR').length).toBeGreaterThan(0);
+    // Margin = 4800 − (60 × 2 × 24 = 2880) = 1920.
+    expect(screen.getAllByText('1920.00 EUR').length).toBeGreaterThan(0);
+  });
+
   test('renders fixed discounts as equivalent percentages in offer rows', () => {
     const fixedDiscountOffer = buildOffer({
       id: 'O-FIXED-DISCOUNT',

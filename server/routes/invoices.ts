@@ -9,6 +9,7 @@ import {
   getForeignKeyViolation,
   getUniqueViolation,
 } from '../utils/db-errors.ts';
+import type { DurationUnit } from '../utils/duration-unit.ts';
 import { computeInvoiceTotals, roundCurrency } from '../utils/invoice-math.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -17,6 +18,7 @@ import {
   badRequest,
   optionalDateString,
   optionalDurationMonths,
+  optionalDurationUnit,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   parseDateString,
@@ -54,6 +56,7 @@ const invoiceItemSchema = {
     discount: { type: 'number' },
     taxRate: { type: 'number' },
     durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years'] },
   },
   required: [
     'id',
@@ -114,6 +117,7 @@ const invoiceItemBodySchema = {
     discount: { type: 'number' },
     taxRate: { type: 'number' },
     durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years'] },
   },
   required: ['description', 'unitOfMeasure', 'quantity', 'unitPrice'],
 } as const;
@@ -160,6 +164,7 @@ type NormalizedInvoiceItemInput = {
   discount: number;
   taxRate: number;
   durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 const validateAndNormalizeItems = (
@@ -244,6 +249,12 @@ const validateAndNormalizeItems = (
       return null;
     }
 
+    const durationUnitResult = optionalDurationUnit(item.durationUnit, `items[${i}].durationUnit`);
+    if (!durationUnitResult.ok) {
+      badRequest(reply, durationUnitResult.message);
+      return null;
+    }
+
     normalizedItems.push({
       productId: productIdResult.value || null,
       description: descriptionResult.value,
@@ -253,6 +264,7 @@ const validateAndNormalizeItems = (
       discount: roundCurrency(discountResult.value || 0),
       taxRate: roundCurrency(taxRateResult.value || 0),
       durationMonths: durationMonthsResult.value ?? 1,
+      durationUnit: durationUnitResult.value ?? 'months',
     });
   }
 
@@ -270,6 +282,7 @@ const buildItemsForInsert = (items: NormalizedInvoiceItemInput[]): invoicesRepo.
     discount: item.discount,
     taxRate: item.taxRate,
     durationMonths: item.durationMonths,
+    durationUnit: item.durationUnit,
   }));
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {

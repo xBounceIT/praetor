@@ -3,13 +3,16 @@ import {
   calcProductSalePrice,
   calculatePricingTotals,
   convertUnitPrice,
+  durationValueToMonths,
   formatDiscountValue,
+  getDurationDisplayValue,
   getEffectiveCost,
   getEffectiveDurationMonths,
   getEffectiveMol,
   getItemPricingContext,
+  normalizeDurationUnit,
   type PricingItem,
-  parseDurationMonthsInput,
+  parseDurationValueToMonths,
   parseNumberInputValue,
   roundCurrency,
 } from '../../utils/numbers';
@@ -118,20 +121,121 @@ describe('getEffectiveDurationMonths', () => {
   });
 });
 
-describe('parseDurationMonthsInput', () => {
-  test('parses a whole number of months', () => {
-    expect(parseDurationMonthsInput('12')).toBe(12);
+describe('normalizeDurationUnit', () => {
+  test("returns 'years' only when the value is exactly 'years'", () => {
+    expect(normalizeDurationUnit('years')).toBe('years');
   });
 
-  test('truncates to an integer', () => {
-    expect(parseDurationMonthsInput('2.9')).toBe(2);
+  test("defaults to 'months' for 'months', unknown strings, and nullish values", () => {
+    expect(normalizeDurationUnit('months')).toBe('months');
+    expect(normalizeDurationUnit('weeks')).toBe('months');
+    expect(normalizeDurationUnit('')).toBe('months');
+    expect(normalizeDurationUnit(undefined)).toBe('months');
+    expect(normalizeDurationUnit(null)).toBe('months');
+    expect(normalizeDurationUnit(12)).toBe('months');
+  });
+});
+
+describe('durationValueToMonths', () => {
+  test('passes months through unchanged (rounded to a whole month)', () => {
+    expect(durationValueToMonths(3, 'months')).toBe(3);
+    expect(durationValueToMonths(2.4, 'months')).toBe(2);
   });
 
-  test('clamps below 1 and empty/invalid input to 1', () => {
-    expect(parseDurationMonthsInput('')).toBe(1);
-    expect(parseDurationMonthsInput('0')).toBe(1);
-    expect(parseDurationMonthsInput('-4')).toBe(1);
-    expect(parseDurationMonthsInput('abc')).toBe(1);
+  test('multiplies years by 12 to get canonical months', () => {
+    expect(durationValueToMonths(2, 'years')).toBe(24);
+    expect(durationValueToMonths(1, 'years')).toBe(12);
+    // 1.5 years × 12 = 18 months.
+    expect(durationValueToMonths(1.5, 'years')).toBe(18);
+  });
+
+  test('falls back to 1 month for zero, negative, or non-finite values', () => {
+    expect(durationValueToMonths(0, 'months')).toBe(1);
+    expect(durationValueToMonths(-3, 'years')).toBe(1);
+    expect(durationValueToMonths(Number.NaN, 'years')).toBe(1);
+    expect(durationValueToMonths(Number.POSITIVE_INFINITY, 'months')).toBe(1);
+  });
+});
+
+describe('getDurationDisplayValue', () => {
+  test('shows the raw months when the unit is months (or defaulted)', () => {
+    expect(getDurationDisplayValue({ durationMonths: 6, durationUnit: 'months' })).toBe(6);
+    // Absent unit defaults to months.
+    expect(getDurationDisplayValue({ durationMonths: 6 })).toBe(6);
+  });
+
+  test('shows months / 12 when the unit is years', () => {
+    expect(getDurationDisplayValue({ durationMonths: 24, durationUnit: 'years' })).toBe(2);
+    expect(getDurationDisplayValue({ durationMonths: 12, durationUnit: 'years' })).toBe(1);
+  });
+
+  test('clamps an absent/invalid durationMonths to 1 before converting', () => {
+    // getEffectiveDurationMonths floors invalid durations to 1, so years shows 1/12.
+    expect(getDurationDisplayValue({ durationUnit: 'months' })).toBe(1);
+    expect(getDurationDisplayValue({ durationMonths: 0, durationUnit: 'years' })).toBe(1 / 12);
+  });
+});
+
+describe('parseDurationValueToMonths', () => {
+  test('parses a months input string into whole months', () => {
+    expect(parseDurationValueToMonths('3', 'months')).toBe(3);
+    expect(parseDurationValueToMonths('12', 'months')).toBe(12);
+  });
+
+  test('parses a years input string into canonical months (× 12)', () => {
+    expect(parseDurationValueToMonths('2', 'years')).toBe(24);
+    expect(parseDurationValueToMonths('1', 'years')).toBe(12);
+  });
+
+  test('clamps a sub-1 value up to 1 of the chosen unit', () => {
+    expect(parseDurationValueToMonths('0', 'months')).toBe(1);
+    expect(parseDurationValueToMonths('-4', 'months')).toBe(1);
+    // 1 year, not 1 month, when the unit is years.
+    expect(parseDurationValueToMonths('0', 'years')).toBe(12);
+  });
+
+  test('falls back to 1 of the chosen unit for empty or non-numeric input', () => {
+    expect(parseDurationValueToMonths('', 'months')).toBe(1);
+    expect(parseDurationValueToMonths('abc', 'months')).toBe(1);
+    // Empty/invalid input under years means one year = 12 months.
+    expect(parseDurationValueToMonths('', 'years')).toBe(12);
+    expect(parseDurationValueToMonths('abc', 'years')).toBe(12);
+  });
+});
+
+describe('pricing helpers ignore durationUnit and multiply by canonical durationMonths (issue #757)', () => {
+  test('getItemPricingContext scales line cost by durationMonths regardless of the display unit', () => {
+    const monthsItem: PricingItem = {
+      productCost: 50,
+      quantity: 2,
+      durationMonths: 24,
+      durationUnit: 'months',
+    };
+    const yearsItem: PricingItem = { ...monthsItem, durationUnit: 'years' };
+
+    // Both report 24 canonical months and the same line cost (50 × 2 × 24 = 2400).
+    expect(getItemPricingContext(monthsItem, 'hours').durationMonths).toBe(24);
+    expect(getItemPricingContext(yearsItem, 'hours').durationMonths).toBe(24);
+    expect(getItemPricingContext(yearsItem, 'hours').lineCost).toBe(2400);
+    expect(getItemPricingContext(yearsItem, 'hours').lineCost).toBe(
+      getItemPricingContext(monthsItem, 'hours').lineCost,
+    );
+  });
+
+  test('calculatePricingTotals produces identical totals for months vs years display units', () => {
+    const monthsItems: PricingItem[] = [
+      { unitPrice: 100, quantity: 2, productCost: 60, durationMonths: 24, durationUnit: 'months' },
+    ];
+    const yearsItems: PricingItem[] = [{ ...monthsItems[0], durationUnit: 'years' }];
+
+    const monthsTotals = calculatePricingTotals(monthsItems, 0);
+    const yearsTotals = calculatePricingTotals(yearsItems, 0);
+
+    // Revenue 100 × 2 × 24 = 4800; cost 60 × 2 × 24 = 2880; margin 1920 — same for both units.
+    expect(yearsTotals.subtotal).toBe(4800);
+    expect(yearsTotals.totalCost).toBe(2880);
+    expect(yearsTotals.margin).toBe(1920);
+    expect(yearsTotals).toEqual(monthsTotals);
   });
 });
 

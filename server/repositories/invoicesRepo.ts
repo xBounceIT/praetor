@@ -2,6 +2,7 @@ import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
 import { invoiceItems, invoices } from '../db/schema/invoices.ts';
 import { requireDateOnly } from '../utils/date.ts';
+import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
 import { formatSequenceSuffix } from '../utils/order-ids.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
 
@@ -35,6 +36,8 @@ export type InvoiceItem = {
   taxRate: number;
   // Months the line's service runs; multiplies the taxable amount (issue #757).
   durationMonths: number;
+  // Display unit for `durationMonths`: 'months' (default) or 'years'.
+  durationUnit: DurationUnit;
 };
 
 export type InvoiceWithItems = Invoice & { items: InvoiceItem[] };
@@ -67,6 +70,7 @@ const mapItem = (row: typeof invoiceItems.$inferSelect): InvoiceItem => ({
   discount: parseDbNumber(row.discount, 0),
   taxRate: parseDbNumber(row.taxRate, 0),
   durationMonths: row.durationMonths ?? 1,
+  durationUnit: normalizeDurationUnit(row.durationUnit),
 });
 
 export const generateNextId = async (year: string, exec: DbExecutor = db): Promise<string> => {
@@ -320,6 +324,7 @@ export type NewInvoiceItem = {
   discount: number;
   taxRate: number;
   durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 export const insertItems = async (
@@ -342,6 +347,7 @@ export const insertItems = async (
         discount: numericForDb(item.discount),
         taxRate: numericForDb(item.taxRate),
         durationMonths: item.durationMonths ?? 1,
+        durationUnit: item.durationUnit ?? 'months',
       })),
     )
     .returning();

@@ -14,6 +14,7 @@ import type {
   ClientOffer,
   ClientOfferItem,
   DiscountType,
+  DurationUnit,
   OfferVersion,
   Product,
   SupplierQuote,
@@ -32,8 +33,11 @@ import {
   calcProductSalePrice,
   calculatePricingTotals,
   convertUnitPrice,
+  durationValueToMonths,
+  getDurationDisplayValue,
   getItemPricingContext,
-  parseDurationMonthsInput,
+  normalizeDurationUnit,
+  parseDurationValueToMonths,
   parseNumberInputValue,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
@@ -41,6 +45,7 @@ import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import DurationUnitSelector from '../shared/DurationUnitSelector';
 import FieldTooltip from '../shared/FieldTooltip';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
@@ -836,6 +841,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       productName: '',
       quantity: 1,
       durationMonths: 1,
+      durationUnit: 'months',
       unitType: 'hours',
       unitPrice: 0,
       productCost: 0,
@@ -939,10 +945,30 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     });
   };
 
-  // Duration in whole months (issue #757). Empty/invalid input falls back to 1 (one-off line).
-  const handleDurationChange = (index: number, value: string) => {
+  // Duration value entered in the item's chosen unit (issue #757). Stored canonically as whole
+  // months; 'years' multiplies by 12. Empty/invalid input falls back to 1 of the chosen unit.
+  const handleDurationValueChange = (index: number, value: string) => {
     if (isReadOnly) return;
-    updateItem(index, 'durationMonths', parseDurationMonthsInput(value));
+    const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
+    updateItem(index, 'durationMonths', parseDurationValueToMonths(value, unit));
+  };
+
+  // Switching months↔years keeps the displayed number and reinterprets it under the new unit
+  // (e.g. "2" months → "2" years = 24 months), mirroring how the quantity unit selector behaves.
+  const handleDurationUnitChange = (index: number, newUnit: DurationUnit) => {
+    if (isReadOnly) return;
+    setFormData((prev) => {
+      const items = [...(prev.items || [])];
+      const item = items[index];
+      if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return prev;
+      const displayValue = getDurationDisplayValue(item);
+      items[index] = {
+        ...items[index],
+        durationUnit: newUnit,
+        durationMonths: durationValueToMonths(displayValue, newUnit),
+      };
+      return { ...prev, items };
+    });
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -975,6 +1001,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         unitPrice: Number(item.unitPrice ?? 0),
         productCost: Number(item.productCost ?? 0),
         durationMonths: Number(item.durationMonths ?? 1) || 1,
+        durationUnit: normalizeDurationUnit(item.durationUnit),
       })),
     };
 
@@ -1181,7 +1208,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
                   {formData.items && formData.items.length > 0 && (
                     <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                      <div className="flex-1 min-w-0 grid grid-cols-14 gap-2">
+                      <div className="flex-1 min-w-0 grid grid-cols-15 gap-2">
                         <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
                           {t('sales:clientQuotes.supplierQuoteColumn')}
                         </div>
@@ -1191,7 +1218,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
                           {t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
                         </div>
-                        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
+                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
                           {t('sales:clientOffers.durationColumn', { defaultValue: 'Duration' })}
                         </div>
                         <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
@@ -1227,6 +1254,9 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                           quantity,
                           durationMonths,
                         } = getItemPricingContext(item);
+                        // Duration is stored as canonical months; show it in the item's unit.
+                        const durationUnit = normalizeDurationUnit(item.durationUnit);
+                        const durationValue = getDurationDisplayValue(item);
                         const unitSalePrice = Number(item.unitPrice || 0);
                         const lineSalePrice = unitSalePrice * quantity * durationMonths;
                         const lineMargin = lineSalePrice - lineCost;
@@ -1391,14 +1421,22 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     placeholder={t('sales:clientOffers.durationColumn', {
                                       defaultValue: 'Duration',
                                     })}
-                                    value={durationMonths}
-                                    onValueChange={(value) => handleDurationChange(index, value)}
+                                    value={durationValue}
+                                    onValueChange={(value) =>
+                                      handleDurationValueChange(index, value)
+                                    }
                                     disabled={isReadOnly}
                                     className="w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
                                   />
                                   <span className="text-xs font-semibold text-zinc-400 shrink-0">
-                                    {t('sales:clientOffers.durationUnit', { defaultValue: 'mo' })}
+                                    /
                                   </span>
+                                  <DurationUnitSelector
+                                    value={durationUnit}
+                                    onChange={(val) => handleDurationUnitChange(index, val)}
+                                    count={durationValue}
+                                    disabled={isReadOnly}
+                                  />
                                 </div>
                               </div>
                               <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
@@ -1478,7 +1516,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                               </div>
                             </div>
                             <div className="hidden lg:flex gap-2 items-center">
-                              <div className="flex-1 min-w-0 grid grid-cols-14 gap-2 items-center">
+                              <div className="flex-1 min-w-0 grid grid-cols-15 gap-2 items-center">
                                 <div className="col-span-3 min-w-0">
                                   <SelectControl
                                     options={supplierQuoteSelectOptions}
@@ -1547,21 +1585,29 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     />
                                   </div>
                                 </div>
-                                <div className="col-span-1 flex items-center justify-center gap-1">
+                                <div className="col-span-2 flex items-center justify-center gap-1">
                                   <ValidatedNumberInput
                                     step="1"
                                     min="1"
                                     placeholder={t('sales:clientOffers.durationColumn', {
                                       defaultValue: 'Duration',
                                     })}
-                                    value={durationMonths}
-                                    onValueChange={(value) => handleDurationChange(index, value)}
+                                    value={durationValue}
+                                    onValueChange={(value) =>
+                                      handleDurationValueChange(index, value)
+                                    }
                                     disabled={isReadOnly}
                                     className="w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                   />
                                   <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
-                                    {t('sales:clientOffers.durationUnit', { defaultValue: 'mo' })}
+                                    /
                                   </span>
+                                  <DurationUnitSelector
+                                    value={durationUnit}
+                                    onChange={(val) => handleDurationUnitChange(index, val)}
+                                    count={durationValue}
+                                    disabled={isReadOnly}
+                                  />
                                 </div>
                                 <div className="col-span-1 flex flex-col items-center justify-center gap-1">
                                   <div className="flex items-center gap-1 w-full">

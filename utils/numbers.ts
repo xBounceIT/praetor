@@ -1,6 +1,11 @@
-import type { DiscountType, SupplierUnitType } from '../types';
+import type { DiscountType, DurationUnit, SupplierUnitType } from '../types';
 
 const CURRENCY_DECIMAL_PLACES = 2;
+
+// Duration display units (issue #757). `durationMonths` is the canonical pricing multiplier
+// (always whole months); `durationUnit` only controls how that value is shown/entered.
+export const DURATION_UNITS: readonly DurationUnit[] = ['months', 'years'];
+const MONTHS_PER_YEAR = 12;
 
 const shiftDecimal = (value: number, decimalPlaces: number): number => {
   const [coefficient, exponent = '0'] = value.toString().split('e');
@@ -56,6 +61,9 @@ export interface PricingItem {
   // quantity. Absent/invalid → 1, so items that never set it (offers, orders, invoices)
   // keep their existing totals.
   durationMonths?: number;
+  // Display unit for the duration value: 'months' (default) or 'years'. Pricing always uses
+  // `durationMonths`; this only affects how the value is rendered/entered in the UI.
+  durationUnit?: DurationUnit;
 }
 
 export const getEffectiveCost = (item: PricingItem): number => {
@@ -72,12 +80,31 @@ export const getEffectiveDurationMonths = (item: PricingItem): number => {
   return Number.isFinite(months) && months > 0 ? months : 1;
 };
 
-// Parse a duration-input string into a whole number of months ≥ 1 (issue #757). Empty/invalid
-// input falls back to 1 (one-off line). Shared by the quote/offer/order/invoice line-item rows
-// so the parse-and-clamp rule lives in one place.
-export const parseDurationMonthsInput = (value: string): number => {
+// Coerce an arbitrary value to a valid duration unit, defaulting to 'months' (issue #757).
+export const normalizeDurationUnit = (value: unknown): DurationUnit =>
+  value === 'years' ? 'years' : 'months';
+
+// Convert a value entered in `unit` into canonical whole months ≥ 1. Years are multiplied by 12;
+// the result is rounded so the integer `duration_months` column never sees a fractional value.
+export const durationValueToMonths = (value: number, unit: DurationUnit): number => {
+  const months = unit === 'years' ? value * MONTHS_PER_YEAR : value;
+  return Number.isFinite(months) && months > 0 ? Math.round(months) : 1;
+};
+
+// The number to show in the duration input for the item's chosen unit. Canonical storage is
+// always months; 'years' is derived as months / 12.
+export const getDurationDisplayValue = (item: PricingItem): number => {
+  const months = getEffectiveDurationMonths(item);
+  return normalizeDurationUnit(item.durationUnit) === 'years' ? months / MONTHS_PER_YEAR : months;
+};
+
+// Parse a duration-input string (expressed in `unit`) into canonical whole months ≥ 1 (issue
+// #757). Empty/invalid input falls back to one of the chosen unit (1 month / 1 year). Shared by
+// the quote/offer/order/invoice line-item rows so the parse-and-clamp rule lives in one place.
+export const parseDurationValueToMonths = (value: string, unit: DurationUnit): number => {
   const parsed = Number.parseInt(value, 10);
-  return value === '' || Number.isNaN(parsed) ? 1 : Math.max(1, parsed);
+  if (value === '' || Number.isNaN(parsed)) return durationValueToMonths(1, unit);
+  return durationValueToMonths(Math.max(1, parsed), unit);
 };
 
 export interface ItemPricingContext {

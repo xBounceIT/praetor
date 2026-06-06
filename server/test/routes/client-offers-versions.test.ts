@@ -350,7 +350,10 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
     setupHappyPath();
     ovFindByIdMock.mockResolvedValue({
       ...SAMPLE_VERSION_ROW,
-      snapshot: { ...SAMPLE_SNAPSHOT, items: [{ ...SAMPLE_ITEM, durationMonths: 12 }] },
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [{ ...SAMPLE_ITEM, durationMonths: 12, durationUnit: 'years' }],
+      },
     });
 
     const res = await testApp.inject({
@@ -362,6 +365,7 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
     expect(res.statusCode).toBe(200);
     const replacedItems = coReplaceItemsMock.mock.calls[0]?.[1];
     expect(replacedItems[0].durationMonths).toBe(12);
+    expect(replacedItems[0].durationUnit).toBe('years');
   });
 
   test('200 happy path snapshots current then applies version atomically', async () => {

@@ -76,11 +76,15 @@ export const quoteItems = pgTable(
     // `quantity` for both cost and revenue (see issue #757). Defaults to 1 (one-off item),
     // which keeps totals identical to the pre-duration behavior.
     durationMonths: integer('duration_months').notNull().default(1),
+    // Display unit for `durationMonths` (issue #757): 'months' (default) or 'years'. Pricing
+    // always uses `durationMonths`; this only controls how the value is shown/entered.
+    durationUnit: text('duration_unit').notNull().default('months'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index('idx_quote_items_quote_id').on(table.quoteId),
     check('chk_quote_items_unit_type', sql`${table.unitType} IN ('hours', 'days', 'unit')`),
     check('chk_quote_items_duration_months', sql`${table.durationMonths} >= 1`),
+    check('chk_quote_items_duration_unit', sql`${table.durationUnit} IN ('months', 'years')`),
   ],
 );

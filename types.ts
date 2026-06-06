@@ -505,6 +505,7 @@ export interface QuoteItem {
   note?: string;
   unitType?: SupplierUnitType;
   durationMonths?: number; // months the service runs; multiplies cost & revenue (issue #757)
+  durationUnit?: DurationUnit; // display unit for the duration value: 'months' (default) or 'years'
 }
 
 export interface Quote {
@@ -573,6 +574,7 @@ export interface ClientOfferItem {
   note?: string;
   unitType?: SupplierUnitType;
   durationMonths?: number; // months the service runs; multiplies cost & revenue (issue #757)
+  durationUnit?: DurationUnit; // display unit for the duration value: 'months' (default) or 'years'
 }
 
 export interface ClientOffer {
@@ -644,6 +646,7 @@ export interface ClientsOrderItem {
   note?: string;
   unitType?: SupplierUnitType;
   durationMonths?: number; // months the service runs; multiplies cost & revenue (issue #757)
+  durationUnit?: DurationUnit; // display unit for the duration value: 'months' (default) or 'years'
 }
 
 export interface ClientsOrder {
@@ -796,6 +799,7 @@ export interface InvoiceItem {
   // Per-item Italian VAT (IVA) rate in percent. 0 for exempt or pre-tax-feature data.
   taxRate?: number;
   durationMonths?: number; // months the service runs; multiplies the taxable amount (issue #757)
+  durationUnit?: DurationUnit; // display unit for the duration value: 'months' (default) or 'years'
 }
 
 export interface Invoice {
@@ -834,6 +838,11 @@ export interface Supplier {
 }
 
 export type SupplierUnitType = 'hours' | 'days' | 'unit';
+
+// Display unit for a line item's duration (issue #757). `durationMonths` stays the canonical
+// pricing multiplier (always whole months); `durationUnit` only controls how that value is
+// shown/entered — 'years' renders `durationMonths / 12`.
+export type DurationUnit = 'months' | 'years';
 
 export interface SupplierQuoteItem {
   id: string;

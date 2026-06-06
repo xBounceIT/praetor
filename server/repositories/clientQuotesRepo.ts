@@ -4,6 +4,7 @@ import { customerOffers } from '../db/schema/customerOffers.ts';
 import { quoteItems, quotes } from '../db/schema/quotes.ts';
 import { sales } from '../db/schema/sales.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
+import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber, parseNullableDbNumber } from '../utils/parse.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 
@@ -39,6 +40,7 @@ export type ClientQuoteItem = {
   note: string | null;
   unitType: UnitType;
   durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 // Correlated subquery used by list/find projections. create/update use `null::varchar`
@@ -131,6 +133,7 @@ const mapItem = (row: typeof quoteItems.$inferSelect): ClientQuoteItem => ({
   note: row.note,
   unitType: normalizeUnitType(row.unitType),
   durationMonths: row.durationMonths ?? 1,
+  durationUnit: normalizeDurationUnit(row.durationUnit),
 });
 
 export const listAll = async (exec: DbExecutor = db): Promise<ClientQuote[]> => {
@@ -495,6 +498,7 @@ export type NewClientQuoteItem = {
   supplierQuoteUnitPrice: number | null;
   unitType: UnitType;
   durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 export const insertItems = async (
@@ -523,6 +527,7 @@ export const insertItems = async (
         supplierQuoteUnitPrice: numericForDb(item.supplierQuoteUnitPrice),
         unitType: item.unitType,
         durationMonths: item.durationMonths ?? 1,
+        durationUnit: item.durationUnit ?? 'months',
       })),
     )
     .returning();

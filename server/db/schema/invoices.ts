@@ -72,10 +72,14 @@ export const invoiceItems = pgTable(
     // Months the line's service runs (issue #757); multiplies the taxable line amount.
     // Default 1 keeps totals identical to pre-duration behavior.
     durationMonths: integer('duration_months').notNull().default(1),
+    // Display unit for `durationMonths` (issue #757): 'months' (default) or 'years'. Pricing
+    // always uses `durationMonths`; this only controls how the value is shown/entered.
+    durationUnit: text('duration_unit').notNull().default('months'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index('idx_invoice_items_invoice_id').on(table.invoiceId),
     check('chk_invoice_items_duration_months', sql`${table.durationMonths} >= 1`),
+    check('chk_invoice_items_duration_unit', sql`${table.durationUnit} IN ('months', 'years')`),
   ],
 );

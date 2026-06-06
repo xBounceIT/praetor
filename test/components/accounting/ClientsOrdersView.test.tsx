@@ -166,6 +166,52 @@ describe('<ClientsOrdersView />', () => {
     expect(screen.getAllByText('240.00 EUR').length).toBeGreaterThan(0);
   });
 
+  test('a years duration prices off the canonical months, matching the months equivalent (issue #757)', () => {
+    // durationUnit only controls display; pricing always uses the canonical durationMonths (24),
+    // so "2 years" (24 months) totals the same as a 24-month line.
+    const yearsOrder: ClientsOrder = {
+      id: 'dm_so_years',
+      clientId: 'client-1',
+      clientName: 'Helios Energy Services',
+      items: [
+        {
+          id: 'item-years',
+          orderId: 'dm_so_years',
+          productId: 'product-1',
+          productName: 'Consulting',
+          quantity: 2,
+          unitPrice: 100,
+          productCost: 60,
+          productMolPercentage: 40,
+          durationMonths: 24,
+          durationUnit: 'years',
+        },
+      ],
+      paymentTerms: '30gg',
+      discount: 0,
+      discountType: 'percentage',
+      status: 'draft',
+      createdAt: Date.UTC(2026, 3, 24),
+      updatedAt: Date.UTC(2026, 3, 24),
+    };
+
+    render(
+      <ClientsOrdersView
+        orders={[yearsOrder]}
+        clients={clients}
+        products={[]}
+        currency="EUR"
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+      />,
+    );
+
+    // Subtotal (revenue) = 100 × 2 × 24 = 4800.
+    expect(screen.getAllByText('4800.00 EUR').length).toBeGreaterThan(0);
+    // Margin = 4800 − (60 × 2 × 24 = 2880) = 1920.
+    expect(screen.getAllByText('1920.00 EUR').length).toBeGreaterThan(0);
+  });
+
   test('edit modal uses the shared shadcn modal layout and form primitives', async () => {
     const source = await readComponentSource('accounting/ClientsOrdersView.tsx');
 
@@ -194,7 +240,7 @@ describe('<ClientsOrdersView />', () => {
 
     expectSourceContainsAll(source, [
       'className="flex items-start gap-2 lg:items-center"',
-      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-13 lg:items-center"',
+      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center"',
       'className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0"',
       'className="flex h-9 items-center rounded-md border border-border bg-background px-3"',
       'className="flex h-9 items-center gap-1"',

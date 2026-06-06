@@ -10,6 +10,7 @@ import { standardErrorResponses, standardRateLimitedErrorResponses } from '../sc
 import { logAudit } from '../utils/audit.ts';
 import { isPastLocalDate } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
+import type { DurationUnit } from '../utils/duration-unit.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -18,6 +19,7 @@ import {
   badRequest,
   optionalDateString,
   optionalDurationMonths,
+  optionalDurationUnit,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   parseDateString,
@@ -39,6 +41,7 @@ type IncomingQuoteItem = {
   note?: string | null;
   unitType?: UnitType;
   durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 type QuoteItemSnapshot = {
@@ -105,6 +108,8 @@ const normalizeQuoteItems = (
       `items[${i}].durationMonths`,
     );
     if (!durationMonthsResult.ok) return { ok: false, message: durationMonthsResult.message };
+    const durationUnitResult = optionalDurationUnit(item.durationUnit, `items[${i}].durationUnit`);
+    if (!durationUnitResult.ok) return { ok: false, message: durationUnitResult.message };
     result.push({
       id: normalizeNullableString(item.id) ?? undefined,
       productId: productIdValue,
@@ -118,6 +123,7 @@ const normalizeQuoteItems = (
       note: normalizeNullableString(item.note),
       unitType: normalizeUnitType(item.unitType),
       durationMonths: durationMonthsResult.value ?? 1,
+      durationUnit: durationUnitResult.value ?? 'months',
     });
   }
   return { ok: true, items: result };
@@ -316,6 +322,7 @@ const quoteItemSchema = {
     note: { type: ['string', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years'] },
   },
   required: [
     'id',
@@ -376,6 +383,7 @@ const quoteItemBodySchema = {
     note: { type: 'string' },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years'] },
   },
   required: ['productId', 'productName', 'quantity', 'unitPrice'],
 } as const;
@@ -431,6 +439,7 @@ const buildItemsForInsert = (items: ResolvedQuoteItem[]): clientQuotesRepo.NewCl
     supplierQuoteUnitPrice: item.supplierQuoteUnitPrice ?? null,
     unitType: item.unitType ?? 'hours',
     durationMonths: item.durationMonths ?? 1,
+    durationUnit: item.durationUnit ?? 'months',
   }));
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -863,8 +872,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             unitPrice: 0,
             discount: 0,
             // Placeholder: this stub only feeds the cost/MOL "unchanged" comparison below;
-            // durationMonths always comes from the incoming item, never from this snapshot.
+            // duration always comes from the incoming item, never from this snapshot.
             durationMonths: 1,
+            durationUnit: 'months',
             productCost: snap.productCost,
             productMolPercentage: snap.productMolPercentage,
             supplierQuoteId: snap.supplierQuoteId,

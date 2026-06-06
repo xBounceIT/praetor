@@ -570,6 +570,18 @@ describe('normalizeQuoteItem', () => {
     ).toBe(1);
   });
 
+  test("durationUnit defaults to 'months', preserves 'years', and normalizes invalid values (issue #757)", () => {
+    expect(
+      normalizeQuoteItem(make<QuoteItem>(baseQuoteItem, { durationUnit: undefined })).durationUnit,
+    ).toBe('months');
+    expect(
+      normalizeQuoteItem(make<QuoteItem>(baseQuoteItem, { durationUnit: 'years' })).durationUnit,
+    ).toBe('years');
+    expect(
+      normalizeQuoteItem(make<QuoteItem>(baseQuoteItem, { durationUnit: 'decades' })).durationUnit,
+    ).toBe('months');
+  });
+
   test('defaults missing/null fields to 0 / null / empty string', () => {
     const item = make<QuoteItem>(baseQuoteItem, {
       quantity: undefined,
@@ -669,6 +681,21 @@ describe('normalizeClientOfferItem', () => {
         .durationMonths,
     ).toBe(1);
   });
+
+  test("durationUnit defaults to 'months', preserves 'years', and normalizes invalid values (issue #757)", () => {
+    expect(
+      normalizeClientOfferItem(make<ClientOfferItem>(baseOfferItem, { durationUnit: undefined }))
+        .durationUnit,
+    ).toBe('months');
+    expect(
+      normalizeClientOfferItem(make<ClientOfferItem>(baseOfferItem, { durationUnit: 'years' }))
+        .durationUnit,
+    ).toBe('years');
+    expect(
+      normalizeClientOfferItem(make<ClientOfferItem>(baseOfferItem, { durationUnit: 'decades' }))
+        .durationUnit,
+    ).toBe('months');
+  });
 });
 
 describe('normalizeClientOffer', () => {
@@ -729,6 +756,24 @@ describe('normalizeClientsOrderItem', () => {
       normalizeClientsOrderItem(make<ClientsOrderItem>(baseClientsOrderItem, { durationMonths: 0 }))
         .durationMonths,
     ).toBe(1);
+  });
+
+  test("durationUnit defaults to 'months', preserves 'years', and normalizes invalid values (issue #757)", () => {
+    expect(
+      normalizeClientsOrderItem(
+        make<ClientsOrderItem>(baseClientsOrderItem, { durationUnit: undefined }),
+      ).durationUnit,
+    ).toBe('months');
+    expect(
+      normalizeClientsOrderItem(
+        make<ClientsOrderItem>(baseClientsOrderItem, { durationUnit: 'years' }),
+      ).durationUnit,
+    ).toBe('years');
+    expect(
+      normalizeClientsOrderItem(
+        make<ClientsOrderItem>(baseClientsOrderItem, { durationUnit: 'decades' }),
+      ).durationUnit,
+    ).toBe('months');
   });
 
   test('preserves provided supplier sale fields', () => {
@@ -995,6 +1040,21 @@ describe('normalizeInvoiceItem', () => {
       normalizeInvoiceItem(make<InvoiceItem>(baseInvoiceItem, { durationMonths: 0 }))
         .durationMonths,
     ).toBe(1);
+  });
+
+  test("durationUnit defaults to 'months', preserves 'years', and normalizes invalid values (issue #757)", () => {
+    expect(
+      normalizeInvoiceItem(make<InvoiceItem>(baseInvoiceItem, { durationUnit: undefined }))
+        .durationUnit,
+    ).toBe('months');
+    expect(
+      normalizeInvoiceItem(make<InvoiceItem>(baseInvoiceItem, { durationUnit: 'years' }))
+        .durationUnit,
+    ).toBe('years');
+    expect(
+      normalizeInvoiceItem(make<InvoiceItem>(baseInvoiceItem, { durationUnit: 'decades' }))
+        .durationUnit,
+    ).toBe('months');
   });
 
   test('falls back to "unit" for unknown unitOfMeasure (days)', () => {

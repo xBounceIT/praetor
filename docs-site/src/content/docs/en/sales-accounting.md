@@ -9,9 +9,9 @@ sidebar:
 
 Quotes and offers include products, quantities, prices, discounts, and terms. Use the catalog to start from consistent data and always check totals, margins, and validity before sending a document.
 
-Each quote line includes a **Duration** column (in months), placed between **Quantity** and **Cost**: it sets how many months the service runs. Duration acts as a multiplier alongside quantity, so both the line's **Total cost** and **Revenue** are computed as *unit value × Quantity × Duration (months)*. For one-off items leave **Duration = 1** so totals stay identical to the previous behavior.
+Each quote line includes a **Duration** column, placed between **Quantity** and **Cost**: it sets how long the service runs. A selector next to the value lets you pick the unit — **Months** or **Years** (1 year = 12 months) — using the same *value / unit* format as quantity. Duration acts as a multiplier alongside quantity, so both the line's **Total cost** and **Revenue** are computed as *unit value × Quantity × Duration (in months)*. For one-off items leave **Duration = 1 month** so totals stay identical to the previous behavior.
 
-**Duration** flows through the whole document chain: when you convert a quote into an offer and then into a sales order, the lines keep the months you set, so the derived document's totals match the quote. **Customer invoices** also carry the Duration column on their lines and multiply the taxable amount (and therefore VAT and total) by the months entered; on invoices the duration is set manually, since invoice lines are not copied automatically from an order.
+**Duration** flows through the whole document chain: when you convert a quote into an offer and then into a sales order, the lines keep both the value and the unit (months or years) you set, so the derived document's totals match the quote. **Customer invoices** also carry the Duration column on their lines and multiply the taxable amount (and therefore VAT and total) by the corresponding months; on invoices the duration is set manually, since invoice lines are not copied automatically from an order.
 
 The quote list shows code, insertion date, client, subtotal, discount percentage, absolute discount, discounted total, margin, MOL, payment terms, due date, and status so the main values can be checked without opening each record.
 

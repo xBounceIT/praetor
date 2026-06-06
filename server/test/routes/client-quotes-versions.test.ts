@@ -193,6 +193,7 @@ const SAMPLE_ITEM = {
   note: null,
   unitType: 'hours' as const,
   durationMonths: 1,
+  durationUnit: 'months' as const,
 };
 
 const SAMPLE_SNAPSHOT = {
@@ -662,13 +663,14 @@ describe('POST /api/sales/client-quotes - duration handling (issue #757)', () =>
       method: 'POST',
       url: '/api/sales/client-quotes',
       headers: authHeader(),
-      payload: createBody({ durationMonths: 12 }),
+      payload: createBody({ durationMonths: 12, durationUnit: 'years' }),
     });
 
     expect(res.statusCode).toBe(201);
     const insertedItems = cqInsertItemsMock.mock.calls[0][1];
     expect(insertedItems).toHaveLength(1);
     expect(insertedItems[0].durationMonths).toBe(12);
+    expect(insertedItems[0].durationUnit).toBe('years');
   });
 
   test('201 defaults an omitted durationMonths to 1 (one-off line)', async () => {
@@ -683,6 +685,7 @@ describe('POST /api/sales/client-quotes - duration handling (issue #757)', () =>
 
     expect(res.statusCode).toBe(201);
     expect(cqInsertItemsMock.mock.calls[0][1][0].durationMonths).toBe(1);
+    expect(cqInsertItemsMock.mock.calls[0][1][0].durationUnit).toBe('months');
   });
 
   test('400 rejects a fractional durationMonths with a whole-months message', async () => {
@@ -736,7 +739,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore - durati
       snapshot: {
         schemaVersion: 1,
         quote: { ...SAMPLE_QUOTE },
-        items: [{ ...SAMPLE_ITEM, durationMonths: 12 }],
+        items: [{ ...SAMPLE_ITEM, durationMonths: 12, durationUnit: 'years' }],
       },
     });
 
@@ -749,5 +752,6 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore - durati
     expect(res.statusCode).toBe(200);
     const replacedItems = cqReplaceItemsMock.mock.calls[0][1];
     expect(replacedItems[0].durationMonths).toBe(12);
+    expect(replacedItems[0].durationUnit).toBe('years');
   });
 });

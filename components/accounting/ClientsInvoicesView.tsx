@@ -6,15 +6,19 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { Client, Invoice, InvoiceItem, Product } from '../../types';
+import type { Client, DurationUnit, Invoice, InvoiceItem, Product } from '../../types';
 import { addDaysToDateOnly, formatDateOnlyForLocale, getLocalDateString } from '../../utils/date';
 import {
   calcProductSalePrice,
+  durationValueToMonths,
+  getDurationDisplayValue,
   getEffectiveDurationMonths,
-  parseDurationMonthsInput,
+  normalizeDurationUnit,
+  parseDurationValueToMonths,
 } from '../../utils/numbers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import DurationUnitSelector from '../shared/DurationUnitSelector';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
 import {
@@ -307,6 +311,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       unitOfMeasure: 'unit',
       quantity: 1,
       durationMonths: 1,
+      durationUnit: 'months',
       unitPrice: 0,
       discount: 0,
       taxRate: DEFAULT_TAX_RATE,
@@ -363,6 +368,28 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     clearItemsError();
   };
 
+  // Duration value entered in the item's chosen unit (issue #757). Stored canonically as whole
+  // months; 'years' multiplies by 12. Empty/invalid input falls back to 1 of the chosen unit.
+  const handleDurationValueChange = (index: number, value: string) => {
+    const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
+    updateItemRow(index, 'durationMonths', parseDurationValueToMonths(value, unit));
+  };
+
+  // Switching months↔years keeps the displayed number and reinterprets it under the new unit
+  // (e.g. "2" months → "2" years = 24 months), mirroring how the quantity unit selector behaves.
+  const handleDurationUnitChange = (index: number, newUnit: DurationUnit) => {
+    const item = formData.items?.[index];
+    if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
+    const displayValue = getDurationDisplayValue(item);
+    const nextItems = [...(formData.items || [])];
+    nextItems[index] = {
+      ...nextItems[index],
+      durationUnit: newUnit,
+      durationMonths: durationValueToMonths(displayValue, newUnit),
+    };
+    setFormData((prev) => ({ ...prev, items: nextItems }));
+  };
+
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
 
@@ -392,6 +419,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       discount: Number(item.discount || 0),
       taxRate: Number(item.taxRate || 0),
       durationMonths: Number(item.durationMonths ?? 1) || 1,
+      durationUnit: normalizeDurationUnit(item.durationUnit),
     }));
 
     const { subtotal, taxTotal, total } = calculateTotals(roundedItems);
@@ -706,10 +734,10 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
                 {formData.items && formData.items.length > 0 && (
                   <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
-                    <div className="grid flex-1 grid-cols-13 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    <div className="grid flex-1 grid-cols-14 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                       <div className="col-span-3">{t('common:labels.product')}</div>
                       <div className="col-span-2">{t('common:labels.quantity')}</div>
-                      <div className="col-span-1 whitespace-nowrap">
+                      <div className="col-span-2 whitespace-nowrap">
                         {t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
                       </div>
                       <div className="col-span-2">{t('common:labels.price')}</div>
@@ -726,6 +754,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                 <div className="space-y-3">
                   {formData.items?.map((item, index) => {
                     const lineTotal = getLineTotal(item);
+                    const durationUnit = normalizeDurationUnit(item.durationUnit);
+                    const durationValue = getDurationDisplayValue(item);
 
                     return (
                       <div
@@ -733,7 +763,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                         className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
                       >
                         <div className="flex items-start gap-2">
-                          <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-13">
+                          <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14">
                             <div className="space-y-1 lg:col-span-3 min-w-0">
                               <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                 {t('common:labels.product')}
@@ -786,7 +816,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                                 </span>
                               </div>
                             </div>
-                            <div className="space-y-1 lg:col-span-1">
+                            <div className="space-y-1 lg:col-span-2">
                               <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                 {t('sales:clientQuotes.durationColumn', {
                                   defaultValue: 'Duration',
@@ -796,19 +826,18 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                                 <ValidatedNumberInput
                                   min="1"
                                   step="1"
-                                  value={getEffectiveDurationMonths(item)}
-                                  onValueChange={(value) =>
-                                    updateItemRow(
-                                      index,
-                                      'durationMonths',
-                                      parseDurationMonthsInput(value),
-                                    )
-                                  }
+                                  value={durationValue}
+                                  onValueChange={(value) => handleDurationValueChange(index, value)}
                                   className="min-w-0"
                                 />
                                 <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                  {t('sales:clientQuotes.durationUnit', { defaultValue: 'mo' })}
+                                  /
                                 </span>
+                                <DurationUnitSelector
+                                  value={durationUnit}
+                                  onChange={(val) => handleDurationUnitChange(index, val)}
+                                  count={durationValue}
+                                />
                               </div>
                             </div>
                             <div className="space-y-1 lg:col-span-2">

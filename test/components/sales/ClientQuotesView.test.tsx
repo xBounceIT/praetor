@@ -188,4 +188,53 @@ describe('<ClientQuotesView />', () => {
     // revenue and cost are scaled by duration.
     expect(screen.getAllByText('240.00 EUR').length).toBeGreaterThan(0);
   });
+
+  test('a years duration prices off the canonical months, matching the months equivalent (issue #757)', () => {
+    // durationUnit only changes how the duration is displayed/entered; pricing always uses the
+    // canonical durationMonths (24). So 24 months shown as "2 years" must total the same as
+    // 24 months shown as months.
+    const yearsItem = {
+      id: 'item-years',
+      quoteId: 'Q-YEARS',
+      productId: 'product-1',
+      productName: 'Consulting',
+      quantity: 2,
+      unitPrice: 100,
+      productCost: 60,
+      productMolPercentage: 40,
+      durationMonths: 24,
+      durationUnit: 'years' as const,
+    };
+    const yearsQuote: Quote = {
+      id: 'Q-YEARS',
+      clientId: 'client-1',
+      clientName: 'Helios Energy Services',
+      items: [yearsItem],
+      paymentTerms: '30gg',
+      discount: 0,
+      discountType: 'percentage',
+      status: 'draft',
+      expirationDate: '2026-06-30',
+      createdAt: Date.UTC(2026, 4, 14),
+      updatedAt: Date.UTC(2026, 4, 14),
+    };
+
+    render(
+      <ClientQuotesView
+        quotes={[yearsQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    // Subtotal (revenue) = 100 × 2 × 24 = 4800.00 — identical to a 24-month item.
+    expect(screen.getAllByText('4800.00 EUR').length).toBeGreaterThan(0);
+    // Margin = 4800 − (60 × 2 × 24 = 2880) = 1920.00.
+    expect(screen.getAllByText('1920.00 EUR').length).toBeGreaterThan(0);
+  });
 });

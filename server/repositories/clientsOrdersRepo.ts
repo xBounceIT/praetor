@@ -3,6 +3,7 @@ import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { customerOffers } from '../db/schema/customerOffers.ts';
 import { saleItems, sales } from '../db/schema/sales.ts';
 import { supplierSaleItems, supplierSales } from '../db/schema/supplierSales.ts';
+import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber, parseNullableDbNumber } from '../utils/parse.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 
@@ -41,6 +42,7 @@ export type ClientOrderItem = {
   note: string | null;
   discount: number;
   durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 const mapOrder = (row: typeof sales.$inferSelect): ClientOrder => ({
@@ -79,6 +81,7 @@ const mapItem = (row: typeof saleItems.$inferSelect): ClientOrderItem => ({
   note: row.note,
   discount: parseDbNumber(row.discount, 0),
   durationMonths: row.durationMonths ?? 1,
+  durationUnit: normalizeDurationUnit(row.durationUnit),
 });
 
 export const listAll = async (exec: DbExecutor = db): Promise<ClientOrder[]> => {
@@ -396,6 +399,7 @@ export type NewClientOrderItem = {
   supplierSaleSupplierName: string | null;
   unitType: UnitType;
   durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 export const insertItems = async (
@@ -427,6 +431,7 @@ export const insertItems = async (
         supplierSaleSupplierName: item.supplierSaleSupplierName,
         unitType: item.unitType,
         durationMonths: item.durationMonths ?? 1,
+        durationUnit: item.durationUnit ?? 'months',
       })),
     )
     .returning();

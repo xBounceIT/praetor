@@ -39,6 +39,9 @@ export const customerOfferItems = pgTable(
     // Months the line's service runs (issue #757); multiplies cost & revenue alongside quantity.
     // Default 1 (one-off) keeps totals identical to pre-duration behavior.
     durationMonths: integer('duration_months').notNull().default(1),
+    // Display unit for `durationMonths` (issue #757): 'months' (default) or 'years'. Pricing
+    // always uses `durationMonths`; this only controls how the value is shown/entered.
+    durationUnit: text('duration_unit').notNull().default('months'),
   },
   (table) => [
     index('idx_customer_offer_items_offer_id').on(table.offerId),
@@ -47,5 +50,9 @@ export const customerOfferItems = pgTable(
       sql`${table.unitType} IN ('hours', 'days', 'unit')`,
     ),
     check('chk_customer_offer_items_duration_months', sql`${table.durationMonths} >= 1`),
+    check(
+      'chk_customer_offer_items_duration_unit',
+      sql`${table.durationUnit} IN ('months', 'years')`,
+    ),
   ],
 );

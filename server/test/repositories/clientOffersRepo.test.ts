@@ -30,6 +30,9 @@ const OFFER_BASE: readonly unknown[] = [
 
 const offerRow = (overrides: Record<number, unknown> = {}) => makeRow(OFFER_BASE, overrides);
 
+// customer_offer_items column order (from schema): created_at sits at index 10 (earlier than
+// the supplier_quote_* group), and duration_months / duration_unit trail as the last two
+// columns (indices 16 / 17).
 const ITEM_BASE: readonly unknown[] = [
   'coi-1',
   'co-1',
@@ -48,6 +51,7 @@ const ITEM_BASE: readonly unknown[] = [
   null,
   null,
   1,
+  'months',
 ];
 
 const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, overrides);
@@ -79,12 +83,19 @@ describe('listAllItems', () => {
     expect(result[0].unitPrice).toBe(10);
     expect(result[0].unitType).toBe('unit');
     expect(result[0].durationMonths).toBe(1);
+    expect(result[0].durationUnit).toBe('months');
   });
 
   test('maps a multi-month duration through to durationMonths (issue #757)', async () => {
     exec.enqueue({ rows: [itemRow({ 16: 12 })] });
     const result = await clientOffersRepo.listAllItems(testDb);
     expect(result[0].durationMonths).toBe(12);
+  });
+
+  test('maps duration_unit through to durationUnit (issue #757)', async () => {
+    exec.enqueue({ rows: [itemRow({ 17: 'years' })] });
+    const result = await clientOffersRepo.listAllItems(testDb);
+    expect(result[0].durationUnit).toBe('years');
   });
 });
 
@@ -274,7 +285,7 @@ describe('rename', () => {
 });
 
 describe('insertItems', () => {
-  test('binds 16 fields per row in column order, with numericForDb on numerics', async () => {
+  test('binds 17 fields per row in column order, with numericForDb on numerics', async () => {
     exec.enqueue({ rows: [itemRow()] });
     await clientOffersRepo.insertItems(
       'co-1',
@@ -295,6 +306,7 @@ describe('insertItems', () => {
           supplierQuoteUnitPrice: null,
           unitType: 'unit',
           durationMonths: 12,
+          durationUnit: 'months',
         },
       ],
       testDb,
@@ -302,7 +314,8 @@ describe('insertItems', () => {
     expect(exec.calls[0].sql).toContain('insert into "customer_offer_items"');
     // Drizzle emits columns in schema declaration order (createdAt is skipped - has
     // CURRENT_TIMESTAMP default and isn't passed), so unitType lands between note and the
-    // supplier_quote_* group, and duration_months trails as the last bound value.
+    // supplier_quote_* group, and duration_months / duration_unit trail as the last bound
+    // values.
     expect(exec.calls[0].params).toEqual([
       'coi-1',
       'co-1',
@@ -320,6 +333,7 @@ describe('insertItems', () => {
       null,
       null,
       12,
+      'months',
     ]);
   });
 });
@@ -347,6 +361,7 @@ describe('replaceItems', () => {
         supplierQuoteUnitPrice: null,
         unitType: 'unit',
         durationMonths: 1,
+        durationUnit: 'months',
       },
       {
         id: 'b',
@@ -364,6 +379,7 @@ describe('replaceItems', () => {
         supplierQuoteUnitPrice: null,
         unitType: 'hours',
         durationMonths: 6,
+        durationUnit: 'months',
       },
     ];
     const result = await clientOffersRepo.replaceItems('co-1', items, testDb);
@@ -371,7 +387,7 @@ describe('replaceItems', () => {
     expect(exec.calls[0].sql).toContain('delete from "customer_offer_items"');
     expect(exec.calls[1].sql).toContain('insert into "customer_offer_items"');
     expect(exec.calls[1].params[0]).toBe('a');
-    expect(exec.calls[1].params[16]).toBe('b'); // 16 fields per row, second row starts at index 16
+    expect(exec.calls[1].params[17]).toBe('b'); // 17 fields per row, second row starts at index 17
     expect(result.map((i) => i.id)).toEqual(['a', 'b']);
   });
 
@@ -513,6 +529,7 @@ describe('mapItem (exercised via insertItems return path)', () => {
     supplierQuoteUnitPrice: null,
     unitType: 'unit',
     durationMonths: 1,
+    durationUnit: 'months',
   };
 
   test('null productMolPercentage stays null (not coerced to 0)', async () => {
