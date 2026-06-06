@@ -125,4 +125,39 @@ describe('<InternalListingView /> productFilterId', () => {
     expect(screen.getByText('Wind Turbine')).toBeInTheDocument();
     expect(screen.queryByText('Solar Panel')).not.toBeInTheDocument();
   });
+
+  test('keeps the Code filter visible when products load after mount (cold open)', () => {
+    // Regression (PR #766 review): on a cold open `products` is empty on first
+    // render, so the id->code filter can't resolve yet. A saved active view that
+    // HIDES the Code column must not slip in before the filter materializes, or
+    // the native funnel would be hidden and unclearable. suppressSavedView guards
+    // this by forcing deep-link mode from the (stable) productFilterId at mount.
+    localStorage.setItem(
+      PRODUCTS_VIEWS_KEY,
+      JSON.stringify([
+        {
+          id: 'hide-code',
+          name: 'No Code',
+          hiddenColIds: ['productCode'],
+          sortState: null,
+          filterState: {},
+        },
+      ]),
+    );
+    localStorage.setItem(PRODUCTS_ACTIVE_VIEW_KEY, 'hide-code');
+
+    const { rerender } = render(
+      <InternalListingView {...baseProps} products={[]} productFilterId="prod-2" />,
+    );
+    // Products arrive asynchronously (App finishes loading them).
+    rerender(<InternalListingView {...baseProps} products={products} productFilterId="prod-2" />);
+
+    expect(screen.getByText('Wind Turbine')).toBeInTheDocument();
+    expect(screen.queryByText('Solar Panel')).not.toBeInTheDocument();
+    // The Code column (and its native funnel) stays visible despite the saved
+    // view that hid it — the deep-link filter remains clearable.
+    expect(
+      screen.getByRole('button', { name: /table\.filters .*productCode/i }),
+    ).toBeInTheDocument();
+  });
 });

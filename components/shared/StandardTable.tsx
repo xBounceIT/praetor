@@ -598,6 +598,14 @@ export type StandardTableProps<T extends object = object> = {
   onRowClick?: (row: T) => void;
   initialFilterState?: Record<string, string[]>;
   /**
+   * Force programmatic/deep-link mode: skip hydrating the persisted saved view on
+   * mount even when `initialFilterState` is still empty. Use when the filter value
+   * is resolved asynchronously (e.g. a quick-view product id that needs the loaded
+   * product list to map to a column), so a saved view that hides the filter column
+   * can't slip in before the filter materializes.
+   */
+  suppressSavedView?: boolean;
+  /**
    * Stable scope key (e.g. `projects.directory`). When set, the table switches to
    * SERVER-BACKED mode: custom views are loaded from / persisted to the shared
    * `viewsApi` store (own + shared, owner/read/write gating) instead of localStorage.
@@ -628,18 +636,22 @@ const StandardTable = <T extends object>({
   disabledRow,
   onRowClick,
   initialFilterState,
+  suppressSavedView = false,
   viewKey,
 }: StandardTableProps<T>) => {
   const { t } = useTranslation('common');
   const isServerBacked = viewKey != null;
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // A non-empty `initialFilterState` is a programmatic filter (a quick-view deep
-  // link or a cross-view "view X" navigation). It must win over a persisted saved
-  // view, which would otherwise overwrite the filter once views hydrate after
-  // mount — and since the prop identity never changes, the sync effect wouldn't
-  // re-apply it. So when one is present, don't hydrate the saved active view.
-  const hasInitialFilter = initialFilterState != null && Object.keys(initialFilterState).length > 0;
+  // A programmatic filter (a quick-view deep link or a cross-view "view X"
+  // navigation) must win over a persisted saved view, which would otherwise
+  // overwrite the filter — and its hidden columns / sort would persist — once
+  // views hydrate after mount. Since the prop identity never changes, the sync
+  // effect wouldn't re-apply it. So skip hydrating the saved active view when a
+  // non-empty `initialFilterState` is present OR the caller forces deep-link mode
+  // (`suppressSavedView`) because its filter value resolves asynchronously.
+  const skipSavedView =
+    suppressSavedView || (initialFilterState != null && Object.keys(initialFilterState).length > 0);
   const [tableViewState, dispatchTableView] = useReducer(
     tableViewReducer,
     null,
@@ -648,7 +660,7 @@ const StandardTable = <T extends object>({
       filterState: initialFilterState ?? {},
       hiddenColIds: new Set<string>(),
       activeViewId:
-        typeof window === 'undefined' || hasInitialFilter
+        typeof window === 'undefined' || skipSavedView
           ? null
           : localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.activeView)),
     }),

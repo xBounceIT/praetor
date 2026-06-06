@@ -1530,6 +1530,10 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
         }
         onRowClick={openEditModal}
         initialFilterState={tableInitialFilterState}
+        // The deep-linked product id resolves to a column value only once the
+        // product list loads; force deep-link mode up front so a saved view that
+        // hides the Code/name column can't apply before the filter materializes.
+        suppressSavedView={Boolean(productFilterId)}
         columns={[
           {
             header: t('crm:internalListing.productCode'),
