@@ -10,7 +10,11 @@ import { standardErrorResponses, standardRateLimitedErrorResponses } from '../sc
 import { logAudit } from '../utils/audit.ts';
 import { todayLocalDateOnly } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
-import type { DurationUnit } from '../utils/duration-unit.ts';
+import {
+  coerceUnitLineDuration,
+  type DurationUnit,
+  isUnitMeasure,
+} from '../utils/duration-unit.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -255,6 +259,13 @@ const normalizeItems = (
       badRequest(reply, durationUnitResult.message);
       return null;
     }
+    const unitType = normalizeUnitType(item.unitType);
+    // A "unit"-measured line can't run for a period, so its duration is forced to a single month.
+    const { durationMonths, durationUnit } = coerceUnitLineDuration(
+      isUnitMeasure(unitType),
+      durationMonthsResult.value ?? 1,
+      durationUnitResult.value ?? 'months',
+    );
     normalizedItems.push({
       productId: item.productId || null,
       productName: productNameResult.value,
@@ -281,11 +292,11 @@ const normalizeItems = (
         item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
           ? null
           : Number(item.supplierQuoteUnitPrice),
-      unitType: normalizeUnitType(item.unitType),
+      unitType,
       discount: itemDiscountResult.value || 0,
       note: item.note || null,
-      durationMonths: durationMonthsResult.value ?? 1,
-      durationUnit: durationUnitResult.value ?? 'months',
+      durationMonths,
+      durationUnit,
     });
   }
 

@@ -10,7 +10,11 @@ import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
-import type { DurationUnit } from '../utils/duration-unit.ts';
+import {
+  coerceUnitLineDuration,
+  type DurationUnit,
+  isUnitMeasure,
+} from '../utils/duration-unit.ts';
 import {
   generateClientOrderId,
   generatePrefixedId,
@@ -234,6 +238,13 @@ const normalizeIncomingItems = (
       value === null || value === undefined ? null : String(value);
     const toNullableNumber = (value: unknown) =>
       value === null || value === undefined ? null : Number(value);
+    const unitType = normalizeUnitType(item.unitType);
+    // A "unit"-measured line can't run for a period, so its duration is forced to a single month.
+    const { durationMonths, durationUnit } = coerceUnitLineDuration(
+      isUnitMeasure(unitType),
+      durationMonthsResult.value ?? 1,
+      durationUnitResult.value ?? 'months',
+    );
     normalized.push({
       id: typeof item.id === 'string' ? item.id : undefined,
       productId: productIdResult.value,
@@ -249,11 +260,11 @@ const normalizeIncomingItems = (
       supplierSaleId: toNullableString(item.supplierSaleId),
       supplierSaleItemId: toNullableString(item.supplierSaleItemId),
       supplierSaleSupplierName: toNullableString(item.supplierSaleSupplierName),
-      unitType: normalizeUnitType(item.unitType),
+      unitType,
       note: toNullableString(item.note),
       discount: itemDiscountResult.value || 0,
-      durationMonths: durationMonthsResult.value ?? 1,
-      durationUnit: durationUnitResult.value ?? 'months',
+      durationMonths,
+      durationUnit,
     });
   }
   return normalized;

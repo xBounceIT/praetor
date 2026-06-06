@@ -150,7 +150,8 @@ describe('<ClientOffersView /> list', () => {
           unitPrice: 100,
           productCost: 60,
           productMolPercentage: 40,
-          unitType: 'unit',
+          // Duration applies only to non-unit lines (hours/days), so this fixture is hours-based.
+          unitType: 'hours',
           durationMonths: 3,
         },
       ],
@@ -177,7 +178,8 @@ describe('<ClientOffersView /> list', () => {
           unitPrice: 100,
           productCost: 60,
           productMolPercentage: 40,
-          unitType: 'unit',
+          // Duration applies only to non-unit lines (hours/days), so this fixture is hours-based.
+          unitType: 'hours',
           durationMonths: 24,
           durationUnit: 'years',
         },

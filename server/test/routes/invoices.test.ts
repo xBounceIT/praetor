@@ -349,6 +349,47 @@ describe('POST /api/invoices', () => {
     );
   });
 
+  test('201 forbids duration on a "unit" line: it neither multiplies the total nor persists', async () => {
+    generateNextIdMock.mockResolvedValue('inv-1');
+    createMock.mockImplementation(async (input: Record<string, unknown>) => ({
+      ...SAMPLE_INVOICE,
+      subtotal: input.subtotal as number,
+      total: input.total as number,
+    }));
+    insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/invoices',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        items: [
+          {
+            description: 'Widget',
+            unitOfMeasure: 'unit',
+            quantity: 2,
+            unitPrice: 50,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    // 2 * 50 = 100. The 12-month duration is forbidden on a unit line, so the server-authoritative
+    // total does NOT scale by it (would be 1200 if duration applied).
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ subtotal: 100, taxTotal: 0, total: 100 }),
+      TX_SENTINEL,
+    );
+    // ...and the persisted line carries the coerced single-month duration.
+    const persistedItems = insertItemsMock.mock.calls[0][1];
+    expect(persistedItems[0].durationMonths).toBe(1);
+    expect(persistedItems[0].durationUnit).toBe('months');
+  });
+
   test('400 amountPaid exceeds computed total', async () => {
     const res = await testApp.inject({
       method: 'POST',

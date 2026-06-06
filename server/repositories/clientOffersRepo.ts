@@ -4,7 +4,12 @@ import { customerOfferItems } from '../db/schema/customerOfferItems.ts';
 import { customerOffers } from '../db/schema/customerOffers.ts';
 import { sales } from '../db/schema/sales.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
-import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
+import {
+  coerceUnitLineDuration,
+  type DurationUnit,
+  isUnitMeasure,
+  normalizeDurationUnit,
+} from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber, parseNullableDbNumber } from '../utils/parse.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 
@@ -400,8 +405,13 @@ export const insertItems = async (
         supplierQuoteSupplierName: item.supplierQuoteSupplierName,
         supplierQuoteUnitPrice: numericForDb(item.supplierQuoteUnitPrice),
         unitType: item.unitType,
-        durationMonths: item.durationMonths ?? 1,
-        durationUnit: item.durationUnit ?? 'months',
+        // Final guard: a "unit"-measured line can't carry a duration (covers POST/PUT and the
+        // snapshot-driven version restore that bypasses route normalization).
+        ...coerceUnitLineDuration(
+          isUnitMeasure(item.unitType),
+          item.durationMonths ?? 1,
+          item.durationUnit ?? 'months',
+        ),
       })),
     )
     .returning();

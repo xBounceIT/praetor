@@ -13,6 +13,7 @@ import {
   durationValueToMonths,
   getDurationDisplayValue,
   getEffectiveDurationMonths,
+  isUnitLine,
   normalizeDurationUnit,
   parseDurationValueToMonths,
 } from '../../utils/numbers';
@@ -418,16 +419,21 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       return;
     }
 
-    const roundedItems = (formData.items || []).map((item) => ({
-      ...item,
-      unitOfMeasure: normalizeUnitOfMeasure(item.unitOfMeasure),
-      quantity: Number(item.quantity ?? 0),
-      unitPrice: Number(item.unitPrice ?? 0),
-      discount: Number(item.discount || 0),
-      taxRate: Number(item.taxRate || 0),
-      durationMonths: Number(item.durationMonths ?? 1) || 1,
-      durationUnit: normalizeDurationUnit(item.durationUnit),
-    }));
+    const roundedItems = (formData.items || []).map((item) => {
+      const unitOfMeasure = normalizeUnitOfMeasure(item.unitOfMeasure);
+      // Unit-measured lines cannot carry a duration — coerce to a single month.
+      const unitLine = unitOfMeasure === 'unit';
+      return {
+        ...item,
+        unitOfMeasure,
+        quantity: Number(item.quantity ?? 0),
+        unitPrice: Number(item.unitPrice ?? 0),
+        discount: Number(item.discount || 0),
+        taxRate: Number(item.taxRate || 0),
+        durationMonths: unitLine ? 1 : Number(item.durationMonths ?? 1) || 1,
+        durationUnit: normalizeDurationUnit(unitLine ? 'months' : item.durationUnit),
+      };
+    });
 
     const { subtotal, taxTotal, total } = calculateTotals(roundedItems);
     const payload = {
@@ -763,6 +769,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     const lineTotal = getLineTotal(item);
                     const durationUnit = normalizeDurationUnit(item.durationUnit);
                     const durationValue = getDurationDisplayValue(item);
+                    // "Unit"-measured lines can't carry a duration → Durata shows N/A.
+                    const isUnitDurationLine = isUnitLine(item);
                     const productHref = buildProductQuickViewHref(item.productId, allProductIds);
 
                     return (
@@ -847,21 +855,31 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                                 })}
                               </FieldLabel>
                               <div className="flex items-center justify-center gap-1">
-                                <ValidatedNumberInput
-                                  min="1"
-                                  step="1"
-                                  value={durationValue}
-                                  onValueChange={(value) => handleDurationValueChange(index, value)}
-                                  className="min-w-0 max-w-[5rem]"
-                                />
-                                <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                  /
-                                </span>
-                                <DurationUnitSelector
-                                  value={durationUnit}
-                                  onChange={(val) => handleDurationUnitChange(index, val)}
-                                  count={durationValue}
-                                />
+                                {isUnitDurationLine ? (
+                                  <span className="text-sm font-medium text-muted-foreground">
+                                    {t('common:labels.notApplicable')}
+                                  </span>
+                                ) : (
+                                  <>
+                                    <ValidatedNumberInput
+                                      min="1"
+                                      step="1"
+                                      value={durationValue}
+                                      onValueChange={(value) =>
+                                        handleDurationValueChange(index, value)
+                                      }
+                                      className="min-w-0 max-w-[5rem]"
+                                    />
+                                    <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                      /
+                                    </span>
+                                    <DurationUnitSelector
+                                      value={durationUnit}
+                                      onChange={(val) => handleDurationUnitChange(index, val)}
+                                      count={durationValue}
+                                    />
+                                  </>
+                                )}
                               </div>
                             </div>
                             <div className="space-y-1 lg:col-span-2">

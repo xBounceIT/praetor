@@ -628,8 +628,9 @@ describe('PUT /api/sales/client-quotes/:id snapshots pre-update state', () => {
 });
 
 // Duration column (issue #757): the route owns its own validation (whole-number / positive /
-// default-to-1) and feeds durationMonths into the persisted line items. Exercise that here —
-// it is the only backend site that scales/validates duration.
+// default-to-1) and feeds durationMonths into the persisted line items. (Offers, orders, and
+// invoices validate/coerce duration the same way; invoices additionally fold it into their
+// server-authoritative totals.) Exercise the quote variant here.
 describe('POST /api/sales/client-quotes - duration handling (issue #757)', () => {
   const createBody = (itemOverrides: Record<string, unknown> = {}) => ({
     id: 'q-new',
@@ -671,6 +672,24 @@ describe('POST /api/sales/client-quotes - duration handling (issue #757)', () =>
     expect(insertedItems).toHaveLength(1);
     expect(insertedItems[0].durationMonths).toBe(12);
     expect(insertedItems[0].durationUnit).toBe('years');
+  });
+
+  test('201 forces a "unit"-measured line to a single month (duration is forbidden)', async () => {
+    setupCreateMocks();
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes',
+      headers: authHeader(),
+      payload: createBody({ unitType: 'unit', durationMonths: 12, durationUnit: 'years' }),
+    });
+
+    expect(res.statusCode).toBe(201);
+    const insertedItems = cqInsertItemsMock.mock.calls[0][1];
+    expect(insertedItems[0].unitType).toBe('unit');
+    // Countable "unit" line: the route coerces the 12-year duration down to a single month.
+    expect(insertedItems[0].durationMonths).toBe(1);
+    expect(insertedItems[0].durationUnit).toBe('months');
   });
 
   test('201 defaults an omitted durationMonths to 1 (one-off line)', async () => {

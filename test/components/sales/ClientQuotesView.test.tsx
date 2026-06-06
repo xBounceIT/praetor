@@ -189,6 +189,55 @@ describe('<ClientQuotesView />', () => {
     expect(screen.getAllByText('240.00 EUR').length).toBeGreaterThan(0);
   });
 
+  test('shows N/A instead of a duration field for "unit"-measured lines', async () => {
+    const unitQuote: Quote = {
+      id: 'Q-UNIT',
+      clientId: 'client-1',
+      clientName: 'Helios Energy Services',
+      items: [
+        {
+          id: 'item-unit',
+          quoteId: 'Q-UNIT',
+          productId: 'product-1',
+          productName: 'Widget',
+          quantity: 5,
+          unitPrice: 100,
+          productCost: 60,
+          productMolPercentage: 40,
+          // Countable "unit" line — duration is forbidden, so the Durata field shows N/A.
+          unitType: 'unit',
+          durationMonths: 1,
+        },
+      ],
+      paymentTerms: '30gg',
+      discount: 0,
+      discountType: 'percentage',
+      status: 'draft',
+      expirationDate: '2026-06-30',
+      createdAt: Date.UTC(2026, 4, 14),
+      updatedAt: Date.UTC(2026, 4, 14),
+    };
+
+    render(
+      <ClientQuotesView
+        quotes={[unitQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+    fireEvent.click(screen.getByText('Q-UNIT'));
+    await screen.findByRole('dialog');
+
+    // The Durata cell renders N/A (no number input, no unit selector) for the unit line.
+    expect(screen.getAllByText('common:labels.notApplicable').length).toBeGreaterThan(0);
+    expect(screen.queryAllByPlaceholderText('sales:clientQuotes.durationColumn')).toHaveLength(0);
+  });
+
   test('a years duration prices off the canonical months, matching the months equivalent (issue #757)', () => {
     // durationUnit only changes how the duration is displayed/entered; pricing always uses the
     // canonical durationMonths (24). So 24 months shown as "2 years" must total the same as

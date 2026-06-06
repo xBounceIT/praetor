@@ -304,7 +304,10 @@ describe('insertItems', () => {
           supplierQuoteItemId: null,
           supplierQuoteSupplierName: null,
           supplierQuoteUnitPrice: null,
-          unitType: 'unit',
+          // hours (not unit): duration applies to non-unit lines, so the distinctive 12 below is
+          // bound through unchanged — letting this assert the column *order*, not the unit-line
+          // duration coercion (covered elsewhere).
+          unitType: 'hours',
           durationMonths: 12,
           durationUnit: 'months',
         },
@@ -327,7 +330,7 @@ describe('insertItems', () => {
       null,
       '0',
       null,
-      'unit',
+      'hours',
       null,
       null,
       null,

@@ -10,6 +10,7 @@ import {
   getEffectiveDurationMonths,
   getEffectiveMol,
   getItemPricingContext,
+  isUnitLine,
   normalizeDurationUnit,
   type PricingItem,
   parseDurationValueToMonths,
@@ -118,6 +119,26 @@ describe('getEffectiveDurationMonths', () => {
     expect(getEffectiveDurationMonths({ durationMonths: 0 })).toBe(1);
     expect(getEffectiveDurationMonths({ durationMonths: -3 })).toBe(1);
     expect(getEffectiveDurationMonths({ durationMonths: Number.NaN })).toBe(1);
+  });
+
+  test('forces 1 for "unit"-measured lines regardless of stored value', () => {
+    // unitType 'unit' (quotes/offers/orders) and unitOfMeasure 'unit' (invoices) both override.
+    expect(getEffectiveDurationMonths({ unitType: 'unit', durationMonths: 12 })).toBe(1);
+    expect(getEffectiveDurationMonths({ unitOfMeasure: 'unit', durationMonths: 12 })).toBe(1);
+    // hours/days lines keep their duration.
+    expect(getEffectiveDurationMonths({ unitType: 'hours', durationMonths: 12 })).toBe(12);
+    expect(getEffectiveDurationMonths({ unitType: 'days', durationMonths: 6 })).toBe(6);
+  });
+});
+
+describe('isUnitLine', () => {
+  test('is true only when the line is unit-measured', () => {
+    expect(isUnitLine({ unitType: 'unit' })).toBe(true);
+    expect(isUnitLine({ unitOfMeasure: 'unit' })).toBe(true);
+    expect(isUnitLine({ unitType: 'hours' })).toBe(false);
+    expect(isUnitLine({ unitType: 'days' })).toBe(false);
+    expect(isUnitLine({ unitOfMeasure: 'hours' })).toBe(false);
+    expect(isUnitLine({})).toBe(false);
   });
 });
 

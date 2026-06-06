@@ -10,7 +10,11 @@ import { standardErrorResponses, standardRateLimitedErrorResponses } from '../sc
 import { logAudit } from '../utils/audit.ts';
 import { isPastLocalDate } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
-import type { DurationUnit } from '../utils/duration-unit.ts';
+import {
+  coerceUnitLineDuration,
+  type DurationUnit,
+  isUnitMeasure,
+} from '../utils/duration-unit.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -110,6 +114,13 @@ const normalizeQuoteItems = (
     if (!durationMonthsResult.ok) return { ok: false, message: durationMonthsResult.message };
     const durationUnitResult = optionalDurationUnit(item.durationUnit, `items[${i}].durationUnit`);
     if (!durationUnitResult.ok) return { ok: false, message: durationUnitResult.message };
+    const unitType = normalizeUnitType(item.unitType);
+    // A "unit"-measured line can't run for a period, so its duration is forced to a single month.
+    const { durationMonths, durationUnit } = coerceUnitLineDuration(
+      isUnitMeasure(unitType),
+      durationMonthsResult.value ?? 1,
+      durationUnitResult.value ?? 'months',
+    );
     result.push({
       id: normalizeNullableString(item.id) ?? undefined,
       productId: productIdValue,
@@ -121,9 +132,9 @@ const normalizeQuoteItems = (
       productMolPercentage: productMolPercentageResult.value,
       discount: itemDiscountResult.value || 0,
       note: normalizeNullableString(item.note),
-      unitType: normalizeUnitType(item.unitType),
-      durationMonths: durationMonthsResult.value ?? 1,
-      durationUnit: durationUnitResult.value ?? 'months',
+      unitType,
+      durationMonths,
+      durationUnit,
     });
   }
   return { ok: true, items: result };

@@ -36,7 +36,8 @@ const buildInvoice = (id: string, durationUnit: 'months' | 'years'): Invoice => 
       id: 'item-1',
       invoiceId: id,
       description: 'Consulting',
-      unitOfMeasure: 'unit',
+      // Duration applies only to non-unit lines, so this fixture is hours-based to exercise it.
+      unitOfMeasure: 'hours',
       // Quantity 3 (not 2) so the duration display value (2 for years) is unambiguous in the inputs.
       quantity: 3,
       unitPrice: 100,

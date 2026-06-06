@@ -2,7 +2,12 @@ import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
 import { invoiceItems, invoices } from '../db/schema/invoices.ts';
 import { requireDateOnly } from '../utils/date.ts';
-import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
+import {
+  coerceUnitLineDuration,
+  type DurationUnit,
+  isUnitMeasure,
+  normalizeDurationUnit,
+} from '../utils/duration-unit.ts';
 import { formatSequenceSuffix } from '../utils/order-ids.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
 
@@ -346,8 +351,12 @@ export const insertItems = async (
         unitPrice: numericForDb(item.unitPrice),
         discount: numericForDb(item.discount),
         taxRate: numericForDb(item.taxRate),
-        durationMonths: item.durationMonths ?? 1,
-        durationUnit: item.durationUnit ?? 'months',
+        // Final guard: a "unit"-measured line can't carry a duration.
+        ...coerceUnitLineDuration(
+          isUnitMeasure(item.unitOfMeasure),
+          item.durationMonths ?? 1,
+          item.durationUnit ?? 'months',
+        ),
       })),
     )
     .returning();

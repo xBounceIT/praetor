@@ -3,7 +3,12 @@ import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { customerOffers } from '../db/schema/customerOffers.ts';
 import { saleItems, sales } from '../db/schema/sales.ts';
 import { supplierSaleItems, supplierSales } from '../db/schema/supplierSales.ts';
-import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
+import {
+  coerceUnitLineDuration,
+  type DurationUnit,
+  isUnitMeasure,
+  normalizeDurationUnit,
+} from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber, parseNullableDbNumber } from '../utils/parse.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 
@@ -430,8 +435,13 @@ export const insertItems = async (
         supplierSaleItemId: item.supplierSaleItemId,
         supplierSaleSupplierName: item.supplierSaleSupplierName,
         unitType: item.unitType,
-        durationMonths: item.durationMonths ?? 1,
-        durationUnit: item.durationUnit ?? 'months',
+        // Final guard: a "unit"-measured line can't carry a duration (covers POST/PUT and the
+        // snapshot-driven version restore that bypasses route normalization).
+        ...coerceUnitLineDuration(
+          isUnitMeasure(item.unitType),
+          item.durationMonths ?? 1,
+          item.durationUnit ?? 'months',
+        ),
       })),
     )
     .returning();
