@@ -157,4 +157,20 @@ describe('<SupplierQuotesView /> optional customer association (issue #759)', ()
     const trigger = document.getElementById('supplier-quote-client');
     expect(trigger?.textContent).toContain('Initech');
   });
+
+  test('shows the stored customer name when the linked client is absent from the options', () => {
+    // The /clients list is user-scoped and does not include the linked client; the select must
+    // still surface the quote's stored clientName rather than the empty placeholder.
+    const withScopedOutClient = buildQuote({
+      id: 'SQ-SCOPED-CLIENT',
+      status: 'draft',
+      clientId: 'cli-hidden',
+      clientName: 'Hidden Customer',
+    });
+    render(<SupplierQuotesView {...baseProps} quotes={[withScopedOutClient]} />);
+    fireEvent.click(screen.getByText('SQ-SCOPED-CLIENT'));
+    const trigger = document.getElementById('supplier-quote-client');
+    expect(trigger?.textContent).toContain('Hidden Customer');
+    expect(trigger?.textContent).not.toContain('sales:supplierQuotes.selectClient');
+  });
 });

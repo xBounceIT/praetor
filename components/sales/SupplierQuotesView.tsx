@@ -255,15 +255,22 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   // The customer link is optional (issue #759); the leading empty-id option clears it.
   // Keep an already-linked-but-now-disabled client visible so editing an existing quote doesn't
   // hide its customer; otherwise only offer active clients.
-  const clientOptions = useMemo(
-    () => [
+  const clientOptions = useMemo(() => {
+    const options = [
       { id: '', name: t('sales:supplierQuotes.noClient', { defaultValue: 'No customer' }) },
       ...clients
         .filter((client) => !client.isDisabled || client.id === editingQuote?.clientId)
         .map((client) => ({ id: client.id, name: client.name })),
-    ],
-    [clients, editingQuote, t],
-  );
+    ];
+    // The linked client may be missing from a user-scoped /clients list (no crm.clients_all.view
+    // and not assigned to it). Synthesize an option from the quote's stored name so the select
+    // shows the customer instead of falling back to the placeholder.
+    const linkedId = editingQuote?.clientId;
+    if (linkedId && !options.some((option) => option.id === linkedId)) {
+      options.push({ id: linkedId, name: editingQuote?.clientName || linkedId });
+    }
+    return options;
+  }, [clients, editingQuote, t]);
 
   const handleClientChange = useCallback(
     (clientId: string) => {
