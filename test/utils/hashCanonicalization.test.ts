@@ -236,4 +236,29 @@ describe('resolveHashChange', () => {
       }),
     ).toEqual({ kind: 'set-view', view: '404' });
   });
+
+  test('a quick-view deep-link hash resolves to its view once the query is parsed out', () => {
+    // Regression: the live hashchange handler parses the query (parseViewHash)
+    // before resolving, so pressing Back onto `#/<view>?filterId=...` maps to the
+    // view instead of 404. Without the strip, the raw query-bearing hash 404s.
+    const parsedPath = parseViewHash('#/sales/supplier-quotes?filterId=SQ-1').path;
+    expect(
+      resolveHashChange({
+        rawHash: parsedPath,
+        activeView: 'timesheets/tracker',
+        validViews,
+        hasUser: true,
+      }),
+    ).toEqual({ kind: 'set-view', view: 'sales/supplier-quotes' });
+
+    // The pre-fix behavior (raw hash, query intact) would route to 404.
+    expect(
+      resolveHashChange({
+        rawHash: 'sales/supplier-quotes?filterId=SQ-1',
+        activeView: 'timesheets/tracker',
+        validViews,
+        hasUser: true,
+      }),
+    ).toEqual({ kind: 'set-view', view: '404' });
+  });
 });

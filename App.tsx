@@ -116,7 +116,6 @@ import {
   type ParsedViewHash,
   parseViewHash,
   resolveHashChange,
-  stripHashPrefix,
 } from './utils/hashCanonicalization';
 import {
   clearStaleModuleScopedState,
@@ -1304,8 +1303,19 @@ const AppContent: React.FC = () => {
     }
     const nextHash = currentUser ? `#/${activeView}` : '#/login';
     if (window.location.hash !== nextHash) {
-      programmaticHashTracker.registerWrite();
-      window.location.hash = nextHash.slice(1);
+      // A quick-view deep link arrives as `#/<view>?filterId=...`; once the view
+      // and filter are seeded into state we strip the query from the address bar.
+      // When only the query differs from the target view, REPLACE the history
+      // entry (no `hashchange` fires, so no programmatic-write to register) rather
+      // than pushing — otherwise Back would return to the query-bearing hash, which
+      // the live resolver below would treat as an unknown view and route to 404.
+      const targetPath = currentUser ? activeView : 'login';
+      if (parseViewHash(window.location.hash).path === targetPath) {
+        window.history.replaceState(null, '', nextHash);
+      } else {
+        programmaticHashTracker.registerWrite();
+        window.location.hash = nextHash.slice(1);
+      }
     }
   }, [activeView, currentUser, isLoading, programmaticHashTracker]);
 
@@ -1319,7 +1329,9 @@ const AppContent: React.FC = () => {
   // addEventListener call during rapid back/forward clicking.
   const handleHashChange = useEffectEvent(() => {
     if (programmaticHashTracker.consumeIfPending()) return;
-    const rawHash = stripHashPrefix(window.location.hash);
+    // Strip any deep-link query (`?filterId=...`) before resolving, so a
+    // back/forward to a quick-view hash maps to its view instead of a 404.
+    const rawHash = parseViewHash(window.location.hash).path;
     const outcome = resolveHashChange({
       rawHash,
       activeView: activeViewRef.current,
