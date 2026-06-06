@@ -850,6 +850,9 @@ export interface SupplierQuote {
   id: string;
   supplierId: string;
   supplierName: string;
+  // Optional customer association (issue #759). Absent/null when no customer is linked.
+  clientId?: string | null;
+  clientName?: string | null;
   items: SupplierQuoteItem[];
   paymentTerms:
     | 'immediate'

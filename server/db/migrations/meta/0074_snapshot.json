@@ -1,5 +1,5 @@
 {
-  "id": "d0a8c6f1-a708-4365-8287-def9b28366ea",
+  "id": "64299d56-80bc-40b5-9bb6-cecd89966693",
   "prevId": "6e7ab31b-15bc-4dc6-a352-1cb88822fa5d",
   "version": "7",
   "dialect": "postgresql",
@@ -3160,13 +3160,6 @@
           "notNull": false,
           "default": "'hours'"
         },
-        "duration_months": {
-          "name": "duration_months",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -3219,10 +3212,6 @@
         "chk_quote_items_unit_type": {
           "name": "chk_quote_items_unit_type",
           "value": "\"quote_items\".\"unit_type\" IN ('hours', 'days', 'unit')"
-        },
-        "chk_quote_items_duration_months": {
-          "name": "chk_quote_items_duration_months",
-          "value": "\"quote_items\".\"duration_months\" >= 1"
         }
       },
       "isRLSEnabled": false
@@ -5864,6 +5853,18 @@
           "primaryKey": false,
           "notNull": true
         },
+        "client_id": {
+          "name": "client_id",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "client_name": {
+          "name": "client_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
         "payment_terms": {
           "name": "payment_terms",
           "type": "varchar(20)",
@@ -5921,6 +5922,21 @@
           "method": "btree",
           "with": {}
         },
+        "idx_supplier_quotes_client_id": {
+          "name": "idx_supplier_quotes_client_id",
+          "columns": [
+            {
+              "expression": "client_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "idx_supplier_quotes_status": {
           "name": "idx_supplier_quotes_status",
           "columns": [
@@ -5958,6 +5974,15 @@
           "tableFrom": "supplier_quotes",
           "tableTo": "suppliers",
           "columnsFrom": ["supplier_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "supplier_quotes_client_id_clients_id_fk": {
+          "name": "supplier_quotes_client_id_clients_id_fk",
+          "tableFrom": "supplier_quotes",
+          "tableTo": "clients",
+          "columnsFrom": ["client_id"],
           "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"

@@ -27,6 +27,8 @@ Le offerte clienti in stato **Accettata** o **Rifiutata** possono essere riporta
 
 I preventivi fornitori aiutano a confrontare costi e condizioni d'acquisto. Associa le righe ai prodotti corretti quando possibile, così i dati restano tracciabili nei flussi successivi.
 
+Nella sezione **Informazioni Fornitore** del dialog **Nuovo Preventivo Fornitore** puoi collegare facoltativamente un **Cliente**: usalo quando il preventivo si riferisce alla commessa di un cliente specifico. L'associazione è opzionale — un preventivo fornitore senza cliente è uno stato valido e si salva senza errori — e può essere rimossa in qualsiasi momento selezionando *Nessun cliente*. Quando è valorizzato, il cliente collegato è visibile sia nel dettaglio del preventivo sia nella colonna **Cliente** della lista.
+
 ## Ordini
 
 Gli ordini clienti e fornitori consolidano le informazioni operative. Prima di confermare, verifica anagrafica, righe, sconti, condizioni di pagamento e collegamenti con documenti precedenti.

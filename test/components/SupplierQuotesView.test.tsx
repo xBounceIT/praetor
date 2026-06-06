@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { fireEvent, screen } from '@testing-library/react';
-import type { Product, Supplier, SupplierQuote } from '../../types';
+import { fireEvent, screen, within } from '@testing-library/react';
+import type { Client, Product, Supplier, SupplierQuote } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
 import { render } from '../helpers/render';
 
@@ -12,6 +12,11 @@ const supplier: Supplier = {
   id: 'sup-1',
   name: 'Acme Supplies',
 };
+
+const clients: Client[] = [
+  { id: 'cli-1', name: 'Globex Corp' },
+  { id: 'cli-2', name: 'Initech' },
+];
 
 const products: Product[] = [];
 
@@ -50,6 +55,7 @@ const acceptedWithOrder = buildQuote({
 const baseProps = {
   quotes: [draft, sent, accepted, denied, acceptedWithOrder],
   suppliers: [supplier],
+  clients,
   products,
   onAddQuote: () => {},
   onUpdateQuote: () => {},
@@ -106,5 +112,65 @@ describe('<SupplierQuotesView /> read-only gating', () => {
     // Linked-order copy wins over the generic non-draft copy.
     expect(screen.getByText('sales:supplierQuotes.readOnlyLinked')).toBeInTheDocument();
     expect(screen.queryByText('sales:supplierQuotes.readOnlyStatus')).not.toBeInTheDocument();
+  });
+});
+
+describe('<SupplierQuotesView /> optional customer association (issue #759)', () => {
+  test('renders the Customer field in the add-quote dialog', () => {
+    render(<SupplierQuotesView {...baseProps} />);
+    fireEvent.click(screen.getByText('sales:supplierQuotes.addQuote'));
+    expect(screen.getByText('sales:supplierQuotes.newQuote')).toBeInTheDocument();
+    // The customer select trigger renders; with nothing linked it shows the "No customer" option
+    // (scoped by id because the same i18n key is also the list column header behind the modal).
+    const trigger = document.getElementById('supplier-quote-client');
+    expect(trigger).not.toBeNull();
+    expect(trigger?.textContent).toContain('sales:supplierQuotes.noClient');
+    // Saving with no customer selected must be allowed: the Save button is shown.
+    expect(screen.getByText('common:buttons.save')).toBeInTheDocument();
+  });
+
+  test('shows the linked customer name in the list', () => {
+    const withClient = buildQuote({
+      id: 'SQ-CLIENT',
+      status: 'draft',
+      clientId: 'cli-1',
+      clientName: 'Globex Corp',
+    });
+    render(<SupplierQuotesView {...baseProps} quotes={[withClient]} />);
+    const row = screen.getByText('SQ-CLIENT').closest('tr');
+    expect(row).not.toBeNull();
+    expect(within(row as HTMLElement).getByText('Globex Corp')).toBeInTheDocument();
+  });
+
+  test('pre-selects the linked customer when editing a quote', () => {
+    const withClient = buildQuote({
+      id: 'SQ-EDIT-CLIENT',
+      status: 'draft',
+      clientId: 'cli-2',
+      clientName: 'Initech',
+    });
+    render(<SupplierQuotesView {...baseProps} quotes={[withClient]} />);
+    fireEvent.click(screen.getByText('SQ-EDIT-CLIENT'));
+    expect(screen.getByText('sales:supplierQuotes.editQuote')).toBeInTheDocument();
+    // The customer select trigger reflects the linked client's name (scoped by id; the list row
+    // behind the modal also renders "Initech").
+    const trigger = document.getElementById('supplier-quote-client');
+    expect(trigger?.textContent).toContain('Initech');
+  });
+
+  test('shows the stored customer name when the linked client is absent from the options', () => {
+    // The /clients list is user-scoped and does not include the linked client; the select must
+    // still surface the quote's stored clientName rather than the empty placeholder.
+    const withScopedOutClient = buildQuote({
+      id: 'SQ-SCOPED-CLIENT',
+      status: 'draft',
+      clientId: 'cli-hidden',
+      clientName: 'Hidden Customer',
+    });
+    render(<SupplierQuotesView {...baseProps} quotes={[withScopedOutClient]} />);
+    fireEvent.click(screen.getByText('SQ-SCOPED-CLIENT'));
+    const trigger = document.getElementById('supplier-quote-client');
+    expect(trigger?.textContent).toContain('Hidden Customer');
+    expect(trigger?.textContent).not.toContain('sales:supplierQuotes.selectClient');
   });
 });
