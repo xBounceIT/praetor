@@ -146,6 +146,31 @@ describe('<SelectControl />', () => {
     expect(popoverContent?.className).not.toContain('w-[var(--radix-popover-trigger-width)]');
   });
 
+  test('searchable combobox stays non-modal on a plain page so it never locks page scroll', () => {
+    render(<SelectControl options={options} value="" onChange={() => {}} searchable />);
+
+    fireEvent.click(screen.getByRole('button'));
+
+    // A non-modal popover leaves the rest of the page interactive.
+    expect(document.body.style.pointerEvents).not.toBe('none');
+  });
+
+  test('searchable combobox becomes modal inside a dialog so the option list scrolls with the wheel', () => {
+    // Inside a modal dialog, Radix's scroll-lock whitelists only the dialog's own
+    // subtree, so wheel events over this portaled popover are swallowed. Promoting
+    // it to modal gives it its own scroll-lock; Radix signals modality by disabling
+    // outside pointer events.
+    render(
+      <div data-slot="dialog-content">
+        <SelectControl options={options} value="" onChange={() => {}} searchable />
+      </div>,
+    );
+
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(document.body.style.pointerEvents).toBe('none');
+  });
+
   test('multi combobox toggles selected values and renders chips', () => {
     const onChange = mock((_value: string | string[]) => {});
     const { rerender } = render(

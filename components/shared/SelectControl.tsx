@@ -1,6 +1,6 @@
 import { CheckIcon, ChevronsUpDownIcon, XIcon } from 'lucide-react';
 import type React from 'react';
-import { useMemo, useReducer } from 'react';
+import { useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
@@ -58,6 +58,18 @@ const toSelectValue = (value: string) => (value === '' ? EMPTY_VALUE_SENTINEL : 
 const fromSelectValue = (value: string) => (value === EMPTY_VALUE_SENTINEL ? '' : value);
 
 const baseTriggerClassName = 'w-full min-w-0 justify-between text-left text-sm font-normal';
+
+/**
+ * When the combobox lives inside a modal dialog, Radix's scroll-lock
+ * (`react-remove-scroll`) only whitelists the dialog's own content subtree.
+ * This popover is portaled to `document.body` — outside that subtree — so the
+ * scroll-lock swallows wheel events over the option list (dragging the scrollbar
+ * still works, since that's a pointer interaction). Promoting the popover to
+ * `modal` gives it its own scroll-lock that whitelists the list, restoring wheel
+ * scrolling. Page-level selects stay non-modal so they never lock page scroll.
+ */
+const isInsideModalDialog = (element: HTMLElement | null) =>
+  Boolean(element?.closest('[data-slot="dialog-content"],[data-slot="sheet-content"]'));
 
 const getSingleSelectedOption = (options: Option[], value: string | string[]) => {
   if (Array.isArray(value)) return undefined;
@@ -211,6 +223,8 @@ const SearchableSelectControl = ({
     searchTerm: '',
   });
   const { open, searchTerm } = state;
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [modal, setModal] = useState(false);
   const selectedOption = getSingleSelectedOption(options, value);
   const selectedValueSet = useMemo(() => new Set(Array.isArray(value) ? value : []), [value]);
   const selectedOptions = useMemo(
@@ -267,12 +281,19 @@ const SearchableSelectControl = ({
       <SelectLabel id={id} label={label} />
       <Popover
         open={open}
+        modal={modal}
         onOpenChange={
-          disabled ? undefined : (nextOpen) => dispatch({ type: 'setOpen', open: nextOpen })
+          disabled
+            ? undefined
+            : (nextOpen) => {
+                if (nextOpen) setModal(isInsideModalDialog(triggerRef.current));
+                dispatch({ type: 'setOpen', open: nextOpen });
+              }
         }
       >
         <PopoverTrigger asChild>
           <Button
+            ref={triggerRef}
             type="button"
             id={id}
             variant="outline"
