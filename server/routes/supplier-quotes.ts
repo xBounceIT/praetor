@@ -22,7 +22,7 @@ import { createChildLogger } from '../utils/logger.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
-import { deriveSupplierLinePricing } from '../utils/supplier-quote-pricing.ts';
+import { deriveSupplierLinePricing, MAX_LINE_AMOUNT } from '../utils/supplier-quote-pricing.ts';
 import {
   badRequest,
   optionalDateString,
@@ -218,6 +218,13 @@ const validateAndNormalizeItems = (
     // even when a caller submits more than two decimals. Derived server-side so it can never drift
     // from what the client computed; totals downstream read this net unit price.
     const pricing = deriveSupplierLinePricing(listPrice, discountPercent);
+    // Reject amounts that would overflow the NUMERIC(15,2) columns so the caller gets a clean 400
+    // instead of a 500-level database error on INSERT. (unitPrice ≤ listPrice, but check both so a
+    // future formula change can't quietly slip an out-of-range net cost through.)
+    if (pricing.listPrice > MAX_LINE_AMOUNT || pricing.unitPrice > MAX_LINE_AMOUNT) {
+      badRequest(reply, `items[${i}].listPrice must not exceed ${MAX_LINE_AMOUNT}`);
+      return null;
+    }
     result.push({
       id: generatePrefixedId(ITEM_ID_PREFIXES.supplierQuoteItem),
       productId: item.productId || null,

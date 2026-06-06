@@ -1,5 +1,10 @@
 import { roundCurrency } from './invoice-math.ts';
 
+// Largest amount that fits the NUMERIC(15,2) currency columns (list_price, unit_price): 13 integer
+// digits plus 2 decimals. A bigger value overflows on INSERT and surfaces as a 500-level database
+// error, so callers must be rejected with a clean 400 before persisting.
+export const MAX_LINE_AMOUNT = 9_999_999_999_999.99;
+
 export type SupplierLinePricing = {
   listPrice: number;
   discountPercent: number;

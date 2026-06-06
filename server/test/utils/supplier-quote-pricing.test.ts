@@ -1,6 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import { roundCurrency } from '../../utils/invoice-math.ts';
-import { deriveSupplierLinePricing } from '../../utils/supplier-quote-pricing.ts';
+import { deriveSupplierLinePricing, MAX_LINE_AMOUNT } from '../../utils/supplier-quote-pricing.ts';
+
+describe('MAX_LINE_AMOUNT', () => {
+  test('equals the NUMERIC(15,2) maximum (13 integer digits + 2 decimals)', () => {
+    // 10^13 - 0.01 = 9999999999999.99; the next scale-2 value (1e13) overflows the column.
+    expect(MAX_LINE_AMOUNT).toBe(9_999_999_999_999.99);
+    expect(MAX_LINE_AMOUNT).toBeLessThan(10_000_000_000_000);
+  });
+});
 
 describe('deriveSupplierLinePricing', () => {
   test('derives the net unit cost from list price and discount', () => {

@@ -463,6 +463,50 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     expect(sqReplaceItemsMock).not.toHaveBeenCalled();
   });
 
+  test('400 rejects a list price that would overflow NUMERIC(15,2) (clean 400, not a DB 500)', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+
+    // 1e13 has 14 integer digits and exceeds the NUMERIC(15,2) max of 9999999999999.99.
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [{ productName: 'Service', quantity: 1, listPrice: 10_000_000_000_000 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(sqReplaceItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('200 accepts a list price at the NUMERIC(15,2) maximum (boundary is inclusive)', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [{ productName: 'Service', quantity: 1, listPrice: 9_999_999_999_999.99 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const itemsArg = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    expect(itemsArg[0]).toEqual(
+      expect.objectContaining({
+        listPrice: 9_999_999_999_999.99,
+        discountPercent: 0,
+        unitPrice: 9_999_999_999_999.99,
+      }),
+    );
+  });
+
   test('200 links a customer, resolving clientName server-side from clientId (issue #759)', async () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
