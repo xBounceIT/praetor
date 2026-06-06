@@ -154,6 +154,11 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
       expect(link).toHaveAttribute('href', '#/catalog/internal-listing?filterId=prod-1');
       expect(link).toHaveAttribute('target', '_blank');
     }
+
+    // The desktop shortcut is no longer an inline column-eating button: it floats
+    // above its field's top-right corner (absolute), mirroring the "manage" affordance.
+    expect(supplierLinks.some((link) => link.className.includes('absolute'))).toBe(true);
+    expect(productLinks.some((link) => link.className.includes('absolute'))).toBe(true);
   });
 
   test('hides the supplier-quote shortcut when the user cannot access that view', () => {

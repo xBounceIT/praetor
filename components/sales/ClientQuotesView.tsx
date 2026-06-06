@@ -7,6 +7,7 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { normalizeQuoteItem } from '../../services/api/normalizers';
 import type {
   Client,
@@ -123,7 +124,12 @@ const quoteToFormData = (quote: Quote): Partial<Quote> => ({
 // Per-line quick-view shortcut: opens the referenced supplier quote / product on
 // its own pre-filtered page in a new browser tab, so the in-progress quote dialog
 // stays open and untouched. Rendered only when the row actually references a record.
-const QuickViewLinkButton: React.FC<{ href: string; label: string }> = ({ href, label }) => (
+const QuickViewLinkButton: React.FC<{
+  href: string;
+  label: string;
+  className?: string;
+  iconClassName?: string;
+}> = ({ href, label, className, iconClassName }) => (
   <Tooltip>
     <TooltipTrigger asChild>
       <Button
@@ -132,7 +138,7 @@ const QuickViewLinkButton: React.FC<{ href: string; label: string }> = ({ href, 
         variant="ghost"
         size="icon-sm"
         aria-label={label}
-        className="shrink-0 text-muted-foreground hover:text-primary"
+        className={cn('shrink-0 text-muted-foreground hover:text-primary', className)}
       >
         <a
           href={href}
@@ -141,7 +147,10 @@ const QuickViewLinkButton: React.FC<{ href: string; label: string }> = ({ href, 
           aria-label={label}
           onClick={(e) => e.stopPropagation()}
         >
-          <i className="fa-solid fa-up-right-from-square text-[11px]" aria-hidden="true"></i>
+          <i
+            className={cn('fa-solid fa-up-right-from-square text-[11px]', iconClassName)}
+            aria-hidden="true"
+          ></i>
           <span className="sr-only">{label}</span>
         </a>
       </Button>
@@ -1597,13 +1606,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
                           {t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
                         </div>
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
+                        <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
                           {t('crm:internalListing.cost')}
                         </div>
                         <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
                           MOL
                         </div>
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
+                        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
                           {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
                         </div>
                         <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
@@ -1930,8 +1939,16 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                               </div>
                             </div>
                             <div className="hidden lg:flex gap-2 items-center">
-                              <div className="flex-1 min-w-0 grid grid-cols-15 gap-2 items-center">
-                                <div className="col-span-2 min-w-0 flex items-center gap-1">
+                              <div className="flex-1 min-w-0 grid grid-cols-15 gap-2 items-center pt-3">
+                                <div className="relative col-span-2 min-w-0">
+                                  {supplierQuoteHref && (
+                                    <QuickViewLinkButton
+                                      href={supplierQuoteHref}
+                                      label={t('sales:clientQuotes.openSupplierQuoteInNewTab')}
+                                      className="absolute right-1 top-0 z-10 h-6 w-6 -translate-y-1/2"
+                                      iconClassName="text-[10px]"
+                                    />
+                                  )}
                                   <SelectControl
                                     options={[
                                       {
@@ -1958,17 +1975,19 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                     displayValueIsPlaceholder={!item.supplierQuoteItemId}
                                     searchable={true}
                                     disabled={isReadOnly}
-                                    className="min-w-0 flex-1"
+                                    className="w-full min-w-0"
                                     buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
                                   />
-                                  {supplierQuoteHref && (
+                                </div>
+                                <div className="relative col-span-2 min-w-0">
+                                  {productHref && (
                                     <QuickViewLinkButton
-                                      href={supplierQuoteHref}
-                                      label={t('sales:clientQuotes.openSupplierQuoteInNewTab')}
+                                      href={productHref}
+                                      label={t('sales:clientQuotes.openProductInNewTab')}
+                                      className="absolute right-1 top-0 z-10 h-6 w-6 -translate-y-1/2"
+                                      iconClassName="text-[10px]"
                                     />
                                   )}
-                                </div>
-                                <div className="col-span-2 min-w-0 flex items-center gap-1">
                                   <ProductSelectOrFallback
                                     item={item}
                                     index={index}
@@ -1980,15 +1999,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                     })}
                                     placeholder={t('sales:clientQuotes.selectProduct')}
                                     onProductChange={updateProductSelection}
-                                    className="min-w-0 flex-1"
+                                    className="w-full min-w-0"
                                     buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
                                   />
-                                  {productHref && (
-                                    <QuickViewLinkButton
-                                      href={productHref}
-                                      label={t('sales:clientQuotes.openProductInNewTab')}
-                                    />
-                                  )}
                                 </div>
                                 <div className="col-span-2">
                                   <div className="flex items-center justify-center gap-1">
@@ -2045,7 +2058,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                     disabled={isReadOnly}
                                   />
                                 </div>
-                                <div className="col-span-2 flex flex-col items-center justify-center gap-1">
+                                <div className="col-span-3 flex flex-col items-center justify-center gap-1">
                                   <div className="flex items-center gap-1 w-full">
                                     <ValidatedNumberInput
                                       value={cost}
@@ -2072,7 +2085,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                     %
                                   </span>
                                 </div>
-                                <div className="col-span-2 flex items-center justify-center">
+                                <div className="col-span-1 flex items-center justify-center">
                                   <span className="text-xs font-bold text-zinc-700 whitespace-nowrap">
                                     {lineCost.toFixed(2)} {currency}
                                   </span>

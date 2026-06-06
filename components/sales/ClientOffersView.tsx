@@ -1221,13 +1221,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
                           {t('sales:clientOffers.durationColumn', { defaultValue: 'Duration' })}
                         </div>
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
+                        <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
                           {t('crm:internalListing.cost')}
                         </div>
                         <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
                           {t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
                         </div>
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
+                        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
                           {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
                         </div>
                         <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
@@ -1609,7 +1609,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     disabled={isReadOnly}
                                   />
                                 </div>
-                                <div className="col-span-2 flex flex-col items-center justify-center gap-1">
+                                <div className="col-span-3 flex flex-col items-center justify-center gap-1">
                                   <div className="flex items-center gap-1 w-full">
                                     <ValidatedNumberInput
                                       value={cost}
@@ -1636,7 +1636,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     %
                                   </span>
                                 </div>
-                                <div className="col-span-2 flex items-center justify-center">
+                                <div className="col-span-1 flex items-center justify-center">
                                   <span className="text-xs font-bold text-zinc-700 whitespace-nowrap">
                                     {lineCost.toFixed(2)} {currency}
                                   </span>
