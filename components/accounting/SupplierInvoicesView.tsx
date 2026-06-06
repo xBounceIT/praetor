@@ -14,6 +14,7 @@ import {
   normalizeDateOnlyString,
 } from '../../utils/date';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
+import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import Modal from '../shared/Modal';
 import {
@@ -474,13 +475,12 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     <FieldLabel htmlFor="supplier-invoice-issue-date">
                       {t('accounting:supplierInvoices.issueDate')}
                     </FieldLabel>
-                    <Input
+                    <DateField
                       id="supplier-invoice-issue-date"
-                      type="date"
                       required
                       value={formData.issueDate || ''}
-                      onChange={(event) =>
-                        dispatch({ type: 'patchForm', patch: { issueDate: event.target.value } })
+                      onChange={(value) =>
+                        dispatch({ type: 'patchForm', patch: { issueDate: value } })
                       }
                     />
                   </Field>
@@ -488,13 +488,12 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                     <FieldLabel htmlFor="supplier-invoice-due-date">
                       {t('accounting:supplierInvoices.dueDate')}
                     </FieldLabel>
-                    <Input
+                    <DateField
                       id="supplier-invoice-due-date"
-                      type="date"
                       required
                       value={formData.dueDate || ''}
-                      onChange={(event) =>
-                        dispatch({ type: 'patchForm', patch: { dueDate: event.target.value } })
+                      onChange={(value) =>
+                        dispatch({ type: 'patchForm', patch: { dueDate: value } })
                       }
                     />
                   </Field>

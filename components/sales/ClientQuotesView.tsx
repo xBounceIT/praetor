@@ -52,6 +52,7 @@ import {
 } from '../../utils/quickViewLinks';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
+import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import DurationUnitSelector from '../shared/DurationUnitSelector';
 import FieldTooltip from '../shared/FieldTooltip';
@@ -1512,13 +1513,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       <FieldLabel htmlFor="client-quote-expiration-date">
                         {t('sales:clientQuotes.expirationDateLabel')}
                       </FieldLabel>
-                      <Input
+                      <DateField
                         id="client-quote-expiration-date"
-                        type="date"
                         required
                         value={formData.expirationDate}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, expirationDate: e.target.value }))
+                        onChange={(value) =>
+                          setFormData((prev) => ({ ...prev, expirationDate: value }))
                         }
                         disabled={isReadOnly}
                       />

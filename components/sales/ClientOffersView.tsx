@@ -51,6 +51,7 @@ import {
 } from '../../utils/quickViewLinks';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
+import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import DurationUnitSelector from '../shared/DurationUnitSelector';
 import FieldTooltip from '../shared/FieldTooltip';
@@ -1196,14 +1197,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                           defaultValue: 'Expiration date',
                         })}
                       </FieldLabel>
-                      <Input
+                      <DateField
                         id="client-offer-expiration-date"
-                        type="date"
                         required
                         value={formData.expirationDate || ''}
                         disabled={isReadOnly}
-                        onChange={(event) =>
-                          setFormData((prev) => ({ ...prev, expirationDate: event.target.value }))
+                        onChange={(value) =>
+                          setFormData((prev) => ({ ...prev, expirationDate: value }))
                         }
                       />
                     </Field>

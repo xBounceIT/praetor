@@ -28,6 +28,7 @@ import { convertUnitPrice, parseNumberInputValue, roundCurrency } from '../../ut
 import { getPaymentTermsOptions } from '../../utils/options';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
+import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import FieldTooltip from '../shared/FieldTooltip';
 import HeaderAddButton from '../shared/HeaderAddButton';
@@ -1010,13 +1011,12 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                           defaultValue: 'Expiration Date',
                         })}
                       </FieldLabel>
-                      <Input
+                      <DateField
                         id="supplier-quote-expiration-date"
-                        type="date"
                         value={formData.expirationDate || ''}
                         disabled={isReadOnly}
-                        onChange={(event) =>
-                          setFormData((prev) => ({ ...prev, expirationDate: event.target.value }))
+                        onChange={(value) =>
+                          setFormData((prev) => ({ ...prev, expirationDate: value }))
                         }
                       />
                     </Field>

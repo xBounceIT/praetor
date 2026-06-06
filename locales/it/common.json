@@ -90,7 +90,8 @@
     "clearFilters": "Cancella filtri",
     "searchPlaceholder": "Cerca...",
     "rowsPerPage": "Righe per pagina",
-    "actions": "Azioni"
+    "actions": "Azioni",
+    "selectDate": "Seleziona data"
   },
   "validation": {
     "required": "Questo campo è obbligatorio",
