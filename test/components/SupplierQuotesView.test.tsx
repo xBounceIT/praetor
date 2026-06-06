@@ -167,6 +167,29 @@ describe('<SupplierQuotesView /> supplier pricing chain', () => {
     expect(item?.discountPercent).toBe(100);
     expect(item?.unitPrice).toBe(0);
   });
+
+  test('rounds list price/discount to DB scale so the submitted net cost matches the server', () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+    render(<SupplierQuotesView {...baseProps} onUpdateQuote={onUpdateQuote} />);
+    fireEvent.click(screen.getByText('SQ-DRAFT'));
+
+    // A list price with >2 decimals must be rounded to the persisted scale (NUMERIC(_,2)) before
+    // deriving the net cost, exactly as the server does — otherwise the UI would show/submit a net
+    // cost the server would not store.
+    const listPriceInputs = screen.getAllByDisplayValue('100.00');
+    fireEvent.change(listPriceInputs[0], { target: { value: '10.005' } });
+    const discountInputs = screen.getAllByDisplayValue('0');
+    fireEvent.change(discountInputs[0], { target: { value: '10' } });
+
+    fireEvent.click(screen.getByText('common:buttons.update'));
+
+    const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
+    const item = updates.items?.[0];
+    // 10.005 → 10.01 at scale 2; 10.01 × (1 − 10/100) = 9.009 → 9.01 (matches deriveSupplierLinePricing).
+    expect(item?.listPrice).toBe(10.01);
+    expect(item?.discountPercent).toBe(10);
+    expect(item?.unitPrice).toBe(9.01);
+  });
 });
 
 describe('<SupplierQuotesView /> summary discount line', () => {

@@ -57,14 +57,20 @@ interface TotalsBreakdown {
   total: number;
 }
 
-// Costo unitario (net unit cost) = Prezzo listino × (1 − Sconto a noi / 100). Mirrors the
-// server-side derivation in routes/supplier-quotes.ts so the rendered value matches what gets
-// persisted. Falls back to the existing net price for legacy rows that predate list price.
-const computeNetUnitPrice = (listPrice: number, discountPercent: number): number => {
-  // Clamp the discount into [0, 100] so the net cost can never go negative, even if a
-  // legacy/out-of-range value slips through from storage or a programmatic path.
-  const boundedDiscount = Math.min(100, Math.max(0, discountPercent || 0));
-  return roundCurrency((listPrice || 0) * (1 - boundedDiscount / 100));
+// Derive a line's persisted-scale pricing. Mirrors the server helper
+// (server/utils/supplier-quote-pricing.ts → deriveSupplierLinePricing): round Prezzo listino and
+// Sconto a noi to the DB scale (NUMERIC(_,2)) FIRST, then derive Costo unitario from the rounded
+// values. Keeping the modal in lockstep with the server means the previewed and submitted line
+// totals match the saved quote even when the user types more than two decimals. The discount is also
+// clamped into [0, 100] so the net cost can never go negative from a legacy/out-of-range value.
+const deriveLinePricing = (
+  listPrice: number,
+  discountPercent: number,
+): { listPrice: number; discountPercent: number; unitPrice: number } => {
+  const roundedListPrice = roundCurrency(listPrice || 0);
+  const roundedDiscountPercent = Math.min(100, Math.max(0, roundCurrency(discountPercent || 0)));
+  const unitPrice = roundCurrency(roundedListPrice * (1 - roundedDiscountPercent / 100));
+  return { listPrice: roundedListPrice, discountPercent: roundedDiscountPercent, unitPrice };
 };
 
 const calculateTotals = (items: SupplierQuoteItem[]): TotalsBreakdown => {
@@ -316,10 +322,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         const current = items[index];
         if (!current) return prev;
         const next = { ...current, [field]: value };
-        // Prezzo listino / Sconto a noi edits re-derive Costo unitario (unitPrice) in the same
-        // update so the net cost — and every total that reads it — stays in lockstep.
+        // Prezzo listino / Sconto a noi edits re-derive the whole line at the persisted DB scale in
+        // the same update, so the rounded list price/discount and the net cost — and every total that
+        // reads them — stay in lockstep with what the server will store.
         if (field === 'listPrice' || field === 'discountPercent') {
-          next.unitPrice = computeNetUnitPrice(next.listPrice, next.discountPercent);
+          const pricing = deriveLinePricing(next.listPrice, next.discountPercent);
+          next.listPrice = pricing.listPrice;
+          next.discountPercent = pricing.discountPercent;
+          next.unitPrice = pricing.unitPrice;
         }
         items[index] = next;
         return { ...prev, items };
@@ -370,13 +380,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     // Convert the list price (the base of the pricing chain), then re-derive Costo unitario.
     const baseListPrice = item.listPrice ?? item.unitPrice ?? 0;
     const adjustedListPrice = convertUnitPrice(baseListPrice, oldType, newType);
-    const discountPercent = item.discountPercent ?? 0;
+    const pricing = deriveLinePricing(adjustedListPrice, item.discountPercent ?? 0);
     const newItems = [...(formData.items || [])];
     newItems[index] = {
       ...newItems[index],
       unitType: newType,
-      listPrice: adjustedListPrice,
-      unitPrice: computeNetUnitPrice(adjustedListPrice, discountPercent),
+      listPrice: pricing.listPrice,
+      discountPercent: pricing.discountPercent,
+      unitPrice: pricing.unitPrice,
     };
     setFormData((prev) => ({ ...prev, items: newItems }));
   };
@@ -793,16 +804,15 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
     const payload: Partial<SupplierQuote> = {
       ...formData,
-      items: (formData.items || []).map((item) => {
-        const listPrice = Number(item.listPrice ?? item.unitPrice ?? 0);
-        const discountPercent = Number(item.discountPercent ?? 0);
-        return {
-          ...item,
-          listPrice,
-          discountPercent,
-          unitPrice: computeNetUnitPrice(listPrice, discountPercent),
-        };
-      }),
+      items: (formData.items || []).map((item) => ({
+        ...item,
+        // Submit the same persisted-scale pricing the server derives, so what the user reviewed is
+        // exactly what gets saved (legacy rows fall back to the net price as the list price).
+        ...deriveLinePricing(
+          Number(item.listPrice ?? item.unitPrice ?? 0),
+          Number(item.discountPercent ?? 0),
+        ),
+      })),
     };
 
     setIsSubmitting(true);
