@@ -148,6 +148,25 @@ describe('<SupplierQuotesView /> supplier pricing chain', () => {
     // 200 * (1 - 10/100) = 180
     expect(item?.unitPrice).toBe(180);
   });
+
+  test('clamps a discount typed above 100% to 100 so the net cost never goes negative', () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+    render(<SupplierQuotesView {...baseProps} onUpdateQuote={onUpdateQuote} />);
+    fireEvent.click(screen.getByText('SQ-DRAFT'));
+
+    // SQ-DRAFT starts at listPrice 100, discount 0; "0" uniquely matches the discount inputs.
+    const discountInputs = screen.getAllByDisplayValue('0');
+    fireEvent.change(discountInputs[0], { target: { value: '150' } });
+
+    fireEvent.click(screen.getByText('common:buttons.update'));
+
+    expect(onUpdateQuote).toHaveBeenCalledTimes(1);
+    const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
+    const item = updates.items?.[0];
+    // The 150% entry is blocked at 100%, and 100 * (1 - 100/100) = 0 (never negative).
+    expect(item?.discountPercent).toBe(100);
+    expect(item?.unitPrice).toBe(0);
+  });
 });
 
 describe('<SupplierQuotesView /> summary discount line', () => {

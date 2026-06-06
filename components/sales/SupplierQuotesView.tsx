@@ -60,8 +60,12 @@ interface TotalsBreakdown {
 // Costo unitario (net unit cost) = Prezzo listino × (1 − Sconto a noi / 100). Mirrors the
 // server-side derivation in routes/supplier-quotes.ts so the rendered value matches what gets
 // persisted. Falls back to the existing net price for legacy rows that predate list price.
-const computeNetUnitPrice = (listPrice: number, discountPercent: number): number =>
-  roundCurrency((listPrice || 0) * (1 - (discountPercent || 0) / 100));
+const computeNetUnitPrice = (listPrice: number, discountPercent: number): number => {
+  // Clamp the discount into [0, 100] so the net cost can never go negative, even if a
+  // legacy/out-of-range value slips through from storage or a programmatic path.
+  const boundedDiscount = Math.min(100, Math.max(0, discountPercent || 0));
+  return roundCurrency((listPrice || 0) * (1 - boundedDiscount / 100));
+};
 
 const calculateTotals = (items: SupplierQuoteItem[]): TotalsBreakdown => {
   let grossListTotal = 0;
@@ -1033,10 +1037,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   {formData.items && formData.items.length > 0 && (
                     <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
                       <div className="flex-1 min-w-0 grid grid-cols-12 gap-3">
-                        <div className="col-span-4 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
+                        <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
                           {t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
                         </div>
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
+                        <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
                           {t('sales:supplierQuotes.listPrice', { defaultValue: 'List Price' })}
                         </div>
                         <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
@@ -1164,6 +1168,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                 <div className="flex items-center gap-1">
                                   <ValidatedNumberInput
                                     value={itemDiscountPercent}
+                                    min={0}
+                                    max={100}
                                     onValueChange={(value) =>
                                       updateItem(
                                         index,
@@ -1200,7 +1206,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                             </div>
                             <div className="hidden lg:flex gap-2 items-center">
                               <div className="flex-1 min-w-0 grid grid-cols-12 gap-3 items-center">
-                                <div className="col-span-4">
+                                <div className="col-span-3">
                                   <Input
                                     type="text"
                                     value={item.productName || ''}
@@ -1213,7 +1219,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                     })}
                                   />
                                 </div>
-                                <div className="col-span-2 flex items-center gap-1.5">
+                                <div className="col-span-3 flex items-center gap-1.5">
                                   <ValidatedNumberInput
                                     value={itemListPrice}
                                     formatDecimals={2}
@@ -1230,6 +1236,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                 <div className="col-span-2 flex items-center gap-1">
                                   <ValidatedNumberInput
                                     value={itemDiscountPercent}
+                                    min={0}
+                                    max={100}
                                     onValueChange={(value) =>
                                       updateItem(
                                         index,

@@ -167,6 +167,51 @@ describe('<ValidatedNumberInput />', () => {
     expect(input.value).toBe('9.0');
   });
 
+  test('max: a value above the max is clamped before onValueChange', () => {
+    const onValueChange = mock((_v: string) => {});
+    const { container } = render(
+      <ValidatedNumberInput value="" onValueChange={onValueChange} min={0} max={100} />,
+    );
+    const input = getInput(container);
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '150' } });
+    expect(onValueChange).toHaveBeenLastCalledWith('100');
+    expect(input.value).toBe('100');
+  });
+
+  test('max: a value within bounds passes through unchanged', () => {
+    const onValueChange = mock((_v: string) => {});
+    const { container } = render(
+      <ValidatedNumberInput value="" onValueChange={onValueChange} min={0} max={100} />,
+    );
+    const input = getInput(container);
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '75' } });
+    expect(onValueChange).toHaveBeenLastCalledWith('75');
+  });
+
+  test('bounds: clearing the field stays empty (min does not backfill)', () => {
+    const onValueChange = mock((_v: string) => {});
+    const { container } = render(
+      <ValidatedNumberInput value="5" onValueChange={onValueChange} min={0} max={100} />,
+    );
+    const input = getInput(container);
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '' } });
+    expect(onValueChange).toHaveBeenLastCalledWith('');
+  });
+
+  test('bounds: a trailing decimal point is preserved while typing', () => {
+    const onValueChange = mock((_v: string) => {});
+    const { container } = render(
+      <ValidatedNumberInput value="" onValueChange={onValueChange} min={0} max={100} />,
+    );
+    const input = getInput(container);
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '12.' } });
+    expect(onValueChange).toHaveBeenLastCalledWith('12.');
+  });
+
   test('forwards extra props to the underlying input (placeholder, name)', () => {
     const { container } = render(
       <ValidatedNumberInput value="" onValueChange={() => {}} placeholder="0.00" name="amount" />,
