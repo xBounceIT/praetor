@@ -1044,7 +1044,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                             defaultValue: 'Discount to Us (%)',
                           })}
                         </div>
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
+                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
                           {t('sales:supplierQuotes.unitCost', { defaultValue: 'Unit Cost' })}
                         </div>
                         <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
