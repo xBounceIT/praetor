@@ -1208,11 +1208,11 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
                   {formData.items && formData.items.length > 0 && (
                     <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                      <div className="flex-1 min-w-0 grid grid-cols-15 gap-2">
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
+                      <div className="flex-1 min-w-0 grid grid-cols-16 gap-2">
+                        <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
                           {t('sales:clientQuotes.supplierQuoteColumn')}
                         </div>
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider">
+                        <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider">
                           {t('sales:clientOffers.product', { defaultValue: 'Product' })}
                         </div>
                         <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
@@ -1221,7 +1221,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
                           {t('sales:clientOffers.durationColumn', { defaultValue: 'Duration' })}
                         </div>
-                        <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
+                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
                           {t('crm:internalListing.cost')}
                         </div>
                         <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
@@ -1516,8 +1516,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                               </div>
                             </div>
                             <div className="hidden lg:flex gap-2 items-center">
-                              <div className="flex-1 min-w-0 grid grid-cols-15 gap-2 items-center">
-                                <div className="col-span-2 min-w-0">
+                              <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center pt-3">
+                                <div className="col-span-3 min-w-0">
                                   <SelectControl
                                     options={supplierQuoteSelectOptions}
                                     value={item.supplierQuoteItemId || 'none'}
@@ -1539,7 +1539,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
                                   />
                                 </div>
-                                <div className="col-span-2 min-w-0">
+                                <div className="col-span-3 min-w-0">
                                   <ProductSelectOrFallback
                                     item={item}
                                     index={index}
@@ -1609,7 +1609,12 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     disabled={isReadOnly}
                                   />
                                 </div>
-                                <div className="col-span-3 flex flex-col items-center justify-center gap-1">
+                                <div className="relative col-span-2 flex flex-col items-center justify-center gap-1">
+                                  {isLinkedToSupplierQuote && (
+                                    <div className="absolute right-0.5 -top-1 z-10 -translate-y-full">
+                                      <SupplierQuoteCostHint />
+                                    </div>
+                                  )}
                                   <div className="flex items-center gap-1 w-full">
                                     <ValidatedNumberInput
                                       value={cost}
@@ -1621,7 +1626,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
                                       {currency}
                                     </span>
-                                    {isLinkedToSupplierQuote && <SupplierQuoteCostHint />}
                                   </div>
                                 </div>
                                 <div className="col-span-1 flex items-center justify-center gap-1">
