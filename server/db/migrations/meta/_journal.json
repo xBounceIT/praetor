@@ -523,8 +523,15 @@
     {
       "idx": 74,
       "version": "7",
-      "when": 1780617600000,
-      "tag": "0074_grant_expired_project_time_entry_permission",
+      "when": 1780691412646,
+      "tag": "0074_add_supplier_quote_client",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1780691412647,
+      "tag": "0075_grant_expired_project_time_entry_permission",
       "breakpoints": true
     }
   ]

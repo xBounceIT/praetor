@@ -451,8 +451,11 @@ export const updateTimeEntry = async (
       }
     }
   } else if (context.taskId === null) {
-    const backfill = await tasksRepo.findIdByProjectAndName(context.projectId, context.task);
-    if (backfill) resolvedTaskId = backfill;
+    const endDate = await projectsRepo.findEndDateById(context.projectId);
+    if (canWriteExpiredProjectEntries(actor) || !isProjectExpired(endDate)) {
+      const backfill = await tasksRepo.findIdByProjectAndName(context.projectId, context.task);
+      if (backfill) resolvedTaskId = backfill;
+    }
   }
 
   if (dateChanging && !catalogChanging) {

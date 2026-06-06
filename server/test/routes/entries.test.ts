@@ -1069,6 +1069,52 @@ describe('PUT /api/entries/:id', () => {
     );
   });
 
+  test('200 does not backfill taskId on an expired project without the override', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext({ taskId: null }));
+    projectsFindEndDateByIdMock.mockResolvedValue('2000-01-01');
+    findIdByProjectAndNameMock.mockResolvedValue('t-resolved');
+    entriesUpdateMock.mockResolvedValue(SAMPLE_ENTRY);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: versionedPatch({ duration: 5 }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(projectsFindEndDateByIdMock).toHaveBeenCalledWith('p1');
+    expect(findIdByProjectAndNameMock).not.toHaveBeenCalled();
+    const patch = entriesUpdateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(patch.taskId).toBeUndefined();
+  });
+
+  test('200 backfills taskId on an expired project with the override', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      ...TRACKER_PERMS,
+      'timesheets.expired_projects.create',
+    ]);
+    entriesFindContextMock.mockResolvedValue(sampleContext({ taskId: null }));
+    projectsFindEndDateByIdMock.mockResolvedValue('2000-01-01');
+    findIdByProjectAndNameMock.mockResolvedValue('t-resolved');
+    entriesUpdateMock.mockResolvedValue(SAMPLE_ENTRY);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: versionedPatch({ duration: 5 }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(projectsFindEndDateByIdMock).toHaveBeenCalledWith('p1');
+    expect(findIdByProjectAndNameMock).toHaveBeenCalledWith('p1', 'Dev');
+    expect(entriesUpdateMock).toHaveBeenCalledWith(
+      'te-1',
+      expect.objectContaining({ taskId: 't-resolved' }),
+    );
+  });
+
   test('404 when entry not found via findContext', async () => {
     entriesFindContextMock.mockResolvedValue(null);
 

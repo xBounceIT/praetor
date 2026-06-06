@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
+import * as realClientsRepo from '../../repositories/clientsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
 import * as realSupplierQuoteVersionsRepo from '../../repositories/supplierQuoteVersionsRepo.ts';
@@ -20,12 +21,15 @@ const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const supplierQuoteVersionsRepoSnap = { ...realSupplierQuoteVersionsRepo };
+const clientsRepoSnap = { ...realClientsRepo };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
 
 const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
+
+const clientsFindNameMock = mock();
 
 const sqFindByIdMock = mock();
 const sqFindLinkedOrderIdMock = mock();
@@ -75,6 +79,10 @@ beforeAll(async () => {
     insert: sqvInsertMock,
     buildSnapshot: sqvBuildSnapshotMock,
   }));
+  mock.module('../../repositories/clientsRepo.ts', () => ({
+    ...clientsRepoSnap,
+    findName: clientsFindNameMock,
+  }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
     logAudit: logAuditMock,
@@ -97,6 +105,7 @@ afterAll(() => {
     '../../repositories/supplierQuoteVersionsRepo.ts',
     () => supplierQuoteVersionsRepoSnap,
   );
+  mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
 });
@@ -146,6 +155,7 @@ const allMocks = [
   findAuthUserByIdMock,
   userHasRoleMock,
   getRolePermissionsMock,
+  clientsFindNameMock,
   sqFindByIdMock,
   sqFindLinkedOrderIdMock,
   sqFindIdConflictMock,
@@ -358,6 +368,123 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
 
     expect(res.statusCode).toBe(404);
     expect(JSON.parse(res.body)).toEqual({ error: 'Supplier quote not found' });
+    expect(sqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 links a customer, resolving clientName server-side from clientId (issue #759)', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    clientsFindNameMock.mockResolvedValue('Globex Corp');
+    sqUpdateMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      clientId: 'cli-1',
+      clientName: 'Globex Corp',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      // Note: a stale clientName in the body is ignored; the server resolves it from clientId.
+      payload: { clientId: 'cli-1', clientName: 'STALE NAME' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(clientsFindNameMock).toHaveBeenCalledWith('cli-1');
+    expect(sqUpdateMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ clientId: 'cli-1', clientName: 'Globex Corp' }),
+    );
+  });
+
+  test('200 clears the customer link when clientId is empty', async () => {
+    sqFindByIdMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      clientId: 'cli-1',
+      clientName: 'Globex Corp',
+    });
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue({ ...DRAFT_QUOTE, clientId: null, clientName: null });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { clientId: '' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // No client lookup for a cleared link.
+    expect(clientsFindNameMock).not.toHaveBeenCalled();
+    expect(sqUpdateMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ clientId: null, clientName: null }),
+    );
+  });
+
+  test('200 preserves the stored clientName when an edit resubmits the unchanged clientId (#759)', async () => {
+    // Quote linked to cli-1 with a name captured before the client was later renamed. The edit
+    // form resubmits the unchanged clientId alongside the real change (notes).
+    sqFindByIdMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      clientId: 'cli-1',
+      clientName: 'Name At Link Time',
+    });
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      clientId: 'cli-1',
+      clientName: 'Name At Link Time',
+      notes: 'edited',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { clientId: 'cli-1', notes: 'edited' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // Unchanged link → no client lookup and no clientName/clientId in the patch, so the repo
+    // leaves the denormalized name untouched.
+    expect(clientsFindNameMock).not.toHaveBeenCalled();
+    const patch = sqUpdateMock.mock.calls[0]?.[1];
+    expect(patch).toEqual(expect.objectContaining({ notes: 'edited' }));
+    expect(patch).not.toHaveProperty('clientId');
+    expect(patch).not.toHaveProperty('clientName');
+  });
+
+  test('400 when clientId does not reference an existing client', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    clientsFindNameMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { clientId: 'ghost' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'clientId does not reference an existing client',
+    });
+    expect(sqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 rejects customer reassignment when current status is accepted', async () => {
+    sqFindByIdMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'accepted' });
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    clientsFindNameMock.mockResolvedValue('Globex Corp');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { clientId: 'cli-1' },
+    });
+
+    expect(res.statusCode).toBe(409);
     expect(sqUpdateMock).not.toHaveBeenCalled();
   });
 });
