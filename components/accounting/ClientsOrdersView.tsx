@@ -1104,7 +1104,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                             className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
                           >
                             <div className="flex items-start gap-2 lg:items-center">
-                              <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center">
+                              <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center lg:pt-5">
                                 <div className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('accounting:clientsOrders.supplierOrderColumn', {
@@ -1130,7 +1130,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('sales:clientQuotes.productsServices')}
                                   </FieldLabel>
-                                  <div className="flex items-center gap-1">
+                                  <div className="relative flex items-center gap-1">
                                     <SelectControl
                                       options={activeProducts.map((p) => ({
                                         id: p.id,
@@ -1156,6 +1156,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                         disabledLabel={t(
                                           'sales:clientQuotes.productShortcutUnavailable',
                                         )}
+                                        floating
                                       />
                                     )}
                                   </div>

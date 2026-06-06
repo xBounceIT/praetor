@@ -246,6 +246,8 @@ describe('<ClientsInvoicesView /> product quick-view shortcut', () => {
       expect(link).toHaveAttribute('href', '#/catalog/internal-listing?filterId=product-1');
       expect(link).toHaveAttribute('target', '_blank');
     }
+    // The shortcut floats above the field on desktop (lg:absolute), matching quotes/offers.
+    expect(productLinks.some((link) => link.className.includes('lg:absolute'))).toBe(true);
   });
 
   test('hides the product shortcut entirely without internal-listing access', async () => {

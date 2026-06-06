@@ -779,12 +779,12 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                         className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
                       >
                         <div className="flex items-start gap-2">
-                          <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14">
+                          <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:pt-5">
                             <div className="space-y-1 lg:col-span-3 min-w-0">
                               <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                 {t('common:labels.product')}
                               </FieldLabel>
-                              <div className="flex items-center gap-1">
+                              <div className="relative flex items-center gap-1">
                                 <SelectControl
                                   options={[
                                     { id: '', name: t('accounting:clientsInvoices.customItem') },
@@ -815,6 +815,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                                     disabledLabel={t(
                                       'sales:clientQuotes.productShortcutUnavailable',
                                     )}
+                                    floating
                                   />
                                 )}
                               </div>

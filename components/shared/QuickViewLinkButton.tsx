@@ -15,9 +15,11 @@ import { cn } from '@/lib/utils';
  * `disabled` attribute) keeps it hoverable so the tooltip still surfaces.
  *
  * `floating` lifts the button into the field's top-right gutter (above the
- * control, consuming no inline width) for the dense desktop line-item grids;
- * omit it for the inline placement used in stacked/mobile layouts. The owning
- * cell must be `position: relative` and reserve top room (e.g. `pt-5`).
+ * control, consuming no inline width) on the dense desktop line-item grids, and
+ * stays inline below `lg` for the stacked/mobile layouts that show a field label
+ * above the control. So a single responsive cell can use the same prop as the
+ * dedicated desktop blocks. The owning cell must be `position: relative` and the
+ * row must reserve top room on `lg` (e.g. `pt-5` / `lg:pt-5`).
  */
 const QuickViewLinkButton: React.FC<{
   href: string | null;
@@ -25,10 +27,12 @@ const QuickViewLinkButton: React.FC<{
   disabledLabel: string;
   floating?: boolean;
 }> = ({ href, label, disabledLabel, floating }) => {
-  const positionClass = floating ? 'absolute right-1 -top-1 z-10 h-6 w-6 -translate-y-full' : '';
+  const positionClass = floating
+    ? 'lg:absolute lg:right-1 lg:-top-1 lg:z-10 lg:h-6 lg:w-6 lg:-translate-y-full'
+    : '';
   const iconClass = cn(
     'fa-solid fa-up-right-from-square',
-    floating ? 'text-[10px]' : 'text-[11px]',
+    floating ? 'text-[11px] lg:text-[10px]' : 'text-[11px]',
   );
   return (
     <Tooltip>
