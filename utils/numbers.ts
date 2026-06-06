@@ -114,8 +114,11 @@ export const getDurationDisplayValue = (item: PricingItem): number => {
 // Parse a duration-input string (expressed in `unit`) into canonical whole months ≥ 1 (issue
 // #757). Empty/invalid input falls back to one of the chosen unit (1 month / 1 year). Shared by
 // the quote/offer/order/invoice line-item rows so the parse-and-clamp rule lives in one place.
+// Parses with parseFloat (not parseInt): in 'years' a non-multiple of 12 months renders as a
+// fractional year (e.g. 18 months → 1.5), and that decimal must survive editing — `durationValueToMonths`
+// then folds it back to canonical whole months (1.5 × 12 = 18), so the value round-trips.
 export const parseDurationValueToMonths = (value: string, unit: DurationUnit): number => {
-  const parsed = Number.parseInt(value, 10);
+  const parsed = Number.parseFloat(value);
   if (value === '' || Number.isNaN(parsed)) return durationValueToMonths(1, unit);
   return durationValueToMonths(Math.max(1, parsed), unit);
 };

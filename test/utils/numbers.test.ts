@@ -222,6 +222,15 @@ describe('parseDurationValueToMonths', () => {
     expect(parseDurationValueToMonths('', 'years')).toBe(12);
     expect(parseDurationValueToMonths('abc', 'years')).toBe(12);
   });
+
+  test('round-trips a fractional year (non-multiple of 12 months) without truncating', () => {
+    // 18 months displays as 1.5 years; editing that decimal must save 18 months, not 12.
+    expect(parseDurationValueToMonths('1.5', 'years')).toBe(18);
+    expect(getDurationDisplayValue({ durationUnit: 'years', durationMonths: 18 })).toBe(1.5);
+    expect(parseDurationValueToMonths('2.5', 'years')).toBe(30);
+    // Fractional months round to the nearest whole month (the canonical integer column).
+    expect(parseDurationValueToMonths('1.5', 'months')).toBe(2);
+  });
 });
 
 describe('pricing helpers ignore durationUnit and multiply by canonical durationMonths (issue #757)', () => {
