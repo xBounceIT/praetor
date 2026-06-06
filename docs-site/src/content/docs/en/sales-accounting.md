@@ -25,6 +25,8 @@ Customer offers in **Accepted** or **Denied** status can be moved back to **Draf
 
 Supplier quotes help compare purchase costs and conditions. Link rows to the correct products when possible so data remains traceable in later workflows.
 
+In the **Supplier Information** section of the **New Supplier Quote** dialog you can optionally link a **Customer**: use it when the quote relates to a specific customer engagement. The association is optional — a supplier quote with no customer is a valid state and saves without errors — and can be removed at any time by selecting *No customer*. When set, the linked customer is visible both in the quote detail and in the **Customer** column of the list.
+
 ## Orders
 
 Customer and supplier orders consolidate operational information. Before confirming, check the record, rows, discounts, payment terms, and links to previous documents.

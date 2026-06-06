@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type {
+  Client,
   Product,
   Supplier,
   SupplierQuote,
@@ -63,6 +64,7 @@ const calculateTotals = (items: SupplierQuoteItem[]): TotalsBreakdown => {
 export interface SupplierQuotesViewProps {
   quotes: SupplierQuote[];
   suppliers: Supplier[];
+  clients: Client[];
   products: Product[];
   onAddQuote: (quoteData: Partial<SupplierQuote>) => void | Promise<void>;
   onUpdateQuote: (id: string, updates: Partial<SupplierQuote>) => void | Promise<void>;
@@ -77,6 +79,8 @@ export interface SupplierQuotesViewProps {
 const getDefaultFormData = (): Partial<SupplierQuote> => ({
   supplierId: '',
   supplierName: '',
+  clientId: null,
+  clientName: null,
   id: '',
   items: [],
   paymentTerms: 'immediate',
@@ -88,6 +92,7 @@ const getDefaultFormData = (): Partial<SupplierQuote> => ({
 const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   quotes,
   suppliers,
+  clients,
   products,
   onAddQuote,
   onUpdateQuote,
@@ -250,6 +255,38 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     [suppliers],
   );
 
+  // The customer link is optional (issue #759); the leading empty-id option clears it.
+  // Keep an already-linked-but-now-disabled client visible so editing an existing quote doesn't
+  // hide its customer; otherwise only offer active clients.
+  const clientOptions = useMemo(() => {
+    const options = [
+      { id: '', name: t('sales:supplierQuotes.noClient', { defaultValue: 'No customer' }) },
+      ...clients
+        .filter((client) => !client.isDisabled || client.id === editingQuote?.clientId)
+        .map((client) => ({ id: client.id, name: client.name })),
+    ];
+    // The linked client may be missing from a user-scoped /clients list (no crm.clients_all.view
+    // and not assigned to it). Synthesize an option from the quote's stored name so the select
+    // shows the customer instead of falling back to the placeholder.
+    const linkedId = editingQuote?.clientId;
+    if (linkedId && !options.some((option) => option.id === linkedId)) {
+      options.push({ id: linkedId, name: editingQuote?.clientName || linkedId });
+    }
+    return options;
+  }, [clients, editingQuote, t]);
+
+  const handleClientChange = useCallback(
+    (clientId: string) => {
+      const client = clients.find((item) => item.id === clientId);
+      setFormData((prev) => ({
+        ...prev,
+        clientId: clientId || null,
+        clientName: client?.name || null,
+      }));
+    },
+    [clients],
+  );
+
   const updateItem = useCallback(
     (index: number, field: keyof SupplierQuoteItem, value: string | number) => {
       if (isReadOnly) return;
@@ -359,6 +396,20 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
             </div>
           );
         },
+      },
+      {
+        header: t('sales:supplierQuotes.client', { defaultValue: 'Customer' }),
+        id: 'clientName',
+        accessorFn: (row) => row.clientName ?? '',
+        cell: ({ row }) => {
+          const history = isHistoryRow(row);
+          return (
+            <div className={`text-sm ${history ? 'text-zinc-400' : 'text-zinc-600'}`}>
+              {row.clientName || '-'}
+            </div>
+          );
+        },
+        filterFormat: (value) => (value ? String(value) : '-'),
       },
       {
         header: t('sales:supplierQuotes.total', { defaultValue: 'Total' }),
@@ -840,6 +891,21 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         className={errors.supplierId ? 'border-red-300' : ''}
                       />
                       <FieldError className="text-xs">{errors.supplierId}</FieldError>
+                    </Field>
+                    <Field>
+                      <SelectControl
+                        id="supplier-quote-client"
+                        options={clientOptions}
+                        value={formData.clientId || ''}
+                        onChange={(value) => handleClientChange(value as string)}
+                        placeholder={t('sales:supplierQuotes.selectClient', {
+                          defaultValue: 'Select a customer (optional)',
+                        })}
+                        searchable={true}
+                        disabled={isReadOnly}
+                        label={t('sales:supplierQuotes.client', { defaultValue: 'Customer' })}
+                        buttonClassName="h-9"
+                      />
                     </Field>
                     <Field data-invalid={Boolean(errors.id)}>
                       <FieldLabel htmlFor="supplier-quote-code">

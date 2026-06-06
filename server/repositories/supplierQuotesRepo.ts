@@ -9,6 +9,8 @@ export type SupplierQuote = {
   id: string;
   supplierId: string;
   supplierName: string;
+  clientId: string | null;
+  clientName: string | null;
   paymentTerms: string | null;
   status: string;
   expirationDate: string | null;
@@ -35,6 +37,8 @@ const mapQuote = (row: QuoteRow): SupplierQuote => ({
   id: row.id,
   supplierId: row.supplierId,
   supplierName: row.supplierName,
+  clientId: row.clientId ?? null,
+  clientName: row.clientName ?? null,
   paymentTerms: row.paymentTerms,
   status: row.status,
   expirationDate: normalizeNullableDateOnly(row.expirationDate, 'supplierQuote.expirationDate'),
@@ -165,6 +169,8 @@ export type NewSupplierQuote = {
   id: string;
   supplierId: string;
   supplierName: string;
+  clientId: string | null;
+  clientName: string | null;
   paymentTerms: string;
   status: string;
   expirationDate: string;
@@ -181,6 +187,8 @@ export const create = async (
       id: input.id,
       supplierId: input.supplierId,
       supplierName: input.supplierName,
+      clientId: input.clientId,
+      clientName: input.clientName,
       paymentTerms: input.paymentTerms,
       status: input.status,
       expirationDate: input.expirationDate,
@@ -193,6 +201,11 @@ export const create = async (
 export type SupplierQuoteUpdate = {
   supplierId?: string | null;
   supplierName?: string | null;
+  // clientId/clientName accept an explicit `null` to clear the customer link. Unlike the
+  // COALESCE-guarded fields above, `undefined` means "leave untouched" while `null` writes a
+  // NULL — the optional association in issue #759 must be removable, not just settable.
+  clientId?: string | null;
+  clientName?: string | null;
   paymentTerms?: string;
   status?: string;
   expirationDate?: string | null;
@@ -215,6 +228,10 @@ export const update = async (
     .set({
       supplierId: sql`COALESCE(${patch.supplierId ?? null}, ${supplierQuotes.supplierId})`,
       supplierName: sql`COALESCE(${patch.supplierName ?? null}, ${supplierQuotes.supplierName})`,
+      // Direct write (not COALESCE) so an explicit null clears the link; `undefined` keeps it.
+      clientId: patch.clientId === undefined ? sql`${supplierQuotes.clientId}` : patch.clientId,
+      clientName:
+        patch.clientName === undefined ? sql`${supplierQuotes.clientName}` : patch.clientName,
       paymentTerms: sql`COALESCE(${patch.paymentTerms ?? null}, ${supplierQuotes.paymentTerms})`,
       status: sql`COALESCE(${patch.status ?? null}, ${supplierQuotes.status})`,
       expirationDate: sql`COALESCE(${patch.expirationDate ?? null}::date, ${supplierQuotes.expirationDate})`,
@@ -244,6 +261,8 @@ export const rename = async (
 export type SupplierQuoteRestoreFields = {
   supplierId: string;
   supplierName: string;
+  clientId: string | null;
+  clientName: string | null;
   paymentTerms: string;
   status: string;
   expirationDate: string;
@@ -260,6 +279,8 @@ export const restoreSnapshotQuote = async (
     .set({
       supplierId: snapshot.supplierId,
       supplierName: snapshot.supplierName,
+      clientId: snapshot.clientId,
+      clientName: snapshot.clientName,
       paymentTerms: snapshot.paymentTerms,
       status: snapshot.status,
       expirationDate: snapshot.expirationDate,

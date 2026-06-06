@@ -519,6 +519,13 @@
       "when": 1780613472247,
       "tag": "0073_rainy_valkyrie",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1780691412646,
+      "tag": "0074_add_supplier_quote_client",
+      "breakpoints": true
     }
   ]
 }

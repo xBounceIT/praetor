@@ -32179,6 +32179,18 @@
                       "supplierName": {
                         "type": "string"
                       },
+                      "clientId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "clientName": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
                       "paymentTerms": {
                         "type": [
                           "null",
@@ -32448,6 +32460,12 @@
                   "supplierName": {
                     "type": "string"
                   },
+                  "clientId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "items": {
                     "type": "array",
                     "items": {
@@ -32525,6 +32543,18 @@
                     },
                     "supplierName": {
                       "type": "string"
+                    },
+                    "clientId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "clientName": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "paymentTerms": {
                       "type": [
@@ -32775,6 +32805,12 @@
                   "supplierName": {
                     "type": "string"
                   },
+                  "clientId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "items": {
                     "type": "array",
                     "items": {
@@ -32855,6 +32891,18 @@
                     },
                     "supplierName": {
                       "type": "string"
+                    },
+                    "clientId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "clientName": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "paymentTerms": {
                       "type": [
@@ -33697,6 +33745,18 @@
                     },
                     "supplierName": {
                       "type": "string"
+                    },
+                    "clientId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "clientName": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "paymentTerms": {
                       "type": [

@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
+import * as realClientsRepo from '../../repositories/clientsRepo.ts';
 import * as realProductsRepo from '../../repositories/productsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
@@ -25,6 +26,7 @@ const suppliersRepoSnap = { ...realSuppliersRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const supplierQuoteVersionsRepoSnap = { ...realSupplierQuoteVersionsRepo };
 const productsRepoSnap = { ...realProductsRepo };
+const clientsRepoSnap = { ...realClientsRepo };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
 
@@ -45,6 +47,7 @@ const sqReplaceItemsMock = mock();
 
 const suppliersFindByIdMock = mock();
 const productsGetSnapshotsMock = mock();
+const clientsExistsByIdMock = mock();
 
 const sqvListForQuoteMock = mock();
 const sqvFindByIdMock = mock();
@@ -92,6 +95,10 @@ beforeAll(async () => {
     ...productsRepoSnap,
     getSnapshots: productsGetSnapshotsMock,
   }));
+  mock.module('../../repositories/clientsRepo.ts', () => ({
+    ...clientsRepoSnap,
+    existsById: clientsExistsByIdMock,
+  }));
   mock.module('../../repositories/supplierQuoteVersionsRepo.ts', () => ({
     ...supplierQuoteVersionsRepoSnap,
     listForQuote: sqvListForQuoteMock,
@@ -123,6 +130,7 @@ afterAll(() => {
     () => supplierQuoteVersionsRepoSnap,
   );
   mock.module('../../repositories/productsRepo.ts', () => productsRepoSnap);
+  mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
 });
@@ -200,6 +208,7 @@ const allMocks = [
   sqReplaceItemsMock,
   suppliersFindByIdMock,
   productsGetSnapshotsMock,
+  clientsExistsByIdMock,
   sqvListForQuoteMock,
   sqvFindByIdMock,
   sqvInsertMock,
@@ -226,6 +235,8 @@ beforeEach(async () => {
   sqFindByIdMock.mockResolvedValue(SAMPLE_QUOTE);
   sqFindItemsForQuoteMock.mockResolvedValue([SAMPLE_ITEM]);
   sqFindIdConflictMock.mockResolvedValue(false);
+  // Snapshots without a client link never call existsById; default true keeps the rest happy.
+  clientsExistsByIdMock.mockResolvedValue(true);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/sales/supplier-quotes');
 });
@@ -422,6 +433,54 @@ describe('POST /api/sales/supplier-quotes/:id/versions/:versionId/restore', () =
     expect(res.statusCode).toBe(409);
     expect(JSON.parse(res.body).error).toContain('Snapshot product');
     expect(sqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
+  });
+
+  // Regression for the customer link (issue #759): the snapshot's clientId lives only in JSON
+  // history, so a since-deleted client (live link cleared, RESTRICT FK freed) must surface as a
+  // clean 409 here rather than a 500 FK violation inside restoreSnapshotQuote.
+  test('409 when snapshot client no longer exists', async () => {
+    setupHappyPath();
+    sqvFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        quote: { ...SAMPLE_QUOTE, clientId: 'cli-gone', clientName: 'Ghost Co' },
+      },
+    });
+    clientsExistsByIdMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes/sq-1/versions/sqv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Snapshot client');
+    expect(clientsExistsByIdMock).toHaveBeenCalledWith('cli-gone');
+    expect(sqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
+  });
+
+  test('200 restores a snapshot whose linked client still exists', async () => {
+    setupHappyPath();
+    sqvFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        quote: { ...SAMPLE_QUOTE, clientId: 'cli-1', clientName: 'Globex' },
+      },
+    });
+    clientsExistsByIdMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes/sq-1/versions/sqv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(clientsExistsByIdMock).toHaveBeenCalledWith('cli-1');
+    expect(sqRestoreSnapshotQuoteMock).toHaveBeenCalled();
   });
 
   test('404 when version not found (and no cross-quote leak)', async () => {
