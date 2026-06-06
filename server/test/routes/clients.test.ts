@@ -289,6 +289,24 @@ describe('GET /api/clients', () => {
     expect(Object.keys(body[0]).sort()).toEqual(['description', 'id', 'name']);
   });
 
+  test('200 viewer with only sales.supplier_quotes.view can list clients (#759)', async () => {
+    // The supplier-quotes view needs the client list for its optional Cliente select; the
+    // frontend canListClients preload gate relies on this server-side authorization.
+    getRolePermissionsMock.mockResolvedValue(['sales.supplier_quotes.view']);
+    listClientsMock.mockResolvedValue([SAMPLE_CLIENT]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/clients',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    // Non-crm viewer → summary arm (id, name, description only).
+    expect(body[0]).toEqual({ id: 'c-1', name: 'ACME', description: null });
+  });
+
   test('200 viewer with crm.clients.view → full client arm passes response schema', async () => {
     getRolePermissionsMock.mockResolvedValue(['crm.clients.view']);
     listClientsMock.mockResolvedValue([SAMPLE_CLIENT]);
