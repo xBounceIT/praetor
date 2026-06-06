@@ -144,6 +144,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     [suppliers],
   );
 
+  // A quick-view deep link (or a cross-view "view quote" action) pre-filters the
+  // table to one quote. It targets the visible "Codice" (id) column, so the
+  // native column filter shows as active and stays clearable from its dropdown.
   const tableInitialFilterState = useMemo(() => {
     if (quoteFilterId) {
       return { id: [quoteFilterId] };

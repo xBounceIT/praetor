@@ -112,6 +112,8 @@
     "noSupplierQuote": "Nessun Preventivo Fornitore",
     "selectSupplierQuote": "Seleziona preventivo fornitore...",
     "selectProduct": "Seleziona prodotto...",
+    "openSupplierQuoteInNewTab": "Apri il preventivo fornitore in una nuova scheda",
+    "openProductInNewTab": "Apri il prodotto in una nuova scheda",
     "qty": "Quantità",
     "hour": "Ora",
     "hours": "Ore",

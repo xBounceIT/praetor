@@ -33,6 +33,9 @@ import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 export interface InternalListingViewProps {
   products: Product[];
+  // When set (via a quick-view deep link), the products table opens pre-filtered
+  // to this product id so the referenced record is the only row shown.
+  productFilterId?: string | null;
   onAddProduct: (productData: Partial<Product>) => Promise<void>;
   onUpdateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
   onDeleteProduct: (id: string) => void;
@@ -70,6 +73,7 @@ const getDisplayTypeName = (typeName: string) =>
 
 const InternalListingView: React.FC<InternalListingViewProps> = ({
   products,
+  productFilterId,
   onAddProduct,
   onUpdateProduct,
   onDeleteProduct,
@@ -85,6 +89,20 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   onDeleteInternalSubcategory,
 }) => {
   const { t, i18n } = useTranslation(['crm', 'common']);
+
+  // A quick-view deep link arrives as a product id. Resolve it to a *visible*
+  // column value — the "Codice" (productCode) column, falling back to the name —
+  // so the table opens with the native column filter active (a highlighted,
+  // clearable filter chip) instead of an invisible hidden-column filter.
+  const tableInitialFilterState = useMemo<Record<string, string[]> | undefined>(() => {
+    if (!productFilterId) return undefined;
+    const product = products.find((p) => p.id === productFilterId);
+    if (!product) return undefined;
+    // Prefer the visible "Codice" column; fall back to the name when codeless.
+    const column = product.productCode ? 'productCode' : 'name';
+    const value = product.productCode || product.name;
+    return value ? { [column]: [value] } : undefined;
+  }, [productFilterId, products]);
 
   // Product Types State
   const [productTypes, setProductTypes] = useState<InternalProductType[]>([]);
@@ -1511,6 +1529,11 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             : 'hover:bg-zinc-50/50'
         }
         onRowClick={openEditModal}
+        initialFilterState={tableInitialFilterState}
+        // The deep-linked product id resolves to a column value only once the
+        // product list loads; force deep-link mode up front so a saved view that
+        // hides the Code/name column can't apply before the filter materializes.
+        suppressSavedView={Boolean(productFilterId)}
         columns={[
           {
             header: t('crm:internalListing.productCode'),
