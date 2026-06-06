@@ -287,6 +287,24 @@ describe('<Modal />', () => {
     expect(shell?.className).toContain('rounded-lg');
   });
 
+  test('full-size modal content uses the wide responsive cap', () => {
+    render(
+      <Modal isOpen={true} onClose={() => {}}>
+        <ModalContent size="full">
+          <div>Wide shell</div>
+        </ModalContent>
+      </Modal>,
+    );
+
+    const shell = screen.getByText('Wide shell').closest('[data-slot="modal-content"]');
+    // The widest tier caps at 1600px so dense line-item grids (e.g. the Costo / Costo Totale
+    // columns) have room to show full values on large displays, while `w-full` still lets the
+    // panel shrink to fit smaller viewports.
+    expect(shell?.className).toContain('max-w-[100rem]');
+    expect(shell?.className).toContain('w-full');
+    expect(shell?.className).not.toContain('max-w-7xl');
+  });
+
   test('modal layout reuses the shared modal theme subscription', () => {
     const addEventListenerSpy = spyOn(window, 'addEventListener');
 
