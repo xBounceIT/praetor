@@ -1140,10 +1140,9 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                 </CardHeader>
                 <CardContent className="space-y-4 p-6">
                   {isIdpManagedTotp ? (
-                    <div
-                      role="status"
+                    <output
                       aria-live="polite"
-                      className="flex items-start gap-3 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground"
+                      className="flex w-full items-start gap-3 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground"
                     >
                       <Lock aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
                       <div className="space-y-1">
@@ -1152,7 +1151,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                         </p>
                         <p>{t('twoFactor.idpManagedDescription')}</p>
                       </div>
-                    </div>
+                    </output>
                   ) : isLoadingTotpStatus && !totpStatus ? (
                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                       <Loader2 aria-hidden="true" className="size-4 animate-spin" />
@@ -1178,10 +1177,9 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                       </Button>
                     </div>
                   ) : isFeatureDisabled ? (
-                    <div
-                      role="status"
+                    <output
                       aria-live="polite"
-                      className="flex items-start gap-3 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground"
+                      className="flex w-full items-start gap-3 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground"
                     >
                       <Lock aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
                       <div className="space-y-1">
@@ -1195,7 +1193,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
                           )}
                         </p>
                       </div>
-                    </div>
+                    </output>
                   ) : isTotpEnabled ? (
                     <div className="space-y-4">
                       {isTotpRequired && (

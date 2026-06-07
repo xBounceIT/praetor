@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
@@ -128,6 +128,78 @@ const quoteToFormData = (quote: Quote): Partial<Quote> => ({
   notes: quote.notes || '',
 });
 
+interface PendingClientChange {
+  clientId: string;
+  clientName: string;
+}
+
+interface ClientQuotesViewState {
+  isModalOpen: boolean;
+  editingQuote: Quote | null;
+  isDeleteConfirmOpen: boolean;
+  quoteToDelete: Quote | null;
+  pendingClientChange: PendingClientChange | null;
+  isSubmitting: boolean;
+  isDeleting: boolean;
+}
+
+const INITIAL_CLIENT_QUOTES_VIEW_STATE: ClientQuotesViewState = {
+  isModalOpen: false,
+  editingQuote: null,
+  isDeleteConfirmOpen: false,
+  quoteToDelete: null,
+  pendingClientChange: null,
+  isSubmitting: false,
+  isDeleting: false,
+};
+
+type ClientQuotesViewAction =
+  | { type: 'openAddModal' }
+  | { type: 'openEditModal'; quote: Quote }
+  | { type: 'closeModal' }
+  | { type: 'setEditingQuote'; quote: Quote | null }
+  | { type: 'setPendingClientChange'; value: PendingClientChange | null }
+  | { type: 'setIsSubmitting'; value: boolean }
+  | { type: 'confirmDelete'; quote: Quote }
+  | { type: 'closeDeleteConfirm' }
+  | { type: 'deleteSuccess' }
+  | { type: 'setIsDeleting'; value: boolean };
+
+const clientQuotesViewReducer = (
+  state: ClientQuotesViewState,
+  action: ClientQuotesViewAction,
+): ClientQuotesViewState => {
+  switch (action.type) {
+    case 'openAddModal':
+      return { ...state, editingQuote: null, pendingClientChange: null, isModalOpen: true };
+    case 'openEditModal':
+      return {
+        ...state,
+        editingQuote: action.quote,
+        pendingClientChange: null,
+        isModalOpen: true,
+      };
+    case 'closeModal':
+      return { ...state, isModalOpen: false };
+    case 'setEditingQuote':
+      return { ...state, editingQuote: action.quote };
+    case 'setPendingClientChange':
+      return { ...state, pendingClientChange: action.value };
+    case 'setIsSubmitting':
+      return { ...state, isSubmitting: action.value };
+    case 'confirmDelete':
+      return { ...state, quoteToDelete: action.quote, isDeleteConfirmOpen: true };
+    case 'closeDeleteConfirm':
+      return { ...state, isDeleteConfirmOpen: false };
+    case 'deleteSuccess':
+      return { ...state, isDeleteConfirmOpen: false, quoteToDelete: null };
+    case 'setIsDeleting':
+      return { ...state, isDeleting: action.value };
+    default:
+      return state;
+  }
+};
+
 const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   quotes,
   clients,
@@ -173,17 +245,17 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     [t],
   );
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [quoteToDelete, setQuoteToDelete] = useState<Quote | null>(null);
-  const [pendingClientChange, setPendingClientChange] = useState<{
-    clientId: string;
-    clientName: string;
-  } | null>(null);
+  const [state, dispatch] = useReducer(clientQuotesViewReducer, INITIAL_CLIENT_QUOTES_VIEW_STATE);
+  const {
+    isModalOpen,
+    editingQuote,
+    isDeleteConfirmOpen,
+    quoteToDelete,
+    pendingClientChange,
+    isSubmitting,
+    isDeleting,
+  } = state;
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   const getStatusLabel = useCallback(
     (status: string) => {
@@ -288,26 +360,22 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   }, []);
 
   const closeModal = useCallback(() => {
-    setIsModalOpen(false);
+    dispatch({ type: 'closeModal' });
     setPreviewVersion(null);
   }, []);
 
   const openAddModal = () => {
-    setEditingQuote(null);
-    setPendingClientChange(null);
+    dispatch({ type: 'openAddModal' });
     setFormData(getDefaultFormData());
     setErrors({});
     setPreviewVersion(null);
-    setIsModalOpen(true);
   };
 
   const openEditModal = useCallback((quote: Quote) => {
-    setEditingQuote(quote);
-    setPendingClientChange(null);
+    dispatch({ type: 'openEditModal', quote });
     setFormData(quoteToFormData(quote));
     setErrors({});
     setPreviewVersion(null);
-    setIsModalOpen(true);
   }, []);
 
   const handleVersionPreview = useCallback(
@@ -333,7 +401,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
   const handleVersionRestored = useCallback(
     (updated: Quote) => {
-      setEditingQuote(updated);
+      dispatch({ type: 'setEditingQuote', quote: updated });
       setFormData(quoteToFormData(updated));
       setPreviewVersion(null);
       onQuoteRestored?.(updated);
@@ -432,7 +500,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       items: itemsWithSnapshots,
     };
 
-    setIsSubmitting(true);
+    dispatch({ type: 'setIsSubmitting', value: true });
     try {
       if (editingQuote) {
         await onUpdateQuote(editingQuote.id, payload);
@@ -443,14 +511,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       toastError((err as Error).message || t('sales:clientQuotes.failedToSave'));
       return;
     } finally {
-      setIsSubmitting(false);
+      dispatch({ type: 'setIsSubmitting', value: false });
     }
     closeModal();
   };
 
   const confirmDelete = useCallback((quote: Quote) => {
-    setQuoteToDelete(quote);
-    setIsDeleteConfirmOpen(true);
+    dispatch({ type: 'confirmDelete', quote });
   }, []);
 
   const handleStatusUpdate = async (id: string, updates: Partial<Quote>) => {
@@ -464,21 +531,20 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   const handleDelete = async () => {
     if (!quoteToDelete) return;
     if (isDeleting) return;
-    setIsDeleting(true);
+    dispatch({ type: 'setIsDeleting', value: true });
     try {
       await onDeleteQuote(quoteToDelete.id);
-      setIsDeleteConfirmOpen(false);
-      setQuoteToDelete(null);
+      dispatch({ type: 'deleteSuccess' });
     } catch (err) {
       toastError((err as Error).message || t('sales:clientQuotes.failedToDelete'));
     } finally {
-      setIsDeleting(false);
+      dispatch({ type: 'setIsDeleting', value: false });
     }
   };
 
   const applyClientChange = (clientId: string, clientName: string, shouldReprice: boolean) => {
     if (isReadOnly) return;
-    setPendingClientChange(null);
+    dispatch({ type: 'setPendingClientChange', value: null });
     setFormData((prev) => {
       const updatedItems = shouldReprice
         ? (prev.items || []).map((item) => {
@@ -548,7 +614,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       Boolean(formData.items && formData.items.length > 0);
 
     if (shouldPromptReprice) {
-      setPendingClientChange({ clientId, clientName: nextClientName });
+      dispatch({
+        type: 'setPendingClientChange',
+        value: { clientId, clientName: nextClientName },
+      });
       return;
     }
 
@@ -2237,7 +2306,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         </div>
       </Modal>
 
-      <Modal isOpen={Boolean(pendingClientChange)} onClose={() => setPendingClientChange(null)}>
+      <Modal
+        isOpen={Boolean(pendingClientChange)}
+        onClose={() => dispatch({ type: 'setPendingClientChange', value: null })}
+      >
         <ModalContent size="sm">
           <div className="space-y-5 p-6">
             <div>
@@ -2263,7 +2335,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setPendingClientChange(null)}
+                onClick={() => dispatch({ type: 'setPendingClientChange', value: null })}
                 className="w-full"
               >
                 {t('sales:clientQuotes.clientChangeRepriceCancel')}
@@ -2278,7 +2350,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         isOpen={isDeleteConfirmOpen}
         onClose={() => {
           if (isDeleting) return;
-          setIsDeleteConfirmOpen(false);
+          dispatch({ type: 'closeDeleteConfirm' });
         }}
         onConfirm={handleDelete}
         isDeleting={isDeleting}

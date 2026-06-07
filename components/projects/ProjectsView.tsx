@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel, RequiredMark } from '@/components/ui/field';
@@ -132,6 +132,131 @@ export interface ProjectsViewProps {
   onNavigateToProject?: (projectId: string) => void;
 }
 
+interface ProjectsViewState {
+  // Modal state — create only
+  isModalOpen: boolean;
+  isDeleteConfirmOpen: boolean;
+  projectToDelete: Project | null;
+  managingProjectId: string | null;
+  // Form state
+  name: string;
+  orderId: string;
+  clientId: string;
+  description: string;
+  billingType: StoredBillingType;
+  billingFrequency: BillingFrequency;
+  offerId: string;
+  startDate: string;
+  endDate: string;
+  revenue: string;
+  errors: Record<string, string>;
+  draftTasks: DraftTask[];
+}
+
+const INITIAL_PROJECTS_STATE: ProjectsViewState = {
+  isModalOpen: false,
+  isDeleteConfirmOpen: false,
+  projectToDelete: null,
+  managingProjectId: null,
+  name: '',
+  orderId: '',
+  clientId: '',
+  description: '',
+  billingType: 'time_and_materials',
+  billingFrequency: 'monthly',
+  offerId: '',
+  startDate: '',
+  endDate: '',
+  revenue: '',
+  errors: {},
+  draftTasks: [],
+};
+
+type ProjectsViewAction =
+  | { type: 'setName'; value: string }
+  | { type: 'setOrderId'; value: string }
+  | { type: 'setClientId'; value: string }
+  | { type: 'setDescription'; value: string }
+  | { type: 'setBillingType'; value: StoredBillingType }
+  | { type: 'setBillingFrequency'; value: BillingFrequency }
+  | { type: 'setOfferId'; value: string }
+  | { type: 'setStartDate'; value: string }
+  | { type: 'setEndDate'; value: string }
+  | { type: 'setRevenue'; value: string }
+  | { type: 'setErrors'; value: Record<string, string> }
+  | { type: 'patchErrors'; value: Record<string, string> }
+  | { type: 'setDraftTasks'; value: DraftTask[] }
+  | { type: 'openAddModal' }
+  | { type: 'closeModal' }
+  | { type: 'promptDelete'; project: Project }
+  | { type: 'setManagingProjectId'; value: string | null };
+
+const projectsViewReducer = (
+  state: ProjectsViewState,
+  action: ProjectsViewAction,
+): ProjectsViewState => {
+  switch (action.type) {
+    case 'setName':
+      return { ...state, name: action.value };
+    case 'setOrderId':
+      return { ...state, orderId: action.value };
+    case 'setClientId':
+      return { ...state, clientId: action.value };
+    case 'setDescription':
+      return { ...state, description: action.value };
+    case 'setBillingType':
+      return { ...state, billingType: action.value };
+    case 'setBillingFrequency':
+      return { ...state, billingFrequency: action.value };
+    case 'setOfferId':
+      return { ...state, offerId: action.value };
+    case 'setStartDate':
+      return { ...state, startDate: action.value };
+    case 'setEndDate':
+      return { ...state, endDate: action.value };
+    case 'setRevenue':
+      return { ...state, revenue: action.value };
+    case 'setErrors':
+      return { ...state, errors: action.value };
+    case 'patchErrors':
+      return { ...state, errors: { ...state.errors, ...action.value } };
+    case 'setDraftTasks':
+      return { ...state, draftTasks: action.value };
+    case 'openAddModal':
+      return {
+        ...state,
+        name: '',
+        orderId: '',
+        clientId: '',
+        description: '',
+        billingType: 'time_and_materials',
+        billingFrequency: 'monthly',
+        offerId: '',
+        startDate: '',
+        endDate: '',
+        revenue: '',
+        draftTasks: [],
+        errors: {},
+        isModalOpen: true,
+      };
+    case 'closeModal':
+      return {
+        ...state,
+        isModalOpen: false,
+        isDeleteConfirmOpen: false,
+        projectToDelete: null,
+        draftTasks: [],
+        errors: {},
+      };
+    case 'promptDelete':
+      return { ...state, projectToDelete: action.project, isDeleteConfirmOpen: true };
+    case 'setManagingProjectId':
+      return { ...state, managingProjectId: action.value };
+    default:
+      return state;
+  }
+};
+
 const ProjectsView: React.FC<ProjectsViewProps> = ({
   projects,
   clients,
@@ -156,25 +281,25 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     buildPermission('projects.assignments', 'update'),
   );
 
-  // Modal state — create only
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
-  const [managingProjectId, setManagingProjectId] = useState<string | null>(null);
-
-  // Form state
-  const [name, setName] = useState('');
-  const [orderId, setOrderId] = useState('');
-  const [clientId, setClientId] = useState('');
-  const [description, setDescription] = useState('');
-  const [billingType, setBillingType] = useState<StoredBillingType>('time_and_materials');
-  const [billingFrequency, setBillingFrequency] = useState<BillingFrequency>('monthly');
-  const [offerId, setOfferId] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [revenue, setRevenue] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [draftTasks, setDraftTasks] = useState<DraftTask[]>([]);
+  const [state, dispatch] = useReducer(projectsViewReducer, INITIAL_PROJECTS_STATE);
+  const {
+    isModalOpen,
+    isDeleteConfirmOpen,
+    projectToDelete,
+    managingProjectId,
+    name,
+    orderId,
+    clientId,
+    description,
+    billingType,
+    billingFrequency,
+    offerId,
+    startDate,
+    endDate,
+    revenue,
+    errors,
+    draftTasks,
+  } = state;
 
   const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
   const projectIdsKey = useMemo(() => projectIds.join('\u0000'), [projectIds]);
@@ -254,27 +379,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
   const openAddModal = () => {
     if (!canCreateProjects) return;
-    setName('');
-    setOrderId('');
-    setClientId('');
-    setDescription('');
-    setBillingType('time_and_materials');
-    setBillingFrequency('monthly');
-    setOfferId('');
-    setStartDate('');
-    setEndDate('');
-    setRevenue('');
-    setDraftTasks([]);
-    setErrors({});
-    setIsModalOpen(true);
+    dispatch({ type: 'openAddModal' });
   };
 
   const closeModal = () => {
-    setIsModalOpen(false);
-    setIsDeleteConfirmOpen(false);
-    setProjectToDelete(null);
-    setDraftTasks([]);
-    setErrors({});
+    dispatch({ type: 'closeModal' });
   };
 
   // Reset a currently-bound order/offer if it no longer matches `nextClientId`. The
@@ -283,28 +392,28 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     if (keep !== 'offer' && offerId) {
       const current = offers.find((o) => o.id === offerId);
       if (!current || current.clientId !== nextClientId) {
-        setOfferId('');
-        if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
+        dispatch({ type: 'setOfferId', value: '' });
+        if (errors.offerId) dispatch({ type: 'patchErrors', value: { offerId: '' } });
       }
     }
     if (keep !== 'order' && orderId) {
       const current = orders.find((o) => o.id === orderId);
       if (!current || current.clientId !== nextClientId) {
-        setOrderId('');
-        if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
+        dispatch({ type: 'setOrderId', value: '' });
+        if (errors.orderId) dispatch({ type: 'patchErrors', value: { orderId: '' } });
       }
     }
   };
 
   const applyClientChange = (nextClientId: string) => {
-    setClientId(nextClientId);
-    if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+    dispatch({ type: 'setClientId', value: nextClientId });
+    if (errors.clientId) dispatch({ type: 'patchErrors', value: { clientId: '' } });
     clearStaleClientLinks(nextClientId, null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrors({});
+    dispatch({ type: 'setErrors', value: {} });
 
     if (!canCreateProjects) return;
 
@@ -318,7 +427,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       newErrors.dateRange = t('projects:projects.dateRangeInvalid');
     }
     if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+      dispatch({ type: 'setErrors', value: newErrors });
       return;
     }
 
@@ -357,8 +466,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   };
 
   const promptDelete = (project: Project) => {
-    setProjectToDelete(project);
-    setIsDeleteConfirmOpen(true);
+    dispatch({ type: 'promptDelete', project });
   };
 
   const handleDelete = () => {
@@ -371,33 +479,37 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
   const openAssignments = (projectId: string) => {
     if (!canManageAssignments) return;
-    setManagingProjectId(projectId);
+    dispatch({ type: 'setManagingProjectId', value: projectId });
   };
 
   const closeAssignments = () => {
-    setManagingProjectId(null);
+    dispatch({ type: 'setManagingProjectId', value: null });
   };
 
   // Draft task helpers
   const addDraftTask = () => {
-    setDraftTasks((prev) => [
-      ...prev,
-      {
-        _id: String(Date.now() + Math.random()),
-        name: '',
-        billingType,
-        billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
-        monthlyEffort: '',
-        expectedEffort: '',
-        revenue: '',
-        notes: '',
-      },
-    ]);
+    dispatch({
+      type: 'setDraftTasks',
+      value: [
+        ...draftTasks,
+        {
+          _id: String(Date.now() + Math.random()),
+          name: '',
+          billingType,
+          billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
+          monthlyEffort: '',
+          expectedEffort: '',
+          revenue: '',
+          notes: '',
+        },
+      ],
+    });
   };
 
   const updateDraftTask = (id: string, field: keyof Omit<DraftTask, '_id'>, value: string) => {
-    setDraftTasks((prev) =>
-      prev.map((t) => {
+    dispatch({
+      type: 'setDraftTasks',
+      value: draftTasks.map((t) => {
         if (t._id !== id) return t;
         if (field === 'billingType') {
           const nextBillingType = value as StoredBillingType;
@@ -410,11 +522,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         }
         return { ...t, [field]: value };
       }),
-    );
+    });
   };
 
   const removeDraftTask = (id: string) => {
-    setDraftTasks((prev) => prev.filter((t) => t._id !== id));
+    dispatch({ type: 'setDraftTasks', value: draftTasks.filter((t) => t._id !== id) });
   };
 
   const getDerivedProjectBillingType = (project: Project): BillingType => {
@@ -677,12 +789,14 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         value={orderId}
                         onChange={(val) => {
                           const nextOrderId = val as string;
-                          setOrderId(nextOrderId);
-                          if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
+                          dispatch({ type: 'setOrderId', value: nextOrderId });
+                          if (errors.orderId)
+                            dispatch({ type: 'patchErrors', value: { orderId: '' } });
                           const nextOrder = orders.find((o) => o.id === nextOrderId);
                           if (!nextOrder) return;
-                          setClientId(nextOrder.clientId);
-                          if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+                          dispatch({ type: 'setClientId', value: nextOrder.clientId });
+                          if (errors.clientId)
+                            dispatch({ type: 'patchErrors', value: { clientId: '' } });
                           clearStaleClientLinks(nextOrder.clientId, 'order');
                         }}
                         label={t('projects:projects.orderOptionalLabel')}
@@ -737,8 +851,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         value={name}
                         aria-invalid={Boolean(errors.name)}
                         onChange={(e) => {
-                          setName(e.target.value);
-                          if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
+                          dispatch({ type: 'setName', value: e.target.value });
+                          if (errors.name) dispatch({ type: 'patchErrors', value: { name: '' } });
                         }}
                         placeholder={t('projects:projects.projectNamePlaceholder')}
                       />
@@ -753,7 +867,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                     <Textarea
                       id="project-description"
                       value={description}
-                      onChange={(e) => setDescription(e.target.value)}
+                      onChange={(e) => dispatch({ type: 'setDescription', value: e.target.value })}
                       placeholder={t('projects:projects.descriptionPlaceholder')}
                       rows={3}
                       className="min-h-20 resize-none"
@@ -771,9 +885,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         value={startDate}
                         aria-invalid={Boolean(errors.startDate || errors.dateRange)}
                         onChange={(value) => {
-                          setStartDate(value);
+                          dispatch({ type: 'setStartDate', value });
                           if (errors.startDate || errors.dateRange) {
-                            setErrors((prev) => ({ ...prev, startDate: '', dateRange: '' }));
+                            dispatch({
+                              type: 'patchErrors',
+                              value: { startDate: '', dateRange: '' },
+                            });
                           }
                         }}
                       />
@@ -789,9 +906,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         value={endDate}
                         aria-invalid={Boolean(errors.endDate || errors.dateRange)}
                         onChange={(value) => {
-                          setEndDate(value);
+                          dispatch({ type: 'setEndDate', value });
                           if (errors.endDate || errors.dateRange) {
-                            setErrors((prev) => ({ ...prev, endDate: '', dateRange: '' }));
+                            dispatch({
+                              type: 'patchErrors',
+                              value: { endDate: '', dateRange: '' },
+                            });
                           }
                         }}
                       />
@@ -810,13 +930,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         value={offerId}
                         onChange={(val) => {
                           const nextOfferId = val as string;
-                          setOfferId(nextOfferId);
-                          if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
+                          dispatch({ type: 'setOfferId', value: nextOfferId });
+                          if (errors.offerId)
+                            dispatch({ type: 'patchErrors', value: { offerId: '' } });
                           const nextOffer = offers.find((o) => o.id === nextOfferId);
                           if (!nextOffer) return;
                           if (nextOffer.clientId !== clientId) {
-                            setClientId(nextOffer.clientId);
-                            if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+                            dispatch({ type: 'setClientId', value: nextOffer.clientId });
+                            if (errors.clientId)
+                              dispatch({ type: 'patchErrors', value: { clientId: '' } });
                           }
                           clearStaleClientLinks(nextOffer.clientId, 'offer');
                         }}
@@ -843,7 +965,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         placeholder="0.00"
                         value={revenueSource === 'manual' ? revenue : displayedRevenue.toFixed(2)}
                         readOnly={revenueSource !== 'manual'}
-                        onChange={(e) => setRevenue(e.target.value)}
+                        onChange={(e) => dispatch({ type: 'setRevenue', value: e.target.value })}
                       />
                       <p className="text-xs text-muted-foreground">
                         {revenueHintBySource[revenueSource]}
@@ -858,9 +980,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       value={billingType}
                       onChange={(val) => {
                         const nextBillingType = val as StoredBillingType;
-                        setBillingType(nextBillingType);
+                        dispatch({ type: 'setBillingType', value: nextBillingType });
                         if (nextBillingType === 'time_and_materials')
-                          setBillingFrequency('monthly');
+                          dispatch({ type: 'setBillingFrequency', value: 'monthly' });
                       }}
                       label={t('projects:projects.billingType')}
                       searchable={false}
@@ -876,7 +998,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                             )
                       }
                       value={billingType === 'time_and_materials' ? 'monthly' : billingFrequency}
-                      onChange={(val) => setBillingFrequency(val as BillingFrequency)}
+                      onChange={(val) =>
+                        dispatch({ type: 'setBillingFrequency', value: val as BillingFrequency })
+                      }
                       label={t('projects:projects.billingFrequency')}
                       disabled={billingType === 'time_and_materials'}
                       searchable={false}

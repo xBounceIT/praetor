@@ -87,7 +87,7 @@ describe('ProjectsView create-form validation', () => {
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
     ).text();
     expect(source).toContain('const nextOrder = orders.find((o) => o.id === nextOrderId);');
-    expect(source).toContain('setClientId(nextOrder.clientId);');
+    expect(source).toContain("dispatch({ type: 'setClientId', value: nextOrder.clientId });");
     expect(source).toContain('disabled={Boolean(selectedOrder)}');
   });
 
@@ -99,15 +99,19 @@ describe('ProjectsView create-form validation', () => {
       "if (offer.status !== 'sent' && offer.status !== 'accepted') return options;",
     );
     expect(source).toContain('if (clientId && offer.clientId !== clientId) return options;');
-    expect(source).toContain('setClientId(nextOffer.clientId);');
+    expect(source).toContain("dispatch({ type: 'setClientId', value: nextOffer.clientId });");
   });
 
   test('changing the order or offer clears any stale sibling link via the shared helper', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
     ).text();
-    expect(source).toMatch(/setOrderId\(nextOrderId\)[\s\S]{0,600}['"]order['"]/);
-    expect(source).toMatch(/setOfferId\(nextOfferId\)[\s\S]{0,600}['"]offer['"]/);
+    expect(source).toMatch(
+      /setOrderId['"],\s*value:\s*nextOrderId\s*\}\)[\s\S]{0,900}['"]order['"]/,
+    );
+    expect(source).toMatch(
+      /setOfferId['"],\s*value:\s*nextOfferId\s*\}\)[\s\S]{0,900}['"]offer['"]/,
+    );
   });
 });
 

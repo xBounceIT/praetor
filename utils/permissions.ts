@@ -144,7 +144,7 @@ export const hasPermission = (permissions: Permission[] | undefined, permission:
 export const hasAnyPermission = (permissions: Permission[] | undefined, required: Permission[]) =>
   required.some((permission) => hasPermission(permissions, permission));
 
-export const scopeResourceFor = (resource: PermissionResource): PermissionResource | undefined => {
+const scopeResourceFor = (resource: PermissionResource): PermissionResource | undefined => {
   const scoped = `${resource}_all`;
   return PERMISSION_DEFINITIONS.some((definition) => definition.id === scoped) ? scoped : undefined;
 };
@@ -198,7 +198,7 @@ export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'docs/frontend': buildPermission('docs.frontend', 'view'),
 };
 
-export const VIEW_PERMISSION_OPTIONS: Record<View, Permission[]> = Object.fromEntries(
+const VIEW_PERMISSION_OPTIONS: Record<View, Permission[]> = Object.fromEntries(
   Object.entries(VIEW_PERMISSION_MAP).map(([view, permission]) => {
     const [resource, action] = permission.split(/\.(?=[^.]+$)/) as [
       PermissionResource,

@@ -1,8 +1,7 @@
 import type { Permission, ProjectRuleConditionValueType } from '../../types';
 
-export const PROJECT_RULE_NUMBER_OPERATORS = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'] as const;
-export const PROJECT_RULE_ENUM_OPERATORS = ['eq', 'neq'] as const;
-export const PROJECT_RULE_CONDITION_VALUE_TYPES = ['literal', 'field'] as const;
+const PROJECT_RULE_NUMBER_OPERATORS = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'] as const;
+const PROJECT_RULE_ENUM_OPERATORS = ['eq', 'neq'] as const;
 
 export type ProjectRuleNumberOperator = (typeof PROJECT_RULE_NUMBER_OPERATORS)[number];
 export type ProjectRuleEnumOperator = (typeof PROJECT_RULE_ENUM_OPERATORS)[number];
@@ -17,7 +16,7 @@ export type ProjectRuleFieldDefinition = {
   requiresPermission?: Permission;
 };
 
-export const PROJECT_RULE_FIELD_DEFINITIONS: readonly ProjectRuleFieldDefinition[] = [
+const PROJECT_RULE_FIELD_DEFINITIONS: readonly ProjectRuleFieldDefinition[] = [
   { id: 'revenue', kind: 'number', operators: PROJECT_RULE_NUMBER_OPERATORS },
   {
     id: 'cost_to_date',
@@ -67,7 +66,7 @@ const enumValuesMatch = (
   );
 };
 
-export const areProjectRuleFieldsComparable = (leftField: string, rightField: string) => {
+const areProjectRuleFieldsComparable = (leftField: string, rightField: string) => {
   const leftDefinition = getProjectRuleFieldDefinition(leftField);
   const rightDefinition = getProjectRuleFieldDefinition(rightField);
   if (!leftDefinition || !rightDefinition) return false;

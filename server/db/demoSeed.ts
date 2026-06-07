@@ -787,11 +787,14 @@ export const runDemoSeedRefresh = async ({
     await client.query('COMMIT');
     inTransaction = false;
 
-    for (const user of DEMO_USERS) {
-      if (user.role === 'top_manager') {
-        await userAssignmentsRepo.syncTopManagerAssignmentsForUser(user.id);
-      }
-    }
+    // Each sync runs in its own transaction (default db executor) against a distinct user's
+    // assignment rows, so the per-user fan-outs are independent and run concurrently. This is
+    // a bounded, fixed set (DEMO_USERS), so there's no connection-pool-storm risk.
+    await Promise.all(
+      DEMO_USERS.filter((user) => user.role === 'top_manager').map((user) =>
+        userAssignmentsRepo.syncTopManagerAssignmentsForUser(user.id),
+      ),
+    );
   } catch (err) {
     if (inTransaction) {
       await client.query('ROLLBACK');

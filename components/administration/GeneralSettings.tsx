@@ -11,7 +11,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import type React from 'react';
-import { useRef, useState } from 'react';
+import { useReducer, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -113,6 +113,85 @@ const areRilTransferOptionsEqual = (left: string[], right: unknown): boolean =>
   JSON.stringify(normalizeRilTransferOptions(left)) ===
   JSON.stringify(normalizeRilTransferOptions(right));
 
+interface GeneralSettingsState {
+  currency: string;
+  dailyLimit: number;
+  startOfWeek: IGeneralSettings['startOfWeek'];
+  treatSaturdayAsHoliday: boolean;
+  allowWeekendSelection: boolean;
+  defaultLocation: TimeEntryLocation;
+  rilCompanyName: string;
+  rilDefaultStartTime: string;
+  rilDefaultExitTime: string;
+  rilLunchBreakMinutes: number;
+  rilNoteOptions: EditableRilNoteOption[];
+  rilTransferOptions: EditableRilTransferOption[];
+  enableAiReporting: boolean;
+  geminiApiKey: string;
+  aiProvider: AiProvider;
+  openrouterApiKey: string;
+  geminiModelId: string;
+  openrouterModelId: string;
+  modelCheck: { state: ModelCheckState; message?: string };
+  activeTab: TabId;
+  tabDirection: 'left' | 'right';
+  isSaving: boolean;
+  isSaved: boolean;
+}
+
+const INITIAL_GENERAL_SETTINGS_STATE: GeneralSettingsState = {
+  currency: '',
+  dailyLimit: 8,
+  startOfWeek: 'Monday',
+  treatSaturdayAsHoliday: false,
+  allowWeekendSelection: true,
+  defaultLocation: 'remote',
+  rilCompanyName: '',
+  rilDefaultStartTime: DEFAULT_RIL_START_TIME,
+  rilDefaultExitTime: DEFAULT_RIL_EXIT_TIME,
+  rilLunchBreakMinutes: 60,
+  rilNoteOptions: toEditableRilNoteOptions(undefined),
+  rilTransferOptions: toEditableRilTransferOptions(undefined),
+  enableAiReporting: false,
+  geminiApiKey: '',
+  aiProvider: 'gemini',
+  openrouterApiKey: '',
+  geminiModelId: '',
+  openrouterModelId: '',
+  modelCheck: { state: 'idle' },
+  activeTab: 'localization',
+  tabDirection: 'right',
+  isSaving: false,
+  isSaved: false,
+};
+
+type GeneralSettingsAction =
+  | { type: 'merge'; patch: Partial<GeneralSettingsState> }
+  | {
+      type: 'setRilNoteOptions';
+      updater: (prev: EditableRilNoteOption[]) => EditableRilNoteOption[];
+    }
+  | {
+      type: 'setRilTransferOptions';
+      updater: (prev: EditableRilTransferOption[]) => EditableRilTransferOption[];
+    };
+
+const generalSettingsReducer = (
+  state: GeneralSettingsState,
+  action: GeneralSettingsAction,
+): GeneralSettingsState => {
+  switch (action.type) {
+    case 'merge':
+      return { ...state, ...action.patch };
+    case 'setRilNoteOptions':
+      return { ...state, rilNoteOptions: action.updater(state.rilNoteOptions) };
+    case 'setRilTransferOptions':
+      return { ...state, rilTransferOptions: action.updater(state.rilTransferOptions) };
+    default:
+      return state;
+  }
+};
+
 interface ToggleSettingRowProps {
   label: string;
   description: string;
@@ -148,43 +227,42 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
     { id: 'gemini', name: t('general.aiProviders.gemini') },
     { id: 'openrouter', name: t('general.aiProviders.openrouter') },
   ];
-  const [currency, setCurrency] = useState('');
-  const [dailyLimit, setDailyLimit] = useState(8);
-  const [startOfWeek, setStartOfWeek] = useState<IGeneralSettings['startOfWeek']>('Monday');
-  const [treatSaturdayAsHoliday, setTreatSaturdayAsHoliday] = useState(false);
-  const [allowWeekendSelection, setAllowWeekendSelection] = useState(true);
-  const [defaultLocation, setDefaultLocation] = useState<TimeEntryLocation>('remote');
-  const [rilCompanyName, setRilCompanyName] = useState('');
-  const [rilDefaultStartTime, setRilDefaultStartTime] = useState(DEFAULT_RIL_START_TIME);
-  const [rilDefaultExitTime, setRilDefaultExitTime] = useState(DEFAULT_RIL_EXIT_TIME);
-  const [rilLunchBreakMinutes, setRilLunchBreakMinutes] = useState(60);
-  const [rilNoteOptions, setRilNoteOptions] = useState<EditableRilNoteOption[]>(() =>
-    toEditableRilNoteOptions(undefined),
-  );
-  const [rilTransferOptions, setRilTransferOptions] = useState<EditableRilTransferOption[]>(() =>
-    toEditableRilTransferOptions(undefined),
-  );
-  const [enableAiReporting, setEnableAiReporting] = useState(false);
-  const [geminiApiKey, setGeminiApiKey] = useState('');
-  const [aiProvider, setAiProvider] = useState<AiProvider>('gemini');
-  const [openrouterApiKey, setOpenrouterApiKey] = useState('');
-  const [geminiModelId, setGeminiModelId] = useState('');
-  const [openrouterModelId, setOpenrouterModelId] = useState('');
-  const [modelCheck, setModelCheck] = useState<{ state: ModelCheckState; message?: string }>({
-    state: 'idle',
-  });
-  const [activeTab, setActiveTab] = useState<TabId>('localization');
-  const [tabDirection, setTabDirection] = useState<'left' | 'right'>('right');
-  const [isSaving, setIsSaving] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
+  const [state, dispatch] = useReducer(generalSettingsReducer, INITIAL_GENERAL_SETTINGS_STATE);
+  const {
+    currency,
+    dailyLimit,
+    startOfWeek,
+    treatSaturdayAsHoliday,
+    allowWeekendSelection,
+    defaultLocation,
+    rilCompanyName,
+    rilDefaultStartTime,
+    rilDefaultExitTime,
+    rilLunchBreakMinutes,
+    rilNoteOptions,
+    rilTransferOptions,
+    enableAiReporting,
+    geminiApiKey,
+    aiProvider,
+    openrouterApiKey,
+    geminiModelId,
+    openrouterModelId,
+    modelCheck,
+    activeTab,
+    tabDirection,
+    isSaving,
+    isSaved,
+  } = state;
   const loadedSettingsRef = useRef<IGeneralSettings | null>(null);
 
   const handleTabChange = (id: TabId) => {
     if (id === activeTab) return;
     const nextIndex = TABS.findIndex((tab) => tab.id === id);
     const currentIndex = TABS.findIndex((tab) => tab.id === activeTab);
-    setTabDirection(nextIndex > currentIndex ? 'right' : 'left');
-    setActiveTab(id);
+    dispatch({
+      type: 'merge',
+      patch: { tabDirection: nextIndex > currentIndex ? 'right' : 'left', activeTab: id },
+    });
   };
 
   const sectionAnimationClass =
@@ -194,38 +272,53 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
 
   if (loadedSettingsRef.current !== settings) {
     loadedSettingsRef.current = settings;
-    setCurrency(settings.currency);
-    setDailyLimit(settings.dailyLimit);
-    setStartOfWeek(settings.startOfWeek);
-    setTreatSaturdayAsHoliday(settings.treatSaturdayAsHoliday);
-    setAllowWeekendSelection(settings.allowWeekendSelection ?? true);
-    setDefaultLocation(settings.defaultLocation || 'remote');
-    setRilCompanyName(settings.rilCompanyName || '');
-    setRilDefaultStartTime(settings.rilDefaultStartTime || DEFAULT_RIL_START_TIME);
-    setRilDefaultExitTime(settings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME);
-    setRilLunchBreakMinutes(settings.rilLunchBreakMinutes ?? 60);
-    setRilNoteOptions(toEditableRilNoteOptions(settings.rilNoteOptions));
-    setRilTransferOptions(toEditableRilTransferOptions(settings.rilTransferOptions));
-    setEnableAiReporting(settings.enableAiReporting);
-    setGeminiApiKey(settings.geminiApiKey || '');
-    setAiProvider(settings.aiProvider || 'gemini');
-    setOpenrouterApiKey(settings.openrouterApiKey || '');
-    setGeminiModelId(settings.geminiModelId || '');
-    setOpenrouterModelId(settings.openrouterModelId || '');
-    setModelCheck({ state: 'idle' });
+    dispatch({
+      type: 'merge',
+      patch: {
+        currency: settings.currency,
+        dailyLimit: settings.dailyLimit,
+        startOfWeek: settings.startOfWeek,
+        treatSaturdayAsHoliday: settings.treatSaturdayAsHoliday,
+        allowWeekendSelection: settings.allowWeekendSelection ?? true,
+        defaultLocation: settings.defaultLocation || 'remote',
+        rilCompanyName: settings.rilCompanyName || '',
+        rilDefaultStartTime: settings.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
+        rilDefaultExitTime: settings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,
+        rilLunchBreakMinutes: settings.rilLunchBreakMinutes ?? 60,
+        rilNoteOptions: toEditableRilNoteOptions(settings.rilNoteOptions),
+        rilTransferOptions: toEditableRilTransferOptions(settings.rilTransferOptions),
+        enableAiReporting: settings.enableAiReporting,
+        geminiApiKey: settings.geminiApiKey || '',
+        aiProvider: settings.aiProvider || 'gemini',
+        openrouterApiKey: settings.openrouterApiKey || '',
+        geminiModelId: settings.geminiModelId || '',
+        openrouterModelId: settings.openrouterModelId || '',
+        modelCheck: { state: 'idle' },
+      },
+    });
   }
 
   const currentApiKey = aiProvider === 'gemini' ? geminiApiKey : openrouterApiKey;
   const currentModelId = aiProvider === 'gemini' ? geminiModelId : openrouterModelId;
 
   const handleApiKeyChange = (value: string) => {
-    (aiProvider === 'gemini' ? setGeminiApiKey : setOpenrouterApiKey)(value);
-    setModelCheck({ state: 'idle' });
+    dispatch({
+      type: 'merge',
+      patch: {
+        ...(aiProvider === 'gemini' ? { geminiApiKey: value } : { openrouterApiKey: value }),
+        modelCheck: { state: 'idle' },
+      },
+    });
   };
 
   const handleModelIdChange = (value: string) => {
-    (aiProvider === 'gemini' ? setGeminiModelId : setOpenrouterModelId)(value);
-    setModelCheck({ state: 'idle' });
+    dispatch({
+      type: 'merge',
+      patch: {
+        ...(aiProvider === 'gemini' ? { geminiModelId: value } : { openrouterModelId: value }),
+        modelCheck: { state: 'idle' },
+      },
+    });
   };
 
   const isAnyAiEnabled = enableAiReporting;
@@ -235,7 +328,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
 
   const handleCheckModel = async () => {
     if (!currentApiKey.trim() || !currentModelId.trim()) return;
-    setModelCheck({ state: 'checking' });
+    dispatch({ type: 'merge', patch: { modelCheck: { state: 'checking' } } });
     try {
       const res = await api.ai.validateModel({
         provider: aiProvider,
@@ -243,21 +336,30 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
         apiKey: currentApiKey,
       });
       if (res.ok) {
-        setModelCheck({ state: 'ok' });
+        dispatch({ type: 'merge', patch: { modelCheck: { state: 'ok' } } });
       } else if (res.code === 'NOT_FOUND') {
-        setModelCheck({ state: 'not_found', message: res.message || '' });
+        dispatch({
+          type: 'merge',
+          patch: { modelCheck: { state: 'not_found', message: res.message || '' } },
+        });
       } else {
-        setModelCheck({ state: 'error', message: res.message || '' });
+        dispatch({
+          type: 'merge',
+          patch: { modelCheck: { state: 'error', message: res.message || '' } },
+        });
       }
     } catch (err) {
-      setModelCheck({ state: 'error', message: (err as Error).message });
+      dispatch({
+        type: 'merge',
+        patch: { modelCheck: { state: 'error', message: (err as Error).message } },
+      });
     }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isApiKeyMissing() || isModelMissing() || isModelNotFound) return;
-    setIsSaving(true);
+    dispatch({ type: 'merge', patch: { isSaving: true } });
     try {
       await onUpdate({
         currency,
@@ -281,12 +383,12 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
         geminiModelId,
         openrouterModelId,
       });
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 3000);
+      dispatch({ type: 'merge', patch: { isSaved: true } });
+      setTimeout(() => dispatch({ type: 'merge', patch: { isSaved: false } }), 3000);
     } catch (err) {
       console.error('Failed to save general settings:', err);
     } finally {
-      setIsSaving(false);
+      dispatch({ type: 'merge', patch: { isSaving: false } });
     }
   };
 
@@ -321,43 +423,51 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
     (!hasChanges && !isSaved);
 
   const updateRilNoteOption = (index: number, field: keyof RilNoteOption, value: string) => {
-    setRilNoteOptions((prev) =>
-      prev.map((option, optionIndex) =>
-        optionIndex === index ? { ...option, [field]: value } : option,
-      ),
-    );
+    dispatch({
+      type: 'setRilNoteOptions',
+      updater: (prev) =>
+        prev.map((option, optionIndex) =>
+          optionIndex === index ? { ...option, [field]: value } : option,
+        ),
+    });
   };
 
   const addRilNoteOption = () => {
-    setRilNoteOptions((prev) => [
-      ...prev,
-      { value: '', label: '', draftId: createRilDraftId('note') },
-    ]);
+    dispatch({
+      type: 'setRilNoteOptions',
+      updater: (prev) => [...prev, { value: '', label: '', draftId: createRilDraftId('note') }],
+    });
   };
 
   const removeRilNoteOption = (index: number) => {
-    setRilNoteOptions((prev) =>
-      prev.length > 1 ? prev.filter((_, optionIndex) => optionIndex !== index) : prev,
-    );
+    dispatch({
+      type: 'setRilNoteOptions',
+      updater: (prev) =>
+        prev.length > 1 ? prev.filter((_, optionIndex) => optionIndex !== index) : prev,
+    });
   };
 
   const updateRilTransferOption = (index: number, value: string) => {
-    setRilTransferOptions((prev) =>
-      prev.map((option, optionIndex) => (optionIndex === index ? { ...option, value } : option)),
-    );
+    dispatch({
+      type: 'setRilTransferOptions',
+      updater: (prev) =>
+        prev.map((option, optionIndex) => (optionIndex === index ? { ...option, value } : option)),
+    });
   };
 
   const addRilTransferOption = () => {
-    setRilTransferOptions((prev) => [
-      ...prev,
-      { value: '', draftId: createRilDraftId('transfer') },
-    ]);
+    dispatch({
+      type: 'setRilTransferOptions',
+      updater: (prev) => [...prev, { value: '', draftId: createRilDraftId('transfer') }],
+    });
   };
 
   const removeRilTransferOption = (index: number) => {
-    setRilTransferOptions((prev) =>
-      prev.length > 1 ? prev.filter((_, optionIndex) => optionIndex !== index) : prev,
-    );
+    dispatch({
+      type: 'setRilTransferOptions',
+      updater: (prev) =>
+        prev.length > 1 ? prev.filter((_, optionIndex) => optionIndex !== index) : prev,
+    });
   };
 
   const {
@@ -424,7 +534,9 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
                   id="general-currency"
                   options={CURRENCY_OPTIONS}
                   value={currency}
-                  onChange={(val) => setCurrency(val as string)}
+                  onChange={(val) =>
+                    dispatch({ type: 'merge', patch: { currency: val as string } })
+                  }
                   searchable={true}
                   placeholder={t('general.currencyLabel')}
                 />
@@ -460,7 +572,10 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
                     value={dailyLimit}
                     onValueChange={(value) => {
                       const parsed = parseFloat(value);
-                      setDailyLimit(value === '' || Number.isNaN(parsed) ? 0 : parsed);
+                      dispatch({
+                        type: 'merge',
+                        patch: { dailyLimit: value === '' || Number.isNaN(parsed) ? 0 : parsed },
+                      });
                     }}
                   />
                   <FieldDescription>{t('general.dailyLimitDescription')}</FieldDescription>
@@ -477,7 +592,12 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
                       { id: 'Sunday', name: t('general.sunday') },
                     ]}
                     value={startOfWeek}
-                    onChange={(val) => setStartOfWeek(val as 'Monday' | 'Sunday')}
+                    onChange={(val) =>
+                      dispatch({
+                        type: 'merge',
+                        patch: { startOfWeek: val as 'Monday' | 'Sunday' },
+                      })
+                    }
                   />
                   <FieldDescription>{t('general.startOfWeekDescription')}</FieldDescription>
                 </Field>
@@ -495,7 +615,12 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
                       { id: 'transfer', name: t('general.locationTypes.transfer') },
                     ]}
                     value={defaultLocation}
-                    onChange={(val) => setDefaultLocation(val as TimeEntryLocation)}
+                    onChange={(val) =>
+                      dispatch({
+                        type: 'merge',
+                        patch: { defaultLocation: val as TimeEntryLocation },
+                      })
+                    }
                   />
                   <FieldDescription>{t('general.defaultLocationDescription')}</FieldDescription>
                 </Field>
@@ -505,14 +630,18 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
                 label={t('general.treatSaturdayAsHolidayLabel')}
                 description={t('general.treatSaturdayAsHolidayDescription')}
                 checked={treatSaturdayAsHoliday}
-                onChange={setTreatSaturdayAsHoliday}
+                onChange={(checked) =>
+                  dispatch({ type: 'merge', patch: { treatSaturdayAsHoliday: checked } })
+                }
               />
 
               <ToggleSettingRow
                 label={t('general.allowWeekendSelectionLabel')}
                 description={t('general.allowWeekendSelectionDescription')}
                 checked={allowWeekendSelection}
-                onChange={setAllowWeekendSelection}
+                onChange={(checked) =>
+                  dispatch({ type: 'merge', patch: { allowWeekendSelection: checked } })
+                }
               />
 
               <div className="space-y-4">
@@ -532,7 +661,9 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
                     <Input
                       id="general-ril-company-name"
                       value={rilCompanyName}
-                      onChange={(event) => setRilCompanyName(event.target.value)}
+                      onChange={(event) =>
+                        dispatch({ type: 'merge', patch: { rilCompanyName: event.target.value } })
+                      }
                     />
                     <FieldDescription>{t('general.rilCompanyNameDescription')}</FieldDescription>
                   </Field>
@@ -545,7 +676,12 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
                       id="general-ril-default-start-time"
                       type="time"
                       value={rilDefaultStartTime}
-                      onChange={(event) => setRilDefaultStartTime(event.target.value)}
+                      onChange={(event) =>
+                        dispatch({
+                          type: 'merge',
+                          patch: { rilDefaultStartTime: event.target.value },
+                        })
+                      }
                     />
                     <FieldDescription>
                       {t('general.rilDefaultStartTimeDescription')}
@@ -560,7 +696,12 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
                       id="general-ril-default-exit-time"
                       type="time"
                       value={rilDefaultExitTime}
-                      onChange={(event) => setRilDefaultExitTime(event.target.value)}
+                      onChange={(event) =>
+                        dispatch({
+                          type: 'merge',
+                          patch: { rilDefaultExitTime: event.target.value },
+                        })
+                      }
                     />
                     <FieldDescription>
                       {t('general.rilDefaultExitTimeDescription')}
@@ -579,7 +720,12 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
                       value={rilLunchBreakMinutes}
                       onValueChange={(value) => {
                         const parsed = parseInt(value, 10);
-                        setRilLunchBreakMinutes(value === '' || Number.isNaN(parsed) ? 0 : parsed);
+                        dispatch({
+                          type: 'merge',
+                          patch: {
+                            rilLunchBreakMinutes: value === '' || Number.isNaN(parsed) ? 0 : parsed,
+                          },
+                        });
                       }}
                     />
                     <FieldDescription>
@@ -716,7 +862,9 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
                 label={t('general.enableAiReportingLabel')}
                 description={t('general.enableAiReportingDescription')}
                 checked={enableAiReporting}
-                onChange={setEnableAiReporting}
+                onChange={(checked) =>
+                  dispatch({ type: 'merge', patch: { enableAiReporting: checked } })
+                }
                 contentClassName="max-w-md"
               />
 
@@ -730,10 +878,12 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
                       id="general-ai-provider"
                       options={AI_PROVIDER_OPTIONS}
                       value={aiProvider}
-                      onChange={(val) => {
-                        setAiProvider(val as AiProvider);
-                        setModelCheck({ state: 'idle' });
-                      }}
+                      onChange={(val) =>
+                        dispatch({
+                          type: 'merge',
+                          patch: { aiProvider: val as AiProvider, modelCheck: { state: 'idle' } },
+                        })
+                      }
                     />
                     <FieldDescription>{t('general.aiProviderDescription')}</FieldDescription>
                   </Field>

@@ -1,5 +1,5 @@
 import { Eye, EyeOff, UserPlus } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
@@ -137,6 +137,146 @@ export interface UserManagementProps {
   currency: string;
 }
 
+interface AssignmentSelection {
+  clientIds: string[];
+  projectIds: string[];
+  taskIds: string[];
+}
+
+const EMPTY_ASSIGNMENTS: AssignmentSelection = {
+  clientIds: [],
+  projectIds: [],
+  taskIds: [],
+};
+
+interface UserManagementState {
+  // Create-user form
+  newFirstName: string;
+  newSurname: string;
+  newEmail: string;
+  newUsername: string;
+  newPassword: string;
+  newRole: string;
+  formErrors: Record<string, string>;
+  showNewPassword: boolean;
+  isCreateModalOpen: boolean;
+  // Assignment modal
+  managingUserId: string | null;
+  assignments: AssignmentSelection;
+  initialAssignments: AssignmentSelection;
+  clientSearch: string;
+  projectSearch: string;
+  taskSearch: string;
+  filterClientId: string;
+  filterProjectId: string;
+  isLoadingAssignments: boolean;
+  // Delete confirmation
+  isDeleteConfirmOpen: boolean;
+  userToDelete: User | null;
+  // Edit-user modal
+  editingUser: User | null;
+  editFirstName: string;
+  editSurname: string;
+  editEmail: string;
+  editRole: string;
+  editAssignedRoleIds: string[];
+  editPrimaryRoleId: string;
+  initialEditAssignedRoleIds: string[];
+  initialEditPrimaryRoleId: string;
+  isLoadingEditRoles: boolean;
+  editRolesError: string;
+  editFormErrors: Record<string, string>;
+  editCostPerHour: string;
+  editIsDisabled: boolean;
+  // Auth-method dialog
+  authMethodUser: User | null;
+  authMethodDraft: UserAuthMethod;
+  authProviderDraft: string;
+  authMethodError: string;
+  isSavingAuthMethod: boolean;
+  // TOTP reset dialog
+  totpResetUser: User | null;
+  totpResetError: string;
+  isResettingTotp: boolean;
+}
+
+const getInitialUserManagementState = (defaultRole: string): UserManagementState => ({
+  newFirstName: '',
+  newSurname: '',
+  newEmail: '',
+  newUsername: '',
+  newPassword: '',
+  newRole: defaultRole,
+  formErrors: {},
+  showNewPassword: false,
+  isCreateModalOpen: false,
+  managingUserId: null,
+  assignments: EMPTY_ASSIGNMENTS,
+  initialAssignments: EMPTY_ASSIGNMENTS,
+  clientSearch: '',
+  projectSearch: '',
+  taskSearch: '',
+  filterClientId: 'all',
+  filterProjectId: 'all',
+  isLoadingAssignments: false,
+  isDeleteConfirmOpen: false,
+  userToDelete: null,
+  editingUser: null,
+  editFirstName: '',
+  editSurname: '',
+  editEmail: '',
+  editRole: '',
+  editAssignedRoleIds: [],
+  editPrimaryRoleId: '',
+  initialEditAssignedRoleIds: [],
+  initialEditPrimaryRoleId: '',
+  isLoadingEditRoles: false,
+  editRolesError: '',
+  editFormErrors: {},
+  editCostPerHour: '0',
+  editIsDisabled: false,
+  authMethodUser: null,
+  authMethodDraft: 'local',
+  authProviderDraft: '',
+  authMethodError: '',
+  isSavingAuthMethod: false,
+  totpResetUser: null,
+  totpResetError: '',
+  isResettingTotp: false,
+});
+
+type UserManagementAction =
+  | { type: 'set'; values: Partial<UserManagementState> }
+  | { type: 'patchFormErrors'; value: Record<string, string> }
+  | { type: 'patchEditFormErrors'; value: Record<string, string> }
+  | { type: 'toggleEditAssignedRole'; roleId: string }
+  | { type: 'toggleAssignment'; assignments: AssignmentSelection };
+
+const userManagementReducer = (
+  state: UserManagementState,
+  action: UserManagementAction,
+): UserManagementState => {
+  switch (action.type) {
+    case 'set':
+      return { ...state, ...action.values };
+    case 'patchFormErrors':
+      return { ...state, formErrors: { ...state.formErrors, ...action.value } };
+    case 'patchEditFormErrors':
+      return { ...state, editFormErrors: { ...state.editFormErrors, ...action.value } };
+    case 'toggleEditAssignedRole':
+      return {
+        ...state,
+        editAssignedRoleIds: state.editAssignedRoleIds.includes(action.roleId)
+          ? state.editAssignedRoleIds.filter((id) => id !== action.roleId)
+          : [...state.editAssignedRoleIds, action.roleId],
+      };
+    case 'toggleAssignment':
+      return { ...state, assignments: action.assignments };
+    default:
+      return state;
+  }
+};
+
 const UserManagement: React.FC<UserManagementProps> = ({
   users,
   clients,
@@ -173,68 +313,54 @@ const UserManagement: React.FC<UserManagementProps> = ({
     return new Map(roles.map((role) => [role.id, role]));
   }, [roles]);
 
-  const [newFirstName, setNewFirstName] = useState('');
-  const [newSurname, setNewSurname] = useState('');
-  const [newEmail, setNewEmail] = useState('');
-  const [newUsername, setNewUsername] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole] = useState<string>(roleOptions[0]?.id || '');
   const usernameManuallyEdited = React.useRef(false);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [showNewPassword, setShowNewPassword] = useState(false);
-
-  const [managingUserId, setManagingUserId] = useState<string | null>(null);
-  const [assignments, setAssignments] = useState<{
-    clientIds: string[];
-    projectIds: string[];
-    taskIds: string[];
-  }>({
-    clientIds: [],
-    projectIds: [],
-    taskIds: [],
-  });
-  const [initialAssignments, setInitialAssignments] = useState<{
-    clientIds: string[];
-    projectIds: string[];
-    taskIds: string[];
-  }>({
-    clientIds: [],
-    projectIds: [],
-    taskIds: [],
-  });
-  const [clientSearch, setClientSearch] = useState('');
-  const [projectSearch, setProjectSearch] = useState('');
-  const [taskSearch, setTaskSearch] = useState('');
-  const [filterClientId, setFilterClientId] = useState('all');
-  const [filterProjectId, setFilterProjectId] = useState('all');
-
-  const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [userToDelete, setUserToDelete] = useState<User | null>(null);
-
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [editFirstName, setEditFirstName] = useState('');
-  const [editSurname, setEditSurname] = useState('');
-  const [editEmail, setEditEmail] = useState('');
-  const [editRole, setEditRole] = useState<string>('');
-  const [editAssignedRoleIds, setEditAssignedRoleIds] = useState<string[]>([]);
-  const [editPrimaryRoleId, setEditPrimaryRoleId] = useState<string>('');
-  const [initialEditAssignedRoleIds, setInitialEditAssignedRoleIds] = useState<string[]>([]);
-  const [initialEditPrimaryRoleId, setInitialEditPrimaryRoleId] = useState<string>('');
-  const [isLoadingEditRoles, setIsLoadingEditRoles] = useState(false);
-  const [editRolesError, setEditRolesError] = useState('');
-  const [editFormErrors, setEditFormErrors] = useState<Record<string, string>>({});
-  const [editCostPerHour, setEditCostPerHour] = useState<string>('0');
-  const [editIsDisabled, setEditIsDisabled] = useState(false);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [authMethodUser, setAuthMethodUser] = useState<User | null>(null);
-  const [authMethodDraft, setAuthMethodDraft] = useState<UserAuthMethod>('local');
-  const [authProviderDraft, setAuthProviderDraft] = useState<string>('');
-  const [authMethodError, setAuthMethodError] = useState('');
-  const [isSavingAuthMethod, setIsSavingAuthMethod] = useState(false);
-  const [totpResetUser, setTotpResetUser] = useState<User | null>(null);
-  const [totpResetError, setTotpResetError] = useState('');
-  const [isResettingTotp, setIsResettingTotp] = useState(false);
+  const [state, dispatch] = useReducer(userManagementReducer, roleOptions[0]?.id || '', (role) =>
+    getInitialUserManagementState(role),
+  );
+  const {
+    newFirstName,
+    newSurname,
+    newEmail,
+    newUsername,
+    newPassword,
+    newRole,
+    formErrors,
+    showNewPassword,
+    isCreateModalOpen,
+    managingUserId,
+    assignments,
+    initialAssignments,
+    clientSearch,
+    projectSearch,
+    taskSearch,
+    filterClientId,
+    filterProjectId,
+    isLoadingAssignments,
+    isDeleteConfirmOpen,
+    userToDelete,
+    editingUser,
+    editFirstName,
+    editSurname,
+    editEmail,
+    editRole,
+    editAssignedRoleIds,
+    editPrimaryRoleId,
+    initialEditAssignedRoleIds,
+    initialEditPrimaryRoleId,
+    isLoadingEditRoles,
+    editRolesError,
+    editFormErrors,
+    editCostPerHour,
+    editIsDisabled,
+    authMethodUser,
+    authMethodDraft,
+    authProviderDraft,
+    authMethodError,
+    isSavingAuthMethod,
+    totpResetUser,
+    totpResetError,
+    isResettingTotp,
+  } = state;
 
   const canCreateUsers = hasPermission(
     permissions,
@@ -263,12 +389,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
     canUpdateAllCosts || (canUpdateOwnCost && targetUserId === currentUserId);
   const canManageAssignments = canUpdateUsers;
   if (!newRole && roleOptions[0]?.id) {
-    setNewRole(roleOptions[0].id);
+    dispatch({ type: 'set', values: { newRole: roleOptions[0].id } });
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFormErrors({});
+    dispatch({ type: 'set', values: { formErrors: {} } });
 
     const newErrors: Record<string, string> = {};
     if (!newFirstName?.trim()) newErrors.firstName = t('common:validation.nameRequired');
@@ -280,7 +406,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
     if (!newPassword?.trim()) newErrors.password = t('common:validation.passwordRequired');
 
     if (Object.keys(newErrors).length > 0) {
-      setFormErrors(newErrors);
+      dispatch({ type: 'set', values: { formErrors: newErrors } });
       return;
     }
 
@@ -294,66 +420,91 @@ const UserManagement: React.FC<UserManagementProps> = ({
     );
     if (!result.success) {
       if (result.error?.includes('Username already exists')) {
-        setFormErrors({ username: t('common:validation.usernameAlreadyExists') || result.error });
+        dispatch({
+          type: 'set',
+          values: {
+            formErrors: { username: t('common:validation.usernameAlreadyExists') || result.error },
+          },
+        });
       } else if (result.error?.toLowerCase().includes('email')) {
-        setFormErrors({ email: t('common:validation.invalidEmail') || result.error });
+        dispatch({
+          type: 'set',
+          values: { formErrors: { email: t('common:validation.invalidEmail') || result.error } },
+        });
       } else {
-        setFormErrors({ general: result.error || t('common:messages.errorOccurred') });
+        dispatch({
+          type: 'set',
+          values: { formErrors: { general: result.error || t('common:messages.errorOccurred') } },
+        });
       }
       return;
     }
 
     resetCreateUserForm();
-    setIsCreateModalOpen(false);
+    dispatch({ type: 'set', values: { isCreateModalOpen: false } });
   };
 
   const resetCreateUserForm = () => {
-    setNewFirstName('');
-    setNewSurname('');
-    setNewEmail('');
-    setNewUsername('');
-    setNewPassword('');
-    setShowNewPassword(false);
-    setNewRole(roleOptions[0]?.id || '');
     usernameManuallyEdited.current = false;
-    setFormErrors({});
+    dispatch({
+      type: 'set',
+      values: {
+        newFirstName: '',
+        newSurname: '',
+        newEmail: '',
+        newUsername: '',
+        newPassword: '',
+        showNewPassword: false,
+        newRole: roleOptions[0]?.id || '',
+        formErrors: {},
+      },
+    });
   };
 
   const closeCreateModal = () => {
-    setIsCreateModalOpen(false);
+    dispatch({ type: 'set', values: { isCreateModalOpen: false } });
     resetCreateUserForm();
   };
 
   if (filterClientId !== 'all' && filterProjectId !== 'all') {
     const selectedProject = projects.find((project) => project.id === filterProjectId);
     if (!selectedProject || selectedProject.clientId !== filterClientId) {
-      setFilterProjectId('all');
+      dispatch({ type: 'set', values: { filterProjectId: 'all' } });
     }
   }
 
   const openAssignments = async (userId: string) => {
     if (!canManageAssignments) return;
-    setManagingUserId(userId);
-    setIsLoadingAssignments(true);
+    dispatch({ type: 'set', values: { managingUserId: userId, isLoadingAssignments: true } });
     try {
       const data = await usersApi.getAssignments(userId);
-      setAssignments(data);
-      setInitialAssignments(JSON.parse(JSON.stringify(data))); // Deep clone for comparison
+      dispatch({
+        type: 'set',
+        values: {
+          assignments: data,
+          initialAssignments: JSON.parse(JSON.stringify(data)), // Deep clone for comparison
+        },
+      });
     } catch (err) {
       console.error('Failed to load assignments', err);
     } finally {
-      setIsLoadingAssignments(false);
+      dispatch({ type: 'set', values: { isLoadingAssignments: false } });
     }
   };
 
   const closeAssignments = () => {
-    setManagingUserId(null);
-    setAssignments({ clientIds: [], projectIds: [], taskIds: [] });
-    setClientSearch('');
-    setProjectSearch('');
-    setTaskSearch('');
-    setFilterClientId('all');
-    setFilterProjectId('all');
+    dispatch({
+      type: 'set',
+      values: {
+        managingUserId: null,
+        assignments: { clientIds: [], projectIds: [], taskIds: [] },
+        clientSearch: '',
+        projectSearch: '',
+        taskSearch: '',
+        filterClientId: 'all',
+        filterProjectId: 'all',
+      },
+    });
   };
 
   const saveAssignments = async () => {
@@ -374,7 +525,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   const toggleAssignment = (type: 'client' | 'project' | 'task', id: string) => {
     if (!canManageAssignments) return;
-    setAssignments((prev) => {
+    const nextAssignments = ((prev: AssignmentSelection): AssignmentSelection => {
       const list =
         type === 'client' ? prev.clientIds : type === 'project' ? prev.projectIds : prev.taskIds;
       const isAdding = !list.includes(id);
@@ -467,141 +618,177 @@ const UserManagement: React.FC<UserManagementProps> = ({
         projectIds: newProjectIds,
         taskIds: newTaskIds,
       };
-    });
+    })(assignments);
+    dispatch({ type: 'toggleAssignment', assignments: nextAssignments });
   };
 
   const confirmDelete = (user: User) => {
-    setUserToDelete(user);
-    setIsDeleteConfirmOpen(true);
+    dispatch({ type: 'set', values: { userToDelete: user, isDeleteConfirmOpen: true } });
   };
 
   const cancelDelete = () => {
-    setIsDeleteConfirmOpen(false);
-    setUserToDelete(null);
+    dispatch({ type: 'set', values: { isDeleteConfirmOpen: false, userToDelete: null } });
   };
 
   const handleDelete = () => {
     if (userToDelete) {
       onDeleteUser(userToDelete.id);
-      setIsDeleteConfirmOpen(false);
-      setUserToDelete(null);
+      dispatch({ type: 'set', values: { isDeleteConfirmOpen: false, userToDelete: null } });
     }
   };
 
   const handleEdit = (user: User) => {
     const { firstName, surname } = splitFullName(user.name);
-    setEditingUser(user);
-    setEditFirstName(firstName);
-    setEditSurname(surname);
-    setEditEmail(user.email || '');
-    setEditRole(user.role);
-    setEditCostPerHour(user.costPerHour?.toString() || '0');
-    setEditIsDisabled(!!user.isDisabled);
-    setEditFormErrors({});
-
     // Multi-role edit state (admin-only in practice because roles are admin-scoped)
-    setEditRolesError('');
     if (user.id === currentUserId || roles.length === 0) {
       const fallback = [user.role];
-      setEditAssignedRoleIds(fallback);
-      setEditPrimaryRoleId(user.role);
-      setInitialEditAssignedRoleIds(fallback);
-      setInitialEditPrimaryRoleId(user.role);
+      dispatch({
+        type: 'set',
+        values: {
+          editingUser: user,
+          editFirstName: firstName,
+          editSurname: surname,
+          editEmail: user.email || '',
+          editRole: user.role,
+          editCostPerHour: user.costPerHour?.toString() || '0',
+          editIsDisabled: !!user.isDisabled,
+          editFormErrors: {},
+          editRolesError: '',
+          editAssignedRoleIds: fallback,
+          editPrimaryRoleId: user.role,
+          initialEditAssignedRoleIds: fallback,
+          initialEditPrimaryRoleId: user.role,
+        },
+      });
       return;
     }
 
-    setIsLoadingEditRoles(true);
+    dispatch({
+      type: 'set',
+      values: {
+        editingUser: user,
+        editFirstName: firstName,
+        editSurname: surname,
+        editEmail: user.email || '',
+        editRole: user.role,
+        editCostPerHour: user.costPerHour?.toString() || '0',
+        editIsDisabled: !!user.isDisabled,
+        editFormErrors: {},
+        editRolesError: '',
+        isLoadingEditRoles: true,
+      },
+    });
     usersApi
       .getRoles(user.id)
       .then(({ roleIds, primaryRoleId }) => {
         const safeRoleIds = roleIds?.length ? roleIds : [user.role];
         const safePrimary = primaryRoleId || user.role;
-        setEditAssignedRoleIds(safeRoleIds);
-        setEditPrimaryRoleId(safePrimary);
-        setInitialEditAssignedRoleIds(safeRoleIds);
-        setInitialEditPrimaryRoleId(safePrimary);
+        dispatch({
+          type: 'set',
+          values: {
+            editAssignedRoleIds: safeRoleIds,
+            editPrimaryRoleId: safePrimary,
+            initialEditAssignedRoleIds: safeRoleIds,
+            initialEditPrimaryRoleId: safePrimary,
+          },
+        });
       })
       .catch((err) => {
         console.error('Failed to load user roles:', err);
-        setEditRolesError((err as Error).message || 'Failed to load roles');
         const fallback = [user.role];
-        setEditAssignedRoleIds(fallback);
-        setEditPrimaryRoleId(user.role);
-        setInitialEditAssignedRoleIds(fallback);
-        setInitialEditPrimaryRoleId(user.role);
+        dispatch({
+          type: 'set',
+          values: {
+            editRolesError: (err as Error).message || 'Failed to load roles',
+            editAssignedRoleIds: fallback,
+            editPrimaryRoleId: user.role,
+            initialEditAssignedRoleIds: fallback,
+            initialEditPrimaryRoleId: user.role,
+          },
+        });
       })
       .finally(() => {
-        setIsLoadingEditRoles(false);
+        dispatch({ type: 'set', values: { isLoadingEditRoles: false } });
       });
   };
 
   const openAuthMethodDialog = (user: User) => {
     const method = user.authMethod || 'local';
-    setAuthMethodUser(user);
-    setAuthMethodDraft(method);
-    setAuthProviderDraft(user.authProviderId || '');
-    setAuthMethodError('');
+    dispatch({
+      type: 'set',
+      values: {
+        authMethodUser: user,
+        authMethodDraft: method,
+        authProviderDraft: user.authProviderId || '',
+        authMethodError: '',
+      },
+    });
   };
 
   const closeAuthMethodDialog = () => {
     if (isSavingAuthMethod) return;
-    setAuthMethodUser(null);
-    setAuthMethodError('');
+    dispatch({ type: 'set', values: { authMethodUser: null, authMethodError: '' } });
   };
 
   const saveAuthMethod = async () => {
     if (!authMethodUser) return;
     const requiresProvider = isSsoAuthMethod(authMethodDraft);
     if (requiresProvider && !authProviderDraft) {
-      setAuthMethodError(t('hr:workforce.authMethod.providerRequired'));
+      dispatch({
+        type: 'set',
+        values: { authMethodError: t('hr:workforce.authMethod.providerRequired') },
+      });
       return;
     }
-    setIsSavingAuthMethod(true);
-    setAuthMethodError('');
+    dispatch({ type: 'set', values: { isSavingAuthMethod: true, authMethodError: '' } });
     try {
       await onUpdateUserAuthMethod(
         authMethodUser.id,
         authMethodDraft,
         requiresProvider ? authProviderDraft : null,
       );
-      setAuthMethodUser(null);
+      dispatch({ type: 'set', values: { authMethodUser: null } });
     } catch (err) {
-      setAuthMethodError((err as Error).message || t('common:messages.errorOccurred'));
+      dispatch({
+        type: 'set',
+        values: { authMethodError: (err as Error).message || t('common:messages.errorOccurred') },
+      });
     } finally {
-      setIsSavingAuthMethod(false);
+      dispatch({ type: 'set', values: { isSavingAuthMethod: false } });
     }
   };
 
   const openTotpResetDialog = (user: User) => {
-    setTotpResetUser(user);
-    setTotpResetError('');
+    dispatch({ type: 'set', values: { totpResetUser: user, totpResetError: '' } });
   };
 
   const closeTotpResetDialog = () => {
     if (isResettingTotp) return;
-    setTotpResetUser(null);
-    setTotpResetError('');
+    dispatch({ type: 'set', values: { totpResetUser: null, totpResetError: '' } });
   };
 
   const confirmTotpReset = async () => {
     if (!totpResetUser) return;
-    setIsResettingTotp(true);
-    setTotpResetError('');
+    dispatch({ type: 'set', values: { isResettingTotp: true, totpResetError: '' } });
     try {
       await onResetUserTotp(totpResetUser.id);
-      setTotpResetUser(null);
+      dispatch({ type: 'set', values: { totpResetUser: null } });
       toastSuccess(t('hr:totpReset.success'));
     } catch (err) {
-      setTotpResetError((err as Error).message || t('common:messages.errorOccurred'));
+      dispatch({
+        type: 'set',
+        values: { totpResetError: (err as Error).message || t('common:messages.errorOccurred') },
+      });
     } finally {
-      setIsResettingTotp(false);
+      dispatch({ type: 'set', values: { isResettingTotp: false } });
     }
   };
 
   const closeEditModal = () => {
-    setEditingUser(null);
-    setEditRolesError('');
-    setEditFormErrors({});
+    dispatch({
+      type: 'set',
+      values: { editingUser: null, editRolesError: '', editFormErrors: {} },
+    });
   };
 
   const saveEdit = async () => {
@@ -620,7 +807,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
       }
 
       if (Object.keys(newErrors).length > 0) {
-        setEditFormErrors(newErrors);
+        dispatch({ type: 'set', values: { editFormErrors: newErrors } });
         return;
       }
 
@@ -660,21 +847,27 @@ const UserManagement: React.FC<UserManagementProps> = ({
         }
       } else if (hasRoleAssignmentChanges) {
         if (!editAssignedRoleIds.includes(editPrimaryRoleId)) {
-          setEditRolesError(t('hr:workforce.primaryRoleMustBeAssigned'));
+          dispatch({
+            type: 'set',
+            values: { editRolesError: t('hr:workforce.primaryRoleMustBeAssigned') },
+          });
           return;
         }
         if (editAssignedRoleIds.length < 1) {
-          setEditRolesError(t('hr:workforce.assignedRolesRequired'));
+          dispatch({
+            type: 'set',
+            values: { editRolesError: t('hr:workforce.assignedRolesRequired') },
+          });
           return;
         }
-        setIsLoadingEditRoles(true);
+        dispatch({ type: 'set', values: { isLoadingEditRoles: true } });
         try {
           await onUpdateUserRoles(editingUser.id, editAssignedRoleIds, editPrimaryRoleId);
         } catch {
           // onUpdateUserRoles already surfaced an error
           return;
         } finally {
-          setIsLoadingEditRoles(false);
+          dispatch({ type: 'set', values: { isLoadingEditRoles: false } });
         }
       }
 
@@ -1162,9 +1355,14 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 value={authMethodDraft}
                 onValueChange={(value) => {
                   const next = value as UserAuthMethod;
-                  setAuthMethodDraft(next);
-                  setAuthProviderDraft('');
-                  setAuthMethodError('');
+                  dispatch({
+                    type: 'set',
+                    values: {
+                      authMethodDraft: next,
+                      authProviderDraft: '',
+                      authMethodError: '',
+                    },
+                  });
                 }}
               >
                 <SelectTrigger className="w-full">
@@ -1190,8 +1388,10 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 <Select
                   value={authProviderDraft || undefined}
                   onValueChange={(value) => {
-                    setAuthProviderDraft(value);
-                    setAuthMethodError('');
+                    dispatch({
+                      type: 'set',
+                      values: { authProviderDraft: value, authMethodError: '' },
+                    });
                   }}
                 >
                   <SelectTrigger className="w-full">
@@ -1287,9 +1487,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     type="text"
                     value={editFirstName}
                     onChange={(e) => {
-                      setEditFirstName(e.target.value);
+                      dispatch({ type: 'set', values: { editFirstName: e.target.value } });
                       if (editFormErrors.firstName) {
-                        setEditFormErrors((prev) => ({ ...prev, firstName: '' }));
+                        dispatch({ type: 'patchEditFormErrors', value: { firstName: '' } });
                       }
                     }}
                     aria-label={t('hr:workforce.name')}
@@ -1311,9 +1511,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     type="text"
                     value={editSurname}
                     onChange={(e) => {
-                      setEditSurname(e.target.value);
+                      dispatch({ type: 'set', values: { editSurname: e.target.value } });
                       if (editFormErrors.surname) {
-                        setEditFormErrors((prev) => ({ ...prev, surname: '' }));
+                        dispatch({ type: 'patchEditFormErrors', value: { surname: '' } });
                       }
                     }}
                     aria-label={t('hr:workforce.surname')}
@@ -1337,9 +1537,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   type="email"
                   value={editEmail}
                   onChange={(e) => {
-                    setEditEmail(e.target.value);
+                    dispatch({ type: 'set', values: { editEmail: e.target.value } });
                     if (editFormErrors.email) {
-                      setEditFormErrors((prev) => ({ ...prev, email: '' }));
+                      dispatch({ type: 'patchEditFormErrors', value: { email: '' } });
                     }
                   }}
                   placeholder="e.g. alice.smith@example.com"
@@ -1383,12 +1583,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                       disabled={isPrimary && checked}
                                       onChange={() => {
                                         if (isPrimary && checked) return;
-                                        setEditAssignedRoleIds((prev) => {
-                                          if (prev.includes(r.id)) {
-                                            return prev.filter((id) => id !== r.id);
-                                          }
-                                          return [...prev, r.id];
-                                        });
+                                        dispatch({ type: 'toggleEditAssignedRole', roleId: r.id });
                                       }}
                                     />
                                     <span className="text-sm font-semibold text-zinc-700 truncate">
@@ -1416,7 +1611,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
                           return role ? [{ id: role.id, name: role.name }] : [];
                         })}
                         value={editPrimaryRoleId}
-                        onChange={(val) => setEditPrimaryRoleId(val as string)}
+                        onChange={(val) =>
+                          dispatch({ type: 'set', values: { editPrimaryRoleId: val as string } })
+                        }
                         buttonClassName="py-2 text-sm"
                         disabled={isLoadingEditRoles || editAssignedRoleIds.length < 1}
                       />
@@ -1436,7 +1633,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         label={t('hr:workforce.role')}
                         options={roleOptions}
                         value={editRole}
-                        onChange={(val) => setEditRole(val as string)}
+                        onChange={(val) =>
+                          dispatch({ type: 'set', values: { editRole: val as string } })
+                        }
                         buttonClassName="py-2 text-sm"
                         disabled={isEditingSelf}
                       />
@@ -1461,7 +1660,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     </div>
                     <ValidatedNumberInput
                       value={editCostPerHour}
-                      onValueChange={setEditCostPerHour}
+                      onValueChange={(value) =>
+                        dispatch({ type: 'set', values: { editCostPerHour: value } })
+                      }
                       className="flex-1 px-4 py-2 bg-transparent outline-none text-sm font-semibold"
                       placeholder="0.00"
                     />
@@ -1474,7 +1675,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   <div>
                     <p className="text-sm font-bold text-zinc-700">{t('hr:workforce.disabled')}</p>
                   </div>
-                  <Toggle checked={editIsDisabled} onChange={setEditIsDisabled} />
+                  <Toggle
+                    checked={editIsDisabled}
+                    onChange={(checked) =>
+                      dispatch({ type: 'set', values: { editIsDisabled: checked } })
+                    }
+                  />
                 </div>
               )}
             </div>
@@ -1530,14 +1736,19 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     value={newFirstName}
                     onChange={(e) => {
                       const val = e.target.value;
-                      setNewFirstName(val);
+                      const values: Partial<UserManagementState> = { newFirstName: val };
                       if (!usernameManuallyEdited.current) {
                         const surname = sanitizeUsernamePart(newSurname);
                         const first = sanitizeUsernamePart(val);
-                        setNewUsername(first && surname ? `${first}.${surname}` : first || surname);
+                        values.newUsername =
+                          first && surname ? `${first}.${surname}` : first || surname;
                       }
+                      dispatch({ type: 'set', values });
                       if (formErrors.firstName || formErrors.general) {
-                        setFormErrors((prev) => ({ ...prev, firstName: '', general: '' }));
+                        dispatch({
+                          type: 'patchFormErrors',
+                          value: { firstName: '', general: '' },
+                        });
                       }
                     }}
                     placeholder="e.g. Alice"
@@ -1561,14 +1772,16 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     value={newSurname}
                     onChange={(e) => {
                       const val = e.target.value;
-                      setNewSurname(val);
+                      const values: Partial<UserManagementState> = { newSurname: val };
                       if (!usernameManuallyEdited.current) {
                         const first = sanitizeUsernamePart(newFirstName);
                         const surname = sanitizeUsernamePart(val);
-                        setNewUsername(first && surname ? `${first}.${surname}` : first || surname);
+                        values.newUsername =
+                          first && surname ? `${first}.${surname}` : first || surname;
                       }
+                      dispatch({ type: 'set', values });
                       if (formErrors.surname || formErrors.general) {
-                        setFormErrors((prev) => ({ ...prev, surname: '', general: '' }));
+                        dispatch({ type: 'patchFormErrors', value: { surname: '', general: '' } });
                       }
                     }}
                     placeholder="e.g. Smith"
@@ -1587,9 +1800,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   type="email"
                   value={newEmail}
                   onChange={(e) => {
-                    setNewEmail(e.target.value);
+                    dispatch({ type: 'set', values: { newEmail: e.target.value } });
                     if (formErrors.email || formErrors.general) {
-                      setFormErrors((prev) => ({ ...prev, email: '', general: '' }));
+                      dispatch({ type: 'patchFormErrors', value: { email: '', general: '' } });
                     }
                   }}
                   placeholder="e.g. alice.smith@example.com"
@@ -1610,9 +1823,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   value={newUsername}
                   onChange={(e) => {
                     usernameManuallyEdited.current = true;
-                    setNewUsername(e.target.value);
+                    dispatch({ type: 'set', values: { newUsername: e.target.value } });
                     if (formErrors.username || formErrors.general) {
-                      setFormErrors((prev) => ({ ...prev, username: '', general: '' }));
+                      dispatch({ type: 'patchFormErrors', value: { username: '', general: '' } });
                     }
                   }}
                   placeholder="e.g. alice.smith"
@@ -1636,9 +1849,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     type={showNewPassword ? 'text' : 'password'}
                     value={newPassword}
                     onChange={(e) => {
-                      setNewPassword(e.target.value);
+                      dispatch({ type: 'set', values: { newPassword: e.target.value } });
                       if (formErrors.password || formErrors.general) {
-                        setFormErrors((prev) => ({ ...prev, password: '', general: '' }));
+                        dispatch({ type: 'patchFormErrors', value: { password: '', general: '' } });
                       }
                     }}
                     placeholder={t('hr:workforce.password')}
@@ -1649,7 +1862,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   />
                   <button
                     type="button"
-                    onClick={() => setShowNewPassword((prev) => !prev)}
+                    onClick={() =>
+                      dispatch({ type: 'set', values: { showNewPassword: !showNewPassword } })
+                    }
                     aria-label={
                       showNewPassword
                         ? t('common:labels.hidePassword')
@@ -1674,7 +1889,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 label={t('hr:workforce.role')}
                 options={roleOptions}
                 value={newRole}
-                onChange={(val) => setNewRole(val as string)}
+                onChange={(val) => dispatch({ type: 'set', values: { newRole: val as string } })}
               />
 
               {formErrors.general && (
@@ -1693,7 +1908,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
       {canCreateUsers && (
         <div className="flex justify-end">
-          <HeaderAddButton onClick={() => setIsCreateModalOpen(true)}>
+          <HeaderAddButton
+            onClick={() => dispatch({ type: 'set', values: { isCreateModalOpen: true } })}
+          >
             {t('hr:workforce.addUser')}
           </HeaderAddButton>
         </div>
@@ -1747,7 +1964,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   <SelectControl
                     options={clientFilterOptions}
                     value={filterClientId}
-                    onChange={(val) => setFilterClientId(val as string)}
+                    onChange={(val) =>
+                      dispatch({ type: 'set', values: { filterClientId: val as string } })
+                    }
                     placeholder={t('hr:workforce.filterByClient')}
                     searchable={true}
                     buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-semibold text-zinc-700 shadow-sm"
@@ -1755,7 +1974,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   <SelectControl
                     options={projectFilterOptions}
                     value={filterProjectId}
-                    onChange={(val) => setFilterProjectId(val as string)}
+                    onChange={(val) =>
+                      dispatch({ type: 'set', values: { filterProjectId: val as string } })
+                    }
                     placeholder={t('hr:workforce.filterByProject')}
                     searchable={true}
                     buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-semibold text-zinc-700 shadow-sm"
@@ -1782,7 +2003,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         placeholder={t('hr:workforce.searchClients')}
                         aria-label={t('hr:workforce.searchClients')}
                         value={clientSearch}
-                        onChange={(e) => setClientSearch(e.target.value)}
+                        onChange={(e) =>
+                          dispatch({ type: 'set', values: { clientSearch: e.target.value } })
+                        }
                         className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
                       />
                     </div>
@@ -1841,7 +2064,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         placeholder={t('hr:workforce.searchProjects')}
                         aria-label={t('hr:workforce.searchProjects')}
                         value={projectSearch}
-                        onChange={(e) => setProjectSearch(e.target.value)}
+                        onChange={(e) =>
+                          dispatch({ type: 'set', values: { projectSearch: e.target.value } })
+                        }
                         className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
                       />
                     </div>
@@ -1906,7 +2131,9 @@ const UserManagement: React.FC<UserManagementProps> = ({
                           placeholder={t('hr:workforce.searchTasks')}
                           aria-label={t('hr:workforce.searchTasks')}
                           value={taskSearch}
-                          onChange={(e) => setTaskSearch(e.target.value)}
+                          onChange={(e) =>
+                            dispatch({ type: 'set', values: { taskSearch: e.target.value } })
+                          }
                           className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
                         />
                       </div>

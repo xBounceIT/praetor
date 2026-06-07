@@ -273,7 +273,7 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
   return workbook;
 };
 
-export const writeRilWorkbookBuffer = async (input: RilWorkbookInput) => {
+const writeRilWorkbookBuffer = async (input: RilWorkbookInput) => {
   const workbook = buildRilWorkbook(input);
   return workbook.xlsx.writeBuffer();
 };
