@@ -5,7 +5,7 @@ export const stripHashPrefix = (hash: string): string => hash.replace('#/', '').
 // Query-string key used by quick-view deep links (e.g.
 // `#/sales/supplier-quotes?filterId=SQ-001`). Keep the reader in App.tsx and the
 // `buildViewDeepLink` writer below in sync with this constant.
-export const VIEW_DEEP_LINK_FILTER_PARAM = 'filterId';
+const VIEW_DEEP_LINK_FILTER_PARAM = 'filterId';
 
 export interface ParsedViewHash {
   // View path with any query string stripped and legacy aliases canonicalized.

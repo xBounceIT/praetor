@@ -1,6 +1,6 @@
 import { CalendarDays } from 'lucide-react';
 import type React from 'react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { inputBaseClassName } from '@/components/ui/inputStyles';
@@ -50,6 +50,8 @@ const DateField: React.FC<DateFieldProps> = ({
 }) => {
   const { t, i18n } = useTranslation('common');
   const [isOpen, setIsOpen] = useState(false);
+  // Stable id linking the combobox trigger to its popover (the calendar) via aria-controls.
+  const contentId = useId();
 
   const normalized = value ? normalizeDateOnlyString(value) : '';
   const displayValue = normalized
@@ -78,6 +80,10 @@ const DateField: React.FC<DateFieldProps> = ({
         <button
           id={id}
           type="button"
+          role="combobox"
+          aria-expanded={isOpen}
+          aria-haspopup="dialog"
+          aria-controls={contentId}
           disabled={disabled}
           aria-invalid={ariaInvalid}
           aria-label={ariaLabel}
@@ -95,7 +101,7 @@ const DateField: React.FC<DateFieldProps> = ({
           </span>
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 space-y-2.5 p-3">
+      <PopoverContent id={contentId} align="start" className="w-72 space-y-2.5 p-3">
         <Calendar
           selectedDate={normalized || undefined}
           onDateSelect={handleDateSelect}

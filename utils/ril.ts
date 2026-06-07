@@ -6,7 +6,7 @@ export type RilLocale = 'en' | 'it';
 
 // Lowercase English weekday names, keyed by JS `Date.getDay()` (0=Sun..6=Sat). Used to look up
 // the per-weekday default "Trasferta" preference when generating rows.
-export const RIL_WEEKDAY_NAMES = [
+const RIL_WEEKDAY_NAMES = [
   'sunday',
   'monday',
   'tuesday',
@@ -93,8 +93,6 @@ const RIL_LOCATION_LABELS: Record<RilLocale, { office: string; remote: string }>
   it: { office: 'In sede', remote: 'Telelavoro' },
 };
 
-export const getRilLocationLabels = (locale: RilLocale) => RIL_LOCATION_LABELS[locale];
-
 export const DEFAULT_RIL_NOTE_OPTIONS: readonly RilNoteOption[] = [
   { value: 'P', label: 'Ferie' },
   { value: 'P2', label: 'Permesso' },
@@ -110,7 +108,7 @@ export const DEFAULT_RIL_EXIT_TIME = '18:00';
 const DEFAULT_LUNCH_BREAK_MINUTES = 60;
 export const RIL_LUNCH_BREAK_START_MINUTES = 13 * 60;
 
-export const isValidRilStartTime = (value: string | undefined | null): value is string =>
+const isValidRilStartTime = (value: string | undefined | null): value is string =>
   typeof value === 'string' && TIME_OF_DAY_PATTERN.test(value);
 
 export const getRilMonthBounds = (monthKey: string): RilMonthBounds => {
@@ -133,7 +131,7 @@ export const getRilMonthBounds = (monthKey: string): RilMonthBounds => {
 export const getCurrentRilMonthKey = (date: Date = new Date()): string =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
-export const parseRilTimeToMinutes = (value: string): number => {
+const parseRilTimeToMinutes = (value: string): number => {
   if (!isValidRilStartTime(value)) return 0;
   const [hours, minutes] = value.split(':').map(Number);
   return hours * 60 + minutes;
@@ -225,7 +223,7 @@ export const calculateRilWorkedHoursFromTimes = (
   return Math.max(0, (elapsedMinutes - lunchMinutes) / 60);
 };
 
-export const formatRilMinutesAsClock = (minutes: number): string => {
+const formatRilMinutesAsClock = (minutes: number): string => {
   const safeMinutes = Math.max(0, Math.round(minutes));
   const hours = Math.floor(safeMinutes / 60);
   const mins = safeMinutes % 60;

@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { FieldLabel, RequiredMark } from '@/components/ui/field';
@@ -71,6 +71,106 @@ const calcMargine = (costo: number, molPercentage: number) =>
 const getDisplayTypeName = (typeName: string) =>
   typeName.charAt(0).toUpperCase() + typeName.slice(1);
 
+const EMPTY_FORM_DATA: Partial<Product> = {
+  name: '',
+  productCode: '',
+  description: '',
+  costo: undefined,
+  molPercentage: undefined,
+  costUnit: 'unit',
+  category: '',
+  subcategory: '',
+  type: '',
+};
+
+interface ListingState {
+  // Product Types State
+  productTypes: InternalProductType[];
+  isLoadingTypes: boolean;
+  // Type Management State
+  isManageTypesModalOpen: boolean;
+  editingType: InternalProductType | null;
+  newTypeName: string;
+  newTypeCostUnit: 'unit' | 'hours';
+  typeError: string | null;
+  isSavingType: boolean;
+  // Main product modal state
+  isModalOpen: boolean;
+  editingProduct: Product | null;
+  isDeleteConfirmOpen: boolean;
+  productToDelete: Product | null;
+  errors: Record<string, string>;
+  serverError: string | null;
+  // Category Management State
+  isManageCategoriesModalOpen: boolean;
+  categories: InternalProductCategory[];
+  isLoadingCategories: boolean;
+  editingCategory: InternalProductCategory | null;
+  newCategoryName: string;
+  categoryError: string | null;
+  isSavingCategory: boolean;
+  // Subcategory Management State
+  isManageSubcategoriesModalOpen: boolean;
+  subcategories: InternalProductSubcategory[];
+  isLoadingSubcategories: boolean;
+  editingSubcategory: InternalProductSubcategory | null;
+  newSubcategoryName: string;
+  subcategoryError: string | null;
+  isSavingSubcategory: boolean;
+  // Form State
+  formData: Partial<Product>;
+}
+
+const INITIAL_LISTING_STATE: ListingState = {
+  productTypes: [],
+  isLoadingTypes: true,
+  isManageTypesModalOpen: false,
+  editingType: null,
+  newTypeName: '',
+  newTypeCostUnit: 'unit',
+  typeError: null,
+  isSavingType: false,
+  isModalOpen: false,
+  editingProduct: null,
+  isDeleteConfirmOpen: false,
+  productToDelete: null,
+  errors: {},
+  serverError: null,
+  isManageCategoriesModalOpen: false,
+  categories: [],
+  isLoadingCategories: false,
+  editingCategory: null,
+  newCategoryName: '',
+  categoryError: null,
+  isSavingCategory: false,
+  isManageSubcategoriesModalOpen: false,
+  subcategories: [],
+  isLoadingSubcategories: false,
+  editingSubcategory: null,
+  newSubcategoryName: '',
+  subcategoryError: null,
+  isSavingSubcategory: false,
+  formData: EMPTY_FORM_DATA,
+};
+
+type ListingAction =
+  | { type: 'merge'; patch: Partial<ListingState> }
+  | { type: 'patchForm'; patch: Partial<Product> }
+  | { type: 'patchErrors'; patch: Record<string, string> };
+
+const listingReducer = (state: ListingState, action: ListingAction): ListingState => {
+  switch (action.type) {
+    case 'merge':
+      return { ...state, ...action.patch };
+    case 'patchForm':
+      return { ...state, formData: { ...state.formData, ...action.patch } };
+    case 'patchErrors':
+      return { ...state, errors: { ...state.errors, ...action.patch } };
+    default:
+      return state;
+  }
+};
+
 const InternalListingView: React.FC<InternalListingViewProps> = ({
   products,
   productFilterId,
@@ -104,58 +204,45 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     return value ? { [column]: [value] } : undefined;
   }, [productFilterId, products]);
 
-  // Product Types State
-  const [productTypes, setProductTypes] = useState<InternalProductType[]>([]);
-  const [isLoadingTypes, setIsLoadingTypes] = useState(true);
+  const [state, dispatch] = useReducer(listingReducer, INITIAL_LISTING_STATE);
+  const {
+    productTypes,
+    isLoadingTypes,
+    isManageTypesModalOpen,
+    editingType,
+    newTypeName,
+    newTypeCostUnit,
+    typeError,
+    isSavingType,
+    isModalOpen,
+    editingProduct,
+    isDeleteConfirmOpen,
+    productToDelete,
+    errors,
+    serverError,
+    isManageCategoriesModalOpen,
+    categories,
+    isLoadingCategories,
+    editingCategory,
+    newCategoryName,
+    categoryError,
+    isSavingCategory,
+    isManageSubcategoriesModalOpen,
+    subcategories,
+    isLoadingSubcategories,
+    editingSubcategory,
+    newSubcategoryName,
+    subcategoryError,
+    isSavingSubcategory,
+    formData,
+  } = state;
 
-  // Type Management State
-  const [isManageTypesModalOpen, setIsManageTypesModalOpen] = useState(false);
-  const [editingType, setEditingType] = useState<InternalProductType | null>(null);
-  const [newTypeName, setNewTypeName] = useState('');
-  const [newTypeCostUnit, setNewTypeCostUnit] = useState<'unit' | 'hours'>('unit');
-  const [typeError, setTypeError] = useState<string | null>(null);
-  const [isSavingType, setIsSavingType] = useState(false);
+  // Mirror of formData for stable useCallback closures that previously read the
+  // latest value via setFormData((prev) => ...). Keeps callback identities stable
+  // while still observing the newest form data.
+  const formDataRef = useRef(formData);
+  formDataRef.current = formData;
 
-  // Main product modal state
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [serverError, setServerError] = useState<string | null>(null);
-
-  // Category Management State
-  const [isManageCategoriesModalOpen, setIsManageCategoriesModalOpen] = useState(false);
-  const [categories, setCategories] = useState<InternalProductCategory[]>([]);
-  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<InternalProductCategory | null>(null);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [categoryError, setCategoryError] = useState<string | null>(null);
-  const [isSavingCategory, setIsSavingCategory] = useState(false);
-
-  // Subcategory Management State
-  const [isManageSubcategoriesModalOpen, setIsManageSubcategoriesModalOpen] = useState(false);
-  const [subcategories, setSubcategories] = useState<InternalProductSubcategory[]>([]);
-  const [isLoadingSubcategories, setIsLoadingSubcategories] = useState(false);
-  const [editingSubcategory, setEditingSubcategory] = useState<InternalProductSubcategory | null>(
-    null,
-  );
-  const [newSubcategoryName, setNewSubcategoryName] = useState('');
-  const [subcategoryError, setSubcategoryError] = useState<string | null>(null);
-  const [isSavingSubcategory, setIsSavingSubcategory] = useState(false);
-
-  // Form State
-  const [formData, setFormData] = useState<Partial<Product>>({
-    name: '',
-    productCode: '',
-    description: '',
-    costo: undefined,
-    molPercentage: undefined,
-    costUnit: 'unit',
-    category: '',
-    subcategory: '',
-    type: '',
-  });
   const defaultProductType = productTypes[0];
   const defaultTypeName = defaultProductType?.name || '';
   const defaultTypeCostUnit = defaultProductType?.costUnit || 'unit';
@@ -165,11 +252,11 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     const loadTypes = async () => {
       try {
         const types = await api.products.listProductTypes();
-        setProductTypes(types);
+        dispatch({ type: 'merge', patch: { productTypes: types } });
       } catch (err) {
         console.error('Failed to load product types:', err);
       } finally {
-        setIsLoadingTypes(false);
+        dispatch({ type: 'merge', patch: { isLoadingTypes: false } });
       }
     };
     loadTypes();
@@ -178,38 +265,38 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   // Load categories when type changes or category modal opens
   const loadCategories = useCallback(async (type: string) => {
     if (!type) {
-      setCategories([]);
+      dispatch({ type: 'merge', patch: { categories: [] } });
       return [];
     }
-    setIsLoadingCategories(true);
+    dispatch({ type: 'merge', patch: { isLoadingCategories: true } });
     try {
       const cats = await api.products.listInternalCategories(type);
-      setCategories(cats);
+      dispatch({ type: 'merge', patch: { categories: cats } });
       return cats;
     } catch (err) {
       console.error('Failed to load categories:', err);
       return [];
     } finally {
-      setIsLoadingCategories(false);
+      dispatch({ type: 'merge', patch: { isLoadingCategories: false } });
     }
   }, []);
 
   // Load subcategories when category changes or subcategory modal opens
   const loadSubcategories = useCallback(async (type: string, category: string) => {
     if (!type || !category) {
-      setSubcategories([]);
+      dispatch({ type: 'merge', patch: { subcategories: [] } });
       return [];
     }
-    setIsLoadingSubcategories(true);
+    dispatch({ type: 'merge', patch: { isLoadingSubcategories: true } });
     try {
       const subs = await api.products.listInternalSubcategories(type, category);
-      setSubcategories(subs);
+      dispatch({ type: 'merge', patch: { subcategories: subs } });
       return subs;
     } catch (err) {
       console.error('Failed to load subcategories:', err);
       return [];
     } finally {
-      setIsLoadingSubcategories(false);
+      dispatch({ type: 'merge', patch: { isLoadingSubcategories: false } });
     }
   }, []);
 
@@ -217,32 +304,40 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     (type: string, nextCategories: InternalProductCategory[]) => {
       const firstCategory = nextCategories[0];
       if (!firstCategory) return;
-      setFormData((prev) => {
-        if (prev.type !== type || prev.category) return prev;
-        return { ...prev, category: firstCategory.name, subcategory: '' };
+      // Preserves the original guard: only auto-select when the type still matches
+      // and no category is chosen yet.
+      if (formDataRef.current.type !== type || formDataRef.current.category) return;
+      dispatch({
+        type: 'patchForm',
+        patch: { category: firstCategory.name, subcategory: '' },
       });
     },
     [],
   );
 
   const openAddModal = () => {
-    setEditingProduct(null);
-    setCategories([]);
-    setSubcategories([]);
-    setFormData({
-      name: '',
-      productCode: '',
-      description: '',
-      costo: undefined,
-      molPercentage: undefined,
-      costUnit: defaultTypeCostUnit,
-      category: '',
-      subcategory: '',
-      type: defaultTypeName,
+    dispatch({
+      type: 'merge',
+      patch: {
+        editingProduct: null,
+        categories: [],
+        subcategories: [],
+        formData: {
+          name: '',
+          productCode: '',
+          description: '',
+          costo: undefined,
+          molPercentage: undefined,
+          costUnit: defaultTypeCostUnit,
+          category: '',
+          subcategory: '',
+          type: defaultTypeName,
+        },
+        errors: {},
+        serverError: null,
+        isModalOpen: true,
+      },
     });
-    setErrors({});
-    setServerError(null);
-    setIsModalOpen(true);
     if (defaultTypeName) {
       void loadCategories(defaultTypeName).then((nextCategories) => {
         selectFirstCategoryForType(defaultTypeName, nextCategories);
@@ -253,43 +348,47 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   };
 
   const openEditModal = (product: Product) => {
-    setEditingProduct(product);
     // Look up cost unit from product types, fallback to the product's current value
     const typeData = productTypes.find((t) => t.name === product.type);
     const typeName = product.type || (productTypes[0]?.name ?? '');
     const categoryName = product.category || '';
-    setCategories([]);
-    setSubcategories([]);
-    setFormData({
-      name: product.name || '',
-      productCode: product.productCode || '',
-      description: product.description || '',
-      costo: product.costo || 0,
-      molPercentage: product.molPercentage || 0,
-      costUnit: typeData?.costUnit || product.costUnit || 'unit',
-      category: categoryName,
-      subcategory: product.subcategory || '',
-      type: typeName,
+    dispatch({
+      type: 'merge',
+      patch: {
+        editingProduct: product,
+        categories: [],
+        subcategories: [],
+        formData: {
+          name: product.name || '',
+          productCode: product.productCode || '',
+          description: product.description || '',
+          costo: product.costo || 0,
+          molPercentage: product.molPercentage || 0,
+          costUnit: typeData?.costUnit || product.costUnit || 'unit',
+          category: categoryName,
+          subcategory: product.subcategory || '',
+          type: typeName,
+        },
+        errors: {},
+        serverError: null,
+        isModalOpen: true,
+      },
     });
-    setErrors({});
-    setServerError(null);
-    setIsModalOpen(true);
     if (typeName) void loadCategories(typeName);
     if (typeName && categoryName) void loadSubcategories(typeName, categoryName);
   };
 
   const handleNumericValueChange = (field: 'costo' | 'molPercentage') => (value: string) => {
     const parsed = parseNumberInputValue(value, undefined);
-    setFormData((prev) => ({ ...prev, [field]: parsed }));
+    dispatch({ type: 'patchForm', patch: { [field]: parsed } });
     if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: '' }));
+      dispatch({ type: 'patchErrors', patch: { [field]: '' } });
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrors({});
-    setServerError(null);
+    dispatch({ type: 'merge', patch: { errors: {}, serverError: null } });
 
     const newErrors: Record<string, string> = {};
     if (!formData.name?.trim()) newErrors.name = t('common:validation.productNameRequired');
@@ -329,7 +428,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     }
 
     if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+      dispatch({ type: 'merge', patch: { errors: newErrors } });
       return;
     }
 
@@ -348,55 +447,77 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
           molPercentage: formData.molPercentage !== undefined ? formData.molPercentage : undefined,
         });
       }
-      setIsModalOpen(false);
+      dispatch({ type: 'merge', patch: { isModalOpen: false } });
     } catch (err: unknown) {
       if (err instanceof Error && err.message.includes('unique')) {
         if (err.message.toLowerCase().includes('product code')) {
-          setErrors({ ...newErrors, productCode: t('common:validation.productCodeUnique') });
+          dispatch({
+            type: 'merge',
+            patch: {
+              errors: { ...newErrors, productCode: t('common:validation.productCodeUnique') },
+            },
+          });
         } else {
-          setErrors({ ...newErrors, name: t('common:validation.productNameUnique') });
+          dispatch({
+            type: 'merge',
+            patch: { errors: { ...newErrors, name: t('common:validation.productNameUnique') } },
+          });
         }
       } else {
-        setServerError(err instanceof Error ? err.message : 'An error occurred');
+        dispatch({
+          type: 'merge',
+          patch: { serverError: err instanceof Error ? err.message : 'An error occurred' },
+        });
       }
     }
   };
 
   const confirmDelete = (product: Product) => {
-    setProductToDelete(product);
-    setIsDeleteConfirmOpen(true);
+    dispatch({
+      type: 'merge',
+      patch: { productToDelete: product, isDeleteConfirmOpen: true },
+    });
   };
 
   const handleDelete = () => {
     if (productToDelete) {
       onDeleteProduct(productToDelete.id);
-      setIsDeleteConfirmOpen(false);
-      setProductToDelete(null);
+      dispatch({
+        type: 'merge',
+        patch: { isDeleteConfirmOpen: false, productToDelete: null },
+      });
     }
   };
 
   // Category Management Handlers
   const handleOpenManageCategories = () => {
-    setIsManageCategoriesModalOpen(true);
-    setEditingCategory(null);
-    setNewCategoryName('');
-    setCategoryError(null);
+    dispatch({
+      type: 'merge',
+      patch: {
+        isManageCategoriesModalOpen: true,
+        editingCategory: null,
+        newCategoryName: '',
+        categoryError: null,
+      },
+    });
   };
 
   const handleSaveCategory = async () => {
     if (!newCategoryName.trim()) {
-      setCategoryError(t('crm:internalListing.categoryNameRequired'));
+      dispatch({
+        type: 'merge',
+        patch: { categoryError: t('crm:internalListing.categoryNameRequired') },
+      });
       return;
     }
 
     const selectedType = formData.type || defaultTypeName;
     if (!selectedType) {
-      setCategoryError(t('common:validation.typeRequired'));
+      dispatch({ type: 'merge', patch: { categoryError: t('common:validation.typeRequired') } });
       return;
     }
 
-    setIsSavingCategory(true);
-    setCategoryError(null);
+    dispatch({ type: 'merge', patch: { isSavingCategory: true, categoryError: null } });
 
     try {
       if (editingCategory) {
@@ -419,23 +540,26 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
         formData.category === editingCategory.name &&
         formData.type === editingCategory.type
       ) {
-        setFormData((prev) => ({ ...prev, category: newCategoryName.trim() }));
+        dispatch({ type: 'patchForm', patch: { category: newCategoryName.trim() } });
       }
 
       // Reset form
-      setEditingCategory(null);
-      setNewCategoryName('');
+      dispatch({ type: 'merge', patch: { editingCategory: null, newCategoryName: '' } });
     } catch (err: unknown) {
-      setCategoryError(err instanceof Error ? err.message : 'An error occurred');
+      dispatch({
+        type: 'merge',
+        patch: { categoryError: err instanceof Error ? err.message : 'An error occurred' },
+      });
     } finally {
-      setIsSavingCategory(false);
+      dispatch({ type: 'merge', patch: { isSavingCategory: false } });
     }
   };
 
   const handleEditCategory = (category: InternalProductCategory) => {
-    setEditingCategory(category);
-    setNewCategoryName(category.name);
-    setCategoryError(null);
+    dispatch({
+      type: 'merge',
+      patch: { editingCategory: category, newCategoryName: category.name, categoryError: null },
+    });
   };
 
   const handleDeleteCategory = async (category: InternalProductCategory) => {
@@ -456,39 +580,47 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
       // If the deleted category was selected, clear it
       if (formData.category === category.name && formData.type === category.type) {
-        setFormData((prev) => ({ ...prev, category: '', subcategory: '' }));
+        dispatch({ type: 'patchForm', patch: { category: '', subcategory: '' } });
       }
 
       // Reload categories
       await loadCategories(category.type);
     } catch (err: unknown) {
-      setCategoryError(err instanceof Error ? err.message : 'An error occurred');
+      dispatch({
+        type: 'merge',
+        patch: { categoryError: err instanceof Error ? err.message : 'An error occurred' },
+      });
     }
   };
 
   const handleCancelCategoryEdit = () => {
-    setEditingCategory(null);
-    setNewCategoryName('');
-    setCategoryError(null);
+    dispatch({
+      type: 'merge',
+      patch: { editingCategory: null, newCategoryName: '', categoryError: null },
+    });
   };
 
   // Product Type Management Handlers
   const handleOpenManageTypes = () => {
-    setIsManageTypesModalOpen(true);
-    setEditingType(null);
-    setNewTypeName('');
-    setNewTypeCostUnit('unit');
-    setTypeError(null);
+    dispatch({
+      type: 'merge',
+      patch: {
+        isManageTypesModalOpen: true,
+        editingType: null,
+        newTypeName: '',
+        newTypeCostUnit: 'unit',
+        typeError: null,
+      },
+    });
   };
 
   const handleSaveType = async () => {
     if (!newTypeName.trim()) {
-      setTypeError(t('crm:internalListing.typeNameRequired'));
+      dispatch({ type: 'merge', patch: { typeError: t('crm:internalListing.typeNameRequired') } });
       return;
     }
 
-    setIsSavingType(true);
-    setTypeError(null);
+    dispatch({ type: 'merge', patch: { isSavingType: true, typeError: null } });
 
     try {
       if (editingType) {
@@ -505,49 +637,63 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
       // Reload types
       const types = await api.products.listProductTypes();
-      setProductTypes(types);
+      dispatch({ type: 'merge', patch: { productTypes: types } });
 
       // If the renamed type was selected, update formData
       if (editingType && formData.type === editingType.name) {
-        setFormData((prev) => ({
-          ...prev,
-          type: newTypeName.trim(),
-          costUnit: newTypeCostUnit,
-        }));
+        dispatch({
+          type: 'patchForm',
+          patch: {
+            type: newTypeName.trim(),
+            costUnit: newTypeCostUnit,
+          },
+        });
       }
 
       // Reset form
-      setEditingType(null);
-      setNewTypeName('');
-      setNewTypeCostUnit('unit');
+      dispatch({
+        type: 'merge',
+        patch: { editingType: null, newTypeName: '', newTypeCostUnit: 'unit' },
+      });
     } catch (err: unknown) {
-      setTypeError(err instanceof Error ? err.message : 'An error occurred');
+      dispatch({
+        type: 'merge',
+        patch: { typeError: err instanceof Error ? err.message : 'An error occurred' },
+      });
     } finally {
-      setIsSavingType(false);
+      dispatch({ type: 'merge', patch: { isSavingType: false } });
     }
   };
 
   const handleEditType = (type: InternalProductType) => {
-    setEditingType(type);
-    setNewTypeName(type.name);
-    setNewTypeCostUnit(type.costUnit);
-    setTypeError(null);
+    dispatch({
+      type: 'merge',
+      patch: {
+        editingType: type,
+        newTypeName: type.name,
+        newTypeCostUnit: type.costUnit,
+        typeError: null,
+      },
+    });
   };
 
   const handleDeleteType = async (type: InternalProductType) => {
     if (type.productCount > 0 || type.categoryCount > 0) {
-      setTypeError(
-        t('crm:internalListing.typeDeleteBlocked', {
-          productCount: type.productCount,
-          categoryCount: type.categoryCount,
-          name: type.name,
-        }),
-      );
+      dispatch({
+        type: 'merge',
+        patch: {
+          typeError: t('crm:internalListing.typeDeleteBlocked', {
+            productCount: type.productCount,
+            categoryCount: type.categoryCount,
+            name: type.name,
+          }),
+        },
+      });
       return;
     }
 
     try {
-      setTypeError(null);
+      dispatch({ type: 'merge', patch: { typeError: null } });
       await onDeleteProductType(type.id);
 
       // If the deleted type was selected, clear it
@@ -555,53 +701,65 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
         const remainingTypes = productTypes.filter((t) => t.id !== type.id);
         const nextType = remainingTypes[0]?.name || '';
         const nextCostUnit = remainingTypes[0]?.costUnit || 'unit';
-        setFormData((prev) => ({
-          ...prev,
-          type: nextType,
-          costUnit: nextCostUnit,
-          category: '',
-          subcategory: '',
-        }));
+        dispatch({
+          type: 'patchForm',
+          patch: {
+            type: nextType,
+            costUnit: nextCostUnit,
+            category: '',
+            subcategory: '',
+          },
+        });
       }
 
       // Reload types
       const types = await api.products.listProductTypes();
-      setProductTypes(types);
+      dispatch({ type: 'merge', patch: { productTypes: types } });
     } catch (err: unknown) {
-      setTypeError(err instanceof Error ? err.message : 'An error occurred');
+      dispatch({
+        type: 'merge',
+        patch: { typeError: err instanceof Error ? err.message : 'An error occurred' },
+      });
     }
   };
 
   const handleCancelTypeEdit = () => {
-    setEditingType(null);
-    setNewTypeName('');
-    setNewTypeCostUnit('unit');
-    setTypeError(null);
+    dispatch({
+      type: 'merge',
+      patch: { editingType: null, newTypeName: '', newTypeCostUnit: 'unit', typeError: null },
+    });
   };
 
   // Subcategory Management Handlers
   const handleOpenManageSubcategories = () => {
     if (!formData.category) return;
-    setIsManageSubcategoriesModalOpen(true);
-    setEditingSubcategory(null);
-    setNewSubcategoryName('');
-    setSubcategoryError(null);
+    dispatch({
+      type: 'merge',
+      patch: {
+        isManageSubcategoriesModalOpen: true,
+        editingSubcategory: null,
+        newSubcategoryName: '',
+        subcategoryError: null,
+      },
+    });
   };
 
   const handleSaveSubcategory = async () => {
     if (!newSubcategoryName.trim()) {
-      setSubcategoryError(t('crm:internalListing.subcategoryNameRequired'));
+      dispatch({
+        type: 'merge',
+        patch: { subcategoryError: t('crm:internalListing.subcategoryNameRequired') },
+      });
       return;
     }
 
     const selectedType = formData.type || defaultTypeName;
     if (!selectedType) {
-      setSubcategoryError(t('common:validation.typeRequired'));
+      dispatch({ type: 'merge', patch: { subcategoryError: t('common:validation.typeRequired') } });
       return;
     }
 
-    setIsSavingSubcategory(true);
-    setSubcategoryError(null);
+    dispatch({ type: 'merge', patch: { isSavingSubcategory: true, subcategoryError: null } });
 
     try {
       if (editingSubcategory) {
@@ -624,29 +782,36 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
       // If the renamed subcategory was selected, update formData
       if (editingSubcategory && formData.subcategory === editingSubcategory.name) {
-        setFormData((prev) => ({ ...prev, subcategory: newSubcategoryName.trim() }));
+        dispatch({ type: 'patchForm', patch: { subcategory: newSubcategoryName.trim() } });
       }
 
       // Reset form
-      setEditingSubcategory(null);
-      setNewSubcategoryName('');
+      dispatch({ type: 'merge', patch: { editingSubcategory: null, newSubcategoryName: '' } });
     } catch (err: unknown) {
-      setSubcategoryError(err instanceof Error ? err.message : 'An error occurred');
+      dispatch({
+        type: 'merge',
+        patch: { subcategoryError: err instanceof Error ? err.message : 'An error occurred' },
+      });
     } finally {
-      setIsSavingSubcategory(false);
+      dispatch({ type: 'merge', patch: { isSavingSubcategory: false } });
     }
   };
 
   const handleEditSubcategory = (subcategory: InternalProductSubcategory) => {
-    setEditingSubcategory(subcategory);
-    setNewSubcategoryName(subcategory.name);
-    setSubcategoryError(null);
+    dispatch({
+      type: 'merge',
+      patch: {
+        editingSubcategory: subcategory,
+        newSubcategoryName: subcategory.name,
+        subcategoryError: null,
+      },
+    });
   };
 
   const handleDeleteSubcategory = async (subcategory: InternalProductSubcategory) => {
     const selectedType = formData.type || defaultTypeName;
     if (!selectedType) {
-      setSubcategoryError(t('common:validation.typeRequired'));
+      dispatch({ type: 'merge', patch: { subcategoryError: t('common:validation.typeRequired') } });
       return;
     }
 
@@ -667,20 +832,24 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
 
       // If the deleted subcategory was selected, clear it
       if (formData.subcategory === subcategory.name) {
-        setFormData((prev) => ({ ...prev, subcategory: '' }));
+        dispatch({ type: 'patchForm', patch: { subcategory: '' } });
       }
 
       // Reload subcategories
       await loadSubcategories(selectedType, formData.category || '');
     } catch (err: unknown) {
-      setSubcategoryError(err instanceof Error ? err.message : 'An error occurred');
+      dispatch({
+        type: 'merge',
+        patch: { subcategoryError: err instanceof Error ? err.message : 'An error occurred' },
+      });
     }
   };
 
   const handleCancelSubcategoryEdit = () => {
-    setEditingSubcategory(null);
-    setNewSubcategoryName('');
-    setSubcategoryError(null);
+    dispatch({
+      type: 'merge',
+      patch: { editingSubcategory: null, newSubcategoryName: '', subcategoryError: null },
+    });
   };
 
   // Get unique categories from the API (includes both persisted and product-derived)
@@ -707,18 +876,21 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     const typeName = val;
     const typeData = productTypes.find((t) => t.name === typeName);
     // Reset category and subcategory, then load the category list for the selected type.
-    setCategories([]);
-    setSubcategories([]);
-    setFormData((prev) => ({
-      ...prev,
-      type: typeName,
-      costUnit: typeData?.costUnit || 'unit',
-      category: '',
-      subcategory: '',
-    }));
-    if (errors.type) {
-      setErrors((prev) => ({ ...prev, type: '' }));
-    }
+    dispatch({
+      type: 'merge',
+      patch: {
+        categories: [],
+        subcategories: [],
+        formData: {
+          ...formData,
+          type: typeName,
+          costUnit: typeData?.costUnit || 'unit',
+          category: '',
+          subcategory: '',
+        },
+        ...(errors.type ? { errors: { ...errors, type: '' } } : {}),
+      },
+    });
     void loadCategories(typeName).then((nextCategories) => {
       if (!editingProduct) {
         selectFirstCategoryForType(typeName, nextCategories);
@@ -744,7 +916,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       {/* Manage Types Modal */}
       <Modal
         isOpen={isManageTypesModalOpen}
-        onClose={() => setIsManageTypesModalOpen(false)}
+        onClose={() => dispatch({ type: 'merge', patch: { isManageTypesModalOpen: false } })}
         zIndex={70}
       >
         <ModalContent size="2xl">
@@ -755,7 +927,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
               </span>
               {t('crm:internalListing.manageTypes')}
             </ModalTitle>
-            <ModalCloseButton onClick={() => setIsManageTypesModalOpen(false)} />
+            <ModalCloseButton
+              onClick={() => dispatch({ type: 'merge', patch: { isManageTypesModalOpen: false } })}
+            />
           </ModalHeader>
 
           <ModalBody className="max-h-[60vh] space-y-4">
@@ -767,7 +941,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                   <Input
                     type="text"
                     value={newTypeName}
-                    onChange={(e) => setNewTypeName(e.target.value)}
+                    onChange={(e) =>
+                      dispatch({ type: 'merge', patch: { newTypeName: e.target.value } })
+                    }
                     placeholder={t('crm:internalListing.typeNamePlaceholder')}
                     className="flex-1"
                     onKeyDown={(e) => e.key === 'Enter' && handleSaveType()}
@@ -778,7 +954,12 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                       { id: 'hours', name: t('crm:internalListing.hour') },
                     ]}
                     value={newTypeCostUnit}
-                    onChange={(val) => setNewTypeCostUnit(val as 'unit' | 'hours')}
+                    onChange={(val) =>
+                      dispatch({
+                        type: 'merge',
+                        patch: { newTypeCostUnit: val as 'unit' | 'hours' },
+                      })
+                    }
                     searchable={false}
                     buttonClassName="py-2 text-sm w-28"
                   />
@@ -931,7 +1112,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       {/* Manage Categories Modal */}
       <Modal
         isOpen={isManageCategoriesModalOpen}
-        onClose={() => setIsManageCategoriesModalOpen(false)}
+        onClose={() => dispatch({ type: 'merge', patch: { isManageCategoriesModalOpen: false } })}
         zIndex={70}
       >
         <ModalContent size="2xl">
@@ -942,7 +1123,11 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
               </span>
               {t('crm:internalListing.manageCategories')}
             </ModalTitle>
-            <ModalCloseButton onClick={() => setIsManageCategoriesModalOpen(false)} />
+            <ModalCloseButton
+              onClick={() =>
+                dispatch({ type: 'merge', patch: { isManageCategoriesModalOpen: false } })
+              }
+            />
           </ModalHeader>
 
           <ModalBody className="max-h-[60vh] space-y-4">
@@ -953,7 +1138,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 <Input
                   type="text"
                   value={newCategoryName}
-                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  onChange={(e) =>
+                    dispatch({ type: 'merge', patch: { newCategoryName: e.target.value } })
+                  }
                   placeholder={t('crm:internalListing.categoryNamePlaceholder')}
                   onKeyDown={(e) => e.key === 'Enter' && handleSaveCategory()}
                 />
@@ -1080,7 +1267,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       {/* Manage Subcategories Modal */}
       <Modal
         isOpen={isManageSubcategoriesModalOpen}
-        onClose={() => setIsManageSubcategoriesModalOpen(false)}
+        onClose={() =>
+          dispatch({ type: 'merge', patch: { isManageSubcategoriesModalOpen: false } })
+        }
         zIndex={70}
       >
         <ModalContent size="2xl">
@@ -1094,7 +1283,11 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 ({formData.category})
               </span>
             </ModalTitle>
-            <ModalCloseButton onClick={() => setIsManageSubcategoriesModalOpen(false)} />
+            <ModalCloseButton
+              onClick={() =>
+                dispatch({ type: 'merge', patch: { isManageSubcategoriesModalOpen: false } })
+              }
+            />
           </ModalHeader>
 
           <ModalBody className="max-h-[60vh] space-y-4">
@@ -1105,7 +1298,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                 <Input
                   type="text"
                   value={newSubcategoryName}
-                  onChange={(e) => setNewSubcategoryName(e.target.value)}
+                  onChange={(e) =>
+                    dispatch({ type: 'merge', patch: { newSubcategoryName: e.target.value } })
+                  }
                   placeholder={t('crm:internalListing.subcategoryNamePlaceholder')}
                   onKeyDown={(e) => e.key === 'Enter' && handleSaveSubcategory()}
                 />
@@ -1232,7 +1427,10 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       </Modal>
 
       {/* Add/Edit Product Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => dispatch({ type: 'merge', patch: { isModalOpen: false } })}
+      >
         <ModalContent size="2xl" className="max-h-[90vh]">
           <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
             <ModalHeader>
@@ -1247,7 +1445,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                   ? t('crm:internalListing.editProductTitle')
                   : t('crm:internalListing.addProductTitle')}
               </ModalTitle>
-              <ModalCloseButton onClick={() => setIsModalOpen(false)} />
+              <ModalCloseButton
+                onClick={() => dispatch({ type: 'merge', patch: { isModalOpen: false } })}
+              />
             </ModalHeader>
 
             <ModalBody className="flex-1 space-y-8">
@@ -1270,8 +1470,8 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                       type="text"
                       value={formData.name}
                       onChange={(e) => {
-                        setFormData((prev) => ({ ...prev, name: e.target.value }));
-                        if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
+                        dispatch({ type: 'patchForm', patch: { name: e.target.value } });
+                        if (errors.name) dispatch({ type: 'patchErrors', patch: { name: '' } });
                       }}
                       placeholder={t('crm:internalListing.productNamePlaceholder')}
                       className={errors.name ? 'border-destructive' : undefined}
@@ -1287,8 +1487,9 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                       type="text"
                       value={formData.productCode}
                       onChange={(e) => {
-                        setFormData((prev) => ({ ...prev, productCode: e.target.value }));
-                        if (errors.productCode) setErrors((prev) => ({ ...prev, productCode: '' }));
+                        dispatch({ type: 'patchForm', patch: { productCode: e.target.value } });
+                        if (errors.productCode)
+                          dispatch({ type: 'patchErrors', patch: { productCode: '' } });
                       }}
                       placeholder={t('common:form.placeholderCode')}
                       className={errors.productCode ? 'border-destructive' : undefined}
@@ -1308,7 +1509,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                     <Textarea
                       value={formData.description || ''}
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, description: e.target.value }))
+                        dispatch({ type: 'patchForm', patch: { description: e.target.value } })
                       }
                       placeholder={t('crm:internalListing.productDescriptionPlaceholder')}
                       rows={2}
@@ -1365,12 +1566,17 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                       value={formData.category || ''}
                       onChange={(val) => {
                         const categoryName = val as string;
-                        setSubcategories([]);
-                        setFormData((prev) => ({
-                          ...prev,
-                          category: categoryName,
-                          subcategory: '',
-                        }));
+                        dispatch({
+                          type: 'merge',
+                          patch: {
+                            subcategories: [],
+                            formData: {
+                              ...formData,
+                              category: categoryName,
+                              subcategory: '',
+                            },
+                          },
+                        });
                         if (formData.type && categoryName) {
                           void loadSubcategories(formData.type, categoryName);
                         }
@@ -1399,7 +1605,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                       options={subcategoryOptions}
                       value={formData.subcategory || ''}
                       onChange={(val) =>
-                        setFormData((prev) => ({ ...prev, subcategory: val as string }))
+                        dispatch({ type: 'patchForm', patch: { subcategory: val as string } })
                       }
                       placeholder={
                         !formData.category
@@ -1481,7 +1687,11 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             </ModalBody>
 
             <ModalFooter>
-              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => dispatch({ type: 'merge', patch: { isModalOpen: false } })}
+              >
                 {t('common:buttons.cancel')}
               </Button>
               <Button type="submit">
@@ -1497,7 +1707,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
       {/* Delete Confirmation Modal */}
       <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen}
-        onClose={() => setIsDeleteConfirmOpen(false)}
+        onClose={() => dispatch({ type: 'merge', patch: { isDeleteConfirmOpen: false } })}
         onConfirm={handleDelete}
         title={t('crm:internalListing.deleteProductTitle')}
         description={t('crm:internalListing.deleteConfirm', {

@@ -1,7 +1,7 @@
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
 import { AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
 import type * as React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,67 @@ type WizardStep = 'scan' | 'verify' | 'backup';
 
 const OTP_LENGTH = 6;
 
+// The wizard's setup/verify state is one cohesive flow (a step machine plus the in-flight/error
+// flags for each phase), so it lives in a single reducer rather than a fan of useState calls.
+interface WizardState {
+  step: WizardStep;
+  setupResult: TotpSetupResult | null;
+  isLoadingSetup: boolean;
+  setupError: string | null;
+  code: string;
+  isVerifying: boolean;
+  verifyError: string | null;
+}
+
+const INITIAL_WIZARD_STATE: WizardState = {
+  step: 'scan',
+  setupResult: null,
+  isLoadingSetup: false,
+  setupError: null,
+  code: '',
+  isVerifying: false,
+  verifyError: null,
+};
+
+type WizardAction =
+  | { type: 'setupStart' }
+  | { type: 'setupSuccess'; result: TotpSetupResult }
+  | { type: 'setupError'; message: string }
+  | { type: 'setupSettled' }
+  | { type: 'gotoVerify' }
+  | { type: 'setCode'; value: string }
+  | { type: 'verifyStart' }
+  | { type: 'verifySuccess' }
+  | { type: 'verifyError'; message: string }
+  | { type: 'verifySettled' };
+
+const wizardReducer = (state: WizardState, action: WizardAction): WizardState => {
+  switch (action.type) {
+    case 'setupStart':
+      return { ...state, isLoadingSetup: true, setupError: null };
+    case 'setupSuccess':
+      return { ...state, setupResult: action.result };
+    case 'setupError':
+      return { ...state, setupError: action.message };
+    case 'setupSettled':
+      return { ...state, isLoadingSetup: false };
+    case 'gotoVerify':
+      return { ...state, step: 'verify' };
+    case 'setCode':
+      return { ...state, code: action.value, verifyError: null };
+    case 'verifyStart':
+      return { ...state, isVerifying: true, verifyError: null };
+    case 'verifySuccess':
+      return { ...state, step: 'backup' };
+    case 'verifyError':
+      return { ...state, verifyError: action.message, code: '' };
+    case 'verifySettled':
+      return { ...state, isVerifying: false };
+    default:
+      return state;
+  }
+};
+
 const TotpSetupWizard: React.FC<TotpSetupWizardProps> = ({
   onSetup,
   onConfirm,
@@ -43,14 +104,8 @@ const TotpSetupWizard: React.FC<TotpSetupWizardProps> = ({
 }) => {
   const { t } = useTranslation('settings');
 
-  const [step, setStep] = useState<WizardStep>('scan');
-  const [setupResult, setSetupResult] = useState<TotpSetupResult | null>(null);
-  const [isLoadingSetup, setIsLoadingSetup] = useState(false);
-  const [setupError, setSetupError] = useState<string | null>(null);
-
-  const [code, setCode] = useState('');
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(wizardReducer, INITIAL_WIZARD_STATE);
+  const { step, setupResult, isLoadingSetup, setupError, code, isVerifying, verifyError } = state;
 
   const isMountedRef = useRef(true);
   // Set true on the first /setup attempt and NEVER reset — auto-run fires exactly once per mount,
@@ -70,19 +125,21 @@ const TotpSetupWizard: React.FC<TotpSetupWizardProps> = ({
   const runSetup = useCallback(async () => {
     if (setupStartedRef.current || setupResult) return;
     setupStartedRef.current = true;
-    setIsLoadingSetup(true);
-    setSetupError(null);
+    dispatch({ type: 'setupStart' });
     try {
       const result = await onSetup();
-      if (isMountedRef.current) setSetupResult(result);
+      if (isMountedRef.current) dispatch({ type: 'setupSuccess', result });
     } catch (err) {
       console.error('Failed to start two-factor setup:', err);
       if (isMountedRef.current) {
-        setSetupError((err as Error).message || t('twoFactor.invalidCode'));
+        dispatch({
+          type: 'setupError',
+          message: (err as Error).message || t('twoFactor.invalidCode'),
+        });
       }
     } finally {
       // Intentionally NOT resetting setupStartedRef — a failed setup must not auto-retry.
-      if (isMountedRef.current) setIsLoadingSetup(false);
+      if (isMountedRef.current) dispatch({ type: 'setupSettled' });
     }
   }, [onSetup, setupResult, t]);
 
@@ -95,31 +152,29 @@ const TotpSetupWizard: React.FC<TotpSetupWizardProps> = ({
     async (submittedCode: string) => {
       if (isVerifying) return;
       if (submittedCode.length !== OTP_LENGTH) return;
-      setIsVerifying(true);
-      setVerifyError(null);
+      dispatch({ type: 'verifyStart' });
       try {
         await onConfirm(submittedCode);
-        if (isMountedRef.current) setStep('backup');
+        if (isMountedRef.current) dispatch({ type: 'verifySuccess' });
       } catch (err) {
         console.error('Failed to verify two-factor code:', err);
         if (!isMountedRef.current) return;
         const isInvalidCode = err instanceof ApiError && err.errorCode === 'invalid_totp_code';
-        setVerifyError(
-          isInvalidCode
+        dispatch({
+          type: 'verifyError',
+          message: isInvalidCode
             ? t('twoFactor.invalidCode')
             : (err as Error).message || t('twoFactor.invalidCode'),
-        );
-        setCode('');
+        });
       } finally {
-        if (isMountedRef.current) setIsVerifying(false);
+        if (isMountedRef.current) dispatch({ type: 'verifySettled' });
       }
     },
     [isVerifying, onConfirm, t],
   );
 
   const handleCodeChange = (value: string) => {
-    setCode(value);
-    if (verifyError) setVerifyError(null);
+    dispatch({ type: 'setCode', value });
   };
 
   const backupCodes = setupResult?.backupCodes ?? [];
@@ -192,7 +247,7 @@ const TotpSetupWizard: React.FC<TotpSetupWizardProps> = ({
             )}
             <Button
               type="button"
-              onClick={() => setStep('verify')}
+              onClick={() => dispatch({ type: 'gotoVerify' })}
               disabled={!setupResult || isLoadingSetup}
             >
               {t('common:buttons.next', { defaultValue: 'Next' })}

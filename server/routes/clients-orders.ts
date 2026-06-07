@@ -1058,9 +1058,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const supplierBackedItems = existingItems.filter((it) => it.supplierSaleItemId);
         if (supplierBackedItems.length > 0) {
           const incomingBySupplierItemId = new Map(
-            (normalizedItems ?? [])
-              .filter((it) => it.supplierSaleItemId)
-              .map((it) => [it.supplierSaleItemId as string, it] as const),
+            (normalizedItems ?? []).flatMap((it) =>
+              it.supplierSaleItemId ? [[it.supplierSaleItemId as string, it] as const] : [],
+            ),
           );
           const desyncsSupplierOrder = supplierBackedItems.some((existing) => {
             const incoming = incomingBySupplierItemId.get(existing.supplierSaleItemId as string);

@@ -1,6 +1,6 @@
 import { ImageOff, Loader2, Save, Trash2, Upload } from 'lucide-react';
 import type React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useReducer, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,32 +22,88 @@ export interface BrandingSettingsProps {
   animationClass?: string;
 }
 
+// The editable company-name field plus the three mutually-exclusive in-flight flags and the
+// failed-logo URL form one cohesive panel state, so they live in a single reducer.
+interface BrandingState {
+  companyName: string;
+  isSavingName: boolean;
+  isUploading: boolean;
+  isRemoving: boolean;
+  // Fall back to the ImageOff placeholder if the current logo fails to load (the server 404s a
+  // logo whose file is gone on disk). Tracking the failed URL (vs a boolean + reset effect) retries
+  // automatically when a new upload changes branding.logoUrl.
+  failedLogoUrl: string | null;
+}
+
+const initBrandingState = (companyName: string): BrandingState => ({
+  companyName,
+  isSavingName: false,
+  isUploading: false,
+  isRemoving: false,
+  failedLogoUrl: null,
+});
+
+type BrandingAction =
+  | { type: 'setCompanyName'; value: string }
+  | { type: 'savingStart' }
+  | { type: 'savingEnd' }
+  | { type: 'uploadStart' }
+  | { type: 'uploadEnd' }
+  | { type: 'removeStart' }
+  | { type: 'removeEnd' }
+  | { type: 'logoFailed'; url: string | null };
+
+const brandingReducer = (state: BrandingState, action: BrandingAction): BrandingState => {
+  switch (action.type) {
+    case 'setCompanyName':
+      return { ...state, companyName: action.value };
+    case 'savingStart':
+      return { ...state, isSavingName: true };
+    case 'savingEnd':
+      return { ...state, isSavingName: false };
+    case 'uploadStart':
+      return { ...state, isUploading: true };
+    case 'uploadEnd':
+      return { ...state, isUploading: false };
+    case 'removeStart':
+      return { ...state, isRemoving: true };
+    case 'removeEnd':
+      return { ...state, isRemoving: false };
+    case 'logoFailed':
+      return { ...state, failedLogoUrl: action.url };
+    default:
+      return state;
+  }
+};
+
 const BrandingSettings: React.FC<BrandingSettingsProps> = ({
   branding,
   onChange,
   animationClass,
 }) => {
   const { t } = useTranslation('settings');
-  const [companyName, setCompanyName] = useState(branding.companyName ?? '');
-  const [isSavingName, setIsSavingName] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [isRemoving, setIsRemoving] = useState(false);
-  // Fall back to the ImageOff placeholder if the current logo fails to load (the server 404s a
-  // logo whose file is gone on disk). Tracking the failed URL (vs a boolean + reset effect) retries
-  // automatically when a new upload changes branding.logoUrl.
-  const [failedLogoUrl, setFailedLogoUrl] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(
+    brandingReducer,
+    branding.companyName ?? '',
+    initBrandingState,
+  );
+  const { companyName, isSavingName, isUploading, isRemoving, failedLogoUrl } = state;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Keep the local field in sync when branding is (re)loaded or changed elsewhere.
-  useEffect(() => {
-    setCompanyName(branding.companyName ?? '');
-  }, [branding.companyName]);
+  // Keep the local field in sync when branding is (re)loaded or changed elsewhere. The last-synced
+  // prop is tracked in a ref (not state) so adjusting the field happens during render off the prop
+  // change itself — no post-render effect copying prop→state. See react.dev "you-might-not-need-an-effect".
+  const lastSyncedNameRef = useRef(branding.companyName ?? '');
+  if (lastSyncedNameRef.current !== (branding.companyName ?? '')) {
+    lastSyncedNameRef.current = branding.companyName ?? '';
+    dispatch({ type: 'setCompanyName', value: branding.companyName ?? '' });
+  }
 
   const nameChanged = companyName.trim() !== (branding.companyName ?? '');
   const busy = isSavingName || isUploading || isRemoving;
 
   const handleSaveName = async () => {
-    setIsSavingName(true);
+    dispatch({ type: 'savingStart' });
     try {
       const trimmed = companyName.trim();
       const updated = await api.branding.updateName(trimmed.length > 0 ? trimmed : null);
@@ -57,7 +113,7 @@ const BrandingSettings: React.FC<BrandingSettingsProps> = ({
       console.error('Failed to save company name:', err);
       toastError(t('branding.saveFailed'));
     } finally {
-      setIsSavingName(false);
+      dispatch({ type: 'savingEnd' });
     }
   };
 
@@ -84,7 +140,7 @@ const BrandingSettings: React.FC<BrandingSettingsProps> = ({
       toastError(validationError);
       return;
     }
-    setIsUploading(true);
+    dispatch({ type: 'uploadStart' });
     try {
       const updated = await api.branding.uploadLogo(file);
       onChange(updated);
@@ -93,12 +149,12 @@ const BrandingSettings: React.FC<BrandingSettingsProps> = ({
       console.error('Failed to upload logo:', err);
       toastError(t('branding.saveFailed'));
     } finally {
-      setIsUploading(false);
+      dispatch({ type: 'uploadEnd' });
     }
   };
 
   const handleRemoveLogo = async () => {
-    setIsRemoving(true);
+    dispatch({ type: 'removeStart' });
     try {
       const updated = await api.branding.deleteLogo();
       onChange(updated);
@@ -107,7 +163,7 @@ const BrandingSettings: React.FC<BrandingSettingsProps> = ({
       console.error('Failed to remove logo:', err);
       toastError(t('branding.saveFailed'));
     } finally {
-      setIsRemoving(false);
+      dispatch({ type: 'removeEnd' });
     }
   };
 
@@ -133,7 +189,7 @@ const BrandingSettings: React.FC<BrandingSettingsProps> = ({
               id="branding-company-name"
               value={companyName}
               maxLength={COMPANY_NAME_MAX_LENGTH}
-              onChange={(event) => setCompanyName(event.target.value)}
+              onChange={(event) => dispatch({ type: 'setCompanyName', value: event.target.value })}
               placeholder={t('branding.companyNamePlaceholder')}
             />
             <Button type="button" onClick={handleSaveName} disabled={busy || !nameChanged}>
@@ -157,7 +213,7 @@ const BrandingSettings: React.FC<BrandingSettingsProps> = ({
                   src={branding.logoUrl}
                   alt={t('branding.currentLogoAlt')}
                   className="size-full object-contain p-1"
-                  onError={() => setFailedLogoUrl(branding.logoUrl)}
+                  onError={() => dispatch({ type: 'logoFailed', url: branding.logoUrl })}
                 />
               ) : (
                 <ImageOff aria-hidden="true" className="size-6 text-muted-foreground" />
@@ -195,6 +251,7 @@ const BrandingSettings: React.FC<BrandingSettingsProps> = ({
           <input
             ref={fileInputRef}
             type="file"
+            aria-label={t('branding.uploadButton')}
             accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml"
             className="hidden"
             onChange={handleFileSelected}

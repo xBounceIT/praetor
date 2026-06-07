@@ -161,8 +161,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(413).send({ error: 'Logo exceeds the 2 MB limit' });
       }
 
-      const existing = await brandingRepo.get();
-      const saved = await saveBrandingLogo(buffer, originalName);
+      // The current-record read and the disk write touch different resources, so run them at
+      // the same time; `existing` is only consulted afterwards to clean up the superseded file.
+      const [existing, saved] = await Promise.all([
+        brandingRepo.get(),
+        saveBrandingLogo(buffer, originalName),
+      ]);
       let updated: AppBrandingRecord;
       try {
         updated = await brandingRepo.setLogo({

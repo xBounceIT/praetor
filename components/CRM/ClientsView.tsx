@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel, RequiredMark } from '@/components/ui/field';
@@ -172,6 +172,204 @@ const hydrateContactsForEdit = (
   ];
 };
 
+interface ClientsViewState {
+  isModalOpen: boolean;
+  editingClient: Client | null;
+  errors: Record<string, string>;
+  formData: Partial<Client>;
+  contactsExpanded: boolean;
+  contactDraft: ClientContact | null;
+  editingContactIndex: number | null;
+  contactDraftError: string | null;
+  isDeleteConfirmOpen: boolean;
+  clientToDelete: Client | null;
+  profileOptions: ClientProfileOptionsByCategory;
+  isLoadingProfileOptions: boolean;
+  isManageProfileOptionModalOpen: boolean;
+  manageCategory: ClientProfileOptionCategory;
+  editingProfileOption: ClientProfileOption | null;
+  newProfileOptionValue: string;
+  profileOptionError: string | null;
+  isSavingProfileOption: boolean;
+}
+
+const INITIAL_CLIENTS_STATE: ClientsViewState = {
+  isModalOpen: false,
+  editingClient: null,
+  errors: {},
+  formData: INITIAL_FORM_DATA,
+  contactsExpanded: false,
+  contactDraft: null,
+  editingContactIndex: null,
+  contactDraftError: null,
+  isDeleteConfirmOpen: false,
+  clientToDelete: null,
+  profileOptions: EMPTY_PROFILE_OPTIONS,
+  isLoadingProfileOptions: false,
+  isManageProfileOptionModalOpen: false,
+  manageCategory: 'sector',
+  editingProfileOption: null,
+  newProfileOptionValue: '',
+  profileOptionError: null,
+  isSavingProfileOption: false,
+};
+
+type ClientsViewAction =
+  | { type: 'setErrors'; value: Record<string, string> }
+  | { type: 'patchErrors'; value: Record<string, string> }
+  | { type: 'setFormData'; value: Partial<Client> }
+  | { type: 'patchFormData'; value: Partial<Client> }
+  | { type: 'setContactsExpanded'; value: boolean }
+  | { type: 'toggleContactsExpanded' }
+  | { type: 'setContactDraft'; value: ClientContact | null }
+  | { type: 'patchContactDraft'; field: keyof ClientContact; value: string }
+  | { type: 'setEditingContactIndex'; value: number | null }
+  | { type: 'setContactDraftError'; value: string | null }
+  | { type: 'setProfileOptions'; value: ClientProfileOptionsByCategory }
+  | { type: 'setIsLoadingProfileOptions'; value: boolean }
+  | { type: 'setIsModalOpen'; value: boolean }
+  | { type: 'setIsManageProfileOptionModalOpen'; value: boolean }
+  | { type: 'setEditingProfileOption'; value: ClientProfileOption | null }
+  | { type: 'setNewProfileOptionValue'; value: string }
+  | { type: 'setProfileOptionError'; value: string | null }
+  | { type: 'setIsSavingProfileOption'; value: boolean }
+  | { type: 'openAddModal' }
+  | { type: 'openEditModal'; client: Client; formData: Partial<Client>; contactsExpanded: boolean }
+  | { type: 'closeModal' }
+  | { type: 'addContact'; clearContactsError: boolean }
+  | { type: 'editContact'; contact: ClientContact; index: number; clearContactsError: boolean }
+  | { type: 'cancelContactDraft' }
+  | { type: 'confirmDelete'; client: Client }
+  | { type: 'setIsDeleteConfirmOpen'; value: boolean }
+  | { type: 'closeDeleteConfirm' }
+  | { type: 'openManageProfileOptions'; category: ClientProfileOptionCategory };
+
+const clientsViewReducer = (
+  state: ClientsViewState,
+  action: ClientsViewAction,
+): ClientsViewState => {
+  switch (action.type) {
+    case 'setErrors':
+      return { ...state, errors: action.value };
+    case 'patchErrors':
+      return { ...state, errors: { ...state.errors, ...action.value } };
+    case 'setFormData':
+      return { ...state, formData: action.value };
+    case 'patchFormData':
+      return { ...state, formData: { ...state.formData, ...action.value } };
+    case 'setContactsExpanded':
+      return { ...state, contactsExpanded: action.value };
+    case 'toggleContactsExpanded':
+      return { ...state, contactsExpanded: !state.contactsExpanded };
+    case 'setContactDraft':
+      return { ...state, contactDraft: action.value };
+    case 'patchContactDraft':
+      return {
+        ...state,
+        contactDraft: {
+          ...(state.contactDraft ?? { ...EMPTY_CONTACT }),
+          [action.field]: action.value,
+        },
+      };
+    case 'setEditingContactIndex':
+      return { ...state, editingContactIndex: action.value };
+    case 'setContactDraftError':
+      return { ...state, contactDraftError: action.value };
+    case 'setProfileOptions':
+      return { ...state, profileOptions: action.value };
+    case 'setIsLoadingProfileOptions':
+      return { ...state, isLoadingProfileOptions: action.value };
+    case 'setIsModalOpen':
+      return { ...state, isModalOpen: action.value };
+    case 'setIsManageProfileOptionModalOpen':
+      return { ...state, isManageProfileOptionModalOpen: action.value };
+    case 'setEditingProfileOption':
+      return { ...state, editingProfileOption: action.value };
+    case 'setNewProfileOptionValue':
+      return { ...state, newProfileOptionValue: action.value };
+    case 'setProfileOptionError':
+      return { ...state, profileOptionError: action.value };
+    case 'setIsSavingProfileOption':
+      return { ...state, isSavingProfileOption: action.value };
+    case 'openAddModal':
+      return {
+        ...state,
+        editingClient: null,
+        formData: INITIAL_FORM_DATA,
+        contactsExpanded: false,
+        contactDraft: null,
+        editingContactIndex: null,
+        contactDraftError: null,
+        errors: {},
+        isModalOpen: true,
+      };
+    case 'openEditModal':
+      return {
+        ...state,
+        editingClient: action.client,
+        formData: action.formData,
+        contactsExpanded: action.contactsExpanded,
+        contactDraft: null,
+        editingContactIndex: null,
+        contactDraftError: null,
+        errors: {},
+        isModalOpen: true,
+      };
+    case 'closeModal':
+      return {
+        ...state,
+        isModalOpen: false,
+        errors: {},
+        contactsExpanded: false,
+        contactDraft: null,
+        editingContactIndex: null,
+        contactDraftError: null,
+      };
+    case 'addContact':
+      return {
+        ...state,
+        contactDraft: { ...EMPTY_CONTACT },
+        editingContactIndex: null,
+        contactDraftError: null,
+        errors: action.clearContactsError ? { ...state.errors, contacts: '' } : state.errors,
+        contactsExpanded: true,
+      };
+    case 'editContact':
+      return {
+        ...state,
+        contactDraft: { ...action.contact },
+        editingContactIndex: action.index,
+        contactDraftError: null,
+        errors: action.clearContactsError ? { ...state.errors, contacts: '' } : state.errors,
+        contactsExpanded: true,
+      };
+    case 'cancelContactDraft':
+      return {
+        ...state,
+        contactDraft: null,
+        editingContactIndex: null,
+        contactDraftError: null,
+      };
+    case 'confirmDelete':
+      return { ...state, clientToDelete: action.client, isDeleteConfirmOpen: true };
+    case 'setIsDeleteConfirmOpen':
+      return { ...state, isDeleteConfirmOpen: action.value };
+    case 'closeDeleteConfirm':
+      return { ...state, isDeleteConfirmOpen: false, clientToDelete: null };
+    case 'openManageProfileOptions':
+      return {
+        ...state,
+        manageCategory: action.category,
+        isManageProfileOptionModalOpen: true,
+        editingProfileOption: null,
+        newProfileOptionValue: '',
+        profileOptionError: null,
+      };
+    default:
+      return state;
+  }
+};
+
 const ClientsView: React.FC<ClientsViewProps> = ({
   clients,
   onAddClient,
@@ -189,40 +387,37 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
   const { language } = i18n;
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [formData, setFormData] = useState<Partial<Client>>(INITIAL_FORM_DATA);
-  const [contactsExpanded, setContactsExpanded] = useState(false);
-  const [contactDraft, setContactDraft] = useState<ClientContact | null>(null);
-  const [editingContactIndex, setEditingContactIndex] = useState<number | null>(null);
-  const [contactDraftError, setContactDraftError] = useState<string | null>(null);
-
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
-
-  const [profileOptions, setProfileOptions] =
-    useState<ClientProfileOptionsByCategory>(EMPTY_PROFILE_OPTIONS);
-  const [isLoadingProfileOptions, setIsLoadingProfileOptions] = useState(false);
-
-  const [isManageProfileOptionModalOpen, setIsManageProfileOptionModalOpen] = useState(false);
-  const [manageCategory, setManageCategory] = useState<ClientProfileOptionCategory>('sector');
-  const [editingProfileOption, setEditingProfileOption] = useState<ClientProfileOption | null>(
-    null,
-  );
-  const [newProfileOptionValue, setNewProfileOptionValue] = useState('');
-  const [profileOptionError, setProfileOptionError] = useState<string | null>(null);
-  const [isSavingProfileOption, setIsSavingProfileOption] = useState(false);
+  const [state, dispatch] = useReducer(clientsViewReducer, INITIAL_CLIENTS_STATE);
+  const {
+    isModalOpen,
+    editingClient,
+    errors,
+    formData,
+    contactsExpanded,
+    contactDraft,
+    editingContactIndex,
+    contactDraftError,
+    isDeleteConfirmOpen,
+    clientToDelete,
+    profileOptions,
+    isLoadingProfileOptions,
+    isManageProfileOptionModalOpen,
+    manageCategory,
+    editingProfileOption,
+    newProfileOptionValue,
+    profileOptionError,
+    isSavingProfileOption,
+  } = state;
 
   const loadProfileOptions = useCallback(async () => {
-    setIsLoadingProfileOptions(true);
+    dispatch({ type: 'setIsLoadingProfileOptions', value: true });
     try {
       const optionsByCategory = await api.clients.listAllProfileOptions();
-      setProfileOptions(optionsByCategory);
+      dispatch({ type: 'setProfileOptions', value: optionsByCategory });
     } catch (err) {
       console.error('Failed to load client profile options:', err);
     } finally {
-      setIsLoadingProfileOptions(false);
+      dispatch({ type: 'setIsLoadingProfileOptions', value: false });
     }
   }, []);
 
@@ -251,14 +446,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
   const openAddModal = () => {
     if (!canCreateClients) return;
-    setEditingClient(null);
-    setFormData(INITIAL_FORM_DATA);
-    setContactsExpanded(false);
-    setContactDraft(null);
-    setEditingContactIndex(null);
-    setContactDraftError(null);
-    setErrors({});
-    setIsModalOpen(true);
+    dispatch({ type: 'openAddModal' });
   };
 
   const openEditModal = useCallback(
@@ -267,61 +455,56 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
       const hydratedContacts = hydrateContactsForEdit(client, normalizeContacts(client.contacts));
       const primaryContact = hydratedContacts[0];
-      setEditingClient(client);
-      setFormData({
-        name: client.name || '',
-        type: client.type ?? 'company',
-        contacts: hydratedContacts,
-        contactName: client.contactName || primaryContact?.fullName || '',
-        clientCode: client.clientCode || '',
-        email: client.email || primaryContact?.email || '',
-        phone: client.phone || primaryContact?.phone || '',
-        address: client.address || '',
-        addressCountry: client.addressCountry || '',
-        addressState: client.addressState || '',
-        addressCap: client.addressCap || '',
-        addressProvince: client.addressProvince || '',
-        addressCivicNumber: client.addressCivicNumber || '',
-        addressLine: client.addressLine || client.address || '',
-        description: client.description || '',
-        atecoCode: client.atecoCode || '',
-        website: client.website || '',
-        sector: client.sector,
-        numberOfEmployees: client.numberOfEmployees,
-        revenue: client.revenue,
-        fiscalCode: getPrimaryTaxId(client),
-        officeCountRange: client.officeCountRange,
+      dispatch({
+        type: 'openEditModal',
+        client,
+        formData: {
+          name: client.name || '',
+          type: client.type ?? 'company',
+          contacts: hydratedContacts,
+          contactName: client.contactName || primaryContact?.fullName || '',
+          clientCode: client.clientCode || '',
+          email: client.email || primaryContact?.email || '',
+          phone: client.phone || primaryContact?.phone || '',
+          address: client.address || '',
+          addressCountry: client.addressCountry || '',
+          addressState: client.addressState || '',
+          addressCap: client.addressCap || '',
+          addressProvince: client.addressProvince || '',
+          addressCivicNumber: client.addressCivicNumber || '',
+          addressLine: client.addressLine || client.address || '',
+          description: client.description || '',
+          atecoCode: client.atecoCode || '',
+          website: client.website || '',
+          sector: client.sector,
+          numberOfEmployees: client.numberOfEmployees,
+          revenue: client.revenue,
+          fiscalCode: getPrimaryTaxId(client),
+          officeCountRange: client.officeCountRange,
+        },
+        contactsExpanded: hydratedContacts.length > 1,
       });
-      setContactsExpanded(hydratedContacts.length > 1);
-      setContactDraft(null);
-      setEditingContactIndex(null);
-      setContactDraftError(null);
-      setErrors({});
-      setIsModalOpen(true);
     },
     [canUpdateClients],
   );
 
-  const setContacts = useCallback((updater: (prev: ClientContact[]) => ClientContact[]) => {
-    setFormData((prev) => {
-      const current = normalizeContacts(prev.contacts);
-      return { ...prev, contacts: updater(current) };
-    });
-  }, []);
+  const setContacts = useCallback(
+    (updater: (prev: ClientContact[]) => ClientContact[]) => {
+      const current = normalizeContacts(formData.contacts);
+      dispatch({ type: 'patchFormData', value: { contacts: updater(current) } });
+    },
+    [formData.contacts],
+  );
 
   const addContact = useCallback(() => {
-    setContactDraft({ ...EMPTY_CONTACT });
-    setEditingContactIndex(null);
-    setContactDraftError(null);
-    if (errors.contacts) setErrors((prev) => ({ ...prev, contacts: '' }));
-    setContactsExpanded(true);
+    dispatch({ type: 'addContact', clearContactsError: Boolean(errors.contacts) });
   }, [errors.contacts]);
 
   const updateContactDraft = useCallback(
     (field: keyof ClientContact, value: string) => {
-      setContactDraft((prev) => ({ ...(prev ?? { ...EMPTY_CONTACT }), [field]: value }));
-      if (contactDraftError) setContactDraftError(null);
-      if (errors.contacts) setErrors((prev) => ({ ...prev, contacts: '' }));
+      dispatch({ type: 'patchContactDraft', field, value });
+      if (contactDraftError) dispatch({ type: 'setContactDraftError', value: null });
+      if (errors.contacts) dispatch({ type: 'patchErrors', value: { contacts: '' } });
     },
     [contactDraftError, errors.contacts],
   );
@@ -331,7 +514,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
     const normalizedDraft = normalizeContact(contactDraft);
     if (!normalizedDraft.fullName) {
-      setContactDraftError(t('common:validation.required'));
+      dispatch({ type: 'setContactDraftError', value: t('common:validation.required') });
       return;
     }
 
@@ -344,40 +527,39 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       return [...prev, normalizedDraft];
     });
 
-    setContactDraft(null);
-    setEditingContactIndex(null);
-    setContactDraftError(null);
-    if (errors.contacts) setErrors((prev) => ({ ...prev, contacts: '' }));
+    dispatch({ type: 'setContactDraft', value: null });
+    dispatch({ type: 'setEditingContactIndex', value: null });
+    dispatch({ type: 'setContactDraftError', value: null });
+    if (errors.contacts) dispatch({ type: 'patchErrors', value: { contacts: '' } });
   }, [contactDraft, editingContactIndex, errors.contacts, setContacts, t]);
 
   const editContact = useCallback(
     (index: number) => {
       const target = normalizeContacts(formData.contacts)[index];
       if (!target) return;
-      setContactDraft({ ...target });
-      setEditingContactIndex(index);
-      setContactDraftError(null);
-      if (errors.contacts) setErrors((prev) => ({ ...prev, contacts: '' }));
-      setContactsExpanded(true);
+      dispatch({
+        type: 'editContact',
+        contact: target,
+        index,
+        clearContactsError: Boolean(errors.contacts),
+      });
     },
     [errors.contacts, formData.contacts],
   );
 
   const cancelContactDraft = useCallback(() => {
-    setContactDraft(null);
-    setEditingContactIndex(null);
-    setContactDraftError(null);
+    dispatch({ type: 'cancelContactDraft' });
   }, []);
 
   const removeContact = useCallback(
     (index: number) => {
       setContacts((prev) => prev.filter((_, currentIndex) => currentIndex !== index));
       if (editingContactIndex === index) {
-        setContactDraft(null);
-        setEditingContactIndex(null);
-        setContactDraftError(null);
+        dispatch({ type: 'setContactDraft', value: null });
+        dispatch({ type: 'setEditingContactIndex', value: null });
+        dispatch({ type: 'setContactDraftError', value: null });
       } else if (editingContactIndex !== null && editingContactIndex > index) {
-        setEditingContactIndex((prev) => (prev === null ? null : prev - 1));
+        dispatch({ type: 'setEditingContactIndex', value: editingContactIndex - 1 });
       }
     },
     [editingContactIndex, setContacts],
@@ -400,8 +582,8 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
     if (normalizedDraft && (editingContactIndex !== null || hasDraftValues)) {
       if (!normalizedDraft.fullName) {
-        setContactDraftError(t('common:validation.required'));
-        setContactsExpanded(true);
+        dispatch({ type: 'setContactDraftError', value: t('common:validation.required') });
+        dispatch({ type: 'setContactsExpanded', value: true });
         return;
       }
 
@@ -442,7 +624,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     }
 
     if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+      dispatch({ type: 'setErrors', value: newErrors });
       return;
     }
 
@@ -483,28 +665,30 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       } else {
         await onAddClient(payload);
       }
-      setIsModalOpen(false);
+      dispatch({ type: 'setIsModalOpen', value: false });
     } catch (err) {
       const message = (err as Error).message;
       if (
         message.toLowerCase().includes('fiscal code') ||
         message.toLowerCase().includes('vat number')
       ) {
-        setErrors({ fiscalCode: message });
+        dispatch({ type: 'setErrors', value: { fiscalCode: message } });
       } else if (
         message.toLowerCase().includes('client id') ||
         message.toLowerCase().includes('client code')
       ) {
-        setErrors({ clientCode: t('common:validation.clientCodeUnique') });
+        dispatch({
+          type: 'setErrors',
+          value: { clientCode: t('common:validation.clientCodeUnique') },
+        });
       } else {
-        setErrors({ general: t('common:messages.errorOccurred') });
+        dispatch({ type: 'setErrors', value: { general: t('common:messages.errorOccurred') } });
       }
     }
   };
 
   const confirmDelete = useCallback((client: Client) => {
-    setClientToDelete(client);
-    setIsDeleteConfirmOpen(true);
+    dispatch({ type: 'confirmDelete', client });
   }, []);
 
   const handleDelete = async () => {
@@ -512,29 +696,19 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     try {
       await onDeleteClient(clientToDelete.id);
     } finally {
-      setIsDeleteConfirmOpen(false);
-      setClientToDelete(null);
+      dispatch({ type: 'closeDeleteConfirm' });
     }
   };
 
   const handleModalClose = () => {
-    setIsModalOpen(false);
-    setErrors({});
-    setContactsExpanded(false);
-    setContactDraft(null);
-    setEditingContactIndex(null);
-    setContactDraftError(null);
+    dispatch({ type: 'closeModal' });
   };
 
   const canSubmit = editingClient ? canUpdateClients : canCreateClients;
 
   const openManageProfileOptions = (category: ClientProfileOptionCategory) => {
     if (!canUpdateClients) return;
-    setManageCategory(category);
-    setIsManageProfileOptionModalOpen(true);
-    setEditingProfileOption(null);
-    setNewProfileOptionValue('');
-    setProfileOptionError(null);
+    dispatch({ type: 'openManageProfileOptions', category });
   };
 
   const handleSaveProfileOption = async () => {
@@ -542,12 +716,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
     const trimmedValue = newProfileOptionValue.trim();
     if (!trimmedValue) {
-      setProfileOptionError(t('common:validation.required'));
+      dispatch({ type: 'setProfileOptionError', value: t('common:validation.required') });
       return;
     }
 
-    setIsSavingProfileOption(true);
-    setProfileOptionError(null);
+    dispatch({ type: 'setIsSavingProfileOption', value: true });
+    dispatch({ type: 'setProfileOptionError', value: null });
 
     try {
       if (editingProfileOption) {
@@ -556,21 +730,22 @@ const ClientsView: React.FC<ClientsViewProps> = ({
           sortOrder: editingProfileOption.sortOrder,
         });
         if (formData[manageCategory] === editingProfileOption.value) {
-          setFormData((prev) => ({ ...prev, [manageCategory]: trimmedValue }));
+          dispatch({ type: 'patchFormData', value: { [manageCategory]: trimmedValue } });
         }
       } else {
         await onCreateClientProfileOption(manageCategory, trimmedValue);
       }
 
       await loadProfileOptions();
-      setEditingProfileOption(null);
-      setNewProfileOptionValue('');
+      dispatch({ type: 'setEditingProfileOption', value: null });
+      dispatch({ type: 'setNewProfileOptionValue', value: '' });
     } catch (err) {
-      setProfileOptionError(
-        err instanceof Error ? err.message : t('common:messages.errorOccurred'),
-      );
+      dispatch({
+        type: 'setProfileOptionError',
+        value: err instanceof Error ? err.message : t('common:messages.errorOccurred'),
+      });
     } finally {
-      setIsSavingProfileOption(false);
+      dispatch({ type: 'setIsSavingProfileOption', value: false });
     }
   };
 
@@ -582,27 +757,28 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       await loadProfileOptions();
 
       if (formData[option.category] === option.value) {
-        setFormData((prev) => ({ ...prev, [option.category]: null }));
+        dispatch({ type: 'patchFormData', value: { [option.category]: null } });
       }
     } catch (err) {
-      setProfileOptionError(
-        err instanceof Error ? err.message : t('common:messages.errorOccurred'),
-      );
+      dispatch({
+        type: 'setProfileOptionError',
+        value: err instanceof Error ? err.message : t('common:messages.errorOccurred'),
+      });
     }
   };
 
   const handleEditProfileOption = (option: ClientProfileOption) => {
     if (!canUpdateClients) return;
 
-    setEditingProfileOption(option);
-    setNewProfileOptionValue(option.value);
-    setProfileOptionError(null);
+    dispatch({ type: 'setEditingProfileOption', value: option });
+    dispatch({ type: 'setNewProfileOptionValue', value: option.value });
+    dispatch({ type: 'setProfileOptionError', value: null });
   };
 
   const handleCancelProfileOptionEdit = () => {
-    setEditingProfileOption(null);
-    setNewProfileOptionValue('');
-    setProfileOptionError(null);
+    dispatch({ type: 'setEditingProfileOption', value: null });
+    dispatch({ type: 'setNewProfileOptionValue', value: '' });
+    dispatch({ type: 'setProfileOptionError', value: null });
   };
 
   const contactColumns = useMemo<Column<ContactTableRow>[]>(
@@ -972,7 +1148,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     <div className="space-y-8 animate-in fade-in duration-500">
       <Modal
         isOpen={isManageProfileOptionModalOpen}
-        onClose={() => setIsManageProfileOptionModalOpen(false)}
+        onClose={() => dispatch({ type: 'setIsManageProfileOptionModalOpen', value: false })}
         zIndex={70}
       >
         <ModalContent size="2xl">
@@ -983,7 +1159,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               </span>
               {t('crm:clients.manageValuesTitle', { field: manageCategoryLabels[manageCategory] })}
             </ModalTitle>
-            <ModalCloseButton onClick={() => setIsManageProfileOptionModalOpen(false)} />
+            <ModalCloseButton
+              onClick={() => dispatch({ type: 'setIsManageProfileOptionModalOpen', value: false })}
+            />
           </ModalHeader>
 
           <ModalBody className="max-h-[60vh] space-y-4">
@@ -996,7 +1174,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                   id="client-profile-option-value"
                   type="text"
                   value={newProfileOptionValue}
-                  onChange={(e) => setNewProfileOptionValue(e.target.value)}
+                  onChange={(e) =>
+                    dispatch({ type: 'setNewProfileOptionValue', value: e.target.value })
+                  }
                   placeholder={t('crm:clients.valuePlaceholder')}
                   onKeyDown={(e) => e.key === 'Enter' && void handleSaveProfileOption()}
                 />
@@ -1150,8 +1330,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       type="text"
                       value={formData.clientCode}
                       onChange={(e) => {
-                        setFormData((prev) => ({ ...prev, clientCode: e.target.value }));
-                        if (errors.clientCode) setErrors((prev) => ({ ...prev, clientCode: '' }));
+                        dispatch({ type: 'patchFormData', value: { clientCode: e.target.value } });
+                        if (errors.clientCode)
+                          dispatch({ type: 'patchErrors', value: { clientCode: '' } });
                       }}
                       placeholder={t('crm:clients.clientCodePlaceholder')}
                       className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
@@ -1170,8 +1351,8 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       type="text"
                       value={formData.name}
                       onChange={(e) => {
-                        setFormData((prev) => ({ ...prev, name: e.target.value }));
-                        if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
+                        dispatch({ type: 'patchFormData', value: { name: e.target.value } });
+                        if (errors.name) dispatch({ type: 'patchErrors', value: { name: '' } });
                       }}
                       placeholder={t('crm:clients.namePlaceholder')}
                       className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
@@ -1190,10 +1371,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       options={typeOptions}
                       value={formData.type || 'company'}
                       onChange={(val) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          type: (val as Client['type']) || 'company',
-                        }))
+                        dispatch({
+                          type: 'patchFormData',
+                          value: { type: (val as Client['type']) || 'company' },
+                        })
                       }
                       searchable={false}
                     />
@@ -1222,7 +1403,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       type="text"
                       value={formData.website ?? ''}
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, website: e.target.value }))
+                        dispatch({ type: 'patchFormData', value: { website: e.target.value } })
                       }
                       placeholder={t('crm:clients.websitePlaceholder')}
                       className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
@@ -1236,7 +1417,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       type="text"
                       value={formData.addressCountry}
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, addressCountry: e.target.value }))
+                        dispatch({
+                          type: 'patchFormData',
+                          value: { addressCountry: e.target.value },
+                        })
                       }
                       placeholder={t('crm:clients.countryPlaceholder')}
                       className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
@@ -1250,7 +1434,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       type="text"
                       value={formData.addressState}
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, addressState: e.target.value }))
+                        dispatch({ type: 'patchFormData', value: { addressState: e.target.value } })
                       }
                       placeholder={t('crm:clients.statePlaceholder')}
                       className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
@@ -1264,7 +1448,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       type="text"
                       value={formData.addressCap}
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, addressCap: e.target.value }))
+                        dispatch({ type: 'patchFormData', value: { addressCap: e.target.value } })
                       }
                       placeholder={t('crm:clients.capPlaceholder')}
                       className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
@@ -1278,7 +1462,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       type="text"
                       value={formData.addressProvince}
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, addressProvince: e.target.value }))
+                        dispatch({
+                          type: 'patchFormData',
+                          value: { addressProvince: e.target.value },
+                        })
                       }
                       placeholder={t('crm:clients.provincePlaceholder')}
                       className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
@@ -1292,7 +1479,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       type="text"
                       value={formData.addressCivicNumber}
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, addressCivicNumber: e.target.value }))
+                        dispatch({
+                          type: 'patchFormData',
+                          value: { addressCivicNumber: e.target.value },
+                        })
                       }
                       placeholder={t('crm:clients.civicNumberPlaceholder')}
                       className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
@@ -1306,7 +1496,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       type="text"
                       value={formData.addressLine}
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, addressLine: e.target.value }))
+                        dispatch({ type: 'patchFormData', value: { addressLine: e.target.value } })
                       }
                       placeholder={t('crm:clients.addressPlaceholder')}
                       className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
@@ -1320,7 +1510,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => setContactsExpanded((prev) => !prev)}
+                      onClick={() => dispatch({ type: 'toggleContactsExpanded' })}
                       className="gap-2 text-xs font-semibold uppercase tracking-wide"
                     >
                       <i
@@ -1450,8 +1640,9 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       type="text"
                       value={formData.fiscalCode}
                       onChange={(e) => {
-                        setFormData((prev) => ({ ...prev, fiscalCode: e.target.value }));
-                        if (errors.fiscalCode) setErrors((prev) => ({ ...prev, fiscalCode: '' }));
+                        dispatch({ type: 'patchFormData', value: { fiscalCode: e.target.value } });
+                        if (errors.fiscalCode)
+                          dispatch({ type: 'patchErrors', value: { fiscalCode: '' } });
                       }}
                       placeholder={t('crm:clients.fiscalCodePlaceholder')}
                       className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
@@ -1470,7 +1661,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       type="text"
                       value={formData.atecoCode ?? ''}
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, atecoCode: e.target.value }))
+                        dispatch({ type: 'patchFormData', value: { atecoCode: e.target.value } })
                       }
                       placeholder={t('crm:clients.atecoCodePlaceholder')}
                       className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
@@ -1506,10 +1697,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       options={sectorOptions}
                       value={formData.sector || ''}
                       onChange={(val) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          sector: (val as Client['sector']) || null,
-                        }))
+                        dispatch({
+                          type: 'patchFormData',
+                          value: { sector: (val as Client['sector']) || null },
+                        })
                       }
                       placeholder={t('common:form.selectOption')}
                       searchable={false}
@@ -1537,10 +1728,12 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       options={numberOfEmployeesOptions}
                       value={formData.numberOfEmployees || ''}
                       onChange={(val) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          numberOfEmployees: (val as Client['numberOfEmployees']) || null,
-                        }))
+                        dispatch({
+                          type: 'patchFormData',
+                          value: {
+                            numberOfEmployees: (val as Client['numberOfEmployees']) || null,
+                          },
+                        })
                       }
                       placeholder={t('common:form.selectOption')}
                       searchable={false}
@@ -1568,10 +1761,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       options={revenueOptions}
                       value={formData.revenue || ''}
                       onChange={(val) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          revenue: (val as Client['revenue']) || null,
-                        }))
+                        dispatch({
+                          type: 'patchFormData',
+                          value: { revenue: (val as Client['revenue']) || null },
+                        })
                       }
                       placeholder={t('common:form.selectOption')}
                       searchable={false}
@@ -1599,10 +1792,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       options={officeCountRangeOptions}
                       value={formData.officeCountRange || ''}
                       onChange={(val) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          officeCountRange: (val as Client['officeCountRange']) || null,
-                        }))
+                        dispatch({
+                          type: 'patchFormData',
+                          value: { officeCountRange: (val as Client['officeCountRange']) || null },
+                        })
                       }
                       placeholder={t('common:form.selectOption')}
                       searchable={false}
@@ -1617,7 +1810,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       rows={3}
                       value={formData.description ?? ''}
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, description: e.target.value }))
+                        dispatch({ type: 'patchFormData', value: { description: e.target.value } })
                       }
                       placeholder={t('crm:clients.description')}
                       className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
@@ -1648,7 +1841,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
       <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen}
-        onClose={() => setIsDeleteConfirmOpen(false)}
+        onClose={() => dispatch({ type: 'setIsDeleteConfirmOpen', value: false })}
         onConfirm={() => {
           void handleDelete();
         }}

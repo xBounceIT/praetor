@@ -2,9 +2,6 @@ import type { DiscountType, DurationUnit, SupplierUnitType } from '../types';
 
 const CURRENCY_DECIMAL_PLACES = 2;
 
-// Duration display units (issue #757). `durationMonths` is the canonical pricing multiplier
-// (always whole months); `durationUnit` only controls how that value is shown/entered.
-export const DURATION_UNITS: readonly DurationUnit[] = ['months', 'years'];
 const MONTHS_PER_YEAR = 12;
 
 const shiftDecimal = (value: number, decimalPlaces: number): number => {

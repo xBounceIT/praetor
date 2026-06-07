@@ -46,6 +46,9 @@ const rilWeekdayTransferDefaultsSchema = {
   additionalProperties: false,
 } as const;
 
+// Set of valid weekday keys for O(1) membership checks inside the sanitizer loop below.
+const RIL_WEEKDAY_SET: ReadonlySet<string> = new Set(settingsRepo.RIL_WEEKDAYS);
+
 // Sanitize the per-weekday default-transfer map: drop unknown keys, trim values, and omit
 // blanks (a blank means "no default for that day"). `undefined` means the field was not sent,
 // so the existing column is preserved; an object (even `{}`) replaces the stored value.
@@ -60,7 +63,7 @@ const parseRilWeekdayTransferDefaults = (
   }
   const out: settingsRepo.RilWeekdayTransferDefaults = {};
   for (const [key, raw] of Object.entries(value)) {
-    if (!(settingsRepo.RIL_WEEKDAYS as readonly string[]).includes(key)) {
+    if (!RIL_WEEKDAY_SET.has(key)) {
       return { ok: false, message: `rilWeekdayTransferDefaults has an invalid weekday: ${key}` };
     }
     if (typeof raw !== 'string') {

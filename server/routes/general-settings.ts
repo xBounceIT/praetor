@@ -602,7 +602,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Compare via JSON of the sorted arrays so a role id containing the delimiter character can't
       // collide (ids are free-form strings) and wrongly skip the security-critical revocation below.
       const sameRoleSet = (a: string[], b: string[]): boolean =>
-        a.length === b.length && JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
+        a.length === b.length && JSON.stringify(a.toSorted()) === JSON.stringify(b.toSorted());
       const enforcementRelevantChange =
         resultEnableTotp !== (previousSettings?.enableTotp ?? true) ||
         resultEnforceTotp !== (previousSettings?.enforceTotp ?? false) ||

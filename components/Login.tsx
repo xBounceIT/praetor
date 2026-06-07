@@ -99,11 +99,13 @@ const Login: React.FC<LoginProps> = ({
   const usingCustomLogo = Boolean(logoUrl) && logoUrl !== failedLogoUrl;
   const resolvedLogoUrl = logoUrl && logoUrl !== failedLogoUrl ? logoUrl : '/praetor-logo.png';
 
-  // Second-factor flow state. `challengeToken`/`enrollToken` are short-lived
-  // server tokens returned by /auth/login that authorize the follow-up call.
+  // Second-factor flow state. `challengeToken`/`enrollToken` are short-lived server tokens returned
+  // by /auth/login that authorize the follow-up call. They are only ever read inside the verify/
+  // enroll handlers (never rendered) and are always set alongside a `setPhase(...)` transition that
+  // drives the re-render, so they live in refs rather than triggering a render of their own.
   const [phase, setPhase] = useState<LoginPhase>('credentials');
-  const [challengeToken, setChallengeToken] = useState('');
-  const [enrollToken, setEnrollToken] = useState('');
+  const challengeTokenRef = useRef('');
+  const enrollTokenRef = useRef('');
   const [totpCode, setTotpCode] = useState('');
   const [useBackupCode, setUseBackupCode] = useState(false);
   const [totpError, setTotpError] = useState('');
@@ -195,7 +197,7 @@ const Login: React.FC<LoginProps> = ({
       const result = await api.auth.login(username, password);
       // /auth/login may short-circuit into a second-factor branch (no token yet).
       if ('totpRequired' in result) {
-        setChallengeToken(result.challengeToken);
+        challengeTokenRef.current = result.challengeToken;
         setTotpCode('');
         setUseBackupCode(false);
         setTotpError('');
@@ -203,7 +205,7 @@ const Login: React.FC<LoginProps> = ({
         return;
       }
       if ('totpEnrollmentRequired' in result) {
-        setEnrollToken(result.enrollToken);
+        enrollTokenRef.current = result.enrollToken;
         pendingRef.current = null;
         setPhase('enroll');
         return;
@@ -225,8 +227,8 @@ const Login: React.FC<LoginProps> = ({
   // `bannerError` surfaces on the credentials form (e.g. an expired challenge).
   const resetToCredentials = (bannerError = '') => {
     setPhase('credentials');
-    setChallengeToken('');
-    setEnrollToken('');
+    challengeTokenRef.current = '';
+    enrollTokenRef.current = '';
     setTotpCode('');
     setUseBackupCode(false);
     setTotpError('');
@@ -240,7 +242,7 @@ const Login: React.FC<LoginProps> = ({
     setVerifyingTotp(true);
     setTotpError('');
     try {
-      const response = await api.auth.totpChallenge(challengeToken, code);
+      const response = await api.auth.totpChallenge(challengeTokenRef.current, code);
       onLogin(response.user, response.token);
     } catch (err) {
       // An expired/invalid challenge token can't be retried — send the user back
@@ -276,7 +278,7 @@ const Login: React.FC<LoginProps> = ({
   // Forced-enrollment confirm: capture the issued session token + user so the
   // wizard's onFinished can complete login after backup codes are shown.
   const handleEnrollConfirm = async (code: string) => {
-    const result = await api.auth.totpConfirm(code, enrollToken);
+    const result = await api.auth.totpConfirm(code, enrollTokenRef.current);
     if (result.token && result.user) {
       pendingRef.current = { token: result.token, user: result.user };
     }
@@ -616,7 +618,7 @@ const Login: React.FC<LoginProps> = ({
               </div>
 
               <TotpSetupWizard
-                onSetup={() => api.auth.totpSetup(enrollToken)}
+                onSetup={() => api.auth.totpSetup(enrollTokenRef.current)}
                 onConfirm={handleEnrollConfirm}
                 onFinished={handleEnrollFinished}
                 onCancel={() => resetToCredentials()}

@@ -458,12 +458,6 @@ const sanitizeColumnWidths = (
   );
 };
 
-const numberRecordsEqual = (a: Record<string, number>, b: Record<string, number>) => {
-  const aEntries = Object.entries(a);
-  const bEntries = Object.entries(b);
-  return aEntries.length === bEntries.length && aEntries.every(([key, value]) => b[key] === value);
-};
-
 const FONT_SIZES = ['xs', 'sm', 'base'] as const;
 type FontSize = (typeof FONT_SIZES)[number];
 
@@ -1143,16 +1137,17 @@ const StandardTable = <T extends object>({
 
   const fontSizeClass = fontSize === 'xs' ? 'text-xs' : fontSize === 'sm' ? 'text-sm' : 'text-base';
 
+  // Persist the clamped column widths whenever they change. The table renders from
+  // `clampedColumnSizing` (a memo derived from the raw sizing state), and `onColumnSizingChange`
+  // already clamps on every user resize, so there's no need to write the clamped value back into
+  // state from here — persisting the derived value directly avoids an extra render.
   useEffect(() => {
-    const next = clampColumnSizing(columnSizing);
-    if (!numberRecordsEqual(columnSizing, next)) {
-      setColumnSizing(next);
-      return;
-    }
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(getStorageKey(title, STORAGE_SUFFIX.colWidths), JSON.stringify(next));
-    }
-  }, [clampColumnSizing, columnSizing, title]);
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(
+      getStorageKey(title, STORAGE_SUFFIX.colWidths),
+      JSON.stringify(clampedColumnSizing),
+    );
+  }, [clampedColumnSizing, title]);
 
   const getValue = useCallback((row: T, col: Column<T>) => {
     if (col.accessorFn) return col.accessorFn(row);

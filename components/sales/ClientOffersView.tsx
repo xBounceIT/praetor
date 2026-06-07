@@ -1,6 +1,6 @@
 import { RotateCcw } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
@@ -148,6 +148,101 @@ const getDiscountPercentageLabelValue = (
     getDiscountPercentageValue(discount, discountType, subtotal, discountAmount),
   )}%`;
 
+interface ClientOffersViewState {
+  editingOffer: ClientOffer | null;
+  offerToDelete: ClientOffer | null;
+  offerToRevert: ClientOffer | null;
+  revertReason: string;
+  isModalOpen: boolean;
+  isDeleteConfirmOpen: boolean;
+  isRevertConfirmOpen: boolean;
+  isSubmitting: boolean;
+  isDeleting: boolean;
+  isReverting: boolean;
+}
+
+const INITIAL_CLIENT_OFFERS_VIEW_STATE: ClientOffersViewState = {
+  editingOffer: null,
+  offerToDelete: null,
+  offerToRevert: null,
+  revertReason: '',
+  isModalOpen: false,
+  isDeleteConfirmOpen: false,
+  isRevertConfirmOpen: false,
+  isSubmitting: false,
+  isDeleting: false,
+  isReverting: false,
+};
+
+type ClientOffersViewAction =
+  | { type: 'openEditModal'; offer: ClientOffer }
+  | { type: 'openAddModal' }
+  | { type: 'setEditingOffer'; offer: ClientOffer | null }
+  | { type: 'closeModal' }
+  | { type: 'openRevertConfirm'; offer: ClientOffer }
+  | { type: 'closeRevertConfirm' }
+  | { type: 'revertSuccess' }
+  | { type: 'setRevertReason'; value: string }
+  | { type: 'setIsReverting'; value: boolean }
+  | { type: 'promptDelete'; offer: ClientOffer }
+  | { type: 'closeDeleteConfirm' }
+  | { type: 'deleteSuccess' }
+  | { type: 'setIsDeleting'; value: boolean }
+  | { type: 'setIsSubmitting'; value: boolean };
+
+const clientOffersViewReducer = (
+  state: ClientOffersViewState,
+  action: ClientOffersViewAction,
+): ClientOffersViewState => {
+  switch (action.type) {
+    case 'openEditModal':
+      return { ...state, editingOffer: action.offer, isModalOpen: true };
+    case 'openAddModal':
+      return { ...state, editingOffer: null, isModalOpen: true };
+    case 'setEditingOffer':
+      return { ...state, editingOffer: action.offer };
+    case 'closeModal':
+      return { ...state, isModalOpen: false };
+    case 'openRevertConfirm':
+      return {
+        ...state,
+        offerToRevert: action.offer,
+        revertReason: '',
+        isRevertConfirmOpen: true,
+      };
+    case 'closeRevertConfirm':
+      return {
+        ...state,
+        isRevertConfirmOpen: false,
+        offerToRevert: null,
+        revertReason: '',
+      };
+    case 'revertSuccess':
+      return {
+        ...state,
+        isRevertConfirmOpen: false,
+        offerToRevert: null,
+        revertReason: '',
+      };
+    case 'setRevertReason':
+      return { ...state, revertReason: action.value };
+    case 'setIsReverting':
+      return { ...state, isReverting: action.value };
+    case 'promptDelete':
+      return { ...state, offerToDelete: action.offer, isDeleteConfirmOpen: true };
+    case 'closeDeleteConfirm':
+      return { ...state, isDeleteConfirmOpen: false };
+    case 'deleteSuccess':
+      return { ...state, isDeleteConfirmOpen: false, offerToDelete: null };
+    case 'setIsDeleting':
+      return { ...state, isDeleting: action.value };
+    case 'setIsSubmitting':
+      return { ...state, isSubmitting: action.value };
+    default:
+      return state;
+  }
+};
+
 const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   offers,
   clients,
@@ -276,19 +371,22 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     });
   };
 
-  const [editingOffer, setEditingOffer] = useState<ClientOffer | null>(null);
-  const [offerToDelete, setOfferToDelete] = useState<ClientOffer | null>(null);
-  const [offerToRevert, setOfferToRevert] = useState<ClientOffer | null>(null);
-  const [revertReason, setRevertReason] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [isRevertConfirmOpen, setIsRevertConfirmOpen] = useState(false);
+  const [state, dispatch] = useReducer(clientOffersViewReducer, INITIAL_CLIENT_OFFERS_VIEW_STATE);
+  const {
+    editingOffer,
+    offerToDelete,
+    offerToRevert,
+    revertReason,
+    isModalOpen,
+    isDeleteConfirmOpen,
+    isRevertConfirmOpen,
+    isSubmitting,
+    isDeleting,
+    isReverting,
+  } = state;
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<Partial<ClientOffer>>(() => getDefaultFormData());
   const [previewVersion, setPreviewVersion] = useState<OfferVersion | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isReverting, setIsReverting] = useState(false);
 
   const baseReadOnly = Boolean(editingOffer && editingOffer.status !== 'draft');
   const isReadOnly = baseReadOnly || previewVersion !== null;
@@ -325,11 +423,10 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   }, [offerFilterId, quoteFilterId]);
 
   const openEditModal = useCallback((offer: ClientOffer) => {
-    setEditingOffer(offer);
+    dispatch({ type: 'openEditModal', offer });
     setFormData(offerToFormData(offer));
     setErrors({});
     setPreviewVersion(null);
-    setIsModalOpen(true);
   }, []);
 
   const handleVersionPreview = useCallback(
@@ -354,7 +451,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
   const handleVersionRestored = useCallback(
     (updated: ClientOffer) => {
-      setEditingOffer(updated);
+      dispatch({ type: 'setEditingOffer', offer: updated });
       setFormData(offerToFormData(updated));
       setPreviewVersion(null);
       onOfferRestored?.(updated);
@@ -387,31 +484,25 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   };
 
   const openRevertConfirm = (offer: ClientOffer) => {
-    setOfferToRevert(offer);
-    setRevertReason('');
-    setIsRevertConfirmOpen(true);
+    dispatch({ type: 'openRevertConfirm', offer });
   };
 
   const closeRevertConfirm = () => {
     if (isReverting) return;
-    setIsRevertConfirmOpen(false);
-    setOfferToRevert(null);
-    setRevertReason('');
+    dispatch({ type: 'closeRevertConfirm' });
   };
 
   const handleRevertToDraft = async () => {
     if (!offerToRevert || !onRevertOfferToDraft || isReverting) return;
-    setIsReverting(true);
+    dispatch({ type: 'setIsReverting', value: true });
     try {
       const reason = revertReason.trim();
       await onRevertOfferToDraft(offerToRevert.id, reason || undefined);
-      setIsRevertConfirmOpen(false);
-      setOfferToRevert(null);
-      setRevertReason('');
+      dispatch({ type: 'revertSuccess' });
     } catch (err) {
       toastError((err as Error).message || t('sales:clientOffers.failedToUpdateStatus'));
     } finally {
-      setIsReverting(false);
+      dispatch({ type: 'setIsReverting', value: false });
     }
   };
 
@@ -823,8 +914,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setOfferToDelete(row);
-                        setIsDeleteConfirmOpen(true);
+                        dispatch({ type: 'promptDelete', offer: row });
                       }}
                       aria-label={t('common:buttons.delete')}
                       className="p-2 text-red-600 rounded-lg transition-all hover:text-red-600 hover:bg-red-50"
@@ -843,11 +933,10 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   ];
 
   const openAddModal = () => {
-    setEditingOffer(null);
+    dispatch({ type: 'openAddModal' });
     setFormData(getDefaultFormData());
     setErrors({});
     setPreviewVersion(null);
-    setIsModalOpen(true);
   };
 
   const handleClientChange = (clientId: string) => {
@@ -1033,7 +1122,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       })),
     };
 
-    setIsSubmitting(true);
+    dispatch({ type: 'setIsSubmitting', value: true });
     try {
       if (editingOffer) {
         await onUpdateOffer(editingOffer.id, payload);
@@ -1044,14 +1133,14 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       toastError((err as Error).message || t('sales:clientOffers.failedToSave'));
       return;
     } finally {
-      setIsSubmitting(false);
+      dispatch({ type: 'setIsSubmitting', value: false });
     }
-    setIsModalOpen(false);
+    dispatch({ type: 'closeModal' });
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+      <Modal isOpen={isModalOpen} onClose={() => dispatch({ type: 'closeModal' })}>
         <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
           <ModalContent size="full" className="max-h-[90vh]">
             <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
@@ -1069,7 +1158,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                       ? t('sales:clientOffers.editOffer', { defaultValue: 'Edit offer' })
                       : t('sales:clientOffers.newOffer', { defaultValue: 'New offer' })}
                 </ModalTitle>
-                <ModalCloseButton onClick={() => setIsModalOpen(false)} />
+                <ModalCloseButton onClick={() => dispatch({ type: 'closeModal' })} />
               </ModalHeader>
 
               <ModalBody className="flex-1 space-y-5">
@@ -1881,7 +1970,11 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
               </ModalBody>
 
               <ModalFooter>
-                <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => dispatch({ type: 'closeModal' })}
+                >
                   {t('common:buttons.cancel')}
                 </Button>
                 {!isReadOnly && (
@@ -1938,7 +2031,9 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 <Textarea
                   id="client-offer-revert-reason"
                   value={revertReason}
-                  onChange={(event) => setRevertReason(event.target.value)}
+                  onChange={(event) =>
+                    dispatch({ type: 'setRevertReason', value: event.target.value })
+                  }
                   disabled={isReverting}
                   placeholder={t('sales:clientOffers.revertReasonPlaceholder', {
                     defaultValue: 'Optional note for the audit trail',
@@ -1977,20 +2072,19 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         isOpen={isDeleteConfirmOpen}
         onClose={() => {
           if (isDeleting) return;
-          setIsDeleteConfirmOpen(false);
+          dispatch({ type: 'closeDeleteConfirm' });
         }}
         onConfirm={async () => {
           if (!offerToDelete) return;
           if (isDeleting) return;
-          setIsDeleting(true);
+          dispatch({ type: 'setIsDeleting', value: true });
           try {
             await onDeleteOffer(offerToDelete.id);
-            setIsDeleteConfirmOpen(false);
-            setOfferToDelete(null);
+            dispatch({ type: 'deleteSuccess' });
           } catch (err) {
             toastError((err as Error).message || t('sales:clientOffers.failedToDelete'));
           } finally {
-            setIsDeleting(false);
+            dispatch({ type: 'setIsDeleting', value: false });
           }
         }}
         isDeleting={isDeleting}

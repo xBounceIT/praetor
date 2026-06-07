@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
@@ -117,6 +117,153 @@ const getDefaultFormData = (): Partial<SupplierQuote> => ({
   notes: '',
 });
 
+interface SupplierQuotesViewState {
+  editingQuote: SupplierQuote | null;
+  quoteToDelete: SupplierQuote | null;
+  isModalOpen: boolean;
+  isDeleteConfirmOpen: boolean;
+  errors: Record<string, string>;
+  formData: Partial<SupplierQuote>;
+  previewVersion: SupplierQuoteVersion | null;
+  isSubmitting: boolean;
+  isDeleting: boolean;
+}
+
+const getInitialSupplierQuotesState = (): SupplierQuotesViewState => ({
+  editingQuote: null,
+  quoteToDelete: null,
+  isModalOpen: false,
+  isDeleteConfirmOpen: false,
+  errors: {},
+  formData: getDefaultFormData(),
+  previewVersion: null,
+  isSubmitting: false,
+  isDeleting: false,
+});
+
+type SupplierQuotesViewAction =
+  | { type: 'setEditingQuote'; value: SupplierQuote | null }
+  | { type: 'setQuoteToDelete'; value: SupplierQuote | null }
+  | { type: 'setIsModalOpen'; value: boolean }
+  | { type: 'setIsDeleteConfirmOpen'; value: boolean }
+  | { type: 'setErrors'; value: Record<string, string> }
+  | { type: 'clearError'; key: string }
+  | { type: 'setFormData'; value: Partial<SupplierQuote> }
+  | { type: 'patchFormData'; value: Partial<SupplierQuote> }
+  | { type: 'setPreviewVersion'; value: SupplierQuoteVersion | null }
+  | { type: 'setIsSubmitting'; value: boolean }
+  | { type: 'setIsDeleting'; value: boolean }
+  | { type: 'closeModal' }
+  | { type: 'openAddModal' }
+  | { type: 'openEditModal'; quote: SupplierQuote; formData: Partial<SupplierQuote> }
+  | { type: 'previewVersion'; version: SupplierQuoteVersion; formData: Partial<SupplierQuote> }
+  | { type: 'restoreVersion'; quote: SupplierQuote; formData: Partial<SupplierQuote> }
+  | { type: 'updateItem'; index: number; field: keyof SupplierQuoteItem; value: string | number }
+  | { type: 'addItem'; item: SupplierQuoteItem }
+  | { type: 'removeItem'; index: number }
+  | { type: 'setItem'; index: number; item: SupplierQuoteItem };
+
+const supplierQuotesViewReducer = (
+  state: SupplierQuotesViewState,
+  action: SupplierQuotesViewAction,
+): SupplierQuotesViewState => {
+  switch (action.type) {
+    case 'setEditingQuote':
+      return { ...state, editingQuote: action.value };
+    case 'setQuoteToDelete':
+      return { ...state, quoteToDelete: action.value };
+    case 'setIsModalOpen':
+      return { ...state, isModalOpen: action.value };
+    case 'setIsDeleteConfirmOpen':
+      return { ...state, isDeleteConfirmOpen: action.value };
+    case 'setErrors':
+      return { ...state, errors: action.value };
+    case 'clearError': {
+      const next = { ...state.errors };
+      delete next[action.key];
+      return { ...state, errors: next };
+    }
+    case 'setFormData':
+      return { ...state, formData: action.value };
+    case 'patchFormData':
+      return { ...state, formData: { ...state.formData, ...action.value } };
+    case 'setPreviewVersion':
+      return { ...state, previewVersion: action.value };
+    case 'setIsSubmitting':
+      return { ...state, isSubmitting: action.value };
+    case 'setIsDeleting':
+      return { ...state, isDeleting: action.value };
+    case 'closeModal':
+      return { ...state, isModalOpen: false, previewVersion: null };
+    case 'openAddModal':
+      return {
+        ...state,
+        editingQuote: null,
+        formData: getDefaultFormData(),
+        errors: {},
+        previewVersion: null,
+        isModalOpen: true,
+      };
+    case 'openEditModal':
+      return {
+        ...state,
+        editingQuote: action.quote,
+        formData: action.formData,
+        errors: {},
+        previewVersion: null,
+        isModalOpen: true,
+      };
+    case 'previewVersion':
+      return {
+        ...state,
+        previewVersion: action.version,
+        formData: action.formData,
+        errors: {},
+      };
+    case 'restoreVersion':
+      return {
+        ...state,
+        editingQuote: action.quote,
+        formData: action.formData,
+        previewVersion: null,
+      };
+    case 'updateItem': {
+      const items = [...(state.formData.items || [])];
+      const current = items[action.index];
+      if (!current) return state;
+      const next = { ...current, [action.field]: action.value };
+      // Prezzo listino / Sconto a noi edits re-derive the whole line at the persisted DB scale in
+      // the same update, so the rounded list price/discount and the net cost — and every total that
+      // reads them — stay in lockstep with what the server will store.
+      if (action.field === 'listPrice' || action.field === 'discountPercent') {
+        const pricing = deriveLinePricing(next.listPrice, next.discountPercent);
+        next.listPrice = pricing.listPrice;
+        next.discountPercent = pricing.discountPercent;
+        next.unitPrice = pricing.unitPrice;
+      }
+      items[action.index] = next;
+      return { ...state, formData: { ...state.formData, items } };
+    }
+    case 'addItem':
+      return {
+        ...state,
+        formData: { ...state.formData, items: [...(state.formData.items || []), action.item] },
+      };
+    case 'removeItem': {
+      const items = [...(state.formData.items || [])];
+      items.splice(action.index, 1);
+      return { ...state, formData: { ...state.formData, items } };
+    }
+    case 'setItem': {
+      const items = [...(state.formData.items || [])];
+      items[action.index] = action.item;
+      return { ...state, formData: { ...state.formData, items } };
+    }
+    default:
+      return state;
+  }
+};
+
 const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   quotes,
   suppliers,
@@ -161,15 +308,22 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     return undefined;
   }, [quoteFilterId]);
 
-  const [editingQuote, setEditingQuote] = useState<SupplierQuote | null>(null);
-  const [quoteToDelete, setQuoteToDelete] = useState<SupplierQuote | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [formData, setFormData] = useState<Partial<SupplierQuote>>(() => getDefaultFormData());
-  const [previewVersion, setPreviewVersion] = useState<SupplierQuoteVersion | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [state, dispatch] = useReducer(
+    supplierQuotesViewReducer,
+    undefined,
+    getInitialSupplierQuotesState,
+  );
+  const {
+    editingQuote,
+    quoteToDelete,
+    isModalOpen,
+    isDeleteConfirmOpen,
+    errors,
+    formData,
+    previewVersion,
+    isSubmitting,
+    isDeleting,
+  } = state;
 
   const baseReadOnly = Boolean(editingQuote && editingQuote.status !== 'draft');
   const isReadOnly = baseReadOnly || previewVersion !== null;
@@ -200,16 +354,11 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const itemInputClassName = 'font-medium';
 
   const closeModal = useCallback(() => {
-    setIsModalOpen(false);
-    setPreviewVersion(null);
+    dispatch({ type: 'closeModal' });
   }, []);
 
   const openAddModal = useCallback(() => {
-    setEditingQuote(null);
-    setFormData(getDefaultFormData());
-    setErrors({});
-    setPreviewVersion(null);
-    setIsModalOpen(true);
+    dispatch({ type: 'openAddModal' });
   }, []);
 
   const quoteToFormData = useCallback(
@@ -222,42 +371,40 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
   const openEditModal = useCallback(
     (quote: SupplierQuote) => {
-      setEditingQuote(quote);
-      setFormData(quoteToFormData(quote));
-      setErrors({});
-      setPreviewVersion(null);
-      setIsModalOpen(true);
+      dispatch({ type: 'openEditModal', quote, formData: quoteToFormData(quote) });
     },
     [quoteToFormData],
   );
 
   const handleVersionPreview = useCallback(
     (version: SupplierQuoteVersion) => {
-      setPreviewVersion(version);
-      setFormData({
-        ...version.snapshot.quote,
-        id: editingQuote?.id ?? version.snapshot.quote.id,
-        items: version.snapshot.items,
-        expirationDate: version.snapshot.quote.expirationDate
-          ? normalizeDateOnlyString(version.snapshot.quote.expirationDate)
-          : '',
-        status: version.snapshot.quote.status as SupplierQuote['status'],
+      dispatch({
+        type: 'previewVersion',
+        version,
+        formData: {
+          ...version.snapshot.quote,
+          id: editingQuote?.id ?? version.snapshot.quote.id,
+          items: version.snapshot.items,
+          expirationDate: version.snapshot.quote.expirationDate
+            ? normalizeDateOnlyString(version.snapshot.quote.expirationDate)
+            : '',
+          status: version.snapshot.quote.status as SupplierQuote['status'],
+        },
       });
-      setErrors({});
     },
     [editingQuote],
   );
 
   const handleClearPreview = useCallback(() => {
-    if (editingQuote) setFormData(quoteToFormData(editingQuote));
-    setPreviewVersion(null);
+    if (editingQuote) {
+      dispatch({ type: 'setFormData', value: quoteToFormData(editingQuote) });
+    }
+    dispatch({ type: 'setPreviewVersion', value: null });
   }, [editingQuote, quoteToFormData]);
 
   const handleVersionRestored = useCallback(
     (updated: SupplierQuote) => {
-      setEditingQuote(updated);
-      setFormData(quoteToFormData(updated));
-      setPreviewVersion(null);
+      dispatch({ type: 'restoreVersion', quote: updated, formData: quoteToFormData(updated) });
       onQuoteRestored?.(updated);
     },
     [onQuoteRestored, quoteToFormData],
@@ -274,11 +421,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const handleSupplierChange = useCallback(
     (supplierId: string) => {
       const supplier = suppliers.find((item) => item.id === supplierId);
-      setFormData((prev) => ({
-        ...prev,
-        supplierId,
-        supplierName: supplier?.name || '',
-      }));
+      dispatch({
+        type: 'patchFormData',
+        value: { supplierId, supplierName: supplier?.name || '' },
+      });
     },
     [suppliers],
   );
@@ -289,9 +435,11 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const clientOptions = useMemo(() => {
     const options = [
       { id: '', name: t('sales:supplierQuotes.noClient', { defaultValue: 'No customer' }) },
-      ...clients
-        .filter((client) => !client.isDisabled || client.id === editingQuote?.clientId)
-        .map((client) => ({ id: client.id, name: client.name })),
+      ...clients.flatMap((client) =>
+        !client.isDisabled || client.id === editingQuote?.clientId
+          ? [{ id: client.id, name: client.name }]
+          : [],
+      ),
     ];
     // The linked client may be missing from a user-scoped /clients list (no crm.clients_all.view
     // and not assigned to it). Synthesize an option from the quote's stored name so the select
@@ -306,11 +454,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const handleClientChange = useCallback(
     (clientId: string) => {
       const client = clients.find((item) => item.id === clientId);
-      setFormData((prev) => ({
-        ...prev,
-        clientId: clientId || null,
-        clientName: client?.name || null,
-      }));
+      dispatch({
+        type: 'patchFormData',
+        value: { clientId: clientId || null, clientName: client?.name || null },
+      });
     },
     [clients],
   );
@@ -318,56 +465,33 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   const updateItem = useCallback(
     (index: number, field: keyof SupplierQuoteItem, value: string | number) => {
       if (isReadOnly) return;
-      setFormData((prev) => {
-        const items = [...(prev.items || [])];
-        const current = items[index];
-        if (!current) return prev;
-        const next = { ...current, [field]: value };
-        // Prezzo listino / Sconto a noi edits re-derive the whole line at the persisted DB scale in
-        // the same update, so the rounded list price/discount and the net cost — and every total that
-        // reads them — stay in lockstep with what the server will store.
-        if (field === 'listPrice' || field === 'discountPercent') {
-          const pricing = deriveLinePricing(next.listPrice, next.discountPercent);
-          next.listPrice = pricing.listPrice;
-          next.discountPercent = pricing.discountPercent;
-          next.unitPrice = pricing.unitPrice;
-        }
-        items[index] = next;
-        return { ...prev, items };
-      });
+      dispatch({ type: 'updateItem', index, field, value });
     },
     [isReadOnly],
   );
 
   const addItem = useCallback(() => {
     if (isReadOnly) return;
-    setFormData((prev) => ({
-      ...prev,
-      items: [
-        ...(prev.items || []),
-        {
-          id: `tmp-${Date.now()}`,
-          quoteId: editingQuote?.id || '',
-          productName: '',
-          quantity: 1,
-          listPrice: 0,
-          discountPercent: 0,
-          unitPrice: 0,
-          unitType: 'unit' as const,
-          note: '',
-        },
-      ],
-    }));
+    dispatch({
+      type: 'addItem',
+      item: {
+        id: `tmp-${Date.now()}`,
+        quoteId: editingQuote?.id || '',
+        productName: '',
+        quantity: 1,
+        listPrice: 0,
+        discountPercent: 0,
+        unitPrice: 0,
+        unitType: 'unit' as const,
+        note: '',
+      },
+    });
   }, [editingQuote?.id, isReadOnly]);
 
   const removeItem = useCallback(
     (index: number) => {
       if (isReadOnly) return;
-      setFormData((prev) => {
-        const items = [...(prev.items || [])];
-        items.splice(index, 1);
-        return { ...prev, items };
-      });
+      dispatch({ type: 'removeItem', index });
     },
     [isReadOnly],
   );
@@ -382,15 +506,17 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     const baseListPrice = item.listPrice ?? item.unitPrice ?? 0;
     const adjustedListPrice = convertUnitPrice(baseListPrice, oldType, newType);
     const pricing = deriveLinePricing(adjustedListPrice, item.discountPercent ?? 0);
-    const newItems = [...(formData.items || [])];
-    newItems[index] = {
-      ...newItems[index],
-      unitType: newType,
-      listPrice: pricing.listPrice,
-      discountPercent: pricing.discountPercent,
-      unitPrice: pricing.unitPrice,
-    };
-    setFormData((prev) => ({ ...prev, items: newItems }));
+    dispatch({
+      type: 'setItem',
+      index,
+      item: {
+        ...item,
+        unitType: newType,
+        listPrice: pricing.listPrice,
+        discountPercent: pricing.discountPercent,
+        unitPrice: pricing.unitPrice,
+      },
+    });
   };
 
   const handleStatusUpdate = useCallback(
@@ -708,8 +834,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation();
-                          setQuoteToDelete(row);
-                          setIsDeleteConfirmOpen(true);
+                          dispatch({ type: 'setQuoteToDelete', value: row });
+                          dispatch({ type: 'setIsDeleteConfirmOpen', value: true });
                         }}
                         aria-label={t('common:buttons.delete', { defaultValue: 'Delete' })}
                         className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
@@ -799,7 +925,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     }
 
     if (Object.keys(nextErrors).length > 0) {
-      setErrors(nextErrors);
+      dispatch({ type: 'setErrors', value: nextErrors });
       return;
     }
 
@@ -816,7 +942,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       })),
     };
 
-    setIsSubmitting(true);
+    dispatch({ type: 'setIsSubmitting', value: true });
     try {
       if (editingQuote) {
         await onUpdateQuote(editingQuote.id, payload);
@@ -827,7 +953,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       toastError((err as Error).message || t('sales:supplierQuotes.failedToSave'));
       return;
     } finally {
-      setIsSubmitting(false);
+      dispatch({ type: 'setIsSubmitting', value: false });
     }
     closeModal();
   };
@@ -970,16 +1096,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         value={formData.id || ''}
                         disabled={isReadOnly}
                         onChange={(event) => {
-                          setFormData((prev) => ({
-                            ...prev,
-                            id: event.target.value,
-                          }));
+                          dispatch({ type: 'patchFormData', value: { id: event.target.value } });
                           if (errors.id) {
-                            setErrors((prev) => {
-                              const next = { ...prev };
-                              delete next.id;
-                              return next;
-                            });
+                            dispatch({ type: 'clearError', key: 'id' });
                           }
                         }}
                         className={errors.id ? 'border-red-300' : ''}
@@ -993,10 +1112,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         options={paymentTermsOptions}
                         value={formData.paymentTerms || 'immediate'}
                         onChange={(value) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            paymentTerms: value as SupplierQuote['paymentTerms'],
-                          }))
+                          dispatch({
+                            type: 'patchFormData',
+                            value: { paymentTerms: value as SupplierQuote['paymentTerms'] },
+                          })
                         }
                         searchable={false}
                         disabled={isReadOnly}
@@ -1017,7 +1136,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         value={formData.expirationDate || ''}
                         disabled={isReadOnly}
                         onChange={(value) =>
-                          setFormData((prev) => ({ ...prev, expirationDate: value }))
+                          dispatch({ type: 'patchFormData', value: { expirationDate: value } })
                         }
                       />
                     </Field>
@@ -1382,7 +1501,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         defaultValue: 'Optional notes...',
                       })}
                       onChange={(event) =>
-                        setFormData((prev) => ({ ...prev, notes: event.target.value }))
+                        dispatch({ type: 'patchFormData', value: { notes: event.target.value } })
                       }
                       className="min-h-28 resize-none"
                     />
@@ -1445,20 +1564,20 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         isOpen={isDeleteConfirmOpen}
         onClose={() => {
           if (isDeleting) return;
-          setIsDeleteConfirmOpen(false);
+          dispatch({ type: 'setIsDeleteConfirmOpen', value: false });
         }}
         onConfirm={async () => {
           if (!quoteToDelete) return;
           if (isDeleting) return;
-          setIsDeleting(true);
+          dispatch({ type: 'setIsDeleting', value: true });
           try {
             await onDeleteQuote(quoteToDelete.id);
-            setIsDeleteConfirmOpen(false);
-            setQuoteToDelete(null);
+            dispatch({ type: 'setIsDeleteConfirmOpen', value: false });
+            dispatch({ type: 'setQuoteToDelete', value: null });
           } catch (err) {
             toastError((err as Error).message || t('sales:supplierQuotes.failedToDelete'));
           } finally {
-            setIsDeleting(false);
+            dispatch({ type: 'setIsDeleting', value: false });
           }
         }}
         isDeleting={isDeleting}
