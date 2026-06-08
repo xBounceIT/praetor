@@ -24809,6 +24809,16 @@
                                 "days",
                                 "unit"
                               ]
+                            },
+                            "durationMonths": {
+                              "type": "number"
+                            },
+                            "durationUnit": {
+                              "type": "string",
+                              "enum": [
+                                "months",
+                                "years"
+                              ]
                             }
                           },
                           "required": [
@@ -25056,6 +25066,16 @@
                             "days",
                             "unit"
                           ]
+                        },
+                        "durationMonths": {
+                          "type": "number"
+                        },
+                        "durationUnit": {
+                          "type": "string",
+                          "enum": [
+                            "months",
+                            "years"
+                          ]
                         }
                       },
                       "required": [
@@ -25233,6 +25253,16 @@
                               "hours",
                               "days",
                               "unit"
+                            ]
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
                             ]
                           }
                         },
@@ -25461,6 +25491,16 @@
                             "days",
                             "unit"
                           ]
+                        },
+                        "durationMonths": {
+                          "type": "number"
+                        },
+                        "durationUnit": {
+                          "type": "string",
+                          "enum": [
+                            "months",
+                            "years"
+                          ]
                         }
                       },
                       "required": [
@@ -25644,6 +25684,16 @@
                               "hours",
                               "days",
                               "unit"
+                            ]
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
                             ]
                           }
                         },
@@ -26539,6 +26589,16 @@
                               "days",
                               "unit"
                             ]
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [
@@ -26850,6 +26910,16 @@
                             },
                             "discount": {
                               "type": "number"
+                            },
+                            "durationMonths": {
+                              "type": "number"
+                            },
+                            "durationUnit": {
+                              "type": "string",
+                              "enum": [
+                                "months",
+                                "years"
+                              ]
                             }
                           },
                           "required": [
@@ -27105,6 +27175,16 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "durationMonths": {
+                          "type": "number"
+                        },
+                        "durationUnit": {
+                          "type": "string",
+                          "enum": [
+                            "months",
+                            "years"
+                          ]
                         }
                       },
                       "required": [
@@ -27297,6 +27377,16 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [
@@ -27529,6 +27619,16 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "durationMonths": {
+                          "type": "number"
+                        },
+                        "durationUnit": {
+                          "type": "string",
+                          "enum": [
+                            "months",
+                            "years"
+                          ]
                         }
                       },
                       "required": [
@@ -27723,6 +27823,16 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [
@@ -28201,6 +28311,16 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [
@@ -28951,6 +29071,16 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [
@@ -30525,6 +30655,16 @@
                             },
                             "discount": {
                               "type": "number"
+                            },
+                            "durationMonths": {
+                              "type": "number"
+                            },
+                            "durationUnit": {
+                              "type": "string",
+                              "enum": [
+                                "months",
+                                "years"
+                              ]
                             }
                           },
                           "required": [
@@ -30797,6 +30937,16 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "durationMonths": {
+                          "type": "number"
+                        },
+                        "durationUnit": {
+                          "type": "string",
+                          "enum": [
+                            "months",
+                            "years"
+                          ]
                         }
                       },
                       "required": [
@@ -30989,6 +31139,16 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [
@@ -31238,6 +31398,16 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "durationMonths": {
+                          "type": "number"
+                        },
+                        "durationUnit": {
+                          "type": "string",
+                          "enum": [
+                            "months",
+                            "years"
+                          ]
                         }
                       },
                       "required": [
@@ -31438,6 +31608,16 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [
@@ -32353,6 +32533,16 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [
@@ -32621,6 +32811,16 @@
                             },
                             "taxRate": {
                               "type": "number"
+                            },
+                            "durationMonths": {
+                              "type": "number"
+                            },
+                            "durationUnit": {
+                              "type": "string",
+                              "enum": [
+                                "months",
+                                "years"
+                              ]
                             }
                           },
                           "required": [
@@ -32875,6 +33075,16 @@
                         },
                         "taxRate": {
                           "type": "number"
+                        },
+                        "durationMonths": {
+                          "type": "number"
+                        },
+                        "durationUnit": {
+                          "type": "string",
+                          "enum": [
+                            "months",
+                            "years"
+                          ]
                         }
                       },
                       "required": [
@@ -32993,6 +33203,16 @@
                           },
                           "taxRate": {
                             "type": "number"
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [
@@ -33227,6 +33447,16 @@
                         },
                         "taxRate": {
                           "type": "number"
+                        },
+                        "durationMonths": {
+                          "type": "number"
+                        },
+                        "durationUnit": {
+                          "type": "string",
+                          "enum": [
+                            "months",
+                            "years"
+                          ]
                         }
                       },
                       "required": [
@@ -33348,6 +33578,16 @@
                           },
                           "taxRate": {
                             "type": "number"
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [
@@ -43806,6 +44046,7 @@
                 "supplier_quote_attachment",
                 "task",
                 "user",
+                "webhook",
                 "work_unit"
               ]
             },
@@ -43911,6 +44152,1323 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/webhooks/": {
+      "get": {
+        "summary": "List webhook targets",
+        "tags": [
+          "webhooks"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string"
+                      },
+                      "httpMethod": {
+                        "type": "string",
+                        "enum": [
+                          "GET",
+                          "POST",
+                          "PUT",
+                          "PATCH",
+                          "DELETE"
+                        ]
+                      },
+                      "authType": {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "basic",
+                          "bearer",
+                          "api_key"
+                        ]
+                      },
+                      "authUsername": {
+                        "type": "string"
+                      },
+                      "authHeaderName": {
+                        "type": "string"
+                      },
+                      "authSecret": {
+                        "type": "string"
+                      },
+                      "customHeaders": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "enabled": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "description",
+                      "url",
+                      "httpMethod",
+                      "authType",
+                      "authUsername",
+                      "authHeaderName",
+                      "authSecret",
+                      "customHeaders",
+                      "enabled"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a webhook target",
+        "tags": [
+          "webhooks"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "httpMethod": {
+                    "type": "string",
+                    "enum": [
+                      "GET",
+                      "POST",
+                      "PUT",
+                      "PATCH",
+                      "DELETE"
+                    ]
+                  },
+                  "authType": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "basic",
+                      "bearer",
+                      "api_key"
+                    ]
+                  },
+                  "authUsername": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "authHeaderName": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "authSecret": {
+                    "type": "string"
+                  },
+                  "customHeaders": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 50
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "httpMethod": {
+                      "type": "string",
+                      "enum": [
+                        "GET",
+                        "POST",
+                        "PUT",
+                        "PATCH",
+                        "DELETE"
+                      ]
+                    },
+                    "authType": {
+                      "type": "string",
+                      "enum": [
+                        "none",
+                        "basic",
+                        "bearer",
+                        "api_key"
+                      ]
+                    },
+                    "authUsername": {
+                      "type": "string"
+                    },
+                    "authHeaderName": {
+                      "type": "string"
+                    },
+                    "authSecret": {
+                      "type": "string"
+                    },
+                    "customHeaders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "value"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "description",
+                    "url",
+                    "httpMethod",
+                    "authType",
+                    "authUsername",
+                    "authHeaderName",
+                    "authSecret",
+                    "customHeaders",
+                    "enabled"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/webhooks/{id}": {
+      "get": {
+        "summary": "Get a webhook target by id",
+        "tags": [
+          "webhooks"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "httpMethod": {
+                      "type": "string",
+                      "enum": [
+                        "GET",
+                        "POST",
+                        "PUT",
+                        "PATCH",
+                        "DELETE"
+                      ]
+                    },
+                    "authType": {
+                      "type": "string",
+                      "enum": [
+                        "none",
+                        "basic",
+                        "bearer",
+                        "api_key"
+                      ]
+                    },
+                    "authUsername": {
+                      "type": "string"
+                    },
+                    "authHeaderName": {
+                      "type": "string"
+                    },
+                    "authSecret": {
+                      "type": "string"
+                    },
+                    "customHeaders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "value"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "description",
+                    "url",
+                    "httpMethod",
+                    "authType",
+                    "authUsername",
+                    "authHeaderName",
+                    "authSecret",
+                    "customHeaders",
+                    "enabled"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a webhook target",
+        "tags": [
+          "webhooks"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "httpMethod": {
+                    "type": "string",
+                    "enum": [
+                      "GET",
+                      "POST",
+                      "PUT",
+                      "PATCH",
+                      "DELETE"
+                    ]
+                  },
+                  "authType": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "basic",
+                      "bearer",
+                      "api_key"
+                    ]
+                  },
+                  "authUsername": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "authHeaderName": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "authSecret": {
+                    "type": "string"
+                  },
+                  "customHeaders": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 50
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "httpMethod": {
+                      "type": "string",
+                      "enum": [
+                        "GET",
+                        "POST",
+                        "PUT",
+                        "PATCH",
+                        "DELETE"
+                      ]
+                    },
+                    "authType": {
+                      "type": "string",
+                      "enum": [
+                        "none",
+                        "basic",
+                        "bearer",
+                        "api_key"
+                      ]
+                    },
+                    "authUsername": {
+                      "type": "string"
+                    },
+                    "authHeaderName": {
+                      "type": "string"
+                    },
+                    "authSecret": {
+                      "type": "string"
+                    },
+                    "customHeaders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "value"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "description",
+                    "url",
+                    "httpMethod",
+                    "authType",
+                    "authUsername",
+                    "authHeaderName",
+                    "authSecret",
+                    "customHeaders",
+                    "enabled"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a webhook target",
+        "tags": [
+          "webhooks"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Default Response"
           },
           "400": {
             "description": "Default Response",
