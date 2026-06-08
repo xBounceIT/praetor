@@ -54,6 +54,7 @@ export type {
   ViewShare,
 } from './api/views';
 export { viewsApi } from './api/views';
+export { webhooksApi } from './api/webhooks';
 export { workUnitsApi } from './api/workUnits';
 
 import { aiApi } from './api/ai';
@@ -87,6 +88,7 @@ import { suppliersApi } from './api/suppliers';
 import { tasksApi } from './api/tasks';
 import { usersApi } from './api/users';
 import { viewsApi } from './api/views';
+import { webhooksApi } from './api/webhooks';
 import { workUnitsApi } from './api/workUnits';
 
 export default {
@@ -114,6 +116,7 @@ export default {
   notifications: notificationsApi,
   workUnits: workUnitsApi,
   views: viewsApi,
+  webhooks: webhooksApi,
   settings: settingsApi,
   sso: ssoApi,
   ldap: ldapApi,

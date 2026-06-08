@@ -41,6 +41,7 @@ export const AUDIT_ENTITY_TYPES = [
   'supplier_quote_attachment',
   'task',
   'user',
+  'webhook',
   'work_unit',
 ] as const;
 

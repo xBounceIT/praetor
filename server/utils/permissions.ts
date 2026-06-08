@@ -84,6 +84,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'administration.email', actions: VIEW_UPDATE },
   { id: 'administration.roles', actions: CRUD },
   { id: 'administration.logs', actions: VIEW_ONLY },
+  { id: 'administration.webhooks', actions: CRUD },
 
   // Standalone
   { id: 'settings', actions: VIEW_UPDATE },

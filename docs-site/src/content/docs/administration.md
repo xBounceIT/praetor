@@ -1,6 +1,6 @@
 ---
 title: Amministrazione
-description: Gestione di utenti, ruoli, autenticazione, impostazioni, email e log.
+description: Gestione di utenti, ruoli, autenticazione, impostazioni, email, log e webhook.
 sidebar:
   order: 7
 ---
@@ -106,3 +106,20 @@ Dopo aver modificato SMTP, mittente o sicurezza, esegui sempre un test di invio 
 I log aiutano a ricostruire accessi e operazioni rilevanti. Usali per audit, troubleshooting e verifiche dopo modifiche amministrative.
 
 Filtra per periodo per ridurre il rumore e concentrarti sull'evento da analizzare.
+
+## Webhook
+
+I webhook consentono agli amministratori di registrare destinazioni HTTP in uscita che Praetor può chiamare per notificare sistemi esterni. La pagina **Webhook** elenca tutte le destinazioni configurate ed è disponibile agli amministratori con i permessi `administration.webhooks` corrispondenti.
+
+Ogni destinazione definisce:
+
+- **Nome** e una **Descrizione** facoltativa per identificare l'integrazione.
+- **URL** — l'endpoint che Praetor chiama. Sono accettati solo URL `http` e `https`.
+- **Metodo HTTP** — `GET`, `POST` (predefinito), `PUT`, `PATCH` o `DELETE`.
+- **Autenticazione** — come Praetor si autentica verso la destinazione: **Nessuna**, **Bearer token**, **Basic** (nome utente e password) o **Chiave API** (un valore inviato in un header personalizzato che assegni). La credenziale segreta è cifrata a riposo e non viene mai restituita al browser; in modifica mostra un badge **Memorizzato — Sostituisci**, e lo stesso comportamento Mantieni / Sostituisci degli altri campi segreti la preserva finché non la sostituisci o la rimuovi esplicitamente.
+- **Header personalizzati** — coppie chiave/valore facoltative allegate a ogni richiesta, sovrapposte all'header di autenticazione. Usali per valori di instradamento non segreti come un id tenant.
+- **Abilitato** — un interruttore che marca la destinazione come attiva o inattiva.
+
+Le azioni di creazione, modifica ed eliminazione sono regolate rispettivamente dai permessi create, update e delete, e ogni modifica viene scritta nel log di audit.
+
+Questa pagina configura solo le destinazioni; gli eventi che attivano ciascun webhook vengono collegati separatamente.

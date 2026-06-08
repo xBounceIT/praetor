@@ -697,6 +697,45 @@ export interface OrderVersion extends OrderVersionRow {
   snapshot: OrderVersionSnapshot;
 }
 
+export type WebhookHttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+export type WebhookAuthType = 'none' | 'basic' | 'bearer' | 'api_key';
+
+export interface WebhookHeader {
+  key: string;
+  value: string;
+}
+
+// A configured webhook target. `authSecret` arrives masked from the server (the mask sentinel when
+// a secret is stored, '' otherwise) — never the real credential.
+export interface Webhook {
+  id: string;
+  name: string;
+  description: string;
+  url: string;
+  httpMethod: WebhookHttpMethod;
+  authType: WebhookAuthType;
+  authUsername: string;
+  authHeaderName: string;
+  authSecret: string;
+  customHeaders: WebhookHeader[];
+  enabled: boolean;
+}
+
+// Create/update body. Omit `authSecret` (or send the mask sentinel) to keep the stored secret;
+// send a new value to replace it, or '' to clear it.
+export interface WebhookPayload {
+  name: string;
+  description: string;
+  url: string;
+  httpMethod: WebhookHttpMethod;
+  authType: WebhookAuthType;
+  authUsername: string;
+  authHeaderName: string;
+  authSecret?: string;
+  customHeaders: WebhookHeader[];
+  enabled: boolean;
+}
+
 export type View =
   // Timesheets module
   | 'timesheets/tracker'
@@ -709,6 +748,7 @@ export type View =
   | 'administration/email'
   | 'administration/roles'
   | 'administration/logs'
+  | 'administration/webhooks'
   // CRM module
   | 'crm/clients'
   | 'crm/suppliers'
@@ -1041,6 +1081,7 @@ export const AUDIT_ENTITY_TYPES = [
   'supplier_quote_attachment',
   'task',
   'user',
+  'webhook',
   'work_unit',
 ] as const;
 
