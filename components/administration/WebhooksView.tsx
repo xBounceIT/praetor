@@ -36,7 +36,7 @@ import {
 import { isStoredSecret } from '../../utils/maskedSecret';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import { toastError, toastSuccess } from '../../utils/toast';
-import { resolveSecretForPayload } from '../../utils/webhookPayload';
+import { resolveAuthFieldsForType, resolveSecretForPayload } from '../../utils/webhookPayload';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
@@ -83,6 +83,9 @@ const isValidWebhookUrl = (value: string): boolean => {
 type FormState = {
   isOpen: boolean;
   editingId: string | null;
+  // The webhook being edited (null when creating), kept so toggling the auth type away and back can
+  // restore the credentials it was loaded with instead of clearing them.
+  original: Webhook | null;
   name: string;
   description: string;
   url: string;
@@ -104,6 +107,7 @@ type FormState = {
 const emptyForm: FormState = {
   isOpen: false,
   editingId: null,
+  original: null,
   name: '',
   description: '',
   url: '',
@@ -142,6 +146,7 @@ const formReducer = (state: FormState, action: FormAction): FormState => {
         ...emptyForm,
         isOpen: true,
         editingId: webhook.id,
+        original: webhook,
         name: webhook.name,
         description: webhook.description,
         url: webhook.url,
@@ -158,19 +163,22 @@ const formReducer = (state: FormState, action: FormAction): FormState => {
       return { ...emptyForm };
     case 'patch':
       return { ...state, ...action.values };
-    case 'changeAuthType':
-      // Switching scheme reinterprets every credential field, so clear them and force the admin to
-      // re-enter the secret rather than carrying stale values across types.
+    case 'changeAuthType': {
+      // Returning to the auth type the webhook was loaded with restores its credentials; switching
+      // to a different scheme clears them (username/header/secret don't carry across schemes). This
+      // keeps toggling the type back and forth from silently dropping a stored credential.
+      const fields = resolveAuthFieldsForType(action.authType, state.original);
       return {
         ...state,
         authType: action.authType,
-        authUsername: '',
-        authHeaderName: '',
+        authUsername: fields.authUsername,
+        authHeaderName: fields.authHeaderName,
         authSecret: '',
-        secretStored: false,
+        secretStored: fields.secretStored,
         isReplacingSecret: false,
         errors: {},
       };
+    }
     case 'startReplaceSecret':
       return { ...state, isReplacingSecret: true, authSecret: '' };
     case 'cancelReplaceSecret':

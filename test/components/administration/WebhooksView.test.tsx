@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { Webhook, WebhookPayload } from '../../../types';
-import { resolveSecretForPayload } from '../../../utils/webhookPayload';
+import { resolveAuthFieldsForType, resolveSecretForPayload } from '../../../utils/webhookPayload';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
 import { render } from '../../helpers/render';
@@ -205,5 +205,62 @@ describe('resolveSecretForPayload', () => {
         authSecret: 'new',
       }),
     ).toBe('new');
+  });
+});
+
+describe('resolveAuthFieldsForType', () => {
+  const basicOriginal = {
+    authType: 'basic' as const,
+    authUsername: 'svc-user',
+    authHeaderName: '',
+    authSecret: '********',
+  };
+
+  test('restores the credentials when returning to the original auth type', () => {
+    // Regression (Codex PR review): toggling the auth type away and back to basic must not drop the
+    // stored username/secret and then silently send authUsername:''.
+    expect(resolveAuthFieldsForType('basic', basicOriginal)).toEqual({
+      authUsername: 'svc-user',
+      authHeaderName: '',
+      secretStored: true,
+    });
+  });
+
+  test('restores the api_key header when returning to the original api_key type', () => {
+    expect(
+      resolveAuthFieldsForType('api_key', {
+        authType: 'api_key',
+        authUsername: '',
+        authHeaderName: 'X-API-Key',
+        authSecret: '********',
+      }),
+    ).toEqual({ authUsername: '', authHeaderName: 'X-API-Key', secretStored: true });
+  });
+
+  test('clears credentials when switching to a different scheme', () => {
+    expect(resolveAuthFieldsForType('bearer', basicOriginal)).toEqual({
+      authUsername: '',
+      authHeaderName: '',
+      secretStored: false,
+    });
+  });
+
+  test('clears credentials when creating (no original)', () => {
+    expect(resolveAuthFieldsForType('basic', null)).toEqual({
+      authUsername: '',
+      authHeaderName: '',
+      secretStored: false,
+    });
+  });
+
+  test('never marks none as having a stored secret', () => {
+    expect(
+      resolveAuthFieldsForType('none', {
+        authType: 'none',
+        authUsername: '',
+        authHeaderName: '',
+        authSecret: '',
+      }),
+    ).toEqual({ authUsername: '', authHeaderName: '', secretStored: false });
   });
 });
