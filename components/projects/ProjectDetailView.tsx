@@ -1106,6 +1106,12 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               searchable={false}
               buttonClassName="h-9"
             />
+            {/*
+              Both billing types support either frequency (issue #785), so the only gate left
+              here is `mixed`: a project whose tasks have differing billing types has no single
+              project-level frequency to edit, so the control stays disabled and shows the
+              default. This asymmetry vs. the other surfaces is intentional - don't remove it.
+            */}
             <SelectControl
               id="detail-billing-frequency"
               options={translatedBillingFrequencyOptions}
