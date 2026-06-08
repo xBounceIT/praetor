@@ -327,18 +327,22 @@ const Login: React.FC<LoginProps> = ({
           <p className="mt-2 text-sm text-muted-foreground">{t('auth:login.title')}</p>
 
           {logoutReason === 'inactivity' && (
-            <div className="mt-6 flex w-full items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 animate-in fade-in slide-in-from-top-2">
-              <i className="fa-solid fa-clock mt-0.5 text-amber-500"></i>
+            <div className="mt-6 flex w-full items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 animate-in fade-in slide-in-from-top-2">
+              <i className="fa-solid fa-clock mt-0.5 text-amber-500 dark:text-amber-400"></i>
               <div className="flex-1">
-                <p className="text-sm font-bold text-amber-800">{t('auth:session.expired')}</p>
-                <p className="text-xs text-amber-600">{t('auth:session.expiredMessage')}</p>
+                <p className="text-sm font-bold text-amber-800 dark:text-amber-300">
+                  {t('auth:session.expired')}
+                </p>
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  {t('auth:session.expiredMessage')}
+                </p>
               </div>
               {onClearLogoutReason && (
                 <button
                   type="button"
                   onClick={onClearLogoutReason}
                   aria-label={t('common:buttons.close')}
-                  className="text-amber-400 transition-colors hover:text-amber-600"
+                  className="text-amber-400 transition-colors hover:text-amber-600 dark:hover:text-amber-300"
                 >
                   <i className="fa-solid fa-xmark"></i>
                 </button>
@@ -349,21 +353,23 @@ const Login: React.FC<LoginProps> = ({
           {serverUnreachable && (
             <div
               role="alert"
-              className="mt-6 flex w-full items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 animate-in fade-in slide-in-from-top-2"
+              className="mt-6 flex w-full items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 animate-in fade-in slide-in-from-top-2"
             >
-              <i className="fa-solid fa-triangle-exclamation mt-0.5 text-red-500"></i>
+              <i className="fa-solid fa-triangle-exclamation mt-0.5 text-red-500 dark:text-red-400"></i>
               <div className="flex-1">
-                <p className="text-sm font-bold text-red-800">
+                <p className="text-sm font-bold text-red-800 dark:text-red-300">
                   {t('auth:session.serverUnreachableTitle')}
                 </p>
-                <p className="text-xs text-red-600">{t('auth:session.serverUnreachableMessage')}</p>
+                <p className="text-xs text-red-600 dark:text-red-400">
+                  {t('auth:session.serverUnreachableMessage')}
+                </p>
               </div>
               {onDismissServerUnreachable && (
                 <button
                   type="button"
                   aria-label={t('common:buttons.close')}
                   onClick={onDismissServerUnreachable}
-                  className="text-red-400 transition-colors hover:text-red-600"
+                  className="text-red-400 transition-colors hover:text-red-600 dark:hover:text-red-300"
                 >
                   <i className="fa-solid fa-xmark"></i>
                 </button>

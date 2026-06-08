@@ -4,6 +4,11 @@ import type { ReactNode } from 'react';
 import type { SupplierQuoteAttachment } from '../../types';
 import { clearSpyStateAfterAll } from '../helpers/mockCleanup.ts';
 import { render } from '../helpers/render';
+import {
+  expectSourceContainsAll,
+  expectSourceOmitsAll,
+  readComponentSource,
+} from './modalStylingTestUtils';
 
 // Stable t/i18n references - components that put `t` in useEffect dep arrays would otherwise
 // loop forever in tests because every render produces a fresh `t` identity.
@@ -265,5 +270,14 @@ describe('<SupplierQuoteAttachmentsSection />', () => {
     await waitFor(() =>
       expect(screen.getByText('Quotes become read-only once an order exists')).toBeInTheDocument(),
     );
+  });
+});
+
+describe('SupplierQuoteAttachmentsSection dark-mode error banner (issue #768 follow-up)', () => {
+  test('the upload-error banner avoids light-only red classes', async () => {
+    const source = await readComponentSource('sales/SupplierQuoteAttachmentsSection.tsx');
+    // Translucent red + explicit dark-mode text keeps the error legible on the dark dialog.
+    expectSourceContainsAll(source, ['border-red-500/30', 'bg-red-500/10', 'dark:text-red-300']);
+    expectSourceOmitsAll(source, ['border-red-200']);
   });
 });

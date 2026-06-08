@@ -1,6 +1,10 @@
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
+import { Field, FieldDescription, FieldError, FieldLabel } from '../ui/field';
+import { Input } from '../ui/input';
+import { Textarea } from '../ui/textarea';
 
 export type SecretFieldProps = {
   label: string;
@@ -22,6 +26,9 @@ export type SecretFieldProps = {
 // overwrite the real value with mask + extra characters (issue #601), so Stored mode hides the
 // input behind a Replace badge until the admin explicitly opts in. Cancelling restores the mask
 // so it round-trips back to the server unchanged.
+//
+// Built from shadcn primitives (Field/FieldLabel/Input/Textarea/Badge) and theme tokens so the
+// label and input match the native fields rendered alongside it (and respect every theme).
 const SecretField: React.FC<SecretFieldProps> = ({
   label,
   value,
@@ -43,45 +50,42 @@ const SecretField: React.FC<SecretFieldProps> = ({
 
   if (isStored && !isReplacing) {
     return (
-      <div data-testid={testId}>
-        <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-          {label}
-        </label>
-        <div className="flex items-center gap-3 px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg">
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-full bg-emerald-50 text-emerald-700">
-            <i className="fa-solid fa-lock"></i>
+      <Field data-testid={testId}>
+        <FieldLabel>{label}</FieldLabel>
+        <div className="flex items-center gap-3 rounded-md border border-input bg-muted/50 px-3 py-2">
+          <Badge variant="secondary" className="gap-1.5">
+            <i className="fa-solid fa-lock" aria-hidden="true"></i>
             {storedLabel}
-          </span>
+          </Badge>
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="text-xs font-bold ml-auto"
+            className="ml-auto"
             onClick={onStartReplace}
             data-testid={testId ? `${testId}-replace` : undefined}
           >
             {replaceLabel}
           </Button>
         </div>
-        <p className="text-[10px] text-zinc-400 italic mt-1">{storedHelp}</p>
-      </div>
+        <FieldDescription>{storedHelp}</FieldDescription>
+      </Field>
     );
   }
 
-  const baseClass = `w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 outline-none text-sm ${monospace ? 'font-mono' : 'font-semibold text-zinc-700'} ${error ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`;
+  const inputClassName = monospace ? 'font-mono' : undefined;
+  const isInvalid = error ? true : undefined;
 
   return (
-    <div data-testid={testId}>
-      <div className="flex items-center justify-between mb-2">
-        <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">
-          {label}
-        </label>
+    <Field data-testid={testId} data-invalid={isInvalid}>
+      <div className="flex items-center justify-between gap-2">
+        <FieldLabel>{label}</FieldLabel>
         {isReplacing && (
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="text-[10px] font-bold text-muted-foreground hover:text-foreground h-6 px-2"
+            className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
             onClick={onCancelReplace}
             data-testid={testId ? `${testId}-keep-stored` : undefined}
           >
@@ -90,26 +94,28 @@ const SecretField: React.FC<SecretFieldProps> = ({
         )}
       </div>
       {multiline ? (
-        <textarea
+        <Textarea
           value={value}
           onChange={(event) => onChange(event.target.value)}
           rows={5}
           aria-label={label}
-          className={baseClass}
+          aria-invalid={isInvalid}
+          className={inputClassName}
           data-testid={testId ? `${testId}-input` : undefined}
         />
       ) : (
-        <input
+        <Input
           type="password"
           value={value}
           onChange={(event) => onChange(event.target.value)}
           aria-label={label}
-          className={baseClass}
+          aria-invalid={isInvalid}
+          className={inputClassName}
           data-testid={testId ? `${testId}-input` : undefined}
         />
       )}
-      {error && <p className="text-red-500 text-[10px] font-bold mt-1">{error}</p>}
-    </div>
+      {error && <FieldError>{error}</FieldError>}
+    </Field>
   );
 };
 

@@ -14,6 +14,7 @@ export type KnownPermissionResource =
   | 'timesheets.ril'
   | 'timesheets.recurring'
   | 'timesheets.tracker_all'
+  | 'timesheets.expired_projects'
   | 'crm.clients'
   | 'crm.clients_all'
   | 'crm.suppliers'
@@ -48,6 +49,7 @@ export type KnownPermissionResource =
   | 'administration.email'
   | 'administration.roles'
   | 'administration.logs'
+  | 'administration.webhooks'
   | 'settings'
   | 'docs.api'
   | 'docs.frontend'
@@ -705,6 +707,49 @@ export interface OrderVersion extends OrderVersionRow {
   snapshot: OrderVersionSnapshot;
 }
 
+export const WEBHOOK_HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
+export type WebhookHttpMethod = (typeof WEBHOOK_HTTP_METHODS)[number];
+export const WEBHOOK_AUTH_TYPES = ['none', 'basic', 'bearer', 'api_key'] as const;
+export type WebhookAuthType = (typeof WEBHOOK_AUTH_TYPES)[number];
+
+export interface WebhookHeader {
+  key: string;
+  value: string;
+}
+
+// A configured webhook target. `authSecret` arrives masked from the server (the mask sentinel when
+// a secret is stored, '' otherwise) — never the real credential.
+export interface Webhook {
+  id: string;
+  name: string;
+  description: string;
+  url: string;
+  httpMethod: WebhookHttpMethod;
+  authType: WebhookAuthType;
+  authUsername: string;
+  authHeaderName: string;
+  authSecret: string;
+  customHeaders: WebhookHeader[];
+  enabled: boolean;
+}
+
+// Create/update body. Omit `authSecret` to keep the stored secret; send a new value to replace it,
+// or '' to clear it. There is no input mask sentinel: any string sent is stored as-is (a literal
+// '********' is saved verbatim), so callers must OMIT the field to preserve the credential — echoing
+// the masked value back from a fetched webhook would overwrite the stored secret with asterisks.
+export interface WebhookPayload {
+  name: string;
+  description: string;
+  url: string;
+  httpMethod: WebhookHttpMethod;
+  authType: WebhookAuthType;
+  authUsername: string;
+  authHeaderName: string;
+  authSecret?: string;
+  customHeaders: WebhookHeader[];
+  enabled: boolean;
+}
+
 export type View =
   // Timesheets module
   | 'timesheets/tracker'
@@ -717,6 +762,7 @@ export type View =
   | 'administration/email'
   | 'administration/roles'
   | 'administration/logs'
+  | 'administration/webhooks'
   // CRM module
   | 'crm/clients'
   | 'crm/suppliers'
@@ -1049,6 +1095,7 @@ export const AUDIT_ENTITY_TYPES = [
   'supplier_quote_attachment',
   'task',
   'user',
+  'webhook',
   'work_unit',
 ] as const;
 

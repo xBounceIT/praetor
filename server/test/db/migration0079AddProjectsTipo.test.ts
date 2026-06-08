@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { readMigrationFile } from '../helpers/schemaFiles.ts';
 
-describe('migration 0078: add projects.tipo', () => {
-  const MIGRATION = readMigrationFile('0078_add_projects_tipo.sql');
+describe('migration 0079: add projects.tipo', () => {
+  const MIGRATION = readMigrationFile('0079_add_projects_tipo.sql');
 
   test('adds tipo and tipo_confirmed columns with rollout defaults (issue #784)', () => {
     // Existing rows are backfilled to 'attivo' (the rollout default) and left unconfirmed

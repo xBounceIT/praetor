@@ -1,5 +1,5 @@
 {
-  "id": "5c8038ac-5507-460f-b899-e0fd2bee1dbb",
+  "id": "985f5110-6f80-45d7-bd0b-54bd04a357dd",
   "prevId": "db96ba71-f155-4638-be55-a9aa0d8da4c1",
   "version": "7",
   "dialect": "postgresql",
@@ -2963,20 +2963,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'monthly'"
-        },
-        "tipo": {
-          "name": "tipo",
-          "type": "varchar(20)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'attivo'"
-        },
-        "tipo_confirmed": {
-          "name": "tipo_confirmed",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
         }
       },
       "indexes": {
@@ -3032,10 +3018,6 @@
         "projects_billing_type_check": {
           "name": "projects_billing_type_check",
           "value": "\"projects\".\"billing_type\" IN ('retainer', 'time_and_materials')"
-        },
-        "projects_tipo_check": {
-          "name": "projects_tipo_check",
-          "value": "\"projects\".\"tipo\" IN ('attivo', 'passivo')"
         },
         "projects_billing_frequency_check": {
           "name": "projects_billing_frequency_check",
@@ -7463,6 +7445,132 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.webhooks": {
+      "name": "webhooks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(50)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
+        "url": {
+          "name": "url",
+          "type": "varchar(2000)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "http_method": {
+          "name": "http_method",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'POST'"
+        },
+        "auth_type": {
+          "name": "auth_type",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'none'"
+        },
+        "auth_username": {
+          "name": "auth_username",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
+        "auth_header_name": {
+          "name": "auth_header_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
+        "auth_secret": {
+          "name": "auth_secret",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
+        "custom_headers": {
+          "name": "custom_headers",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'[]'::jsonb"
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "idx_webhooks_created_at": {
+          "name": "idx_webhooks_created_at",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "webhooks_http_method_check": {
+          "name": "webhooks_http_method_check",
+          "value": "\"webhooks\".\"http_method\" IN ('GET', 'POST', 'PUT', 'PATCH', 'DELETE')"
+        },
+        "webhooks_auth_type_check": {
+          "name": "webhooks_auth_type_check",
+          "value": "\"webhooks\".\"auth_type\" IN ('none', 'basic', 'bearer', 'api_key')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.work_unit_managers": {

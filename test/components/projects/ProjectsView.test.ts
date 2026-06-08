@@ -110,6 +110,21 @@ describe('ProjectsView create-form validation', () => {
     );
   });
 
+  test('manual revenue source shows no helper hint, but activities/order still do', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+    // The manual source is omitted from the hint map (Partial) — no redundant helper text.
+    expect(source).toContain('Partial<Record<RevenueSource, string>>');
+    expect(source).not.toContain("manual: t('projects:projects.revenueManualHint')");
+    // Informative source hints remain.
+    expect(source).toContain("activities: t('projects:projects.revenueFromActivities')");
+    expect(source).toContain("order: t('projects:projects.revenueFromOrder')");
+    // The hint renders through the shared FieldDescription primitive, only when present.
+    expect(source).toContain('{revenueHintBySource[revenueSource] && (');
+    expect(source).toContain('<FieldDescription className="text-xs">');
+  });
+
   test('order selector auto-fills the client and disables the client picker while bound', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
@@ -152,5 +167,27 @@ describe('ProjectsView toolbar styling', () => {
       "import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';",
     );
     expect(source.match(/className=\{TABLE_CONTROL_BUTTON_CLASSNAME\}/g) ?? []).toHaveLength(1);
+  });
+});
+
+describe('ProjectsView draft-task delete action (issue #782)', () => {
+  // StandardTable collapses an actions column into a "…" overflow menu and derives
+  // each item's text from the control's tooltip / aria-label. The draft-task delete
+  // button had neither, so the menu item rendered icon-only with no label text — the
+  // blank space where "Elimina"/"Delete" belongs is what issue #782 reported as a
+  // wrong font colour in light mode. It must carry the shared delete label (matching
+  // ProjectTasksTable in the edit view) so the collapsed menu shows a labelled item.
+  test('the remove-draft-task control is tooltip-wrapped and carries the delete label', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+    // aria-label sits on the remove button itself (assistive-tech name + menu-label fallback).
+    expect(source).toMatch(
+      /onClick=\{\(\) => removeDraftTask\(row\._id\)\}[\s\S]{0,80}aria-label=\{t\('common:buttons\.delete'\)\}/,
+    );
+    // The same cell exposes the tooltip label StandardTable reads for the collapsed menu item.
+    expect(source).toMatch(
+      /removeDraftTask\(row\._id\)[\s\S]{0,400}<TooltipContent>\{t\('common:buttons\.delete'\)\}<\/TooltipContent>/,
+    );
   });
 });
