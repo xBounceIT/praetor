@@ -1295,7 +1295,7 @@ const AiReportingView: React.FC<AiReportingViewProps> = ({
         </div>
 
         {error && (
-          <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 mx-4 md:mx-6">
+          <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300 mx-4 md:mx-6">
             {error}
           </div>
         )}
