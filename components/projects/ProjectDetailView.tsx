@@ -739,8 +739,13 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     if (revenueSource === 'manual') {
       updates.revenue = persistedRevenue ?? null;
     }
-    if (derivedBillingType !== 'mixed' || projectBillingChanged) {
+    if (derivedBillingType !== 'mixed') {
       updates.billingType = billingType;
+      updates.billingFrequency = billingFrequency;
+    } else if (projectBillingChanged) {
+      // A mixed project has no single billing type to set, but its frequency is a real
+      // project-level value (inherited by quick-added tasks), so persist a frequency edit
+      // without touching the derived/mixed type.
       updates.billingFrequency = billingFrequency;
     }
     // Await so we can clear the billing-change latch only on success. Every other
@@ -1094,21 +1099,22 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               buttonClassName="h-9"
             />
             {/*
-              Both billing types support either frequency (issue #785), so the only gate left
-              here is `mixed`: a project whose tasks have differing billing types has no single
-              project-level frequency to edit, so the control stays disabled and shows the
-              default. This asymmetry vs. the other surfaces is intentional - don't remove it.
+              The billing *type* is disabled when `mixed` (a project whose tasks have differing
+              types has no single type to set). The *frequency*, though, is a single project-level
+              value even for a mixed project - it's the default new quick-added tasks inherit
+              (POST /tasks falls back to the project's billingFrequency), so it stays editable and
+              shows the real stored value rather than a hardcoded default.
             */}
             <SelectControl
               id="detail-billing-frequency"
               options={translatedBillingFrequencyOptions}
-              value={derivedBillingType === 'mixed' ? DEFAULT_BILLING_FREQUENCY : billingFrequency}
+              value={billingFrequency}
               onChange={(val) => {
                 setProjectBillingChanged(true);
                 setBillingFrequency(val as BillingFrequency);
               }}
               label={t('projects:projects.billingFrequency')}
-              disabled={!canUpdateProjects || derivedBillingType === 'mixed'}
+              disabled={!canUpdateProjects}
               searchable={false}
               buttonClassName="h-9"
             />
