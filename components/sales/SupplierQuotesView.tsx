@@ -985,8 +985,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
               <ModalBody className="flex-1 space-y-5">
                 {previewVersion && (
-                  <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-300 bg-amber-50">
-                    <span className="text-amber-800 text-xs font-bold flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
+                    <span className="text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-2">
                       <i className="fa-solid fa-clock-rotate-left"></i>
                       {t('sales:supplierQuotes.versionHistory.previewBanner', {
                         date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
@@ -997,7 +997,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       type="button"
                       variant="link"
                       onClick={handleClearPreview}
-                      className="h-auto px-0 text-xs font-semibold text-amber-800"
+                      className="h-auto px-0 text-xs font-semibold text-amber-800 dark:text-amber-300"
                     >
                       {t('sales:supplierQuotes.versionHistory.backToCurrent', {
                         defaultValue: 'Back to current',
@@ -1006,8 +1006,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   </div>
                 )}
                 {baseReadOnly && (
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
-                    <span className="text-amber-700 text-xs font-bold">{readOnlyReason}</span>
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
+                    <span className="text-amber-700 dark:text-amber-300 text-xs font-bold">
+                      {readOnlyReason}
+                    </span>
                   </div>
                 )}
                 {editingQuote?.linkedOrderId && (

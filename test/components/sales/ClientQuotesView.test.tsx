@@ -3,6 +3,11 @@ import { fireEvent, screen } from '@testing-library/react';
 import type { Client, Quote } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
+import {
+  expectSourceContainsAll,
+  expectSourceOmitsAll,
+  readComponentSource,
+} from '../modalStylingTestUtils';
 
 installI18nMock();
 
@@ -286,5 +291,53 @@ describe('<ClientQuotesView />', () => {
     expect(screen.getAllByText('4800.00 EUR').length).toBeGreaterThan(0);
     // Margin = 4800 − (60 × 2 × 24 = 2880) = 1920.00.
     expect(screen.getAllByText('1920.00 EUR').length).toBeGreaterThan(0);
+  });
+
+  test('the read-only banner renders dark-mode-compatible amber, not a light slab (issue #768)', async () => {
+    // A finalized (accepted) quote opens the dialog read-only and surfaces the warning banner.
+    const acceptedQuote: Quote = { ...quotes[0], id: 'Q-ACCEPTED', status: 'accepted' };
+
+    render(
+      <ClientQuotesView
+        quotes={[acceptedQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Q-ACCEPTED'));
+    await screen.findByRole('dialog');
+
+    const label = screen.getByText('sales:clientQuotes.readOnlyBecauseFinal');
+    // The label carries an explicit dark-mode color so it stays legible on the dark dialog.
+    expect(label.className).toContain('dark:text-amber-300');
+    // The banner background is translucent amber (renders on both themes) instead of the old
+    // solid bg-amber-50 cream that looked broken in dark mode (issue #768).
+    const banner = label.closest('div');
+    expect(banner?.className).toContain('bg-amber-500/10');
+    expect(banner?.className).toContain('border-amber-500/30');
+    // The old solid-cream banner border is gone (bg-amber-50 is a prefix of bg-amber-500/10,
+    // so assert on the unambiguous old border token instead).
+    expect(banner?.className).not.toContain('border-amber-200');
+  });
+
+  test('dialog warning banners avoid light-only amber classes (issue #768)', async () => {
+    const source = await readComponentSource('sales/ClientQuotesView.tsx');
+    // Read-only + version-preview banners use translucent amber plus an explicit dark-mode
+    // text color, matching the dark-mode-compatible accounting orders banners.
+    expectSourceContainsAll(source, [
+      'border border-amber-500/30 bg-amber-500/10',
+      'dark:text-amber-300',
+    ]);
+    // The old light-only banner backgrounds (a pale cream slab on the dark dialog) are gone.
+    expectSourceOmitsAll(source, [
+      'border border-amber-200 bg-amber-50',
+      'border border-amber-300 bg-amber-50',
+    ]);
   });
 });
