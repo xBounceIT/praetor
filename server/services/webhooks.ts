@@ -74,8 +74,6 @@ const normalizeAuth = (
         authHeaderName: input.authHeaderName || existing.authHeaderName,
         authSecret,
       };
-    default:
-      return EMPTY_AUTH;
   }
 };
 

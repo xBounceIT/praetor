@@ -697,8 +697,10 @@ export interface OrderVersion extends OrderVersionRow {
   snapshot: OrderVersionSnapshot;
 }
 
-export type WebhookHttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-export type WebhookAuthType = 'none' | 'basic' | 'bearer' | 'api_key';
+export const WEBHOOK_HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
+export type WebhookHttpMethod = (typeof WEBHOOK_HTTP_METHODS)[number];
+export const WEBHOOK_AUTH_TYPES = ['none', 'basic', 'bearer', 'api_key'] as const;
+export type WebhookAuthType = (typeof WEBHOOK_AUTH_TYPES)[number];
 
 export interface WebhookHeader {
   key: string;

@@ -1,5 +1,9 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import type { StoredWebhookHeader } from '../db/schema/webhooks.ts';
+import {
+  type StoredWebhookHeader,
+  WEBHOOK_AUTH_TYPES,
+  WEBHOOK_HTTP_METHODS,
+} from '../db/schema/webhooks.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as webhooksRepo from '../repositories/webhooksRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
@@ -14,8 +18,6 @@ import {
   validateEnum,
 } from '../utils/validation.ts';
 
-const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
-const AUTH_TYPES = ['none', 'basic', 'bearer', 'api_key'] as const;
 const MAX_CUSTOM_HEADERS = 50;
 
 // Mirror the varchar widths in server/db/schema/webhooks.ts. Without these, an over-length value
@@ -44,8 +46,8 @@ const webhookResponseSchema = {
     name: { type: 'string' },
     description: { type: 'string' },
     url: { type: 'string' },
-    httpMethod: { type: 'string', enum: [...HTTP_METHODS] },
-    authType: { type: 'string', enum: [...AUTH_TYPES] },
+    httpMethod: { type: 'string', enum: [...WEBHOOK_HTTP_METHODS] },
+    authType: { type: 'string', enum: [...WEBHOOK_AUTH_TYPES] },
     authUsername: { type: 'string' },
     authHeaderName: { type: 'string' },
     authSecret: { type: 'string' },
@@ -71,8 +73,8 @@ const webhookBodyProperties = {
   name: { type: 'string', maxLength: MAX_NAME_LEN },
   description: { type: 'string' },
   url: { type: 'string', maxLength: MAX_URL_LEN },
-  httpMethod: { type: 'string', enum: [...HTTP_METHODS] },
-  authType: { type: 'string', enum: [...AUTH_TYPES] },
+  httpMethod: { type: 'string', enum: [...WEBHOOK_HTTP_METHODS] },
+  authType: { type: 'string', enum: [...WEBHOOK_AUTH_TYPES] },
   authUsername: { type: 'string', maxLength: MAX_AUTH_FIELD_LEN },
   authHeaderName: { type: 'string', maxLength: MAX_AUTH_FIELD_LEN },
   authSecret: { type: 'string' },
@@ -166,7 +168,7 @@ const validateWebhookBody = (
   }
 
   if (body.httpMethod !== undefined) {
-    const method = validateEnum(body.httpMethod, HTTP_METHODS, 'httpMethod');
+    const method = validateEnum(body.httpMethod, WEBHOOK_HTTP_METHODS, 'httpMethod');
     if (!method.ok) {
       badRequest(reply, method.message);
       return null;
@@ -175,7 +177,7 @@ const validateWebhookBody = (
   }
 
   if (body.authType !== undefined) {
-    const authType = validateEnum(body.authType, AUTH_TYPES, 'authType');
+    const authType = validateEnum(body.authType, WEBHOOK_AUTH_TYPES, 'authType');
     if (!authType.ok) {
       badRequest(reply, authType.message);
       return null;

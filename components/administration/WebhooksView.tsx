@@ -25,7 +25,14 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { webhooksApi } from '../../services/api/webhooks';
-import type { Webhook, WebhookAuthType, WebhookHttpMethod, WebhookPayload } from '../../types';
+import {
+  WEBHOOK_AUTH_TYPES,
+  WEBHOOK_HTTP_METHODS,
+  type Webhook,
+  type WebhookAuthType,
+  type WebhookHttpMethod,
+  type WebhookPayload,
+} from '../../types';
 import { isStoredSecret } from '../../utils/maskedSecret';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import { toastError, toastSuccess } from '../../utils/toast';
@@ -48,9 +55,6 @@ import SelectControl from '../shared/SelectControl';
 export interface WebhooksViewProps {
   permissions: string[];
 }
-
-const HTTP_METHODS: WebhookHttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
-const AUTH_TYPES: WebhookAuthType[] = ['none', 'basic', 'bearer', 'api_key'];
 
 type LoadStatus = 'loading' | 'ready' | 'error';
 
@@ -573,7 +577,7 @@ const WebhooksView: React.FC<WebhooksViewProps> = ({ permissions }) => {
                   <SelectControl
                     id="webhook-method"
                     label={t('administration:webhooks.fields.method')}
-                    options={HTTP_METHODS.map((method) => ({ id: method, name: method }))}
+                    options={WEBHOOK_HTTP_METHODS.map((method) => ({ id: method, name: method }))}
                     value={form.httpMethod}
                     onChange={(value) =>
                       dispatch({
@@ -585,7 +589,7 @@ const WebhooksView: React.FC<WebhooksViewProps> = ({ permissions }) => {
                   <SelectControl
                     id="webhook-auth-type"
                     label={t('administration:webhooks.fields.authType')}
-                    options={AUTH_TYPES.map((authType) => ({
+                    options={WEBHOOK_AUTH_TYPES.map((authType) => ({
                       id: authType,
                       name: t(`administration:webhooks.authTypes.${authType}`),
                     }))}

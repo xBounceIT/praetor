@@ -11,14 +11,18 @@ import {
 } from 'drizzle-orm/pg-core';
 
 // Outbound HTTP method a webhook target is invoked with. The column is a plain varchar guarded
-// by a CHECK constraint; the `$type` annotation surfaces the union to TS callers.
-export type WebhookHttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+// by a CHECK constraint; the `$type` annotation surfaces the union to TS callers. The tuple is the
+// single backend source for these values — the route imports it for its AJV enums and validators
+// so the union type and the runtime allow-list can never drift.
+export const WEBHOOK_HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
+export type WebhookHttpMethod = (typeof WEBHOOK_HTTP_METHODS)[number];
 
 // How Praetor authenticates to the target. `none` sends no credentials. The credential columns
 // are interpreted per-type (see webhooksService): `bearer` uses auth_secret as the token; `basic`
 // pairs auth_username with auth_secret (the password); `api_key` sends auth_secret under the
 // header named by auth_header_name. auth_secret is always stored as ciphertext (utils/crypto.ts).
-export type WebhookAuthType = 'none' | 'basic' | 'bearer' | 'api_key';
+export const WEBHOOK_AUTH_TYPES = ['none', 'basic', 'bearer', 'api_key'] as const;
+export type WebhookAuthType = (typeof WEBHOOK_AUTH_TYPES)[number];
 
 // Arbitrary request headers attached to every dispatch, layered on top of (and lower priority
 // than) the headers the auth type contributes. Stored as a JSON array so order is preserved.
