@@ -7,6 +7,11 @@ import { THEME_STORAGE_KEY } from '../../../utils/theme';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
 import { render } from '../../helpers/render';
+import {
+  expectSourceContainsAll,
+  expectSourceOmitsAll,
+  readComponentSource,
+} from '../modalStylingTestUtils';
 
 installI18nMock();
 
@@ -642,5 +647,27 @@ describe('<UserManagement />', () => {
       )[0];
       expect(updates).not.toHaveProperty('costPerHour');
     });
+  });
+});
+
+describe('UserManagement dark-mode form chrome', () => {
+  test('edit, delete, and role-assignment modal chrome uses theme tokens, not light zinc', async () => {
+    const source = await readComponentSource('administration/UserManagement.tsx');
+
+    // Modal panels, the roles list box, section labels, and the role-selector cards adapt to the
+    // theme instead of rendering as white/zinc slabs on the dark surface.
+    expectSourceContainsAll(source, [
+      'bg-card rounded-2xl shadow-2xl',
+      'bg-muted/50 border border-border rounded-xl',
+      "'bg-accent border-border shadow-sm'",
+      'text-xs font-bold text-muted-foreground uppercase tracking-wider',
+    ]);
+    // The old hardcoded light chrome (white modal panels, zinc list box, light role cards) is gone.
+    expectSourceOmitsAll(source, [
+      'bg-white rounded-2xl shadow-2xl',
+      'bg-zinc-50 border border-zinc-200 rounded-xl',
+      "'bg-zinc-50 border-zinc-300 shadow-sm'",
+      "'bg-white border-zinc-200 hover:border-zinc-300'",
+    ]);
   });
 });
