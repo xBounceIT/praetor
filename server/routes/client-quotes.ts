@@ -15,6 +15,7 @@ import {
   type DurationUnit,
   isUnitMeasure,
 } from '../utils/duration-unit.ts';
+import { normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -58,12 +59,6 @@ type QuoteItemSnapshot = {
 };
 
 type ResolvedQuoteItem = IncomingQuoteItem & QuoteItemSnapshot;
-
-const normalizeNullableString = (value: unknown) => {
-  if (value === undefined || value === null) return null;
-  const stringValue = String(value).trim();
-  return stringValue.length > 0 ? stringValue : null;
-};
 
 const normalizeQuoteItems = (
   items: unknown[],

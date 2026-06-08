@@ -15,6 +15,7 @@ import {
   type DurationUnit,
   isUnitMeasure,
 } from '../utils/duration-unit.ts';
+import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import {
   generateClientOrderId,
   generatePrefixedId,
@@ -196,10 +197,7 @@ const normalizeIncomingItems = (
     // A line is either pinned to a catalog product (`productId`) or sourced from a supplier-quote
     // item (`supplierQuoteItemId`). Require at least one — mirrors the quote/offer routes so a
     // free-form supplier line survives the offer→order conversion (issue #783).
-    const supplierQuoteItemId =
-      item.supplierQuoteItemId === null || item.supplierQuoteItemId === undefined
-        ? null
-        : String(item.supplierQuoteItemId).trim() || null;
+    const supplierQuoteItemId = normalizeNullableString(item.supplierQuoteItemId);
     const productIdValue = typeof item.productId === 'string' ? item.productId.trim() : '';
     if (!productIdValue && !supplierQuoteItemId) {
       badRequest(
@@ -247,10 +245,6 @@ const normalizeIncomingItems = (
       badRequest(reply, durationUnitResult.message);
       return null;
     }
-    const toNullableString = (value: unknown) =>
-      value === null || value === undefined ? null : String(value);
-    const toNullableNumber = (value: unknown) =>
-      value === null || value === undefined ? null : Number(value);
     const unitType = normalizeUnitType(item.unitType);
     // A "unit"-measured line can't run for a period, so its duration is forced to a single month.
     const { durationMonths, durationUnit } = coerceUnitLineDuration(
@@ -265,17 +259,17 @@ const normalizeIncomingItems = (
       quantity: quantityResult.value,
       unitPrice: unitPriceResult.value,
       productCost: Number(item.productCost ?? 0),
-      productMolPercentage: toNullableNumber(item.productMolPercentage),
-      supplierQuoteId: toNullableString(item.supplierQuoteId),
+      productMolPercentage: normalizeNullableNumber(item.productMolPercentage),
+      supplierQuoteId: normalizeNullableString(item.supplierQuoteId),
       // Trimmed/normalized above so the stored value matches the productId-vs-supplier gate.
       supplierQuoteItemId,
-      supplierQuoteSupplierName: toNullableString(item.supplierQuoteSupplierName),
-      supplierQuoteUnitPrice: toNullableNumber(item.supplierQuoteUnitPrice),
-      supplierSaleId: toNullableString(item.supplierSaleId),
-      supplierSaleItemId: toNullableString(item.supplierSaleItemId),
-      supplierSaleSupplierName: toNullableString(item.supplierSaleSupplierName),
+      supplierQuoteSupplierName: normalizeNullableString(item.supplierQuoteSupplierName),
+      supplierQuoteUnitPrice: normalizeNullableNumber(item.supplierQuoteUnitPrice),
+      supplierSaleId: normalizeNullableString(item.supplierSaleId),
+      supplierSaleItemId: normalizeNullableString(item.supplierSaleItemId),
+      supplierSaleSupplierName: normalizeNullableString(item.supplierSaleSupplierName),
       unitType,
-      note: toNullableString(item.note),
+      note: normalizeNullableString(item.note),
       discount: itemDiscountResult.value || 0,
       durationMonths,
       durationUnit,

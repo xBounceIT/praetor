@@ -15,6 +15,7 @@ import {
   type DurationUnit,
   isUnitMeasure,
 } from '../utils/duration-unit.ts';
+import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -272,29 +273,14 @@ const normalizeItems = (
       quantity: quantityResult.value,
       unitPrice: unitPriceResult.value,
       productCost: Number(item.productCost ?? 0),
-      productMolPercentage:
-        item.productMolPercentage === undefined || item.productMolPercentage === null
-          ? null
-          : Number(item.productMolPercentage),
-      supplierQuoteId:
-        item.supplierQuoteId === undefined || item.supplierQuoteId === null
-          ? null
-          : String(item.supplierQuoteId),
-      supplierQuoteItemId:
-        item.supplierQuoteItemId === undefined || item.supplierQuoteItemId === null
-          ? null
-          : String(item.supplierQuoteItemId),
-      supplierQuoteSupplierName:
-        item.supplierQuoteSupplierName === undefined || item.supplierQuoteSupplierName === null
-          ? null
-          : String(item.supplierQuoteSupplierName),
-      supplierQuoteUnitPrice:
-        item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
-          ? null
-          : Number(item.supplierQuoteUnitPrice),
+      productMolPercentage: normalizeNullableNumber(item.productMolPercentage),
+      supplierQuoteId: normalizeNullableString(item.supplierQuoteId),
+      supplierQuoteItemId: normalizeNullableString(item.supplierQuoteItemId),
+      supplierQuoteSupplierName: normalizeNullableString(item.supplierQuoteSupplierName),
+      supplierQuoteUnitPrice: normalizeNullableNumber(item.supplierQuoteUnitPrice),
       unitType,
       discount: itemDiscountResult.value || 0,
-      note: item.note || null,
+      note: normalizeNullableString(item.note),
       durationMonths,
       durationUnit,
     });
