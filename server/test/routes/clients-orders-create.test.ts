@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
 import * as realClientsOrdersRepo from '../../repositories/clientsOrdersRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
+import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realPermissions from '../../utils/permissions.ts';
@@ -18,6 +19,7 @@ const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
 const clientsOrdersRepoSnap = { ...realClientsOrdersRepo };
+const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
 
@@ -27,6 +29,8 @@ const getRolePermissionsMock = mock();
 
 const coCreateMock = mock();
 const coInsertItemsMock = mock();
+const sqFindByIdMock = mock();
+const sqFindLinkedOrderIdMock = mock();
 
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
@@ -53,6 +57,11 @@ beforeAll(async () => {
     create: coCreateMock,
     insertItems: coInsertItemsMock,
   }));
+  mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
+    ...supplierQuotesRepoSnap,
+    findById: sqFindByIdMock,
+    findLinkedOrderId: sqFindLinkedOrderIdMock,
+  }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
     logAudit: logAuditMock,
@@ -71,6 +80,7 @@ afterAll(() => {
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../repositories/clientsOrdersRepo.ts', () => clientsOrdersRepoSnap);
+  mock.module('../../repositories/supplierQuotesRepo.ts', () => supplierQuotesRepoSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
 });
@@ -133,6 +143,8 @@ const allMocks = [
   getRolePermissionsMock,
   coCreateMock,
   coInsertItemsMock,
+  sqFindByIdMock,
+  sqFindLinkedOrderIdMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -147,6 +159,9 @@ beforeEach(async () => {
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   coCreateMock.mockResolvedValue(CREATED_ORDER);
+  // Default: no supplier quote resolves, so the auto-create-supplier-order branch fast-fails.
+  sqFindByIdMock.mockResolvedValue(null);
+  sqFindLinkedOrderIdMock.mockResolvedValue(null);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/clients-orders');
 });
@@ -215,6 +230,51 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     expect(JSON.parse(res.body).error).toContain('productId is required');
     expect(coCreateMock).not.toHaveBeenCalled();
     expect(coInsertItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('a product-less line carrying a supplierQuoteId enters supplier-order auto-create', async () => {
+    // The real offer→order payload sends a product-less line that ALSO carries supplierQuoteId +
+    // supplier fields, which drives the auto-create-supplier-order loop. Exercise that the null
+    // productId does not derail the supplier-quote extraction (here it fast-fails to skip).
+    coInsertItemsMock.mockResolvedValue([
+      insertedItem({
+        productId: null,
+        productName: 'Free-form supplier line',
+        supplierQuoteId: 'sq-1',
+        supplierQuoteItemId: 'sqi-1',
+      }),
+    ]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: 'co-1',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            productId: null,
+            productName: 'Free-form supplier line',
+            quantity: 1,
+            unitPrice: 100,
+            supplierQuoteId: 'sq-1',
+            supplierQuoteItemId: 'sqi-1',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    // The supplier-quote extraction ran for the product-less line (keyed on supplierQuoteId).
+    expect(sqFindByIdMock).toHaveBeenCalledWith('sq-1');
+    const insertedItems = coInsertItemsMock.mock.calls[0][1] as Array<{
+      productId: unknown;
+      supplierQuoteId: unknown;
+    }>;
+    expect(insertedItems[0].productId).toBeNull();
+    expect(insertedItems[0].supplierQuoteId).toBe('sq-1');
   });
 
   test('201 still creates a normal catalog-product line', async () => {

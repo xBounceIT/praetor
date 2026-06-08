@@ -267,7 +267,8 @@ const normalizeIncomingItems = (
       productCost: Number(item.productCost ?? 0),
       productMolPercentage: toNullableNumber(item.productMolPercentage),
       supplierQuoteId: toNullableString(item.supplierQuoteId),
-      supplierQuoteItemId: toNullableString(item.supplierQuoteItemId),
+      // Trimmed/normalized above so the stored value matches the productId-vs-supplier gate.
+      supplierQuoteItemId,
       supplierQuoteSupplierName: toNullableString(item.supplierQuoteSupplierName),
       supplierQuoteUnitPrice: toNullableNumber(item.supplierQuoteUnitPrice),
       supplierSaleId: toNullableString(item.supplierSaleId),
