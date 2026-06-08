@@ -28,10 +28,10 @@ ON CONFLICT (id) DO NOTHING;
 
 -- start_date/end_date bracket the demo time entries logged against each project
 -- (see the first time_entries block below) so every entry falls inside its project window.
-INSERT INTO projects (id, name, client_id, description, start_date, end_date) VALUES
-    ('p1', 'Website Redesign', 'c1', 'Complete overhaul of the main marketing site.', (CURRENT_DATE - INTERVAL '30 days')::date, (CURRENT_DATE + INTERVAL '30 days')::date),
-    ('p2', 'Mobile App', 'c1', 'Native iOS and Android application development.', (CURRENT_DATE - INTERVAL '28 days')::date, (CURRENT_DATE + INTERVAL '28 days')::date),
-    ('p3', 'Internal Research', 'c2', 'Ongoing research into new market trends.', (CURRENT_DATE - INTERVAL '25 days')::date, (CURRENT_DATE + INTERVAL '25 days')::date)
+INSERT INTO projects (id, name, client_id, description, start_date, end_date, tipo, tipo_confirmed) VALUES
+    ('p1', 'Website Redesign', 'c1', 'Complete overhaul of the main marketing site.', (CURRENT_DATE - INTERVAL '30 days')::date, (CURRENT_DATE + INTERVAL '30 days')::date, 'attivo', TRUE),
+    ('p2', 'Mobile App', 'c1', 'Native iOS and Android application development.', (CURRENT_DATE - INTERVAL '28 days')::date, (CURRENT_DATE + INTERVAL '28 days')::date, 'attivo', TRUE),
+    ('p3', 'Internal Research', 'c2', 'Ongoing research into new market trends.', (CURRENT_DATE - INTERVAL '25 days')::date, (CURRENT_DATE + INTERVAL '25 days')::date, 'attivo', TRUE)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO tasks (id, name, project_id, description) VALUES
@@ -975,7 +975,9 @@ INSERT INTO projects (
     offer_id,
     start_date,
     end_date,
-    revenue
+    revenue,
+    tipo,
+    tipo_confirmed
 ) VALUES
     (
         'dm_proj_01',
@@ -988,7 +990,7 @@ INSERT INTO projects (
         'dm_co_03',
         (CURRENT_DATE - INTERVAL '18 days')::date,
         (CURRENT_DATE + INTERVAL '30 days')::date,
-        4674.00
+        4674.00, 'attivo', TRUE
     ),
     (
         'dm_proj_02',
@@ -1001,7 +1003,7 @@ INSERT INTO projects (
         'dm_co_03',
         (CURRENT_DATE - INTERVAL '18 days')::date,
         (CURRENT_DATE + INTERVAL '60 days')::date,
-        1629.25
+        1629.25, 'attivo', TRUE
     )
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
@@ -1013,7 +1015,9 @@ ON CONFLICT (id) DO UPDATE SET
     offer_id = EXCLUDED.offer_id,
     start_date = EXCLUDED.start_date,
     end_date = EXCLUDED.end_date,
-    revenue = EXCLUDED.revenue;
+    revenue = EXCLUDED.revenue,
+    tipo = EXCLUDED.tipo,
+    tipo_confirmed = EXCLUDED.tipo_confirmed;
 
 -- Tasks for the demo projects above. Without these rows the second time_entries block
 -- below resolves task_id to NULL because it looks up tasks by (project_id, name). See
