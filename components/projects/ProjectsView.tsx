@@ -755,15 +755,23 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       align: 'right',
       cell: ({ row }) => (
         <div className="flex justify-end">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => removeDraftTask(row._id)}
-            className="text-muted-foreground hover:text-destructive"
-          >
-            <i className="fa-solid fa-trash-can text-xs"></i>
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => removeDraftTask(row._id)}
+                  aria-label={t('common:buttons.delete')}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <i className="fa-solid fa-trash-can text-xs"></i>
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
+          </Tooltip>
         </div>
       ),
     },

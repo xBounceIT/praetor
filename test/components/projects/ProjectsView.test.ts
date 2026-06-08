@@ -141,3 +141,25 @@ describe('ProjectsView toolbar styling', () => {
     expect(source.match(/className=\{TABLE_CONTROL_BUTTON_CLASSNAME\}/g) ?? []).toHaveLength(1);
   });
 });
+
+describe('ProjectsView draft-task delete action (issue #782)', () => {
+  // StandardTable collapses an actions column into a "…" overflow menu and derives
+  // each item's text from the control's tooltip / aria-label. The draft-task delete
+  // button had neither, so the menu item rendered icon-only with no label text — the
+  // blank space where "Elimina"/"Delete" belongs is what issue #782 reported as a
+  // wrong font colour in light mode. It must carry the shared delete label (matching
+  // ProjectTasksTable in the edit view) so the collapsed menu shows a labelled item.
+  test('the remove-draft-task control is tooltip-wrapped and carries the delete label', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+    // aria-label sits on the remove button itself (assistive-tech name + menu-label fallback).
+    expect(source).toMatch(
+      /onClick=\{\(\) => removeDraftTask\(row\._id\)\}[\s\S]{0,80}aria-label=\{t\('common:buttons\.delete'\)\}/,
+    );
+    // The same cell exposes the tooltip label StandardTable reads for the collapsed menu item.
+    expect(source).toMatch(
+      /removeDraftTask\(row\._id\)[\s\S]{0,400}<TooltipContent>\{t\('common:buttons\.delete'\)\}<\/TooltipContent>/,
+    );
+  });
+});
