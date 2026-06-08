@@ -1524,6 +1524,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       files={stagedAttachments}
                       onAdd={handleStageAttachment}
                       onRemove={handleRemoveStagedAttachment}
+                      disabled={isSubmitting}
                       readOnlyStatus={readOnlyStatus}
                       statusLabel={statusLabel}
                     />

@@ -18,6 +18,12 @@ interface SupplierQuoteAttachmentsStagingProps {
   files: File[];
   onAdd: (file: File) => void;
   onRemove: (index: number) => void;
+  /**
+   * Locks the queue while the parent is saving. handleSubmit captures the queue at submit time and
+   * uploads that snapshot; a file added (or removed) during the in-flight save would not be in it and
+   * would be silently dropped when the modal closes, so the controls are disabled meanwhile.
+   */
+  disabled?: boolean;
   /** Resolved FieldTooltip status string; mirrors the other sections in SupplierQuotesView. */
   readOnlyStatus: string;
   /** Localized "Status:" label prefix. */
@@ -34,6 +40,7 @@ const SupplierQuoteAttachmentsStaging: React.FC<SupplierQuoteAttachmentsStagingP
   files,
   onAdd,
   onRemove,
+  disabled = false,
   readOnlyStatus,
   statusLabel,
 }) => {
@@ -55,6 +62,7 @@ const SupplierQuoteAttachmentsStaging: React.FC<SupplierQuoteAttachmentsStagingP
 
   const acceptFile = useCallback(
     (file: File) => {
+      if (disabled) return;
       const code = validateAttachmentFile(file);
       if (code) {
         setError(validationMessage(code));
@@ -63,7 +71,7 @@ const SupplierQuoteAttachmentsStaging: React.FC<SupplierQuoteAttachmentsStagingP
       setError(null);
       onAdd(file);
     },
-    [onAdd, validationMessage],
+    [disabled, onAdd, validationMessage],
   );
 
   const handleFileInputChange = useCallback(
@@ -119,7 +127,7 @@ const SupplierQuoteAttachmentsStaging: React.FC<SupplierQuoteAttachmentsStagingP
           isDragging
             ? 'border-praetor bg-praetor/5'
             : 'border-zinc-200 bg-zinc-50 hover:border-zinc-300'
-        }`}
+        } ${disabled ? 'opacity-60 pointer-events-none' : ''}`}
       >
         <i className="fa-solid fa-cloud-arrow-up text-2xl text-zinc-400"></i>
         <span className="font-bold text-zinc-600">
@@ -135,6 +143,7 @@ const SupplierQuoteAttachmentsStaging: React.FC<SupplierQuoteAttachmentsStagingP
         <input
           type="file"
           accept={ATTACHMENT_ACCEPT_ATTR}
+          disabled={disabled}
           aria-label={t('supplierQuotes.attachments.dropHere', {
             defaultValue: 'Drop a file here or click to upload',
           })}
@@ -165,7 +174,8 @@ const SupplierQuoteAttachmentsStaging: React.FC<SupplierQuoteAttachmentsStagingP
               <button
                 type="button"
                 onClick={() => onRemove(index)}
-                className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
+                disabled={disabled}
+                className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50 disabled:opacity-60 disabled:pointer-events-none"
                 aria-label={t('supplierQuotes.attachments.removeStaged', {
                   defaultValue: 'Remove',
                 })}

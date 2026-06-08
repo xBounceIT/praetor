@@ -92,4 +92,31 @@ describe('<SupplierQuoteAttachmentsStaging />', () => {
     fireEvent.click(screen.getAllByLabelText('Remove')[1]);
     expect(onRemove).toHaveBeenCalledWith(1);
   });
+
+  test('locks the queue while disabled so a mid-save file is not silently dropped', () => {
+    // While the parent is saving, handleSubmit has already snapshotted the queue; a file added now
+    // would never be uploaded and would be wiped on modal close. The controls must be inert.
+    const onAdd = mock((_file: File) => {});
+    const onRemove = mock((_index: number) => {});
+    render(
+      <SupplierQuoteAttachmentsStaging
+        {...baseProps}
+        disabled
+        files={[xlsx('first.xlsx')]}
+        onAdd={onAdd}
+        onRemove={onRemove}
+      />,
+    );
+
+    const input = fileInput();
+    expect(input.disabled).toBe(true);
+    // Even if a change is forced through, the disabled guard ignores the file.
+    fireEvent.change(input, { target: { files: [xlsx('late.xlsx')] } });
+    expect(onAdd).not.toHaveBeenCalled();
+
+    const removeButton = screen.getByLabelText('Remove') as HTMLButtonElement;
+    expect(removeButton.disabled).toBe(true);
+    fireEvent.click(removeButton);
+    expect(onRemove).not.toHaveBeenCalled();
+  });
 });
