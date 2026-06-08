@@ -350,7 +350,9 @@
       "downloadAction": "Scarica",
       "deleteAction": "Elimina",
       "deleteConfirm": "Rimuovere questo allegato?",
-      "saveQuoteFirst": "Salva prima il preventivo per poter aggiungere allegati.",
+      "removeStaged": "Rimuovi",
+      "pendingUploadHint": "I file vengono caricati al salvataggio del preventivo.",
+      "uploadPartialFailed": "Preventivo salvato, ma non è stato possibile caricare {{count}} allegato/i: {{names}}. Riprova dal preventivo salvato.",
       "loadFailed": "Caricamento degli allegati non riuscito.",
       "errors": {
         "tooLarge": "Il file supera il limite di 10 MB",

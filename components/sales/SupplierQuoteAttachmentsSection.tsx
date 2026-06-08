@@ -4,31 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { supplierQuotesApi } from '../../services/api/supplierQuotes';
 import type { SupplierQuoteAttachment } from '../../types';
 import { formatInsertDateTime } from '../../utils/date';
+import {
+  ATTACHMENT_ACCEPT_ATTR,
+  formatAttachmentFileSize,
+  validateAttachmentFile,
+} from '../../utils/supplierQuoteAttachments';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import FieldTooltip from '../shared/FieldTooltip';
-
-const ALLOWED_EXT = new Set(['xlsx', 'pdf', 'docx']);
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
-const ACCEPT_ATTR = '.xlsx,.pdf,.docx';
-
-const formatFileSize = (bytes: number): string => {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let value = bytes;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-  const decimals = unitIndex === 0 ? 0 : 1;
-  return `${value.toFixed(decimals)} ${units[unitIndex]}`;
-};
-
-const getExtension = (name: string): string => {
-  const dot = name.lastIndexOf('.');
-  if (dot < 0 || dot === name.length - 1) return '';
-  return name.slice(dot + 1).toLowerCase();
-};
 
 type AttachmentState = {
   attachments: SupplierQuoteAttachment[];
@@ -113,13 +95,13 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
 
   const validateFile = useCallback(
     (file: File): string | null => {
-      if (file.size > MAX_FILE_SIZE) {
+      const code = validateAttachmentFile(file);
+      if (code === 'tooLarge') {
         return t('sales:supplierQuotes.attachments.errors.tooLarge', {
           defaultValue: 'File exceeds the 10 MB upload limit',
         });
       }
-      const ext = getExtension(file.name);
-      if (!ALLOWED_EXT.has(ext)) {
+      if (code === 'invalidType') {
         return t('sales:supplierQuotes.attachments.errors.invalidType', {
           defaultValue: 'File type not allowed. Use xlsx, pdf, or docx.',
         });
@@ -273,7 +255,7 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
           </span>
           <input
             type="file"
-            accept={ACCEPT_ATTR}
+            accept={ATTACHMENT_ACCEPT_ATTR}
             disabled={isUploading}
             aria-label={t('sales:supplierQuotes.attachments.dropHere', {
               defaultValue: 'Drop a file here or click to upload',
@@ -308,7 +290,7 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
                   {attachment.fileName}
                 </div>
                 <div className="text-xs text-zinc-400">
-                  {formatFileSize(attachment.fileSize)}
+                  {formatAttachmentFileSize(attachment.fileSize)}
                   {attachment.createdAt
                     ? ` · ${formatInsertDateTime(attachment.createdAt, i18n.language)}`
                     : ''}
