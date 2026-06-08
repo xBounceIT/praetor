@@ -568,6 +568,13 @@
       "when": 1780961541952,
       "tag": "0080_unlock_misura_billing_frequency",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1780962907073,
+      "tag": "0081_drop_sale_items_product_id_not_null",
+      "breakpoints": true
     }
   ]
 }

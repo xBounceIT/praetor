@@ -421,6 +421,30 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     );
   });
 
+  test('200 restores a snapshot line with no productId (issue #783)', async () => {
+    setupHappyPath();
+    // A supplier-quote-sourced line carries supplierQuoteItemId but no catalog product. Before
+    // sale_items.product_id became nullable this restore was rejected with a 409.
+    ovFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [{ ...SAMPLE_ITEM, id: 'si-free', productId: null, supplierQuoteItemId: 'sqi-1' }],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders/o-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const replacedItems = coReplaceItemsMock.mock.calls[0]?.[1];
+    expect(replacedItems).toHaveLength(1);
+    expect(replacedItems[0].productId).toBeNull();
+  });
+
   test('404 when current order does not exist', async () => {
     coFindExistingMock.mockResolvedValue(null);
     ovFindByIdMock.mockResolvedValue(SAMPLE_VERSION);

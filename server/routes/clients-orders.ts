@@ -105,7 +105,10 @@ const clientOrderItemBodySchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
-    productId: { type: 'string' },
+    // Nullable / optional: a supplier-quote-sourced line carries `supplierQuoteItemId` instead
+    // of a catalog product id (issue #783). `normalizeIncomingItems` enforces that one of the
+    // two is present.
+    productId: { type: ['string', 'null'] },
     productName: { type: 'string' },
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
@@ -124,7 +127,7 @@ const clientOrderItemBodySchema = {
     durationMonths: { type: 'number' },
     durationUnit: { type: 'string', enum: ['months', 'years'] },
   },
-  required: ['productId', 'productName', 'quantity', 'unitPrice'],
+  required: ['productName', 'quantity', 'unitPrice'],
 } as const;
 
 const clientOrderCreateBodySchema = {
@@ -163,7 +166,7 @@ const clientOrderUpdateBodySchema = {
 
 type NormalizedOrderItem = {
   id?: string;
-  productId: string;
+  productId: string | null;
   productName: string;
   quantity: number;
   unitPrice: number;
@@ -190,9 +193,19 @@ const normalizeIncomingItems = (
   const normalized: NormalizedOrderItem[] = [];
   for (let i = 0; i < items.length; i++) {
     const item = items[i] as Record<string, unknown>;
-    const productIdResult = requireNonEmptyString(item.productId, `items[${i}].productId`);
-    if (!productIdResult.ok) {
-      badRequest(reply, productIdResult.message);
+    // A line is either pinned to a catalog product (`productId`) or sourced from a supplier-quote
+    // item (`supplierQuoteItemId`). Require at least one — mirrors the quote/offer routes so a
+    // free-form supplier line survives the offer→order conversion (issue #783).
+    const supplierQuoteItemId =
+      item.supplierQuoteItemId === null || item.supplierQuoteItemId === undefined
+        ? null
+        : String(item.supplierQuoteItemId).trim() || null;
+    const productIdValue = typeof item.productId === 'string' ? item.productId.trim() : '';
+    if (!productIdValue && !supplierQuoteItemId) {
+      badRequest(
+        reply,
+        `items[${i}].productId is required when no supplierQuoteItemId is provided`,
+      );
       return null;
     }
     const productNameResult = requireNonEmptyString(item.productName, `items[${i}].productName`);
@@ -247,7 +260,7 @@ const normalizeIncomingItems = (
     );
     normalized.push({
       id: typeof item.id === 'string' ? item.id : undefined,
-      productId: productIdResult.value,
+      productId: productIdValue || null,
       productName: productNameResult.value,
       quantity: quantityResult.value,
       unitPrice: unitPriceResult.value,
@@ -1474,28 +1487,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const snapshotItems: clientsOrdersRepo.NewClientOrderItem[] = [];
-      for (const { orderId: _o, id: _i, ...rest } of version.snapshot.items) {
-        if (!rest.productId) {
-          // sale_items.product_id is NOT NULL with FK; restore would otherwise fail mid-tx.
-          return replyError(request, reply, {
-            statusCode: 409,
-            message: `Snapshot item "${rest.productName}" is missing a product reference`,
-            action: 'client_order.restore.conflict',
-            entityType: 'client_order',
-            entityId: idResult.value,
-            details: {
-              secondaryLabel: 'snapshot_item_missing_product',
-              targetLabel: rest.productName,
-            },
-          });
-        }
-        snapshotItems.push({
+      // `sale_items.product_id` is nullable (issue #783), so a product-less supplier line in the
+      // snapshot restores as-is. `findMissingSnapshotReference` above already rejected any
+      // non-null productId that no longer points at a live product.
+      const snapshotItems: clientsOrdersRepo.NewClientOrderItem[] = version.snapshot.items.map(
+        ({ orderId: _o, id: _i, ...rest }) => ({
           ...rest,
           id: generatePrefixedId(ITEM_ID_PREFIXES.saleItem),
-          productId: rest.productId,
-        });
-      }
+          // Empty-string productIds slip through some snapshots; the DB column needs NULL.
+          productId: rest.productId || null,
+        }),
+      );
 
       let restored: {
         order: clientsOrdersRepo.ClientOrder | null;
