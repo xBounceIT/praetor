@@ -76,6 +76,19 @@ describe('createWebhook', () => {
     expect(insertedArg().id).toMatch(/^webhook-/);
   });
 
+  test('stores a literal ******** secret on create instead of treating it as the masked sentinel', async () => {
+    // Codex PR review: on create there is no stored secret to keep, so a ******** value is a real
+    // eight-asterisk credential and must be encrypted, not collapsed to empty.
+    await webhooksService.createWebhook({
+      name: 'X',
+      url: 'https://x.com',
+      authType: 'bearer',
+      authSecret: '********',
+    });
+    expect(encryptMock).toHaveBeenCalledWith('********');
+    expect(insertedArg().authSecret).toBe('enc(********)');
+  });
+
   test('authType none clears all credentials and skips encryption', async () => {
     await webhooksService.createWebhook({
       name: 'X',
@@ -143,7 +156,10 @@ describe('updateWebhook', () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 
-  test('preserves the stored secret when the masked sentinel is sent and the type is unchanged', async () => {
+  test('stores a literal ******** secret verbatim instead of treating it as a keep-stored sentinel', async () => {
+    // Codex PR review: the UI keeps a stored secret by OMITTING the field, never by echoing the
+    // masked value back — so an explicit ******** is a real eight-asterisk credential, not a
+    // sentinel, and must be encrypted rather than collapsed back to the old ciphertext.
     findByIdMock.mockResolvedValue(
       existingWebhook({ authType: 'bearer', authSecret: 'enc(old-token)' }),
     );
@@ -151,8 +167,8 @@ describe('updateWebhook', () => {
       authType: 'bearer',
       authSecret: '********',
     });
-    expect(encryptMock).not.toHaveBeenCalled();
-    expect(updatedPatch().authSecret).toBe('enc(old-token)');
+    expect(encryptMock).toHaveBeenCalledWith('********');
+    expect(updatedPatch().authSecret).toBe('enc(********)');
   });
 
   test('preserves the stored secret when authSecret is omitted entirely', async () => {
@@ -174,17 +190,26 @@ describe('updateWebhook', () => {
     expect(updatedPatch().authSecret).toBe('enc(new-token)');
   });
 
-  test('discards the old secret when switching auth type even if masked', async () => {
+  test('discards the old secret when switching auth type and no new secret is provided', async () => {
+    // Omitting authSecret means "keep stored", but a scheme switch reinterprets the credential, so the
+    // stale secret is dropped rather than carried into the new scheme.
     findByIdMock.mockResolvedValue(
       existingWebhook({ authType: 'basic', authSecret: 'enc(old-pw)', authUsername: 'u' }),
     );
-    await webhooksService.updateWebhook('webhook-1', {
-      authType: 'bearer',
-      authSecret: '********',
-    });
+    await webhooksService.updateWebhook('webhook-1', { authType: 'bearer' });
+    expect(encryptMock).not.toHaveBeenCalled();
     expect(updatedPatch().authSecret).toBe('');
     expect(updatedPatch().authType).toBe('bearer');
     expect(updatedPatch().authUsername).toBe('');
+  });
+
+  test('encrypts a new secret provided while switching auth type', async () => {
+    findByIdMock.mockResolvedValue(
+      existingWebhook({ authType: 'basic', authSecret: 'enc(old-pw)', authUsername: 'u' }),
+    );
+    await webhooksService.updateWebhook('webhook-1', { authType: 'bearer', authSecret: 'new-tok' });
+    expect(updatedPatch().authSecret).toBe('enc(new-tok)');
+    expect(updatedPatch().authType).toBe('bearer');
   });
 
   test('switching to none clears every auth field', async () => {

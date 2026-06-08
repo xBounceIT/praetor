@@ -128,8 +128,8 @@ const parseCustomHeaders = (
 // Validate + normalize a create/update body into a service input. Fastify/AJV has already enforced
 // the JSON shape (types, enum membership, additionalProperties); this layer adds the semantics AJV
 // can't express: required-on-create, URL scheme, per-entry header checks, and trimming. `authSecret`
-// is intentionally NOT trimmed — surrounding whitespace can be meaningful in a credential, and the
-// MASKED_SECRET sentinel must round-trip byte-for-byte.
+// is intentionally NOT trimmed — surrounding whitespace can be meaningful in a credential, so the
+// value is stored exactly as sent (the UI signals "keep the stored secret" by omitting the field).
 const validateWebhookBody = (
   body: Record<string, unknown>,
   reply: FastifyReply,

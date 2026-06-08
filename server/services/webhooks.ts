@@ -4,11 +4,13 @@ import type {
   WebhookHttpMethod,
 } from '../db/schema/webhooks.ts';
 import * as webhooksRepo from '../repositories/webhooksRepo.ts';
-import { encrypt, MASKED_SECRET } from '../utils/crypto.ts';
+import { encrypt } from '../utils/crypto.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 
-// Plaintext input from the route. `authSecret` carries the raw credential the admin typed, or the
-// MASKED_SECRET sentinel (or `undefined`) to mean "keep the stored value". Everything is already
+// Plaintext input from the route. `authSecret` carries the raw credential the admin typed, or
+// `undefined` (the field omitted) to mean "keep the stored value". The UI signals "unchanged" by
+// omitting the field, never by echoing the masked value back — so any present string, including the
+// literal MASKED_SECRET text, is a real credential and is stored verbatim. Everything is already
 // validated/trimmed by the route before it reaches the service.
 export type WebhookInput = {
   name?: string;
@@ -27,16 +29,18 @@ type NormalizedAuth = { authUsername: string; authHeaderName: string; authSecret
 
 const EMPTY_AUTH: NormalizedAuth = { authUsername: '', authHeaderName: '', authSecret: '' };
 
-// Resolve the ciphertext to persist for the secret credential. Preserving the stored value only
-// makes sense when the auth type is unchanged — switching schemes (e.g. basic -> bearer)
-// reinterprets what the secret means, so a masked/absent value clears it rather than carrying a
-// stale credential into the new scheme.
+// Resolve the ciphertext to persist for the secret credential. An omitted secret (`undefined`) means
+// "keep the stored value", but only when the auth type is unchanged — switching schemes (e.g.
+// basic -> bearer) reinterprets what the secret means, so an absent value clears it rather than
+// carrying a stale credential into the new scheme. A present string is always a real credential: ''
+// clears it and anything else is encrypted as-is (a literal `********` is a valid secret, not a
+// sentinel — the UI never round-trips the masked value, it omits the field instead).
 const resolveSecretCiphertext = (
   provided: string | undefined,
   existingCiphertext: string,
   sameAuthType: boolean,
 ): string => {
-  if (provided === undefined || provided === MASKED_SECRET) {
+  if (provided === undefined) {
     return sameAuthType ? existingCiphertext : '';
   }
   if (provided === '') return '';
