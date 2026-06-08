@@ -10078,6 +10078,16 @@
                           "monthly",
                           "one_time"
                         ]
+                      },
+                      "tipo": {
+                        "type": "string",
+                        "enum": [
+                          "attivo",
+                          "passivo"
+                        ]
+                      },
+                      "tipoConfirmed": {
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -10086,7 +10096,9 @@
                       "clientId",
                       "isDisabled",
                       "billingType",
-                      "billingFrequency"
+                      "billingFrequency",
+                      "tipo",
+                      "tipoConfirmed"
                     ]
                   }
                 }
@@ -10294,6 +10306,13 @@
                       "monthly",
                       "one_time"
                     ]
+                  },
+                  "tipo": {
+                    "type": "string",
+                    "enum": [
+                      "attivo",
+                      "passivo"
+                    ]
                   }
                 },
                 "required": [
@@ -10301,7 +10320,8 @@
                   "clientId",
                   "offerId",
                   "startDate",
-                  "endDate"
+                  "endDate",
+                  "tipo"
                 ]
               }
             }
@@ -10380,6 +10400,16 @@
                         "monthly",
                         "one_time"
                       ]
+                    },
+                    "tipo": {
+                      "type": "string",
+                      "enum": [
+                        "attivo",
+                        "passivo"
+                      ]
+                    },
+                    "tipoConfirmed": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -10388,7 +10418,9 @@
                     "clientId",
                     "isDisabled",
                     "billingType",
-                    "billingFrequency"
+                    "billingFrequency",
+                    "tipo",
+                    "tipoConfirmed"
                   ]
                 }
               }
@@ -10738,6 +10770,13 @@
                       "monthly",
                       "one_time"
                     ]
+                  },
+                  "tipo": {
+                    "type": "string",
+                    "enum": [
+                      "attivo",
+                      "passivo"
+                    ]
                   }
                 }
               }
@@ -10827,6 +10866,16 @@
                         "monthly",
                         "one_time"
                       ]
+                    },
+                    "tipo": {
+                      "type": "string",
+                      "enum": [
+                        "attivo",
+                        "passivo"
+                      ]
+                    },
+                    "tipoConfirmed": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -10835,7 +10884,9 @@
                     "clientId",
                     "isDisabled",
                     "billingType",
-                    "billingFrequency"
+                    "billingFrequency",
+                    "tipo",
+                    "tipoConfirmed"
                   ]
                 }
               }
@@ -24809,6 +24860,16 @@
                                 "days",
                                 "unit"
                               ]
+                            },
+                            "durationMonths": {
+                              "type": "number"
+                            },
+                            "durationUnit": {
+                              "type": "string",
+                              "enum": [
+                                "months",
+                                "years"
+                              ]
                             }
                           },
                           "required": [
@@ -25056,6 +25117,16 @@
                             "days",
                             "unit"
                           ]
+                        },
+                        "durationMonths": {
+                          "type": "number"
+                        },
+                        "durationUnit": {
+                          "type": "string",
+                          "enum": [
+                            "months",
+                            "years"
+                          ]
                         }
                       },
                       "required": [
@@ -25233,6 +25304,16 @@
                               "hours",
                               "days",
                               "unit"
+                            ]
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
                             ]
                           }
                         },
@@ -25461,6 +25542,16 @@
                             "days",
                             "unit"
                           ]
+                        },
+                        "durationMonths": {
+                          "type": "number"
+                        },
+                        "durationUnit": {
+                          "type": "string",
+                          "enum": [
+                            "months",
+                            "years"
+                          ]
                         }
                       },
                       "required": [
@@ -25644,6 +25735,16 @@
                               "hours",
                               "days",
                               "unit"
+                            ]
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
                             ]
                           }
                         },
@@ -26539,6 +26640,16 @@
                               "days",
                               "unit"
                             ]
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [
@@ -26850,6 +26961,16 @@
                             },
                             "discount": {
                               "type": "number"
+                            },
+                            "durationMonths": {
+                              "type": "number"
+                            },
+                            "durationUnit": {
+                              "type": "string",
+                              "enum": [
+                                "months",
+                                "years"
+                              ]
                             }
                           },
                           "required": [
@@ -27105,6 +27226,16 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "durationMonths": {
+                          "type": "number"
+                        },
+                        "durationUnit": {
+                          "type": "string",
+                          "enum": [
+                            "months",
+                            "years"
+                          ]
                         }
                       },
                       "required": [
@@ -27297,6 +27428,16 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [
@@ -27529,6 +27670,16 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "durationMonths": {
+                          "type": "number"
+                        },
+                        "durationUnit": {
+                          "type": "string",
+                          "enum": [
+                            "months",
+                            "years"
+                          ]
                         }
                       },
                       "required": [
@@ -27723,6 +27874,16 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [
@@ -28201,6 +28362,16 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [
@@ -28951,6 +29122,16 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [
@@ -30525,6 +30706,16 @@
                             },
                             "discount": {
                               "type": "number"
+                            },
+                            "durationMonths": {
+                              "type": "number"
+                            },
+                            "durationUnit": {
+                              "type": "string",
+                              "enum": [
+                                "months",
+                                "years"
+                              ]
                             }
                           },
                           "required": [
@@ -30797,6 +30988,16 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "durationMonths": {
+                          "type": "number"
+                        },
+                        "durationUnit": {
+                          "type": "string",
+                          "enum": [
+                            "months",
+                            "years"
+                          ]
                         }
                       },
                       "required": [
@@ -30989,6 +31190,16 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [
@@ -31238,6 +31449,16 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "durationMonths": {
+                          "type": "number"
+                        },
+                        "durationUnit": {
+                          "type": "string",
+                          "enum": [
+                            "months",
+                            "years"
+                          ]
                         }
                       },
                       "required": [
@@ -31438,6 +31659,16 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [
@@ -32353,6 +32584,16 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [
@@ -32621,6 +32862,16 @@
                             },
                             "taxRate": {
                               "type": "number"
+                            },
+                            "durationMonths": {
+                              "type": "number"
+                            },
+                            "durationUnit": {
+                              "type": "string",
+                              "enum": [
+                                "months",
+                                "years"
+                              ]
                             }
                           },
                           "required": [
@@ -32875,6 +33126,16 @@
                         },
                         "taxRate": {
                           "type": "number"
+                        },
+                        "durationMonths": {
+                          "type": "number"
+                        },
+                        "durationUnit": {
+                          "type": "string",
+                          "enum": [
+                            "months",
+                            "years"
+                          ]
                         }
                       },
                       "required": [
@@ -32993,6 +33254,16 @@
                           },
                           "taxRate": {
                             "type": "number"
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [
@@ -33227,6 +33498,16 @@
                         },
                         "taxRate": {
                           "type": "number"
+                        },
+                        "durationMonths": {
+                          "type": "number"
+                        },
+                        "durationUnit": {
+                          "type": "string",
+                          "enum": [
+                            "months",
+                            "years"
+                          ]
                         }
                       },
                       "required": [
@@ -33348,6 +33629,16 @@
                           },
                           "taxRate": {
                             "type": "number"
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years"
+                            ]
                           }
                         },
                         "required": [

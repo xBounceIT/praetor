@@ -1143,7 +1143,10 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 buttonClassName="h-9"
                 disabled={!canUpdateProjects}
               />
-              {tipoNeedsConfirmation && !tipo && (
+              {/* Show the explanatory hint until the user acts. Once a blocked save sets the
+                  required error, defer to it (the red error is the actionable message) so the
+                  two near-duplicate "confirm the type" notices don't stack. */}
+              {tipoNeedsConfirmation && !tipo && !errors.tipo && (
                 <p className="flex items-center gap-1 text-[10px] font-medium text-amber-600">
                   <i className="fa-solid fa-circle-info" aria-hidden="true"></i>
                   {t('projects:projects.tipoConfirmHint')}
