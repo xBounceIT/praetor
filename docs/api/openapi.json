@@ -25133,7 +25133,8 @@
                         "productId",
                         "productName",
                         "quantity",
-                        "unitPrice"
+                        "unitPrice",
+                        "unitType"
                       ]
                     }
                   },
@@ -25558,7 +25559,8 @@
                         "productId",
                         "productName",
                         "quantity",
-                        "unitPrice"
+                        "unitPrice",
+                        "unitType"
                       ]
                     }
                   },
@@ -27241,7 +27243,8 @@
                       "required": [
                         "productName",
                         "quantity",
-                        "unitPrice"
+                        "unitPrice",
+                        "unitType"
                       ]
                     }
                   },
@@ -27685,7 +27688,8 @@
                       "required": [
                         "productName",
                         "quantity",
-                        "unitPrice"
+                        "unitPrice",
+                        "unitType"
                       ]
                     }
                   },
@@ -31033,7 +31037,8 @@
                       "required": [
                         "productName",
                         "quantity",
-                        "unitPrice"
+                        "unitPrice",
+                        "unitType"
                       ]
                     }
                   },
@@ -31523,7 +31528,8 @@
                       "required": [
                         "productName",
                         "quantity",
-                        "unitPrice"
+                        "unitPrice",
+                        "unitType"
                       ]
                     }
                   },
