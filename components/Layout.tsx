@@ -30,6 +30,7 @@ import {
   UserCheck,
   UserCog,
   Users,
+  Webhook,
 } from 'lucide-react';
 import type React from 'react';
 import { useLayoutEffect, useMemo } from 'react';
@@ -282,6 +283,12 @@ const Layout: React.FC<LayoutProps> = ({
             label: t('routes.logs'),
             icon: ClipboardList,
             title: t('titles.logs'),
+          },
+          {
+            view: 'administration/webhooks',
+            label: t('routes.webhooks'),
+            icon: Webhook,
+            title: t('titles.webhooks'),
           },
         ],
       },

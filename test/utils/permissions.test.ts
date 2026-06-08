@@ -56,6 +56,10 @@ describe('PERMISSION_DEFINITIONS / ALL_PERMISSIONS', () => {
     expect(ALL_PERMISSIONS).toContain('hr.work_units.delete');
     expect(ALL_PERMISSIONS).toContain('hr.work_units_all.delete');
     expect(ALL_PERMISSIONS).toContain('administration.roles.update');
+    expect(ALL_PERMISSIONS).toContain('administration.webhooks.view');
+    expect(ALL_PERMISSIONS).toContain('administration.webhooks.create');
+    expect(ALL_PERMISSIONS).toContain('administration.webhooks.update');
+    expect(ALL_PERMISSIONS).toContain('administration.webhooks.delete');
     expect(ALL_PERMISSIONS).toContain('hr.costs.view');
     expect(ALL_PERMISSIONS).toContain('hr.costs.update');
     expect(ALL_PERMISSIONS).toContain('hr.costs_all.view');

@@ -547,6 +547,13 @@
       "when": 1780772883549,
       "tag": "0077_add_duration_to_line_items",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1780913052253,
+      "tag": "0078_add_webhooks_table",
+      "breakpoints": true
     }
   ]
 }

@@ -163,6 +163,7 @@
         "supplier_quote": "supplier quote",
         "task": "task",
         "user": "user",
+        "webhook": "webhook",
         "work_unit": "competence center"
       },
       "details": {
@@ -201,6 +202,83 @@
       "lastMonth": "Last month",
       "thisYear": "This year",
       "custom": "Custom"
+    }
+  },
+  "webhooks": {
+    "title": "Webhooks",
+    "subtitle": "Configure webhook targets and their authentication.",
+    "createWebhook": "Create webhook",
+    "editWebhook": "Edit webhook",
+    "deleteWebhook": "Delete webhook",
+    "formSubtitle": "Define the target's name, URL, method, and authentication.",
+    "loading": "Loading webhooks...",
+    "loadError": "Unable to load webhooks",
+    "loadErrorHelp": "Something went wrong while loading webhooks. Please try again.",
+    "noHeaders": "No custom headers.",
+    "secretStored": "Stored",
+    "secretStoredHelp": "The stored value is hidden. Use Replace to set a new one.",
+    "empty": {
+      "title": "No webhooks yet",
+      "description": "Create your first webhook target to get started."
+    },
+    "columns": {
+      "name": "Name",
+      "url": "URL",
+      "method": "Method",
+      "auth": "Authentication",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "authTypes": {
+      "none": "None",
+      "basic": "Basic",
+      "bearer": "Bearer token",
+      "api_key": "API key"
+    },
+    "status": {
+      "active": "Active",
+      "disabled": "Disabled"
+    },
+    "fields": {
+      "name": "Name",
+      "description": "Description",
+      "url": "URL",
+      "method": "HTTP method",
+      "authType": "Authentication",
+      "username": "Username",
+      "headerName": "Header name",
+      "password": "Password",
+      "apiKeyValue": "API key value",
+      "token": "Token",
+      "customHeaders": "Custom headers",
+      "headerKey": "Header key",
+      "headerValue": "Header value",
+      "enabled": "Enabled",
+      "enabledHelp": "Disabled webhooks won't be invoked."
+    },
+    "placeholders": {
+      "name": "e.g. Slack notification",
+      "description": "Optional description",
+      "url": "https://example.com/webhook",
+      "headerName": "X-API-Key",
+      "headerKey": "X-Custom-Header",
+      "headerValue": "Value"
+    },
+    "actions": {
+      "addHeader": "Add header",
+      "removeHeader": "Remove header",
+      "retry": "Retry"
+    },
+    "errors": {
+      "urlRequired": "URL is required.",
+      "urlInvalid": "Enter a valid http(s) URL.",
+      "headerNameRequired": "Header name is required for API key authentication.",
+      "headerKeyRequired": "Header key is required."
+    },
+    "toasts": {
+      "created": "Webhook created.",
+      "updated": "Webhook updated.",
+      "deleted": "Webhook deleted."
     }
   }
 }
