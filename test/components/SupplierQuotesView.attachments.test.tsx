@@ -34,8 +34,10 @@ const supplier: Supplier = { id: 'sup-1', name: 'Acme Supplies' };
 const clients: Client[] = [];
 const products: Product[] = [];
 
+// The server-assigned id deliberately differs from the code typed below, so the test proves the
+// upload targets the id returned by onAddQuote rather than the raw form value.
 const createdQuote: SupplierQuote = {
-  id: 'SQ-NEW',
+  id: 'SQ-SERVER-ID',
   supplierId: 'sup-1',
   supplierName: 'Acme Supplies',
   items: [],
@@ -84,9 +86,9 @@ describe('<SupplierQuotesView /> create with staged attachments (issue #781)', (
     fireEvent.click(document.getElementById('supplier-quote-supplier') as HTMLElement);
     fireEvent.click(screen.getByText('Acme Supplies'));
 
-    // Quote code is required.
+    // Quote code is required (intentionally different from the server-assigned id).
     fireEvent.change(document.getElementById('supplier-quote-code') as HTMLInputElement, {
-      target: { value: 'SQ-NEW' },
+      target: { value: 'SQ-TYPED-CODE' },
     });
 
     // At least one line item is required.
@@ -104,7 +106,7 @@ describe('<SupplierQuotesView /> create with staged attachments (issue #781)', (
     await waitFor(() => expect(onAddQuote).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(uploadAttachmentMock).toHaveBeenCalledTimes(1));
     // The staged file is uploaded against the id returned by onAddQuote, not the typed code.
-    expect(uploadAttachmentMock.mock.calls[0][0]).toBe('SQ-NEW');
+    expect(uploadAttachmentMock.mock.calls[0][0]).toBe('SQ-SERVER-ID');
     expect(uploadAttachmentMock.mock.calls[0][1]).toBe(file);
   });
 });
