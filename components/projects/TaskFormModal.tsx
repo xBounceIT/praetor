@@ -6,9 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { useBillingFrequencyOptions, useBillingTypeOptions } from '@/hooks/useBillingOptions';
 import {
-  BILLING_FREQUENCY_OPTIONS,
-  BILLING_TYPE_OPTIONS,
   DEFAULT_BILLING_FREQUENCY,
   DEFAULT_BILLING_TYPE,
   toStoredBillingType,
@@ -327,14 +326,8 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
     isSubmitting,
   } = formState;
 
-  const translatedBillingTypeOptions = useMemo(
-    () => BILLING_TYPE_OPTIONS.map((option) => ({ id: option.id, name: t(option.name) })),
-    [t],
-  );
-  const translatedBillingFrequencyOptions = useMemo(
-    () => BILLING_FREQUENCY_OPTIONS.map((option) => ({ id: option.id, name: t(option.name) })),
-    [t],
-  );
+  const translatedBillingTypeOptions = useBillingTypeOptions();
+  const translatedBillingFrequencyOptions = useBillingFrequencyOptions();
 
   const projectSelectOptions = useMemo(
     () => projects.map((p) => ({ id: p.id, name: p.name })),

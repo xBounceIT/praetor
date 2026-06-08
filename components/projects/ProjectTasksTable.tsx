@@ -4,12 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  BILLING_FREQUENCY_OPTIONS,
-  BILLING_TYPE_OPTIONS,
-  DEFAULT_BILLING_FREQUENCY,
-  DEFAULT_BILLING_TYPE,
-} from '@/utils/billing';
+import { useBillingFrequencyOptions, useBillingTypeOptions } from '@/hooks/useBillingOptions';
+import { DEFAULT_BILLING_FREQUENCY, DEFAULT_BILLING_TYPE } from '@/utils/billing';
 import { tasksApi } from '../../services/api';
 import type { BillingFrequency, ProjectTask, StoredBillingType } from '../../types';
 import SelectControl from '../shared/SelectControl';
@@ -125,14 +121,8 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
     onUpdateTask(row.id, { [field]: parsed });
   };
 
-  const translatedBillingTypeOptions = BILLING_TYPE_OPTIONS.map((o) => ({
-    id: o.id,
-    name: t(o.name),
-  }));
-  const translatedBillingFrequencyOptions = BILLING_FREQUENCY_OPTIONS.map((o) => ({
-    id: o.id,
-    name: t(o.name),
-  }));
+  const translatedBillingTypeOptions = useBillingTypeOptions();
+  const translatedBillingFrequencyOptions = useBillingFrequencyOptions();
 
   const columns: Column<ProjectTask>[] = [
     {

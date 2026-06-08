@@ -6,9 +6,8 @@ import { Field, FieldError, FieldLabel, RequiredMark } from '@/components/ui/fie
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useBillingFrequencyOptions, useBillingTypeOptions } from '@/hooks/useBillingOptions';
 import {
-  BILLING_FREQUENCY_OPTIONS,
-  BILLING_TYPE_OPTIONS,
   DEFAULT_BILLING_FREQUENCY,
   DEFAULT_BILLING_TYPE,
   toStoredBillingType,
@@ -527,14 +526,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     return taskBillingTypes.has(storedProjectBillingType) ? storedProjectBillingType : 'mixed';
   };
 
-  const translatedBillingTypeOptions = BILLING_TYPE_OPTIONS.map((option) => ({
-    id: option.id,
-    name: t(option.name),
-  }));
-  const translatedBillingFrequencyOptions = BILLING_FREQUENCY_OPTIONS.map((option) => ({
-    id: option.id,
-    name: t(option.name),
-  }));
+  const translatedBillingTypeOptions = useBillingTypeOptions();
+  const translatedBillingFrequencyOptions = useBillingFrequencyOptions();
   const formatBillingType = (value: Project['billingType'] | ProjectTask['billingType']) =>
     value === 'mixed'
       ? t('projects:projects.billingTypes.mixed')

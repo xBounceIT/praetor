@@ -29,8 +29,8 @@ import type {
   UserWorkLocation,
 } from '../../types';
 import {
-  DEFAULT_BILLING_FREQUENCY,
   DEFAULT_BILLING_TYPE,
+  normalizeBillingFrequency,
   toStoredBillingType,
 } from '../../utils/billing';
 import { normalizeDateOnlyString } from '../../utils/date';
@@ -360,7 +360,7 @@ const normalizeProjectBilling = (
 ): Required<Pick<Project, 'billingType' | 'billingFrequency'>> => ({
   // Projects keep a derived 'mixed' type as-is; only a missing type falls back to the default.
   billingType: billingType ?? DEFAULT_BILLING_TYPE,
-  billingFrequency: billingFrequency ?? DEFAULT_BILLING_FREQUENCY,
+  billingFrequency: normalizeBillingFrequency(billingFrequency),
 });
 
 const normalizeTaskBilling = (
@@ -369,7 +369,7 @@ const normalizeTaskBilling = (
 ): Required<Pick<ProjectTask, 'billingType' | 'billingFrequency'>> => ({
   // Tasks can't be 'mixed' — coerce anything non-retainer to the stored default.
   billingType: toStoredBillingType(billingType),
-  billingFrequency: billingFrequency ?? DEFAULT_BILLING_FREQUENCY,
+  billingFrequency: normalizeBillingFrequency(billingFrequency),
 });
 
 export const normalizeGeneralSettings = (s: GeneralSettings): GeneralSettings => ({

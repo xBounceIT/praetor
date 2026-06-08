@@ -1,15 +1,20 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  BILLING_FREQUENCIES as SERVER_BILLING_FREQUENCIES,
   DEFAULT_BILLING_FREQUENCY as SERVER_DEFAULT_BILLING_FREQUENCY,
   DEFAULT_BILLING_TYPE as SERVER_DEFAULT_BILLING_TYPE,
+  STORED_BILLING_TYPES as SERVER_STORED_BILLING_TYPES,
 } from '../../server/utils/billing';
 import {
   BILLING_FREQUENCY_OPTIONS,
   BILLING_TYPE_OPTIONS,
   DEFAULT_BILLING_FREQUENCY,
   DEFAULT_BILLING_TYPE,
+  normalizeBillingFrequency,
   toStoredBillingType,
 } from '../../utils/billing';
+
+const sorted = (values: readonly string[]) => [...values].sort();
 
 describe('shared frontend billing module', () => {
   test('defaults equal the backend (server/utils/billing.ts) constants', () => {
@@ -20,9 +25,15 @@ describe('shared frontend billing module', () => {
     expect(DEFAULT_BILLING_FREQUENCY).toBe(SERVER_DEFAULT_BILLING_FREQUENCY);
   });
 
-  test('option arrays expose the supported ids in order', () => {
-    expect(BILLING_TYPE_OPTIONS.map((o) => o.id)).toEqual(['time_and_materials', 'retainer']);
-    expect(BILLING_FREQUENCY_OPTIONS.map((o) => o.id)).toEqual(['monthly', 'one_time']);
+  test('option ids cover exactly the billing values the backend accepts', () => {
+    // Order may differ (the dropdowns list time_and_materials first; the backend lists retainer
+    // first), so compare as sets. Guards against a value added on one tier but not the other.
+    expect(sorted(BILLING_TYPE_OPTIONS.map((o) => o.id))).toEqual(
+      sorted(SERVER_STORED_BILLING_TYPES),
+    );
+    expect(sorted(BILLING_FREQUENCY_OPTIONS.map((o) => o.id))).toEqual(
+      sorted(SERVER_BILLING_FREQUENCIES),
+    );
   });
 
   test('toStoredBillingType preserves retainer and coerces everything else to the default', () => {
@@ -31,5 +42,12 @@ describe('shared frontend billing module', () => {
     expect(toStoredBillingType('mixed')).toBe('time_and_materials');
     expect(toStoredBillingType(undefined)).toBe('time_and_materials');
     expect(toStoredBillingType(null)).toBe('time_and_materials');
+  });
+
+  test('normalizeBillingFrequency coalesces only a missing value to the default', () => {
+    expect(normalizeBillingFrequency('one_time')).toBe('one_time');
+    expect(normalizeBillingFrequency('monthly')).toBe('monthly');
+    expect(normalizeBillingFrequency(undefined)).toBe(DEFAULT_BILLING_FREQUENCY);
+    expect(normalizeBillingFrequency(null)).toBe(DEFAULT_BILLING_FREQUENCY);
   });
 });

@@ -22,4 +22,10 @@ export const BILLING_FREQUENCY_OPTIONS: readonly { id: BillingFrequency; name: s
 // backend normalizeStoredBillingType.
 export const toStoredBillingType = (
   billingType: BillingType | null | undefined,
-): StoredBillingType => (billingType === 'retainer' ? 'retainer' : 'time_and_materials');
+): StoredBillingType => (billingType === 'retainer' ? 'retainer' : DEFAULT_BILLING_TYPE);
+
+// Coalesce a missing billing frequency to the default. Mirrors the backend
+// normalizeBillingFrequency — frequency is independent of billing type (issue #785).
+export const normalizeBillingFrequency = (
+  billingFrequency: BillingFrequency | null | undefined,
+): BillingFrequency => billingFrequency ?? DEFAULT_BILLING_FREQUENCY;

@@ -37,9 +37,8 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useBillingFrequencyOptions, useBillingTypeOptions } from '@/hooks/useBillingOptions';
 import {
-  BILLING_FREQUENCY_OPTIONS,
-  BILLING_TYPE_OPTIONS,
   DEFAULT_BILLING_FREQUENCY,
   DEFAULT_BILLING_TYPE,
   toStoredBillingType,
@@ -582,14 +581,8 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     }
   }
 
-  const translatedBillingTypeOptions = BILLING_TYPE_OPTIONS.map((o) => ({
-    id: o.id,
-    name: t(o.name),
-  }));
-  const translatedBillingFrequencyOptions = BILLING_FREQUENCY_OPTIONS.map((o) => ({
-    id: o.id,
-    name: t(o.name),
-  }));
+  const translatedBillingTypeOptions = useBillingTypeOptions();
+  const translatedBillingFrequencyOptions = useBillingFrequencyOptions();
 
   const projectTasks = useMemo(
     () => tasks.filter((t) => t.projectId === project.id),

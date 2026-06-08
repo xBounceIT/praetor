@@ -2,9 +2,9 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useBillingFrequencyOptions, useBillingTypeOptions } from '../../hooks/useBillingOptions';
 import { tasksApi } from '../../services/api/tasks';
 import type { BillingFrequency, Client, Project, ProjectTask, Role, User } from '../../types';
-import { BILLING_FREQUENCY_OPTIONS, BILLING_TYPE_OPTIONS } from '../../utils/billing';
 import { formatInsertDate } from '../../utils/date';
 import { hasScopedActionPermission } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -153,14 +153,8 @@ const TasksView: React.FC<TasksViewProps> = ({
     loadedProjectIdsKeyRef.current = projectIdsKey;
     dispatch({ type: 'resetHours', hasProjects: projectIds.length > 0 });
   }
-  const translatedBillingTypeOptions = useMemo(
-    () => BILLING_TYPE_OPTIONS.map((option) => ({ id: option.id, name: t(option.name) })),
-    [t],
-  );
-  const translatedBillingFrequencyOptions = useMemo(
-    () => BILLING_FREQUENCY_OPTIONS.map((option) => ({ id: option.id, name: t(option.name) })),
-    [t],
-  );
+  const translatedBillingTypeOptions = useBillingTypeOptions();
+  const translatedBillingFrequencyOptions = useBillingFrequencyOptions();
   const formatBillingType = useCallback(
     (value: ProjectTask['billingType']) =>
       translatedBillingTypeOptions.find((option) => option.id === value)?.name ?? '-',
