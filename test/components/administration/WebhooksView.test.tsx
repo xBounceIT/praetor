@@ -138,34 +138,72 @@ describe('<WebhooksView />', () => {
 
 describe('resolveSecretForPayload', () => {
   test('authType none always clears the secret', () => {
-    expect(resolveSecretForPayload({ authType: 'none', isEditing: true, authSecret: 'x' })).toBe(
-      '',
-    );
+    expect(
+      resolveSecretForPayload({
+        authType: 'none',
+        isEditing: true,
+        isReplacingSecret: false,
+        authSecret: 'x',
+      }),
+    ).toBe('');
   });
 
   test('sends the typed secret when creating', () => {
     expect(
-      resolveSecretForPayload({ authType: 'bearer', isEditing: false, authSecret: 'tok' }),
+      resolveSecretForPayload({
+        authType: 'bearer',
+        isEditing: false,
+        isReplacingSecret: false,
+        authSecret: 'tok',
+      }),
     ).toBe('tok');
   });
 
   test('sends an empty secret when creating with a blank field', () => {
-    expect(resolveSecretForPayload({ authType: 'bearer', isEditing: false, authSecret: '' })).toBe(
-      '',
-    );
+    expect(
+      resolveSecretForPayload({
+        authType: 'bearer',
+        isEditing: false,
+        isReplacingSecret: false,
+        authSecret: '',
+      }),
+    ).toBe('');
   });
 
-  test('omits the secret when editing with a blank field so the stored value is preserved', () => {
-    // Regression: editing then saving with an empty secret field (after toggling the auth type back
-    // and forth, or clicking Replace without typing) must NOT wipe the stored credential.
+  test('omits the secret for an untouched stored field so the stored value is preserved', () => {
+    // Regression: editing then saving with an empty, NON-replacing secret field (after toggling the
+    // auth type back and forth, or leaving the stored badge untouched) must NOT wipe the credential.
     expect(
-      resolveSecretForPayload({ authType: 'bearer', isEditing: true, authSecret: '' }),
+      resolveSecretForPayload({
+        authType: 'bearer',
+        isEditing: true,
+        isReplacingSecret: false,
+        authSecret: '',
+      }),
     ).toBeUndefined();
   });
 
-  test('sends the new secret when editing and a value was entered', () => {
+  test('clears the secret when explicitly replacing with a blank field', () => {
+    // The admin clicked "Replace" and saved an empty value: this explicit clear must reach the server
+    // as '' (not be omitted), otherwise the documented authSecret:'' clear is unreachable from the UI.
     expect(
-      resolveSecretForPayload({ authType: 'bearer', isEditing: true, authSecret: 'new' }),
+      resolveSecretForPayload({
+        authType: 'bearer',
+        isEditing: true,
+        isReplacingSecret: true,
+        authSecret: '',
+      }),
+    ).toBe('');
+  });
+
+  test('sends the new secret when explicitly replacing with a value', () => {
+    expect(
+      resolveSecretForPayload({
+        authType: 'bearer',
+        isEditing: true,
+        isReplacingSecret: true,
+        authSecret: 'new',
+      }),
     ).toBe('new');
   });
 });

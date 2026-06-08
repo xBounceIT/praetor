@@ -301,6 +301,7 @@ const WebhooksView: React.FC<WebhooksViewProps> = ({ permissions }) => {
     const authSecret = resolveSecretForPayload({
       authType: form.authType,
       isEditing: Boolean(form.editingId),
+      isReplacingSecret: form.isReplacingSecret,
       authSecret: form.authSecret,
     });
     if (authSecret !== undefined) payload.authSecret = authSecret;
