@@ -198,8 +198,8 @@ const normalizeIncomingItems = (
     // item (`supplierQuoteItemId`). Require at least one — mirrors the quote/offer routes so a
     // free-form supplier line survives the offer→order conversion (issue #783).
     const supplierQuoteItemId = normalizeNullableString(item.supplierQuoteItemId);
-    const productIdValue = typeof item.productId === 'string' ? item.productId.trim() : '';
-    if (!productIdValue && !supplierQuoteItemId) {
+    const productId = normalizeNullableString(item.productId);
+    if (!productId && !supplierQuoteItemId) {
       badRequest(
         reply,
         `items[${i}].productId is required when no supplierQuoteItemId is provided`,
@@ -254,7 +254,7 @@ const normalizeIncomingItems = (
     );
     normalized.push({
       id: typeof item.id === 'string' ? item.id : undefined,
-      productId: productIdValue || null,
+      productId,
       productName: productNameResult.value,
       quantity: quantityResult.value,
       unitPrice: unitPriceResult.value,

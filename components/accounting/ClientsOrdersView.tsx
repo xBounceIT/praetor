@@ -535,6 +535,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     () => new Set(activeProducts.map((p) => p.id)),
     [activeProducts],
   );
+  // Built once per render and shared by every line row, instead of re-mapping per item.
+  const productOptions = useMemo(
+    () => activeProducts.map((p) => ({ id: p.id, name: p.name })),
+    [activeProducts],
+  );
   // A supplier-quote-sourced line can carry no catalog product (issue #783) or one that's been
   // archived; show its name read-only instead of an empty product dropdown (mirrors the
   // quote/offer/invoice editors).
@@ -1146,10 +1151,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                     <ProductSelectOrFallback
                                       item={item}
                                       index={index}
-                                      options={activeProducts.map((p) => ({
-                                        id: p.id,
-                                        name: p.name,
-                                      }))}
+                                      options={productOptions}
                                       // A product-less supplier line (issue #783) shows its name
                                       // read-only instead of an empty dropdown.
                                       isProductMissing={isLinkedProductMissing(item)}

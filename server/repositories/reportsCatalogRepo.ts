@@ -432,7 +432,7 @@ export const getCatalogSection = async (
           SELECT qi.product_id, qi.product_name, COUNT(*) as use_count, COALESCE(SUM(qi.quantity), 0) as quantity_total
             FROM quote_items qi
             JOIN quotes q ON q.id = qi.quote_id
-           WHERE q.created_at::date >= ${fromDate} AND q.created_at::date <= ${toDate}
+           WHERE q.created_at::date >= ${fromDate} AND q.created_at::date <= ${toDate} AND qi.product_id IS NOT NULL
            GROUP BY qi.product_id, qi.product_name
           UNION ALL
           SELECT si.product_id, si.product_name, COUNT(*) as use_count, COALESCE(SUM(si.quantity), 0) as quantity_total
