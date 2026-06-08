@@ -130,9 +130,10 @@ describe('ProjectsView toolbar styling', () => {
 describe('ProjectsView draft-task delete action (issue #782)', () => {
   // StandardTable collapses an actions column into a "…" overflow menu and derives
   // each item's text from the control's tooltip / aria-label. The draft-task delete
-  // button had neither, so the menu item rendered icon-only — the blank label space
-  // read as white-on-white text in light mode. It must carry the shared delete label
-  // (matching ProjectTasksTable in the edit view) so the menu shows a coloured label.
+  // button had neither, so the menu item rendered icon-only with no label text — the
+  // blank space where "Elimina"/"Delete" belongs is what issue #782 reported as a
+  // wrong font colour in light mode. It must carry the shared delete label (matching
+  // ProjectTasksTable in the edit view) so the collapsed menu shows a labelled item.
   test('the remove-draft-task control is tooltip-wrapped and carries the delete label', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
