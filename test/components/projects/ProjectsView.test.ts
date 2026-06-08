@@ -82,6 +82,21 @@ describe('ProjectsView create-form validation', () => {
     );
   });
 
+  test('manual revenue source shows no helper hint, but activities/order still do', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+    // The manual source is omitted from the hint map (Partial) — no redundant helper text.
+    expect(source).toContain('Partial<Record<RevenueSource, string>>');
+    expect(source).not.toContain("manual: t('projects:projects.revenueManualHint')");
+    // Informative source hints remain.
+    expect(source).toContain("activities: t('projects:projects.revenueFromActivities')");
+    expect(source).toContain("order: t('projects:projects.revenueFromOrder')");
+    // The hint renders through the shared FieldDescription primitive, only when present.
+    expect(source).toContain('{revenueHintBySource[revenueSource] && (');
+    expect(source).toContain('<FieldDescription className="text-xs">');
+  });
+
   test('order selector auto-fills the client and disables the client picker while bound', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),

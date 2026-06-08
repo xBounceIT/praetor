@@ -2,7 +2,13 @@ import type React from 'react';
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { Field, FieldError, FieldLabel, RequiredMark } from '@/components/ui/field';
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+  RequiredMark,
+} from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -601,10 +607,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     order: orderRevenue,
     manual: revenue ? parseFloat(revenue) : 0,
   };
-  const revenueHintBySource: Record<RevenueSource, string> = {
+  // Activities/order hints explain why the field is read-only; the manual source is
+  // omitted because the field label already says what to enter.
+  const revenueHintBySource: Partial<Record<RevenueSource, string>> = {
     activities: t('projects:projects.revenueFromActivities'),
     order: t('projects:projects.revenueFromOrder'),
-    manual: t('projects:projects.revenueManualHint'),
   };
   const displayedRevenue = revenueBySource[revenueSource];
   const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : undefined;
@@ -967,9 +974,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         readOnly={revenueSource !== 'manual'}
                         onChange={(e) => dispatch({ type: 'setRevenue', value: e.target.value })}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        {revenueHintBySource[revenueSource]}
-                      </p>
+                      {revenueHintBySource[revenueSource] && (
+                        <FieldDescription className="text-xs">
+                          {revenueHintBySource[revenueSource]}
+                        </FieldDescription>
+                      )}
                     </Field>
                   </div>
 
