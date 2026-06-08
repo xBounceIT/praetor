@@ -27,6 +27,7 @@ import type {
   ClientsOrder,
   Project,
   ProjectTask,
+  ProjectTipo,
   Role,
   StoredBillingType,
   User,
@@ -76,6 +77,11 @@ export type DraftTaskInput = {
   notes?: string;
 };
 
+const tipoOptions = [
+  { id: 'attivo', name: 'projects:projects.tipoValues.attivo' },
+  { id: 'passivo', name: 'projects:projects.tipoValues.passivo' },
+];
+
 type RevenueSource = 'activities' | 'order' | 'manual';
 type RevenueLike = { revenue?: number | string | null };
 
@@ -100,6 +106,7 @@ export type AddProjectFormInput = {
   startDate?: string | null;
   endDate?: string | null;
   revenue?: number | null;
+  tipo: ProjectTipo;
 };
 
 export interface ProjectsViewProps {
@@ -148,6 +155,8 @@ interface ProjectsViewState {
   startDate: string;
   endDate: string;
   revenue: string;
+  // '' = no choice yet; the create form requires a deliberate Attivo/Passivo pick (issue #784).
+  tipo: ProjectTipo | '';
   errors: Record<string, string>;
   draftTasks: DraftTask[];
 }
@@ -167,6 +176,7 @@ const INITIAL_PROJECTS_STATE: ProjectsViewState = {
   startDate: '',
   endDate: '',
   revenue: '',
+  tipo: '',
   errors: {},
   draftTasks: [],
 };
@@ -182,6 +192,7 @@ type ProjectsViewAction =
   | { type: 'setStartDate'; value: string }
   | { type: 'setEndDate'; value: string }
   | { type: 'setRevenue'; value: string }
+  | { type: 'setTipo'; value: ProjectTipo | '' }
   | { type: 'setErrors'; value: Record<string, string> }
   | { type: 'patchErrors'; value: Record<string, string> }
   | { type: 'setDraftTasks'; value: DraftTask[] }
@@ -215,6 +226,8 @@ const projectsViewReducer = (
       return { ...state, endDate: action.value };
     case 'setRevenue':
       return { ...state, revenue: action.value };
+    case 'setTipo':
+      return { ...state, tipo: action.value };
     case 'setErrors':
       return { ...state, errors: action.value };
     case 'patchErrors':
@@ -234,6 +247,7 @@ const projectsViewReducer = (
         startDate: '',
         endDate: '',
         revenue: '',
+        tipo: '',
         draftTasks: [],
         errors: {},
         isModalOpen: true,
@@ -296,6 +310,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     startDate,
     endDate,
     revenue,
+    tipo,
     errors,
     draftTasks,
   } = state;
@@ -422,6 +437,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     if (!offerId) newErrors.offerId = t('projects:projects.offerRequired');
     if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');
     if (!endDate) newErrors.endDate = t('projects:projects.endDateRequired');
+    if (!tipo) newErrors.tipo = t('projects:projects.tipoRequired');
     if (startDate && endDate && startDate > endDate) {
       newErrors.dateRange = t('projects:projects.dateRangeInvalid');
     }
@@ -456,6 +472,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       startDate: startDate || null,
       endDate: endDate || null,
       revenue: persistedRevenue,
+      // Guaranteed non-empty by the `!tipo` validation guard above.
+      tipo: tipo as ProjectTipo,
     });
     closeModal();
     if (result && onNavigateToProject) {
@@ -540,6 +558,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       : (translatedBillingTypeOptions.find((option) => option.id === value)?.name ?? '-');
   const formatBillingFrequency = (value: BillingFrequency | undefined) =>
     translatedBillingFrequencyOptions.find((option) => option.id === value)?.name ?? '-';
+
+  const translatedTipoOptions = tipoOptions.map((option) => ({
+    id: option.id,
+    name: t(option.name),
+  }));
+  const formatTipo = (value: ProjectTipo | undefined) =>
+    translatedTipoOptions.find((option) => option.id === value)?.name ?? '-';
 
   const clientOptions = clients.map((c: Client) => ({ id: c.id, name: c.name }));
 
@@ -963,6 +988,29 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <SelectControl
+                        id="project-tipo"
+                        options={translatedTipoOptions}
+                        value={tipo}
+                        onChange={(val) => {
+                          dispatch({ type: 'setTipo', value: val as ProjectTipo });
+                          if (errors.tipo) dispatch({ type: 'patchErrors', value: { tipo: '' } });
+                        }}
+                        label={
+                          <>
+                            {t('projects:projects.tipo')} <RequiredMark />
+                          </>
+                        }
+                        placeholder={t('projects:projects.selectTipo')}
+                        searchable={false}
+                        buttonClassName="h-9"
+                      />
+                      <FieldError className="text-xs">{errors.tipo}</FieldError>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
                     <SelectControl
                       id="project-billing-type"
                       options={translatedBillingTypeOptions}
@@ -1134,6 +1182,14 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                 >
                   {row.description || t('projects:projects.noDescriptionProvided')}
                 </p>
+              ),
+            },
+            {
+              header: t('projects:projects.tipo'),
+              id: 'tipo',
+              accessorFn: (row) => formatTipo(row.tipo),
+              cell: ({ row }) => (
+                <span className="text-xs font-bold text-zinc-600">{formatTipo(row.tipo)}</span>
               ),
             },
             {

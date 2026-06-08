@@ -28,6 +28,7 @@ import {
 import { ForeignKeyError, NotFoundError } from '../utils/http-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { requestHasPermission as hasPermission, makeAccessChecker } from '../utils/permissions.ts';
+import { PROJECT_TIPOS } from '../utils/projectTipo.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
@@ -39,6 +40,7 @@ import {
   optionalNonNegativeNumber,
   parseDateString,
   requireNonEmptyString,
+  validateEnum,
 } from '../utils/validation.ts';
 
 const userIdsSchema = {
@@ -80,8 +82,19 @@ const projectSchema = {
     revenue: { type: ['number', 'null'] },
     billingType: { type: 'string', enum: BILLING_TYPES },
     billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
+    tipo: { type: 'string', enum: PROJECT_TIPOS },
+    tipoConfirmed: { type: 'boolean' },
   },
-  required: ['id', 'name', 'clientId', 'isDisabled', 'billingType', 'billingFrequency'],
+  required: [
+    'id',
+    'name',
+    'clientId',
+    'isDisabled',
+    'billingType',
+    'billingFrequency',
+    'tipo',
+    'tipoConfirmed',
+  ],
 } as const;
 
 const projectCreateBodySchema = {
@@ -97,8 +110,9 @@ const projectCreateBodySchema = {
     revenue: { type: ['number', 'null'] },
     billingType: { type: 'string', enum: STORED_BILLING_TYPES },
     billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
+    tipo: { type: 'string', enum: PROJECT_TIPOS },
   },
-  required: ['name', 'clientId', 'offerId', 'startDate', 'endDate'],
+  required: ['name', 'clientId', 'offerId', 'startDate', 'endDate', 'tipo'],
 } as const;
 
 const projectUpdateBodySchema = {
@@ -115,6 +129,7 @@ const projectUpdateBodySchema = {
     revenue: { type: ['number', 'null'] },
     billingType: { type: 'string', enum: STORED_BILLING_TYPES },
     billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
+    tipo: { type: 'string', enum: PROJECT_TIPOS },
   },
 } as const;
 
@@ -218,6 +233,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         startDate?: string;
         endDate?: string;
         revenue?: number | string | null;
+        tipo?: string;
       };
 
       const nameResult = requireNonEmptyString(name, 'name');
@@ -264,6 +280,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!billingFrequencyResult.ok) return badRequest(reply, billingFrequencyResult.message);
       const billingFrequency = normalizeBillingFrequency(billingFrequencyResult.value);
 
+      // `tipo` is mandatory on create (issue #784): the form requires a deliberate choice.
+      const tipoResult = validateEnum(body.tipo, PROJECT_TIPOS, 'tipo');
+      if (!tipoResult.ok) return badRequest(reply, tipoResult.message);
+
       const id = generatePrefixedId('p');
 
       // The two FK lookups are independent — run them concurrently.
@@ -297,6 +317,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               revenue: revenueResult.value,
               billingType,
               billingFrequency,
+              tipo: tipoResult.value,
             },
             tx,
           );
@@ -444,9 +465,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         revenue?: number | string | null;
         billingType?: string;
         billingFrequency?: string;
+        tipo?: string;
       };
-      const { name, clientId, description, isDisabled, orderId, billingType, billingFrequency } =
-        body;
+      const {
+        name,
+        clientId,
+        description,
+        isDisabled,
+        orderId,
+        billingType,
+        billingFrequency,
+        tipo,
+      } = body;
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       if (!(await canAccessProject(request, idResult.value, 'projects.manage_all.update'))) {
@@ -467,6 +497,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         'billingFrequency',
       );
       if (!billingFrequencyResult.ok) return badRequest(reply, billingFrequencyResult.message);
+      // `tipo` is optional on update, but when present it must be a valid value. Supplying it
+      // confirms the field (the repo sets `tipo_confirmed`), satisfying the forced first-edit
+      // confirmation for rollout-defaulted projects (issue #784).
+      const tipoResult = optionalEnum(tipo, PROJECT_TIPOS, 'tipo');
+      if (!tipoResult.ok) return badRequest(reply, tipoResult.message);
 
       // Parse each optional patch field into a `{provided, value}` tuple so we can distinguish
       // "absent from body" (skip) from "explicitly null" (clear) in the repo call below.
@@ -590,6 +625,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               revenue: revenuePatch.provided ? revenuePatch.value : undefined,
               billingType: billingTypeResult.value ?? undefined,
               billingFrequency: billingFrequencyResult.value ?? undefined,
+              tipo: tipoResult.value ?? undefined,
             },
             tx,
           );

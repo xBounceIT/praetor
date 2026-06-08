@@ -282,6 +282,10 @@ export const normalizeProject = (p: Project): Project => ({
   ...p,
   revenue: p.revenue === undefined || p.revenue === null ? null : Number(p.revenue),
   ...normalizeProjectBilling(p.billingType, p.billingFrequency),
+  // `tipo` defaults to 'attivo' (the rollout default); `tipoConfirmed` to false so a
+  // payload missing the flag is treated as "needs confirmation" rather than confirmed.
+  tipo: p.tipo === 'passivo' ? 'passivo' : 'attivo',
+  tipoConfirmed: p.tipoConfirmed === true,
 });
 
 export const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({

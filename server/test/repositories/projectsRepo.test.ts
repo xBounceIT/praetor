@@ -26,7 +26,7 @@ beforeEach(() => {
 // and the user_projects/user_clients-touching helpers use executeRows (named-key rows).
 //
 // Schema column order: id, name, client_id, description, is_disabled, created_at, order_id,
-// offer_id, start_date, end_date, revenue, billing_type, billing_frequency
+// offer_id, start_date, end_date, revenue, billing_type, billing_frequency, tipo, tipo_confirmed
 const PROJECT_ROW: readonly unknown[] = [
   'p-1',
   'Alpha',
@@ -41,6 +41,8 @@ const PROJECT_ROW: readonly unknown[] = [
   null,
   'time_and_materials',
   'monthly',
+  'attivo',
+  true,
 ];
 
 const mappedRow: projectsRepo.Project = {
@@ -57,6 +59,8 @@ const mappedRow: projectsRepo.Project = {
   revenue: null,
   billingType: 'time_and_materials',
   billingFrequency: 'monthly',
+  tipo: 'attivo',
+  tipoConfirmed: true,
 };
 
 const rawProjectRow = {
@@ -73,6 +77,8 @@ const rawProjectRow = {
   revenue: null,
   billing_type: 'time_and_materials',
   billing_frequency: 'monthly',
+  tipo: 'attivo',
+  tipo_confirmed: true,
 };
 
 describe('listAll', () => {
@@ -87,6 +93,15 @@ describe('listAll', () => {
     exec.enqueue({ rows: [{ ...rawProjectRow, billing_type: 'mixed' }] });
     const result = await projectsRepo.listAll(testDb);
     expect(result[0].billingType).toBe('mixed');
+  });
+
+  test('selects and maps tipo / tipo_confirmed, defaulting confirmed to false', async () => {
+    exec.enqueue({ rows: [{ ...rawProjectRow, tipo: 'passivo', tipo_confirmed: false }] });
+    const result = await projectsRepo.listAll(testDb);
+    expect(exec.calls[0].sql).toContain('p.tipo');
+    expect(exec.calls[0].sql).toContain('p.tipo_confirmed');
+    expect(result[0].tipo).toBe('passivo');
+    expect(result[0].tipoConfirmed).toBe(false);
   });
 });
 
@@ -214,6 +229,7 @@ describe('create', () => {
         clientId: 'c-1',
         description: 'desc',
         isDisabled: false,
+        tipo: 'attivo',
       },
       testDb,
     );
@@ -235,11 +251,33 @@ describe('create', () => {
         description: 'desc',
         isDisabled: false,
         orderId: 'so-7',
+        tipo: 'attivo',
       },
       testDb,
     );
     expect(exec.calls[0].params).toContain('so-7');
     expect(created.orderId).toBe('so-7');
+  });
+
+  test('persists tipo and confirms it on create (issue #784)', async () => {
+    exec.enqueue({ rows: [makeRow(PROJECT_ROW, { 13: 'passivo' })] });
+    exec.enqueue({ rows: [{ ...rawProjectRow, tipo: 'passivo' }] });
+    const created = await projectsRepo.create(
+      {
+        id: 'p-1',
+        name: 'Alpha',
+        clientId: 'c-1',
+        description: 'desc',
+        isDisabled: false,
+        tipo: 'passivo',
+      },
+      testDb,
+    );
+    // tipo / tipo_confirmed are the last two table columns, so they bind last.
+    expect(exec.calls[0].params.at(-2)).toBe('passivo');
+    expect(exec.calls[0].params.at(-1)).toBe(true);
+    expect(created.tipo).toBe('passivo');
+    expect(created.tipoConfirmed).toBe(true);
   });
 
   // Drizzle wraps driver errors in DrizzleQueryError with the original DatabaseError on .cause.
@@ -252,6 +290,7 @@ describe('create', () => {
     description: 'desc',
     isDisabled: false,
     orderId: 'so-bad',
+    tipo: 'attivo',
   };
 
   test('FK violation on projects_order_id_fkey throws ForeignKeyError("Linked order")', async () => {
@@ -350,6 +389,25 @@ describe('update', () => {
     await projectsRepo.update('p-1', { orderId: null }, testDb);
     expect(exec.calls[0].sql.toLowerCase()).toContain('"order_id" = $1');
     expect(exec.calls[0].params).toContain(null);
+  });
+
+  test('setting tipo also confirms it (tipo_confirmed = true) (issue #784)', async () => {
+    exec.enqueue({ rows: [makeRow(PROJECT_ROW)] });
+    exec.enqueue({ rows: [rawProjectRow] });
+    await projectsRepo.update('p-1', { tipo: 'passivo' }, testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('"tipo" =');
+    expect(sql).toContain('"tipo_confirmed" =');
+    expect(exec.calls[0].params).toContain('passivo');
+    expect(exec.calls[0].params).toContain(true);
+  });
+
+  test('a null tipo patch is ignored rather than clearing the NOT NULL column', async () => {
+    exec.enqueue({ rows: [rawProjectRow] });
+    const result = await projectsRepo.update('p-1', { tipo: null }, testDb);
+    // No settable fields → falls back to a SELECT, never issues an UPDATE.
+    expect(exec.calls[0].sql.toLowerCase()).not.toContain('update');
+    expect(result).toEqual(mappedRow);
   });
 
   test('FK violation on projects_order_id_fkey throws ForeignKeyError("Linked order")', async () => {
