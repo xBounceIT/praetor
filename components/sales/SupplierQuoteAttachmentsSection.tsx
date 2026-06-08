@@ -94,21 +94,12 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
     reload();
   }, [reload]);
 
-  const validateFile = useCallback(
-    (file: File): string | null => {
-      const code = validateAttachmentFile(file);
-      if (!code) return null;
-      const { key, defaultValue } = attachmentValidationMessage(code);
-      return t(key, { defaultValue });
-    },
-    [t],
-  );
-
   const handleUpload = useCallback(
     async (file: File) => {
-      const validationError = validateFile(file);
-      if (validationError) {
-        dispatchAttachments({ type: 'error', message: validationError });
+      const code = validateAttachmentFile(file);
+      if (code) {
+        const { key, defaultValue } = attachmentValidationMessage(code);
+        dispatchAttachments({ type: 'error', message: t(key, { defaultValue }) });
         return;
       }
       setIsUploading(true);
@@ -129,7 +120,7 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
         setIsUploading(false);
       }
     },
-    [quoteId, t, validateFile],
+    [quoteId, t],
   );
 
   const handleDownload = useCallback(

@@ -382,14 +382,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     dispatch({ type: 'openAddModal' });
   }, []);
 
-  const handleStageAttachment = useCallback((file: File) => {
-    dispatch({ type: 'addStagedAttachment', file });
-  }, []);
-
-  const handleRemoveStagedAttachment = useCallback((index: number) => {
-    dispatch({ type: 'removeStagedAttachment', index });
-  }, []);
-
   const quoteToFormData = useCallback(
     (quote: SupplierQuote): Partial<SupplierQuote> => ({
       ...quote,
@@ -1522,8 +1514,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   !editingQuote && (
                     <SupplierQuoteAttachmentsStaging
                       files={stagedAttachments}
-                      onAdd={handleStageAttachment}
-                      onRemove={handleRemoveStagedAttachment}
+                      onAdd={(file) => dispatch({ type: 'addStagedAttachment', file })}
+                      onRemove={(index) => dispatch({ type: 'removeStagedAttachment', index })}
                       disabled={isSubmitting}
                       readOnlyStatus={readOnlyStatus}
                       statusLabel={statusLabel}
