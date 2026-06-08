@@ -604,7 +604,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const revenueHintBySource: Record<RevenueSource, string> = {
     activities: t('projects:projects.revenueFromActivities'),
     order: t('projects:projects.revenueFromOrder'),
-    manual: t('projects:projects.revenueManualHint'),
+    // Manual entry needs no hint — the field label already says what to enter.
+    // The activities/order hints stay because they explain why the field is read-only.
+    manual: '',
   };
   const displayedRevenue = revenueBySource[revenueSource];
   const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : undefined;
@@ -967,9 +969,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                         readOnly={revenueSource !== 'manual'}
                         onChange={(e) => dispatch({ type: 'setRevenue', value: e.target.value })}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        {revenueHintBySource[revenueSource]}
-                      </p>
+                      {revenueHintBySource[revenueSource] && (
+                        <p className="text-xs text-muted-foreground">
+                          {revenueHintBySource[revenueSource]}
+                        </p>
+                      )}
                     </Field>
                   </div>
 

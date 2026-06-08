@@ -82,6 +82,22 @@ describe('ProjectsView create-form validation', () => {
     );
   });
 
+  test('manual revenue source shows no helper hint, but activities/order still do', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+    // The redundant manual hint was removed; the field label already explains the input.
+    expect(source).not.toContain("manual: t('projects:projects.revenueManualHint')");
+    // Pin the empty-string sentinel specifically — a bare `manual: ` substring would
+    // also match the old `manual: t(...)` code and give false confidence.
+    expect(source).toContain("manual: ''");
+    // Informative source hints remain.
+    expect(source).toContain("activities: t('projects:projects.revenueFromActivities')");
+    expect(source).toContain("order: t('projects:projects.revenueFromOrder')");
+    // The hint paragraph only renders when there is a hint to show.
+    expect(source).toContain('{revenueHintBySource[revenueSource] && (');
+  });
+
   test('order selector auto-fills the client and disables the client picker while bound', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
