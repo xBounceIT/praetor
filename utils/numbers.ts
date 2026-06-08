@@ -199,3 +199,10 @@ export const formatDiscountValue = (
   discountType: DiscountType,
   currency: string,
 ): string => (discountType === 'currency' ? `${discount} ${currency}` : `${discount}%`);
+
+/**
+ * Render a margin/MOL percentage for display with a fixed two decimals (e.g. "33.33%").
+ * Centralizes the precision so the quote, offer and order views stay consistent; the value
+ * is already rounded to two decimals upstream by `calculatePricingTotals`.
+ */
+export const formatMolPercentage = (value: number): string => `${(value || 0).toFixed(2)}%`;

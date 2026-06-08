@@ -43,6 +43,7 @@ import * as tasksSchema from './schema/tasks.ts';
 import * as timeEntriesSchema from './schema/timeEntries.ts';
 import * as usersSchema from './schema/users.ts';
 import * as userWorkUnitsSchema from './schema/userWorkUnits.ts';
+import * as webhooksSchema from './schema/webhooks.ts';
 import * as workUnitManagersSchema from './schema/workUnitManagers.ts';
 import * as workUnitsSchema from './schema/workUnits.ts';
 
@@ -88,6 +89,7 @@ export const schema = {
   ...timeEntriesSchema,
   ...usersSchema,
   ...userWorkUnitsSchema,
+  ...webhooksSchema,
   ...workUnitManagersSchema,
   ...workUnitsSchema,
 } as const;

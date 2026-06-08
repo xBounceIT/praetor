@@ -4,6 +4,11 @@ import userEvent from '@testing-library/user-event';
 import type { Client, ClientOffer, Product, SupplierQuote } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
+import {
+  expectSourceContainsAll,
+  expectSourceOmitsAll,
+  readComponentSource,
+} from '../modalStylingTestUtils';
 
 installI18nMock({ includeInterpolatedValues: true });
 
@@ -133,7 +138,8 @@ describe('<ClientOffersView /> list', () => {
   test('renders delivery date, MOL, and payment terms in offer rows', () => {
     render(<ClientOffersView {...baseProps} />);
     expect(screen.getByText('5/14/2026')).toBeInTheDocument();
-    expect(screen.getByText('33.3%')).toBeInTheDocument();
+    // MOL column shows the margin percentage with two decimals (issue #780).
+    expect(screen.getByText('33.33%')).toBeInTheDocument();
     expect(screen.getByText('crm:paymentTerms.30gg')).toBeInTheDocument();
   });
 
@@ -540,5 +546,22 @@ describe('<ClientOffersView /> quick-view shortcuts', () => {
         name: 'sales:clientQuotes.supplierQuoteShortcutUnavailable',
       }).length,
     ).toBeGreaterThan(0);
+  });
+});
+
+describe('<ClientOffersView /> dark-mode banners (issue #768)', () => {
+  test('dialog warning banners avoid light-only amber classes', async () => {
+    const source = await readComponentSource('sales/ClientOffersView.tsx');
+    // Read-only + version-preview banners use translucent amber plus an explicit dark-mode
+    // text color, matching the dark-mode-compatible accounting orders banners.
+    expectSourceContainsAll(source, [
+      'border border-amber-500/30 bg-amber-500/10',
+      'dark:text-amber-300',
+    ]);
+    // The old light-only banner backgrounds (a pale cream slab on the dark dialog) are gone.
+    expectSourceOmitsAll(source, [
+      'border border-amber-200 bg-amber-50',
+      'border border-amber-300 bg-amber-50',
+    ]);
   });
 });

@@ -29,6 +29,7 @@ import GeneralSettings from './components/administration/GeneralSettings';
 import LogsView from './components/administration/LogsView';
 import RolesView from './components/administration/RolesView';
 import UserManagement from './components/administration/UserManagement';
+import WebhooksView from './components/administration/WebhooksView';
 import ClientsView from './components/CRM/ClientsView';
 import SuppliersView from './components/CRM/SuppliersView';
 import InternalListingView from './components/catalog/InternalListingView';
@@ -822,6 +823,7 @@ const AppContent: React.FC = () => {
       'administration/general',
       'administration/email',
       'administration/logs',
+      'administration/webhooks',
       'crm/clients',
       'crm/suppliers',
       // Sales module
@@ -876,6 +878,7 @@ const AppContent: React.FC = () => {
       'administration/general',
       'administration/email',
       'administration/logs',
+      'administration/webhooks',
       'crm/clients',
       'crm/suppliers',
       // Sales module
@@ -3160,6 +3163,14 @@ const AppContent: React.FC = () => {
                   onUpdateRolePermissions={handleUpdateRolePermissions}
                   onDeleteRole={handleDeleteRole}
                 />
+              )}
+
+            {hasPermission(
+              currentUser.permissions,
+              VIEW_PERMISSION_MAP['administration/webhooks'],
+            ) &&
+              activeView === 'administration/webhooks' && (
+                <WebhooksView permissions={currentUser.permissions || []} />
               )}
 
             {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/logs']) &&

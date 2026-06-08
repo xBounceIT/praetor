@@ -163,6 +163,7 @@
         "supplier_quote": "preventivo fornitore",
         "task": "attività",
         "user": "utente",
+        "webhook": "webhook",
         "work_unit": "competence center"
       },
       "details": {
@@ -201,6 +202,83 @@
       "lastMonth": "Mese scorso",
       "thisYear": "Quest'anno",
       "custom": "Personalizzato"
+    }
+  },
+  "webhooks": {
+    "title": "Webhook",
+    "subtitle": "Configura gli endpoint webhook e la relativa autenticazione.",
+    "createWebhook": "Crea webhook",
+    "editWebhook": "Modifica webhook",
+    "deleteWebhook": "Elimina webhook",
+    "formSubtitle": "Definisci nome, URL, metodo e autenticazione del target.",
+    "loading": "Caricamento webhook...",
+    "loadError": "Impossibile caricare i webhook",
+    "loadErrorHelp": "Si è verificato un errore durante il caricamento dei webhook. Riprova.",
+    "noHeaders": "Nessun header personalizzato.",
+    "secretStored": "Salvato",
+    "secretStoredHelp": "Il valore salvato è nascosto. Usa Sostituisci per impostarne uno nuovo.",
+    "empty": {
+      "title": "Nessun webhook",
+      "description": "Crea il primo target webhook per iniziare."
+    },
+    "columns": {
+      "name": "Nome",
+      "url": "URL",
+      "method": "Metodo",
+      "auth": "Autenticazione",
+      "status": "Stato",
+      "actions": "Azioni"
+    },
+    "authTypes": {
+      "none": "Nessuna",
+      "basic": "Basic",
+      "bearer": "Bearer token",
+      "api_key": "Chiave API"
+    },
+    "status": {
+      "active": "Attivo",
+      "disabled": "Disattivato"
+    },
+    "fields": {
+      "name": "Nome",
+      "description": "Descrizione",
+      "url": "URL",
+      "method": "Metodo HTTP",
+      "authType": "Autenticazione",
+      "username": "Nome utente",
+      "headerName": "Nome header",
+      "password": "Password",
+      "apiKeyValue": "Valore chiave API",
+      "token": "Token",
+      "customHeaders": "Header personalizzati",
+      "headerKey": "Chiave header",
+      "headerValue": "Valore header",
+      "enabled": "Abilitato",
+      "enabledHelp": "I webhook disabilitati non verranno invocati."
+    },
+    "placeholders": {
+      "name": "Es. Notifica Slack",
+      "description": "Descrizione opzionale",
+      "url": "https://esempio.com/webhook",
+      "headerName": "X-API-Key",
+      "headerKey": "X-Custom-Header",
+      "headerValue": "Valore"
+    },
+    "actions": {
+      "addHeader": "Aggiungi header",
+      "removeHeader": "Rimuovi header",
+      "retry": "Riprova"
+    },
+    "errors": {
+      "urlRequired": "L'URL è obbligatorio.",
+      "urlInvalid": "Inserisci un URL http(s) valido.",
+      "headerNameRequired": "Il nome header è obbligatorio per l'autenticazione con chiave API.",
+      "headerKeyRequired": "La chiave dell'header è obbligatoria."
+    },
+    "toasts": {
+      "created": "Webhook creato.",
+      "updated": "Webhook aggiornato.",
+      "deleted": "Webhook eliminato."
     }
   }
 }
