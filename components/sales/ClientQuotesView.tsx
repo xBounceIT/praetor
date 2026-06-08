@@ -35,10 +35,12 @@ import {
   convertUnitPrice,
   durationValueToMonths,
   formatDiscountValue,
+  formatMolPercentage,
   getDurationDisplayValue,
   getItemPricingContext,
   isUnitLine,
   normalizeDurationUnit,
+  type PricingTotals,
   parseDurationValueToMonths,
   parseNumberInputValue,
 } from '../../utils/numbers';
@@ -101,6 +103,17 @@ export interface ClientQuotesViewProps {
 }
 
 const EMPTY_OFFERS: ClientOffer[] = [];
+
+// Fallback for a row whose pricing isn't in the memoized map (never happens at runtime since
+// the map is built from the same list the table renders, but keeps the lookups type-safe).
+const EMPTY_PRICING_TOTALS: PricingTotals = {
+  subtotal: 0,
+  discountAmount: 0,
+  total: 0,
+  totalCost: 0,
+  margin: 0,
+  marginPercentage: 0,
+};
 
 const getDefaultFormData = (): Partial<Quote> => ({
   id: '',
@@ -343,21 +356,33 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     };
   }, [formData.items, formData.discount, formData.discountType]);
 
-  const formatDiscountPercentage = useCallback((quote: Quote) => {
-    if (quote.discountType !== 'currency') {
-      return `${quote.discount}%`;
+  // Compute each row's pricing once per quotes change, so the column accessors and cells below
+  // read from this map instead of recomputing calculatePricingTotals (an O(line-items) pass)
+  // twice per column for every visible row.
+  const quotePricingMap = useMemo(() => {
+    const map = new Map<string, PricingTotals>();
+    for (const quote of quotes) {
+      map.set(
+        quote.id,
+        calculatePricingTotals(quote.items, quote.discount, 'hours', quote.discountType),
+      );
     }
+    return map;
+  }, [quotes]);
 
-    const { discountAmount, subtotal } = calculatePricingTotals(
-      quote.items,
-      quote.discount,
-      'hours',
-      quote.discountType,
-    );
-    if (subtotal <= 0) return '0%';
+  const formatDiscountPercentage = useCallback(
+    (quote: Quote) => {
+      if (quote.discountType !== 'currency') {
+        return `${quote.discount}%`;
+      }
 
-    return `${Number(((discountAmount / subtotal) * 100).toFixed(1))}%`;
-  }, []);
+      const { discountAmount, subtotal } = quotePricingMap.get(quote.id) ?? EMPTY_PRICING_TOTALS;
+      if (subtotal <= 0) return '0%';
+
+      return `${Number(((discountAmount / subtotal) * 100).toFixed(1))}%`;
+    },
+    [quotePricingMap],
+  );
 
   const closeModal = useCallback(() => {
     dispatch({ type: 'closeModal' });
@@ -968,18 +993,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     {
       header: t('sales:clientQuotes.subtotal', { defaultValue: 'Subtotal' }),
       id: 'subtotal',
-      accessorFn: (row) =>
-        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).subtotal,
+      accessorFn: (row) => quotePricingMap.get(row.id)?.subtotal ?? 0,
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
       disableFiltering: true,
       cell: ({ row }) => {
-        const { subtotal } = calculatePricingTotals(
-          row.items,
-          row.discount,
-          'hours',
-          row.discountType,
-        );
+        const { subtotal } = quotePricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         const history = isHistoryRow(row);
         return (
           <span
@@ -1011,18 +1030,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     {
       header: t('common:labels.discount'),
       id: 'discountAmount',
-      accessorFn: (row) =>
-        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).discountAmount,
+      accessorFn: (row) => quotePricingMap.get(row.id)?.discountAmount ?? 0,
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
       disableFiltering: true,
       cell: ({ row }) => {
-        const { discountAmount } = calculatePricingTotals(
-          row.items,
-          row.discount,
-          'hours',
-          row.discountType,
-        );
+        const { discountAmount } = quotePricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         const history = isHistoryRow(row);
         if (discountAmount <= 0) {
           return (
@@ -1045,18 +1058,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     {
       header: t('sales:clientQuotes.discountedTotalColumn'),
       id: 'total',
-      accessorFn: (row) =>
-        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).total,
+      accessorFn: (row) => quotePricingMap.get(row.id)?.total ?? 0,
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[9rem]',
       disableFiltering: true,
       cell: ({ row }) => {
-        const { total } = calculatePricingTotals(
-          row.items,
-          row.discount,
-          'hours',
-          row.discountType,
-        );
+        const { total } = quotePricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         const history = isHistoryRow(row);
         return (
           <span
@@ -1070,18 +1077,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     {
       header: t('sales:clientQuotes.marginLabel'),
       id: 'margin',
-      accessorFn: (row) =>
-        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).margin,
+      accessorFn: (row) => quotePricingMap.get(row.id)?.margin ?? 0,
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
       disableFiltering: true,
       cell: ({ row }) => {
-        const { margin } = calculatePricingTotals(
-          row.items,
-          row.discount,
-          'hours',
-          row.discountType,
-        );
+        const { margin } = quotePricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         const history = isHistoryRow(row);
         return (
           <span
@@ -1095,24 +1096,18 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     {
       header: t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' }),
       id: 'mol',
-      accessorFn: (row) =>
-        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).marginPercentage,
+      accessorFn: (row) => quotePricingMap.get(row.id)?.marginPercentage ?? 0,
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[6rem]',
       disableFiltering: true,
       cell: ({ row }) => {
-        const { marginPercentage } = calculatePricingTotals(
-          row.items,
-          row.discount,
-          'hours',
-          row.discountType,
-        );
+        const { marginPercentage } = quotePricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         const history = isHistoryRow(row);
         return (
           <span
             className={`text-sm font-bold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-emerald-600'}`}
           >
-            {marginPercentage.toFixed(1)}%
+            {formatMolPercentage(marginPercentage)}
           </span>
         );
       },
@@ -2265,7 +2260,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                           : undefined
                       }
                       margin={{
-                        label: `${t('sales:clientQuotes.marginLabel')} (${(formTotals.marginPercentage || 0).toFixed(1)}%)`,
+                        label: `${t('sales:clientQuotes.marginLabel')} (${formatMolPercentage(formTotals.marginPercentage)})`,
                         amount: formTotals.margin,
                       }}
                     />

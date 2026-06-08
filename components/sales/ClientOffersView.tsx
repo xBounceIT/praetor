@@ -34,10 +34,12 @@ import {
   calculatePricingTotals,
   convertUnitPrice,
   durationValueToMonths,
+  formatMolPercentage,
   getDurationDisplayValue,
   getItemPricingContext,
   isUnitLine,
   normalizeDurationUnit,
+  type PricingTotals,
   parseDurationValueToMonths,
   parseNumberInputValue,
 } from '../../utils/numbers';
@@ -241,6 +243,17 @@ const clientOffersViewReducer = (
     default:
       return state;
   }
+};
+
+// Fallback for a row whose pricing isn't in the memoized map (never happens at runtime since
+// the map is built from the same list the table renders, but keeps the lookups type-safe).
+const EMPTY_PRICING_TOTALS: PricingTotals = {
+  subtotal: 0,
+  discountAmount: 0,
+  total: 0,
+  totalCost: 0,
+  margin: 0,
+  marginPercentage: 0,
 };
 
 const ClientOffersView: React.FC<ClientOffersViewProps> = ({
@@ -506,6 +519,20 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     }
   };
 
+  // Compute each row's pricing once per offers change, so the column accessors and cells below
+  // read from this map instead of recomputing calculatePricingTotals (an O(line-items) pass)
+  // twice per column for every visible row.
+  const offerPricingMap = useMemo(() => {
+    const map = new Map<string, PricingTotals>();
+    for (const offer of offers) {
+      map.set(
+        offer.id,
+        calculatePricingTotals(offer.items, offer.discount, 'hours', offer.discountType),
+      );
+    }
+    return map;
+  }, [offers]);
+
   const columns: Column<ClientOffer>[] = [
     {
       header: t('sales:clientOffers.offerColumn', { defaultValue: 'Offer' }),
@@ -543,18 +570,12 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     {
       header: t('sales:clientOffers.subtotal', { defaultValue: 'Subtotal' }),
       id: 'subtotal',
-      accessorFn: (row) =>
-        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).subtotal,
+      accessorFn: (row) => offerPricingMap.get(row.id)?.subtotal ?? 0,
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
       disableFiltering: true,
       cell: ({ row }) => {
-        const { subtotal } = calculatePricingTotals(
-          row.items,
-          row.discount,
-          'hours',
-          row.discountType,
-        );
+        const { subtotal } = offerPricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         return (
           <span className="text-sm font-semibold text-zinc-700 whitespace-nowrap">
             {subtotal.toFixed(2)} {currency}
@@ -566,24 +587,14 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       header: t('sales:clientOffers.discountPercentColumn', { defaultValue: 'Discount %' }),
       id: 'globalDiscount',
       accessorFn: (row) => {
-        const { subtotal, discountAmount } = calculatePricingTotals(
-          row.items,
-          row.discount,
-          'hours',
-          row.discountType,
-        );
+        const { subtotal, discountAmount } = offerPricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         return getDiscountPercentageValue(row.discount, row.discountType, subtotal, discountAmount);
       },
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
       disableFiltering: true,
       cell: ({ row }) => {
-        const { subtotal, discountAmount } = calculatePricingTotals(
-          row.items,
-          row.discount,
-          'hours',
-          row.discountType,
-        );
+        const { subtotal, discountAmount } = offerPricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         return (
           <span className="text-sm font-semibold text-zinc-600 whitespace-nowrap">
             {getDiscountPercentageLabelValue(
@@ -599,18 +610,12 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     {
       header: t('common:labels.discount'),
       id: 'discountAmount',
-      accessorFn: (row) =>
-        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).discountAmount,
+      accessorFn: (row) => offerPricingMap.get(row.id)?.discountAmount ?? 0,
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
       disableFiltering: true,
       cell: ({ row }) => {
-        const { discountAmount } = calculatePricingTotals(
-          row.items,
-          row.discount,
-          'hours',
-          row.discountType,
-        );
+        const { discountAmount } = offerPricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         if (discountAmount <= 0) {
           return <span className="text-sm font-semibold text-zinc-400">-</span>;
         }
@@ -624,18 +629,12 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     {
       header: t('sales:clientOffers.discountedTotalColumn', { defaultValue: 'Discounted total' }),
       id: 'total',
-      accessorFn: (row) =>
-        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).total,
+      accessorFn: (row) => offerPricingMap.get(row.id)?.total ?? 0,
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
       disableFiltering: true,
       cell: ({ row }) => {
-        const { total } = calculatePricingTotals(
-          row.items,
-          row.discount,
-          'hours',
-          row.discountType,
-        );
+        const { total } = offerPricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         return (
           <span className="text-sm font-bold text-zinc-700 whitespace-nowrap">
             {total.toFixed(2)} {currency}
@@ -646,18 +645,12 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     {
       header: t('sales:clientOffers.margin', { defaultValue: 'Margin' }),
       id: 'margin',
-      accessorFn: (row) =>
-        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).margin,
+      accessorFn: (row) => offerPricingMap.get(row.id)?.margin ?? 0,
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
       disableFiltering: true,
       cell: ({ row }) => {
-        const { margin } = calculatePricingTotals(
-          row.items,
-          row.discount,
-          'hours',
-          row.discountType,
-        );
+        const { margin } = offerPricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         return (
           <span className="text-sm font-bold text-emerald-600 whitespace-nowrap">
             {margin.toFixed(2)} {currency}
@@ -668,21 +661,15 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     {
       header: t('sales:clientOffers.molColumn', { defaultValue: 'MOL' }),
       id: 'mol',
-      accessorFn: (row) =>
-        calculatePricingTotals(row.items, row.discount, 'hours', row.discountType).marginPercentage,
+      accessorFn: (row) => offerPricingMap.get(row.id)?.marginPercentage ?? 0,
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[6rem]',
       disableFiltering: true,
       cell: ({ row }) => {
-        const { marginPercentage } = calculatePricingTotals(
-          row.items,
-          row.discount,
-          'hours',
-          row.discountType,
-        );
+        const { marginPercentage } = offerPricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         return (
           <span className="text-sm font-semibold text-emerald-700 whitespace-nowrap">
-            {marginPercentage.toFixed(1)}%
+            {formatMolPercentage(marginPercentage)}
           </span>
         );
       },
@@ -1959,7 +1946,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                               : undefined
                           }
                           margin={{
-                            label: `${t('sales:clientOffers.margin', { defaultValue: 'Margin' })} (${(marginPercentage || 0).toFixed(1)}%)`,
+                            label: `${t('sales:clientOffers.margin', { defaultValue: 'Margin' })} (${formatMolPercentage(marginPercentage)})`,
                             amount: margin,
                           }}
                         />

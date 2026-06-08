@@ -133,7 +133,8 @@ describe('<ClientOffersView /> list', () => {
   test('renders delivery date, MOL, and payment terms in offer rows', () => {
     render(<ClientOffersView {...baseProps} />);
     expect(screen.getByText('5/14/2026')).toBeInTheDocument();
-    expect(screen.getByText('33.3%')).toBeInTheDocument();
+    // MOL column shows the margin percentage with two decimals (issue #780).
+    expect(screen.getByText('33.33%')).toBeInTheDocument();
     expect(screen.getByText('crm:paymentTerms.30gg')).toBeInTheDocument();
   });
 

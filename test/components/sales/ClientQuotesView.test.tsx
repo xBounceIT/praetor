@@ -110,7 +110,8 @@ describe('<ClientQuotesView />', () => {
       'sales:clientQuotes.statusColumn',
       'sales:clientQuotes.actionsColumn',
     ]);
-    expect(screen.getByText('33.3%')).toBeInTheDocument();
+    // MOL column shows the margin percentage with two decimals (issue #780).
+    expect(screen.getByText('33.33%')).toBeInTheDocument();
     expect(screen.getByText('12.5%')).toBeInTheDocument();
   });
 
