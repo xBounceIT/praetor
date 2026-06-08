@@ -725,8 +725,10 @@ export interface Webhook {
   enabled: boolean;
 }
 
-// Create/update body. Omit `authSecret` (or send the mask sentinel) to keep the stored secret;
-// send a new value to replace it, or '' to clear it.
+// Create/update body. Omit `authSecret` to keep the stored secret; send a new value to replace it,
+// or '' to clear it. There is no input mask sentinel: any string sent is stored as-is (a literal
+// '********' is saved verbatim), so callers must OMIT the field to preserve the credential — echoing
+// the masked value back from a fetched webhook would overwrite the stored secret with asterisks.
 export interface WebhookPayload {
   name: string;
   description: string;
