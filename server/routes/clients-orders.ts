@@ -287,6 +287,46 @@ const normalizeIncomingItems = (
   return normalized;
 };
 
+// A product-less line (`productId === null`) has the supplier-quote reference as its only anchor,
+// and `sale_items.supplier_quote_*` has no FK. Resolve each referenced item against *accepted*
+// supplier quotes — the same authoritative source the client-quotes route trusts — and stamp the
+// supplier fields from the snapshot. Without this, a direct POST/PUT could persist a line with
+// bogus or non-accepted refs (the supplier-order auto-create silently skips them) that the UI
+// still locks as supplier-backed. Returns null after replying 400 if a reference can't be resolved.
+const resolveSupplierQuoteRefs = async (
+  items: NormalizedOrderItem[],
+  reply: FastifyReply,
+): Promise<NormalizedOrderItem[] | null> => {
+  const productlessItemIds = items.flatMap((item) =>
+    item.productId === null && item.supplierQuoteItemId ? [item.supplierQuoteItemId] : [],
+  );
+  if (productlessItemIds.length === 0) return items;
+
+  const snapshots = await supplierQuotesRepo.getQuoteItemSnapshots(productlessItemIds);
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (item.productId !== null || !item.supplierQuoteItemId) continue;
+    const snapshot = snapshots.get(item.supplierQuoteItemId);
+    if (!snapshot) {
+      badRequest(
+        reply,
+        `items[${i}].supplierQuoteItemId "${item.supplierQuoteItemId}" is invalid or its supplier quote is not accepted`,
+      );
+      return null;
+    }
+    // Trust the snapshot, not the client: stamp the authoritative quote id, supplier name and unit
+    // price so the persisted line is tied to the real accepted quote and the supplier-order
+    // auto-create keys off a valid supplierQuoteId.
+    items[i] = {
+      ...item,
+      supplierQuoteId: snapshot.supplierQuoteId,
+      supplierQuoteSupplierName: snapshot.supplierName,
+      supplierQuoteUnitPrice: snapshot.netCost,
+    };
+  }
+  return items;
+};
+
 const buildItemsForInsert = (
   items: NormalizedOrderItem[],
 ): clientsOrdersRepo.NewClientOrderItem[] =>
@@ -548,7 +588,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Items must be a non-empty array');
       }
 
-      const normalizedItems = normalizeIncomingItems(items, reply);
+      const parsedItems = normalizeIncomingItems(items, reply);
+      if (!parsedItems) return;
+      const normalizedItems = await resolveSupplierQuoteRefs(parsedItems, reply);
       if (!normalizedItems) return;
 
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
@@ -942,7 +984,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
         }
-        normalizedItems = normalizeIncomingItems(items, reply);
+        const parsedItems = normalizeIncomingItems(items, reply);
+        if (!parsedItems) return;
+        normalizedItems = await resolveSupplierQuoteRefs(parsedItems, reply);
         if (!normalizedItems) return;
       }
 

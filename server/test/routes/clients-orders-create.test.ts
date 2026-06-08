@@ -31,6 +31,7 @@ const coCreateMock = mock();
 const coInsertItemsMock = mock();
 const sqFindByIdMock = mock();
 const sqFindLinkedOrderIdMock = mock();
+const sqGetQuoteItemSnapshotsMock = mock();
 
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
@@ -61,6 +62,7 @@ beforeAll(async () => {
     ...supplierQuotesRepoSnap,
     findById: sqFindByIdMock,
     findLinkedOrderId: sqFindLinkedOrderIdMock,
+    getQuoteItemSnapshots: sqGetQuoteItemSnapshotsMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
@@ -145,6 +147,7 @@ const allMocks = [
   coInsertItemsMock,
   sqFindByIdMock,
   sqFindLinkedOrderIdMock,
+  sqGetQuoteItemSnapshotsMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -162,6 +165,22 @@ beforeEach(async () => {
   // Default: no supplier quote resolves, so the auto-create-supplier-order branch fast-fails.
   sqFindByIdMock.mockResolvedValue(null);
   sqFindLinkedOrderIdMock.mockResolvedValue(null);
+  // Default: the referenced supplier-quote item belongs to an accepted quote (sq-1), so a
+  // product-less line resolves. The dangling/bogus-ref test overrides this to an empty Map.
+  sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+    new Map([
+      [
+        'sqi-1',
+        {
+          supplierQuoteId: 'sq-1',
+          supplierName: 'Supplier Co',
+          productId: null,
+          unitPrice: 50,
+          netCost: 50,
+        },
+      ],
+    ]),
+  );
 
   testApp = await buildRouteTestApp(routePlugin, '/api/clients-orders');
 });
@@ -373,14 +392,111 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     });
 
     expect(res.statusCode).toBe(201);
-    // The nullable fields survive validation as null (not coerced to 0/'') and reach the insert.
     const inserted = coInsertItemsMock.mock.calls[0][1] as Array<{
       productMolPercentage: unknown;
       supplierQuoteUnitPrice: unknown;
       supplierQuoteId: unknown;
     }>;
+    // productMolPercentage isn't derived, so its explicit null survives validation (not coerced).
     expect(inserted[0].productMolPercentage).toBeNull();
-    expect(inserted[0].supplierQuoteUnitPrice).toBeNull();
+    // supplierQuoteId + supplierQuoteUnitPrice are stamped from the accepted-quote snapshot.
     expect(inserted[0].supplierQuoteId).toBe('sq-1');
+    expect(inserted[0].supplierQuoteUnitPrice).toBe(50);
+  });
+
+  test('400 when a product-less line references an invalid or non-accepted supplier quote', async () => {
+    // No snapshot resolves (bogus id, or the quote isn't accepted): the line has no real supplier
+    // backing and must be rejected, not persisted as a dangling UI-locked supplier line.
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(new Map());
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: 'co-1',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            productId: null,
+            productName: 'Bogus supplier line',
+            quantity: 1,
+            unitPrice: 100,
+            supplierQuoteId: 'sq-unknown',
+            supplierQuoteItemId: 'sqi-unknown',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain(
+      'is invalid or its supplier quote is not accepted',
+    );
+    expect(coCreateMock).not.toHaveBeenCalled();
+    expect(coInsertItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('derives supplier fields from the snapshot, overriding mismatched client values', async () => {
+    // A direct POST cannot spoof supplier metadata: the persisted line carries the snapshot's
+    // authoritative quote id / supplier name / unit price, and the auto-create keys off the real id.
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-1',
+          {
+            supplierQuoteId: 'sq-real',
+            supplierName: 'Real Supplier',
+            productId: null,
+            unitPrice: 75,
+            netCost: 75,
+          },
+        ],
+      ]),
+    );
+    coInsertItemsMock.mockResolvedValue([
+      insertedItem({
+        productId: null,
+        productName: 'Free-form supplier line',
+        supplierQuoteId: 'sq-real',
+        supplierQuoteItemId: 'sqi-1',
+      }),
+    ]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: 'co-1',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            productId: null,
+            productName: 'Free-form supplier line',
+            quantity: 1,
+            unitPrice: 100,
+            supplierQuoteId: 'sq-client-lie',
+            supplierQuoteItemId: 'sqi-1',
+            supplierQuoteSupplierName: 'Client Spoof',
+            supplierQuoteUnitPrice: 999,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const inserted = coInsertItemsMock.mock.calls[0][1] as Array<{
+      supplierQuoteId: unknown;
+      supplierQuoteSupplierName: unknown;
+      supplierQuoteUnitPrice: unknown;
+    }>;
+    expect(inserted[0].supplierQuoteId).toBe('sq-real');
+    expect(inserted[0].supplierQuoteSupplierName).toBe('Real Supplier');
+    expect(inserted[0].supplierQuoteUnitPrice).toBe(75);
+    expect(sqFindByIdMock).toHaveBeenCalledWith('sq-real');
+    expect(sqFindByIdMock).not.toHaveBeenCalledWith('sq-client-lie');
   });
 });
