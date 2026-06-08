@@ -321,6 +321,24 @@ describe('PUT /api/webhooks/:id', () => {
     expect(JSON.parse(res.body).authSecret).toBe(MASKED_SECRET);
   });
 
+  test('200 allows a partial api_key update that omits authHeaderName', async () => {
+    // Regression (Codex PR review): a partial PUT that echoes authType:'api_key' while changing
+    // another field must not be forced to resend authHeaderName — the service preserves the stored
+    // header. The route only requires the header on create.
+    updateWebhookMock.mockResolvedValue(SAMPLE_WEBHOOK);
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/webhooks/webhook-1',
+      headers: authHeader(),
+      payload: { authType: 'api_key', enabled: false },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(updateWebhookMock).toHaveBeenCalledWith(
+      'webhook-1',
+      expect.objectContaining({ authType: 'api_key', enabled: false }),
+    );
+  });
+
   test('404 when the service reports the webhook is missing', async () => {
     updateWebhookMock.mockResolvedValue(null);
     const res = await testApp.inject({

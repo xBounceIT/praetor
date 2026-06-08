@@ -77,9 +77,24 @@ const normalizeAuth = (
   }
 };
 
+// An api_key target must carry the header to send the key under. The route enforces this on create;
+// the service enforces it post-merge (after normalizeAuth has folded in any preserved header) so a
+// switch to api_key on update can't leave the header empty — the route can't see the stored value
+// to make that call. Thrown with a 4xx statusCode so the app error handler returns a clean 400.
+const assertApiKeyHeader = (authType: WebhookAuthType, authHeaderName: string): void => {
+  if (authType === 'api_key' && authHeaderName.length === 0) {
+    const error = new Error('authHeaderName is required when authType is api_key') as Error & {
+      statusCode: number;
+    };
+    error.statusCode = 400;
+    throw error;
+  }
+};
+
 export const createWebhook = async (input: WebhookInput): Promise<webhooksRepo.Webhook> => {
   const authType = input.authType ?? 'none';
   const auth = normalizeAuth(authType, input, EMPTY_AUTH, false);
+  assertApiKeyHeader(authType, auth.authHeaderName);
   return webhooksRepo.insert({
     id: generatePrefixedId('webhook'),
     name: input.name ?? '',
@@ -104,6 +119,7 @@ export const updateWebhook = async (
 
   const authType = input.authType ?? existing.authType;
   const auth = normalizeAuth(authType, input, existing, authType === existing.authType);
+  assertApiKeyHeader(authType, auth.authHeaderName);
 
   const patch: webhooksRepo.WebhookPatch = {
     authType,

@@ -225,9 +225,15 @@ const validateWebhookBody = (
   }
   if (enabled.value !== undefined) input.enabled = enabled.value;
 
-  // An api-key scheme is meaningless without the header to send the key under. Enforce it whenever
-  // the request is (re)setting auth to api_key, so the stored config is always dispatchable.
-  if (input.authType === 'api_key' && !(input.authHeaderName && input.authHeaderName.length > 0)) {
+  // An api-key scheme needs the header to send the key under. On create there is no stored header to
+  // fall back on, so require it here. On update the header is optional in the body: the service
+  // preserves the existing one (and rejects a switch to api_key that would leave it empty), so a
+  // partial update that merely echoes authType must not be forced to resend the header every time.
+  if (
+    options.isCreate &&
+    input.authType === 'api_key' &&
+    !(input.authHeaderName && input.authHeaderName.length > 0)
+  ) {
     badRequest(reply, 'authHeaderName is required when authType is api_key');
     return null;
   }

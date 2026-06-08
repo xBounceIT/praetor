@@ -126,6 +126,13 @@ describe('createWebhook', () => {
     expect(insertedArg().customHeaders).toEqual([]);
     expect(insertedArg().authType).toBe('none');
   });
+
+  test('rejects api_key without a header name', async () => {
+    await expect(
+      webhooksService.createWebhook({ name: 'X', url: 'https://x.com', authType: 'api_key' }),
+    ).rejects.toThrow('authHeaderName is required');
+    expect(insertMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('updateWebhook', () => {
@@ -213,5 +220,25 @@ describe('updateWebhook', () => {
     );
     await webhooksService.updateWebhook('webhook-1', { authHeaderName: 'X-New' });
     expect(updatedPatch().authHeaderName).toBe('X-New');
+  });
+
+  test('keeps the stored api_key header on a partial update that re-echoes the type', async () => {
+    // Codex PR review: a partial update echoing authType:'api_key' (e.g. just toggling enabled)
+    // keeps the stored header instead of failing.
+    findByIdMock.mockResolvedValue(
+      existingWebhook({ authType: 'api_key', authHeaderName: 'X-API-Key', authSecret: 'enc(k)' }),
+    );
+    await webhooksService.updateWebhook('webhook-1', { authType: 'api_key', enabled: false });
+    expect(updatedPatch().authType).toBe('api_key');
+    expect(updatedPatch().authHeaderName).toBe('X-API-Key');
+    expect(updatedPatch().enabled).toBe(false);
+  });
+
+  test('rejects switching to api_key on update when no header is available', async () => {
+    findByIdMock.mockResolvedValue(existingWebhook({ authType: 'none', authHeaderName: '' }));
+    await expect(
+      webhooksService.updateWebhook('webhook-1', { authType: 'api_key' }),
+    ).rejects.toThrow('authHeaderName is required');
+    expect(updateMock).not.toHaveBeenCalled();
   });
 });
