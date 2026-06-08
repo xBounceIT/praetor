@@ -263,6 +263,30 @@ describe('POST /api/webhooks', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  test('400 (not 500) when the url exceeds the column length', async () => {
+    // Regression: without a maxLength guard an over-length value overflows varchar(2000) at the DB
+    // and surfaces as a 500 instead of a clean 400.
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/webhooks',
+      headers: authHeader(),
+      payload: { name: 'Long', url: `https://example.com/${'a'.repeat(2000)}` },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(createWebhookMock).not.toHaveBeenCalled();
+  });
+
+  test('400 when the name exceeds the column length', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/webhooks',
+      headers: authHeader(),
+      payload: { name: 'n'.repeat(256), url: 'https://example.com/hook' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(createWebhookMock).not.toHaveBeenCalled();
+  });
+
   test('403 missing administration.webhooks.create permission', async () => {
     getRolePermissionsMock.mockResolvedValue(['administration.webhooks.view']);
     const res = await testApp.inject({

@@ -67,7 +67,11 @@ const normalizeAuth = (
     case 'api_key':
       return {
         authUsername: '',
-        authHeaderName: input.authHeaderName ?? existing.authHeaderName,
+        // Treat an empty/absent header as "keep the stored one". A PUT that omits authType (so the
+        // route's api_key header-required guard never fires) must not be able to blank out the
+        // header and persist an undispatchable api_key target. Any api_key row already passed the
+        // create/switch guard, so existing.authHeaderName is non-empty.
+        authHeaderName: input.authHeaderName || existing.authHeaderName,
         authSecret,
       };
     default:

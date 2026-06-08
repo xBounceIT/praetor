@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { Webhook, WebhookPayload } from '../../../types';
+import { resolveSecretForPayload } from '../../../utils/webhookPayload';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
 import { render } from '../../helpers/render';
@@ -132,5 +133,39 @@ describe('<WebhooksView />', () => {
     // delete request itself is covered end-to-end by the backend route tests.
     expect(screen.getByRole('button', { name: 'common:buttons.edit' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'common:buttons.delete' })).toBeDefined();
+  });
+});
+
+describe('resolveSecretForPayload', () => {
+  test('authType none always clears the secret', () => {
+    expect(resolveSecretForPayload({ authType: 'none', isEditing: true, authSecret: 'x' })).toBe(
+      '',
+    );
+  });
+
+  test('sends the typed secret when creating', () => {
+    expect(
+      resolveSecretForPayload({ authType: 'bearer', isEditing: false, authSecret: 'tok' }),
+    ).toBe('tok');
+  });
+
+  test('sends an empty secret when creating with a blank field', () => {
+    expect(resolveSecretForPayload({ authType: 'bearer', isEditing: false, authSecret: '' })).toBe(
+      '',
+    );
+  });
+
+  test('omits the secret when editing with a blank field so the stored value is preserved', () => {
+    // Regression: editing then saving with an empty secret field (after toggling the auth type back
+    // and forth, or clicking Replace without typing) must NOT wipe the stored credential.
+    expect(
+      resolveSecretForPayload({ authType: 'bearer', isEditing: true, authSecret: '' }),
+    ).toBeUndefined();
+  });
+
+  test('sends the new secret when editing and a value was entered', () => {
+    expect(
+      resolveSecretForPayload({ authType: 'bearer', isEditing: true, authSecret: 'new' }),
+    ).toBe('new');
   });
 });

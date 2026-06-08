@@ -195,4 +195,23 @@ describe('updateWebhook', () => {
     expect(encryptMock).not.toHaveBeenCalled();
     expect(updatedPatch().authSecret).toBe('');
   });
+
+  test('preserves the stored api_key header when a blank header is sent without re-sending authType', async () => {
+    // Regression: a PUT that omits authType (so the route's api_key header guard never fires) must
+    // not be able to blank out the header and persist an undispatchable api_key target.
+    findByIdMock.mockResolvedValue(
+      existingWebhook({ authType: 'api_key', authHeaderName: 'X-API-Key', authSecret: 'enc(k)' }),
+    );
+    await webhooksService.updateWebhook('webhook-1', { authHeaderName: '' });
+    expect(updatedPatch().authType).toBe('api_key');
+    expect(updatedPatch().authHeaderName).toBe('X-API-Key');
+  });
+
+  test('updates the api_key header when a new non-empty value is sent', async () => {
+    findByIdMock.mockResolvedValue(
+      existingWebhook({ authType: 'api_key', authHeaderName: 'X-Old', authSecret: 'enc(k)' }),
+    );
+    await webhooksService.updateWebhook('webhook-1', { authHeaderName: 'X-New' });
+    expect(updatedPatch().authHeaderName).toBe('X-New');
+  });
 });

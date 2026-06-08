@@ -26,8 +26,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { webhooksApi } from '../../services/api/webhooks';
 import type { Webhook, WebhookAuthType, WebhookHttpMethod, WebhookPayload } from '../../types';
+import { isStoredSecret } from '../../utils/maskedSecret';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import { toastError, toastSuccess } from '../../utils/toast';
+import { resolveSecretForPayload } from '../../utils/webhookPayload';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
@@ -143,7 +145,7 @@ const formReducer = (state: FormState, action: FormAction): FormState => {
         authType: webhook.authType,
         authUsername: webhook.authUsername,
         authHeaderName: webhook.authHeaderName,
-        secretStored: webhook.authType !== 'none' && Boolean(webhook.authSecret),
+        secretStored: webhook.authType !== 'none' && isStoredSecret(webhook.authSecret),
         customHeaders: action.headerRows,
         enabled: webhook.enabled,
       };
@@ -292,13 +294,12 @@ const WebhooksView: React.FC<WebhooksViewProps> = ({ permissions }) => {
       enabled: form.enabled,
     };
 
-    if (form.authType === 'none') {
-      payload.authSecret = '';
-    } else if (form.secretStored && !form.isReplacingSecret) {
-      // Keep the stored secret: omit authSecret so the server preserves the existing ciphertext.
-    } else {
-      payload.authSecret = form.authSecret;
-    }
+    const authSecret = resolveSecretForPayload({
+      authType: form.authType,
+      isEditing: Boolean(form.editingId),
+      authSecret: form.authSecret,
+    });
+    if (authSecret !== undefined) payload.authSecret = authSecret;
 
     return payload;
   };

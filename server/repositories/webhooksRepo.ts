@@ -88,7 +88,9 @@ export const findById = async (id: string, exec: DbExecutor = db): Promise<Webho
 
 export const insert = async (webhook: NewWebhook, exec: DbExecutor = db): Promise<Webhook> => {
   const rows = await exec.insert(webhooks).values(webhook).returning(WEBHOOK_PROJECTION);
-  return mapRow(rows[0]);
+  const row = rows[0];
+  if (!row) throw new Error('Webhook insert returned no row');
+  return mapRow(row);
 };
 
 export const update = async (

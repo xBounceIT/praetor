@@ -18,6 +18,13 @@ const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
 const AUTH_TYPES = ['none', 'basic', 'bearer', 'api_key'] as const;
 const MAX_CUSTOM_HEADERS = 50;
 
+// Mirror the varchar widths in server/db/schema/webhooks.ts. Without these, an over-length value
+// passes AJV and the semantic validator, reaches Postgres, and overflows the column — surfacing as
+// a 500 instead of a clean 400. (`description`/`authSecret` are `text` columns, so unbounded.)
+const MAX_NAME_LEN = 255;
+const MAX_URL_LEN = 2000;
+const MAX_AUTH_FIELD_LEN = 255;
+
 const customHeaderSchema = {
   type: 'object',
   properties: {
@@ -61,13 +68,13 @@ const webhookResponseSchema = {
 } as const;
 
 const webhookBodyProperties = {
-  name: { type: 'string' },
+  name: { type: 'string', maxLength: MAX_NAME_LEN },
   description: { type: 'string' },
-  url: { type: 'string' },
+  url: { type: 'string', maxLength: MAX_URL_LEN },
   httpMethod: { type: 'string', enum: [...HTTP_METHODS] },
   authType: { type: 'string', enum: [...AUTH_TYPES] },
-  authUsername: { type: 'string' },
-  authHeaderName: { type: 'string' },
+  authUsername: { type: 'string', maxLength: MAX_AUTH_FIELD_LEN },
+  authHeaderName: { type: 'string', maxLength: MAX_AUTH_FIELD_LEN },
   authSecret: { type: 'string' },
   customHeaders: { type: 'array', items: customHeaderSchema, maxItems: MAX_CUSTOM_HEADERS },
   enabled: { type: 'boolean' },
