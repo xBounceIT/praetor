@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  DEFAULT_BILLING_FREQUENCY as SERVER_DEFAULT_BILLING_FREQUENCY,
+  DEFAULT_BILLING_TYPE as SERVER_DEFAULT_BILLING_TYPE,
+} from '../../server/utils/billing';
+import {
   BILLING_FREQUENCY_OPTIONS,
   BILLING_TYPE_OPTIONS,
   DEFAULT_BILLING_FREQUENCY,
@@ -8,12 +12,12 @@ import {
 } from '../../utils/billing';
 
 describe('shared frontend billing module', () => {
-  test('defaults match the backend (server/utils/billing.ts) constants', () => {
-    // These MUST stay in sync with server/utils/billing.ts DEFAULT_BILLING_TYPE /
-    // DEFAULT_BILLING_FREQUENCY. Changing one without the other would split the default a
-    // client renders from the one the server persists.
-    expect(DEFAULT_BILLING_TYPE).toBe('time_and_materials');
-    expect(DEFAULT_BILLING_FREQUENCY).toBe('monthly');
+  test('defaults equal the backend (server/utils/billing.ts) constants', () => {
+    // Assert real equality against the backend rather than pinning literals, so a change to
+    // one side without the other fails here instead of silently splitting the default a client
+    // renders from the one the server persists.
+    expect(DEFAULT_BILLING_TYPE).toBe(SERVER_DEFAULT_BILLING_TYPE);
+    expect(DEFAULT_BILLING_FREQUENCY).toBe(SERVER_DEFAULT_BILLING_FREQUENCY);
   });
 
   test('option arrays expose the supported ids in order', () => {
