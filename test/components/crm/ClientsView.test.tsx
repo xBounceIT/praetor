@@ -186,6 +186,26 @@ describe('<ClientsView /> contact validation', () => {
   });
 });
 
+describe('<ClientsView /> dark-mode form inputs', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    listAllProfileOptions.mockClear();
+  });
+
+  test('form fields render the theme-aware shadcn Input, not a hardcoded light fill', async () => {
+    renderClientsView();
+    await openAddClientModal();
+
+    const codeInput = screen.getByPlaceholderText('crm:clients.clientCodePlaceholder');
+    // Migrated to the shadcn Input primitive so the theme-aware base (and aria-invalid
+    // destructive state) applies instead of the old bg-zinc-50 / bg-red-50 light slab.
+    expect(codeInput).toHaveAttribute('data-slot', 'input');
+    expect(codeInput.className).not.toContain('bg-zinc-50');
+    expect(codeInput.className).not.toContain('bg-red-50');
+    expect(codeInput.className).not.toContain('border-zinc-200');
+  });
+});
+
 describe('<ClientsView /> dark-mode error banners (issue #768 follow-up)', () => {
   test('the contact + general validation banners avoid light-only red classes', async () => {
     const source = await readComponentSource('CRM/ClientsView.tsx');

@@ -7,6 +7,11 @@ import { THEME_STORAGE_KEY } from '../../../utils/theme';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
 import { render } from '../../helpers/render';
+import {
+  expectSourceContainsAll,
+  expectSourceOmitsAll,
+  readComponentSource,
+} from '../modalStylingTestUtils';
 
 installI18nMock();
 
@@ -642,5 +647,31 @@ describe('<UserManagement />', () => {
       )[0];
       expect(updates).not.toHaveProperty('costPerHour');
     });
+  });
+});
+
+describe('UserManagement dark-mode form inputs', () => {
+  test('edit-user identity fields use the shadcn Input with aria-invalid, not a light fill', async () => {
+    const source = await readComponentSource('administration/UserManagement.tsx');
+
+    // The first name / surname / email fields were native <input>s with a hardcoded bg-zinc-50
+    // base (broken in dark mode). They now use the theme-aware shadcn Input + aria-invalid.
+    expectSourceContainsAll(source, [
+      'aria-invalid={Boolean(editFormErrors.firstName)}',
+      'aria-invalid={Boolean(editFormErrors.surname)}',
+      'aria-invalid={Boolean(editFormErrors.email)}',
+    ]);
+    expectSourceOmitsAll(source, [
+      'bg-zinc-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold',
+    ]);
+  });
+
+  test('the edit-user email field uses the shadcn Input, not a native <input> (PR #796 review)', async () => {
+    const source = await readComponentSource('administration/UserManagement.tsx');
+    // The edit-user email field was left as a native <input> while first name / surname were
+    // migrated, so it missed the theme-aware base + data-slot. It is now the shadcn Input.
+    // (`value={editEmail}` is unique to the edit field; the create field uses `value={newEmail}`.)
+    expect(source).not.toMatch(/<input\b[\s\S]{0,160}?value=\{editEmail\}/);
+    expect(source).toMatch(/<Input\b[\s\S]{0,160}?value=\{editEmail\}/);
   });
 });
