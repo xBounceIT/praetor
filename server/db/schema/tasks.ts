@@ -52,10 +52,6 @@ export const tasks = pgTable(
       'tasks_billing_frequency_check',
       sql`${table.billingFrequency} IN ('monthly', 'one_time')`,
     ),
-    check(
-      'tasks_time_and_materials_monthly_check',
-      sql`${table.billingType} != 'time_and_materials' OR ${table.billingFrequency} = 'monthly'`,
-    ),
     // Storage-layer backstop for the 24h cap enforced in `server/routes/tasks.ts`
     // and `server/services/timeEntries.ts`. Mirrors `time_entries_duration_max_check`
     // so a pre-#590 template with a huge `recurrenceDuration` can't keep producing

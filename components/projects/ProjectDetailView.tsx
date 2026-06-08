@@ -229,9 +229,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const storedInitialBillingType = toStoredBillingType(project.billingType);
   const [billingType, setBillingType] = useState<StoredBillingType>(storedInitialBillingType);
   const [billingFrequency, setBillingFrequency] = useState<BillingFrequency>(
-    storedInitialBillingType === 'time_and_materials'
-      ? 'monthly'
-      : (project.billingFrequency ?? 'monthly'),
+    project.billingFrequency ?? 'monthly',
   );
   const [projectBillingChanged, setProjectBillingChanged] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -708,11 +706,8 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       project.revenue !== null && project.revenue !== undefined ? String(project.revenue) : '',
     );
     setTempIsDisabled(project.isDisabled ?? false);
-    const stored = toStoredBillingType(project.billingType);
-    setBillingType(stored);
-    setBillingFrequency(
-      stored === 'time_and_materials' ? 'monthly' : (project.billingFrequency ?? 'monthly'),
-    );
+    setBillingType(toStoredBillingType(project.billingType));
+    setBillingFrequency(project.billingFrequency ?? 'monthly');
     setProjectBillingChanged(false);
     setErrors({});
   };
@@ -758,8 +753,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     }
     if (derivedBillingType !== 'mixed' || projectBillingChanged) {
       updates.billingType = billingType;
-      updates.billingFrequency =
-        billingType === 'time_and_materials' ? 'monthly' : billingFrequency;
+      updates.billingFrequency = billingFrequency;
     }
     // Await so we can clear the billing-change latch only on success. Every other
     // hasChanges contributor compares local state to project.* (so a rejected save
@@ -1103,10 +1097,8 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               options={projectBillingTypeOptions}
               value={derivedBillingType}
               onChange={(val) => {
-                const next = val as StoredBillingType;
                 setProjectBillingChanged(true);
-                setBillingType(next);
-                if (next === 'time_and_materials') setBillingFrequency('monthly');
+                setBillingType(val as StoredBillingType);
               }}
               label={t('projects:projects.billingType')}
               disabled={!canUpdateProjects || derivedBillingType === 'mixed'}
@@ -1115,28 +1107,14 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             />
             <SelectControl
               id="detail-billing-frequency"
-              options={
-                billingType === 'retainer'
-                  ? translatedBillingFrequencyOptions
-                  : translatedBillingFrequencyOptions.filter((o) => o.id === 'monthly')
-              }
-              value={
-                derivedBillingType === 'mixed'
-                  ? 'monthly'
-                  : billingType === 'time_and_materials'
-                    ? 'monthly'
-                    : billingFrequency
-              }
+              options={translatedBillingFrequencyOptions}
+              value={derivedBillingType === 'mixed' ? 'monthly' : billingFrequency}
               onChange={(val) => {
                 setProjectBillingChanged(true);
                 setBillingFrequency(val as BillingFrequency);
               }}
               label={t('projects:projects.billingFrequency')}
-              disabled={
-                !canUpdateProjects ||
-                derivedBillingType === 'mixed' ||
-                billingType === 'time_and_materials'
-              }
+              disabled={!canUpdateProjects || derivedBillingType === 'mixed'}
               searchable={false}
               buttonClassName="h-9"
             />

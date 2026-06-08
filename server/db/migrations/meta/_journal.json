@@ -547,6 +547,13 @@
       "when": 1780772883549,
       "tag": "0077_add_duration_to_line_items",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1780950319636,
+      "tag": "0078_unlock_misura_billing_frequency",
+      "breakpoints": true
     }
   ]
 }

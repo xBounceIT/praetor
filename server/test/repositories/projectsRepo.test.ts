@@ -305,17 +305,18 @@ describe('update', () => {
     expect(exec.calls[0].params).toContain('p-1');
   });
 
-  test('normalizes billingFrequency-only update against stored billing type', async () => {
-    exec.enqueue({ rows: [makeRow(['time_and_materials'])] });
+  // Billing frequency is independent of billing type now: an "A misura" (time_and_materials)
+  // project may bill one-time. The update writes the requested frequency directly, without
+  // reading back the stored billing type to normalize against it.
+  test('billingFrequency-only update persists the requested frequency for any billing type', async () => {
     exec.enqueue({ rows: [makeRow(PROJECT_ROW)] });
     exec.enqueue({ rows: [rawProjectRow] });
 
     await projectsRepo.update('p-1', { billingFrequency: 'one_time' }, testDb);
 
-    expect(exec.calls[0].sql.toLowerCase()).toContain('select');
-    expect(exec.calls[1].sql.toLowerCase()).toContain('update "projects"');
-    expect(exec.calls[1].params).toContain('monthly');
-    expect(exec.calls[1].params).not.toContain('one_time');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('update "projects"');
+    expect(exec.calls[0].params).toContain('one_time');
+    expect(exec.calls[0].params).not.toContain('monthly');
   });
 
   test('omitting all fields falls back to a SELECT (no UPDATE issued)', async () => {

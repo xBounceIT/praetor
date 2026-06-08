@@ -356,8 +356,7 @@ const normalizeProjectBilling = (
   const resolvedBillingType = billingType ?? 'time_and_materials';
   return {
     billingType: resolvedBillingType,
-    billingFrequency:
-      resolvedBillingType === 'time_and_materials' ? 'monthly' : (billingFrequency ?? 'monthly'),
+    billingFrequency: billingFrequency ?? 'monthly',
   };
 };
 
@@ -368,8 +367,7 @@ const normalizeTaskBilling = (
   const resolvedBillingType = billingType === 'retainer' ? 'retainer' : 'time_and_materials';
   return {
     billingType: resolvedBillingType,
-    billingFrequency:
-      resolvedBillingType === 'time_and_materials' ? 'monthly' : (billingFrequency ?? 'monthly'),
+    billingFrequency: billingFrequency ?? 'monthly',
   };
 };
 

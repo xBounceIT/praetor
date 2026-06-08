@@ -110,8 +110,7 @@ type TaskFormAction =
 const deriveBillingFromProject = (project: Project | undefined) => {
   const billingType: StoredBillingType =
     project?.billingType === 'retainer' ? 'retainer' : 'time_and_materials';
-  const billingFrequency: BillingFrequency =
-    billingType === 'time_and_materials' ? 'monthly' : (project?.billingFrequency ?? 'monthly');
+  const billingFrequency: BillingFrequency = project?.billingFrequency ?? 'monthly';
   return { billingType, billingFrequency };
 };
 
@@ -134,10 +133,7 @@ const createTaskFormState = (
       projectId: editingTask.projectId,
       description: editingTask.description || '',
       billingType: editingTask.billingType ?? 'time_and_materials',
-      billingFrequency:
-        editingTask.billingType === 'time_and_materials'
-          ? 'monthly'
-          : (editingTask.billingFrequency ?? 'monthly'),
+      billingFrequency: editingTask.billingFrequency ?? 'monthly',
       monthlyEffort:
         editingTask.monthlyEffort !== undefined ? String(editingTask.monthlyEffort) : '',
       expectedEffort:
@@ -179,12 +175,7 @@ const taskFormReducer = (state: TaskFormState, action: TaskFormAction): TaskForm
         ...(action.billing ?? {}),
       };
     case 'setBillingType':
-      return {
-        ...state,
-        billingType: action.billingType,
-        billingFrequency:
-          action.billingType === 'time_and_materials' ? 'monthly' : state.billingFrequency,
-      };
+      return { ...state, billingType: action.billingType };
     case 'setBillingFrequency':
       return { ...state, billingFrequency: action.billingFrequency };
     case 'toggleDisabled':
@@ -370,7 +361,7 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
     if (!name || !projectId) return;
     const details: TaskFormDetails = {
       billingType,
-      billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
+      billingFrequency,
       monthlyEffort: monthlyEffort ? parseFloat(monthlyEffort) : undefined,
       expectedEffort: expectedEffort ? parseFloat(expectedEffort) : undefined,
       revenue: revenue ? parseFloat(revenue) : undefined,
@@ -498,14 +489,8 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
                 />
                 <SelectControl
                   id="task-billing-frequency"
-                  options={
-                    billingType === 'retainer'
-                      ? translatedBillingFrequencyOptions
-                      : translatedBillingFrequencyOptions.filter(
-                          (option) => option.id === 'monthly',
-                        )
-                  }
-                  value={billingType === 'time_and_materials' ? 'monthly' : billingFrequency}
+                  options={translatedBillingFrequencyOptions}
+                  value={billingFrequency}
                   onChange={(val) =>
                     dispatch({
                       type: 'setBillingFrequency',
@@ -513,7 +498,6 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
                     })
                   }
                   label={t('projects:projects.billingFrequency')}
-                  disabled={billingType === 'time_and_materials'}
                   searchable={false}
                   buttonClassName="h-9"
                 />

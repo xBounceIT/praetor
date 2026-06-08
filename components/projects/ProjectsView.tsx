@@ -438,8 +438,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       taskInputs.push({
         name: taskName,
         billingType: task.billingType,
-        billingFrequency:
-          task.billingType === 'time_and_materials' ? 'monthly' : task.billingFrequency,
+        billingFrequency: task.billingFrequency,
         monthlyEffort: task.monthlyEffort ? parseFloat(task.monthlyEffort) : undefined,
         expectedEffort: task.expectedEffort ? parseFloat(task.expectedEffort) : undefined,
         revenue: task.revenue ? parseFloat(task.revenue) : undefined,
@@ -454,7 +453,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       description,
       draftTasks: taskInputs.length > 0 ? taskInputs : undefined,
       billingType,
-      billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
+      billingFrequency,
       startDate: startDate || null,
       endDate: endDate || null,
       revenue: persistedRevenue,
@@ -496,7 +495,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           _id: String(Date.now() + Math.random()),
           name: '',
           billingType,
-          billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
+          billingFrequency,
           monthlyEffort: '',
           expectedEffort: '',
           revenue: '',
@@ -511,15 +510,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       type: 'setDraftTasks',
       value: draftTasks.map((t) => {
         if (t._id !== id) return t;
-        if (field === 'billingType') {
-          const nextBillingType = value as StoredBillingType;
-          return {
-            ...t,
-            billingType: nextBillingType,
-            billingFrequency:
-              nextBillingType === 'time_and_materials' ? 'monthly' : t.billingFrequency,
-          };
-        }
         return { ...t, [field]: value };
       }),
     });
@@ -653,14 +643,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       disableFiltering: true,
       cell: ({ row }) => (
         <SelectControl
-          options={
-            row.billingType === 'retainer'
-              ? translatedBillingFrequencyOptions
-              : translatedBillingFrequencyOptions.filter((option) => option.id === 'monthly')
-          }
-          value={row.billingType === 'time_and_materials' ? 'monthly' : row.billingFrequency}
+          options={translatedBillingFrequencyOptions}
+          value={row.billingFrequency}
           onChange={(val) => updateDraftTask(row._id, 'billingFrequency', val as string)}
-          disabled={row.billingType === 'time_and_materials'}
           className="min-w-[120px]"
           buttonClassName="h-8 text-xs"
           searchable={false}
@@ -978,31 +963,21 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                       id="project-billing-type"
                       options={translatedBillingTypeOptions}
                       value={billingType}
-                      onChange={(val) => {
-                        const nextBillingType = val as StoredBillingType;
-                        dispatch({ type: 'setBillingType', value: nextBillingType });
-                        if (nextBillingType === 'time_and_materials')
-                          dispatch({ type: 'setBillingFrequency', value: 'monthly' });
-                      }}
+                      onChange={(val) =>
+                        dispatch({ type: 'setBillingType', value: val as StoredBillingType })
+                      }
                       label={t('projects:projects.billingType')}
                       searchable={false}
                       buttonClassName="h-9"
                     />
                     <SelectControl
                       id="project-billing-frequency"
-                      options={
-                        billingType === 'retainer'
-                          ? translatedBillingFrequencyOptions
-                          : translatedBillingFrequencyOptions.filter(
-                              (option) => option.id === 'monthly',
-                            )
-                      }
-                      value={billingType === 'time_and_materials' ? 'monthly' : billingFrequency}
+                      options={translatedBillingFrequencyOptions}
+                      value={billingFrequency}
                       onChange={(val) =>
                         dispatch({ type: 'setBillingFrequency', value: val as BillingFrequency })
                       }
                       label={t('projects:projects.billingFrequency')}
-                      disabled={billingType === 'time_and_materials'}
                       searchable={false}
                       buttonClassName="h-9"
                     />

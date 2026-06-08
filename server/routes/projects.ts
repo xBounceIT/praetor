@@ -264,7 +264,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
       if (!billingFrequencyResult.ok) return badRequest(reply, billingFrequencyResult.message);
       const billingFrequency = normalizeBillingFrequency(
-        billingType,
         billingFrequencyResult.value ?? DEFAULT_BILLING_FREQUENCY,
       );
 

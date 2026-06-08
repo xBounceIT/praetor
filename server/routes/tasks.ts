@@ -267,7 +267,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         billingTypeResult.value ??
         normalizeStoredBillingType(projectBilling?.billingType ?? DEFAULT_BILLING_TYPE);
       const taskBillingFrequency = normalizeBillingFrequency(
-        taskBillingType,
         billingFrequencyResult.value ??
           projectBilling?.billingFrequency ??
           DEFAULT_BILLING_FREQUENCY,

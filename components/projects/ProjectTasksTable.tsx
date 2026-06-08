@@ -164,14 +164,7 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
         <SelectControl
           options={translatedBillingTypeOptions}
           value={row.billingType ?? 'time_and_materials'}
-          onChange={(val) => {
-            const nextBillingType = val as StoredBillingType;
-            onUpdateTask(row.id, {
-              billingType: nextBillingType,
-              billingFrequency:
-                nextBillingType === 'time_and_materials' ? 'monthly' : row.billingFrequency,
-            });
-          }}
+          onChange={(val) => onUpdateTask(row.id, { billingType: val as StoredBillingType })}
           disabled={!canUpdate}
           className="min-w-[140px]"
           buttonClassName="h-8 text-xs"
@@ -186,18 +179,10 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
       disableFiltering: true,
       cell: ({ row }) => (
         <SelectControl
-          options={
-            row.billingType === 'retainer'
-              ? translatedBillingFrequencyOptions
-              : translatedBillingFrequencyOptions.filter((option) => option.id === 'monthly')
-          }
-          value={
-            row.billingType === 'time_and_materials'
-              ? 'monthly'
-              : (row.billingFrequency ?? 'monthly')
-          }
+          options={translatedBillingFrequencyOptions}
+          value={row.billingFrequency ?? 'monthly'}
           onChange={(val) => onUpdateTask(row.id, { billingFrequency: val as BillingFrequency })}
-          disabled={!canUpdate || row.billingType === 'time_and_materials'}
+          disabled={!canUpdate}
           className="min-w-[120px]"
           buttonClassName="h-8 text-xs"
           searchable={false}
