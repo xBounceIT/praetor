@@ -66,13 +66,6 @@ export interface PricingItem {
   durationUnit?: DurationUnit;
 }
 
-// A "unit"-measured line is a countable quantity (e.g. 40 units), not a service that runs over
-// a period, so a duration makes no sense for it and is forbidden. Quotes/offers/orders carry the
-// unit in `unitType`, invoices in `unitOfMeasure`; either being 'unit' marks the line. ('days'
-// and 'hours' are time-based and keep their duration.)
-export const isUnitLine = (item: Pick<PricingItem, 'unitType' | 'unitOfMeasure'>): boolean =>
-  item.unitType === 'unit' || item.unitOfMeasure === 'unit';
-
 export const getEffectiveCost = (item: PricingItem): number => {
   if (item.supplierQuoteItemId) return Number(item.supplierQuoteUnitPrice ?? 0);
   return Number(item.productCost ?? 0);
@@ -83,9 +76,8 @@ export const getEffectiveMol = (item: PricingItem): number => {
 };
 
 export const getEffectiveDurationMonths = (item: PricingItem): number => {
-  // Unit-measured lines never run for a period, so they always price as a single month —
-  // regardless of any (legacy or stale) stored value.
-  if (isUnitLine(item)) return 1;
+  // Duration always multiplies the line (issue #757) and applies to every unit type; absent or
+  // non-positive values fall back to a single month.
   const months = Number(item.durationMonths ?? 1);
   return Number.isFinite(months) && months > 0 ? months : 1;
 };

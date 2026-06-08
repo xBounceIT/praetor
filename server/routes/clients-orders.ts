@@ -10,11 +10,7 @@ import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
-import {
-  coerceUnitLineDuration,
-  type DurationUnit,
-  isUnitMeasure,
-} from '../utils/duration-unit.ts';
+import type { DurationUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import {
   generateClientOrderId,
@@ -254,12 +250,8 @@ const normalizeIncomingItems = (
       return null;
     }
     const unitType = normalizeUnitType(item.unitType);
-    // A "unit"-measured line can't run for a period, so its duration is forced to a single month.
-    const { durationMonths, durationUnit } = coerceUnitLineDuration(
-      isUnitMeasure(unitType),
-      durationMonthsResult.value ?? 1,
-      durationUnitResult.value ?? 'months',
-    );
+    const durationMonths = durationMonthsResult.value ?? 1;
+    const durationUnit = durationUnitResult.value ?? 'months';
     normalized.push({
       id: typeof item.id === 'string' ? item.id : undefined,
       productId,

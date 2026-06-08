@@ -674,7 +674,7 @@ describe('POST /api/sales/client-quotes - duration handling (issue #757)', () =>
     expect(insertedItems[0].durationUnit).toBe('years');
   });
 
-  test('201 forces a "unit"-measured line to a single month (duration is forbidden)', async () => {
+  test('201 preserves a unit-measured line duration (Durata applies to every unit type)', async () => {
     setupCreateMocks();
 
     const res = await testApp.inject({
@@ -687,9 +687,9 @@ describe('POST /api/sales/client-quotes - duration handling (issue #757)', () =>
     expect(res.statusCode).toBe(201);
     const insertedItems = cqInsertItemsMock.mock.calls[0][1];
     expect(insertedItems[0].unitType).toBe('unit');
-    // Countable "unit" line: the route coerces the 12-year duration down to a single month.
-    expect(insertedItems[0].durationMonths).toBe(1);
-    expect(insertedItems[0].durationUnit).toBe('months');
+    // Unit lines carry a duration like any other line — it reaches insertItems unchanged.
+    expect(insertedItems[0].durationMonths).toBe(12);
+    expect(insertedItems[0].durationUnit).toBe('years');
   });
 
   test('201 defaults an omitted durationMonths to 1 (one-off line)', async () => {

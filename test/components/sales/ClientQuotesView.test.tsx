@@ -195,7 +195,7 @@ describe('<ClientQuotesView />', () => {
     expect(screen.getAllByText('240.00 EUR').length).toBeGreaterThan(0);
   });
 
-  test('shows N/A instead of a duration field for "unit"-measured lines', async () => {
+  test('shows an editable duration field for "unit"-measured lines (always usable)', async () => {
     const unitQuote: Quote = {
       id: 'Q-UNIT',
       clientId: 'client-1',
@@ -210,9 +210,9 @@ describe('<ClientQuotesView />', () => {
           unitPrice: 100,
           productCost: 60,
           productMolPercentage: 40,
-          // Countable "unit" line — duration is forbidden, so the Durata field shows N/A.
+          // Durata is editable for every unit type now, including 'unit'.
           unitType: 'unit',
-          durationMonths: 1,
+          durationMonths: 6,
         },
       ],
       paymentTerms: '30gg',
@@ -239,9 +239,13 @@ describe('<ClientQuotesView />', () => {
     fireEvent.click(screen.getByText('Q-UNIT'));
     await screen.findByRole('dialog');
 
-    // The Durata cell renders N/A (no number input, no unit selector) for the unit line.
-    expect(screen.getAllByText('common:labels.notApplicable').length).toBeGreaterThan(0);
-    expect(screen.queryAllByPlaceholderText('sales:clientQuotes.durationColumn')).toHaveLength(0);
+    // The Durata cell is an editable input (not N/A), showing the stored 6 months for the unit line.
+    expect(screen.queryAllByText('common:labels.notApplicable')).toHaveLength(0);
+    const durationInputs = screen
+      .getAllByPlaceholderText('sales:clientQuotes.durationColumn')
+      .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
+    expect(durationInputs.length).toBeGreaterThan(0);
+    expect(durationInputs.some((el) => el.value === '6')).toBe(true);
   });
 
   test('a years duration prices off the canonical months, matching the months equivalent (issue #757)', () => {
