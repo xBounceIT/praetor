@@ -4,6 +4,7 @@ import { Trans, useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { tasksApi } from '../../services/api/tasks';
 import type { BillingFrequency, Client, Project, ProjectTask, Role, User } from '../../types';
+import { BILLING_FREQUENCY_OPTIONS, BILLING_TYPE_OPTIONS } from '../../utils/billing';
 import { formatInsertDate } from '../../utils/date';
 import { hasScopedActionPermission } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -12,16 +13,6 @@ import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import UserAssignmentModal from '../shared/UserAssignmentModal';
 import TaskFormModal, { type RecurringConfig } from './TaskFormModal';
-
-const billingTypeOptions = [
-  { id: 'time_and_materials', name: 'projects:projects.billingTypes.timeAndMaterials' },
-  { id: 'retainer', name: 'projects:projects.billingTypes.retainer' },
-];
-
-const billingFrequencyOptions = [
-  { id: 'monthly', name: 'projects:projects.billingFrequencies.monthly' },
-  { id: 'one_time', name: 'projects:projects.billingFrequencies.oneTime' },
-];
 
 type TaskHoursLoadState = 'idle' | 'loading' | 'error';
 
@@ -163,11 +154,11 @@ const TasksView: React.FC<TasksViewProps> = ({
     dispatch({ type: 'resetHours', hasProjects: projectIds.length > 0 });
   }
   const translatedBillingTypeOptions = useMemo(
-    () => billingTypeOptions.map((option) => ({ id: option.id, name: t(option.name) })),
+    () => BILLING_TYPE_OPTIONS.map((option) => ({ id: option.id, name: t(option.name) })),
     [t],
   );
   const translatedBillingFrequencyOptions = useMemo(
-    () => billingFrequencyOptions.map((option) => ({ id: option.id, name: t(option.name) })),
+    () => BILLING_FREQUENCY_OPTIONS.map((option) => ({ id: option.id, name: t(option.name) })),
     [t],
   );
   const formatBillingType = useCallback(

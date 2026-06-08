@@ -37,6 +37,13 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  BILLING_FREQUENCY_OPTIONS,
+  BILLING_TYPE_OPTIONS,
+  DEFAULT_BILLING_FREQUENCY,
+  DEFAULT_BILLING_TYPE,
+  toStoredBillingType,
+} from '@/utils/billing';
 import { useCurrentUserId } from '../../contexts/useCurrentUserId';
 import { entriesApi, projectsApi } from '../../services/api';
 import type {
@@ -102,19 +109,6 @@ const DASHBOARD_WIDGETS: readonly DashboardWidgetDef[] = [
 ];
 
 const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
-
-const toStoredBillingType = (value: BillingType | undefined): StoredBillingType =>
-  value === 'retainer' ? 'retainer' : 'time_and_materials';
-
-const billingTypeOptions = [
-  { id: 'time_and_materials', name: 'projects:projects.billingTypes.timeAndMaterials' },
-  { id: 'retainer', name: 'projects:projects.billingTypes.retainer' },
-];
-
-const billingFrequencyOptions = [
-  { id: 'monthly', name: 'projects:projects.billingFrequencies.monthly' },
-  { id: 'one_time', name: 'projects:projects.billingFrequencies.oneTime' },
-];
 
 const getInitials = (name: string): string => {
   const parts = name.trim().split(/\s+/).slice(0, 2);
@@ -230,7 +224,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     toStoredBillingType(project.billingType),
   );
   const [billingFrequency, setBillingFrequency] = useState<BillingFrequency>(
-    project.billingFrequency ?? 'monthly',
+    project.billingFrequency ?? DEFAULT_BILLING_FREQUENCY,
   );
   const [projectBillingChanged, setProjectBillingChanged] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -588,11 +582,11 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     }
   }
 
-  const translatedBillingTypeOptions = billingTypeOptions.map((o) => ({
+  const translatedBillingTypeOptions = BILLING_TYPE_OPTIONS.map((o) => ({
     id: o.id,
     name: t(o.name),
   }));
-  const translatedBillingFrequencyOptions = billingFrequencyOptions.map((o) => ({
+  const translatedBillingFrequencyOptions = BILLING_FREQUENCY_OPTIONS.map((o) => ({
     id: o.id,
     name: t(o.name),
   }));
@@ -606,7 +600,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const derivedBillingType: BillingType = useMemo(() => {
     if (project.billingType === 'mixed') return 'mixed';
     const stored = toStoredBillingType(project.billingType);
-    const taskTypes = new Set(projectTasks.map((t) => t.billingType ?? 'time_and_materials'));
+    const taskTypes = new Set(projectTasks.map((t) => t.billingType ?? DEFAULT_BILLING_TYPE));
     if (taskTypes.size === 0) return stored;
     if (taskTypes.size > 1) return 'mixed';
     return taskTypes.has(stored) ? stored : 'mixed';
@@ -708,7 +702,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     );
     setTempIsDisabled(project.isDisabled ?? false);
     setBillingType(toStoredBillingType(project.billingType));
-    setBillingFrequency(project.billingFrequency ?? 'monthly');
+    setBillingFrequency(project.billingFrequency ?? DEFAULT_BILLING_FREQUENCY);
     setProjectBillingChanged(false);
     setErrors({});
   };
@@ -1115,7 +1109,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             <SelectControl
               id="detail-billing-frequency"
               options={translatedBillingFrequencyOptions}
-              value={derivedBillingType === 'mixed' ? 'monthly' : billingFrequency}
+              value={derivedBillingType === 'mixed' ? DEFAULT_BILLING_FREQUENCY : billingFrequency}
               onChange={(val) => {
                 setProjectBillingChanged(true);
                 setBillingFrequency(val as BillingFrequency);

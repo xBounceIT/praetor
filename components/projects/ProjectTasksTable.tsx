@@ -4,21 +4,17 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  BILLING_FREQUENCY_OPTIONS,
+  BILLING_TYPE_OPTIONS,
+  DEFAULT_BILLING_FREQUENCY,
+  DEFAULT_BILLING_TYPE,
+} from '@/utils/billing';
 import { tasksApi } from '../../services/api';
 import type { BillingFrequency, ProjectTask, StoredBillingType } from '../../types';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
-
-const billingTypeOptionsRaw = [
-  { id: 'time_and_materials', name: 'projects:projects.billingTypes.timeAndMaterials' },
-  { id: 'retainer', name: 'projects:projects.billingTypes.retainer' },
-];
-
-const billingFrequencyOptionsRaw = [
-  { id: 'monthly', name: 'projects:projects.billingFrequencies.monthly' },
-  { id: 'one_time', name: 'projects:projects.billingFrequencies.oneTime' },
-];
 
 export interface ProjectTasksTableProps {
   projectId: string;
@@ -129,11 +125,11 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
     onUpdateTask(row.id, { [field]: parsed });
   };
 
-  const translatedBillingTypeOptions = billingTypeOptionsRaw.map((o) => ({
+  const translatedBillingTypeOptions = BILLING_TYPE_OPTIONS.map((o) => ({
     id: o.id,
     name: t(o.name),
   }));
-  const translatedBillingFrequencyOptions = billingFrequencyOptionsRaw.map((o) => ({
+  const translatedBillingFrequencyOptions = BILLING_FREQUENCY_OPTIONS.map((o) => ({
     id: o.id,
     name: t(o.name),
   }));
@@ -163,7 +159,7 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
       cell: ({ row }) => (
         <SelectControl
           options={translatedBillingTypeOptions}
-          value={row.billingType ?? 'time_and_materials'}
+          value={row.billingType ?? DEFAULT_BILLING_TYPE}
           onChange={(val) => onUpdateTask(row.id, { billingType: val as StoredBillingType })}
           disabled={!canUpdate}
           className="min-w-[140px]"
@@ -180,7 +176,7 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
       cell: ({ row }) => (
         <SelectControl
           options={translatedBillingFrequencyOptions}
-          value={row.billingFrequency ?? 'monthly'}
+          value={row.billingFrequency ?? DEFAULT_BILLING_FREQUENCY}
           onChange={(val) => onUpdateTask(row.id, { billingFrequency: val as BillingFrequency })}
           disabled={!canUpdate}
           className="min-w-[120px]"

@@ -28,6 +28,11 @@ import type {
   UserEmploymentStatus,
   UserWorkLocation,
 } from '../../types';
+import {
+  DEFAULT_BILLING_FREQUENCY,
+  DEFAULT_BILLING_TYPE,
+  toStoredBillingType,
+} from '../../utils/billing';
 import { normalizeDateOnlyString } from '../../utils/date';
 import { normalizeDurationUnit } from '../../utils/numbers';
 import {
@@ -352,24 +357,20 @@ export const normalizeTask = (t: ProjectTask): ProjectTask => ({
 const normalizeProjectBilling = (
   billingType: Project['billingType'] | undefined,
   billingFrequency: BillingFrequency | undefined,
-): Required<Pick<Project, 'billingType' | 'billingFrequency'>> => {
-  const resolvedBillingType = billingType ?? 'time_and_materials';
-  return {
-    billingType: resolvedBillingType,
-    billingFrequency: billingFrequency ?? 'monthly',
-  };
-};
+): Required<Pick<Project, 'billingType' | 'billingFrequency'>> => ({
+  // Projects keep a derived 'mixed' type as-is; only a missing type falls back to the default.
+  billingType: billingType ?? DEFAULT_BILLING_TYPE,
+  billingFrequency: billingFrequency ?? DEFAULT_BILLING_FREQUENCY,
+});
 
 const normalizeTaskBilling = (
   billingType: ProjectTask['billingType'] | undefined,
   billingFrequency: BillingFrequency | undefined,
-): Required<Pick<ProjectTask, 'billingType' | 'billingFrequency'>> => {
-  const resolvedBillingType = billingType === 'retainer' ? 'retainer' : 'time_and_materials';
-  return {
-    billingType: resolvedBillingType,
-    billingFrequency: billingFrequency ?? 'monthly',
-  };
-};
+): Required<Pick<ProjectTask, 'billingType' | 'billingFrequency'>> => ({
+  // Tasks can't be 'mixed' — coerce anything non-retainer to the stored default.
+  billingType: toStoredBillingType(billingType),
+  billingFrequency: billingFrequency ?? DEFAULT_BILLING_FREQUENCY,
+});
 
 export const normalizeGeneralSettings = (s: GeneralSettings): GeneralSettings => ({
   ...s,

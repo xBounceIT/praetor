@@ -6,6 +6,13 @@ import { Field, FieldError, FieldLabel, RequiredMark } from '@/components/ui/fie
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  BILLING_FREQUENCY_OPTIONS,
+  BILLING_TYPE_OPTIONS,
+  DEFAULT_BILLING_FREQUENCY,
+  DEFAULT_BILLING_TYPE,
+  toStoredBillingType,
+} from '@/utils/billing';
 import { projectsApi, tasksApi } from '../../services/api';
 import type {
   BillingFrequency,
@@ -63,19 +70,6 @@ export type DraftTaskInput = {
   revenue?: number;
   notes?: string;
 };
-
-const billingTypeOptions = [
-  { id: 'time_and_materials', name: 'projects:projects.billingTypes.timeAndMaterials' },
-  { id: 'retainer', name: 'projects:projects.billingTypes.retainer' },
-];
-
-const billingFrequencyOptions = [
-  { id: 'monthly', name: 'projects:projects.billingFrequencies.monthly' },
-  { id: 'one_time', name: 'projects:projects.billingFrequencies.oneTime' },
-];
-
-const toStoredBillingType = (value: BillingType | undefined): StoredBillingType =>
-  value === 'retainer' ? 'retainer' : 'time_and_materials';
 
 type RevenueSource = 'activities' | 'order' | 'manual';
 type RevenueLike = { revenue?: number | string | null };
@@ -162,8 +156,8 @@ const INITIAL_PROJECTS_STATE: ProjectsViewState = {
   orderId: '',
   clientId: '',
   description: '',
-  billingType: 'time_and_materials',
-  billingFrequency: 'monthly',
+  billingType: DEFAULT_BILLING_TYPE,
+  billingFrequency: DEFAULT_BILLING_FREQUENCY,
   offerId: '',
   startDate: '',
   endDate: '',
@@ -229,8 +223,8 @@ const projectsViewReducer = (
         orderId: '',
         clientId: '',
         description: '',
-        billingType: 'time_and_materials',
-        billingFrequency: 'monthly',
+        billingType: DEFAULT_BILLING_TYPE,
+        billingFrequency: DEFAULT_BILLING_FREQUENCY,
         offerId: '',
         startDate: '',
         endDate: '',
@@ -525,7 +519,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     const taskBillingTypes = new Set<StoredBillingType>();
     for (const task of tasks) {
       if (task.projectId === project.id) {
-        taskBillingTypes.add(task.billingType ?? 'time_and_materials');
+        taskBillingTypes.add(task.billingType ?? DEFAULT_BILLING_TYPE);
       }
     }
     if (taskBillingTypes.size === 0) return storedProjectBillingType;
@@ -533,11 +527,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     return taskBillingTypes.has(storedProjectBillingType) ? storedProjectBillingType : 'mixed';
   };
 
-  const translatedBillingTypeOptions = billingTypeOptions.map((option) => ({
+  const translatedBillingTypeOptions = BILLING_TYPE_OPTIONS.map((option) => ({
     id: option.id,
     name: t(option.name),
   }));
-  const translatedBillingFrequencyOptions = billingFrequencyOptions.map((option) => ({
+  const translatedBillingFrequencyOptions = BILLING_FREQUENCY_OPTIONS.map((option) => ({
     id: option.id,
     name: t(option.name),
   }));
