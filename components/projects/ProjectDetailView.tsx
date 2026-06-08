@@ -47,6 +47,7 @@ import type {
   ClientsOrder,
   Project,
   ProjectTask,
+  ProjectTipo,
   Role,
   StoredBillingType,
   TimeEntry,
@@ -114,6 +115,11 @@ const billingTypeOptions = [
 const billingFrequencyOptions = [
   { id: 'monthly', name: 'projects:projects.billingFrequencies.monthly' },
   { id: 'one_time', name: 'projects:projects.billingFrequencies.oneTime' },
+];
+
+const tipoOptions = [
+  { id: 'attivo', name: 'projects:projects.tipoValues.attivo' },
+  { id: 'passivo', name: 'projects:projects.tipoValues.passivo' },
 ];
 
 const getInitials = (name: string): string => {
@@ -234,6 +240,12 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       : (project.billingFrequency ?? 'monthly'),
   );
   const [projectBillingChanged, setProjectBillingChanged] = useState(false);
+  // `tipo` (issue #784). A rollout-defaulted project (`tipoConfirmed === false`) starts with an
+  // EMPTY selector so the user must make a deliberate first choice before saving — we don't
+  // pre-fill the silent 'attivo' default. A confirmed project shows its stored value.
+  const tipoNeedsConfirmation = !project.tipoConfirmed;
+  const baselineTipo: ProjectTipo | '' = project.tipoConfirmed ? (project.tipo ?? '') : '';
+  const [tipo, setTipo] = useState<ProjectTipo | ''>(baselineTipo);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // No prop-sync useEffect: the parent passes `key={project.id}` so this component
@@ -597,6 +609,10 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     id: o.id,
     name: t(o.name),
   }));
+  const translatedTipoOptions = tipoOptions.map((o) => ({
+    id: o.id,
+    name: t(o.name),
+  }));
 
   const projectTasks = useMemo(
     () => tasks.filter((t) => t.projectId === project.id),
@@ -695,7 +711,10 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     offerId !== (project.offerId ?? '') ||
     revenueChanged ||
     tempIsDisabled !== (project.isDisabled ?? false) ||
-    projectBillingChanged;
+    projectBillingChanged ||
+    // For an unconfirmed project baselineTipo is '', so picking a value (or any other edit)
+    // raises the save bar; for a confirmed project this fires only on an actual tipo change.
+    tipo !== baselineTipo;
 
   const handleDiscard = () => {
     setName(project.name);
@@ -714,6 +733,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       stored === 'time_and_materials' ? 'monthly' : (project.billingFrequency ?? 'monthly'),
     );
     setProjectBillingChanged(false);
+    setTipo(baselineTipo);
     setErrors({});
   };
 
@@ -736,6 +756,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     if (startDate && endDate && startDate > endDate) {
       newErrors.dateRange = t('projects:projects.dateRangeInvalid');
     }
+    // Force a deliberate tipo choice before saving: required for confirmed projects and the
+    // forced first-edit confirmation for rollout-defaulted ones (issue #784).
+    if (!tipo) newErrors.tipo = t('projects:projects.tipoConfirmRequired');
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -748,6 +771,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       offerId,
       startDate: startDate || null,
       endDate: endDate || null,
+      // Guaranteed non-empty by the `!tipo` guard above. Sending it confirms the field
+      // server-side (tipo_confirmed = true), clearing the forced-confirmation state.
+      tipo: tipo as ProjectTipo,
     };
     // Only touch `revenue` when the source is manual: derived values (activities
     // sum or linked-order total) are recomputed on read. Sending `null` here would
@@ -1098,6 +1124,36 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               />
               <p className="text-xs text-muted-foreground">{revenueHintBySource[revenueSource]}</p>
             </Field>
+            <div className="space-y-1.5">
+              <SelectControl
+                id="detail-tipo"
+                options={translatedTipoOptions}
+                value={tipo}
+                onChange={(val) => {
+                  setTipo(val as ProjectTipo);
+                  if (errors.tipo) setErrors((prev) => ({ ...prev, tipo: '' }));
+                }}
+                label={
+                  <>
+                    {t('projects:projects.tipo')} <RequiredMark />
+                  </>
+                }
+                placeholder={t('projects:projects.selectTipo')}
+                searchable={false}
+                buttonClassName="h-9"
+                disabled={!canUpdateProjects}
+              />
+              {/* Show the explanatory hint until the user acts. Once a blocked save sets the
+                  required error, defer to it (the red error is the actionable message) so the
+                  two near-duplicate "confirm the type" notices don't stack. */}
+              {tipoNeedsConfirmation && !tipo && !errors.tipo && (
+                <p className="flex items-center gap-1 text-[10px] font-medium text-amber-600">
+                  <i className="fa-solid fa-circle-info" aria-hidden="true"></i>
+                  {t('projects:projects.tipoConfirmHint')}
+                </p>
+              )}
+              <FieldError className="text-xs">{errors.tipo}</FieldError>
+            </div>
             <SelectControl
               id="detail-billing-type"
               options={projectBillingTypeOptions}

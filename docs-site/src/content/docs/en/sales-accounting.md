@@ -35,6 +35,8 @@ In the **Supplier Information** section of the **New Supplier Quote** dialog you
 
 The **Items** table makes the purchase pricing chain explicit with the **Product**, **List Price**, **Discount to Us (%)**, **Unit Cost**, **Qty**, and **Total** columns. Enter the supplier's list price and the discount percentage they grant you (capped at 0–100%, since a larger discount would push the cost below zero): Praetor derives the **Unit Cost** as `List Price × (1 − Discount to Us / 100)`, while the row **Total** stays `Unit Cost × Qty`. The Unit Cost field is read-only because it is derived. In the **Summary**, the **Subtotal** sums the list prices (`List Price × Qty`), the **Discount** row highlights the total discount granted by the suppliers, and the **Total** reports the net cost (`Unit Cost × Qty`). The Discount row appears only when at least one line has a discount.
 
+You can attach the supplier's files (**xlsx**, **pdf**, or **docx**, up to 10 MB each) in the **Attachments** section. Files can be added straight from the **New Supplier Quote** dialog — they are queued while you fill in the quote and uploaded automatically when you save it — as well as later while the quote is still a draft. Attachments can only be changed on draft quotes with no linked order; once the quote leaves draft or an order is created from it the section becomes read-only and existing files can only be downloaded.
+
 ## Orders
 
 Customer and supplier orders consolidate operational information. Before confirming, check the record, rows, discounts, payment terms, and links to previous documents.

@@ -1385,7 +1385,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 </h4>
 
                 {errors.contacts && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-xs font-bold">
+                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-600 dark:text-red-300 text-xs font-bold">
                     {errors.contacts}
                   </div>
                 )}
@@ -1801,7 +1801,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
               </div>
 
               {errors.general && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-600">
+                <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-3 text-red-600 dark:text-red-300">
                   <i className="fa-solid fa-circle-exclamation text-lg"></i>
                   <p className="text-sm font-bold">{errors.general}</p>
                 </div>

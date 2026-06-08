@@ -78,6 +78,15 @@
       "monthly": "Monthly",
       "oneTime": "One-time"
     },
+    "tipo": "Type",
+    "selectTipo": "Select type...",
+    "tipoRequired": "Type is required",
+    "tipoConfirmRequired": "Confirm the project type before saving",
+    "tipoConfirmHint": "This project was set to \"Active\" automatically. Confirm or update the type before saving.",
+    "tipoValues": {
+      "attivo": "Active",
+      "passivo": "Passive"
+    },
     "taskRevenue": "Revenue",
     "taskNotes": "Notes",
     "noTasksAdded": "No tasks added yet.",

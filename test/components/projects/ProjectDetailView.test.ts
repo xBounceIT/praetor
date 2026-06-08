@@ -106,6 +106,27 @@ describe('ProjectDetailView wiring', () => {
     expect(source).toContain('{project.endDate && <RequiredMark />}');
   });
 
+  test('forces an explicit tipo confirmation on first edit of a rollout-defaulted project (issue #784)', async () => {
+    const source = await readSource();
+    // Unconfirmed (rollout-defaulted) projects need a deliberate choice; the selector
+    // baseline starts EMPTY rather than silently pre-filling the 'attivo' default.
+    expect(source).toContain('const tipoNeedsConfirmation = !project.tipoConfirmed;');
+    expect(source).toContain(
+      "const baselineTipo: ProjectTipo | '' = project.tipoConfirmed ? (project.tipo ?? '') : '';",
+    );
+    // Save is blocked until a tipo is chosen.
+    expect(source).toContain(
+      "if (!tipo) newErrors.tipo = t('projects:projects.tipoConfirmRequired')",
+    );
+    // The chosen value is sent so the server confirms the field (tipo_confirmed = true).
+    expect(source).toContain('tipo: tipo as ProjectTipo,');
+    // The selector + the explanatory hint render in the detail form.
+    expect(source).toContain('id="detail-tipo"');
+    expect(source).toContain("t('projects:projects.tipoConfirmHint')");
+    // Picking a value (or any other edit) raises the save bar via the baseline comparison.
+    expect(source).toContain('tipo !== baselineTipo');
+  });
+
   test('team-size KPI and assignment fetch are gated on canManageAssignments', async () => {
     // GET /projects/:id/users is server-gated on `projects.assignments.update`. Without
     // that permission the fetch 403s and the KPI would show a misleading "0".

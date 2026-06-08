@@ -7,6 +7,7 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { supplierQuotesApi } from '../../services/api/supplierQuotes';
 import type {
   Client,
   Product,
@@ -26,6 +27,7 @@ import {
 } from '../../utils/date';
 import { convertUnitPrice, parseNumberInputValue, roundCurrency } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
+import { uploadStagedAttachments } from '../../utils/supplierQuoteAttachments';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DateField from '../shared/DateField';
@@ -47,6 +49,7 @@ import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import SupplierQuoteAttachmentsSection from './SupplierQuoteAttachmentsSection';
+import SupplierQuoteAttachmentsStaging from './SupplierQuoteAttachmentsStaging';
 import SupplierQuoteVersionsPanel from './SupplierQuoteVersionsPanel';
 
 interface TotalsBreakdown {
@@ -94,7 +97,8 @@ export interface SupplierQuotesViewProps {
   suppliers: Supplier[];
   clients: Client[];
   products: Product[];
-  onAddQuote: (quoteData: Partial<SupplierQuote>) => void | Promise<void>;
+  // Resolves to the created quote so the modal can upload any files staged during creation.
+  onAddQuote: (quoteData: Partial<SupplierQuote>) => Promise<SupplierQuote>;
   onUpdateQuote: (id: string, updates: Partial<SupplierQuote>) => void | Promise<void>;
   onDeleteQuote: (id: string) => void | Promise<void>;
   onCreateOrder?: (quote: SupplierQuote) => void | Promise<void>;
@@ -127,6 +131,9 @@ interface SupplierQuotesViewState {
   previewVersion: SupplierQuoteVersion | null;
   isSubmitting: boolean;
   isDeleting: boolean;
+  // Files chosen while creating a new quote. A new quote has no id to upload against yet, so they
+  // are buffered here and flushed to /attachments right after the quote is created.
+  stagedAttachments: File[];
 }
 
 const getInitialSupplierQuotesState = (): SupplierQuotesViewState => ({
@@ -139,6 +146,7 @@ const getInitialSupplierQuotesState = (): SupplierQuotesViewState => ({
   previewVersion: null,
   isSubmitting: false,
   isDeleting: false,
+  stagedAttachments: [],
 });
 
 type SupplierQuotesViewAction =
@@ -161,7 +169,9 @@ type SupplierQuotesViewAction =
   | { type: 'updateItem'; index: number; field: keyof SupplierQuoteItem; value: string | number }
   | { type: 'addItem'; item: SupplierQuoteItem }
   | { type: 'removeItem'; index: number }
-  | { type: 'setItem'; index: number; item: SupplierQuoteItem };
+  | { type: 'setItem'; index: number; item: SupplierQuoteItem }
+  | { type: 'addStagedAttachment'; file: File }
+  | { type: 'removeStagedAttachment'; index: number };
 
 const supplierQuotesViewReducer = (
   state: SupplierQuotesViewState,
@@ -194,7 +204,7 @@ const supplierQuotesViewReducer = (
     case 'setIsDeleting':
       return { ...state, isDeleting: action.value };
     case 'closeModal':
-      return { ...state, isModalOpen: false, previewVersion: null };
+      return { ...state, isModalOpen: false, previewVersion: null, stagedAttachments: [] };
     case 'openAddModal':
       return {
         ...state,
@@ -203,6 +213,7 @@ const supplierQuotesViewReducer = (
         errors: {},
         previewVersion: null,
         isModalOpen: true,
+        stagedAttachments: [],
       };
     case 'openEditModal':
       return {
@@ -212,6 +223,8 @@ const supplierQuotesViewReducer = (
         errors: {},
         previewVersion: null,
         isModalOpen: true,
+        // A persisted quote uses the live attachments section, not staging; drop any stale queue.
+        stagedAttachments: [],
       };
     case 'previewVersion':
       return {
@@ -259,6 +272,13 @@ const supplierQuotesViewReducer = (
       items[action.index] = action.item;
       return { ...state, formData: { ...state.formData, items } };
     }
+    case 'addStagedAttachment':
+      return { ...state, stagedAttachments: [...state.stagedAttachments, action.file] };
+    case 'removeStagedAttachment':
+      return {
+        ...state,
+        stagedAttachments: state.stagedAttachments.filter((_, index) => index !== action.index),
+      };
     default:
       return state;
   }
@@ -323,6 +343,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     previewVersion,
     isSubmitting,
     isDeleting,
+    stagedAttachments,
   } = state;
 
   const baseReadOnly = Boolean(editingQuote && editingQuote.status !== 'draft');
@@ -947,7 +968,33 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       if (editingQuote) {
         await onUpdateQuote(editingQuote.id, payload);
       } else {
-        await onAddQuote(payload);
+        const created = await onAddQuote(payload);
+        if (stagedAttachments.length > 0) {
+          // The quote now exists, so flush the files staged during creation to it.
+          const { failed } = await uploadStagedAttachments(
+            created.id,
+            stagedAttachments,
+            (quoteId, file) => supplierQuotesApi.uploadAttachment(quoteId, file),
+          );
+          if (failed.length > 0) {
+            toastError(
+              t('sales:supplierQuotes.attachments.uploadPartialFailed', {
+                count: failed.length,
+                names: failed.map((file) => file.name).join(', '),
+                defaultValue:
+                  'Quote saved, but {{count}} attachment(s) could not be uploaded: {{names}}. Retry from the saved quote.',
+              }),
+            );
+            // The quote is persisted; reopen it in edit mode so the user sees what uploaded and can
+            // retry the rest from the live attachments section instead of losing their work.
+            dispatch({
+              type: 'openEditModal',
+              quote: created,
+              formData: quoteToFormData(created),
+            });
+            return;
+          }
+        }
       }
     } catch (err) {
       toastError((err as Error).message || t('sales:supplierQuotes.failedToSave'));
@@ -1467,14 +1514,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   />
                 ) : (
                   !editingQuote && (
-                    <div className="border-t border-border pt-4">
-                      <p className="rounded-md border border-dashed border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
-                        <i className="fa-solid fa-paperclip mr-2"></i>
-                        {t('sales:supplierQuotes.attachments.saveQuoteFirst', {
-                          defaultValue: 'Save the quote first to add attachments.',
-                        })}
-                      </p>
-                    </div>
+                    <SupplierQuoteAttachmentsStaging
+                      files={stagedAttachments}
+                      onAdd={(file) => dispatch({ type: 'addStagedAttachment', file })}
+                      onRemove={(index) => dispatch({ type: 'removeStagedAttachment', index })}
+                      disabled={isSubmitting}
+                      readOnlyStatus={readOnlyStatus}
+                      statusLabel={statusLabel}
+                    />
                   )
                 )}
 
