@@ -1,4 +1,4 @@
-import type { BillingFrequency, Project, StoredBillingType } from '../../types';
+import type { BillingFrequency, Project, ProjectTipo, StoredBillingType } from '../../types';
 import { fetchApi } from './client';
 import { normalizeProject } from './normalizers';
 
@@ -23,6 +23,7 @@ export const projectsApi = {
     revenue?: number | null;
     billingType?: StoredBillingType;
     billingFrequency?: BillingFrequency;
+    tipo: ProjectTipo;
   }): Promise<Project> =>
     fetchApi<Project>('/projects', {
       method: 'POST',

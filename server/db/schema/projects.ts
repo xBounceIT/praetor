@@ -52,6 +52,11 @@ export const projects = pgTable(
       .$type<'monthly' | 'one_time'>()
       .notNull()
       .default('monthly'),
+    // `tipo` (issue #784): mandatory active/passive classification. Existing rows are
+    // defaulted to 'attivo' by the rollout migration; `tipo_confirmed` stays false until a
+    // user explicitly chooses a value, so the edit form can force a deliberate first choice.
+    tipo: varchar('tipo', { length: 20 }).$type<'attivo' | 'passivo'>().notNull().default('attivo'),
+    tipoConfirmed: boolean('tipo_confirmed').notNull().default(false),
   },
   (table) => [
     index('idx_projects_client_id').on(table.clientId),
@@ -59,6 +64,7 @@ export const projects = pgTable(
       'projects_billing_type_check',
       sql`${table.billingType} IN ('retainer', 'time_and_materials')`,
     ),
+    check('projects_tipo_check', sql`${table.tipo} IN ('attivo', 'passivo')`),
     check(
       'projects_billing_frequency_check',
       sql`${table.billingFrequency} IN ('monthly', 'one_time')`,

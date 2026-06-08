@@ -10078,6 +10078,16 @@
                           "monthly",
                           "one_time"
                         ]
+                      },
+                      "tipo": {
+                        "type": "string",
+                        "enum": [
+                          "attivo",
+                          "passivo"
+                        ]
+                      },
+                      "tipoConfirmed": {
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -10086,7 +10096,9 @@
                       "clientId",
                       "isDisabled",
                       "billingType",
-                      "billingFrequency"
+                      "billingFrequency",
+                      "tipo",
+                      "tipoConfirmed"
                     ]
                   }
                 }
@@ -10294,6 +10306,13 @@
                       "monthly",
                       "one_time"
                     ]
+                  },
+                  "tipo": {
+                    "type": "string",
+                    "enum": [
+                      "attivo",
+                      "passivo"
+                    ]
                   }
                 },
                 "required": [
@@ -10301,7 +10320,8 @@
                   "clientId",
                   "offerId",
                   "startDate",
-                  "endDate"
+                  "endDate",
+                  "tipo"
                 ]
               }
             }
@@ -10380,6 +10400,16 @@
                         "monthly",
                         "one_time"
                       ]
+                    },
+                    "tipo": {
+                      "type": "string",
+                      "enum": [
+                        "attivo",
+                        "passivo"
+                      ]
+                    },
+                    "tipoConfirmed": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -10388,7 +10418,9 @@
                     "clientId",
                     "isDisabled",
                     "billingType",
-                    "billingFrequency"
+                    "billingFrequency",
+                    "tipo",
+                    "tipoConfirmed"
                   ]
                 }
               }
@@ -10738,6 +10770,13 @@
                       "monthly",
                       "one_time"
                     ]
+                  },
+                  "tipo": {
+                    "type": "string",
+                    "enum": [
+                      "attivo",
+                      "passivo"
+                    ]
                   }
                 }
               }
@@ -10827,6 +10866,16 @@
                         "monthly",
                         "one_time"
                       ]
+                    },
+                    "tipo": {
+                      "type": "string",
+                      "enum": [
+                        "attivo",
+                        "passivo"
+                      ]
+                    },
+                    "tipoConfirmed": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -10835,7 +10884,9 @@
                     "clientId",
                     "isDisabled",
                     "billingType",
-                    "billingFrequency"
+                    "billingFrequency",
+                    "tipo",
+                    "tipoConfirmed"
                   ]
                 }
               }
