@@ -183,6 +183,15 @@ describe('<Login />', () => {
     expect(screen.getByPlaceholderText('auth:login.password')).toBeInTheDocument();
   });
 
+  test('username and password labels omit the required asterisk', () => {
+    // The login form intentionally drops the red required-field markers, so the
+    // RequiredMark "*" rendered by FieldLabel's `required` prop must be absent.
+    render(<Login onLogin={() => {}} />);
+    expect(screen.getByText('common:labels.username')).toBeInTheDocument();
+    expect(screen.getByText('common:labels.password')).toBeInTheDocument();
+    expect(screen.queryByText('*')).not.toBeInTheDocument();
+  });
+
   test('submitting empty fields shows usernameRequired and passwordRequired errors', async () => {
     render(<Login onLogin={() => {}} />);
     const submit = screen.getByRole('button', { name: /auth:login.signIn/ });
