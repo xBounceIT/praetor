@@ -35,6 +35,7 @@ import {
   convertUnitPrice,
   durationValueToMonths,
   formatDiscountValue,
+  formatMolPercentage,
   getDurationDisplayValue,
   getItemPricingContext,
   isUnitLine,
@@ -1112,7 +1113,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           <span
             className={`text-sm font-bold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-emerald-600'}`}
           >
-            {marginPercentage.toFixed(2)}%
+            {formatMolPercentage(marginPercentage)}
           </span>
         );
       },
@@ -2265,7 +2266,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                           : undefined
                       }
                       margin={{
-                        label: `${t('sales:clientQuotes.marginLabel')} (${(formTotals.marginPercentage || 0).toFixed(2)}%)`,
+                        label: `${t('sales:clientQuotes.marginLabel')} (${formatMolPercentage(formTotals.marginPercentage)})`,
                         amount: formTotals.margin,
                       }}
                     />

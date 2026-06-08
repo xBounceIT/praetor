@@ -34,6 +34,7 @@ import {
   calculatePricingTotals,
   convertUnitPrice,
   durationValueToMonths,
+  formatMolPercentage,
   getDurationDisplayValue,
   getItemPricingContext,
   isUnitLine,
@@ -682,7 +683,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         );
         return (
           <span className="text-sm font-semibold text-emerald-700 whitespace-nowrap">
-            {marginPercentage.toFixed(2)}%
+            {formatMolPercentage(marginPercentage)}
           </span>
         );
       },
@@ -1959,7 +1960,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                               : undefined
                           }
                           margin={{
-                            label: `${t('sales:clientOffers.margin', { defaultValue: 'Margin' })} (${(marginPercentage || 0).toFixed(2)}%)`,
+                            label: `${t('sales:clientOffers.margin', { defaultValue: 'Margin' })} (${formatMolPercentage(marginPercentage)})`,
                             amount: margin,
                           }}
                         />

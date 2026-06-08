@@ -5,6 +5,7 @@ import {
   convertUnitPrice,
   durationValueToMonths,
   formatDiscountValue,
+  formatMolPercentage,
   getDurationDisplayValue,
   getEffectiveCost,
   getEffectiveDurationMonths,
@@ -498,5 +499,24 @@ describe('formatDiscountValue', () => {
 
   test('renders currency with a " <currency>" suffix', () => {
     expect(formatDiscountValue(50, 'currency', 'EUR')).toBe('50 EUR');
+  });
+});
+
+describe('formatMolPercentage', () => {
+  test('always renders two decimals with a "%" suffix (issue #780)', () => {
+    expect(formatMolPercentage(33.33)).toBe('33.33%');
+    // One-significant-decimal and whole numbers pad to two decimals.
+    expect(formatMolPercentage(12.5)).toBe('12.50%');
+    expect(formatMolPercentage(40)).toBe('40.00%');
+  });
+
+  test('renders zero and negative margins', () => {
+    expect(formatMolPercentage(0)).toBe('0.00%');
+    expect(formatMolPercentage(-15.5)).toBe('-15.50%');
+  });
+
+  test('coerces a missing value to 0.00%', () => {
+    expect(formatMolPercentage(undefined as unknown as number)).toBe('0.00%');
+    expect(formatMolPercentage(Number.NaN)).toBe('0.00%');
   });
 });
