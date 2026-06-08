@@ -198,15 +198,20 @@ const normalizeIncomingItems = (
   const normalized: NormalizedOrderItem[] = [];
   for (let i = 0; i < items.length; i++) {
     const item = items[i] as Record<string, unknown>;
-    // A line is either pinned to a catalog product (`productId`) or sourced from a supplier-quote
-    // item (`supplierQuoteItemId`). Require at least one — mirrors the quote/offer routes so a
-    // free-form supplier line survives the offer→order conversion (issue #783).
+    // A line is either pinned to a catalog product (`productId`) or sourced from a supplier quote.
+    // A supplier-sourced line must carry BOTH the quote reference (`supplierQuoteId`, which drives
+    // the supplier-order auto-create below) and the item reference (`supplierQuoteItemId`, which the
+    // UI uses to lock the line). `supplier_quote_item_id` has no FK, so accepting an item id without
+    // the quote id would persist a product-less line tied to no real supplier quote/order while the
+    // UI still renders it as supplier-backed. The offer→order conversion always forwards both, so a
+    // free-form supplier line still survives the conversion (issue #783).
+    const supplierQuoteId = normalizeNullableString(item.supplierQuoteId);
     const supplierQuoteItemId = normalizeNullableString(item.supplierQuoteItemId);
     const productId = normalizeNullableString(item.productId);
-    if (!productId && !supplierQuoteItemId) {
+    if (!productId && !(supplierQuoteId && supplierQuoteItemId)) {
       badRequest(
         reply,
-        `items[${i}].productId is required when no supplierQuoteItemId is provided`,
+        `items[${i}].productId is required unless the line references a supplier quote (supplierQuoteId and supplierQuoteItemId)`,
       );
       return null;
     }
@@ -264,8 +269,8 @@ const normalizeIncomingItems = (
       unitPrice: unitPriceResult.value,
       productCost: Number(item.productCost ?? 0),
       productMolPercentage: normalizeNullableNumber(item.productMolPercentage),
-      supplierQuoteId: normalizeNullableString(item.supplierQuoteId),
-      // Trimmed/normalized above so the stored value matches the productId-vs-supplier gate.
+      // Normalized above so the stored values match the productId-vs-supplier-quote gate.
+      supplierQuoteId,
       supplierQuoteItemId,
       supplierQuoteSupplierName: normalizeNullableString(item.supplierQuoteSupplierName),
       supplierQuoteUnitPrice: normalizeNullableNumber(item.supplierQuoteUnitPrice),

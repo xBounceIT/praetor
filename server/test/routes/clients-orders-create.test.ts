@@ -174,12 +174,13 @@ const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })
 
 describe('POST /api/clients-orders product-less supplier lines (issue #783)', () => {
   test('201 creates an order from a supplier-quote line with no productId', async () => {
-    // The offer→order conversion sends this exact shape: a free-form supplier line carries a
-    // supplierQuoteItemId but a null productId (no catalog product).
+    // The offer→order conversion sends this exact shape: a free-form supplier line carries the
+    // supplier-quote reference (supplierQuoteId + supplierQuoteItemId) but a null productId.
     coInsertItemsMock.mockResolvedValue([
       insertedItem({
         productId: null,
         productName: 'Free-form supplier line',
+        supplierQuoteId: 'sq-1',
         supplierQuoteItemId: 'sqi-1',
       }),
     ]);
@@ -198,6 +199,7 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
             productName: 'Free-form supplier line',
             quantity: 1,
             unitPrice: 100,
+            supplierQuoteId: 'sq-1',
             supplierQuoteItemId: 'sqi-1',
           },
         ],
@@ -211,6 +213,36 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     expect(insertedItems[0].productId).toBeNull();
     const body = JSON.parse(res.body);
     expect(body.items[0].productId).toBeNull();
+  });
+
+  test('400 when a product-less line carries supplierQuoteItemId but no supplierQuoteId', async () => {
+    // Regression for the P2: a supplier-item id with no quote id has no FK backing and would not
+    // trigger the supplier-order auto-create (keyed on supplierQuoteId), so it must be rejected
+    // rather than persisted as a dangling product-less line the UI locks as supplier-backed.
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: 'co-1',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            productId: null,
+            productName: 'Dangling supplier line',
+            quantity: 1,
+            unitPrice: 100,
+            supplierQuoteItemId: 'sqi-1',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain('productId is required');
+    expect(coCreateMock).not.toHaveBeenCalled();
+    expect(coInsertItemsMock).not.toHaveBeenCalled();
   });
 
   test('400 when a line has neither productId nor supplierQuoteItemId', async () => {
@@ -297,18 +329,20 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     expect(insertedItems[0].productId).toBe('p-1');
   });
 
-  test('accepts the real offer→order payload: product-less line with every nullable field null', async () => {
+  test('accepts the real offer→order payload: supplier line keeps optional nullable fields null', async () => {
     coInsertItemsMock.mockResolvedValue([
       insertedItem({
         productId: null,
         productName: 'Free-form supplier line',
+        supplierQuoteId: 'sq-1',
         supplierQuoteItemId: 'sqi-1',
       }),
     ]);
 
     // This is the exact shape `clientOffersRepo.mapItem` + the frontend spread produce for a
-    // supplier-quote-sourced offer line: the nullable fields arrive as explicit `null`, not
-    // omitted. The body schema must accept them (they reach `normalizeIncomingItems`).
+    // supplier-quote-sourced offer line: the supplier reference (supplierQuoteId + item id) is set,
+    // while the remaining nullable fields arrive as explicit `null`, not omitted. The body schema
+    // must accept the nulls and they must survive validation (not be coerced to 0/'').
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/clients-orders',
@@ -325,7 +359,7 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
             unitPrice: 100,
             productCost: 0,
             productMolPercentage: null,
-            supplierQuoteId: null,
+            supplierQuoteId: 'sq-1',
             supplierQuoteItemId: 'sqi-1',
             supplierQuoteSupplierName: null,
             supplierQuoteUnitPrice: null,
@@ -347,6 +381,6 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     }>;
     expect(inserted[0].productMolPercentage).toBeNull();
     expect(inserted[0].supplierQuoteUnitPrice).toBeNull();
-    expect(inserted[0].supplierQuoteId).toBeNull();
+    expect(inserted[0].supplierQuoteId).toBe('sq-1');
   });
 });
