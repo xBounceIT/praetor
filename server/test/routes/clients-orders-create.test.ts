@@ -296,4 +296,57 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     const insertedItems = coInsertItemsMock.mock.calls[0][1] as Array<{ productId: unknown }>;
     expect(insertedItems[0].productId).toBe('p-1');
   });
+
+  test('accepts the real offer→order payload: product-less line with every nullable field null', async () => {
+    coInsertItemsMock.mockResolvedValue([
+      insertedItem({
+        productId: null,
+        productName: 'Free-form supplier line',
+        supplierQuoteItemId: 'sqi-1',
+      }),
+    ]);
+
+    // This is the exact shape `clientOffersRepo.mapItem` + the frontend spread produce for a
+    // supplier-quote-sourced offer line: the nullable fields arrive as explicit `null`, not
+    // omitted. The body schema must accept them (they reach `normalizeIncomingItems`).
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: 'co-1',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            productId: null,
+            productName: 'Free-form supplier line',
+            quantity: 1,
+            unitPrice: 100,
+            productCost: 0,
+            productMolPercentage: null,
+            supplierQuoteId: null,
+            supplierQuoteItemId: 'sqi-1',
+            supplierQuoteSupplierName: null,
+            supplierQuoteUnitPrice: null,
+            supplierSaleId: null,
+            supplierSaleItemId: null,
+            supplierSaleSupplierName: null,
+            note: null,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    // The nullable fields survive validation as null (not coerced to 0/'') and reach the insert.
+    const inserted = coInsertItemsMock.mock.calls[0][1] as Array<{
+      productMolPercentage: unknown;
+      supplierQuoteUnitPrice: unknown;
+      supplierQuoteId: unknown;
+    }>;
+    expect(inserted[0].productMolPercentage).toBeNull();
+    expect(inserted[0].supplierQuoteUnitPrice).toBeNull();
+    expect(inserted[0].supplierQuoteId).toBeNull();
+  });
 });
