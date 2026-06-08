@@ -64,7 +64,7 @@ const baseProps = {
   suppliers: [supplier],
   clients,
   products,
-  onAddQuote: () => {},
+  onAddQuote: () => Promise.resolve(draft),
   onUpdateQuote: () => {},
   onDeleteQuote: () => {},
   currency: 'EUR',
@@ -309,6 +309,23 @@ describe('<SupplierQuotesView /> optional customer association (issue #759)', ()
     const trigger = document.getElementById('supplier-quote-client');
     expect(trigger?.textContent).toContain('Hidden Customer');
     expect(trigger?.textContent).not.toContain('sales:supplierQuotes.selectClient');
+  });
+});
+
+describe('<SupplierQuotesView /> new-quote attachment staging (issue #781)', () => {
+  test('the New-quote dialog shows the attachment dropzone instead of a "save first" notice', () => {
+    render(<SupplierQuotesView {...baseProps} />);
+    fireEvent.click(screen.getByText('sales:supplierQuotes.addQuote'));
+
+    // The dialog opens in create mode...
+    expect(screen.getByText('sales:supplierQuotes.newQuote')).toBeInTheDocument();
+    // ...with the staging dropzone (the staging component uses unprefixed `sales` keys)...
+    expect(screen.getByText('supplierQuotes.attachments.dropHere')).toBeInTheDocument();
+    expect(screen.getByText('supplierQuotes.attachments.pendingUploadHint')).toBeInTheDocument();
+    // ...and no longer the old "save the quote first" placeholder.
+    expect(
+      screen.queryByText('sales:supplierQuotes.attachments.saveQuoteFirst'),
+    ).not.toBeInTheDocument();
   });
 });
 
