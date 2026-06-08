@@ -38,6 +38,24 @@ export const validateAttachmentFile = (file: File): AttachmentValidationError | 
 };
 
 /**
+ * i18n key + English fallback for a validation outcome, so the live and staging attachment flows
+ * surface identical message text from one place. Callers apply their own `t`:
+ * `const { key, defaultValue } = attachmentValidationMessage(code); t(key, { defaultValue })`.
+ */
+export const attachmentValidationMessage = (
+  code: AttachmentValidationError,
+): { key: string; defaultValue: string } =>
+  code === 'tooLarge'
+    ? {
+        key: 'sales:supplierQuotes.attachments.errors.tooLarge',
+        defaultValue: 'File exceeds the 10 MB upload limit',
+      }
+    : {
+        key: 'sales:supplierQuotes.attachments.errors.invalidType',
+        defaultValue: 'File type not allowed. Use xlsx, pdf, or docx.',
+      };
+
+/**
  * Upload a batch of staged files to a freshly-created quote. Runs them through `allSettled` so a
  * single bad file doesn't abort the rest, and returns the files that failed (input order preserved)
  * so the caller can tell the user which ones to retry. Never throws. The uploader is injected so the

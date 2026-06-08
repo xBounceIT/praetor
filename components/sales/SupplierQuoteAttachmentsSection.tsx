@@ -5,12 +5,14 @@ import { supplierQuotesApi } from '../../services/api/supplierQuotes';
 import type { SupplierQuoteAttachment } from '../../types';
 import { formatInsertDateTime } from '../../utils/date';
 import {
-  ATTACHMENT_ACCEPT_ATTR,
+  attachmentValidationMessage,
   formatAttachmentFileSize,
   validateAttachmentFile,
 } from '../../utils/supplierQuoteAttachments';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import FieldTooltip from '../shared/FieldTooltip';
+import AttachmentDropzone from './AttachmentDropzone';
+import AttachmentRow from './AttachmentRow';
 
 type AttachmentState = {
   attachments: SupplierQuoteAttachment[];
@@ -70,7 +72,6 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
     error: null,
   });
   const [isUploading, setIsUploading] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<SupplierQuoteAttachment | null>(null);
 
   const reload = useCallback(async () => {
@@ -96,17 +97,9 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
   const validateFile = useCallback(
     (file: File): string | null => {
       const code = validateAttachmentFile(file);
-      if (code === 'tooLarge') {
-        return t('sales:supplierQuotes.attachments.errors.tooLarge', {
-          defaultValue: 'File exceeds the 10 MB upload limit',
-        });
-      }
-      if (code === 'invalidType') {
-        return t('sales:supplierQuotes.attachments.errors.invalidType', {
-          defaultValue: 'File type not allowed. Use xlsx, pdf, or docx.',
-        });
-      }
-      return null;
+      if (!code) return null;
+      const { key, defaultValue } = attachmentValidationMessage(code);
+      return t(key, { defaultValue });
     },
     [t],
   );
@@ -137,27 +130,6 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
       }
     },
     [quoteId, t, validateFile],
-  );
-
-  const handleFileInputChange = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      // Reset the input so selecting the same file again still triggers a change event.
-      event.target.value = '';
-      if (file) await handleUpload(file);
-    },
-    [handleUpload],
-  );
-
-  const handleDrop = useCallback(
-    async (event: React.DragEvent<HTMLLabelElement>) => {
-      event.preventDefault();
-      setIsDragging(false);
-      if (isReadOnly || isUploading) return;
-      const file = event.dataTransfer.files?.[0];
-      if (file) await handleUpload(file);
-    },
-    [handleUpload, isReadOnly, isUploading],
   );
 
   const handleDownload = useCallback(
@@ -222,48 +194,26 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
       </h4>
 
       {!isReadOnly && (
-        // <label> + hidden <input type="file"> gets us native click-to-open and keyboard focus
-        // without needing role="button" on a div. Drag handlers stay on the label.
-        <label
-          onDragOver={(event) => {
-            event.preventDefault();
-            if (!isDragging) setIsDragging(true);
-          }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={handleDrop}
-          aria-label={t('sales:supplierQuotes.attachments.uploadButton', {
-            defaultValue: 'Upload file',
-          })}
-          className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-4 py-6 text-sm transition-all cursor-pointer ${
-            isDragging
-              ? 'border-praetor bg-praetor/5'
-              : 'border-zinc-200 bg-zinc-50 hover:border-zinc-300'
-          } ${isUploading ? 'opacity-60 pointer-events-none' : ''}`}
-        >
-          <i className="fa-solid fa-cloud-arrow-up text-2xl text-zinc-400"></i>
-          <span className="font-bold text-zinc-600">
-            {isUploading
+        <AttachmentDropzone
+          onFile={handleUpload}
+          busy={isUploading}
+          primaryLabel={
+            isUploading
               ? t('sales:supplierQuotes.attachments.uploading', { defaultValue: 'Uploading...' })
               : t('sales:supplierQuotes.attachments.dropHere', {
                   defaultValue: 'Drop a file here or click to upload',
-                })}
-          </span>
-          <span className="text-xs text-zinc-400">
-            {t('sales:supplierQuotes.attachments.allowedTypes', {
-              defaultValue: 'Allowed: xlsx, pdf, docx · max 10 MB',
-            })}
-          </span>
-          <input
-            type="file"
-            accept={ATTACHMENT_ACCEPT_ATTR}
-            disabled={isUploading}
-            aria-label={t('sales:supplierQuotes.attachments.dropHere', {
-              defaultValue: 'Drop a file here or click to upload',
-            })}
-            className="hidden"
-            onChange={handleFileInputChange}
-          />
-        </label>
+                })
+          }
+          allowedTypesLabel={t('sales:supplierQuotes.attachments.allowedTypes', {
+            defaultValue: 'Allowed: xlsx, pdf, docx · max 10 MB',
+          })}
+          uploadButtonLabel={t('sales:supplierQuotes.attachments.uploadButton', {
+            defaultValue: 'Upload file',
+          })}
+          inputLabel={t('sales:supplierQuotes.attachments.dropHere', {
+            defaultValue: 'Drop a file here or click to upload',
+          })}
+        />
       )}
 
       {attachmentState.error && (
@@ -283,42 +233,41 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
       ) : (
         <ul className="divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white">
           {attachmentState.attachments.map((attachment) => (
-            <li key={attachment.id} className="flex items-center gap-3 px-3 py-2.5">
-              <i className="fa-solid fa-file-lines text-zinc-400"></i>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-bold text-zinc-700 truncate">
-                  {attachment.fileName}
-                </div>
-                <div className="text-xs text-zinc-400">
-                  {formatAttachmentFileSize(attachment.fileSize)}
-                  {attachment.createdAt
-                    ? ` · ${formatInsertDateTime(attachment.createdAt, i18n.language)}`
-                    : ''}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleDownload(attachment)}
-                className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
-                aria-label={t('sales:supplierQuotes.attachments.downloadAction', {
-                  defaultValue: 'Download',
-                })}
-              >
-                <i className="fa-solid fa-download"></i>
-              </button>
-              {!isReadOnly && (
-                <button
-                  type="button"
-                  onClick={() => setPendingDelete(attachment)}
-                  className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
-                  aria-label={t('sales:supplierQuotes.attachments.deleteAction', {
-                    defaultValue: 'Delete',
-                  })}
-                >
-                  <i className="fa-solid fa-trash-can"></i>
-                </button>
-              )}
-            </li>
+            <AttachmentRow
+              key={attachment.id}
+              fileName={attachment.fileName}
+              meta={`${formatAttachmentFileSize(attachment.fileSize)}${
+                attachment.createdAt
+                  ? ` · ${formatInsertDateTime(attachment.createdAt, i18n.language)}`
+                  : ''
+              }`}
+              actions={
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(attachment)}
+                    className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
+                    aria-label={t('sales:supplierQuotes.attachments.downloadAction', {
+                      defaultValue: 'Download',
+                    })}
+                  >
+                    <i className="fa-solid fa-download"></i>
+                  </button>
+                  {!isReadOnly && (
+                    <button
+                      type="button"
+                      onClick={() => setPendingDelete(attachment)}
+                      className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
+                      aria-label={t('sales:supplierQuotes.attachments.deleteAction', {
+                        defaultValue: 'Delete',
+                      })}
+                    >
+                      <i className="fa-solid fa-trash-can"></i>
+                    </button>
+                  )}
+                </>
+              }
+            />
           ))}
         </ul>
       )}
