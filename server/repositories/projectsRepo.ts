@@ -275,8 +275,6 @@ export type NewProject = {
   billingType?: StoredBillingType;
   billingFrequency?: BillingFrequency;
   tipo: ProjectTipo;
-  // Defaults to true: a project created through the app always has an explicitly chosen tipo.
-  tipoConfirmed?: boolean;
 };
 
 // Legacy auto-generated name from schema.sql, plus the canonical Drizzle name produced by
@@ -309,7 +307,9 @@ export const create = async (project: NewProject, exec: DbExecutor = db): Promis
           project.billingFrequency,
         ),
         tipo: project.tipo,
-        tipoConfirmed: project.tipoConfirmed ?? true,
+        // A project created through the app always has an explicitly chosen tipo (NewProject
+        // requires it), so it is confirmed by definition.
+        tipoConfirmed: true,
       })
       .returning();
     return (await findById(project.id, exec)) ?? mapRow(rows[0]);
@@ -338,7 +338,6 @@ export type ProjectUpdate = {
   billingType?: StoredBillingType | null;
   billingFrequency?: BillingFrequency | null;
   tipo?: ProjectTipo | null;
-  tipoConfirmed?: boolean;
 };
 
 export const update = async (
@@ -374,12 +373,11 @@ export const update = async (
   }
   // An explicit tipo choice both stores the value and confirms the field (issue #784),
   // clearing the "force a choice on first edit" state for rollout-defaulted projects.
-  // `tipo` is NOT NULL, so a null patch is treated as "no change" rather than a clear.
+  // Confirmation is always a side-effect of choosing a tipo — there is no separate
+  // "confirm" path. `tipo` is NOT NULL, so a null patch is "no change", not a clear.
   if (patch.tipo != null) {
     set.tipo = patch.tipo;
     set.tipoConfirmed = true;
-  } else if (patch.tipoConfirmed !== undefined) {
-    set.tipoConfirmed = patch.tipoConfirmed;
   }
 
   if (Object.keys(set).length === 0) {

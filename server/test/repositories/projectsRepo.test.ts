@@ -259,7 +259,7 @@ describe('create', () => {
     expect(created.orderId).toBe('so-7');
   });
 
-  test('persists tipo and defaults tipo_confirmed to true (issue #784)', async () => {
+  test('persists tipo and confirms it on create (issue #784)', async () => {
     exec.enqueue({ rows: [makeRow(PROJECT_ROW, { 13: 'passivo' })] });
     exec.enqueue({ rows: [{ ...rawProjectRow, tipo: 'passivo' }] });
     const created = await projectsRepo.create(
@@ -278,25 +278,6 @@ describe('create', () => {
     expect(exec.calls[0].params.at(-1)).toBe(true);
     expect(created.tipo).toBe('passivo');
     expect(created.tipoConfirmed).toBe(true);
-  });
-
-  test('forwards an explicit tipoConfirmed=false', async () => {
-    exec.enqueue({ rows: [makeRow(PROJECT_ROW, { 14: false })] });
-    exec.enqueue({ rows: [{ ...rawProjectRow, tipo_confirmed: false }] });
-    const created = await projectsRepo.create(
-      {
-        id: 'p-1',
-        name: 'Alpha',
-        clientId: 'c-1',
-        description: 'desc',
-        isDisabled: false,
-        tipo: 'attivo',
-        tipoConfirmed: false,
-      },
-      testDb,
-    );
-    expect(exec.calls[0].params.at(-1)).toBe(false);
-    expect(created.tipoConfirmed).toBe(false);
   });
 
   // Drizzle wraps driver errors in DrizzleQueryError with the original DatabaseError on .cause.
@@ -415,15 +396,6 @@ describe('update', () => {
     expect(sql).toContain('"tipo_confirmed" =');
     expect(exec.calls[0].params).toContain('passivo');
     expect(exec.calls[0].params).toContain(true);
-  });
-
-  test('tipoConfirmed-only update sets the flag without touching tipo', async () => {
-    exec.enqueue({ rows: [makeRow(PROJECT_ROW)] });
-    exec.enqueue({ rows: [rawProjectRow] });
-    await projectsRepo.update('p-1', { tipoConfirmed: true }, testDb);
-    const sql = exec.calls[0].sql.toLowerCase();
-    expect(sql).toContain('"tipo_confirmed" =');
-    expect(sql).not.toContain('"tipo" =');
   });
 
   test('a null tipo patch is ignored rather than clearing the NOT NULL column', async () => {
