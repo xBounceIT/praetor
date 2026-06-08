@@ -1483,7 +1483,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
                     {t('hr:workforce.name')} {!editIdentityReadOnly && <RequiredMark />}
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={editFirstName}
                     onChange={(e) => {
@@ -1495,9 +1495,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     aria-label={t('hr:workforce.name')}
                     readOnly={editIdentityReadOnly}
                     disabled={editIdentityReadOnly}
-                    className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
-                      editFormErrors.firstName ? 'border-red-400' : 'border-zinc-200'
-                    } disabled:cursor-not-allowed disabled:opacity-70`}
+                    aria-invalid={Boolean(editFormErrors.firstName)}
                   />
                   {editFormErrors.firstName && (
                     <p className="text-xs text-red-500 mt-1">{editFormErrors.firstName}</p>
@@ -1507,7 +1505,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
                     {t('hr:workforce.surname')}
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={editSurname}
                     onChange={(e) => {
@@ -1519,9 +1517,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     aria-label={t('hr:workforce.surname')}
                     readOnly={editIdentityReadOnly}
                     disabled={editIdentityReadOnly}
-                    className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
-                      editFormErrors.surname ? 'border-red-400' : 'border-zinc-200'
-                    } disabled:cursor-not-allowed disabled:opacity-70`}
+                    aria-invalid={Boolean(editFormErrors.surname)}
                   />
                   {editFormErrors.surname && (
                     <p className="text-xs text-red-500 mt-1">{editFormErrors.surname}</p>
@@ -1546,9 +1542,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   aria-label={t('common:labels.email')}
                   readOnly={editIdentityReadOnly}
                   disabled={editIdentityReadOnly}
-                  className={`w-full px-4 py-2 bg-zinc-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold ${
-                    editFormErrors.email ? 'border-red-400' : 'border-zinc-200'
-                  } disabled:cursor-not-allowed disabled:opacity-70`}
+                  aria-invalid={Boolean(editFormErrors.email)}
                 />
                 {editFormErrors.email && (
                   <p className="text-xs text-red-500 mt-1">{editFormErrors.email}</p>
@@ -1654,8 +1648,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
                     {t('hr:workforce.costPerHour')}
                   </label>
-                  <div className="flex items-center bg-zinc-50 border border-zinc-200 rounded-lg focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
-                    <div className="w-16 flex items-center justify-center text-zinc-400 text-sm font-bold border-r border-zinc-200 py-2 bg-zinc-100/30">
+                  <div className="flex items-center border border-input bg-transparent dark:bg-input/30 rounded-lg focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
+                    <div className="w-16 flex items-center justify-center text-muted-foreground text-sm font-bold border-r border-input py-2 bg-muted/50">
                       {currency}
                     </div>
                     <ValidatedNumberInput

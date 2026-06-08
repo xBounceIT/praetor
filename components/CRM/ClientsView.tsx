@@ -1335,9 +1335,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                           dispatch({ type: 'patchErrors', value: { clientCode: '' } });
                       }}
                       placeholder={t('crm:clients.clientCodePlaceholder')}
-                      className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                        errors.clientCode ? 'border-red-500 bg-red-50' : 'border-zinc-200'
-                      }`}
+                      aria-invalid={Boolean(errors.clientCode)}
                     />
                     {errors.clientCode && (
                       <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientCode}</p>
@@ -1355,9 +1353,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                         if (errors.name) dispatch({ type: 'patchErrors', value: { name: '' } });
                       }}
                       placeholder={t('crm:clients.namePlaceholder')}
-                      className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                        errors.name ? 'border-red-500 bg-red-50' : 'border-zinc-200'
-                      }`}
+                      aria-invalid={Boolean(errors.name)}
                     />
                     {errors.name && (
                       <p className="text-red-500 text-[10px] font-bold ml-1">{errors.name}</p>
@@ -1406,7 +1402,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                         dispatch({ type: 'patchFormData', value: { website: e.target.value } })
                       }
                       placeholder={t('crm:clients.websitePlaceholder')}
-                      className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -1423,7 +1418,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                         })
                       }
                       placeholder={t('crm:clients.countryPlaceholder')}
-                      className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -1437,7 +1431,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                         dispatch({ type: 'patchFormData', value: { addressState: e.target.value } })
                       }
                       placeholder={t('crm:clients.statePlaceholder')}
-                      className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -1451,7 +1444,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                         dispatch({ type: 'patchFormData', value: { addressCap: e.target.value } })
                       }
                       placeholder={t('crm:clients.capPlaceholder')}
-                      className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -1468,7 +1460,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                         })
                       }
                       placeholder={t('crm:clients.provincePlaceholder')}
-                      className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -1485,7 +1476,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                         })
                       }
                       placeholder={t('crm:clients.civicNumberPlaceholder')}
-                      className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                     />
                   </div>
                   <div className="col-span-full space-y-1.5">
@@ -1499,7 +1489,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                         dispatch({ type: 'patchFormData', value: { addressLine: e.target.value } })
                       }
                       placeholder={t('crm:clients.addressPlaceholder')}
-                      className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                     />
                   </div>
                 </div>
@@ -1534,7 +1523,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                   {contactsExpanded && (
                     <div className="space-y-4">
                       {contactDraft && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-zinc-50 rounded-xl border border-zinc-200">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-xl border border-border">
                           <div className="space-y-1.5">
                             <label className="text-xs font-bold text-zinc-500 ml-1">
                               {t('crm:clients.fullName')} <RequiredMark />
@@ -1544,9 +1533,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                               value={contactDraft.fullName}
                               onChange={(e) => updateContactDraft('fullName', e.target.value)}
                               placeholder={t('crm:clients.fullNamePlaceholder')}
-                              className={`w-full text-sm px-4 py-2.5 bg-white border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                                contactDraftError ? 'border-red-500 bg-red-50' : 'border-zinc-200'
-                              }`}
+                              aria-invalid={Boolean(contactDraftError)}
                             />
                           </div>
                           <div className="space-y-1.5">
@@ -1558,7 +1545,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                               value={contactDraft.role || ''}
                               onChange={(e) => updateContactDraft('role', e.target.value)}
                               placeholder={t('crm:clients.rolePlaceholder')}
-                              className="w-full text-sm px-4 py-2.5 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                             />
                           </div>
                           <div className="space-y-1.5">
@@ -1570,7 +1556,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                               value={contactDraft.email || ''}
                               onChange={(e) => updateContactDraft('email', e.target.value)}
                               placeholder={t('crm:clients.email')}
-                              className="w-full text-sm px-4 py-2.5 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                             />
                           </div>
                           <div className="space-y-1.5">
@@ -1582,7 +1567,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                               value={contactDraft.phone || ''}
                               onChange={(e) => updateContactDraft('phone', e.target.value)}
                               placeholder={t('crm:clients.phone')}
-                              className="w-full text-sm px-4 py-2.5 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                             />
                           </div>
 
@@ -1645,9 +1629,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                           dispatch({ type: 'patchErrors', value: { fiscalCode: '' } });
                       }}
                       placeholder={t('crm:clients.fiscalCodePlaceholder')}
-                      className={`w-full text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all ${
-                        errors.fiscalCode ? 'border-red-500 bg-red-50' : 'border-zinc-200'
-                      }`}
+                      aria-invalid={Boolean(errors.fiscalCode)}
                     />
                     {errors.fiscalCode && (
                       <p className="text-red-500 text-[10px] font-bold ml-1">{errors.fiscalCode}</p>
@@ -1664,7 +1646,6 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                         dispatch({ type: 'patchFormData', value: { atecoCode: e.target.value } })
                       }
                       placeholder={t('crm:clients.atecoCodePlaceholder')}
-                      className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all"
                     />
                   </div>
                 </div>
@@ -1813,7 +1794,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                         dispatch({ type: 'patchFormData', value: { description: e.target.value } })
                       }
                       placeholder={t('crm:clients.description')}
-                      className="w-full text-sm px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-praetor outline-none transition-all resize-none"
+                      className="resize-none"
                     />
                   </div>
                 </div>
