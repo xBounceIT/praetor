@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
-import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyPluginAsync } from 'fastify';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realWebhooksRepo from '../../repositories/webhooksRepo.ts';
@@ -394,5 +394,41 @@ describe('DELETE /api/webhooks/:id', () => {
       headers: authHeader(),
     });
     expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('OpenAPI spec (generated /docs/api)', () => {
+  // Codex PR review: create requires name + url, but PUT is a partial patch. The generated OpenAPI
+  // request bodies must reflect that — otherwise a client generated from /docs/api submits a
+  // name/url-less create body that is documented as valid but always 400s.
+  type SpecOp = {
+    requestBody?: { content?: Record<string, { schema?: { required?: string[] } }> };
+  };
+  type Spec = { paths?: Record<string, Record<string, SpecOp>> };
+  let spec: Spec;
+
+  beforeAll(async () => {
+    const { default: swagger } = await import('@fastify/swagger');
+    const app = Fastify({ logger: false });
+    app.decorate('rateLimit', () => async () => {});
+    await app.register(swagger, { openapi: { info: { title: 'test', version: '1.0.0' } } });
+    await app.register(routePlugin, { prefix: '/api/webhooks' });
+    await app.ready();
+    spec = app.swagger() as unknown as Spec;
+    await app.close();
+  });
+
+  const bodyRequired = (path: string, method: string): string[] =>
+    spec.paths?.[path]?.[method]?.requestBody?.content?.['application/json']?.schema?.required ??
+    [];
+
+  test('POST marks name and url required', () => {
+    expect(bodyRequired('/api/webhooks/', 'post')).toEqual(expect.arrayContaining(['name', 'url']));
+  });
+
+  test('PUT (partial update) requires neither name nor url', () => {
+    const required = bodyRequired('/api/webhooks/{id}', 'put');
+    expect(required).not.toContain('name');
+    expect(required).not.toContain('url');
   });
 });

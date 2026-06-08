@@ -88,6 +88,18 @@ const webhookBodySchema = {
   additionalProperties: false,
 } as const;
 
+// Create requires name + url; PUT is a partial update, so they stay optional there. Marking them
+// required on the POST schema keeps the generated OpenAPI in sync with validateWebhookBody's
+// create-only checks, so a client generated from /docs/api doesn't submit a name/url-less body that
+// is documented as valid but always 400s. (AJV `required` only checks presence; the non-empty/URL
+// checks still live in validateWebhookBody.)
+const webhookCreateBodySchema = {
+  type: 'object',
+  properties: webhookBodyProperties,
+  additionalProperties: false,
+  required: ['name', 'url'],
+} as const;
+
 const idParamsSchema = {
   type: 'object',
   properties: { id: { type: 'string' } },
@@ -305,7 +317,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['webhooks'],
         summary: 'Create a webhook target',
-        body: webhookBodySchema,
+        body: webhookCreateBodySchema,
         response: {
           201: webhookResponseSchema,
           ...standardRateLimitedErrorResponses,
