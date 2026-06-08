@@ -1,4 +1,4 @@
-import type { View } from '../types';
+import type { KnownPermissionResource, View } from '../types';
 
 export type PermissionAction = 'view' | 'create' | 'update' | 'delete';
 export type PermissionResource = string;
@@ -10,7 +10,10 @@ const VIEW_UPDATE: PermissionAction[] = ['view', 'update'];
 const VIEW_UPDATE_DELETE: PermissionAction[] = ['view', 'update', 'delete'];
 
 export type PermissionDefinition = {
-  id: PermissionResource;
+  // Typed as the canonical literal union (not the loose PermissionResource) so adding a runtime
+  // definition without registering its resource in KnownPermissionResource is a compile error —
+  // this keeps the typed permission set in types.ts in sync with the runtime list below.
+  id: KnownPermissionResource;
   actions: PermissionAction[];
   isScope?: boolean;
   module: string;
