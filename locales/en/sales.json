@@ -350,7 +350,9 @@
       "downloadAction": "Download",
       "deleteAction": "Delete",
       "deleteConfirm": "Remove this attachment?",
-      "saveQuoteFirst": "Save the quote first to add attachments.",
+      "removeStaged": "Remove",
+      "pendingUploadHint": "Files are uploaded when you save the quote.",
+      "uploadPartialFailed": "Quote saved, but {{count}} attachment(s) could not be uploaded: {{names}}. Retry from the saved quote.",
       "loadFailed": "Failed to load attachments.",
       "errors": {
         "tooLarge": "File exceeds the 10 MB upload limit",

@@ -6,6 +6,11 @@ import type { Client, ClientProfileOption, ClientProfileOptionsByCategory } from
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
 import { render } from '../../helpers/render';
+import {
+  expectSourceContainsAll,
+  expectSourceOmitsAll,
+  readComponentSource,
+} from '../modalStylingTestUtils';
 
 installI18nMock();
 
@@ -178,5 +183,17 @@ describe('<ClientsView /> contact validation', () => {
 
     expect(props.onAddClient).not.toHaveBeenCalled();
     expect(screen.getByText('common:validation.required')).toBeInTheDocument();
+  });
+});
+
+describe('<ClientsView /> dark-mode error banners (issue #768 follow-up)', () => {
+  test('the contact + general validation banners avoid light-only red classes', async () => {
+    const source = await readComponentSource('CRM/ClientsView.tsx');
+    // Error banners use translucent red plus an explicit dark-mode text color so they read
+    // correctly on the dark dialog surface, matching the amber warning banners from #768.
+    expectSourceContainsAll(source, ['border-red-500/30', 'bg-red-500/10', 'dark:text-red-300']);
+    // The old light-only banner border (a pale red slab in dark mode) is gone. Input invalid
+    // states use border-red-500, so border-red-200 is unique to the message banners here.
+    expectSourceOmitsAll(source, ['border-red-200']);
   });
 });

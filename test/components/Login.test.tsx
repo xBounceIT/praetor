@@ -487,6 +487,39 @@ describe('<Login />', () => {
       expect(logo.classList.contains('brightness-0')).toBe(false);
       expect(logo.classList.contains('invert')).toBe(false);
     });
+
+    // The logout/error banners used a hardcoded light palette (bg-amber-50 / bg-red-50 with no
+    // dark: variant), so they rendered as a pale slab on the dark login page. They now use the
+    // same translucent treatment as the dialog banners plus explicit dark-mode text colors.
+    test('the inactivity logout banner uses theme-aware amber, not a light slab', () => {
+      render(<Login onLogin={() => {}} logoutReason="inactivity" />);
+      const title = screen.getByText('auth:session.expired');
+      const banner = title.parentElement?.parentElement;
+
+      expect(banner?.classList.contains('bg-amber-500/10')).toBe(true);
+      expect(banner?.classList.contains('border-amber-500/30')).toBe(true);
+      // The old solid light slab is gone.
+      expect(banner?.classList.contains('bg-amber-50')).toBe(false);
+      expect(banner?.classList.contains('border-amber-200')).toBe(false);
+      // The title carries an explicit dark-mode color so it stays legible on the dark page.
+      expect(title.classList.contains('dark:text-amber-300')).toBe(true);
+    });
+
+    test('the server-unreachable banner uses theme-aware red, not a light slab', () => {
+      render(<Login onLogin={() => {}} serverUnreachable />);
+      // The red banner carries role="alert".
+      const banner = screen.getByRole('alert');
+
+      expect(banner.classList.contains('bg-red-500/10')).toBe(true);
+      expect(banner.classList.contains('border-red-500/30')).toBe(true);
+      expect(banner.classList.contains('bg-red-50')).toBe(false);
+      expect(banner.classList.contains('border-red-200')).toBe(false);
+      expect(
+        screen
+          .getByText('auth:session.serverUnreachableTitle')
+          .classList.contains('dark:text-red-300'),
+      ).toBe(true);
+    });
   });
 
   describe('custom branding', () => {

@@ -36,6 +36,7 @@ import tasksRoutes from './routes/tasks.ts';
 import twoFactorRoutes from './routes/two-factor.ts';
 import usersRoutes from './routes/users.ts';
 import viewsRoutes from './routes/views.ts';
+import webhooksRoutes from './routes/webhooks.ts';
 import workUnitsRoutes from './routes/work-units.ts';
 import { ajvFormatsPlugin, ajvFormatsPluginOptions } from './utils/ajv-formats.ts';
 import { loggerOptions, serializeError } from './utils/logger.ts';
@@ -196,6 +197,7 @@ export const buildApp = async () => {
   fastify.register(reportsRoutes, { prefix: '/api/reports' });
   fastify.register(logsRoutes, { prefix: '/api/logs' });
   fastify.register(mcpRoutes, { prefix: '/api/mcp' });
+  fastify.register(webhooksRoutes, { prefix: '/api/webhooks' });
 
   fastify.get(
     '/api/health',

@@ -50,7 +50,8 @@
     "roles": "Roles",
     "aiReporting": "AI Reporting",
     "docs": "Documentation",
-    "logs": "Logs"
+    "logs": "Logs",
+    "webhooks": "Webhooks"
   },
   "menu": {
     "settings": "Settings",
@@ -92,7 +93,8 @@
     "emailSettings": "Email Settings",
     "roles": "Roles",
     "aiReporting": "AI Reporting",
-    "logs": "System Logs"
+    "logs": "System Logs",
+    "webhooks": "Webhooks"
   },
   "notifications": {
     "title": "Notifications",

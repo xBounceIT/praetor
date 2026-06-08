@@ -35,6 +35,8 @@ Nella sezione **Informazioni Fornitore** del dialog **Nuovo Preventivo Fornitore
 
 La tabella **Articoli** rende esplicita la catena di prezzo d'acquisto con le colonne **Prodotto**, **Prezzo listino**, **Sconto a noi (%)**, **Costo unitario**, **Qtà** e **Totale**. Inserisci il prezzo di listino del fornitore e la percentuale di sconto che ti concede (limitata a 0–100%, perché uno sconto superiore porterebbe il costo sotto zero): Praetor calcola il **Costo unitario** come `Prezzo listino × (1 − Sconto a noi / 100)`, mentre il **Totale** di riga resta `Costo unitario × Qtà`. Il campo Costo unitario è in sola lettura perché derivato. Nel **Riepilogo**, il **Subtotale** somma i prezzi di listino (`Prezzo listino × Qtà`), la riga **Sconto** evidenzia lo sconto totale concesso dai fornitori e il **Totale** riporta il costo netto (`Costo unitario × Qtà`). La riga Sconto compare solo quando almeno una riga ha uno sconto.
 
+Puoi allegare i file del fornitore (**xlsx**, **pdf** o **docx**, fino a 10 MB ciascuno) nella sezione **Allegati**. I file possono essere aggiunti già dal dialog **Nuovo Preventivo Fornitore** — vengono messi in coda mentre compili il preventivo e caricati automaticamente al salvataggio — oltre che successivamente finché il preventivo è in bozza. Gli allegati possono essere modificati solo nei preventivi in bozza senza ordine collegato; quando il preventivo esce dalla bozza o nasce un ordine collegato la sezione diventa di sola lettura e i file esistenti possono solo essere scaricati.
+
 ## Ordini
 
 Gli ordini clienti e fornitori consolidano le informazioni operative. Prima di confermare, verifica anagrafica, righe, sconti, condizioni di pagamento e collegamenti con documenti precedenti.

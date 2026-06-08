@@ -1,6 +1,6 @@
 ---
 title: Administration
-description: Managing users, roles, authentication, settings, email, and logs.
+description: Managing users, roles, authentication, settings, email, logs, and webhooks.
 sidebar:
   order: 7
 ---
@@ -106,3 +106,20 @@ After changing SMTP, sender, or security options, always run a send test before 
 Logs help reconstruct access and relevant operations. Use them for audit, troubleshooting, and checks after administrative changes.
 
 Filter by period to reduce noise and focus on the event you need to analyze.
+
+## Webhooks
+
+Webhooks let administrators register outbound HTTP targets that Praetor can call to notify external systems. The **Webhooks** page lists every configured target and is available to administrators with the matching `administration.webhooks` permissions.
+
+Each target defines:
+
+- **Name** and an optional **Description** to identify the integration.
+- **URL** — the endpoint Praetor calls. Only `http` and `https` URLs are accepted.
+- **HTTP method** — `GET`, `POST` (default), `PUT`, `PATCH`, or `DELETE`.
+- **Authentication** — how Praetor authenticates to the target: **None**, **Bearer token**, **Basic** (username and password), or **API key** (a value sent under a custom header you name). The secret credential is encrypted at rest and never returned to the browser; when editing it shows a **Stored — Replace** badge, and the same Keep / Replace behavior as the other secret fields preserves it unless you explicitly replace or clear it.
+- **Custom headers** — optional key/value pairs attached to every request, layered on top of the authentication header. Use these for non-secret routing values such as a tenant id.
+- **Enabled** — a toggle that marks the target active or inactive.
+
+Create, edit, and delete actions are gated by the create, update, and delete permissions respectively, and every change is written to the audit log.
+
+This page configures targets only; the events that trigger each webhook are wired up separately.

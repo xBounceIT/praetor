@@ -165,8 +165,10 @@ describe('makeSupplierQuoteHandlers', () => {
     );
     const ctx = buildHandlers();
 
-    await ctx.handlers.addSupplierQuote({ status: 'draft' } as never);
+    const created = await ctx.handlers.addSupplierQuote({ status: 'draft' } as never);
     expect(ctx.supplierQuotes.get()).toEqual([{ id: 'sq-new', status: 'draft' }]);
+    // The created quote is returned so the modal can upload files staged during creation to it.
+    expect(created).toEqual({ id: 'sq-new', status: 'draft' } as never);
   });
 
   test('addSupplierQuote rethrows api error', async () => {

@@ -54,10 +54,13 @@ export const makeSupplierQuoteHandlers = (deps: SupplierQuoteHandlersDeps) => {
     setSupplierInvoices(invoicesData);
   };
 
-  const addSupplierQuote = async (quoteData: Partial<SupplierQuote>) => {
+  // Returns the created quote so the caller can act on its server id — the supplier-quote
+  // modal flushes any files staged during creation to /attachments once the id exists.
+  const addSupplierQuote = async (quoteData: Partial<SupplierQuote>): Promise<SupplierQuote> => {
     try {
       const quote = await api.supplierQuotes.create(quoteData);
       setSupplierQuotes((prev) => [...prev, quote]);
+      return quote;
     } catch (err) {
       console.error('Failed to add supplier quote:', err);
       throw err;

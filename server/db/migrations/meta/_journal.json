@@ -551,8 +551,15 @@
     {
       "idx": 78,
       "version": "7",
-      "when": 1780950319636,
-      "tag": "0078_unlock_misura_billing_frequency",
+      "when": 1780913052253,
+      "tag": "0078_add_webhooks_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1780960102055,
+      "tag": "0079_unlock_misura_billing_frequency",
       "breakpoints": true
     }
   ]
