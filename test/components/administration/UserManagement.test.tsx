@@ -665,4 +665,13 @@ describe('UserManagement dark-mode form inputs', () => {
       'bg-zinc-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold',
     ]);
   });
+
+  test('the edit-user email field uses the shadcn Input, not a native <input> (PR #796 review)', async () => {
+    const source = await readComponentSource('administration/UserManagement.tsx');
+    // The edit-user email field was left as a native <input> while first name / surname were
+    // migrated, so it missed the theme-aware base + data-slot. It is now the shadcn Input.
+    // (`value={editEmail}` is unique to the edit field; the create field uses `value={newEmail}`.)
+    expect(source).not.toMatch(/<input\b[\s\S]{0,160}?value=\{editEmail\}/);
+    expect(source).toMatch(/<Input\b[\s\S]{0,160}?value=\{editEmail\}/);
+  });
 });

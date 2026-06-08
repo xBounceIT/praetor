@@ -1529,7 +1529,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
                   {t('common:labels.email')}
                 </label>
-                <input
+                <Input
                   type="email"
                   value={editEmail}
                   onChange={(e) => {
