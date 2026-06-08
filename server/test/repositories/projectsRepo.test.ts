@@ -314,6 +314,9 @@ describe('update', () => {
 
     await projectsRepo.update('p-1', { billingFrequency: 'one_time' }, testDb);
 
+    // Exactly UPDATE + findById — no read-back SELECT to normalize the frequency against the
+    // stored billing type (that was the removed behavior); a reintroduced one would add a call.
+    expect(exec.calls).toHaveLength(2);
     expect(exec.calls[0].sql.toLowerCase()).toContain('update "projects"');
     expect(exec.calls[0].params).toContain('one_time');
     expect(exec.calls[0].params).not.toContain('monthly');

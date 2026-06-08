@@ -917,11 +917,14 @@ describe('normalizeProject', () => {
     });
   });
 
-  test('preserves derived mixed billing type on projects', () => {
-    const project = make<Project>(baseProject, { billingType: 'mixed' });
+  test('preserves derived mixed billing type and the provided frequency on projects', () => {
+    const project = make<Project>(baseProject, {
+      billingType: 'mixed',
+      billingFrequency: 'one_time',
+    });
     expect(normalizeProject(project)).toMatchObject({
       billingType: 'mixed',
-      billingFrequency: 'monthly',
+      billingFrequency: 'one_time',
     });
   });
 });

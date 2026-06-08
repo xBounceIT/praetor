@@ -458,6 +458,34 @@ describe('POST /api/projects', () => {
     });
   });
 
+  test('201: time and materials project keeps a one-time frequency (issue #785)', async () => {
+    createMock.mockResolvedValue({
+      ...SAMPLE_PROJECT,
+      billingType: 'time_and_materials',
+      billingFrequency: 'one_time',
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: {
+        ...VALID_CREATE_PAYLOAD,
+        billingType: 'time_and_materials',
+        billingFrequency: 'one_time',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        billingType: 'time_and_materials',
+        billingFrequency: 'one_time',
+      }),
+      TX_SENTINEL,
+    );
+  });
+
   test('400: orderId belonging to a different client is rejected', async () => {
     findOrderClientIdByIdMock.mockResolvedValue('c-other');
 

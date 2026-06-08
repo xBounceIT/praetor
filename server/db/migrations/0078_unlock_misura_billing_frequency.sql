@@ -1,2 +1,2 @@
-ALTER TABLE "projects" DROP CONSTRAINT "projects_time_and_materials_monthly_check";--> statement-breakpoint
-ALTER TABLE "tasks" DROP CONSTRAINT "tasks_time_and_materials_monthly_check";
+ALTER TABLE "projects" DROP CONSTRAINT IF EXISTS "projects_time_and_materials_monthly_check";--> statement-breakpoint
+ALTER TABLE "tasks" DROP CONSTRAINT IF EXISTS "tasks_time_and_materials_monthly_check";

@@ -9,8 +9,11 @@ const readSource = () =>
 describe('TaskFormModal billing frequency (issue #785)', () => {
   test('the frequency selector offers every frequency regardless of billing type', async () => {
     const source = await readSource();
-    expect(source).toContain('id="task-billing-frequency"');
-    expect(source).toContain('options={translatedBillingFrequencyOptions}');
+    // Bind the assertion to the frequency control specifically: its options prop must be the
+    // full, unfiltered list (a whole-file `toContain` could match an unrelated control).
+    expect(source).toMatch(
+      /id="task-billing-frequency"[\s\S]{0,80}options=\{translatedBillingFrequencyOptions\}/,
+    );
     // No "only monthly" filtering for time_and_materials anymore.
     expect(source).not.toContain("option.id === 'monthly'");
   });

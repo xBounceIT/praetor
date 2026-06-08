@@ -226,8 +226,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     project.revenue !== null && project.revenue !== undefined ? String(project.revenue) : '',
   );
   const [tempIsDisabled, setTempIsDisabled] = useState(project.isDisabled ?? false);
-  const storedInitialBillingType = toStoredBillingType(project.billingType);
-  const [billingType, setBillingType] = useState<StoredBillingType>(storedInitialBillingType);
+  const [billingType, setBillingType] = useState<StoredBillingType>(
+    toStoredBillingType(project.billingType),
+  );
   const [billingFrequency, setBillingFrequency] = useState<BillingFrequency>(
     project.billingFrequency ?? 'monthly',
   );
