@@ -126,7 +126,10 @@ const offerItemBodySchema = {
     durationMonths: { type: 'number' },
     durationUnit: { type: 'string', enum: ['months', 'years'] },
   },
-  required: ['productName', 'quantity', 'unitPrice'],
+  // unitType is required: it drives per-unit pricing (a 'days' line bills at 8x the hourly rate)
+  // and is stored on every line, so the API must not silently default the unit. Mirrors invoices'
+  // required unitOfMeasure.
+  required: ['productName', 'quantity', 'unitPrice', 'unitType'],
 } as const;
 
 const offerCreateBodySchema = {

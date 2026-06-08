@@ -644,6 +644,7 @@ describe('POST /api/sales/client-quotes - duration handling (issue #757)', () =>
         quantity: 2,
         unitPrice: 10,
         productCost: 5,
+        unitType: 'hours',
         ...itemOverrides,
       },
     ],

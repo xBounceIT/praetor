@@ -128,6 +128,9 @@ const clientOrderItemBodySchema = {
     durationMonths: { type: 'number' },
     durationUnit: { type: 'string', enum: ['months', 'years'] },
   },
+  // productId is intentionally NOT required so free-form supplier-quote lines (no linked product)
+  // can be converted into orders (#783/#795). unitType is likewise optional here — product-less
+  // lines may omit it and the route defaults it via normalizeUnitType.
   required: ['productName', 'quantity', 'unitPrice'],
 } as const;
 
