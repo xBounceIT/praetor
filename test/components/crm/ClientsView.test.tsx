@@ -197,3 +197,21 @@ describe('<ClientsView /> dark-mode error banners (issue #768 follow-up)', () =>
     expectSourceOmitsAll(source, ['border-red-200']);
   });
 });
+
+describe('<ClientsView /> dark-mode form chrome', () => {
+  test('field labels, table containers, and the page header use theme tokens, not light zinc', async () => {
+    const source = await readComponentSource('CRM/ClientsView.tsx');
+    // Field labels, the manage-values table containers, and the page title/subtitle adapt to the
+    // theme instead of rendering as low-contrast zinc text/borders on the dark surface.
+    expectSourceContainsAll(source, [
+      'text-xs font-bold text-muted-foreground',
+      'containerClassName="shadow-none border-border rounded-2xl"',
+      '<h2 className="text-2xl font-semibold text-foreground">',
+    ]);
+    expectSourceOmitsAll(source, [
+      'text-xs font-bold text-zinc-500',
+      'shadow-none border-zinc-200 rounded-2xl',
+      'text-2xl font-semibold text-zinc-800',
+    ]);
+  });
+});
