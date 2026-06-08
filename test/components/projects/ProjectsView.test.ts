@@ -70,6 +70,34 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain('id="project-revenue"');
   });
 
+  test('requires a Tipo (Attivo/Passivo), exposes the selector, and forwards it (issue #784)', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+    // Mandatory: submit is blocked until a value is chosen.
+    expect(source).toContain("if (!tipo) newErrors.tipo = t('projects:projects.tipoRequired')");
+    // The create dialog renders the required Tipo selector with a placeholder (starts empty).
+    expect(source).toContain('id="project-tipo"');
+    expect(source).toContain("placeholder={t('projects:projects.selectTipo')}");
+    // The chosen value is forwarded to the create handler.
+    expect(source).toContain('tipo: tipo as ProjectTipo,');
+    // And the projects list surfaces the value in its own column.
+    expect(source).toContain('accessorFn: (row) => formatTipo(row.tipo)');
+  });
+
+  test('tipo labels and values exist in both locales (issue #784)', async () => {
+    const en = await Bun.file(new URL('../../../locales/en/projects.json', import.meta.url)).json();
+    const it = await Bun.file(new URL('../../../locales/it/projects.json', import.meta.url)).json();
+    for (const loc of [en, it]) {
+      expect(loc.projects.tipo).toBeTruthy();
+      expect(loc.projects.selectTipo).toBeTruthy();
+      expect(loc.projects.tipoRequired).toBeTruthy();
+      expect(loc.projects.tipoConfirmRequired).toBeTruthy();
+      expect(loc.projects.tipoValues.attivo).toBeTruthy();
+      expect(loc.projects.tipoValues.passivo).toBeTruthy();
+    }
+  });
+
   test('revenue precedence: activity sum > order > manual, and read-only unless manual', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),

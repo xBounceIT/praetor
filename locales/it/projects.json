@@ -78,6 +78,15 @@
       "monthly": "Mensile",
       "oneTime": "Una tantum"
     },
+    "tipo": "Tipo",
+    "selectTipo": "Seleziona tipo...",
+    "tipoRequired": "Il tipo è obbligatorio",
+    "tipoConfirmRequired": "Conferma il tipo del progetto prima di salvare",
+    "tipoConfirmHint": "Questo progetto è stato impostato su \"Attivo\" automaticamente. Conferma o aggiorna il tipo prima di salvare.",
+    "tipoValues": {
+      "attivo": "Attivo",
+      "passivo": "Passivo"
+    },
     "taskRevenue": "Ricavo",
     "taskNotes": "Note",
     "noTasksAdded": "Nessuna attività aggiunta.",

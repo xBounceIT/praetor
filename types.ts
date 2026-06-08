@@ -71,6 +71,10 @@ export type TimeEntryLocation = 'office' | 'customer_premise' | 'remote' | 'tran
 export type StoredBillingType = 'retainer' | 'time_and_materials';
 export type BillingType = StoredBillingType | 'mixed';
 export type BillingFrequency = 'monthly' | 'one_time';
+// Project `tipo` (issue #784): mandatory active/passive classification, kept in sync with the
+// server `PROJECT_TIPOS` allow-list in server/utils/projectTipo.ts.
+export const PROJECT_TIPOS = ['attivo', 'passivo'] as const;
+export type ProjectTipo = (typeof PROJECT_TIPOS)[number];
 
 export interface RilNoteOption {
   value: string;
@@ -265,6 +269,10 @@ export interface Project {
   revenue?: number | null;
   billingType?: BillingType;
   billingFrequency?: BillingFrequency;
+  tipo?: ProjectTipo;
+  // False until a user explicitly confirms `tipo`. Rollout-defaulted projects start false so the
+  // edit form can force a deliberate first choice; projects created in-app are true (issue #784).
+  tipoConfirmed?: boolean;
 }
 
 export type ProjectRuleActionType = 'notify';
