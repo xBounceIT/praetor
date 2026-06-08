@@ -1112,7 +1112,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           <span
             className={`text-sm font-bold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-emerald-600'}`}
           >
-            {marginPercentage.toFixed(1)}%
+            {marginPercentage.toFixed(2)}%
           </span>
         );
       },
@@ -2265,7 +2265,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                           : undefined
                       }
                       margin={{
-                        label: `${t('sales:clientQuotes.marginLabel')} (${(formTotals.marginPercentage || 0).toFixed(1)}%)`,
+                        label: `${t('sales:clientQuotes.marginLabel')} (${(formTotals.marginPercentage || 0).toFixed(2)}%)`,
                         amount: formTotals.margin,
                       }}
                     />

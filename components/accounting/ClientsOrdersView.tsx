@@ -1418,7 +1418,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                               : undefined
                           }
                           margin={{
-                            label: `${t('sales:clientQuotes.marginLabel')} (${marginPercentage.toFixed(1)}%)`,
+                            label: `${t('sales:clientQuotes.marginLabel')} (${marginPercentage.toFixed(2)}%)`,
                             amount: margin,
                           }}
                         />

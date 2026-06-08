@@ -682,7 +682,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         );
         return (
           <span className="text-sm font-semibold text-emerald-700 whitespace-nowrap">
-            {marginPercentage.toFixed(1)}%
+            {marginPercentage.toFixed(2)}%
           </span>
         );
       },
@@ -1959,7 +1959,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                               : undefined
                           }
                           margin={{
-                            label: `${t('sales:clientOffers.margin', { defaultValue: 'Margin' })} (${(marginPercentage || 0).toFixed(1)}%)`,
+                            label: `${t('sales:clientOffers.margin', { defaultValue: 'Margin' })} (${(marginPercentage || 0).toFixed(2)}%)`,
                             amount: margin,
                           }}
                         />
