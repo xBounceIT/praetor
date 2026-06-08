@@ -11,13 +11,12 @@ export type BillingFrequency = (typeof BILLING_FREQUENCIES)[number];
 export const DEFAULT_BILLING_TYPE: StoredBillingType = 'time_and_materials';
 export const DEFAULT_BILLING_FREQUENCY: BillingFrequency = 'monthly';
 
+// Billing frequency is independent of billing type: both "A misura" (time_and_materials)
+// and "Canone" (retainer) tasks/projects may bill monthly or one-time. This only coalesces
+// a missing value to the default.
 export const normalizeBillingFrequency = (
-  billingType: StoredBillingType,
   frequency: BillingFrequency | null | undefined,
-): BillingFrequency => {
-  if (billingType === 'time_and_materials') return 'monthly';
-  return frequency ?? DEFAULT_BILLING_FREQUENCY;
-};
+): BillingFrequency => frequency ?? DEFAULT_BILLING_FREQUENCY;
 
 export const normalizeStoredBillingType = (
   billingType: BillingType | null | undefined,

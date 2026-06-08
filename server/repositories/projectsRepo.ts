@@ -302,10 +302,7 @@ export const create = async (project: NewProject, exec: DbExecutor = db): Promis
         endDate: project.endDate ?? null,
         revenue: numericForDb(project.revenue),
         billingType: project.billingType ?? DEFAULT_BILLING_TYPE,
-        billingFrequency: normalizeBillingFrequency(
-          project.billingType ?? DEFAULT_BILLING_TYPE,
-          project.billingFrequency,
-        ),
+        billingFrequency: normalizeBillingFrequency(project.billingFrequency),
         tipo: project.tipo,
         // A project created through the app always has an explicitly chosen tipo (NewProject
         // requires it), so it is confirmed by definition.
@@ -357,19 +354,13 @@ export const update = async (
   if (patch.revenue !== undefined) {
     set.revenue = numericForDb(patch.revenue);
   }
+  // billing_type and billing_frequency are independent columns now, so each is set on its
+  // own - no need to read back the current type to normalize the frequency against it.
   if (patch.billingType !== undefined) {
-    const nextBillingType = patch.billingType ?? DEFAULT_BILLING_TYPE;
-    set.billingType = nextBillingType;
-    set.billingFrequency = normalizeBillingFrequency(nextBillingType, patch.billingFrequency);
-  } else if (patch.billingFrequency !== undefined) {
-    const currentRows = await exec
-      .select({ billingType: projects.billingType })
-      .from(projects)
-      .where(eq(projects.id, id));
-    set.billingFrequency = normalizeBillingFrequency(
-      currentRows[0]?.billingType ?? DEFAULT_BILLING_TYPE,
-      patch.billingFrequency,
-    );
+    set.billingType = patch.billingType ?? DEFAULT_BILLING_TYPE;
+  }
+  if (patch.billingFrequency !== undefined) {
+    set.billingFrequency = normalizeBillingFrequency(patch.billingFrequency);
   }
   // An explicit tipo choice both stores the value and confirms the field (issue #784),
   // clearing the "force a choice on first edit" state for rollout-defaulted projects.

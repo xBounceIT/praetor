@@ -874,30 +874,30 @@ describe('normalizeTask', () => {
     expect(result.revenue).toBe(0);
   });
 
-  test('normalizes time and materials frequency to monthly', () => {
+  test('preserves one_time frequency for time and materials tasks', () => {
     const task = make<ProjectTask>(baseTask, {
       billingType: 'time_and_materials',
       billingFrequency: 'one_time',
     });
-    expect(normalizeTask(task).billingFrequency).toBe('monthly');
+    expect(normalizeTask(task).billingFrequency).toBe('one_time');
   });
 
-  test('normalizes legacy partial billing payloads to time and materials monthly', () => {
+  test('keeps the provided frequency on legacy partial billing payloads', () => {
     const task = make<ProjectTask>(baseTask, { billingFrequency: 'one_time' });
     expect(normalizeTask(task)).toMatchObject({
       billingType: 'time_and_materials',
-      billingFrequency: 'monthly',
+      billingFrequency: 'one_time',
     });
   });
 
-  test('does not preserve mixed billing type on tasks', () => {
+  test('does not preserve mixed billing type on tasks but keeps the frequency', () => {
     const task = make<ProjectTask>(baseTask, {
       billingType: 'mixed',
       billingFrequency: 'one_time',
     });
     expect(normalizeTask(task)).toMatchObject({
       billingType: 'time_and_materials',
-      billingFrequency: 'monthly',
+      billingFrequency: 'one_time',
     });
   });
 });
@@ -909,19 +909,22 @@ describe('normalizeProject', () => {
     clientId: 'c-1',
   };
 
-  test('normalizes legacy partial billing payloads to time and materials monthly', () => {
+  test('keeps the provided frequency on legacy partial billing payloads', () => {
     const project = make<Project>(baseProject, { billingFrequency: 'one_time' });
     expect(normalizeProject(project)).toMatchObject({
       billingType: 'time_and_materials',
-      billingFrequency: 'monthly',
+      billingFrequency: 'one_time',
     });
   });
 
-  test('preserves derived mixed billing type on projects', () => {
-    const project = make<Project>(baseProject, { billingType: 'mixed' });
+  test('preserves derived mixed billing type and the provided frequency on projects', () => {
+    const project = make<Project>(baseProject, {
+      billingType: 'mixed',
+      billingFrequency: 'one_time',
+    });
     expect(normalizeProject(project)).toMatchObject({
       billingType: 'mixed',
-      billingFrequency: 'monthly',
+      billingFrequency: 'one_time',
     });
   });
 });

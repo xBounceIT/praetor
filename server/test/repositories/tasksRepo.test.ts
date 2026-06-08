@@ -177,31 +177,29 @@ describe('update', () => {
     expect(exec.calls[0].params).toContain('t-1');
   });
 
-  test('normalizes billingFrequency-only update against stored billing type', async () => {
-    exec.enqueue({ rows: [makeRow(['time_and_materials'])] });
-    exec.enqueue({ rows: [taskRow({ 14: 'time_and_materials', 15: 'monthly' })] });
+  // Billing frequency is independent of billing type now: a misura (time_and_materials) task
+  // may bill one-time. The update writes the requested frequency directly - no read-back of
+  // the current billing type, no FOR UPDATE lock, no forcing to monthly.
+  test('billingFrequency-only update persists the requested frequency for any billing type', async () => {
+    exec.enqueue({ rows: [taskRow({ 14: 'time_and_materials', 15: 'one_time' })] });
 
     await tasksRepo.update('t-1', { billingFrequency: 'one_time' }, testDb);
 
-    expect(exec.calls[0].sql.toLowerCase()).toContain('select');
-    expect(exec.calls[1].sql.toLowerCase()).toContain('update "tasks"');
-    expect(exec.calls[1].params).toContain('monthly');
-    expect(exec.calls[1].params).not.toContain('one_time');
+    expect(exec.calls).toHaveLength(1);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('update "tasks"');
+    expect(exec.calls[0].params).toContain('one_time');
+    expect(exec.calls[0].params).not.toContain('monthly');
   });
 
-  // Without a row lock, a concurrent UPDATE that flips billingType between this SELECT and
-  // the following UPDATE would make our normalization stale and write a billingFrequency
-  // matched against the old billingType. The locking SELECT serializes the read against any
-  // concurrent writer of the same row.
-  test('billingFrequency-only update reads current billingType with FOR UPDATE', async () => {
-    exec.enqueue({ rows: [makeRow(['retainer'])] });
-    exec.enqueue({ rows: [taskRow({ 14: 'retainer', 15: 'one_time' })] });
+  test('billingType-only update leaves billing_frequency untouched', async () => {
+    exec.enqueue({ rows: [taskRow({ 14: 'time_and_materials', 15: 'one_time' })] });
 
-    await tasksRepo.update('t-1', { billingFrequency: 'one_time' }, testDb);
+    await tasksRepo.update('t-1', { billingType: 'time_and_materials' }, testDb);
 
-    const selectSql = exec.calls[0].sql.toLowerCase();
-    expect(selectSql).toContain('select');
-    expect(selectSql).toContain('for update');
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('set "billing_type"');
+    expect(sql).not.toContain('"billing_frequency" =');
+    expect(exec.calls[0].params).toContain('time_and_materials');
   });
 
   test('returns null when UPDATE finds no row', async () => {

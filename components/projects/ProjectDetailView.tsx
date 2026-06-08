@@ -37,6 +37,12 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useBillingFrequencyOptions, useBillingTypeOptions } from '@/hooks/useBillingOptions';
+import {
+  DEFAULT_BILLING_FREQUENCY,
+  DEFAULT_BILLING_TYPE,
+  toStoredBillingType,
+} from '@/utils/billing';
 import { useCurrentUserId } from '../../contexts/useCurrentUserId';
 import { entriesApi, projectsApi } from '../../services/api';
 import type {
@@ -103,19 +109,6 @@ const DASHBOARD_WIDGETS: readonly DashboardWidgetDef[] = [
 ];
 
 const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
-
-const toStoredBillingType = (value: BillingType | undefined): StoredBillingType =>
-  value === 'retainer' ? 'retainer' : 'time_and_materials';
-
-const billingTypeOptions = [
-  { id: 'time_and_materials', name: 'projects:projects.billingTypes.timeAndMaterials' },
-  { id: 'retainer', name: 'projects:projects.billingTypes.retainer' },
-];
-
-const billingFrequencyOptions = [
-  { id: 'monthly', name: 'projects:projects.billingFrequencies.monthly' },
-  { id: 'one_time', name: 'projects:projects.billingFrequencies.oneTime' },
-];
 
 const tipoOptions = [
   { id: 'attivo', name: 'projects:projects.tipoValues.attivo' },
@@ -232,12 +225,11 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     project.revenue !== null && project.revenue !== undefined ? String(project.revenue) : '',
   );
   const [tempIsDisabled, setTempIsDisabled] = useState(project.isDisabled ?? false);
-  const storedInitialBillingType = toStoredBillingType(project.billingType);
-  const [billingType, setBillingType] = useState<StoredBillingType>(storedInitialBillingType);
+  const [billingType, setBillingType] = useState<StoredBillingType>(
+    toStoredBillingType(project.billingType),
+  );
   const [billingFrequency, setBillingFrequency] = useState<BillingFrequency>(
-    storedInitialBillingType === 'time_and_materials'
-      ? 'monthly'
-      : (project.billingFrequency ?? 'monthly'),
+    project.billingFrequency ?? DEFAULT_BILLING_FREQUENCY,
   );
   const [projectBillingChanged, setProjectBillingChanged] = useState(false);
   // `tipo` (issue #784). A rollout-defaulted project (`tipoConfirmed === false`) starts with an
@@ -601,14 +593,8 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     }
   }
 
-  const translatedBillingTypeOptions = billingTypeOptions.map((o) => ({
-    id: o.id,
-    name: t(o.name),
-  }));
-  const translatedBillingFrequencyOptions = billingFrequencyOptions.map((o) => ({
-    id: o.id,
-    name: t(o.name),
-  }));
+  const translatedBillingTypeOptions = useBillingTypeOptions();
+  const translatedBillingFrequencyOptions = useBillingFrequencyOptions();
   const translatedTipoOptions = tipoOptions.map((o) => ({
     id: o.id,
     name: t(o.name),
@@ -623,7 +609,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const derivedBillingType: BillingType = useMemo(() => {
     if (project.billingType === 'mixed') return 'mixed';
     const stored = toStoredBillingType(project.billingType);
-    const taskTypes = new Set(projectTasks.map((t) => t.billingType ?? 'time_and_materials'));
+    const taskTypes = new Set(projectTasks.map((t) => t.billingType ?? DEFAULT_BILLING_TYPE));
     if (taskTypes.size === 0) return stored;
     if (taskTypes.size > 1) return 'mixed';
     return taskTypes.has(stored) ? stored : 'mixed';
@@ -727,11 +713,8 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       project.revenue !== null && project.revenue !== undefined ? String(project.revenue) : '',
     );
     setTempIsDisabled(project.isDisabled ?? false);
-    const stored = toStoredBillingType(project.billingType);
-    setBillingType(stored);
-    setBillingFrequency(
-      stored === 'time_and_materials' ? 'monthly' : (project.billingFrequency ?? 'monthly'),
-    );
+    setBillingType(toStoredBillingType(project.billingType));
+    setBillingFrequency(project.billingFrequency ?? DEFAULT_BILLING_FREQUENCY);
     setProjectBillingChanged(false);
     setTipo(baselineTipo);
     setErrors({});
@@ -782,10 +765,14 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     if (revenueSource === 'manual') {
       updates.revenue = persistedRevenue ?? null;
     }
-    if (derivedBillingType !== 'mixed' || projectBillingChanged) {
+    if (derivedBillingType !== 'mixed') {
       updates.billingType = billingType;
-      updates.billingFrequency =
-        billingType === 'time_and_materials' ? 'monthly' : billingFrequency;
+      updates.billingFrequency = billingFrequency;
+    } else if (projectBillingChanged) {
+      // A mixed project has no single billing type to set, but its frequency is a real
+      // project-level value (inherited by quick-added tasks), so persist a frequency edit
+      // without touching the derived/mixed type.
+      updates.billingFrequency = billingFrequency;
     }
     // Await so we can clear the billing-change latch only on success. Every other
     // hasChanges contributor compares local state to project.* (so a rejected save
@@ -1159,40 +1146,31 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               options={projectBillingTypeOptions}
               value={derivedBillingType}
               onChange={(val) => {
-                const next = val as StoredBillingType;
                 setProjectBillingChanged(true);
-                setBillingType(next);
-                if (next === 'time_and_materials') setBillingFrequency('monthly');
+                setBillingType(val as StoredBillingType);
               }}
               label={t('projects:projects.billingType')}
               disabled={!canUpdateProjects || derivedBillingType === 'mixed'}
               searchable={false}
               buttonClassName="h-9"
             />
+            {/*
+              The billing *type* is disabled when `mixed` (a project whose tasks have differing
+              types has no single type to set). The *frequency*, though, is a single project-level
+              value even for a mixed project - it's the default new quick-added tasks inherit
+              (POST /tasks falls back to the project's billingFrequency), so it stays editable and
+              shows the real stored value rather than a hardcoded default.
+            */}
             <SelectControl
               id="detail-billing-frequency"
-              options={
-                billingType === 'retainer'
-                  ? translatedBillingFrequencyOptions
-                  : translatedBillingFrequencyOptions.filter((o) => o.id === 'monthly')
-              }
-              value={
-                derivedBillingType === 'mixed'
-                  ? 'monthly'
-                  : billingType === 'time_and_materials'
-                    ? 'monthly'
-                    : billingFrequency
-              }
+              options={translatedBillingFrequencyOptions}
+              value={billingFrequency}
               onChange={(val) => {
                 setProjectBillingChanged(true);
                 setBillingFrequency(val as BillingFrequency);
               }}
               label={t('projects:projects.billingFrequency')}
-              disabled={
-                !canUpdateProjects ||
-                derivedBillingType === 'mixed' ||
-                billingType === 'time_and_materials'
-              }
+              disabled={!canUpdateProjects}
               searchable={false}
               buttonClassName="h-9"
             />

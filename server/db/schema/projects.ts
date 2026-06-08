@@ -70,10 +70,6 @@ export const projects = pgTable(
       sql`${table.billingFrequency} IN ('monthly', 'one_time')`,
     ),
     check(
-      'projects_time_and_materials_monthly_check',
-      sql`${table.billingType} != 'time_and_materials' OR ${table.billingFrequency} = 'monthly'`,
-    ),
-    check(
       'projects_date_range_check',
       sql`${table.startDate} IS NULL OR ${table.endDate} IS NULL OR ${table.startDate} <= ${table.endDate}`,
     ),

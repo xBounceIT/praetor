@@ -21,7 +21,6 @@ import { assertAuthenticated } from '../utils/auth-assert.ts';
 import {
   BILLING_FREQUENCIES,
   BILLING_TYPES,
-  DEFAULT_BILLING_FREQUENCY,
   DEFAULT_BILLING_TYPE,
   normalizeBillingFrequency,
   STORED_BILLING_TYPES,
@@ -279,10 +278,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         'billingFrequency',
       );
       if (!billingFrequencyResult.ok) return badRequest(reply, billingFrequencyResult.message);
-      const billingFrequency = normalizeBillingFrequency(
-        billingType,
-        billingFrequencyResult.value ?? DEFAULT_BILLING_FREQUENCY,
-      );
+      const billingFrequency = normalizeBillingFrequency(billingFrequencyResult.value);
 
       // `tipo` is mandatory on create (issue #784): the form requires a deliberate choice.
       const tipoResult = validateEnum(body.tipo, PROJECT_TIPOS, 'tipo');

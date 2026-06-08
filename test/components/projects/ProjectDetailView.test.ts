@@ -636,4 +636,21 @@ describe('ProjectDetailView dashboard customization', () => {
     // KPI cells are tall enough (h3 + minH3) to fit the team-size avatar footer.
     expect(source).toMatch(/id: 'teamSize', x: \d+, y: \d+, w: \d+, h: 3, minW: \d+, minH: 3/);
   });
+
+  test('mixed projects can still see and edit the project-level billing frequency (issue #785)', async () => {
+    const source = await readSource();
+    // The frequency is a single project-level value new quick-added tasks inherit, so unlike the
+    // billing TYPE it must NOT be gated on `mixed`: it shows the real stored value and stays
+    // editable. (The value/disabled props are bound to the detail-billing-frequency control.)
+    expect(source).toMatch(/id="detail-billing-frequency"[\s\S]{0,140}value=\{billingFrequency\}/);
+    expect(source).toMatch(
+      /id="detail-billing-frequency"[\s\S]{0,400}disabled=\{!canUpdateProjects\}/,
+    );
+    // Saving a frequency edit on a mixed project persists only the frequency (the local
+    // billingType is a coerced default for a mixed project, so it must not be written).
+    expect(source).toContain('} else if (projectBillingChanged) {');
+    expect(source).toMatch(
+      /else if \(projectBillingChanged\) \{[\s\S]{0,260}updates\.billingFrequency = billingFrequency;/,
+    );
+  });
 });

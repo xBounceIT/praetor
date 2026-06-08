@@ -25,7 +25,7 @@ Aggiorna il listino quando cambiano costi, margini o condizioni di vendita, cos�
 
 I progetti collegano clienti, attività e registrazioni di tempo. Crea attività chiare e riutilizzabili, con nomi che descrivono il lavoro effettivo.
 
-Per ogni progetto e attività puoi indicare il tipo di consuntivazione: canone o a misura. Le attività a misura sono sempre mensili; per i canoni puoi scegliere frequenza mensile o una tantum. Se le attività usano un tipo diverso da quello del progetto, il progetto viene mostrato come misto.
+Per ogni progetto e attività puoi indicare il tipo di consuntivazione (canone o a misura) e la frequenza (mensile o una tantum) in modo indipendente: entrambi i tipi di consuntivazione supportano entrambe le frequenze. Se le attività usano un tipo diverso da quello del progetto, il progetto viene mostrato come misto.
 
 Usa la stima di impegno mensile per pianificare il carico ricorrente e l'impegno totale per monitorare l'avanzamento rispetto alle ore complessive previste.
 
