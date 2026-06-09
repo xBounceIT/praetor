@@ -2,7 +2,9 @@ import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { Client, ClientsOrder, Product, SupplierSaleOrder } from '../../../types';
+import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { render } from '../../helpers/render';
+import { rowDeleteButtons } from '../../helpers/rowDeleteButtons';
 import {
   expectSourceContainsAll,
   expectSourceOmitsAll,
@@ -46,6 +48,12 @@ mock.module('../../../services/api/clientsOrders', () => ({
 afterEach(() => {
   document.body.style.overflow = '';
 });
+
+// Other suites globally stub DeleteConfirmModal (Bun's mock.module is process-wide and
+// last-write-wins), so pin the shared deterministic stub against this file's binding.
+mock.module('../../../components/shared/DeleteConfirmModal', () => ({
+  default: LineDeleteConfirmStub,
+}));
 
 const ClientsOrdersView = (await import('../../../components/accounting/ClientsOrdersView'))
   .default;
@@ -239,9 +247,10 @@ describe('<ClientsOrdersView />', () => {
     const source = await readComponentSource('accounting/ClientsOrdersView.tsx');
 
     expectSourceContainsAll(source, [
-      'className="flex items-start gap-2 lg:items-center"',
-      // lg:pt-5 reserves the top gutter the floated product quick-view shortcut sits in (desktop).
-      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center lg:pt-5"',
+      // lg:pt-5 quick-view gutter lives on the row flex (with the trash button), not the grid, so
+      // the delete button stays vertically aligned with the inputs.
+      'className="flex items-start gap-2 lg:items-center lg:pt-5"',
+      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center"',
       'className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0"',
       'className="flex h-9 items-center rounded-md border border-border bg-background px-3"',
       // Quantity and duration controls both center their compact value input + unit selector.
@@ -616,5 +625,53 @@ describe('<ClientsOrdersView /> supplier-order quick-view shortcut', () => {
         name: 'accounting:clientsOrders.supplierOrderShortcutUnavailable',
       }),
     ).toHaveLength(0);
+  });
+});
+
+describe('<ClientsOrdersView /> line-item delete confirmation', () => {
+  const openEditor = async () => {
+    render(
+      <ClientsOrdersView
+        orders={orders}
+        clients={clients}
+        products={[]}
+        currency="EUR"
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+      />,
+    );
+    fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
+    return screen.findByRole('dialog');
+  };
+
+  test('confirms before removing a product line and removes it only after confirming', async () => {
+    const dialog = await openEditor();
+    const rowDeletes = rowDeleteButtons(dialog);
+    expect(rowDeletes.length).toBeGreaterThan(0);
+
+    fireEvent.click(rowDeletes[0]);
+    const confirmUi = await screen.findByTestId('line-delete-confirm');
+    expect(within(confirmUi).getByTestId('line-delete-title')).toHaveTextContent(
+      'accounting:clientsOrders.removeProductTitle',
+    );
+    expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
+
+    fireEvent.click(within(confirmUi).getByTestId('line-delete-confirm-btn'));
+    await waitFor(() => {
+      expect(rowDeleteButtons(dialog)).toHaveLength(0);
+    });
+  });
+
+  test('keeps the product line when the confirmation is dismissed', async () => {
+    const dialog = await openEditor();
+    const rowDeletes = rowDeleteButtons(dialog);
+
+    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await screen.findByTestId('line-delete-cancel'));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('line-delete-confirm')).not.toBeInTheDocument();
+    });
+    expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
   });
 });

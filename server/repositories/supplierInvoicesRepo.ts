@@ -2,6 +2,7 @@ import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
 import { supplierInvoiceItems, supplierInvoices } from '../db/schema/supplierInvoices.ts';
 import { requireDateOnly } from '../utils/date.ts';
+import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
 
 export type SupplierInvoice = {
@@ -28,6 +29,8 @@ export type SupplierInvoiceItem = {
   quantity: number;
   unitPrice: number;
   discount: number;
+  durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 const mapInvoice = (row: typeof supplierInvoices.$inferSelect): SupplierInvoice => ({
@@ -54,6 +57,8 @@ const mapItem = (row: typeof supplierInvoiceItems.$inferSelect): SupplierInvoice
   quantity: parseDbNumber(row.quantity, 0),
   unitPrice: parseDbNumber(row.unitPrice, 0),
   discount: parseDbNumber(row.discount, 0),
+  durationMonths: row.durationMonths ?? 1,
+  durationUnit: normalizeDurationUnit(row.durationUnit),
 });
 
 // Memory-side cap on unfiltered listAll. There is no index on `created_at`, so Postgres
@@ -292,6 +297,8 @@ export type NewSupplierInvoiceItem = {
   quantity: number;
   unitPrice: number;
   discount: number;
+  durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 export const insertItems = async (
@@ -311,6 +318,10 @@ export const insertItems = async (
         quantity: numericForDb(item.quantity),
         unitPrice: numericForDb(item.unitPrice),
         discount: numericForDb(item.discount),
+        // Duration applies to every line type (issue #775); 'na' is gated via effectiveDurationMonths
+        // downstream, so the chosen value/unit is persisted verbatim.
+        durationMonths: item.durationMonths ?? 1,
+        durationUnit: item.durationUnit ?? 'months',
       })),
     )
     .returning();

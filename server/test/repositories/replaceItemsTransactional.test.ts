@@ -341,6 +341,8 @@ describe('supplierInvoicesRepo.replaceItems', () => {
     quantity: 1,
     unitPrice: 5,
     discount: 0,
+    durationMonths: 1,
+    durationUnit: 'months' as const,
   };
 
   test('failed INSERT leaves prior items intact', async () => {
@@ -372,6 +374,8 @@ describe('supplierOrdersRepo.replaceItems', () => {
     unitPrice: 5,
     discount: 0,
     note: null,
+    durationMonths: 1,
+    durationUnit: 'months' as const,
   };
 
   test('failed INSERT leaves prior items intact', async () => {
@@ -405,6 +409,8 @@ describe('supplierQuotesRepo.replaceItems', () => {
     unitPrice: 5,
     note: null,
     unitType: 'unit',
+    durationMonths: 1,
+    durationUnit: 'months' as const,
   };
 
   test('failed INSERT leaves prior items intact', async () => {

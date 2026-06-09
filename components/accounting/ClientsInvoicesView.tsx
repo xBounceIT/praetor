@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useMemo, useReducer } from 'react';
+import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
@@ -167,6 +167,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   );
   const { isModalOpen, editingInvoice, isDeleteConfirmOpen, invoiceToDelete, errors, formData } =
     invoiceState;
+  const [productRowToDelete, setProductRowToDelete] = useState<number | null>(null);
   const setFormData = useCallback((update: StateUpdate<Partial<Invoice>>) => {
     dispatchInvoiceState({ type: 'setFormData', update });
   }, []);
@@ -175,6 +176,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   }, []);
   const closeModal = useCallback(() => {
     dispatchInvoiceState({ type: 'closeModal' });
+    setProductRowToDelete(null);
   }, []);
   const closeDeleteConfirm = useCallback(() => {
     dispatchInvoiceState({ type: 'closeDeleteConfirm' });
@@ -772,8 +774,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                         key={item.id}
                         className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
                       >
-                        <div className="flex items-start gap-2">
-                          <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:pt-5">
+                        <div className="flex items-start gap-2 lg:items-center lg:pt-5">
+                          <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14">
                             <div className="space-y-1 lg:col-span-3 min-w-0">
                               <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                 {t('common:labels.product')}
@@ -965,7 +967,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                             type="button"
                             variant="ghost"
                             size="icon-sm"
-                            onClick={() => removeItemRow(index)}
+                            onClick={() => setProductRowToDelete(index)}
                             className="text-muted-foreground hover:text-destructive"
                           >
                             <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
@@ -1084,6 +1086,21 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         description={t('accounting:clientsInvoices.deleteMessage', {
           invoiceNumber: invoiceToDelete?.id || '',
         })}
+      />
+
+      {/* Line-item (product) delete confirmation */}
+      <DeleteConfirmModal
+        isOpen={productRowToDelete !== null}
+        onClose={() => setProductRowToDelete(null)}
+        onConfirm={() => {
+          if (productRowToDelete !== null) {
+            removeItemRow(productRowToDelete);
+          }
+          setProductRowToDelete(null);
+        }}
+        title={t('accounting:clientsInvoices.removeProductTitle')}
+        description={t('accounting:clientsInvoices.removeProductConfirm')}
+        zIndex={70}
       />
 
       <div className="space-y-4">

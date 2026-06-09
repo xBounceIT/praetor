@@ -6,16 +6,30 @@ import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { Product, Supplier, SupplierInvoice, SupplierInvoiceItem } from '../../types';
+import type {
+  DurationUnit,
+  Product,
+  Supplier,
+  SupplierInvoice,
+  SupplierInvoiceItem,
+} from '../../types';
 import {
   addDaysToDateOnly,
   formatDateOnlyForLocale,
   getLocalDateString,
   normalizeDateOnlyString,
 } from '../../utils/date';
+import {
+  durationValueToMonths,
+  getDurationDisplayValue,
+  getEffectiveDurationMonths,
+  normalizeDurationUnit,
+  parseDurationValueToMonths,
+} from '../../utils/numbers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import DurationUnitSelector from '../shared/DurationUnitSelector';
 import Modal from '../shared/Modal';
 import {
   ModalBody,
@@ -50,7 +64,10 @@ const calculateTotals = (items: SupplierInvoiceItem[]) => {
   let subtotal = 0;
 
   items.forEach((item) => {
-    const lineSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0);
+    // Duration multiplies the line total alongside quantity (issue #776); 'na' lines never multiply
+    // (getEffectiveDurationMonths returns 1).
+    const lineSubtotal =
+      Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0) * getEffectiveDurationMonths(item);
     const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
     const lineNet = lineSubtotal - lineDiscount;
     subtotal += lineNet;
@@ -231,6 +248,34 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
     dispatch({ type: 'removeItem', index });
   }, []);
 
+  // Duration value entered in the line's chosen unit (issue #776). Stored canonically as whole
+  // months; the Mese/Anno selector only changes how that value is displayed/entered. Routing
+  // through updateItem keeps the reducer's total recompute in one place.
+  const handleDurationValueChange = useCallback(
+    (index: number, value: string) => {
+      const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
+      updateItem(index, 'durationMonths', parseDurationValueToMonths(value, unit));
+    },
+    [formData.items, updateItem],
+  );
+
+  const handleDurationUnitChange = useCallback(
+    (index: number, newUnit: DurationUnit) => {
+      const items = formData.items || [];
+      const item = items[index];
+      if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
+      // 'na' (N/A) drops the multiplier to a single month — the value input is disabled and the line
+      // never multiplies (issue #775). Recompute totals atomically so the summary stays in sync.
+      const durationMonths =
+        newUnit === 'na' ? 1 : durationValueToMonths(getDurationDisplayValue(item), newUnit);
+      const nextItems = items.map((current, i) =>
+        i === index ? { ...current, durationUnit: newUnit, durationMonths } : current,
+      );
+      dispatch({ type: 'patchForm', patch: { items: nextItems, ...calculateTotals(nextItems) } });
+    },
+    [formData.items],
+  );
+
   const handleSubmit = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault();
@@ -246,6 +291,10 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
           quantity: Number(item.quantity ?? 0),
           unitPrice: Number(item.unitPrice ?? 0),
           discount: Number(item.discount ?? 0),
+          // Duration applies to every line type (issue #775); 'na' is gated server-side, so submit
+          // the chosen value/unit verbatim.
+          durationMonths: Number(item.durationMonths ?? 1) || 1,
+          durationUnit: normalizeDurationUnit(item.durationUnit),
         })),
       });
 
@@ -259,7 +308,10 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
   const totalDiscount = useMemo(
     () =>
       (formData.items || []).reduce((sum, item) => {
-        const lineSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0);
+        const lineSubtotal =
+          Number(item.quantity ?? 0) *
+          Number(item.unitPrice ?? 0) *
+          getEffectiveDurationMonths(item);
         return sum + (lineSubtotal * Number(item.discount ?? 0)) / 100;
       }, 0),
     [formData.items],
@@ -530,12 +582,17 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                   <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
                     <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                       <div className="col-span-2 ml-1">{t('crm:quotes.productsServices')}</div>
-                      <div className="col-span-3">
+                      <div className="col-span-2">
                         {t('accounting:supplierInvoices.descriptionPlaceholder')}
                       </div>
                       <div className="col-span-1">{t('common:labels.quantity')}</div>
                       <div className="col-span-2">{t('crm:internalListing.salePrice')}</div>
                       <div className="col-span-1">{t('accounting:supplierOrders.discount')}</div>
+                      <div className="col-span-2">
+                        {t('accounting:supplierInvoices.durationColumn', {
+                          defaultValue: 'Duration',
+                        })}
+                      </div>
                       <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
                     </div>
                     <div className="w-8 shrink-0"></div>
@@ -545,7 +602,14 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                 {(formData.items || []).length > 0 ? (
                   <div className="space-y-3">
                     {formData.items?.map((item, index) => {
-                      const lineSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0);
+                      // Duration multiplies the line total alongside quantity (issue #776); 'na'
+                      // lines never multiply (getEffectiveDurationMonths returns 1).
+                      const durationUnit = normalizeDurationUnit(item.durationUnit);
+                      const durationValue = getDurationDisplayValue(item);
+                      const lineSubtotal =
+                        Number(item.quantity ?? 0) *
+                        Number(item.unitPrice ?? 0) *
+                        getEffectiveDurationMonths(item);
                       const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
                       const lineTotal = lineSubtotal - lineDiscount;
 
@@ -633,6 +697,34 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                               </div>
                               <div className="space-y-1">
                                 <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                  {t('accounting:supplierInvoices.durationColumn', {
+                                    defaultValue: 'Duration',
+                                  })}
+                                </FieldLabel>
+                                <div className="flex items-center gap-1">
+                                  <ValidatedNumberInput
+                                    step="1"
+                                    min="1"
+                                    value={durationValue}
+                                    disabled={durationUnit === 'na'}
+                                    onValueChange={(value) =>
+                                      handleDurationValueChange(index, value)
+                                    }
+                                    className="min-w-0 text-center"
+                                  />
+                                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                    /
+                                  </span>
+                                  <DurationUnitSelector
+                                    value={durationUnit}
+                                    onChange={(val) => handleDurationUnitChange(index, val)}
+                                    count={durationValue}
+                                    i18nPrefix="accounting:supplierInvoices"
+                                  />
+                                </div>
+                              </div>
+                              <div className="space-y-1">
+                                <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                                   {t('common:labels.total')}
                                 </FieldLabel>
                                 <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground">
@@ -666,7 +758,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                   buttonClassName="h-9"
                                 />
                               </div>
-                              <div className="lg:col-span-3">
+                              <div className="lg:col-span-2">
                                 <Input
                                   type="text"
                                   value={item.description}
@@ -732,6 +824,32 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                                   <span className="shrink-0 text-xs font-medium text-muted-foreground">
                                     %
                                   </span>
+                                </div>
+                              </div>
+                              <div className="lg:col-span-2">
+                                <div className="flex items-center gap-1">
+                                  <ValidatedNumberInput
+                                    step="1"
+                                    min="1"
+                                    placeholder={t('accounting:supplierInvoices.durationColumn', {
+                                      defaultValue: 'Duration',
+                                    })}
+                                    value={durationValue}
+                                    disabled={durationUnit === 'na'}
+                                    onValueChange={(value) =>
+                                      handleDurationValueChange(index, value)
+                                    }
+                                    className="min-w-0 font-medium"
+                                  />
+                                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                                    /
+                                  </span>
+                                  <DurationUnitSelector
+                                    value={durationUnit}
+                                    onChange={(val) => handleDurationUnitChange(index, val)}
+                                    count={durationValue}
+                                    i18nPrefix="accounting:supplierInvoices"
+                                  />
                                 </div>
                               </div>
                               <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground lg:col-span-2">

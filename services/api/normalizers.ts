@@ -432,6 +432,11 @@ export const normalizeSupplierQuoteItem = (item: SupplierQuoteItem): SupplierQuo
     listPrice: Number(item.listPrice ?? unitPrice),
     discountPercent: Number(item.discountPercent || 0),
     unitPrice,
+    // Duration multiplies the line total (issue #776); defend the field the same way the
+    // client-quote/offer/order/invoice item normalizers do so a missing/non-numeric value can
+    // never feed a NaN into calculateTotals.
+    durationMonths: Number(item.durationMonths ?? 1) || 1,
+    durationUnit: normalizeDurationUnit(item.durationUnit),
     note: item.note || '',
   };
 };
@@ -450,6 +455,10 @@ export const normalizeSupplierSaleOrderItem = (
   quantity: Number(item.quantity || 0),
   unitPrice: Number(item.unitPrice || 0),
   discount: Number(item.discount || 0),
+  // Duration multiplies the line total (issue #776); defend the field the same way the other
+  // item normalizers do so a missing/non-numeric value can never feed a NaN into the order total.
+  durationMonths: Number(item.durationMonths ?? 1) || 1,
+  durationUnit: normalizeDurationUnit(item.durationUnit),
   note: item.note || '',
 });
 
@@ -464,6 +473,8 @@ export const normalizeSupplierInvoiceItem = (item: SupplierInvoiceItem): Supplie
   quantity: Number(item.quantity || 0),
   unitPrice: Number(item.unitPrice || 0),
   discount: Number(item.discount || 0),
+  durationMonths: Number(item.durationMonths ?? 1) || 1,
+  durationUnit: normalizeDurationUnit(item.durationUnit),
 });
 
 export const normalizeSupplierInvoice = (invoice: SupplierInvoice): SupplierInvoice => ({

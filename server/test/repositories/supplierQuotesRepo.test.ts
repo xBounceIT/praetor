@@ -38,7 +38,7 @@ const quoteListRow = (overrides: Record<number, unknown> = {}) =>
 
 // Column order in db/schema/supplierQuotes.ts (supplier_quote_items):
 //   [id, quoteId, productId, productName, quantity, unitPrice, note, createdAt, unitType,
-//    listPrice, discountPercent]
+//    listPrice, discountPercent, durationMonths, durationUnit]
 const ITEM_BASE: readonly unknown[] = [
   'sqi-1',
   'q-1',
@@ -51,6 +51,8 @@ const ITEM_BASE: readonly unknown[] = [
   'unit',
   '21',
   '50',
+  1,
+  'months',
 ];
 
 const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, overrides);
@@ -89,6 +91,20 @@ describe('listAllItems', () => {
     exec.enqueue({ rows: [itemRow({ 8: null })] });
     const result = await supplierQuotesRepo.listAllItems(testDb);
     expect(result[0].unitType).toBe('unit');
+  });
+
+  test('maps the duration columns (issue #776)', async () => {
+    exec.enqueue({ rows: [itemRow({ 11: 18, 12: 'years' })] });
+    const result = await supplierQuotesRepo.listAllItems(testDb);
+    expect(result[0].durationMonths).toBe(18);
+    expect(result[0].durationUnit).toBe('years');
+  });
+
+  test('defaults a null/legacy duration to one month (issue #776)', async () => {
+    exec.enqueue({ rows: [itemRow({ 11: null, 12: null })] });
+    const result = await supplierQuotesRepo.listAllItems(testDb);
+    expect(result[0].durationMonths).toBe(1);
+    expect(result[0].durationUnit).toBe('months');
   });
 });
 
@@ -184,6 +200,8 @@ describe('replaceItems', () => {
         unitPrice: 5,
         note: null,
         unitType: 'unit',
+        durationMonths: 1,
+        durationUnit: 'months' as const,
       },
       {
         id: 'sqi-b',
@@ -195,6 +213,8 @@ describe('replaceItems', () => {
         unitPrice: 6,
         note: null,
         unitType: 'unit',
+        durationMonths: 1,
+        durationUnit: 'months' as const,
       },
     ];
     const result = await supplierQuotesRepo.replaceItems('q-1', items, testDb);
@@ -212,6 +232,33 @@ describe('replaceItems', () => {
     expect(exec.calls.length).toBe(1);
     expect(exec.calls[0].sql).toContain('delete from');
     expect(result).toEqual([]);
+  });
+
+  test('persists a line duration verbatim on insert — no unit-line coercion (issue #775)', async () => {
+    exec.enqueue({ rows: [] }); // DELETE
+    exec.enqueue({ rows: [itemRow({ 0: 'sqi-x' })] }); // INSERT ... RETURNING
+    const items = [
+      {
+        id: 'sqi-x',
+        productId: null,
+        productName: 'Widget',
+        quantity: 7,
+        listPrice: 5,
+        discountPercent: 0,
+        unitPrice: 5,
+        note: null,
+        unitType: 'unit',
+        // Duration applies to every line type now (issue #775); the repo persists the submitted
+        // value/unit unchanged (covers version-restore, which rebuilds items straight from a
+        // snapshot). The 'na' unit — not the line's unitType — is what disables the multiplier.
+        durationMonths: 5,
+        durationUnit: 'years' as const,
+      },
+    ];
+    await supplierQuotesRepo.replaceItems('q-1', items, testDb);
+    const insertParams = exec.calls[1].params;
+    expect(insertParams).toContain('years');
+    expect(insertParams).toContain(5);
   });
 });
 

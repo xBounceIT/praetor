@@ -399,6 +399,12 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<Partial<ClientOffer>>(() => getDefaultFormData());
   const [previewVersion, setPreviewVersion] = useState<OfferVersion | null>(null);
+  const [productRowToDelete, setProductRowToDelete] = useState<number | null>(null);
+
+  const closeModal = useCallback(() => {
+    dispatch({ type: 'closeModal' });
+    setProductRowToDelete(null);
+  }, []);
 
   const baseReadOnly = Boolean(editingOffer && editingOffer.status !== 'draft');
   const isReadOnly = baseReadOnly || previewVersion !== null;
@@ -1123,12 +1129,12 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     } finally {
       dispatch({ type: 'setIsSubmitting', value: false });
     }
-    dispatch({ type: 'closeModal' });
+    closeModal();
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <Modal isOpen={isModalOpen} onClose={() => dispatch({ type: 'closeModal' })}>
+      <Modal isOpen={isModalOpen} onClose={closeModal}>
         <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
           <ModalContent size="full" className="max-h-[90vh]">
             <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
@@ -1146,7 +1152,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                       ? t('sales:clientOffers.editOffer', { defaultValue: 'Edit offer' })
                       : t('sales:clientOffers.newOffer', { defaultValue: 'New offer' })}
                 </ModalTitle>
-                <ModalCloseButton onClick={() => dispatch({ type: 'closeModal' })} />
+                <ModalCloseButton onClick={closeModal} />
               </ModalHeader>
 
               <ModalBody className="flex-1 space-y-5">
@@ -1489,7 +1495,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                 type="button"
                                 variant="ghost"
                                 size="icon-sm"
-                                onClick={() => removeItem(index)}
+                                onClick={() => setProductRowToDelete(index)}
                                 disabled={isReadOnly}
                                 className="mt-5 shrink-0 text-muted-foreground hover:text-destructive"
                               >
@@ -1650,8 +1656,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                 </div>
                               </div>
                             </div>
-                            <div className="hidden lg:flex gap-2 items-center">
-                              <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center pt-5">
+                            <div className="hidden lg:flex gap-2 items-center pt-5">
+                              <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center">
                                 <div className="relative col-span-3 min-w-0">
                                   {canViewSupplierQuotes && (
                                     <QuickViewLinkButton
@@ -1815,7 +1821,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                 type="button"
                                 variant="ghost"
                                 size="icon-sm"
-                                onClick={() => removeItem(index)}
+                                onClick={() => setProductRowToDelete(index)}
                                 disabled={isReadOnly}
                                 className="shrink-0 text-muted-foreground hover:text-destructive"
                               >
@@ -1940,11 +1946,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
               </ModalBody>
 
               <ModalFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => dispatch({ type: 'closeModal' })}
-                >
+                <Button type="button" variant="outline" onClick={closeModal}>
                   {t('common:buttons.cancel')}
                 </Button>
                 {!isReadOnly && (
@@ -2060,6 +2062,21 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         isDeleting={isDeleting}
         title={t('sales:clientOffers.deleteTitle', { defaultValue: 'Delete offer?' })}
         description={offerToDelete?.id ?? ''}
+      />
+
+      {/* Line-item (product) delete confirmation */}
+      <DeleteConfirmModal
+        isOpen={productRowToDelete !== null}
+        onClose={() => setProductRowToDelete(null)}
+        onConfirm={() => {
+          if (productRowToDelete !== null) {
+            removeItem(productRowToDelete);
+          }
+          setProductRowToDelete(null);
+        }}
+        title={t('sales:clientOffers.removeProductTitle')}
+        description={t('sales:clientOffers.removeProductConfirm')}
+        zIndex={70}
       />
 
       <div className="space-y-4">

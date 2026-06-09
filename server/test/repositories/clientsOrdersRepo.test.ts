@@ -267,6 +267,8 @@ describe('supplier-order auto-creation flow', () => {
           quantity: 1,
           unitPrice: 5,
           note: null,
+          durationMonths: 3,
+          durationUnit: 'months',
         },
         {
           id: 'ssi-b',
@@ -275,6 +277,8 @@ describe('supplier-order auto-creation flow', () => {
           quantity: 2,
           unitPrice: 6,
           note: 'n',
+          durationMonths: 24,
+          durationUnit: 'years',
         },
       ],
       testDb,
@@ -283,6 +287,10 @@ describe('supplier-order auto-creation flow', () => {
     expect(exec.calls[0].params).toContain('ssi-a');
     expect(exec.calls[0].params).toContain('ssi-b');
     expect(exec.calls[0].params).toContain('so-1');
+    // Duration carried onto the auto-created order line (issue #776).
+    expect(exec.calls[0].params).toContain(3);
+    expect(exec.calls[0].params).toContain(24);
+    expect(exec.calls[0].params).toContain('years');
   });
 
   test('bulkInsertSupplierOrderItems is a no-op for empty items', async () => {

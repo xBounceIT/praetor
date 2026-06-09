@@ -24,6 +24,8 @@
     "deleteOrder": "Elimina Ordine",
     "deleteOrderTitle": "Eliminare Ordine?",
     "deleteOrderConfirm": "Sei sicuro di voler eliminare questo ordine per {{clientName}}? Questa azione non può essere annullata.",
+    "removeProductTitle": "Rimuovere il prodotto?",
+    "removeProductConfirm": "Sei sicuro di voler rimuovere questo prodotto dall'ordine?",
     "readOnlyStatus": "Gli ordini {{status}} sono in sola lettura",
     "clientColumn": "Cliente",
     "totalColumn": "Totale",
@@ -130,6 +132,8 @@
     "summary": "Riepilogo",
     "deleteTitle": "Eliminare fattura?",
     "deleteMessage": "Sei sicuro di voler eliminare la fattura {{invoiceNumber}}? Questa azione non può essere annullata.",
+    "removeProductTitle": "Rimuovere il prodotto?",
+    "removeProductConfirm": "Sei sicuro di voler rimuovere questo prodotto dalla fattura?",
     "notesPlaceholder": "Note aggiuntive..."
   },
   "supplierOrders": {
@@ -159,6 +163,12 @@
     "noItemsAdded": "Nessun articolo aggiunto",
     "orderDetails": "Dettagli Ordine",
     "items": "Articoli",
+    "durationColumn": "Durata",
+    "month": "Mese",
+    "months": "Mesi",
+    "year": "Anno",
+    "years": "Anni",
+    "durationNa": "N/D",
     "subtotal": "Subtotale",
     "summary": "Riepilogo",
     "versionHistory": {
@@ -204,6 +214,12 @@
     "totalDiscount": "Sconto Totale",
     "noItems": "Nessuna voce ancora. Aggiungi una riga per iniziare.",
     "descriptionPlaceholder": "Descrizione",
-    "notesPlaceholder": "Note aggiuntive..."
+    "notesPlaceholder": "Note aggiuntive...",
+    "durationColumn": "Durata",
+    "month": "Mese",
+    "months": "Mesi",
+    "year": "Anno",
+    "years": "Anni",
+    "durationNa": "N/D"
   }
 }

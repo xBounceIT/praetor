@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { Client, Product, Supplier, SupplierQuote } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
 import { render } from '../helpers/render';
@@ -29,6 +29,10 @@ const buildQuote = (overrides: Partial<SupplierQuote>): SupplierQuote => ({
   id: 'SQ-base',
   supplierId: 'sup-1',
   supplierName: 'Acme Supplies',
+  // Every supplier quote is associated with a customer (issue #777); default to one so edit/submit
+  // fixtures pass the mandatory-customer check. Tests that need a client-less quote override these.
+  clientId: 'cli-1',
+  clientName: 'Globex Corp',
   items: [
     {
       id: 'sqi-1',
@@ -252,20 +256,93 @@ describe('<SupplierQuotesView /> deep-link filter', () => {
   });
 });
 
-describe('<SupplierQuotesView /> optional customer association (issue #759)', () => {
-  test('renders the Customer field in the add-quote dialog', () => {
+// Opens the New-quote dialog and fills every required field (supplier, code, one line item).
+// Pass a customer name to also pick it from the Customer combobox. The caller must render with
+// `quotes={[]}` so the supplier/customer names are unambiguous (no table rows behind the modal).
+const fillNewQuoteForm = (customerName?: string) => {
+  fireEvent.click(screen.getByText('sales:supplierQuotes.addQuote'));
+  fireEvent.click(document.getElementById('supplier-quote-supplier') as HTMLElement);
+  fireEvent.click(screen.getByText('Acme Supplies'));
+  if (customerName) {
+    fireEvent.click(document.getElementById('supplier-quote-client') as HTMLElement);
+    fireEvent.click(screen.getByText(customerName));
+  }
+  fireEvent.change(document.getElementById('supplier-quote-code') as HTMLInputElement, {
+    target: { value: 'SQ-NEW' },
+  });
+  fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
+};
+
+// The customer link used to be optional (issue #759); issue #777 makes it mandatory.
+describe('<SupplierQuotesView /> mandatory customer association (issue #777)', () => {
+  test('marks the Customer field required and drops the empty "No customer" option', () => {
     render(<SupplierQuotesView {...baseProps} />);
     fireEvent.click(screen.getByText('sales:supplierQuotes.addQuote'));
     expect(screen.getByText('sales:supplierQuotes.newQuote')).toBeInTheDocument();
-    // The customer select trigger renders; with nothing linked it shows the "No customer" option
-    // (scoped by id because the same i18n key is also the list column header behind the modal).
+
+    // The Customer field now carries the required `*` indicator, like Supplier / Quote Code.
+    const clientLabel = document.querySelector('label[for="supplier-quote-client"]');
+    expect(clientLabel?.textContent).toContain('*');
+
+    // With nothing linked the trigger shows the placeholder; the empty "No customer" clearing
+    // option is gone (scoped by id since the same key is also the list column header behind it).
     const trigger = document.getElementById('supplier-quote-client');
     expect(trigger).not.toBeNull();
-    expect(trigger?.textContent).toContain('sales:supplierQuotes.noClient');
-    // Saving with no customer selected must be allowed: the Save button is shown.
-    expect(screen.getByText('common:buttons.save')).toBeInTheDocument();
+    expect(trigger?.textContent).toContain('sales:supplierQuotes.selectClient');
+    expect(trigger?.textContent).not.toContain('sales:supplierQuotes.noClient');
   });
 
+  test('blocks updating an existing client-less draft until a customer is chosen', () => {
+    // A draft created while the link was optional (clientId null) must now name a customer to save.
+    const clientless = buildQuote({
+      id: 'SQ-NO-CLIENT',
+      status: 'draft',
+      clientId: null,
+      clientName: null,
+    });
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+    render(
+      <SupplierQuotesView {...baseProps} quotes={[clientless]} onUpdateQuote={onUpdateQuote} />,
+    );
+    fireEvent.click(screen.getByText('SQ-NO-CLIENT'));
+
+    // Supplier, code, and items are all valid — only the customer is missing.
+    fireEvent.click(screen.getByText('common:buttons.update'));
+
+    expect(onUpdateQuote).not.toHaveBeenCalled();
+    expect(screen.getByText('sales:supplierQuotes.errors.clientRequired')).toBeInTheDocument();
+  });
+
+  test('blocks saving a NEW quote when no customer is selected', () => {
+    const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
+    // No table rows so the supplier name is unambiguous in the combobox.
+    render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
+
+    // Fill every required field except the customer.
+    fillNewQuoteForm();
+    fireEvent.click(screen.getByText('common:buttons.save'));
+
+    // The create path is blocked and the customer-required error surfaces.
+    expect(onAddQuote).not.toHaveBeenCalled();
+    expect(screen.getByText('sales:supplierQuotes.errors.clientRequired')).toBeInTheDocument();
+  });
+
+  test('saves a new quote once a customer is selected', async () => {
+    const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
+    // No table rows (quotes: []) so the supplier/customer names are unambiguous in the combobox.
+    render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
+
+    fillNewQuoteForm('Globex Corp');
+    fireEvent.click(screen.getByText('common:buttons.save'));
+
+    await waitFor(() => expect(onAddQuote).toHaveBeenCalledTimes(1));
+    const payload = onAddQuote.mock.calls[0]?.[0] as Partial<SupplierQuote>;
+    expect(payload.clientId).toBe('cli-1');
+    expect(payload.clientName).toBe('Globex Corp');
+  });
+});
+
+describe('<SupplierQuotesView /> linked customer display', () => {
   test('shows the linked customer name in the list', () => {
     const withClient = buildQuote({
       id: 'SQ-CLIENT',
@@ -309,6 +386,182 @@ describe('<SupplierQuotesView /> optional customer association (issue #759)', ()
     const trigger = document.getElementById('supplier-quote-client');
     expect(trigger?.textContent).toContain('Hidden Customer');
     expect(trigger?.textContent).not.toContain('sales:supplierQuotes.selectClient');
+  });
+});
+
+describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
+  const daysLineQuote = buildQuote({
+    id: 'SQ-DURATION',
+    status: 'draft',
+    items: [
+      {
+        id: 'sqi-dur',
+        quoteId: 'SQ-DURATION',
+        productName: 'Managed service',
+        quantity: 2,
+        listPrice: 100,
+        discountPercent: 0,
+        unitPrice: 100,
+        // Time-based line (days) → duration is editable, unlike the default "unit" lines.
+        unitType: 'days',
+        durationMonths: 3,
+        durationUnit: 'months',
+      },
+    ],
+  });
+
+  test('renders the Durata column and an editable duration for a time-based line', () => {
+    render(<SupplierQuotesView {...baseProps} quotes={[daysLineQuote]} />);
+    fireEvent.click(screen.getByText('SQ-DURATION'));
+    // The Durata column header renders once a line item exists...
+    expect(screen.getAllByText('sales:supplierQuotes.durationColumn').length).toBeGreaterThan(0);
+    // ...and the row carries a duration input reflecting the stored value (3 months).
+    const durationInputs = screen
+      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
+    expect(durationInputs.length).toBeGreaterThan(0);
+    expect(durationInputs[0].value).toBe('3');
+  });
+
+  test('scales the quote total by the line duration', () => {
+    render(<SupplierQuotesView {...baseProps} quotes={[daysLineQuote]} />);
+    // Total column = unitPrice 100 × quantity 2 × durationMonths 3 = 600.00
+    // (without the duration multiplier it would be 200.00).
+    expect(screen.getAllByText('600.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.queryByText('200.00 EUR')).not.toBeInTheDocument();
+  });
+
+  test('renders an editable duration for a unit-measured line (duration applies to every type)', () => {
+    // SQ-DRAFT's sample item is unitType "unit". Under the new model duration applies to every line
+    // type (issue #775) — the cell shows the editable value + selector, not a static N/A.
+    render(<SupplierQuotesView {...baseProps} />);
+    fireEvent.click(screen.getByText('SQ-DRAFT'));
+    expect(screen.queryAllByText('common:labels.notApplicable')).toHaveLength(0);
+    const durationInputs = screen
+      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
+    expect(durationInputs.length).toBeGreaterThan(0);
+  });
+
+  test('treats a line with durationUnit "na" as no-duration (x1) and disables its value input', () => {
+    const naQuote = buildQuote({
+      id: 'SQ-DUR-NA',
+      status: 'draft',
+      items: [
+        {
+          id: 'sqi-na',
+          quoteId: 'SQ-DUR-NA',
+          productName: 'Managed service',
+          quantity: 2,
+          listPrice: 100,
+          discountPercent: 0,
+          unitPrice: 100,
+          unitType: 'days',
+          // N/A duration: the stored months must never multiply the total (issue #775).
+          durationMonths: 3,
+          durationUnit: 'na',
+        },
+      ],
+    });
+    render(<SupplierQuotesView {...baseProps} quotes={[naQuote]} />);
+    fireEvent.click(screen.getByText('SQ-DUR-NA'));
+    // 2 × 100 × 1 (na) = 200.00 — not 600.00, even though durationMonths is 3.
+    expect(screen.getAllByText('200.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.queryByText('600.00 EUR')).not.toBeInTheDocument();
+    // The value input is disabled while the unit is N/A; the selector stays usable.
+    const durationInputs = screen
+      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
+    expect(durationInputs.length).toBeGreaterThan(0);
+    expect(durationInputs.every((el) => el.disabled)).toBe(true);
+  });
+
+  test('editing the duration updates the submitted multiplier', () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+    const editableQuote = buildQuote({
+      id: 'SQ-DUR-EDIT',
+      status: 'draft',
+      items: [
+        {
+          id: 'sqi-edit',
+          quoteId: 'SQ-DUR-EDIT',
+          productName: 'Managed service',
+          quantity: 2,
+          listPrice: 100,
+          discountPercent: 0,
+          unitPrice: 100,
+          unitType: 'days',
+          durationMonths: 1,
+          durationUnit: 'months',
+        },
+      ],
+    });
+    render(
+      <SupplierQuotesView {...baseProps} quotes={[editableQuote]} onUpdateQuote={onUpdateQuote} />,
+    );
+    fireEvent.click(screen.getByText('SQ-DUR-EDIT'));
+
+    const durationInputs = screen
+      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
+    fireEvent.change(durationInputs[0], { target: { value: '4' } });
+
+    fireEvent.click(screen.getByText('common:buttons.update'));
+
+    expect(onUpdateQuote).toHaveBeenCalledTimes(1);
+    const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
+    expect(updates.items?.[0]?.durationMonths).toBe(4);
+    expect(updates.items?.[0]?.durationUnit).toBe('months');
+  });
+
+  test("submits each line's stored duration verbatim (no unit-line coercion)", () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+    const mixedQuote = buildQuote({
+      id: 'SQ-DUR-MIX',
+      status: 'draft',
+      items: [
+        {
+          id: 'sqi-days',
+          quoteId: 'SQ-DUR-MIX',
+          productName: 'Managed service',
+          quantity: 1,
+          listPrice: 100,
+          discountPercent: 0,
+          unitPrice: 100,
+          unitType: 'days',
+          durationMonths: 3,
+          durationUnit: 'months',
+        },
+        {
+          id: 'sqi-unit',
+          quoteId: 'SQ-DUR-MIX',
+          productName: 'Widget',
+          quantity: 1,
+          listPrice: 50,
+          discountPercent: 0,
+          unitPrice: 50,
+          // Unit lines are no longer coerced — duration applies to every type now (issue #775),
+          // so the stored value/unit must round-trip unchanged on submit.
+          unitType: 'unit',
+          durationMonths: 24,
+          durationUnit: 'years',
+        },
+      ],
+    });
+    render(
+      <SupplierQuotesView {...baseProps} quotes={[mixedQuote]} onUpdateQuote={onUpdateQuote} />,
+    );
+    fireEvent.click(screen.getByText('SQ-DUR-MIX'));
+    fireEvent.click(screen.getByText('common:buttons.update'));
+
+    expect(onUpdateQuote).toHaveBeenCalledTimes(1);
+    const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
+    expect(updates.items?.[0]).toEqual(
+      expect.objectContaining({ durationMonths: 3, durationUnit: 'months' }),
+    );
+    expect(updates.items?.[1]).toEqual(
+      expect.objectContaining({ durationMonths: 24, durationUnit: 'years' }),
+    );
   });
 });
 

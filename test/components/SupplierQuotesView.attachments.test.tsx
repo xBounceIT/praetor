@@ -31,7 +31,8 @@ mock.module('../../services/api/supplierQuotes', () => ({
 const SupplierQuotesView = (await import('../../components/sales/SupplierQuotesView')).default;
 
 const supplier: Supplier = { id: 'sup-1', name: 'Acme Supplies' };
-const clients: Client[] = [];
+// A customer is mandatory on every supplier quote (issue #777), so the create flow needs one to pick.
+const clients: Client[] = [{ id: 'cli-1', name: 'Globex Corp' }];
 const products: Product[] = [];
 
 // The server-assigned id deliberately differs from the code typed below, so the test proves the
@@ -85,6 +86,10 @@ describe('<SupplierQuotesView /> create with staged attachments (issue #781)', (
     // Choose the supplier (searchable combobox), which the form requires.
     fireEvent.click(document.getElementById('supplier-quote-supplier') as HTMLElement);
     fireEvent.click(screen.getByText('Acme Supplies'));
+
+    // A customer is also required (issue #777).
+    fireEvent.click(document.getElementById('supplier-quote-client') as HTMLElement);
+    fireEvent.click(screen.getByText('Globex Corp'));
 
     // Quote code is required (intentionally different from the server-assigned id).
     fireEvent.change(document.getElementById('supplier-quote-code') as HTMLInputElement, {
