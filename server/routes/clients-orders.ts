@@ -494,7 +494,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       return `Snapshot client "${snapshot.order.clientId}" no longer exists`;
     }
     const missingProductId = productIds.find((id) => !products.has(id));
-    return missingProductId ? `Snapshot product "${missingProductId}" no longer exists` : null;
+    if (missingProductId) {
+      return `Snapshot product "${missingProductId}" no longer exists`;
+    }
+    // A product-less snapshot item must carry a supplier-quote reference — the same invariant the
+    // POST/PUT path enforces. Restoring an orphaned line (no product AND no supplier quote) would
+    // insert a row that fails normal item validation and is invisible to product-based reporting.
+    const orphanedItem = snapshot.items.find(
+      (item) =>
+        !normalizeNullableString(item.productId) &&
+        !(
+          normalizeNullableString(item.supplierQuoteId) &&
+          normalizeNullableString(item.supplierQuoteItemId)
+        ),
+    );
+    if (orphanedItem) {
+      return `Snapshot item "${orphanedItem.productName}" has no catalog product and no supplier-quote reference`;
+    }
+    return null;
   };
 
   fastify.get(
@@ -1539,8 +1556,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       // `sale_items.product_id` is nullable (issue #783), so a product-less supplier line in the
-      // snapshot restores as-is. `findMissingSnapshotReference` above already rejected any
-      // non-null productId that no longer points at a live product.
+      // snapshot restores as-is. `findMissingSnapshotReference` above already rejected stale
+      // productIds and orphaned product-less items (no product AND no supplier-quote reference).
       const snapshotItems: clientsOrdersRepo.NewClientOrderItem[] = version.snapshot.items.map(
         ({ orderId: _o, id: _i, ...rest }) => ({
           ...rest,

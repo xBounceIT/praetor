@@ -423,13 +423,22 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
 
   test('200 restores a snapshot line with no productId (issue #783)', async () => {
     setupHappyPath();
-    // A supplier-quote-sourced line carries supplierQuoteItemId but no catalog product. Before
-    // sale_items.product_id became nullable this restore was rejected with a 409.
+    // A supplier-quote-sourced line carries the supplier-quote reference (supplierQuoteId +
+    // supplierQuoteItemId) but no catalog product. Before sale_items.product_id became nullable
+    // this restore was rejected with a 409.
     ovFindByIdMock.mockResolvedValue({
       ...SAMPLE_VERSION,
       snapshot: {
         ...SAMPLE_SNAPSHOT,
-        items: [{ ...SAMPLE_ITEM, id: 'si-free', productId: null, supplierQuoteItemId: 'sqi-1' }],
+        items: [
+          {
+            ...SAMPLE_ITEM,
+            id: 'si-free',
+            productId: null,
+            supplierQuoteId: 'sq-1',
+            supplierQuoteItemId: 'sqi-1',
+          },
+        ],
       },
     });
 
@@ -443,6 +452,43 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     const replacedItems = coReplaceItemsMock.mock.calls[0]?.[1];
     expect(replacedItems).toHaveLength(1);
     expect(replacedItems[0].productId).toBeNull();
+  });
+
+  test('409 when restoring a snapshot with an orphaned product-less item (issue #783)', async () => {
+    setupHappyPath();
+    // No catalog product AND no supplier-quote reference — the same invariant POST/PUT enforce.
+    // Restoring this would insert an orphaned line that fails normal validation and is invisible
+    // to product-based reporting, so it must be rejected before any write.
+    ovFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [
+          {
+            ...SAMPLE_ITEM,
+            id: 'si-orphan',
+            productId: '',
+            supplierQuoteId: null,
+            supplierQuoteItemId: null,
+          },
+        ],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders/o-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain(
+      'no catalog product and no supplier-quote reference',
+    );
+    // Rejected before any restore write.
+    expect(coRestoreSnapshotOrderMock).not.toHaveBeenCalled();
+    expect(coReplaceItemsMock).not.toHaveBeenCalled();
+    expect(ovInsertMock).not.toHaveBeenCalled();
   });
 
   test('404 when current order does not exist', async () => {
