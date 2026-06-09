@@ -838,6 +838,7 @@ export interface WorkUnit {
   id: string;
   name: string;
   managers: { id: string; name: string }[];
+  members?: { id: string; name: string }[];
   description?: string;
   isDisabled?: boolean;
   userCount?: number;
