@@ -387,15 +387,15 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         accessorFn: (row: SupplierSaleOrder) => row.linkedQuoteId ?? '',
         className: 'whitespace-nowrap',
         cell: ({ row }: { row: SupplierSaleOrder }) => {
-          const isMuted = row.status === 'sent';
-
           if (!row.linkedQuoteId) {
             return (
-              <span className={`text-sm italic ${isMuted ? 'text-zinc-300' : 'text-zinc-400'}`}>
+              <span className="text-sm italic text-zinc-400">
                 {t('accounting:supplierOrders.noQuoteLink')}
               </span>
             );
           }
+
+          const isMuted = row.status === 'sent';
 
           return (
             <span
