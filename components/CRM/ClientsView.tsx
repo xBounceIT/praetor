@@ -1534,7 +1534,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                   {contactsExpanded && (
                     <div className="space-y-4">
                       {contactDraft && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-zinc-50 rounded-xl border border-zinc-200">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-xl border border-border">
                           <div className="space-y-1.5">
                             <label className="text-xs font-bold text-muted-foreground ml-1">
                               {t('crm:clients.fullName')} <RequiredMark />
