@@ -525,17 +525,16 @@ describe('<SupplierQuotesView /> dark-mode banners (issue #768)', () => {
 describe('<SupplierQuotesView /> compact line-item numeric columns', () => {
   test('discount/quantity inputs are width-capped and unit cost is content-sized', async () => {
     const source = await readComponentSource('sales/SupplierQuotesView.tsx');
-    // The desktop "Sconto a noi (%)" and "Quantità" inputs are capped at max-w-[5rem] so the
-    // columns only have to fit values like "100" or "45.47" instead of stretching the cell.
-    expectSourceContainsAll(source, [
-      // Adjacent `text-center max-w-[5rem]` is unique to the capped discount/quantity inputs
-      // (the duration input also uses max-w-[5rem], but not directly after text-center).
-      'text-center max-w-[5rem]',
-      // "Costo unitario" is centered under its centered header and sized to its content.
-      'flex items-center justify-center gap-1.5',
-    ]);
-    // The old full-width treatments are gone: the discount input no longer grows with flex-1,
-    // and the unit cost value no longer spans the cell right-aligned.
+    // The desktop "Sconto a noi (%)" and "Quantità" inputs are BOTH capped at max-w-[5rem] so the
+    // columns only have to fit values like "100" or "45.47" instead of stretching the cell. The cap
+    // sits directly after text-center (the duration input also uses max-w-[5rem], but not adjacent
+    // to text-center), so this regex matches exactly those two inputs. Assert both carry it —
+    // reverting either one alone would be a regression a single substring check would miss.
+    expect((source.match(/text-center max-w-\[5rem\]/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    // "Costo unitario" and the discount column are centered under their centered headers; gap-1.5
+    // is unique to the unit-cost cell, sized to its content rather than spanning the column.
+    expectSourceContainsAll(source, ['flex items-center justify-center gap-1.5']);
+    // The old full-width unit-cost treatment is gone: the value no longer spans the cell right-aligned.
     expectSourceOmitsAll(source, ['flex-1 text-right text-sm font-semibold text-zinc-700']);
   });
 });

@@ -1272,7 +1272,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
                           {t('sales:supplierQuotes.listPrice', { defaultValue: 'List Price' })}
                         </div>
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
+                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
                           {t('sales:supplierQuotes.discountToUs', {
                             defaultValue: 'Discount to Us (%)',
                           })}
@@ -1509,7 +1509,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                     {currency}
                                   </span>
                                 </div>
-                                <div className="col-span-2 flex items-center gap-1">
+                                <div className="col-span-2 flex items-center justify-center gap-1">
                                   <ValidatedNumberInput
                                     value={itemDiscountPercent}
                                     min={0}
