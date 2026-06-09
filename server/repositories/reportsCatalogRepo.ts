@@ -432,13 +432,13 @@ export const getCatalogSection = async (
           SELECT qi.product_id, qi.product_name, COUNT(*) as use_count, COALESCE(SUM(qi.quantity), 0) as quantity_total
             FROM quote_items qi
             JOIN quotes q ON q.id = qi.quote_id
-           WHERE q.created_at::date >= ${fromDate} AND q.created_at::date <= ${toDate}
+           WHERE q.created_at::date >= ${fromDate} AND q.created_at::date <= ${toDate} AND qi.product_id IS NOT NULL
            GROUP BY qi.product_id, qi.product_name
           UNION ALL
           SELECT si.product_id, si.product_name, COUNT(*) as use_count, COALESCE(SUM(si.quantity), 0) as quantity_total
             FROM sale_items si
             JOIN sales s ON s.id = si.sale_id
-           WHERE s.created_at::date >= ${fromDate} AND s.created_at::date <= ${toDate}
+           WHERE s.created_at::date >= ${fromDate} AND s.created_at::date <= ${toDate} AND si.product_id IS NOT NULL
            GROUP BY si.product_id, si.product_name
           UNION ALL
           SELECT ii.product_id, ii.description as product_name, COUNT(*) as use_count, COALESCE(SUM(ii.quantity), 0) as quantity_total
@@ -473,7 +473,7 @@ export const getCatalogSection = async (
           ) as value
          FROM sale_items si
          JOIN sales s ON s.id = si.sale_id
-        WHERE s.created_at::date >= ${fromDate} AND s.created_at::date <= ${toDate}
+        WHERE s.created_at::date >= ${fromDate} AND s.created_at::date <= ${toDate} AND si.product_id IS NOT NULL
         GROUP BY si.product_id, si.product_name
         ORDER BY value DESC
         LIMIT ${topLimit}`,

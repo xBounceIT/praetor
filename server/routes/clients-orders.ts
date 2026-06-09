@@ -15,6 +15,7 @@ import {
   type DurationUnit,
   isUnitMeasure,
 } from '../utils/duration-unit.ts';
+import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import {
   generateClientOrderId,
   generatePrefixedId,
@@ -105,26 +106,33 @@ const clientOrderItemBodySchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
-    productId: { type: 'string' },
+    // Nullable / optional: a supplier-quote-sourced line carries `supplierQuoteItemId` instead
+    // of a catalog product id (issue #783). `normalizeIncomingItems` enforces that one of the
+    // two is present.
+    productId: { type: ['string', 'null'] },
     productName: { type: 'string' },
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     productCost: { type: 'number' },
-    productMolPercentage: { type: 'number' },
-    supplierQuoteId: { type: 'string' },
-    supplierQuoteItemId: { type: 'string' },
-    supplierQuoteSupplierName: { type: 'string' },
-    supplierQuoteUnitPrice: { type: 'number' },
-    supplierSaleId: { type: 'string' },
-    supplierSaleItemId: { type: 'string' },
-    supplierSaleSupplierName: { type: 'string' },
+    // Nullable to match the response schema (clientOrderItemSchema): the offer→order conversion
+    // spreads `clientOffersRepo.mapItem` output verbatim, so these arrive as explicit `null` for
+    // non-product / non-supplier lines. Declaring them nullable (instead of relying on Ajv's
+    // coerceTypes to turn null→''/0) keeps the null "unset" semantic through normalizeIncomingItems.
+    productMolPercentage: { type: ['number', 'null'] },
+    supplierQuoteId: { type: ['string', 'null'] },
+    supplierQuoteItemId: { type: ['string', 'null'] },
+    supplierQuoteSupplierName: { type: ['string', 'null'] },
+    supplierQuoteUnitPrice: { type: ['number', 'null'] },
+    supplierSaleId: { type: ['string', 'null'] },
+    supplierSaleItemId: { type: ['string', 'null'] },
+    supplierSaleSupplierName: { type: ['string', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     discount: { type: 'number' },
-    note: { type: 'string' },
+    note: { type: ['string', 'null'] },
     durationMonths: { type: 'number' },
     durationUnit: { type: 'string', enum: ['months', 'years'] },
   },
-  required: ['productId', 'productName', 'quantity', 'unitPrice'],
+  required: ['productName', 'quantity', 'unitPrice'],
 } as const;
 
 const clientOrderCreateBodySchema = {
@@ -163,7 +171,7 @@ const clientOrderUpdateBodySchema = {
 
 type NormalizedOrderItem = {
   id?: string;
-  productId: string;
+  productId: string | null;
   productName: string;
   quantity: number;
   unitPrice: number;
@@ -190,9 +198,20 @@ const normalizeIncomingItems = (
   const normalized: NormalizedOrderItem[] = [];
   for (let i = 0; i < items.length; i++) {
     const item = items[i] as Record<string, unknown>;
-    const productIdResult = requireNonEmptyString(item.productId, `items[${i}].productId`);
-    if (!productIdResult.ok) {
-      badRequest(reply, productIdResult.message);
+    // A line is either pinned to a catalog product (`productId`) or sourced from a supplier-quote
+    // item (`supplierQuoteItemId`). Require one of the two. A product-less line needs only the item
+    // reference: `resolveSupplierQuoteRefs` (run after this) resolves it against accepted supplier
+    // quotes, rejects unresolvable/non-accepted refs, and stamps the authoritative `supplierQuoteId`.
+    // So clients (and older payloads) don't have to duplicate the quote id — matching the
+    // client-quotes item-only reference pattern, while still avoiding dangling lines (issue #783).
+    const supplierQuoteId = normalizeNullableString(item.supplierQuoteId);
+    const supplierQuoteItemId = normalizeNullableString(item.supplierQuoteItemId);
+    const productId = normalizeNullableString(item.productId);
+    if (!productId && !supplierQuoteItemId) {
+      badRequest(
+        reply,
+        `items[${i}].productId is required unless the line references a supplier-quote item (supplierQuoteItemId)`,
+      );
       return null;
     }
     const productNameResult = requireNonEmptyString(item.productName, `items[${i}].productName`);
@@ -234,10 +253,6 @@ const normalizeIncomingItems = (
       badRequest(reply, durationUnitResult.message);
       return null;
     }
-    const toNullableString = (value: unknown) =>
-      value === null || value === undefined ? null : String(value);
-    const toNullableNumber = (value: unknown) =>
-      value === null || value === undefined ? null : Number(value);
     const unitType = normalizeUnitType(item.unitType);
     // A "unit"-measured line can't run for a period, so its duration is forced to a single month.
     const { durationMonths, durationUnit } = coerceUnitLineDuration(
@@ -247,27 +262,71 @@ const normalizeIncomingItems = (
     );
     normalized.push({
       id: typeof item.id === 'string' ? item.id : undefined,
-      productId: productIdResult.value,
+      productId,
       productName: productNameResult.value,
       quantity: quantityResult.value,
       unitPrice: unitPriceResult.value,
       productCost: Number(item.productCost ?? 0),
-      productMolPercentage: toNullableNumber(item.productMolPercentage),
-      supplierQuoteId: toNullableString(item.supplierQuoteId),
-      supplierQuoteItemId: toNullableString(item.supplierQuoteItemId),
-      supplierQuoteSupplierName: toNullableString(item.supplierQuoteSupplierName),
-      supplierQuoteUnitPrice: toNullableNumber(item.supplierQuoteUnitPrice),
-      supplierSaleId: toNullableString(item.supplierSaleId),
-      supplierSaleItemId: toNullableString(item.supplierSaleItemId),
-      supplierSaleSupplierName: toNullableString(item.supplierSaleSupplierName),
+      productMolPercentage: normalizeNullableNumber(item.productMolPercentage),
+      // Normalized above so the stored values match the productId-vs-supplier-quote gate.
+      supplierQuoteId,
+      supplierQuoteItemId,
+      supplierQuoteSupplierName: normalizeNullableString(item.supplierQuoteSupplierName),
+      supplierQuoteUnitPrice: normalizeNullableNumber(item.supplierQuoteUnitPrice),
+      supplierSaleId: normalizeNullableString(item.supplierSaleId),
+      supplierSaleItemId: normalizeNullableString(item.supplierSaleItemId),
+      supplierSaleSupplierName: normalizeNullableString(item.supplierSaleSupplierName),
       unitType,
-      note: toNullableString(item.note),
+      note: normalizeNullableString(item.note),
       discount: itemDiscountResult.value || 0,
       durationMonths,
       durationUnit,
     });
   }
   return normalized;
+};
+
+// A product-less line (`productId === null`) has the supplier-quote reference as its only anchor,
+// and `sale_items.supplier_quote_*` has no FK. Resolve each referenced item against *accepted*
+// supplier quotes — the same authoritative source the client-quotes route trusts — and stamp the
+// supplier fields from the snapshot. Without this, a direct POST/PUT could persist a line with
+// bogus or non-accepted refs (the supplier-order auto-create silently skips them) that the UI
+// still locks as supplier-backed. Returns null after replying 400 if a reference can't be resolved.
+const resolveSupplierQuoteRefs = async (
+  items: NormalizedOrderItem[],
+  reply: FastifyReply,
+): Promise<NormalizedOrderItem[] | null> => {
+  const productlessItemIds = items.flatMap((item) =>
+    item.productId === null && item.supplierQuoteItemId ? [item.supplierQuoteItemId] : [],
+  );
+  if (productlessItemIds.length === 0) return items;
+
+  const snapshots = await supplierQuotesRepo.getQuoteItemSnapshots(productlessItemIds);
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (item.productId !== null || !item.supplierQuoteItemId) continue;
+    const snapshot = snapshots.get(item.supplierQuoteItemId);
+    if (!snapshot) {
+      badRequest(
+        reply,
+        `items[${i}].supplierQuoteItemId "${item.supplierQuoteItemId}" is invalid or its supplier quote is not accepted`,
+      );
+      return null;
+    }
+    // Trust the snapshot, not the client: stamp the authoritative quote id, supplier name and unit
+    // price so the persisted line is tied to the real accepted quote and the supplier-order
+    // auto-create keys off a valid supplierQuoteId. A catalog-backed supplier-quote item also
+    // carries a real productId — adopt it (mirroring the client-quotes resolver) so the sale isn't
+    // stored product-less and stays visible to product quick-links and catalog usage/revenue reports.
+    items[i] = {
+      ...item,
+      productId: snapshot.productId ?? item.productId,
+      supplierQuoteId: snapshot.supplierQuoteId,
+      supplierQuoteSupplierName: snapshot.supplierName,
+      supplierQuoteUnitPrice: snapshot.netCost,
+    };
+  }
+  return items;
 };
 
 const buildItemsForInsert = (
@@ -434,7 +493,44 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       return `Snapshot client "${snapshot.order.clientId}" no longer exists`;
     }
     const missingProductId = productIds.find((id) => !products.has(id));
-    return missingProductId ? `Snapshot product "${missingProductId}" no longer exists` : null;
+    if (missingProductId) {
+      return `Snapshot product "${missingProductId}" no longer exists`;
+    }
+    // A product-less snapshot item (no catalog product) must resolve to an *accepted* supplier-quote
+    // item — the same invariant POST/PUT enforce. Two failure modes are rejected before any write:
+    //  - orphaned: missing either supplier-quote id, so it could never be re-saved through the
+    //    POST/PUT presence gate and is invisible to product-based reporting;
+    //  - stale: the referenced item was deleted or its quote is no longer accepted, so restoring it
+    //    persists a dead reference that the next draft edit (which re-runs `resolveSupplierQuoteRefs`)
+    //    rejects, stranding the order in an un-saveable state.
+    const productlessItems = snapshot.items.filter(
+      (item) => !normalizeNullableString(item.productId),
+    );
+    const orphanedItem = productlessItems.find(
+      (item) =>
+        !(
+          normalizeNullableString(item.supplierQuoteId) &&
+          normalizeNullableString(item.supplierQuoteItemId)
+        ),
+    );
+    if (orphanedItem) {
+      return `Snapshot item "${orphanedItem.productName}" has no catalog product and no supplier-quote reference`;
+    }
+    const supplierQuoteItemIds = productlessItems
+      .map((item) => normalizeNullableString(item.supplierQuoteItemId))
+      .filter((id): id is string => id !== null);
+    if (supplierQuoteItemIds.length > 0) {
+      const quoteItemSnapshots =
+        await supplierQuotesRepo.getQuoteItemSnapshots(supplierQuoteItemIds);
+      const staleItem = productlessItems.find((item) => {
+        const itemId = normalizeNullableString(item.supplierQuoteItemId);
+        return itemId !== null && !quoteItemSnapshots.has(itemId);
+      });
+      if (staleItem) {
+        return `Snapshot item "${staleItem.productName}" references a supplier quote that no longer exists or is not accepted`;
+      }
+    }
+    return null;
   };
 
   fastify.get(
@@ -531,7 +627,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Items must be a non-empty array');
       }
 
-      const normalizedItems = normalizeIncomingItems(items, reply);
+      const parsedItems = normalizeIncomingItems(items, reply);
+      if (!parsedItems) return;
+      const normalizedItems = await resolveSupplierQuoteRefs(parsedItems, reply);
       if (!normalizedItems) return;
 
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
@@ -925,7 +1023,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
         }
-        normalizedItems = normalizeIncomingItems(items, reply);
+        const parsedItems = normalizeIncomingItems(items, reply);
+        if (!parsedItems) return;
+        normalizedItems = await resolveSupplierQuoteRefs(parsedItems, reply);
         if (!normalizedItems) return;
       }
 
@@ -1474,28 +1574,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const snapshotItems: clientsOrdersRepo.NewClientOrderItem[] = [];
-      for (const { orderId: _o, id: _i, ...rest } of version.snapshot.items) {
-        if (!rest.productId) {
-          // sale_items.product_id is NOT NULL with FK; restore would otherwise fail mid-tx.
-          return replyError(request, reply, {
-            statusCode: 409,
-            message: `Snapshot item "${rest.productName}" is missing a product reference`,
-            action: 'client_order.restore.conflict',
-            entityType: 'client_order',
-            entityId: idResult.value,
-            details: {
-              secondaryLabel: 'snapshot_item_missing_product',
-              targetLabel: rest.productName,
-            },
-          });
-        }
-        snapshotItems.push({
+      // `sale_items.product_id` is nullable (issue #783), so a product-less supplier line in the
+      // snapshot restores as-is. `findMissingSnapshotReference` above already rejected stale
+      // productIds and orphaned product-less items (no product AND no supplier-quote reference).
+      const snapshotItems: clientsOrdersRepo.NewClientOrderItem[] = version.snapshot.items.map(
+        ({ orderId: _o, id: _i, ...rest }) => ({
           ...rest,
           id: generatePrefixedId(ITEM_ID_PREFIXES.saleItem),
-          productId: rest.productId,
-        });
-      }
+          // Empty-string productIds slip through some snapshots; the DB column needs NULL.
+          productId: rest.productId || null,
+        }),
+      );
 
       let restored: {
         order: clientsOrdersRepo.ClientOrder | null;

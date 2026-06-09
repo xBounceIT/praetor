@@ -293,12 +293,13 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
   const openModal = async (
     order: ClientsOrder,
     onUpdate = mock((_id: string, _updates: Partial<ClientsOrder>) => Promise.resolve()),
+    productList: Product[] = [],
   ) => {
     render(
       <ClientsOrdersView
         orders={[order]}
         clients={clients}
-        products={[]}
+        products={productList}
         currency="EUR"
         onUpdateClientsOrder={onUpdate}
         onDeleteClientsOrder={mock(() => Promise.resolve())}
@@ -362,6 +363,16 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
     expect(payload.items).toHaveLength(1);
   });
 
+  const consultingProduct: Product = {
+    id: 'product-1',
+    name: 'Consulting',
+    productCode: 'C-1',
+    costo: 1200,
+    molPercentage: 40,
+    costUnit: 'unit',
+    type: 'supply',
+  };
+
   test('product selector and remove button are locked for a supplier-order-backed line', async () => {
     const supplierBackedDraft: ClientsOrder = {
       ...draftLinkedOrder,
@@ -376,17 +387,45 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
         },
       ],
     };
-    const { dialog } = await openModal(supplierBackedDraft);
+    // product-1 is in the catalog, so the selector renders the selected product but stays locked.
+    const { dialog } = await openModal(supplierBackedDraft, undefined, [consultingProduct]);
 
     // The product is fixed by the source supplier quote and removing the line would orphan the
     // auto-created supplier order — both controls are locked (so the user can't reach an
     // edit path the backend always rejects with 409) even though the draft is editable.
-    expect(
-      isDisabled(within(dialog).getByRole('button', { name: 'sales:clientQuotes.selectProduct' })),
-    ).toBe(true);
+    expect(isDisabled(within(dialog).getByRole('button', { name: /Consulting/ }))).toBe(true);
     expect(isDisabled(within(dialog).getByRole('button', { name: 'common:buttons.delete' }))).toBe(
       true,
     );
+  });
+
+  test('a product-less supplier line shows its name read-only, not an empty selector (issue #783)', async () => {
+    const productLessDraft: ClientsOrder = {
+      ...draftLinkedOrder,
+      id: 'dm_so_05',
+      items: [
+        {
+          ...orders[0].items[0],
+          id: 'item-free',
+          // A free-form supplier-quote line with no catalog product (sale_items.product_id null).
+          productId: '',
+          productName: 'Custom integration from SupplierX',
+          supplierQuoteItemId: 'sqi-2',
+          supplierSaleId: 'ss-2',
+          supplierSaleItemId: 'ssi-2',
+        },
+      ],
+    };
+    const { dialog } = await openModal(productLessDraft);
+
+    // Before #783 made product_id nullable orders never had such a line; now the editor must show
+    // the supplier-sourced name read-only instead of an empty (and misleading) product dropdown.
+    expect(
+      within(dialog).getByDisplayValue('Custom integration from SupplierX'),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('button', { name: 'sales:clientQuotes.selectProduct' }),
+    ).toBeNull();
   });
 
   test('product selector and remove button stay enabled for a non-supplier draft line', async () => {

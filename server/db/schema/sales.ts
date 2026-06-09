@@ -60,6 +60,10 @@ export const sales = pgTable(
 );
 
 // `supplier_*` columns track items copied from supplier quotes / linked to supplier sales.
+// `product_id` is nullable: a line sourced from a supplier-quote item (tracked via
+// `supplier_quote_item_id`) need not point at a catalog product, mirroring quote_items /
+// customer_offer_items / invoice_items. Without this, converting an offer that carries such a
+// free-form supplier line into an order failed (issue #783).
 export const saleItems = pgTable(
   'sale_items',
   {
@@ -67,9 +71,9 @@ export const saleItems = pgTable(
     saleId: varchar('sale_id', { length: 100 })
       .notNull()
       .references(() => sales.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
-    productId: varchar('product_id', { length: 50 })
-      .notNull()
-      .references(() => products.id, { onDelete: 'restrict' }),
+    productId: varchar('product_id', { length: 50 }).references(() => products.id, {
+      onDelete: 'restrict',
+    }),
     productName: varchar('product_name', { length: 255 }).notNull(),
     quantity: numeric('quantity', { precision: 10, scale: 2 }).notNull().default('1'),
     unitPrice: numeric('unit_price', { precision: 15, scale: 2 }).notNull().default('0'),

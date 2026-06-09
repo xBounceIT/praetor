@@ -638,7 +638,9 @@ export interface OfferVersion extends OfferVersionRow {
 export interface ClientsOrderItem {
   id: string;
   orderId: string;
-  productId: string;
+  // Null for a product-less supplier-quote line (issue #783); the API response schema returns
+  // `["string","null"]`, so callers must handle the null case.
+  productId: string | null;
   productName: string;
   quantity: number;
   unitPrice: number;

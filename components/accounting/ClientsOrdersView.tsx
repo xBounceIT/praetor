@@ -42,6 +42,7 @@ import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
 import { buildProductQuickViewHref } from '../../utils/quickViewLinks';
 import { toastError } from '../../utils/toast';
+import ProductSelectOrFallback from '../sales/ProductSelectOrFallback';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import DurationUnitSelector from '../shared/DurationUnitSelector';
@@ -527,6 +528,20 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   // All product ids (incl. archived) so the quick-view shortcut on a line that
   // references a now-disabled product still deep-links to that record.
   const allProductIds = useMemo(() => new Set(products.map((p) => p.id)), [products]);
+  const activeProductIds = useMemo(
+    () => new Set(activeProducts.map((p) => p.id)),
+    [activeProducts],
+  );
+  // Built once per render and shared by every line row, instead of re-mapping per item.
+  const productOptions = useMemo(
+    () => activeProducts.map((p) => ({ id: p.id, name: p.name })),
+    [activeProducts],
+  );
+  // A supplier-quote-sourced line can carry no catalog product (issue #783) or one that's been
+  // archived; show its name read-only instead of an empty product dropdown (mirrors the
+  // quote/offer/invoice editors).
+  const isLinkedProductMissing = (item: ClientsOrderItem) =>
+    Boolean(item.supplierQuoteItemId && (!item.productId || !activeProductIds.has(item.productId)));
 
   // A draft order is always editable — including one created from an offer. The order is the
   // live downstream document, so an upstream offer link must not lock it (mirrors the offers
@@ -1130,21 +1145,23 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                     {t('sales:clientQuotes.productsServices')}
                                   </FieldLabel>
                                   <div className="relative flex items-center gap-1">
-                                    <SelectControl
-                                      options={activeProducts.map((p) => ({
-                                        id: p.id,
-                                        name: p.name,
-                                      }))}
-                                      value={item.productId}
-                                      onChange={(val) =>
-                                        updateProductRow(index, 'productId', val as string)
-                                      }
+                                    <ProductSelectOrFallback
+                                      item={item}
+                                      index={index}
+                                      options={productOptions}
+                                      // A product-less supplier line (issue #783) shows its name
+                                      // read-only instead of an empty dropdown.
+                                      isProductMissing={isLinkedProductMissing(item)}
+                                      isReadOnly={isReadOnly}
+                                      ariaLabel={t('sales:clientQuotes.selectProduct')}
                                       placeholder={t('sales:clientQuotes.selectProduct')}
-                                      searchable={true}
                                       // Supplier-quote-backed lines have a fixed product (the backend
                                       // rejects product/quantity changes on supplier-order-backed
-                                      // rows), so lock the selector just like the quantity control.
-                                      disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
+                                      // rows), so the component locks the selector when
+                                      // supplierQuoteItemId is set, just like the quantity control.
+                                      onProductChange={(idx, productId) =>
+                                        updateProductRow(idx, 'productId', productId)
+                                      }
                                       className="min-w-0 flex-1"
                                       buttonClassName="h-9"
                                     />

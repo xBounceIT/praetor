@@ -382,12 +382,13 @@ export const restoreSnapshotOrder = async (
   return rows[0] ? mapOrder(rows[0]) : null;
 };
 
-// `productId` is required because `sale_items.product_id` is NOT NULL with an FK to
-// `products(id)`. Substituting a sentinel like '' would just trade a NOT NULL violation for an
-// FK violation, so callers must resolve a real product id before calling.
+// `productId` is nullable: a line sourced from a supplier-quote item carries
+// `supplierQuoteItemId` instead of a catalog product (issue #783), matching `sale_items`'
+// nullable `product_id`. Callers must still pass a real product id (never '') for product lines,
+// since the FK to `products(id)` rejects an unknown id.
 export type NewClientOrderItem = {
   id: string;
-  productId: string;
+  productId: string | null;
   productName: string;
   quantity: number;
   unitPrice: number;
