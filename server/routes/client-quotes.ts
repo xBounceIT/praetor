@@ -10,7 +10,7 @@ import { standardErrorResponses, standardRateLimitedErrorResponses } from '../sc
 import { logAudit } from '../utils/audit.ts';
 import { isPastLocalDate } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
-import type { DurationUnit } from '../utils/duration-unit.ts';
+import { type DurationUnit, effectiveDurationMonths } from '../utils/duration-unit.ts';
 import { normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -133,6 +133,7 @@ const calculateQuoteTotals = (
     unitPrice: number;
     discount?: number;
     durationMonths?: number;
+    durationUnit?: string;
   }>,
   globalDiscount: number,
   discountType: 'percentage' | 'currency' = 'percentage',
@@ -156,9 +157,10 @@ const calculateQuoteTotals = (
         subtotal: Number.NaN,
       };
     }
-    // Duration is a multiplier on the line revenue (issue #757); guard against a
-    // non-positive value falling through to zero out the gate.
-    const lineSubtotal = quantity * unitPrice * (durationMonths > 0 ? durationMonths : 1);
+    // Duration multiplies the line revenue (issue #757), except 'na' lines which never multiply
+    // (issue #775); a non-positive value falls back to 1 so it can't zero out the gate.
+    const effectiveMonths = effectiveDurationMonths(item.durationUnit, durationMonths);
+    const lineSubtotal = quantity * unitPrice * effectiveMonths;
     const lineDiscount = lineSubtotal * (itemDiscount / 100);
     const lineNet = lineSubtotal - lineDiscount;
     subtotal += lineNet;

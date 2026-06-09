@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   DURATION_UNITS,
   type DurationUnit,
+  effectiveDurationMonths,
   normalizeDurationUnit,
 } from '../../utils/duration-unit.ts';
 
@@ -39,5 +40,24 @@ describe('normalizeDurationUnit', () => {
   test('return type is assignable to DurationUnit', () => {
     const value: DurationUnit = normalizeDurationUnit('years');
     expect(value).toBe('years');
+  });
+});
+
+describe('effectiveDurationMonths', () => {
+  test('returns the stored months for months/years units', () => {
+    expect(effectiveDurationMonths('months', 6)).toBe(6);
+    expect(effectiveDurationMonths('years', 24)).toBe(24);
+  });
+
+  test("returns 1 for an 'na' unit regardless of the stored months (issue #775)", () => {
+    expect(effectiveDurationMonths('na', 6)).toBe(1);
+    expect(effectiveDurationMonths('na', 24)).toBe(1);
+  });
+
+  test('falls back to 1 for absent, zero, negative, or non-finite months', () => {
+    expect(effectiveDurationMonths('months', undefined)).toBe(1);
+    expect(effectiveDurationMonths('months', 0)).toBe(1);
+    expect(effectiveDurationMonths('months', -3)).toBe(1);
+    expect(effectiveDurationMonths('months', Number.NaN)).toBe(1);
   });
 });

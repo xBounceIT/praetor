@@ -8,3 +8,14 @@ export type DurationUnit = (typeof DURATION_UNITS)[number];
 
 export const normalizeDurationUnit = (value: unknown): DurationUnit =>
   value === 'years' ? 'years' : value === 'na' ? 'na' : 'months';
+
+// Canonical whole months a line multiplies by (issue #757). 'na' (N/A) marks a line where duration
+// does not apply, so it never multiplies regardless of the stored months (issue #775); absent or
+// non-positive values fall back to a single month. The single backend source of truth for the 'na'
+// rule — used by both `computeInvoiceTotals` and the quote-total gate so a new multiplier can't
+// silently forget it. Mirrors the frontend `getEffectiveDurationMonths` in `utils/numbers.ts`.
+export const effectiveDurationMonths = (durationUnit: unknown, durationMonths: unknown): number => {
+  if (normalizeDurationUnit(durationUnit) === 'na') return 1;
+  const months = Number(durationMonths ?? 1);
+  return Number.isFinite(months) && months > 0 ? months : 1;
+};

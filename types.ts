@@ -515,7 +515,7 @@ export interface QuoteItem {
   note?: string;
   unitType?: SupplierUnitType;
   durationMonths?: number; // months the service runs; multiplies cost & revenue (issue #757)
-  durationUnit?: DurationUnit; // display unit for the duration value: 'months' (default) or 'years'
+  durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
 }
 
 export interface Quote {
@@ -584,7 +584,7 @@ export interface ClientOfferItem {
   note?: string;
   unitType?: SupplierUnitType;
   durationMonths?: number; // months the service runs; multiplies cost & revenue (issue #757)
-  durationUnit?: DurationUnit; // display unit for the duration value: 'months' (default) or 'years'
+  durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
 }
 
 export interface ClientOffer {
@@ -658,7 +658,7 @@ export interface ClientsOrderItem {
   note?: string;
   unitType?: SupplierUnitType;
   durationMonths?: number; // months the service runs; multiplies cost & revenue (issue #757)
-  durationUnit?: DurationUnit; // display unit for the duration value: 'months' (default) or 'years'
+  durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
 }
 
 export interface ClientsOrder {
@@ -855,7 +855,7 @@ export interface InvoiceItem {
   // Per-item Italian VAT (IVA) rate in percent. 0 for exempt or pre-tax-feature data.
   taxRate?: number;
   durationMonths?: number; // months the service runs; multiplies the taxable amount (issue #757)
-  durationUnit?: DurationUnit; // display unit for the duration value: 'months' (default) or 'years'
+  durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
 }
 
 export interface Invoice {

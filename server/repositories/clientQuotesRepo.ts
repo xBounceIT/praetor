@@ -322,7 +322,13 @@ export const findItemTotals = async (
   quoteId: string,
   exec: DbExecutor = db,
 ): Promise<
-  Array<{ quantity: number; unitPrice: number; discount: number; durationMonths: number }>
+  Array<{
+    quantity: number;
+    unitPrice: number;
+    discount: number;
+    durationMonths: number;
+    durationUnit: DurationUnit;
+  }>
 > => {
   const rows = await exec
     .select({
@@ -330,6 +336,7 @@ export const findItemTotals = async (
       unitPrice: quoteItems.unitPrice,
       discount: quoteItems.discount,
       durationMonths: quoteItems.durationMonths,
+      durationUnit: quoteItems.durationUnit,
     })
     .from(quoteItems)
     .where(eq(quoteItems.quoteId, quoteId));
@@ -338,6 +345,7 @@ export const findItemTotals = async (
     unitPrice: parseDbNumber(row.unitPrice, 0),
     discount: parseDbNumber(row.discount, 0),
     durationMonths: row.durationMonths ?? 1,
+    durationUnit: normalizeDurationUnit(row.durationUnit),
   }));
 };
 
