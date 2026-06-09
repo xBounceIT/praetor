@@ -31052,8 +31052,7 @@
                       "required": [
                         "productName",
                         "quantity",
-                        "unitPrice",
-                        "unitType"
+                        "unitPrice"
                       ]
                     }
                   },
@@ -31545,8 +31544,7 @@
                       "required": [
                         "productName",
                         "quantity",
-                        "unitPrice",
-                        "unitType"
+                        "unitPrice"
                       ]
                     }
                   },
