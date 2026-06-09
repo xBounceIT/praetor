@@ -364,7 +364,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         id: 'id',
         accessorFn: (row: SupplierSaleOrder) => row.id,
         cell: ({ row }: { row: SupplierSaleOrder }) => (
-          <span className="font-bold text-zinc-700">{row.id}</span>
+          <span className="font-bold text-foreground">{row.id}</span>
         ),
       },
       {
@@ -375,7 +375,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
           const isMuted = row.status === 'sent';
 
           return (
-            <span className={`font-bold ${isMuted ? 'text-zinc-400' : 'text-zinc-800'}`}>
+            <span className={`font-bold ${isMuted ? 'text-muted-foreground' : 'text-foreground'}`}>
               {row.supplierName}
             </span>
           );
@@ -389,7 +389,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         cell: ({ row }: { row: SupplierSaleOrder }) => {
           if (!row.linkedQuoteId) {
             return (
-              <span className="text-sm italic text-zinc-400">
+              <span className="text-sm italic text-muted-foreground">
                 {t('accounting:supplierOrders.noQuoteLink')}
               </span>
             );
@@ -400,7 +400,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
           return (
             <span
               className={`font-mono text-xs font-semibold uppercase tracking-wider ${
-                isMuted ? 'text-zinc-400' : 'text-zinc-600'
+                isMuted ? 'text-muted-foreground' : 'text-foreground'
               }`}
             >
               {row.linkedQuoteId}
@@ -420,7 +420,9 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
           const isMuted = row.status === 'sent';
 
           return (
-            <span className={`text-sm font-bold ${isMuted ? 'text-zinc-400' : 'text-zinc-700'}`}>
+            <span
+              className={`text-sm font-bold ${isMuted ? 'text-muted-foreground' : 'text-foreground'}`}
+            >
               {total.toFixed(2)} {currency}
             </span>
           );
@@ -438,7 +440,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 
           return (
             <span
-              className={`text-sm font-semibold ${isMuted ? 'text-zinc-400' : 'text-zinc-600'}`}
+              className={`text-sm font-semibold ${isMuted ? 'text-muted-foreground' : 'text-foreground'}`}
             >
               {getPaymentTermsLabel(row.paymentTerms, t)}
             </span>
@@ -487,7 +489,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                           onViewQuote(linkedQuoteId);
                         }}
                         aria-label={t('accounting:supplierOrders.viewQuote')}
-                        className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
+                        className="rounded-lg p-2 text-muted-foreground transition-all hover:bg-muted hover:text-praetor"
                       >
                         <i className="fa-solid fa-link"></i>
                       </button>
@@ -510,7 +512,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                           ? t('accounting:supplierOrders.editOrder')
                           : t('accounting:supplierOrders.viewOrder')
                       }
-                      className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
+                      className="rounded-lg p-2 text-muted-foreground transition-all hover:bg-muted hover:text-praetor"
                     >
                       <i className={`fa-solid ${isDraft ? 'fa-pen-to-square' : 'fa-eye'}`}></i>
                     </button>
@@ -555,7 +557,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                           void onCreateInvoice(row);
                         }}
                         aria-label={t('accounting:supplierOrders.createInvoice')}
-                        className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
+                        className="rounded-lg p-2 text-muted-foreground transition-all hover:bg-muted hover:text-praetor"
                       >
                         <i className="fa-solid fa-file-invoice-dollar"></i>
                       </button>
@@ -1052,10 +1054,12 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
       <div className="space-y-4">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h2 className="text-2xl font-semibold text-zinc-800">
+            <h2 className="text-2xl font-semibold text-foreground">
               {t('accounting:supplierOrders.title')}
             </h2>
-            <p className="text-sm text-zinc-500">{t('accounting:supplierOrders.subtitle')}</p>
+            <p className="text-sm text-muted-foreground">
+              {t('accounting:supplierOrders.subtitle')}
+            </p>
           </div>
         </div>
       </div>
@@ -1067,7 +1071,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         defaultRowsPerPage={10}
         containerClassName="overflow-visible"
         rowClassName={(row: SupplierSaleOrder) =>
-          row.status === 'sent' ? 'bg-zinc-50 text-zinc-400' : 'hover:bg-zinc-50/50'
+          row.status === 'sent' ? 'bg-muted text-muted-foreground' : 'hover:bg-muted/50'
         }
         onRowClick={(row: SupplierSaleOrder) => openEditModal(row)}
       />

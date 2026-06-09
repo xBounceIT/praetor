@@ -273,7 +273,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         id: 'id',
         accessorFn: (row: SupplierInvoice) => row.id,
         cell: ({ row }: { row: SupplierInvoice }) => (
-          <span className="font-bold text-zinc-700">{row.id}</span>
+          <span className="font-bold text-foreground">{row.id}</span>
         ),
       },
       {
@@ -284,7 +284,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
           const isMuted = row.status === 'paid' || row.status === 'cancelled';
 
           return (
-            <span className={`font-bold ${isMuted ? 'text-zinc-400' : 'text-zinc-800'}`}>
+            <span className={`font-bold ${isMuted ? 'text-muted-foreground' : 'text-foreground'}`}>
               {row.supplierName}
             </span>
           );
@@ -295,7 +295,9 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         id: 'issueDate',
         accessorFn: (row: SupplierInvoice) => formatDateOnlyForLocale(row.issueDate),
         cell: ({ row }: { row: SupplierInvoice }) => (
-          <span className="text-sm text-zinc-600">{formatDateOnlyForLocale(row.issueDate)}</span>
+          <span className="text-sm text-muted-foreground">
+            {formatDateOnlyForLocale(row.issueDate)}
+          </span>
         ),
       },
       {
@@ -303,7 +305,9 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         id: 'dueDate',
         accessorFn: (row: SupplierInvoice) => formatDateOnlyForLocale(row.dueDate),
         cell: ({ row }: { row: SupplierInvoice }) => (
-          <span className="text-sm text-zinc-600">{formatDateOnlyForLocale(row.dueDate)}</span>
+          <span className="text-sm text-muted-foreground">
+            {formatDateOnlyForLocale(row.dueDate)}
+          </span>
         ),
       },
       {
@@ -311,7 +315,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         id: 'invoiceTotal',
         accessorFn: (row: SupplierInvoice) => Number(row.total),
         cell: ({ row }: { row: SupplierInvoice }) => (
-          <span className="font-bold text-zinc-700">
+          <span className="font-bold text-foreground">
             {Number(row.total).toFixed(2)} {currency}
           </span>
         ),
@@ -374,7 +378,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
                       openEditModal(row);
                     }}
                     aria-label={t('common:buttons.edit')}
-                    className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
+                    className="rounded-lg p-2 text-muted-foreground transition-all hover:bg-muted hover:text-praetor"
                   >
                     <i className="fa-solid fa-pen-to-square"></i>
                   </button>
@@ -848,10 +852,12 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
       <div className="space-y-4">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h2 className="text-2xl font-semibold text-zinc-800">
+            <h2 className="text-2xl font-semibold text-foreground">
               {t('accounting:supplierInvoices.title')}
             </h2>
-            <p className="text-sm text-zinc-500">{t('accounting:supplierInvoices.subtitle')}</p>
+            <p className="text-sm text-muted-foreground">
+              {t('accounting:supplierInvoices.subtitle')}
+            </p>
           </div>
         </div>
       </div>
@@ -864,8 +870,8 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
         containerClassName="overflow-visible"
         rowClassName={(row: SupplierInvoice) =>
           row.status === 'paid' || row.status === 'cancelled'
-            ? 'bg-zinc-50 text-zinc-400'
-            : 'hover:bg-zinc-50/50'
+            ? 'bg-muted text-muted-foreground'
+            : 'hover:bg-muted/50'
         }
         onRowClick={(row: SupplierInvoice) => openEditModal(row)}
       />
