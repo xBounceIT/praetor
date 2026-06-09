@@ -1297,16 +1297,16 @@ const UserManagement: React.FC<UserManagementProps> = ({
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
       {/* Delete Confirmation Modal */}
       <Modal isOpen={isDeleteConfirmOpen} onClose={cancelDelete}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+        <div className="bg-card rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 text-center space-y-4">
-            <div className="size-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
-              <i className="fa-solid fa-triangle-exclamation text-red-600 text-xl"></i>
+            <div className="size-12 bg-red-500/10 rounded-full flex items-center justify-center mx-auto">
+              <i className="fa-solid fa-triangle-exclamation text-red-600 dark:text-red-400 text-xl"></i>
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-zinc-800">
+              <h3 className="text-lg font-semibold text-foreground">
                 {t('hr:workforce.deleteUser')}
               </h3>
-              <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
+              <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                 {t('hr:workforce.deleteConfirmMessage', { name: userToDelete?.name })}
               </p>
             </div>
@@ -1314,7 +1314,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
               <button
                 type="button"
                 onClick={cancelDelete}
-                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
+                className="flex-1 py-3 text-sm font-bold text-muted-foreground hover:bg-muted rounded-xl transition-colors"
               >
                 {t('common:buttons.cancel')}
               </button>
@@ -1460,18 +1460,20 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
       {/* Edit User Modal */}
       <Modal isOpen={!!editingUser} onClose={closeEditModal}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
+        <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
           <div className="p-6 space-y-4">
             <div className="flex items-center gap-3 mb-2">
-              <div className="size-10 bg-zinc-100 rounded-full flex items-center justify-center">
+              <div className="size-10 bg-muted rounded-full flex items-center justify-center">
                 <i className="fa-solid fa-user-pen text-praetor"></i>
               </div>
-              <h3 className="text-lg font-semibold text-zinc-800">{t('hr:workforce.editUser')}</h3>
+              <h3 className="text-lg font-semibold text-foreground">
+                {t('hr:workforce.editUser')}
+              </h3>
             </div>
 
             <div className="space-y-4">
               {editIdentityReadOnly && editingUser && (
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-muted-foreground">
                   {t('hr:workforce.identityManagedByProvider', {
                     provider: getAuthMethodLabel(editingUser),
                   })}
@@ -1480,7 +1482,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
                     {t('hr:workforce.name')} {!editIdentityReadOnly && <RequiredMark />}
                   </label>
                   <Input
@@ -1502,7 +1504,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
                     {t('hr:workforce.surname')}
                   </label>
                   <Input
@@ -1526,7 +1528,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
                   {t('common:labels.email')}
                 </label>
                 <Input
@@ -1554,10 +1556,10 @@ const UserManagement: React.FC<UserManagementProps> = ({
                   {canEditAssignedRoles ? (
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                        <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
                           {t('hr:workforce.assignedRoles')}
                         </label>
-                        <div className="max-h-36 overflow-y-auto bg-zinc-50 border border-zinc-200 rounded-xl p-2 space-y-1">
+                        <div className="max-h-36 overflow-y-auto bg-muted/50 border border-border rounded-xl p-2 space-y-1">
                           {roles
                             .slice()
                             .sort((a, b) => a.name.localeCompare(b.name))
@@ -1568,7 +1570,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                 <label
                                   key={r.id}
                                   className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
-                                    checked ? 'bg-white' : 'hover:bg-white/60'
+                                    checked ? 'bg-background shadow-sm' : 'hover:bg-accent'
                                   }`}
                                 >
                                   <div className="flex items-center gap-3 min-w-0">
@@ -1580,12 +1582,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                         dispatch({ type: 'toggleEditAssignedRole', roleId: r.id });
                                       }}
                                     />
-                                    <span className="text-sm font-semibold text-zinc-700 truncate">
+                                    <span className="text-sm font-semibold text-foreground truncate">
                                       {r.name}
                                     </span>
                                   </div>
                                   {isPrimary && (
-                                    <span className="text-[10px] font-black uppercase tracking-wider bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded">
+                                    <span className="text-[10px] font-black uppercase tracking-wider bg-muted text-muted-foreground px-2 py-0.5 rounded">
                                       {t('hr:workforce.primary')}
                                     </span>
                                   )}
@@ -1593,7 +1595,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                               );
                             })}
                         </div>
-                        <p className="text-[10px] text-zinc-400 mt-1">
+                        <p className="text-[10px] text-muted-foreground mt-1">
                           {t('hr:workforce.primaryRoleHelp')}
                         </p>
                       </div>
@@ -1613,7 +1615,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                       />
 
                       {isLoadingEditRoles && (
-                        <p className="text-[10px] text-zinc-400 font-bold">
+                        <p className="text-[10px] text-muted-foreground font-bold">
                           {t('hr:workforce.loadingRoles')}
                         </p>
                       )}
@@ -1634,7 +1636,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         disabled={isEditingSelf}
                       />
                       {isEditingSelf && (
-                        <p className="text-[10px] text-zinc-400 mt-1">
+                        <p className="text-[10px] text-muted-foreground mt-1">
                           {t('hr:workforce.cannotChangeOwnRole')}
                         </p>
                       )}
@@ -1645,7 +1647,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
               {canViewCosts && editingUser && canEditCostFor(editingUser.id) && (
                 <div>
-                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
                     {t('hr:workforce.costPerHour')}
                   </label>
                   <div className="flex items-center border border-input bg-transparent dark:bg-input/30 rounded-lg focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
@@ -1665,9 +1667,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
               )}
 
               {editingUser?.id !== currentUserId && (
-                <div className="flex items-center justify-between p-3 bg-zinc-50 rounded-xl border border-zinc-100">
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-xl border border-border">
                   <div>
-                    <p className="text-sm font-bold text-zinc-700">{t('hr:workforce.disabled')}</p>
+                    <p className="text-sm font-bold text-foreground">
+                      {t('hr:workforce.disabled')}
+                    </p>
                   </div>
                   <Toggle
                     checked={editIsDisabled}
@@ -1683,7 +1687,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
               <button
                 type="button"
                 onClick={closeEditModal}
-                className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
+                className="flex-1 py-3 text-sm font-bold text-muted-foreground hover:bg-muted rounded-xl transition-colors"
               >
                 {t('common:buttons.cancel')}
               </button>
@@ -1932,16 +1936,16 @@ const UserManagement: React.FC<UserManagementProps> = ({
         zIndex={50}
         backdropClass="bg-zinc-900/50 backdrop-blur-sm"
       >
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-          <div className="px-6 py-4 border-b border-zinc-200 flex items-center justify-between bg-zinc-50">
-            <h3 className="font-semibold text-lg text-zinc-800">
+        <div className="bg-card rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/50">
+            <h3 className="font-semibold text-lg text-foreground">
               {t('hr:workforce.manageAccess', { name: managingUser?.name })}
             </h3>
             <button
               type="button"
               onClick={closeAssignments}
               aria-label={t('common:buttons.close')}
-              className="text-zinc-400 hover:text-zinc-600 transition-colors"
+              className="text-muted-foreground hover:text-foreground transition-colors"
             >
               <i className="fa-solid fa-xmark text-xl"></i>
             </button>
@@ -1963,7 +1967,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     }
                     placeholder={t('hr:workforce.filterByClient')}
                     searchable={true}
-                    buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-semibold text-zinc-700 shadow-sm"
+                    buttonClassName="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm font-semibold text-foreground shadow-sm"
                   />
                   <SelectControl
                     options={projectFilterOptions}
@@ -1973,7 +1977,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     }
                     placeholder={t('hr:workforce.filterByProject')}
                     searchable={true}
-                    buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-semibold text-zinc-700 shadow-sm"
+                    buttonClassName="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm font-semibold text-foreground shadow-sm"
                     disabled={projectFilterOptions.length === 1}
                   />
                 </div>
@@ -1983,12 +1987,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 >
                   {/* Clients Column */}
                   <div className="space-y-3">
-                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-zinc-100 mb-2">
+                    <div className="sticky top-0 bg-card z-10 pb-2 border-b border-border mb-2">
                       <div className="flex items-center justify-between py-2">
-                        <h4 className="font-semibold text-zinc-700 text-sm uppercase tracking-wider">
+                        <h4 className="font-semibold text-foreground text-sm uppercase tracking-wider">
                           {t('hr:workforce.clients')}
                         </h4>
-                        <span className="text-xs font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full">
+                        <span className="text-xs font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
                           {assignments.clientIds.length}
                         </span>
                       </div>
@@ -2000,7 +2004,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         onChange={(e) =>
                           dispatch({ type: 'set', values: { clientSearch: e.target.value } })
                         }
-                        className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                        className="w-full px-3 py-1.5 text-sm border border-border bg-background text-foreground rounded-lg focus:ring-2 focus:ring-praetor outline-none placeholder:text-muted-foreground"
                       />
                     </div>
                     <div className="space-y-2">
@@ -2009,8 +2013,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                           key={client.id}
                           className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                             assignments.clientIds.includes(client.id)
-                              ? 'bg-zinc-50 border-zinc-300 shadow-sm'
-                              : 'bg-white border-zinc-200 hover:border-zinc-300'
+                              ? 'bg-accent border-border shadow-sm'
+                              : 'bg-card border-border hover:border-input'
                           }`}
                         >
                           <div className="relative flex items-center justify-center shrink-0">
@@ -2021,21 +2025,21 @@ const UserManagement: React.FC<UserManagementProps> = ({
                               aria-label={client.name}
                               className="sr-only peer"
                             />
-                            <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                            <div className="size-5 rounded-full border-2 border-border relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
                               <div
                                 className={`size-2 rounded-full transition-all duration-200 ${assignments.clientIds.includes(client.id) ? 'bg-white scale-100 opacity-100' : 'bg-zinc-200 scale-0 opacity-0'}`}
                               ></div>
                             </div>
                           </div>
                           <span
-                            className={`text-sm font-semibold ${assignments.clientIds.includes(client.id) ? 'text-zinc-900' : 'text-zinc-600'}`}
+                            className={`text-sm font-semibold ${assignments.clientIds.includes(client.id) ? 'text-foreground' : 'text-muted-foreground'}`}
                           >
                             {client.name}
                           </span>
                         </label>
                       ))}
                       {clients.length === 0 && (
-                        <p className="text-xs text-zinc-400 italic">
+                        <p className="text-xs text-muted-foreground italic">
                           {t('hr:workforce.noClientsFound')}
                         </p>
                       )}
@@ -2044,12 +2048,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
                   {/* Projects Column */}
                   <div className="space-y-3">
-                    <div className="sticky top-0 bg-white z-10 pb-2 border-b border-zinc-100 mb-2">
+                    <div className="sticky top-0 bg-card z-10 pb-2 border-b border-border mb-2">
                       <div className="flex items-center justify-between py-2">
-                        <h4 className="font-semibold text-zinc-700 text-sm uppercase tracking-wider">
+                        <h4 className="font-semibold text-foreground text-sm uppercase tracking-wider">
                           Projects
                         </h4>
-                        <span className="text-xs font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full">
+                        <span className="text-xs font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
                           {assignments.projectIds.length}
                         </span>
                       </div>
@@ -2061,7 +2065,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         onChange={(e) =>
                           dispatch({ type: 'set', values: { projectSearch: e.target.value } })
                         }
-                        className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                        className="w-full px-3 py-1.5 text-sm border border-border bg-background text-foreground rounded-lg focus:ring-2 focus:ring-praetor outline-none placeholder:text-muted-foreground"
                       />
                     </div>
                     <div className="space-y-2">
@@ -2070,8 +2074,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                           key={project.id}
                           className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                             assignments.projectIds.includes(project.id)
-                              ? 'bg-zinc-50 border-zinc-300 shadow-sm'
-                              : 'bg-white border-zinc-200 hover:border-zinc-300'
+                              ? 'bg-accent border-border shadow-sm'
+                              : 'bg-card border-border hover:border-input'
                           }`}
                         >
                           <div className="relative flex items-center justify-center shrink-0">
@@ -2082,7 +2086,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                               aria-label={project.name}
                               className="sr-only peer"
                             />
-                            <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                            <div className="size-5 rounded-full border-2 border-border relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
                               <div
                                 className={`size-2 rounded-full transition-all duration-200 ${assignments.projectIds.includes(project.id) ? 'bg-white scale-100 opacity-100' : 'bg-zinc-200 scale-0 opacity-0'}`}
                               ></div>
@@ -2090,11 +2094,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
                           </div>
                           <div className="flex flex-col">
                             <span
-                              className={`text-sm font-semibold ${assignments.projectIds.includes(project.id) ? 'text-zinc-900' : 'text-zinc-600'}`}
+                              className={`text-sm font-semibold ${assignments.projectIds.includes(project.id) ? 'text-foreground' : 'text-muted-foreground'}`}
                             >
                               {project.name}
                             </span>
-                            <span className="text-[10px] text-zinc-400">
+                            <span className="text-[10px] text-muted-foreground">
                               {clients.find((c) => c.id === project.clientId)?.name ||
                                 t('hr:workforce.unknownClient')}
                             </span>
@@ -2102,7 +2106,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                         </label>
                       ))}
                       {projects.length === 0 && (
-                        <p className="text-xs text-zinc-400 italic">
+                        <p className="text-xs text-muted-foreground italic">
                           {t('hr:workforce.noProjectsFound')}
                         </p>
                       )}
@@ -2111,12 +2115,12 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
                   {canManageAssignments && (
                     <div className="space-y-3">
-                      <div className="sticky top-0 bg-white z-10 pb-2 border-b border-zinc-100 mb-2">
+                      <div className="sticky top-0 bg-card z-10 pb-2 border-b border-border mb-2">
                         <div className="flex items-center justify-between py-2">
-                          <h4 className="font-semibold text-zinc-700 text-sm uppercase tracking-wider">
+                          <h4 className="font-semibold text-foreground text-sm uppercase tracking-wider">
                             Tasks
                           </h4>
-                          <span className="text-xs font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full">
+                          <span className="text-xs font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
                             {assignments.taskIds.length}
                           </span>
                         </div>
@@ -2128,7 +2132,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                           onChange={(e) =>
                             dispatch({ type: 'set', values: { taskSearch: e.target.value } })
                           }
-                          className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                          className="w-full px-3 py-1.5 text-sm border border-border bg-background text-foreground rounded-lg focus:ring-2 focus:ring-praetor outline-none placeholder:text-muted-foreground"
                         />
                       </div>
                       <div className="space-y-2">
@@ -2139,8 +2143,8 @@ const UserManagement: React.FC<UserManagementProps> = ({
                               key={task.id}
                               className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                                 assignments.taskIds.includes(task.id)
-                                  ? 'bg-zinc-50 border-zinc-300 shadow-sm'
-                                  : 'bg-white border-zinc-200 hover:border-zinc-300'
+                                  ? 'bg-accent border-border shadow-sm'
+                                  : 'bg-card border-border hover:border-input'
                               }`}
                             >
                               <div className="relative flex items-center justify-center shrink-0">
@@ -2151,7 +2155,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                                   aria-label={task.name}
                                   className="sr-only peer"
                                 />
-                                <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                                <div className="size-5 rounded-full border-2 border-border relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
                                   <div
                                     className={`size-2 rounded-full transition-all duration-200 ${assignments.taskIds.includes(task.id) ? 'bg-white scale-100 opacity-100' : 'bg-zinc-200 scale-0 opacity-0'}`}
                                   ></div>
@@ -2159,11 +2163,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
                               </div>
                               <div className="flex flex-col">
                                 <span
-                                  className={`text-sm font-semibold ${assignments.taskIds.includes(task.id) ? 'text-zinc-900' : 'text-zinc-600'}`}
+                                  className={`text-sm font-semibold ${assignments.taskIds.includes(task.id) ? 'text-foreground' : 'text-muted-foreground'}`}
                                 >
                                   {task.name}
                                 </span>
-                                <span className="text-[10px] text-zinc-400">
+                                <span className="text-[10px] text-muted-foreground">
                                   {project?.name || t('hr:workforce.unknownProject')}
                                 </span>
                               </div>
@@ -2171,7 +2175,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
                           );
                         })}
                         {tasks.length === 0 && (
-                          <p className="text-xs text-zinc-400 italic">
+                          <p className="text-xs text-muted-foreground italic">
                             {t('hr:workforce.noTasksFound')}
                           </p>
                         )}
@@ -2183,11 +2187,11 @@ const UserManagement: React.FC<UserManagementProps> = ({
             )}
           </div>
 
-          <div className="p-6 border-t border-zinc-200 bg-zinc-50 flex justify-end gap-3">
+          <div className="p-6 border-t border-border bg-muted/50 flex justify-end gap-3">
             <button
               type="button"
               onClick={closeAssignments}
-              className="px-4 py-2 text-zinc-600 font-bold hover:bg-zinc-200 rounded-lg transition-colors text-sm"
+              className="px-4 py-2 text-muted-foreground font-bold hover:bg-muted rounded-lg transition-colors text-sm"
             >
               {t('common:buttons.cancel')}
             </button>
@@ -2195,7 +2199,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
               type="button"
               onClick={saveAssignments}
               disabled={JSON.stringify(assignments) === JSON.stringify(initialAssignments)}
-              className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${JSON.stringify(assignments) === JSON.stringify(initialAssignments) ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200' : 'bg-praetor text-white hover:bg-zinc-800'}`}
+              className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${JSON.stringify(assignments) === JSON.stringify(initialAssignments) ? 'bg-muted text-muted-foreground cursor-not-allowed border border-border' : 'bg-praetor text-white hover:bg-praetor/90'}`}
             >
               {t('hr:workforce.saveAssignments')}
             </button>
