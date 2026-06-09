@@ -356,6 +356,54 @@ describe('<ClientQuotesView />', () => {
     expect(screen.getAllByText('1920.00 EUR').length).toBeGreaterThan(0);
   });
 
+  test('MOL line input keeps two decimals instead of rounding to one (issue #780)', async () => {
+    const twoDecimalMolQuote: Quote = {
+      id: 'Q-MOL',
+      clientId: 'client-1',
+      clientName: 'Helios Energy Services',
+      items: [
+        {
+          id: 'item-mol',
+          quoteId: 'Q-MOL',
+          productId: 'product-1',
+          productName: 'Consulting',
+          quantity: 2,
+          unitPrice: 100,
+          productCost: 60,
+          productMolPercentage: 12.34,
+        },
+      ],
+      paymentTerms: '30gg',
+      discount: 0,
+      discountType: 'percentage',
+      status: 'draft',
+      expirationDate: '2026-06-30',
+      createdAt: Date.UTC(2026, 4, 14),
+      updatedAt: Date.UTC(2026, 4, 14),
+    };
+
+    render(
+      <ClientQuotesView
+        quotes={[twoDecimalMolQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Q-MOL'));
+    await screen.findByRole('dialog');
+
+    // formatDecimals={2}: the MOL inputs (mobile + desktop layouts) show 12.34, not the
+    // pre-fix rounded 12.3 that silently dropped the second decimal.
+    expect(screen.queryAllByDisplayValue('12.34').length).toBeGreaterThan(0);
+    expect(screen.queryAllByDisplayValue('12.3')).toHaveLength(0);
+  });
+
   test('the read-only banner renders dark-mode-compatible amber, not a light slab (issue #768)', async () => {
     // A finalized (accepted) quote opens the dialog read-only and surfaces the warning banner.
     const acceptedQuote: Quote = { ...quotes[0], id: 'Q-ACCEPTED', status: 'accepted' };
