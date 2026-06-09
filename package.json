@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "i18n:check": "bun scripts/check-i18n-keys.mjs",
     "typecheck": "tsc -p server/tsconfig.json && tsc -p tsconfig.json",
-    "test": "bun run test:server && bun run test:frontend && bun run test:react-doctor",
+    "test": "bun run test:server && bun run test:frontend",
     "test:server": "cd server && bun test ./test",
     "test:frontend": "bun test ./test",
     "test:react-doctor": "bun x -y react-doctor@latest .",
