@@ -86,10 +86,8 @@ describe('sales modal styling', () => {
     expectSourceOmitsAll(source, ['rounded-2xl bg-white', '<button']);
   });
 
-  // Regression: the desktop product-line `pt-5` gutter that reserves room for the floated
-  // quick-view shortcut must live on the row flex that also holds the trash button — not on the
-  // inner grid. When it sits on the grid, the sibling delete button centers against the grid's
-  // padded box and floats ~10px above the inputs instead of aligning with the row.
+  // Regression: the desktop line's `pt-5` quick-view gutter must sit on the row flex (which also
+  // holds the trash button), not the inner grid — else the sibling delete button floats above the row.
   test.each([
     ['client quotes', 'sales/ClientQuotesView.tsx'],
     ['client offers', 'sales/ClientOffersView.tsx'],
