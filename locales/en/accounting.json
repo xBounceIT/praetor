@@ -45,6 +45,8 @@
     "orderNumber": "Order Number",
     "supplierOrderColumn": "Supplier Order",
     "noSupplierOrder": "No supplier order",
+    "openSupplierOrderInNewTab": "Open supplier order in a new tab",
+    "supplierOrderShortcutUnavailable": "No linked supplier order to open",
     "supplierOrderLineLocked": "This line is linked to a supplier order and cannot be removed here.",
     "paymentDueDate": "Payment due date",
     "failedToSave": "Failed to save the order. Please retry.",

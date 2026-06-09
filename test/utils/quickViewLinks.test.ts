@@ -3,6 +3,7 @@ import type { SupplierQuote } from '../../types';
 import {
   buildProductQuickViewHref,
   buildQuoteIdBySupplierQuoteItemId,
+  buildSupplierOrderQuickViewHref,
   buildSupplierQuoteQuickViewHref,
   resolveLinkedSupplierQuoteId,
 } from '../../utils/quickViewLinks';
@@ -77,5 +78,25 @@ describe('buildProductQuickViewHref', () => {
     expect(buildProductQuickViewHref(undefined, ids)).toBeNull();
     expect(buildProductQuickViewHref('', ids)).toBeNull();
     expect(buildProductQuickViewHref('prod-gone', ids)).toBeNull();
+  });
+});
+
+describe('buildSupplierOrderQuickViewHref', () => {
+  const ids = new Set(['SO-1']);
+
+  test('builds a pre-filtered deep link when the supplier order is loaded', () => {
+    expect(buildSupplierOrderQuickViewHref('SO-1', ids)).toBe(
+      '#/accounting/supplier-orders?filterId=SO-1',
+    );
+  });
+
+  // Like the sibling builders: permission gating is the caller's concern, so this
+  // only guards reference existence — a missing/unloaded order yields null and the
+  // shortcut renders disabled instead of dead-ending on the full listing.
+  test('returns null for an empty/absent or unloaded supplier order id', () => {
+    expect(buildSupplierOrderQuickViewHref(undefined, ids)).toBeNull();
+    expect(buildSupplierOrderQuickViewHref(null, ids)).toBeNull();
+    expect(buildSupplierOrderQuickViewHref('', ids)).toBeNull();
+    expect(buildSupplierOrderQuickViewHref('SO-GONE', ids)).toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import type { Client, ClientsOrder, Product } from '../../../types';
+import type { Client, ClientsOrder, Product, SupplierSaleOrder } from '../../../types';
 import { render } from '../../helpers/render';
 import {
   expectSourceContainsAll,
@@ -507,5 +507,114 @@ describe('<ClientsOrdersView /> product quick-view shortcut', () => {
         name: 'sales:clientQuotes.productShortcutUnavailable',
       }).length,
     ).toBeGreaterThan(0);
+  });
+});
+
+describe('<ClientsOrdersView /> supplier-order quick-view shortcut', () => {
+  // A line auto-created behind a supplier quote carries the supplier order it spawned.
+  const supplierBackedOrder: ClientsOrder = {
+    id: 'dm_so_sup',
+    clientId: 'client-1',
+    clientName: 'Helios Energy Services',
+    items: [
+      {
+        id: 'item-sup-link',
+        orderId: 'dm_so_sup',
+        productId: 'product-1',
+        productName: 'Consulting',
+        quantity: 1,
+        unitPrice: 1000,
+        productCost: 600,
+        supplierSaleId: 'ss-42',
+        supplierSaleItemId: 'ssi-42',
+        supplierSaleSupplierName: 'SupplierX',
+      },
+    ],
+    paymentTerms: '30gg',
+    discount: 0,
+    discountType: 'percentage',
+    status: 'draft',
+    createdAt: Date.UTC(2026, 3, 24),
+    updatedAt: Date.UTC(2026, 3, 24),
+  };
+
+  // The builder only reads o.id, so a one-field fixture is enough.
+  const supplierOrders = [{ id: 'ss-42' }] as unknown as SupplierSaleOrder[];
+
+  const openModal = (extraProps: Record<string, unknown> = {}) => {
+    render(
+      <ClientsOrdersView
+        orders={[supplierBackedOrder]}
+        clients={clients}
+        products={[]}
+        supplierOrders={supplierOrders}
+        currency="EUR"
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+        {...extraProps}
+      />,
+    );
+    fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
+    return screen.findByRole('dialog');
+  };
+
+  test('opens the referenced supplier order on its pre-filtered page', async () => {
+    const dialog = await openModal();
+    const links = within(dialog).getAllByRole('link', {
+      name: 'accounting:clientsOrders.openSupplierOrderInNewTab',
+    });
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) {
+      expect(link).toHaveAttribute('href', '#/accounting/supplier-orders?filterId=ss-42');
+      expect(link).toHaveAttribute('target', '_blank');
+    }
+    // Floats above the field on desktop (lg:absolute), matching the product shortcut.
+    expect(links.some((link) => link.className.includes('lg:absolute'))).toBe(true);
+  });
+
+  test('hides the supplier-order shortcut entirely without supplier-orders access', async () => {
+    const dialog = await openModal({ canViewSupplierOrders: false });
+    expect(
+      within(dialog).queryAllByRole('link', {
+        name: 'accounting:clientsOrders.openSupplierOrderInNewTab',
+      }),
+    ).toHaveLength(0);
+    expect(
+      within(dialog).queryAllByRole('button', {
+        name: 'accounting:clientsOrders.supplierOrderShortcutUnavailable',
+      }),
+    ).toHaveLength(0);
+  });
+
+  test('keeps the shortcut visible but disabled when the supplier order is not loaded', async () => {
+    // The line still references ss-42, but it isn't in the loaded supplier-orders set,
+    // so the shortcut has nothing to open and renders disabled rather than as a link.
+    const dialog = await openModal({ supplierOrders: [] });
+    expect(
+      within(dialog).queryAllByRole('link', {
+        name: 'accounting:clientsOrders.openSupplierOrderInNewTab',
+      }),
+    ).toHaveLength(0);
+    expect(
+      within(dialog).getAllByRole('button', {
+        name: 'accounting:clientsOrders.supplierOrderShortcutUnavailable',
+      }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  test('omits the shortcut on a line with no supplier order', async () => {
+    // orders[0]'s single line has no supplierSaleId: the shortcut is meaningless there,
+    // so neither a link nor a disabled placeholder button is rendered.
+    const dialog = await openModal({ orders: [orders[0]] });
+    expect(
+      within(dialog).queryAllByRole('link', {
+        name: 'accounting:clientsOrders.openSupplierOrderInNewTab',
+      }),
+    ).toHaveLength(0);
+    expect(
+      within(dialog).queryAllByRole('button', {
+        name: 'accounting:clientsOrders.supplierOrderShortcutUnavailable',
+      }),
+    ).toHaveLength(0);
   });
 });

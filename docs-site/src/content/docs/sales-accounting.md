@@ -43,7 +43,7 @@ Gli ordini clienti e fornitori consolidano le informazioni operative. Prima di c
 
 Un ordine di vendita creato da un'offerta accettata nasce in stato **Bozza** e resta completamente modificabile (cliente, righe, sconti, note e condizioni di pagamento) finché è in bozza. Passa in sola lettura solo dopo essere stato **Confermato** o **Rifiutato**.
 
-Le righe che hanno generato automaticamente un **ordine fornitore** (identificabili dalla colonna *Ordine fornitore*) restano bloccate anche in bozza: non possono essere rimosse né modificate nel prodotto o nella quantità, così l'ordine di approvvigionamento collegato non resta disallineato. Puoi comunque aggiornarne il prezzo di vendita, aggiungere altre righe e modificare i campi di testata.
+Le righe che hanno generato automaticamente un **ordine fornitore** (identificabili dalla colonna *Ordine fornitore*) restano bloccate anche in bozza: non possono essere rimosse né modificate nel prodotto o nella quantità, così l'ordine di approvvigionamento collegato non resta disallineato. Puoi comunque aggiornarne il prezzo di vendita, aggiungere altre righe e modificare i campi di testata. Quando una riga è collegata a un ordine fornitore, l'icona di scorciatoia nella colonna *Ordine fornitore* lo apre, già filtrato, in una nuova scheda — come la scorciatoia del prodotto — così puoi consultarlo senza chiudere l'ordine in lavorazione.
 
 ## Fatture
 

@@ -222,6 +222,9 @@ export interface SupplierOrdersViewProps {
   onOrderRestored?: (order: SupplierSaleOrder) => void | Promise<void>;
   currency: string;
   quoteFilterId?: string | null;
+  // Pre-filters the list to a single supplier order by its own id — set by the
+  // client-order line shortcut that deep-links here (#/accounting/supplier-orders?filterId=…).
+  orderFilterId?: string | null;
 }
 
 const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
@@ -236,6 +239,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   onOrderRestored,
   currency,
   quoteFilterId,
+  orderFilterId,
 }) => {
   const { t, i18n } = useTranslation(['accounting', 'sales', 'common', 'crm']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
@@ -349,13 +353,18 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
     [formData.discount, formData.discountType, formData.items],
   );
 
-  // Filter orders by quoteFilterId if provided
+  // Filter orders by orderFilterId (own id, from a client-order shortcut) or
+  // quoteFilterId (linked supplier quote) if provided. The own-id filter wins so
+  // the per-line shortcut always lands on exactly the referenced order.
   const filteredOrders = useMemo(() => {
+    if (orderFilterId) {
+      return orders.filter((o) => o.id === orderFilterId);
+    }
     if (quoteFilterId) {
       return orders.filter((o) => o.linkedQuoteId === quoteFilterId);
     }
     return orders;
-  }, [orders, quoteFilterId]);
+  }, [orders, orderFilterId, quoteFilterId]);
 
   const columns = useMemo(
     () => [
