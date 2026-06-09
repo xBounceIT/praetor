@@ -1522,28 +1522,28 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                       )
                                     }
                                     disabled={isReadOnly}
-                                    className={`${itemInputClassName} text-center flex-1`}
+                                    className={`${itemInputClassName} text-center max-w-[5rem]`}
                                   />
                                   <span className="text-xs font-semibold text-zinc-400 shrink-0">
                                     %
                                   </span>
                                 </div>
-                                <div className="col-span-2 flex items-center justify-end gap-1.5">
-                                  <span className="flex-1 text-right text-sm font-semibold text-zinc-700 whitespace-nowrap tabular-nums">
+                                <div className="col-span-2 flex items-center justify-center gap-1.5">
+                                  <span className="text-sm font-semibold text-zinc-700 whitespace-nowrap tabular-nums">
                                     {itemUnitCost.toFixed(2)}
                                   </span>
                                   <span className="text-xs font-semibold text-zinc-400 shrink-0 whitespace-nowrap">
                                     {currency}
                                   </span>
                                 </div>
-                                <div className="col-span-2 flex items-center gap-1">
+                                <div className="col-span-2 flex items-center justify-center gap-1">
                                   <ValidatedNumberInput
                                     value={item.quantity}
                                     onValueChange={(value) =>
                                       updateItem(index, 'quantity', parseNumberInputValue(value))
                                     }
                                     disabled={isReadOnly}
-                                    className={`${itemInputClassName} text-center`}
+                                    className={`${itemInputClassName} text-center max-w-[5rem]`}
                                   />
                                   <span className="text-xs font-semibold text-zinc-400 shrink-0">
                                     /
