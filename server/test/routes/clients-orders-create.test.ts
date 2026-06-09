@@ -234,10 +234,19 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     expect(body.items[0].productId).toBeNull();
   });
 
-  test('400 when a product-less line carries supplierQuoteItemId but no supplierQuoteId', async () => {
-    // Regression for the P2: a supplier-item id with no quote id has no FK backing and would not
-    // trigger the supplier-order auto-create (keyed on supplierQuoteId), so it must be rejected
-    // rather than persisted as a dangling product-less line the UI locks as supplier-backed.
+  test('201 accepts an item-only supplier reference (supplierQuoteItemId, no supplierQuoteId)', async () => {
+    // The client-quotes pattern: callers may send only the item id. resolveSupplierQuoteRefs
+    // resolves it against accepted quotes and stamps the authoritative supplierQuoteId, so the
+    // line is not dangling and clients need not duplicate the quote id.
+    coInsertItemsMock.mockResolvedValue([
+      insertedItem({
+        productId: null,
+        productName: 'Item-only supplier line',
+        supplierQuoteId: 'sq-1',
+        supplierQuoteItemId: 'sqi-1',
+      }),
+    ]);
+
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/clients-orders',
@@ -249,7 +258,7 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
         items: [
           {
             productId: null,
-            productName: 'Dangling supplier line',
+            productName: 'Item-only supplier line',
             quantity: 1,
             unitPrice: 100,
             supplierQuoteItemId: 'sqi-1',
@@ -258,10 +267,13 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
       },
     });
 
-    expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body).error).toContain('productId is required');
-    expect(coCreateMock).not.toHaveBeenCalled();
-    expect(coInsertItemsMock).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(201);
+    const insertedItems = coInsertItemsMock.mock.calls[0][1] as Array<{
+      productId: unknown;
+      supplierQuoteId: unknown;
+    }>;
+    // supplierQuoteId was derived from the accepted-quote snapshot, not supplied by the client.
+    expect(insertedItems[0].supplierQuoteId).toBe('sq-1');
   });
 
   test('400 when a line has neither productId nor supplierQuoteItemId', async () => {
