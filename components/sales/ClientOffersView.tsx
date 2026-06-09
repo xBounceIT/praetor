@@ -51,6 +51,7 @@ import {
   buildSupplierQuoteQuickViewHref,
   resolveLinkedSupplierQuoteId,
 } from '../../utils/quickViewLinks';
+import { effectiveQuoteStatus, isTerminalQuoteStatus } from '../../utils/quoteStatus';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DateField from '../shared/DateField';
@@ -422,13 +423,46 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     setProductRowToDelete(null);
   }, []);
 
-  const baseReadOnly = Boolean(editingOffer && editingOffer.status !== 'draft');
+  // Derived #779 status: prefer the server-computed effectiveStatus; fall back to the shared
+  // status model for optimistic updates that haven't round-tripped yet. Accepted/denied are
+  // frozen and never expire.
+  const isOfferExpired = useCallback(
+    (offer: ClientOffer) => {
+      if (offer.effectiveStatus) return offer.effectiveStatus === 'expired';
+      return (
+        effectiveQuoteStatus(offer.status, isDateOnlyBeforeToday(offer.expirationDate, today)) ===
+        'expired'
+      );
+    },
+    [today],
+  );
+
+  const isEditingExpired = Boolean(editingOffer && isOfferExpired(editingOffer));
+  // Expired offers are read-only EXCEPT their expiration date — extending it is the only exit
+  // from `expired` (issue #779) — so an expired DRAFT offer locks too.
+  const baseReadOnly = Boolean(
+    editingOffer && (editingOffer.status !== 'draft' || isEditingExpired),
+  );
   const isReadOnly = baseReadOnly || previewVersion !== null;
   const isClientLocked = Boolean(editingOffer?.linkedQuoteId);
+  // The expiration DateField stays enabled while the form is otherwise read-only, so a sent or
+  // expired offer can have its validity renewed; terminal accepted/denied offers never expire
+  // and stay fully frozen (issue #779).
+  const expirationEditableWhileReadOnly = Boolean(
+    editingOffer &&
+      isReadOnly &&
+      previewVersion === null &&
+      !isTerminalQuoteStatus(editingOffer.status),
+  );
 
-  const readOnlyReason = t('sales:clientOffers.readOnlyStatus', {
-    defaultValue: 'Read-only due to non-draft status',
-  });
+  const readOnlyReason = isEditingExpired
+    ? t('sales:clientOffers.readOnlyExpired', {
+        defaultValue:
+          'Read-only: the offer has expired — extend the expiration date to revalidate it',
+      })
+    : t('sales:clientOffers.readOnlyStatus', {
+        defaultValue: 'Read-only due to non-draft status',
+      });
   const clientLockedReason = t('sales:clientOffers.clientLockedByQuote', {
     defaultValue: 'Locked due to linked quote',
   });
@@ -495,10 +529,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
   const getStatusLabel = useCallback(
     (status: string) => {
+      if (status === 'expired') {
+        return t('sales:clientOffers.statusExpired', { defaultValue: 'Expired' });
+      }
       const option = STATUS_OPTIONS.find((o) => o.id === status);
       return option ? option.name : status;
     },
-    [STATUS_OPTIONS],
+    [STATUS_OPTIONS, t],
   );
 
   const getPaymentTermsLabel = useCallback(
@@ -715,7 +752,10 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[9rem]',
       cell: ({ row }) => {
-        return <StatusBadge type={row.status as StatusType} label={getStatusLabel(row.status)} />;
+        // Prefer the server effective status so `expired` renders correctly (#779).
+        const badgeStatus = (row.effectiveStatus ??
+          (isOfferExpired(row) ? 'expired' : row.status)) as StatusType;
+        return <StatusBadge type={badgeStatus} label={getStatusLabel(badgeStatus)} />;
       },
       filterFormat: (value) => getStatusLabel(String(value ?? '')),
     },
@@ -734,6 +774,12 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       disableFiltering: true,
       cell: ({ row }) => {
         const hasOrder = offerIdsWithOrders.has(row.id);
+        // Scaduto freezes status transitions — the only exit is extending the expiration date
+        // from the edit modal (issue #779); the server enforces the same rule with a 409.
+        const expired = isOfferExpired(row);
+        const expiredTitle = t('sales:clientOffers.expiredActionsDisabled', {
+          defaultValue: 'Expired offers cannot change status; extend the expiration date.',
+        });
         const canRevertRowToDraft =
           canRevertTerminalStatus &&
           Boolean(onRevertOfferToDraft) &&
@@ -790,19 +836,23 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (expired) return;
                         handleStatusUpdate(row.id, { status: 'sent' });
                       }}
+                      disabled={expired}
                       aria-label={t('sales:clientOffers.markSent', {
                         defaultValue: 'Mark as sent',
                       })}
-                      className="p-2 rounded-lg transition-all text-blue-700 hover:text-blue-600 hover:bg-blue-50"
+                      className={`p-2 rounded-lg transition-all ${expired ? 'cursor-not-allowed opacity-50 text-blue-700' : 'text-blue-700 hover:text-blue-600 hover:bg-blue-50'}`}
                     >
                       <i className="fa-solid fa-paper-plane"></i>
                     </button>
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>
-                  {t('sales:clientOffers.markSent', { defaultValue: 'Mark as sent' })}
+                  {expired
+                    ? expiredTitle
+                    : t('sales:clientOffers.markSent', { defaultValue: 'Mark as sent' })}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -815,21 +865,25 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (expired) return;
                           handleStatusUpdate(row.id, { status: 'accepted' });
                         }}
+                        disabled={expired}
                         aria-label={t('sales:clientOffers.markAccepted', {
                           defaultValue: 'Mark as accepted',
                         })}
-                        className="p-2 rounded-lg transition-all text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50"
+                        className={`p-2 rounded-lg transition-all ${expired ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50'}`}
                       >
                         <i className="fa-solid fa-check"></i>
                       </button>
                     </span>
                   </TooltipTrigger>
                   <TooltipContent>
-                    {t('sales:clientOffers.markAccepted', {
-                      defaultValue: 'Mark as accepted',
-                    })}
+                    {expired
+                      ? expiredTitle
+                      : t('sales:clientOffers.markAccepted', {
+                          defaultValue: 'Mark as accepted',
+                        })}
                   </TooltipContent>
                 </Tooltip>
                 <Tooltip>
@@ -839,19 +893,23 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (expired) return;
                           handleStatusUpdate(row.id, { status: 'denied' });
                         }}
+                        disabled={expired}
                         aria-label={t('sales:clientOffers.markDenied', {
                           defaultValue: 'Mark as denied',
                         })}
-                        className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
+                        className={`p-2 rounded-lg transition-all ${expired ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
                       >
                         <i className="fa-solid fa-xmark"></i>
                       </button>
                     </span>
                   </TooltipTrigger>
                   <TooltipContent>
-                    {t('sales:clientOffers.markDenied', { defaultValue: 'Mark as denied' })}
+                    {expired
+                      ? expiredTitle
+                      : t('sales:clientOffers.markDenied', { defaultValue: 'Mark as denied' })}
                   </TooltipContent>
                 </Tooltip>
               </>
@@ -1102,6 +1160,32 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     event.preventDefault();
     if (isSubmitting) return;
 
+    // Read-only-except-date mode (sent/expired, issue #779): submitting extends ONLY the
+    // expiration date. Revalidation needs a date from today onward — a cleared or still-past
+    // date would leave the offer expired, so reject it loudly instead of silently "saving".
+    if (expirationEditableWhileReadOnly && editingOffer) {
+      if (!formData.expirationDate || isDateOnlyBeforeToday(formData.expirationDate, today)) {
+        toastError(
+          t('sales:clientOffers.expirationExtendInvalid', {
+            defaultValue: 'Set an expiration date of today or later to revalidate the offer',
+          }),
+        );
+        return;
+      }
+      dispatch({ type: 'setIsSubmitting', value: true });
+      try {
+        await onUpdateOffer(editingOffer.id, { expirationDate: formData.expirationDate });
+      } catch (err) {
+        toastError((err as Error).message || t('sales:clientOffers.failedToSave'));
+        return;
+      } finally {
+        dispatch({ type: 'setIsSubmitting', value: false });
+      }
+      closeModal();
+      return;
+    }
+    if (isReadOnly) return;
+
     const nextErrors: Record<string, string> = {};
     if (!formData.clientId) {
       nextErrors.clientId = t('sales:clientOffers.clientRequired');
@@ -1213,9 +1297,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 {isReadOnly && (
                   <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
                     <span className="text-amber-700 dark:text-amber-300 text-xs font-bold">
-                      {t('sales:clientOffers.readOnlyStatus', {
-                        defaultValue: 'Read-only due to non-draft status',
-                      })}
+                      {readOnlyReason}
                     </span>
                   </div>
                 )}
@@ -1301,7 +1383,9 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         id="client-offer-expiration-date"
                         required
                         value={formData.expirationDate || ''}
-                        disabled={isReadOnly}
+                        // Editable while sent/expired so the offer's validity can be renewed —
+                        // extending the date is the only exit from `expired` (issue #779).
+                        disabled={isReadOnly && !expirationEditableWhileReadOnly}
                         onChange={(value) =>
                           setFormData((prev) => ({ ...prev, expirationDate: value }))
                         }
@@ -1965,7 +2049,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 <Button type="button" variant="outline" onClick={closeModal}>
                   {t('common:buttons.cancel')}
                 </Button>
-                {!isReadOnly && (
+                {(!isReadOnly || expirationEditableWhileReadOnly) && (
                   <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting
                       ? t('common:buttons.saving')
@@ -2122,7 +2206,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         columns={columns}
         defaultRowsPerPage={5}
         onRowClick={(row) => openEditModal(row)}
-        rowClassName={() => 'cursor-pointer hover:bg-zinc-50/50'}
+        rowClassName={(row) =>
+          // Expired offers are dimmed like the quotes views' history rows; they stay clickable —
+          // the modal is where the expiration gets extended (issue #779).
+          isOfferExpired(row)
+            ? 'bg-zinc-50 text-zinc-400 hover:bg-zinc-100 cursor-pointer'
+            : 'cursor-pointer hover:bg-zinc-50/50'
+        }
         initialFilterState={tableInitialFilterState}
       />
     </div>

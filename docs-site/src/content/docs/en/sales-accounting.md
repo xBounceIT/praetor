@@ -31,6 +31,8 @@ When a document is accepted, continue by creating the linked order or next docum
 
 Customer offers in **Accepted** or **Denied** status can be moved back to **Draft** from the row actions menu only by Top Manager or admin users. Praetor requires confirmation, lets the user enter a reason, and records the change in history/audit; the action is unavailable once a sale order has already been created from the offer.
 
+Customer offers follow the same expiration model as quotes: every offer has a mandatory **Expiration Date**, and once it passes a **Draft** or **Sent** offer shows the derived **Expired** status (an **Accepted** or **Denied** offer is never shown as Expired). An expired offer is read-only and cannot change status — the only way out is extending the **Expiration Date**, which stays editable from the offer form on sent and expired offers.
+
 ## Supplier quotes
 
 Supplier quotes help compare purchase costs and conditions. Link rows to the correct products when possible so data remains traceable in later workflows.

@@ -415,6 +415,9 @@ const buildServer = () => {
       return jsonResult({
         offers: offers.map((offer) => ({
           ...offer,
+          // Derived #779 status: `expired` overrides draft/sent once the expiration date has
+          // passed; accepted/denied are frozen and never expire.
+          effectiveStatus: effectiveQuoteStatusFromDate(offer.status, offer.expirationDate),
           items: itemsByOffer.get(offer.id) ?? [],
         })),
       });

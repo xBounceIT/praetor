@@ -14,7 +14,7 @@ import type { DurationUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
-import { normalizeQuoteStatus } from '../utils/quote-status.ts';
+import { effectiveQuoteStatusFromDate, normalizeQuoteStatus } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
@@ -35,6 +35,14 @@ import {
 // violation; keep them identical so the error doesn't drift between paths.
 const LINKED_OFFER_CONFLICT = 'An offer already exists for this quote';
 const TERMINAL_OFFER_STATUSES = new Set(['accepted', 'denied']);
+
+// Derived #779 status for responses: `expired` overrides a non-terminal stored status once the
+// offer's own expiration date has passed; accepted/denied are frozen and never expire. Mirrors
+// the client-quote `effectiveStatus` field.
+const projectOffer = <T extends { status: string; expirationDate: string | null }>(offer: T) => ({
+  ...offer,
+  effectiveStatus: effectiveQuoteStatusFromDate(offer.status, offer.expirationDate),
+});
 const TERMINAL_REVERT_ERROR = 'Terminal offers must be reverted through the revert-to-draft action';
 const TERMINAL_REVERT_ROLE_ERROR = 'Only Top Manager or Admin can revert terminal offers to draft';
 const TERMINAL_REVERT_LINKED_SALE_ERROR =
@@ -86,6 +94,12 @@ const offerSchema = {
     discount: { type: 'number' },
     discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string' },
+    // Derived (issue #779): `expired` overrides draft/sent once the expiration date has passed;
+    // accepted/denied are frozen and never expire.
+    effectiveStatus: {
+      type: 'string',
+      enum: ['draft', 'sent', 'accepted', 'denied', 'expired'],
+    },
     deliveryDate: { type: ['string', 'null'], format: 'date' },
     expirationDate: { type: ['string', 'null'], format: 'date' },
     notes: { type: ['string', 'null'] },
@@ -101,6 +115,7 @@ const offerSchema = {
     'discount',
     'discountType',
     'status',
+    'effectiveStatus',
     'createdAt',
     'updatedAt',
     'items',
@@ -379,10 +394,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         else itemsByOffer.set(item.offerId, [item]);
       }
 
-      return offers.map((offer) => ({
-        ...offer,
-        items: itemsByOffer.get(offer.id) ?? [],
-      }));
+      return offers.map((offer) =>
+        projectOffer({
+          ...offer,
+          items: itemsByOffer.get(offer.id) ?? [],
+        }),
+      );
     },
   );
 
@@ -615,7 +632,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           secondaryLabel: clientNameResult.value,
         },
       });
-      return reply.code(201).send({ ...createdOffer, items: createdItems });
+      return reply.code(201).send(projectOffer({ ...createdOffer, items: createdItems }));
     },
   );
 
@@ -687,7 +704,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return reply.code(409).send({ error: TERMINAL_REVERT_ERROR });
       }
 
-      const hasLockedFieldUpdates =
+      // Derived #779 status: `expired` overrides draft/sent once the offer's own expiration date
+      // has passed; accepted/denied are frozen and never expire.
+      const currentEffective = effectiveQuoteStatusFromDate(
+        existingOffer.status,
+        existingOffer.expirationDate,
+      );
+      // One declared field set, several derived guards (issue #779). The expiration date is NOT
+      // in the set: it stays editable on non-draft and expired offers — extending it is the only
+      // exit from `expired` — and is locked again only on terminal accepted/denied offers below.
+      const hasNonExpirationContentUpdate =
         clientId !== undefined ||
         clientName !== undefined ||
         items !== undefined ||
@@ -695,9 +721,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discount !== undefined ||
         discountType !== undefined ||
         deliveryDate !== undefined ||
-        expirationDate !== undefined ||
         notes !== undefined;
-      if (existingOffer.status !== 'draft' && hasLockedFieldUpdates) {
+      // Expired offers are content-read-only EXCEPT their expiration date — a plain
+      // expirationDate write is how an offer leaves `expired` (issue #779). Mirrors the
+      // client-quote rule; status changes are handled by the freeze below.
+      if (currentEffective === 'expired' && hasNonExpirationContentUpdate) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Expired offers are read-only; extend the expiration date instead',
+          action: 'client_offer.update.conflict',
+          entityType: 'client_offer',
+          entityId: idResult.value,
+          details: {
+            targetLabel: idResult.value,
+            secondaryLabel: 'expired_read_only',
+            fromValue: 'expired',
+          },
+        });
+      }
+      if (existingOffer.status !== 'draft' && hasNonExpirationContentUpdate) {
         return replyError(request, reply, {
           statusCode: 409,
           message: 'Non-draft offers are read-only',
@@ -710,6 +752,39 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             fromValue: existingOffer.status,
           },
           extraBody: { currentStatus: existingOffer.status },
+        });
+      }
+      // Terminal accepted/denied offers are frozen entirely — including the expiration date
+      // (they can never expire, so there is no validity to renew).
+      if (TERMINAL_OFFER_STATUSES.has(existingOffer.status) && expirationDate !== undefined) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Non-draft offers are read-only',
+          action: 'client_offer.update.conflict',
+          entityType: 'client_offer',
+          entityId: idResult.value,
+          details: {
+            targetLabel: idResult.value,
+            secondaryLabel: 'non_draft_read_only',
+            fromValue: existingOffer.status,
+          },
+          extraBody: { currentStatus: existingOffer.status },
+        });
+      }
+      // Scaduto freezes manual status changes — an offer leaves `expired` only by extending its
+      // expiration date. A no-op resend of the stored status stays tolerated (issue #779).
+      if (
+        currentEffective === 'expired' &&
+        typeof status === 'string' &&
+        normalizeQuoteStatus(status) !== normalizeQuoteStatus(existingOffer.status)
+      ) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Expired offers cannot change status; extend the expiration date instead',
+          action: 'client_offer.update.conflict',
+          entityType: 'client_offer',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'expired_read_only', fromValue: 'expired' },
         });
       }
 
@@ -824,18 +899,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!normalizedItemsForUpdate) return;
       }
 
+      // Derived from the declared field set above so the two lists can't drift (issue #779).
       const isIdOnlyUpdate =
         nextId !== undefined &&
-        clientId === undefined &&
-        clientName === undefined &&
-        items === undefined &&
-        paymentTerms === undefined &&
-        discount === undefined &&
-        discountType === undefined &&
         status === undefined &&
-        deliveryDate === undefined &&
         expirationDate === undefined &&
-        notes === undefined;
+        !hasNonExpirationContentUpdate;
 
       let result: {
         offer: clientOffersRepo.ClientOffer | null;
@@ -927,7 +996,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
 
-      return { ...updatedOffer, items: updatedItems };
+      return projectOffer({ ...updatedOffer, items: updatedItems });
     },
   );
 
@@ -1020,7 +1089,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
 
-      return { ...result.offer, items: result.items };
+      return projectOffer({ ...result.offer, items: result.items });
     },
   );
 
@@ -1259,6 +1328,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             extraBody: { currentStatus: current.status },
           };
         }
+        // Expired offers are content-read-only and exit only via a date extension (issue #779);
+        // a restore would rewrite content, status AND the date in one shot, so block it like the
+        // PUT does.
+        if (effectiveQuoteStatusFromDate(current.status, current.expirationDate) === 'expired') {
+          return {
+            ok: false,
+            statusCode: 409,
+            message: 'Expired offers are read-only; extend the expiration date instead',
+            action: 'client_offer.restore.conflict',
+            secondaryLabel: 'expired_read_only',
+          };
+        }
 
         const linkedSaleId = await clientOffersRepo.findLinkedSaleId(idResult.value, tx);
         if (linkedSaleId) {
@@ -1365,7 +1446,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
 
-      return { ...result.offer, items: result.items };
+      return projectOffer({ ...result.offer, items: result.items });
     },
   );
 }

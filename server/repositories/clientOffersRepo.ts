@@ -120,6 +120,8 @@ export type ExistingOffer = {
   clientName: string;
   status: string;
   deliveryDate: string | null;
+  // Needed by the #779 expired guards: the derived `expired` status comes from this date.
+  expirationDate: string;
 };
 
 // Reads the minimal set of fields needed to gate updates / restores. Does not acquire a row
@@ -137,6 +139,7 @@ export const findExisting = async (
       clientName: customerOffers.clientName,
       status: customerOffers.status,
       deliveryDate: customerOffers.deliveryDate,
+      expirationDate: customerOffers.expirationDate,
     })
     .from(customerOffers)
     .where(eq(customerOffers.id, id));
@@ -156,6 +159,7 @@ export const lockExistingById = async (
       clientName: customerOffers.clientName,
       status: customerOffers.status,
       deliveryDate: customerOffers.deliveryDate,
+      expirationDate: customerOffers.expirationDate,
     })
     .from(customerOffers)
     .where(eq(customerOffers.id, id))

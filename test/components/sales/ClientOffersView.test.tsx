@@ -698,3 +698,91 @@ describe('<ClientOffersView /> line-item delete confirmation', () => {
     expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
   });
 });
+
+describe('<ClientOffersView /> expired-offer handling (issue #779)', () => {
+  const expiredOffer = (over: Partial<ClientOffer> = {}): ClientOffer =>
+    buildOffer({
+      id: 'O-EXPIRED',
+      status: 'sent',
+      // The server marks an expired offer via effectiveStatus; the view trusts it (it
+      // short-circuits the date math) so the row/modal go into the expired
+      // read-only-except-date mode. The default prefilled date is FUTURE so the extend-submit
+      // passes its past-date validation.
+      effectiveStatus: 'expired',
+      expirationDate: '2999-12-31',
+      ...over,
+    });
+
+  test('the status badge renders the translated expired label', () => {
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[buildOffer({ id: 'O-PAST', status: 'sent', expirationDate: '2000-01-01' })]}
+      />,
+    );
+    // No effectiveStatus on the fixture → exercises the shared-model fallback derivation too.
+    expect(screen.getAllByText('sales:clientOffers.statusExpired').length).toBeGreaterThan(0);
+  });
+
+  test('status action buttons are disabled on an expired sent offer', async () => {
+    // Row actions live behind the StandardTable overflow menu ("table.rowActions").
+    const user = userEvent.setup();
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[buildOffer({ id: 'O-PAST', status: 'sent', expirationDate: '2000-01-01' })]}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'table.rowActions' }));
+
+    // Scaduto freezes transitions; the server would 409 — the UI must not offer a dead end.
+    const acceptIcon = document.querySelector('.fa-check');
+    expect(acceptIcon).not.toBeNull();
+    expect(acceptIcon?.closest('button')).toBeDisabled();
+    const denyIcon = document.querySelector('.fa-xmark');
+    expect(denyIcon).not.toBeNull();
+    expect(denyIcon?.closest('button')).toBeDisabled();
+  });
+
+  test('submitting an expired offer extends ONLY the expiration date', async () => {
+    const onUpdateOffer = mock((_id: string, _updates: Partial<ClientOffer>) => Promise.resolve());
+    render(
+      <ClientOffersView {...baseProps} offers={[expiredOffer()]} onUpdateOffer={onUpdateOffer} />,
+    );
+
+    // Expired rows stay openable — the modal is where the expiration gets extended (#779).
+    fireEvent.click(screen.getByText('O-EXPIRED'));
+    const submit = await screen.findByRole('button', { name: 'common:buttons.update' });
+    expect(submit).toBeEnabled();
+    const form = submit.closest('form');
+    expect(form).not.toBeNull();
+    fireEvent.submit(form as HTMLFormElement);
+
+    await waitFor(() => expect(onUpdateOffer).toHaveBeenCalledTimes(1));
+    const [id, payload] = onUpdateOffer.mock.calls[0];
+    expect(id).toBe('O-EXPIRED');
+    // Only the expiration date is sent — the form is otherwise read-only and the server
+    // rejects content edits on an expired offer.
+    expect(Object.keys(payload as object)).toEqual(['expirationDate']);
+  });
+
+  test('submitting with a still-past expiration date is rejected client-side', async () => {
+    const onUpdateOffer = mock((_id: string, _updates: Partial<ClientOffer>) => Promise.resolve());
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[expiredOffer({ expirationDate: '2000-01-01' })]}
+        onUpdateOffer={onUpdateOffer}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('O-EXPIRED'));
+    const submit = await screen.findByRole('button', { name: 'common:buttons.update' });
+    const form = submit.closest('form');
+    expect(form).not.toBeNull();
+    fireEvent.submit(form as HTMLFormElement);
+
+    // The still-past date cannot revalidate the offer — rejected with a toast, no API call.
+    expect(onUpdateOffer).not.toHaveBeenCalled();
+  });
+});

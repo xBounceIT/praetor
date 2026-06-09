@@ -115,7 +115,7 @@ describe('existsById / findIdConflict', () => {
 
 describe('findExisting', () => {
   test('returns existing offer fields needed for permission checks', async () => {
-    exec.enqueue({ rows: [['co-1', 'cq-1', 'c-1', 'Acme', 'draft', null]] });
+    exec.enqueue({ rows: [['co-1', 'cq-1', 'c-1', 'Acme', 'draft', null, '2999-12-31']] });
     const result = await clientOffersRepo.findExisting('co-1', testDb);
     expect(result?.linkedQuoteId).toBe('cq-1');
     expect(result?.status).toBe('draft');
@@ -129,14 +129,14 @@ describe('findExisting', () => {
 
 describe('lockExistingById', () => {
   test('uses FOR UPDATE in the emitted SQL', async () => {
-    exec.enqueue({ rows: [['co-1', 'cq-1', 'c-1', 'Acme', 'draft', null]] });
+    exec.enqueue({ rows: [['co-1', 'cq-1', 'c-1', 'Acme', 'draft', null, '2999-12-31']] });
     await clientOffersRepo.lockExistingById('co-1', testDb);
     expect(exec.calls[0].sql.toLowerCase()).toContain('for update');
     expect(exec.calls[0].params).toContain('co-1');
   });
 
   test('returns mapped row when present', async () => {
-    exec.enqueue({ rows: [['co-1', 'cq-1', 'c-1', 'Acme', 'draft', null]] });
+    exec.enqueue({ rows: [['co-1', 'cq-1', 'c-1', 'Acme', 'draft', null, '2999-12-31']] });
     const result = await clientOffersRepo.lockExistingById('co-1', testDb);
     expect(result?.id).toBe('co-1');
     expect(result?.status).toBe('draft');

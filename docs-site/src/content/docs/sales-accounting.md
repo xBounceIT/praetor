@@ -31,6 +31,8 @@ Quando un documento viene accettato, prosegui creando l'ordine o il documento co
 
 Le offerte clienti in stato **Accettata** o **Rifiutata** possono essere riportate in **Bozza** dal menu azioni solo da Top Manager o admin. Praetor richiede conferma, permette di indicare un motivo e registra il cambio nello storico/audit; l'azione non è disponibile se dall'offerta è già nato un ordine di vendita.
 
+Le offerte clienti seguono lo stesso modello di scadenza dei preventivi: ogni offerta ha una **Data Scadenza** obbligatoria e, una volta superata, un'offerta in **Bozza** o **Inviata** mostra lo stato derivato **Scaduta** (un'offerta **Accettata** o **Rifiutata** non viene mai mostrata come Scaduta). Un'offerta scaduta è in sola lettura e non può cambiare stato: l'unica uscita è estendere la **Data Scadenza**, che resta modificabile dal form dell'offerta per le offerte inviate e scadute.
+
 ## Preventivi fornitori
 
 I preventivi fornitori aiutano a confrontare costi e condizioni d'acquisto. Associa le righe ai prodotti corretti quando possibile, così i dati restano tracciabili nei flussi successivi.
