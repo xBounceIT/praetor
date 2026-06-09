@@ -316,9 +316,12 @@ const resolveSupplierQuoteRefs = async (
     }
     // Trust the snapshot, not the client: stamp the authoritative quote id, supplier name and unit
     // price so the persisted line is tied to the real accepted quote and the supplier-order
-    // auto-create keys off a valid supplierQuoteId.
+    // auto-create keys off a valid supplierQuoteId. A catalog-backed supplier-quote item also
+    // carries a real productId — adopt it (mirroring the client-quotes resolver) so the sale isn't
+    // stored product-less and stays visible to product quick-links and catalog usage/revenue reports.
     items[i] = {
       ...item,
+      productId: snapshot.productId ?? item.productId,
       supplierQuoteId: snapshot.supplierQuoteId,
       supplierQuoteSupplierName: snapshot.supplierName,
       supplierQuoteUnitPrice: snapshot.netCost,

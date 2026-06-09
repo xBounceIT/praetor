@@ -499,4 +499,62 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     expect(sqFindByIdMock).toHaveBeenCalledWith('sq-real');
     expect(sqFindByIdMock).not.toHaveBeenCalledWith('sq-client-lie');
   });
+
+  test('adopts the catalog productId from a catalog-backed supplier-quote snapshot', async () => {
+    // When the accepted supplier-quote item maps to a real catalog product, a product-less order
+    // line must inherit that productId so the sale is not stored product-less and stays visible to
+    // product quick-links and the catalog usage/revenue reports.
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-1',
+          {
+            supplierQuoteId: 'sq-1',
+            supplierName: 'Supplier Co',
+            productId: 'p-cat',
+            unitPrice: 50,
+            netCost: 50,
+          },
+        ],
+      ]),
+    );
+    coInsertItemsMock.mockResolvedValue([
+      insertedItem({
+        productId: 'p-cat',
+        productName: 'Catalog supplier line',
+        supplierQuoteId: 'sq-1',
+        supplierQuoteItemId: 'sqi-1',
+      }),
+    ]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: 'co-1',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            productId: null,
+            productName: 'Catalog supplier line',
+            quantity: 1,
+            unitPrice: 100,
+            supplierQuoteId: 'sq-1',
+            supplierQuoteItemId: 'sqi-1',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const inserted = coInsertItemsMock.mock.calls[0][1] as Array<{
+      productId: unknown;
+      supplierQuoteItemId: unknown;
+    }>;
+    // The line inherited the catalog productId from the snapshot — no longer product-less.
+    expect(inserted[0].productId).toBe('p-cat');
+    expect(inserted[0].supplierQuoteItemId).toBe('sqi-1');
+  });
 });
