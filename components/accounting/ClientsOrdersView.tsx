@@ -81,9 +81,6 @@ const DEFAULT_UNIT_TYPE: SupplierUnitType = 'hours';
 
 const compactInputClass = 'h-9 text-center font-medium';
 
-const pillBadgeClass =
-  'px-2 py-0.5 rounded-full text-white text-[8px] font-black uppercase tracking-wider';
-
 const convertHourlyToUnit = (hourlyPrice: number, unitType: SupplierUnitType | undefined) =>
   convertUnitPrice(hourlyPrice, 'hours', unitType || DEFAULT_UNIT_TYPE);
 
@@ -1243,27 +1240,18 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('crm:internalListing.cost')}
                                   </FieldLabel>
-                                  <div className="flex min-h-9 flex-col items-center justify-center gap-1">
-                                    {item.supplierSaleId && (
-                                      <span className={`${pillBadgeClass} bg-blue-600`}>
-                                        {t('accounting:clientsOrders.supplierOrderBadge', {
-                                          defaultValue: 'Supplier order',
-                                        })}
-                                      </span>
-                                    )}
-                                    <div className="flex items-center gap-1">
-                                      <ValidatedNumberInput
-                                        value={unitCost}
-                                        formatDecimals={2}
-                                        onValueChange={handleCostChange}
-                                        disabled={isReadOnly}
-                                        className={compactInputClass}
-                                      />
-                                      <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
-                                        {currency}
-                                      </span>
-                                      {item.supplierQuoteItemId && <SupplierQuoteCostHint />}
-                                    </div>
+                                  <div className="flex h-9 items-center justify-center gap-1">
+                                    <ValidatedNumberInput
+                                      value={unitCost}
+                                      formatDecimals={2}
+                                      onValueChange={handleCostChange}
+                                      disabled={isReadOnly}
+                                      className={compactInputClass}
+                                    />
+                                    <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
+                                      {currency}
+                                    </span>
+                                    {item.supplierQuoteItemId && <SupplierQuoteCostHint />}
                                   </div>
                                 </div>
                                 <div className="space-y-1 lg:col-span-1 lg:space-y-0">

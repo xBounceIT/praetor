@@ -30,14 +30,20 @@ describe('supplier-quote cost hint', () => {
     expectSourceOmitsAll(source, REMOVED_BADGE_MARKERS);
   });
 
-  test('client orders shows the cost hint and keeps the supplier-order badge', async () => {
+  test('client orders shows the cost hint without a supplier-order badge', async () => {
     const source = await readComponentSource('accounting/ClientsOrdersView.tsx');
 
     expectSourceContainsAll(source, [
       "import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';",
       '{item.supplierQuoteItemId && <SupplierQuoteCostHint />}',
-      "t('accounting:clientsOrders.supplierOrderBadge'",
     ]);
-    expectSourceOmitsAll(source, ['sales:clientQuotes.supplierQuoteBadge', 'bg-emerald-600']);
+    // The blue "Ordine fornitore" pill above the cost was redundant with the
+    // dedicated supplier-order column and the cost hint, so it was removed.
+    expectSourceOmitsAll(source, [
+      'sales:clientQuotes.supplierQuoteBadge',
+      'bg-emerald-600',
+      'accounting:clientsOrders.supplierOrderBadge',
+      'bg-blue-600',
+    ]);
   });
 });
