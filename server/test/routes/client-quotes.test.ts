@@ -41,6 +41,8 @@ const cqFindFullForSnapshotMock = mock();
 const cqFindItemsForQuoteMock = mock();
 const cqFindIdConflictMock = mock();
 const cqUpdateMock = mock();
+const cqFindStatusAndClientNameMock = mock();
+const cqDeleteByIdMock = mock();
 
 const sqFindExpirationByIdMock = mock();
 
@@ -77,6 +79,8 @@ beforeAll(async () => {
     findItemsForQuote: cqFindItemsForQuoteMock,
     findIdConflict: cqFindIdConflictMock,
     update: cqUpdateMock,
+    findStatusAndClientName: cqFindStatusAndClientNameMock,
+    deleteById: cqDeleteByIdMock,
   }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
@@ -118,7 +122,7 @@ const HAPPY_USER = {
   sessionVersion: 1,
 };
 
-const FULL_PERMS = ['sales.client_quotes.update'];
+const FULL_PERMS = ['sales.client_quotes.update', 'sales.client_quotes.delete'];
 
 // findCurrent returns the ClientQuoteGate shape.
 const gate = (over: Partial<ReturnType<typeof baseGate>> = {}) => ({ ...baseGate(), ...over });
@@ -164,6 +168,8 @@ const allMocks = [
   cqFindItemsForQuoteMock,
   cqFindIdConflictMock,
   cqUpdateMock,
+  cqFindStatusAndClientNameMock,
+  cqDeleteByIdMock,
   sqFindExpirationByIdMock,
   qvInsertMock,
   qvBuildSnapshotMock,
@@ -434,5 +440,50 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
     const body = JSON.parse(res.body);
     expect(body.isExpired).toBe(true);
     expect(body.effectiveStatus).toBe('expired');
+  });
+});
+
+describe('DELETE /api/sales/client-quotes/:id', () => {
+  const deleteQuote = (id: string) =>
+    testApp.inject({
+      method: 'DELETE',
+      url: `/api/sales/client-quotes/${id}`,
+      headers: authHeader(),
+    });
+
+  test('204 deletes a deletable quote via the slash-form URL the frontend sends', async () => {
+    // Also pins the route REGISTRATION: a ':id' path (missing leading slash) would concatenate
+    // under the plugin prefix to /api/sales/client-quotes:id and 404 this exact request shape,
+    // which is what services/api/clientQuotes.ts sends.
+    cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'draft', clientName: 'Client' });
+    cqDeleteByIdMock.mockResolvedValue(undefined);
+
+    const res = await deleteQuote('q-1');
+    expect(res.statusCode).toBe(204);
+    expect(cqDeleteByIdMock).toHaveBeenCalledWith('q-1');
+  });
+
+  test('409 when an offer was created from the quote', async () => {
+    cqFindLinkedOfferIdMock.mockResolvedValue('of-1');
+
+    const res = await deleteQuote('q-1');
+    expect(res.statusCode).toBe(409);
+    expect(cqDeleteByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when the quote is accepted', async () => {
+    cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'accepted', clientName: 'Client' });
+
+    const res = await deleteQuote('q-1');
+    expect(res.statusCode).toBe(409);
+    expect(cqDeleteByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('404 when the quote does not exist', async () => {
+    cqFindStatusAndClientNameMock.mockResolvedValue(null);
+
+    const res = await deleteQuote('missing');
+    expect(res.statusCode).toBe(404);
+    expect(cqDeleteByIdMock).not.toHaveBeenCalled();
   });
 });
