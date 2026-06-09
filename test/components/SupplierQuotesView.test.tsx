@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { Client, Product, Supplier, SupplierQuote } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
 import { render } from '../helpers/render';
@@ -29,6 +29,10 @@ const buildQuote = (overrides: Partial<SupplierQuote>): SupplierQuote => ({
   id: 'SQ-base',
   supplierId: 'sup-1',
   supplierName: 'Acme Supplies',
+  // Every supplier quote is associated with a customer (issue #777); default to one so edit/submit
+  // fixtures pass the mandatory-customer check. Tests that need a client-less quote override these.
+  clientId: 'cli-1',
+  clientName: 'Globex Corp',
   items: [
     {
       id: 'sqi-1',
@@ -252,20 +256,71 @@ describe('<SupplierQuotesView /> deep-link filter', () => {
   });
 });
 
-describe('<SupplierQuotesView /> optional customer association (issue #759)', () => {
-  test('renders the Customer field in the add-quote dialog', () => {
+// The customer link used to be optional (issue #759); issue #777 makes it mandatory.
+describe('<SupplierQuotesView /> mandatory customer association (issue #777)', () => {
+  test('marks the Customer field required and drops the empty "No customer" option', () => {
     render(<SupplierQuotesView {...baseProps} />);
     fireEvent.click(screen.getByText('sales:supplierQuotes.addQuote'));
     expect(screen.getByText('sales:supplierQuotes.newQuote')).toBeInTheDocument();
-    // The customer select trigger renders; with nothing linked it shows the "No customer" option
-    // (scoped by id because the same i18n key is also the list column header behind the modal).
+
+    // The Customer field now carries the required `*` indicator, like Supplier / Quote Code.
+    const clientLabel = document.querySelector('label[for="supplier-quote-client"]');
+    expect(clientLabel?.textContent).toContain('*');
+
+    // With nothing linked the trigger shows the placeholder; the empty "No customer" clearing
+    // option is gone (scoped by id since the same key is also the list column header behind it).
     const trigger = document.getElementById('supplier-quote-client');
     expect(trigger).not.toBeNull();
-    expect(trigger?.textContent).toContain('sales:supplierQuotes.noClient');
-    // Saving with no customer selected must be allowed: the Save button is shown.
-    expect(screen.getByText('common:buttons.save')).toBeInTheDocument();
+    expect(trigger?.textContent).toContain('sales:supplierQuotes.selectClient');
+    expect(trigger?.textContent).not.toContain('sales:supplierQuotes.noClient');
   });
 
+  test('blocks updating an existing client-less draft until a customer is chosen', () => {
+    // A draft created while the link was optional (clientId null) must now name a customer to save.
+    const clientless = buildQuote({
+      id: 'SQ-NO-CLIENT',
+      status: 'draft',
+      clientId: null,
+      clientName: null,
+    });
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+    render(
+      <SupplierQuotesView {...baseProps} quotes={[clientless]} onUpdateQuote={onUpdateQuote} />,
+    );
+    fireEvent.click(screen.getByText('SQ-NO-CLIENT'));
+
+    // Supplier, code, and items are all valid — only the customer is missing.
+    fireEvent.click(screen.getByText('common:buttons.update'));
+
+    expect(onUpdateQuote).not.toHaveBeenCalled();
+    expect(screen.getByText('sales:supplierQuotes.errors.clientRequired')).toBeInTheDocument();
+  });
+
+  test('saves a new quote once a customer is selected', async () => {
+    const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
+    // No table rows (quotes: []) so the supplier/customer names are unambiguous in the combobox.
+    render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
+    fireEvent.click(screen.getByText('sales:supplierQuotes.addQuote'));
+
+    fireEvent.click(document.getElementById('supplier-quote-supplier') as HTMLElement);
+    fireEvent.click(screen.getByText('Acme Supplies'));
+    fireEvent.click(document.getElementById('supplier-quote-client') as HTMLElement);
+    fireEvent.click(screen.getByText('Globex Corp'));
+    fireEvent.change(document.getElementById('supplier-quote-code') as HTMLInputElement, {
+      target: { value: 'SQ-NEW' },
+    });
+    fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
+
+    fireEvent.click(screen.getByText('common:buttons.save'));
+
+    await waitFor(() => expect(onAddQuote).toHaveBeenCalledTimes(1));
+    const payload = onAddQuote.mock.calls[0]?.[0] as Partial<SupplierQuote>;
+    expect(payload.clientId).toBe('cli-1');
+    expect(payload.clientName).toBe('Globex Corp');
+  });
+});
+
+describe('<SupplierQuotesView /> linked customer display', () => {
   test('shows the linked customer name in the list', () => {
     const withClient = buildQuote({
       id: 'SQ-CLIENT',
