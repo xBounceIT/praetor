@@ -37,7 +37,6 @@ import {
   formatMolPercentage,
   getDurationDisplayValue,
   getItemPricingContext,
-  isUnitLine,
   normalizeDurationUnit,
   type PricingTotals,
   parseDurationValueToMonths,
@@ -1064,11 +1063,14 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       const items = [...(prev.items || [])];
       const item = items[index];
       if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return prev;
-      const displayValue = getDurationDisplayValue(item);
+      // 'N/A' marks the line as duration-less: reset to the neutral 1 month so it never multiplies
+      // (issue #775). Months/years instead keeps the displayed number under the new unit.
+      const durationMonths =
+        newUnit === 'na' ? 1 : durationValueToMonths(getDurationDisplayValue(item), newUnit);
       items[index] = {
         ...items[index],
         durationUnit: newUnit,
-        durationMonths: durationValueToMonths(displayValue, newUnit),
+        durationMonths,
       };
       return { ...prev, items };
     });
@@ -1103,9 +1105,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         ...item,
         unitPrice: Number(item.unitPrice ?? 0),
         productCost: Number(item.productCost ?? 0),
-        // Unit-measured lines cannot carry a duration — coerce to a single month.
-        durationMonths: isUnitLine(item) ? 1 : Number(item.durationMonths ?? 1) || 1,
-        durationUnit: normalizeDurationUnit(isUnitLine(item) ? 'months' : item.durationUnit),
+        durationMonths: Number(item.durationMonths ?? 1) || 1,
+        durationUnit: normalizeDurationUnit(item.durationUnit),
       })),
     };
 
@@ -1361,8 +1362,6 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         // Duration is stored as canonical months; show it in the item's unit.
                         const durationUnit = normalizeDurationUnit(item.durationUnit);
                         const durationValue = getDurationDisplayValue(item);
-                        // "Unit"-measured lines can't carry a duration → Durata shows N/A.
-                        const isUnitDurationLine = isUnitLine(item);
                         const unitSalePrice = Number(item.unitPrice || 0);
                         const lineSalePrice = unitSalePrice * quantity * durationMonths;
                         const lineMargin = lineSalePrice - lineCost;
@@ -1551,36 +1550,28 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                   />
                                 </div>
                                 <div className="flex items-center gap-1">
-                                  {isUnitDurationLine ? (
-                                    <span className="text-sm font-medium text-zinc-400">
-                                      {t('common:labels.notApplicable')}
-                                    </span>
-                                  ) : (
-                                    <>
-                                      <ValidatedNumberInput
-                                        step="1"
-                                        min="1"
-                                        placeholder={t('sales:clientOffers.durationColumn', {
-                                          defaultValue: 'Duration',
-                                        })}
-                                        value={durationValue}
-                                        onValueChange={(value) =>
-                                          handleDurationValueChange(index, value)
-                                        }
-                                        disabled={isReadOnly}
-                                        className="w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
-                                      />
-                                      <span className="text-xs font-semibold text-zinc-400 shrink-0">
-                                        /
-                                      </span>
-                                      <DurationUnitSelector
-                                        value={durationUnit}
-                                        onChange={(val) => handleDurationUnitChange(index, val)}
-                                        count={durationValue}
-                                        disabled={isReadOnly}
-                                      />
-                                    </>
-                                  )}
+                                  <ValidatedNumberInput
+                                    step="1"
+                                    min="1"
+                                    placeholder={t('sales:clientOffers.durationColumn', {
+                                      defaultValue: 'Duration',
+                                    })}
+                                    value={durationValue}
+                                    onValueChange={(value) =>
+                                      handleDurationValueChange(index, value)
+                                    }
+                                    disabled={isReadOnly || durationUnit === 'na'}
+                                    className="w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
+                                  />
+                                  <span className="text-xs font-semibold text-zinc-400 shrink-0">
+                                    /
+                                  </span>
+                                  <DurationUnitSelector
+                                    value={durationUnit}
+                                    onChange={(val) => handleDurationUnitChange(index, val)}
+                                    count={durationValue}
+                                    disabled={isReadOnly}
+                                  />
                                 </div>
                               </div>
                               <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
@@ -1750,36 +1741,28 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                   </div>
                                 </div>
                                 <div className="col-span-2 flex items-center justify-center gap-1">
-                                  {isUnitDurationLine ? (
-                                    <span className="text-sm font-medium text-zinc-400">
-                                      {t('common:labels.notApplicable')}
-                                    </span>
-                                  ) : (
-                                    <>
-                                      <ValidatedNumberInput
-                                        step="1"
-                                        min="1"
-                                        placeholder={t('sales:clientOffers.durationColumn', {
-                                          defaultValue: 'Duration',
-                                        })}
-                                        value={durationValue}
-                                        onValueChange={(value) =>
-                                          handleDurationValueChange(index, value)
-                                        }
-                                        disabled={isReadOnly}
-                                        className="w-full max-w-[5rem] text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                      />
-                                      <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
-                                        /
-                                      </span>
-                                      <DurationUnitSelector
-                                        value={durationUnit}
-                                        onChange={(val) => handleDurationUnitChange(index, val)}
-                                        count={durationValue}
-                                        disabled={isReadOnly}
-                                      />
-                                    </>
-                                  )}
+                                  <ValidatedNumberInput
+                                    step="1"
+                                    min="1"
+                                    placeholder={t('sales:clientOffers.durationColumn', {
+                                      defaultValue: 'Duration',
+                                    })}
+                                    value={durationValue}
+                                    onValueChange={(value) =>
+                                      handleDurationValueChange(index, value)
+                                    }
+                                    disabled={isReadOnly || durationUnit === 'na'}
+                                    className="w-full max-w-[5rem] text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                  />
+                                  <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
+                                    /
+                                  </span>
+                                  <DurationUnitSelector
+                                    value={durationUnit}
+                                    onChange={(val) => handleDurationUnitChange(index, val)}
+                                    count={durationValue}
+                                    disabled={isReadOnly}
+                                  />
                                 </div>
                                 <div className="relative col-span-2 flex flex-col items-center justify-center gap-1">
                                   {isLinkedToSupplierQuote && (

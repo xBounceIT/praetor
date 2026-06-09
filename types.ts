@@ -515,7 +515,7 @@ export interface QuoteItem {
   note?: string;
   unitType?: SupplierUnitType;
   durationMonths?: number; // months the service runs; multiplies cost & revenue (issue #757)
-  durationUnit?: DurationUnit; // display unit for the duration value: 'months' (default) or 'years'
+  durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
 }
 
 export interface Quote {
@@ -584,7 +584,7 @@ export interface ClientOfferItem {
   note?: string;
   unitType?: SupplierUnitType;
   durationMonths?: number; // months the service runs; multiplies cost & revenue (issue #757)
-  durationUnit?: DurationUnit; // display unit for the duration value: 'months' (default) or 'years'
+  durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
 }
 
 export interface ClientOffer {
@@ -658,7 +658,7 @@ export interface ClientsOrderItem {
   note?: string;
   unitType?: SupplierUnitType;
   durationMonths?: number; // months the service runs; multiplies cost & revenue (issue #757)
-  durationUnit?: DurationUnit; // display unit for the duration value: 'months' (default) or 'years'
+  durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
 }
 
 export interface ClientsOrder {
@@ -855,7 +855,7 @@ export interface InvoiceItem {
   // Per-item Italian VAT (IVA) rate in percent. 0 for exempt or pre-tax-feature data.
   taxRate?: number;
   durationMonths?: number; // months the service runs; multiplies the taxable amount (issue #757)
-  durationUnit?: DurationUnit; // display unit for the duration value: 'months' (default) or 'years'
+  durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
 }
 
 export interface Invoice {
@@ -897,8 +897,9 @@ export type SupplierUnitType = 'hours' | 'days' | 'unit';
 
 // Display unit for a line item's duration (issue #757). `durationMonths` stays the canonical
 // pricing multiplier (always whole months); `durationUnit` only controls how that value is
-// shown/entered — 'years' renders `durationMonths / 12`.
-export type DurationUnit = 'months' | 'years';
+// shown/entered — 'years' renders `durationMonths / 12`. 'na' (N/A) marks a line where duration
+// does not apply: the value beside the selector is disabled and the line never multiplies (×1).
+export type DurationUnit = 'months' | 'years' | 'na';
 
 export interface SupplierQuoteItem {
   id: string;

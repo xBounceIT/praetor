@@ -199,17 +199,21 @@ describe('findItemSnapshotsForQuote', () => {
 });
 
 describe('findItemTotals', () => {
-  test('returns parsed numeric totals including durationMonths', async () => {
+  test('returns parsed numeric totals including durationMonths and durationUnit', async () => {
     exec.enqueue({
       rows: [
-        ['2', '10', '5', 12],
-        [1, 20, null, null],
+        ['2', '10', '5', 12, 'years'],
+        [1, 20, null, null, null],
+        [3, 30, 0, 6, 'na'],
       ],
     });
     const result = await clientQuotesRepo.findItemTotals('cq-1', testDb);
     expect(result).toEqual([
-      { quantity: 2, unitPrice: 10, discount: 5, durationMonths: 12 },
-      { quantity: 1, unitPrice: 20, discount: 0, durationMonths: 1 },
+      { quantity: 2, unitPrice: 10, discount: 5, durationMonths: 12, durationUnit: 'years' },
+      // null duration_unit normalizes to 'months'
+      { quantity: 1, unitPrice: 20, discount: 0, durationMonths: 1, durationUnit: 'months' },
+      // 'na' (N/A) is carried through so the quote-total gate can skip the duration multiplier
+      { quantity: 3, unitPrice: 30, discount: 0, durationMonths: 6, durationUnit: 'na' },
     ]);
   });
 });

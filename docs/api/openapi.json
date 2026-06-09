@@ -24868,7 +24868,8 @@
                               "type": "string",
                               "enum": [
                                 "months",
-                                "years"
+                                "years",
+                                "na"
                               ]
                             }
                           },
@@ -25125,7 +25126,8 @@
                           "type": "string",
                           "enum": [
                             "months",
-                            "years"
+                            "years",
+                            "na"
                           ]
                         }
                       },
@@ -25133,7 +25135,8 @@
                         "productId",
                         "productName",
                         "quantity",
-                        "unitPrice"
+                        "unitPrice",
+                        "unitType"
                       ]
                     }
                   },
@@ -25313,7 +25316,8 @@
                             "type": "string",
                             "enum": [
                               "months",
-                              "years"
+                              "years",
+                              "na"
                             ]
                           }
                         },
@@ -25550,7 +25554,8 @@
                           "type": "string",
                           "enum": [
                             "months",
-                            "years"
+                            "years",
+                            "na"
                           ]
                         }
                       },
@@ -25558,7 +25563,8 @@
                         "productId",
                         "productName",
                         "quantity",
-                        "unitPrice"
+                        "unitPrice",
+                        "unitType"
                       ]
                     }
                   },
@@ -25744,7 +25750,8 @@
                             "type": "string",
                             "enum": [
                               "months",
-                              "years"
+                              "years",
+                              "na"
                             ]
                           }
                         },
@@ -26648,7 +26655,8 @@
                             "type": "string",
                             "enum": [
                               "months",
-                              "years"
+                              "years",
+                              "na"
                             ]
                           }
                         },
@@ -26969,7 +26977,8 @@
                               "type": "string",
                               "enum": [
                                 "months",
-                                "years"
+                                "years",
+                                "na"
                               ]
                             }
                           },
@@ -27234,14 +27243,16 @@
                           "type": "string",
                           "enum": [
                             "months",
-                            "years"
+                            "years",
+                            "na"
                           ]
                         }
                       },
                       "required": [
                         "productName",
                         "quantity",
-                        "unitPrice"
+                        "unitPrice",
+                        "unitType"
                       ]
                     }
                   },
@@ -27436,7 +27447,8 @@
                             "type": "string",
                             "enum": [
                               "months",
-                              "years"
+                              "years",
+                              "na"
                             ]
                           }
                         },
@@ -27678,14 +27690,16 @@
                           "type": "string",
                           "enum": [
                             "months",
-                            "years"
+                            "years",
+                            "na"
                           ]
                         }
                       },
                       "required": [
                         "productName",
                         "quantity",
-                        "unitPrice"
+                        "unitPrice",
+                        "unitType"
                       ]
                     }
                   },
@@ -27882,7 +27896,8 @@
                             "type": "string",
                             "enum": [
                               "months",
-                              "years"
+                              "years",
+                              "na"
                             ]
                           }
                         },
@@ -28370,7 +28385,8 @@
                             "type": "string",
                             "enum": [
                               "months",
-                              "years"
+                              "years",
+                              "na"
                             ]
                           }
                         },
@@ -29130,7 +29146,8 @@
                             "type": "string",
                             "enum": [
                               "months",
-                              "years"
+                              "years",
+                              "na"
                             ]
                           }
                         },
@@ -30714,7 +30731,8 @@
                               "type": "string",
                               "enum": [
                                 "months",
-                                "years"
+                                "years",
+                                "na"
                               ]
                             }
                           },
@@ -31026,7 +31044,8 @@
                           "type": "string",
                           "enum": [
                             "months",
-                            "years"
+                            "years",
+                            "na"
                           ]
                         }
                       },
@@ -31227,7 +31246,8 @@
                             "type": "string",
                             "enum": [
                               "months",
-                              "years"
+                              "years",
+                              "na"
                             ]
                           }
                         },
@@ -31516,7 +31536,8 @@
                           "type": "string",
                           "enum": [
                             "months",
-                            "years"
+                            "years",
+                            "na"
                           ]
                         }
                       },
@@ -31725,7 +31746,8 @@
                             "type": "string",
                             "enum": [
                               "months",
-                              "years"
+                              "years",
+                              "na"
                             ]
                           }
                         },
@@ -32650,7 +32672,8 @@
                             "type": "string",
                             "enum": [
                               "months",
-                              "years"
+                              "years",
+                              "na"
                             ]
                           }
                         },
@@ -32928,7 +32951,8 @@
                               "type": "string",
                               "enum": [
                                 "months",
-                                "years"
+                                "years",
+                                "na"
                               ]
                             }
                           },
@@ -33192,7 +33216,8 @@
                           "type": "string",
                           "enum": [
                             "months",
-                            "years"
+                            "years",
+                            "na"
                           ]
                         }
                       },
@@ -33320,7 +33345,8 @@
                             "type": "string",
                             "enum": [
                               "months",
-                              "years"
+                              "years",
+                              "na"
                             ]
                           }
                         },
@@ -33564,7 +33590,8 @@
                           "type": "string",
                           "enum": [
                             "months",
-                            "years"
+                            "years",
+                            "na"
                           ]
                         }
                       },
@@ -33695,7 +33722,8 @@
                             "type": "string",
                             "enum": [
                               "months",
-                              "years"
+                              "years",
+                              "na"
                             ]
                           }
                         },

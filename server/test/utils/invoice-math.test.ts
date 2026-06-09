@@ -171,6 +171,22 @@ describe('computeInvoiceTotals', () => {
       baseline,
     );
   });
+
+  test("durationUnit 'na' never multiplies, even with a stored durationMonths (issue #775)", () => {
+    // 'N/A' lines ignore duration: taxable = 2 × 50 = 100 (not ×12), 22% VAT = 22, total 122.
+    expect(
+      computeInvoiceTotals([
+        {
+          quantity: 2,
+          unitPrice: 50,
+          discount: 0,
+          taxRate: 22,
+          durationMonths: 12,
+          durationUnit: 'na',
+        },
+      ]),
+    ).toEqual({ subtotal: 100, taxTotal: 22, total: 122 });
+  });
 });
 
 describe('roundCurrency', () => {
