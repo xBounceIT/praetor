@@ -71,9 +71,7 @@ export interface ClientsOrdersViewProps {
   orders: ClientsOrder[];
   clients: Client[];
   products: Product[];
-  // Supplier orders feed the per-line shortcut that jumps to the supplier order
-  // auto-created behind a supplier-quoted line; only the ids are read, to guard
-  // the deep link against an order that is no longer loaded.
+  // Supplier orders behind supplier-quoted lines (only ids are read; see buildSupplierOrderQuickViewHref).
   supplierOrders?: SupplierSaleOrder[];
   onUpdateClientsOrder: (id: string, updates: Partial<ClientsOrder>) => Promise<void>;
   onDeleteClientsOrder: (id: string) => Promise<void>;
@@ -1155,11 +1153,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                         })}
                                       </span>
                                     )}
-                                    {/* Mirror of the product shortcut: jump to the supplier order
-                                        auto-created behind this line. Only meaningful when the line
-                                        actually references one, so it's omitted (not just disabled)
-                                        on supplier-order-less lines. */}
-                                    {canViewSupplierOrders && Boolean(item.supplierSaleId) && (
+                                    {/* Omitted (not just disabled) on lines with no supplier order. */}
+                                    {canViewSupplierOrders && item.supplierSaleId && (
                                       <QuickViewLinkButton
                                         href={supplierOrderHref}
                                         label={t(
