@@ -3,6 +3,7 @@ import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { supplierQuoteItems, supplierQuotes } from '../db/schema/supplierQuotes.ts';
 import { supplierSales } from '../db/schema/supplierSales.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
+import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
 
 export type SupplierQuote = {
@@ -47,6 +48,8 @@ export type SupplierQuoteItem = {
   unitPrice: number;
   note: string | null;
   unitType: string;
+  durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 type QuoteRow = typeof supplierQuotes.$inferSelect & {
@@ -83,6 +86,8 @@ const mapItem = (row: typeof supplierQuoteItems.$inferSelect): SupplierQuoteItem
   unitPrice: parseDbNumber(row.unitPrice, 0),
   note: row.note,
   unitType: row.unitType ?? 'unit',
+  durationMonths: row.durationMonths ?? 1,
+  durationUnit: normalizeDurationUnit(row.durationUnit),
 });
 
 export const listAll = async (exec: DbExecutor = db): Promise<SupplierQuote[]> => {
@@ -385,6 +390,8 @@ export type NewSupplierQuoteItem = {
   unitPrice: number;
   note: string | null;
   unitType: string;
+  durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 export type QuoteItemSnapshot = {
@@ -462,6 +469,10 @@ export const insertItems = async (
         unitPrice: numericForDb(item.unitPrice),
         note: item.note,
         unitType: item.unitType,
+        // Duration applies to every line type (issue #775); 'na' marks a line that never multiplies
+        // and is gated through effectiveDurationMonths, so the value is persisted verbatim here.
+        durationMonths: item.durationMonths ?? 1,
+        durationUnit: item.durationUnit ?? 'months',
       })),
     )
     .returning();

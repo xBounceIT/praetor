@@ -9,6 +9,7 @@ import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
+import type { DurationUnit } from '../utils/duration-unit.ts';
 import {
   generatePrefixedId,
   generateSupplierOrderId,
@@ -19,6 +20,8 @@ import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
+  optionalDurationMonths,
+  optionalDurationUnit,
   optionalEnum,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
@@ -48,6 +51,8 @@ const itemSchema = {
     unitPrice: { type: 'number' },
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
+    durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
   required: ['id', 'orderId', 'productName', 'quantity', 'unitPrice', 'discount'],
 } as const;
@@ -91,6 +96,8 @@ const itemBodySchema = {
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
     note: { type: 'string' },
+    durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
   required: ['productName', 'quantity', 'unitPrice'],
 } as const;
@@ -134,6 +141,8 @@ type SupplierOrderItemInput = {
   unitPrice?: string | number;
   discount?: string | number;
   note?: string;
+  durationMonths?: string | number;
+  durationUnit?: DurationUnit;
 };
 
 const normalizeItems = (
@@ -169,6 +178,21 @@ const normalizeItems = (
       badRequest(reply, discountResult.message);
       return null;
     }
+    // Duration in months: a positive whole number, defaulting to 1 (one-off line). Supplier orders
+    // have no unit-type concept, so duration is a plain multiplier (no unit-line coercion).
+    const durationMonthsResult = optionalDurationMonths(
+      item.durationMonths,
+      `items[${i}].durationMonths`,
+    );
+    if (!durationMonthsResult.ok) {
+      badRequest(reply, durationMonthsResult.message);
+      return null;
+    }
+    const durationUnitResult = optionalDurationUnit(item.durationUnit, `items[${i}].durationUnit`);
+    if (!durationUnitResult.ok) {
+      badRequest(reply, durationUnitResult.message);
+      return null;
+    }
     normalizedItems.push({
       id: generatePrefixedId(ITEM_ID_PREFIXES.supplierItem),
       productId: item.productId || null,
@@ -177,6 +201,8 @@ const normalizeItems = (
       unitPrice: unitPriceResult.value,
       discount: discountResult.value || 0,
       note: item.note || null,
+      durationMonths: durationMonthsResult.value ?? 1,
+      durationUnit: durationUnitResult.value ?? 'months',
     });
   }
   return normalizedItems;
@@ -941,6 +967,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             id: generatePrefixedId(ITEM_ID_PREFIXES.supplierItem),
             // Empty-string productIds slip through some snapshots; the DB column needs NULL.
             productId: rest.productId || null,
+            // Snapshots taken before duration existed (issue #776) lack these keys; default to a
+            // single month so the restored line keeps its pre-duration total.
+            durationMonths: rest.durationMonths ?? 1,
+            durationUnit: rest.durationUnit ?? 'months',
           }),
         );
 

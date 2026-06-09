@@ -544,16 +544,6 @@ const buildServer = () => {
           : await workUnitsRepo.listManagedBy(user.id)
         : [];
 
-      const memberRows = await workUnitsRepo.listUserIdsByUnitIds(
-        visibleWorkUnits.map((unit) => unit.id),
-      );
-      const userIdsByWorkUnit = new Map<string, string[]>();
-      for (const row of memberRows) {
-        const current = userIdsByWorkUnit.get(row.workUnitId) ?? [];
-        current.push(row.userId);
-        userIdsByWorkUnit.set(row.workUnitId, current);
-      }
-
       return jsonResult({
         users: users.map((entry) =>
           maskUser(entry, {
@@ -561,9 +551,13 @@ const buildServer = () => {
             canViewEmails: hasEmailView,
           }),
         ),
-        workUnits: visibleWorkUnits.map((unit) => ({
+        // Expose only member user IDs, derived from the members the repo already returns
+        // (no second user_work_units query). The member display names are deliberately
+        // dropped here — they would bypass the per-user `maskUser` scoping applied to
+        // `users` above.
+        workUnits: visibleWorkUnits.map(({ members, ...unit }) => ({
           ...unit,
-          userIds: userIdsByWorkUnit.get(unit.id) ?? [],
+          userIds: members.map((member) => member.id),
         })),
         scope: {
           canViewAllUsers: hasAllUsersView,

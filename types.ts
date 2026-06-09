@@ -853,6 +853,7 @@ export interface WorkUnit {
   id: string;
   name: string;
   managers: { id: string; name: string }[];
+  members?: { id: string; name: string }[];
   description?: string;
   isDisabled?: boolean;
   userCount?: number;
@@ -930,6 +931,13 @@ export interface SupplierQuoteItem {
   unitPrice: number;
   note?: string;
   unitType?: SupplierUnitType;
+  // Number of months the line item's service runs (issue #776, same logic as client quotes
+  // #757). Multiplies the line total alongside `quantity`. Absent/invalid → 1, so legacy rows
+  // keep their existing totals.
+  durationMonths?: number;
+  // Display unit for `durationMonths`: 'months' (default) or 'years'. Pricing always uses
+  // `durationMonths`; this only controls how the value is shown/entered.
+  durationUnit?: DurationUnit;
 }
 
 export interface SupplierQuote {
@@ -1009,6 +1017,12 @@ export interface SupplierSaleOrderItem {
   unitPrice: number;
   discount?: number;
   note?: string;
+  // Number of months the line runs (issue #776). Multiplies the line total alongside quantity;
+  // carried over from the originating supplier quote so the order total matches the quote.
+  // Absent/invalid → 1, so legacy orders keep their existing totals.
+  durationMonths?: number;
+  // Display unit for `durationMonths`: 'months' (default) or 'years'.
+  durationUnit?: DurationUnit;
 }
 
 export interface SupplierSaleOrder {
@@ -1065,6 +1079,8 @@ export interface SupplierInvoiceItem {
   quantity: number;
   unitPrice: number;
   discount?: number;
+  durationMonths?: number; // months the service runs; multiplies the line total (issue #776/#775)
+  durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
 }
 
 export interface SupplierInvoice {

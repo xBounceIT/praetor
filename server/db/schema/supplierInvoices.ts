@@ -3,6 +3,7 @@ import {
   check,
   date,
   index,
+  integer,
   numeric,
   pgTable,
   text,
@@ -67,7 +68,22 @@ export const supplierInvoiceItems = pgTable(
     quantity: numeric('quantity', { precision: 10, scale: 2 }).notNull().default('1'),
     unitPrice: numeric('unit_price', { precision: 15, scale: 2 }).notNull().default('0'),
     discount: numeric('discount', { precision: 5, scale: 2 }).default('0'),
+    // Months the line's service runs (issue #776); multiplies the line total alongside `quantity`,
+    // carried over from the supplier order so the invoice total matches. Default 1 keeps legacy
+    // invoices' totals identical to the pre-duration behavior.
+    durationMonths: integer('duration_months').notNull().default(1),
+    // Display unit for `durationMonths`: 'months' (default), 'years', or 'na'. 'na' (N/A) marks a
+    // line where duration does not apply and never multiplies (issue #775). Pricing always uses
+    // `durationMonths`; this only controls how the value is shown/entered.
+    durationUnit: text('duration_unit').notNull().default('months'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [index('idx_supplier_invoice_items_invoice_id').on(table.invoiceId)],
+  (table) => [
+    index('idx_supplier_invoice_items_invoice_id').on(table.invoiceId),
+    check('chk_supplier_invoice_items_duration_months', sql`${table.durationMonths} >= 1`),
+    check(
+      'chk_supplier_invoice_items_duration_unit',
+      sql`${table.durationUnit} IN ('months', 'years', 'na')`,
+    ),
+  ],
 );

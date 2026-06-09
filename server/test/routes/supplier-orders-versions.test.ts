@@ -385,6 +385,37 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
     );
   });
 
+  test('restores a snapshot item duration and defaults legacy items to one month (issue #776)', async () => {
+    setupHappyPath();
+    // One duration-bearing item and one legacy item (snapshot predates duration → no keys).
+    const durationItem = {
+      ...SAMPLE_ITEM,
+      id: 'ssi-dur',
+      durationMonths: 24,
+      durationUnit: 'years' as const,
+    };
+    const legacyItem = { ...SAMPLE_ITEM, id: 'ssi-legacy' };
+    sovFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: { ...SAMPLE_SNAPSHOT, items: [durationItem, legacyItem] },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/accounting/supplier-orders/so-1/versions/sov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const restoredItems = soReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    expect(restoredItems[0]).toEqual(
+      expect.objectContaining({ durationMonths: 24, durationUnit: 'years' }),
+    );
+    expect(restoredItems[1]).toEqual(
+      expect.objectContaining({ durationMonths: 1, durationUnit: 'months' }),
+    );
+  });
+
   test('409 when linked invoice exists', async () => {
     soLockExistingByIdMock.mockResolvedValue({
       id: 'so-1',

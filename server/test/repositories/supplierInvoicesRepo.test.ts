@@ -309,6 +309,8 @@ describe('replaceItems', () => {
           quantity: 1,
           unitPrice: 5,
           discount: 0,
+          durationMonths: 1,
+          durationUnit: 'months',
         },
       ],
       testDb,

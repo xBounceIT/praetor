@@ -485,6 +485,8 @@ export type NewSupplierOrderItemForAutoCreate = {
   quantity: number;
   unitPrice: number;
   note: string | null;
+  durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 export const bulkInsertSupplierOrderItems = async (
@@ -502,6 +504,10 @@ export const bulkInsertSupplierOrderItems = async (
       quantity: numericForDb(item.quantity),
       unitPrice: numericForDb(item.unitPrice),
       note: item.note,
+      // Carry the duration from the originating supplier quote (issue #776) so the auto-created
+      // order's total matches the quote instead of collapsing to a single month.
+      durationMonths: item.durationMonths,
+      durationUnit: item.durationUnit,
     })),
   );
 };

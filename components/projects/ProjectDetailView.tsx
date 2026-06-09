@@ -1438,11 +1438,20 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 !assignedLoading && assignedUsers.length > 0 ? (
                   <div className="flex [&>*+*]:-ml-2">
                     {assignedUsers.slice(0, 6).map((u) => (
-                      <Avatar key={u.id} className="size-7 border-2 border-card">
-                        <AvatarFallback className="text-[10px]">
-                          {getInitials(u.name)}
-                        </AvatarFallback>
-                      </Avatar>
+                      <Tooltip key={u.id}>
+                        <TooltipTrigger asChild>
+                          <Avatar
+                            role="img"
+                            aria-label={u.name}
+                            className="size-7 border-2 border-card"
+                          >
+                            <AvatarFallback className="text-[10px]">
+                              {getInitials(u.name)}
+                            </AvatarFallback>
+                          </Avatar>
+                        </TooltipTrigger>
+                        <TooltipContent>{u.name}</TooltipContent>
+                      </Tooltip>
                     ))}
                     {assignedUsers.length > 6 && (
                       <div className="flex size-7 items-center justify-center rounded-full border-2 border-card bg-muted text-[10px] font-medium text-muted-foreground">

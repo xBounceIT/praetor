@@ -862,6 +862,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 quantity: item.quantity,
                 unitPrice: item.unitPrice,
                 note: item.note,
+                // Carry the supplier quote's duration onto the auto-created order line (issue #776)
+                // so the order total matches the quote instead of collapsing to a single month.
+                durationMonths: item.durationMonths,
+                durationUnit: item.durationUnit,
               };
             });
 

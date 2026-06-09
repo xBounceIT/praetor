@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { supplierQuotesApi } from '../../services/api/supplierQuotes';
 import type {
   Client,
+  DurationUnit,
   Product,
   Supplier,
   SupplierQuote,
@@ -26,7 +27,16 @@ import {
   isDateOnlyBeforeToday,
   normalizeDateOnlyString,
 } from '../../utils/date';
-import { convertUnitPrice, parseNumberInputValue, roundCurrency } from '../../utils/numbers';
+import {
+  convertUnitPrice,
+  durationValueToMonths,
+  getDurationDisplayValue,
+  getEffectiveDurationMonths,
+  normalizeDurationUnit,
+  parseDurationValueToMonths,
+  parseNumberInputValue,
+  roundCurrency,
+} from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { isTerminalQuoteStatus } from '../../utils/quoteStatus';
 import { uploadStagedAttachments } from '../../utils/supplierQuoteAttachments';
@@ -34,6 +44,7 @@ import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import DurationUnitSelector from '../shared/DurationUnitSelector';
 import FieldTooltip from '../shared/FieldTooltip';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
@@ -86,8 +97,11 @@ const calculateTotals = (items: SupplierQuoteItem[]): TotalsBreakdown => {
     // Legacy fallback: rows/snapshots that predate list price use the net unit price as the
     // list price (no discount), so gross == net and no discount surfaces for them.
     const listPrice = item.listPrice ?? item.unitPrice ?? 0;
-    grossListTotal += item.quantity * listPrice;
-    netTotal += item.quantity * item.unitPrice;
+    // Duration multiplies the line total alongside quantity (issue #776). Unit-measured lines
+    // never carry a duration, so getEffectiveDurationMonths returns 1 for them.
+    const durationMonths = getEffectiveDurationMonths(item);
+    grossListTotal += item.quantity * listPrice * durationMonths;
+    netTotal += item.quantity * item.unitPrice * durationMonths;
   });
   const subtotal = roundCurrency(grossListTotal);
   const total = roundCurrency(netTotal);
@@ -471,18 +485,16 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     [suppliers],
   );
 
-  // The customer link is optional (issue #759); the leading empty-id option clears it.
-  // Keep an already-linked-but-now-disabled client visible so editing an existing quote doesn't
-  // hide its customer; otherwise only offer active clients.
+  // The customer link is mandatory (issue #777): every supplier quote must name a customer, so
+  // there is no empty "No customer" option — the field starts on the placeholder and submission is
+  // blocked until one is picked (see handleSubmit). Keep an already-linked-but-now-disabled client
+  // visible so editing an existing quote doesn't hide its customer; otherwise only offer active ones.
   const clientOptions = useMemo(() => {
-    const options = [
-      { id: '', name: t('sales:supplierQuotes.noClient', { defaultValue: 'No customer' }) },
-      ...clients.flatMap((client) =>
-        !client.isDisabled || client.id === editingQuote?.clientId
-          ? [{ id: client.id, name: client.name }]
-          : [],
-      ),
-    ];
+    const options = clients.flatMap((client) =>
+      !client.isDisabled || client.id === editingQuote?.clientId
+        ? [{ id: client.id, name: client.name }]
+        : [],
+    );
     // The linked client may be missing from a user-scoped /clients list (no crm.clients_all.view
     // and not assigned to it). Synthesize an option from the quote's stored name so the select
     // shows the customer instead of falling back to the placeholder.
@@ -491,7 +503,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       options.push({ id: linkedId, name: editingQuote?.clientName || linkedId });
     }
     return options;
-  }, [clients, editingQuote, t]);
+  }, [clients, editingQuote]);
 
   const handleClientChange = useCallback(
     (clientId: string) => {
@@ -500,6 +512,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         type: 'patchFormData',
         value: { clientId: clientId || null, clientName: client?.name || null },
       });
+      // Mirror the Quote Code field: clear the required-customer error as soon as one is chosen.
+      if (clientId) {
+        dispatch({ type: 'clearError', key: 'clientId' });
+      }
     },
     [clients],
   );
@@ -525,6 +541,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         discountPercent: 0,
         unitPrice: 0,
         unitType: 'unit' as const,
+        durationMonths: 1,
+        durationUnit: 'months' as const,
         note: '',
       },
     });
@@ -557,6 +575,33 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         listPrice: pricing.listPrice,
         discountPercent: pricing.discountPercent,
         unitPrice: pricing.unitPrice,
+      },
+    });
+  };
+
+  // Duration value entered in the item's chosen unit (issue #776). Stored canonically as whole
+  // months; the Mese/Anno selector only changes how that value is displayed/entered.
+  const handleDurationValueChange = (index: number, value: string) => {
+    if (isReadOnly) return;
+    const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
+    updateItem(index, 'durationMonths', parseDurationValueToMonths(value, unit));
+  };
+
+  const handleDurationUnitChange = (index: number, newUnit: DurationUnit) => {
+    if (isReadOnly) return;
+    const item = formData.items?.[index];
+    if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
+    // Switching to 'na' (N/A) drops the multiplier to a single month — the value input is disabled
+    // and the line never multiplies (issue #775). Other units convert the displayed value to months.
+    const durationMonths =
+      newUnit === 'na' ? 1 : durationValueToMonths(getDurationDisplayValue(item), newUnit);
+    dispatch({
+      type: 'setItem',
+      index,
+      item: {
+        ...item,
+        durationUnit: newUnit,
+        durationMonths,
       },
     });
   };
@@ -970,6 +1015,11 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         defaultValue: 'Supplier is required',
       });
     }
+    if (!formData.clientId) {
+      nextErrors.clientId = t('sales:supplierQuotes.errors.clientRequired', {
+        defaultValue: 'Customer is required',
+      });
+    }
     if (!formData.id?.trim()) {
       nextErrors.id = t('sales:supplierQuotes.errors.quoteCodeRequired', {
         defaultValue: 'Quote Code is required',
@@ -990,12 +1040,16 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       ...formData,
       items: (formData.items || []).map((item) => ({
         ...item,
-        // Submit the same persisted-scale pricing the server derives, so what the user reviewed is
-        // exactly what gets saved (legacy rows fall back to the net price as the list price).
+        // Submit the same persisted-scale pricing the server derives, so what the user reviewed
+        // is exactly what gets saved (legacy rows fall back to the net price as the list price).
         ...deriveLinePricing(
           Number(item.listPrice ?? item.unitPrice ?? 0),
           Number(item.discountPercent ?? 0),
         ),
+        // Duration applies to every line type now (issue #775); 'na' is gated server-side via
+        // effectiveDurationMonths, so the chosen value/unit is submitted verbatim.
+        durationMonths: Number(item.durationMonths ?? 1) || 1,
+        durationUnit: normalizeDurationUnit(item.durationUnit),
       })),
     };
     if (editingQuote) {
@@ -1163,20 +1217,23 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       />
                       <FieldError className="text-xs">{errors.supplierId}</FieldError>
                     </Field>
-                    <Field>
+                    <Field data-invalid={Boolean(errors.clientId)}>
                       <SelectControl
                         id="supplier-quote-client"
                         options={clientOptions}
                         value={formData.clientId || ''}
                         onChange={(value) => handleClientChange(value as string)}
                         placeholder={t('sales:supplierQuotes.selectClient', {
-                          defaultValue: 'Select a customer (optional)',
+                          defaultValue: 'Select a customer',
                         })}
                         searchable={true}
                         disabled={isReadOnly}
                         label={t('sales:supplierQuotes.client', { defaultValue: 'Customer' })}
+                        required
                         buttonClassName="h-9"
+                        className={errors.clientId ? 'border-red-300' : ''}
                       />
+                      <FieldError className="text-xs">{errors.clientId}</FieldError>
                     </Field>
                     <Field data-invalid={Boolean(errors.id)}>
                       <FieldLabel htmlFor="supplier-quote-code" required>
@@ -1299,14 +1356,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
                   {formData.items && formData.items.length > 0 && (
                     <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                      <div className="flex-1 min-w-0 grid grid-cols-12 gap-3">
-                        <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
+                      <div className="flex-1 min-w-0 grid grid-cols-16 gap-2">
+                        <div className="col-span-6 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
                           {t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
                         </div>
-                        <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
+                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
                           {t('sales:supplierQuotes.listPrice', { defaultValue: 'List Price' })}
                         </div>
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
+                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
                           {t('sales:supplierQuotes.discountToUs', {
                             defaultValue: 'Discount to Us (%)',
                           })}
@@ -1316,6 +1373,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         </div>
                         <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
                           {t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
+                        </div>
+                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
+                          {t('sales:supplierQuotes.durationColumn', { defaultValue: 'Duration' })}
                         </div>
                       </div>
                       <div className="w-24 shrink-0 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-right">
@@ -1333,7 +1393,12 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                         const itemListPrice = item.listPrice ?? item.unitPrice ?? 0;
                         const itemDiscountPercent = item.discountPercent ?? 0;
                         const itemUnitCost = item.unitPrice ?? 0;
-                        const lineTotal = item.quantity * itemUnitCost;
+                        // Duration multiplies the line total alongside quantity (issue #776).
+                        const durationMonths = getEffectiveDurationMonths(item);
+                        const lineTotal = item.quantity * itemUnitCost * durationMonths;
+                        // Duration is stored as canonical months; show it in the item's unit.
+                        const durationUnit = normalizeDurationUnit(item.durationUnit);
+                        const durationValue = getDurationDisplayValue(item);
                         const itemProduct = item.productId
                           ? products.find((p) => p.id === item.productId)
                           : undefined;
@@ -1382,6 +1447,45 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                       onChange={(val) => handleUnitTypeChange(index, val)}
                                       isSupply={isSupply}
                                       quantity={Number(item.quantity) || 0}
+                                      disabled={isReadOnly}
+                                      i18nPrefix="sales:supplierQuotes"
+                                    />
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
+                                    {t('sales:supplierQuotes.durationColumn', {
+                                      defaultValue: 'Duration',
+                                    })}
+                                    <FieldTooltip
+                                      description={t('sales:fieldInfo.duration', {
+                                        defaultValue: 'Number of months the service runs',
+                                      })}
+                                      status={readOnlyStatus}
+                                      statusLabel={statusLabel}
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <ValidatedNumberInput
+                                      step="1"
+                                      min="1"
+                                      placeholder={t('sales:supplierQuotes.durationColumn', {
+                                        defaultValue: 'Duration',
+                                      })}
+                                      value={durationValue}
+                                      onValueChange={(value) =>
+                                        handleDurationValueChange(index, value)
+                                      }
+                                      disabled={isReadOnly || durationUnit === 'na'}
+                                      className="w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
+                                    />
+                                    <span className="text-xs font-semibold text-zinc-400 shrink-0">
+                                      /
+                                    </span>
+                                    <DurationUnitSelector
+                                      value={durationUnit}
+                                      onChange={(val) => handleDurationUnitChange(index, val)}
+                                      count={durationValue}
                                       disabled={isReadOnly}
                                       i18nPrefix="sales:supplierQuotes"
                                     />
@@ -1468,8 +1572,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                               </div>
                             </div>
                             <div className="hidden lg:flex gap-2 items-center">
-                              <div className="flex-1 min-w-0 grid grid-cols-12 gap-3 items-center">
-                                <div className="col-span-3">
+                              <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center">
+                                <div className="col-span-6">
                                   <Input
                                     type="text"
                                     value={item.productName || ''}
@@ -1482,7 +1586,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                     })}
                                   />
                                 </div>
-                                <div className="col-span-3 flex items-center gap-1.5">
+                                <div className="col-span-2 flex items-center gap-1.5">
                                   <ValidatedNumberInput
                                     value={itemListPrice}
                                     formatDecimals={2}
@@ -1490,13 +1594,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                       updateItem(index, 'listPrice', parseNumberInputValue(value))
                                     }
                                     disabled={isReadOnly}
-                                    className={`${itemInputClassName} flex-1`}
+                                    className={`${itemInputClassName} flex-1 text-right`}
                                   />
                                   <span className="text-xs font-semibold text-zinc-400 shrink-0 whitespace-nowrap">
                                     {currency}
                                   </span>
                                 </div>
-                                <div className="col-span-2 flex items-center gap-1">
+                                <div className="col-span-2 flex items-center justify-center gap-1">
                                   <ValidatedNumberInput
                                     value={itemDiscountPercent}
                                     min={0}
@@ -1509,28 +1613,28 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                       )
                                     }
                                     disabled={isReadOnly}
-                                    className={`${itemInputClassName} text-center flex-1`}
+                                    className={`${itemInputClassName} text-center max-w-[5rem]`}
                                   />
                                   <span className="text-xs font-semibold text-zinc-400 shrink-0">
                                     %
                                   </span>
                                 </div>
-                                <div className="col-span-2 flex items-center justify-end gap-1.5">
-                                  <span className="flex-1 text-right text-sm font-semibold text-zinc-700 whitespace-nowrap tabular-nums">
+                                <div className="col-span-2 flex items-center justify-center gap-1.5">
+                                  <span className="text-sm font-semibold text-zinc-700 whitespace-nowrap tabular-nums">
                                     {itemUnitCost.toFixed(2)}
                                   </span>
                                   <span className="text-xs font-semibold text-zinc-400 shrink-0 whitespace-nowrap">
                                     {currency}
                                   </span>
                                 </div>
-                                <div className="col-span-2 flex items-center gap-1">
+                                <div className="col-span-2 flex items-center justify-center gap-1">
                                   <ValidatedNumberInput
                                     value={item.quantity}
                                     onValueChange={(value) =>
                                       updateItem(index, 'quantity', parseNumberInputValue(value))
                                     }
                                     disabled={isReadOnly}
-                                    className={`${itemInputClassName} text-center`}
+                                    className={`${itemInputClassName} text-center max-w-[5rem]`}
                                   />
                                   <span className="text-xs font-semibold text-zinc-400 shrink-0">
                                     /
@@ -1540,6 +1644,31 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                     onChange={(val) => handleUnitTypeChange(index, val)}
                                     isSupply={isSupply}
                                     quantity={Number(item.quantity) || 0}
+                                    disabled={isReadOnly}
+                                    i18nPrefix="sales:supplierQuotes"
+                                  />
+                                </div>
+                                <div className="col-span-2 flex items-center justify-center gap-1">
+                                  <ValidatedNumberInput
+                                    step="1"
+                                    min="1"
+                                    placeholder={t('sales:supplierQuotes.durationColumn', {
+                                      defaultValue: 'Duration',
+                                    })}
+                                    value={durationValue}
+                                    onValueChange={(value) =>
+                                      handleDurationValueChange(index, value)
+                                    }
+                                    disabled={isReadOnly || durationUnit === 'na'}
+                                    className="w-full max-w-[5rem] text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                  />
+                                  <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
+                                    /
+                                  </span>
+                                  <DurationUnitSelector
+                                    value={durationUnit}
+                                    onChange={(val) => handleDurationUnitChange(index, val)}
+                                    count={durationValue}
                                     disabled={isReadOnly}
                                     i18nPrefix="sales:supplierQuotes"
                                   />

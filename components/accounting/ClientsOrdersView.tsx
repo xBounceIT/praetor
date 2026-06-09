@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next';
 import type React from 'react';
-import { useCallback, useMemo, useReducer } from 'react';
+import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import type {
   DurationUnit,
   OrderVersion,
   Product,
+  SupplierSaleOrder,
   SupplierUnitType,
 } from '../../types';
 import {
@@ -32,6 +33,7 @@ import {
   formatMolPercentage,
   getDurationDisplayValue,
   getItemPricingContext,
+  MOL_PERCENTAGE_DECIMALS,
   normalizeDurationUnit,
   type PricingTotals,
   parseDurationValueToMonths,
@@ -39,7 +41,10 @@ import {
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
-import { buildProductQuickViewHref } from '../../utils/quickViewLinks';
+import {
+  buildProductQuickViewHref,
+  buildSupplierOrderQuickViewHref,
+} from '../../utils/quickViewLinks';
 import { toastError } from '../../utils/toast';
 import ProductSelectOrFallback from '../sales/ProductSelectOrFallback';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
@@ -59,6 +64,7 @@ import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';
+import { TABLE_ROW_ACTION_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import OrderVersionsPanel from './OrderVersionsPanel';
@@ -67,12 +73,15 @@ export interface ClientsOrdersViewProps {
   orders: ClientsOrder[];
   clients: Client[];
   products: Product[];
+  // Supplier orders behind supplier-quoted lines (only ids are read; see buildSupplierOrderQuickViewHref).
+  supplierOrders?: SupplierSaleOrder[];
   onUpdateClientsOrder: (id: string, updates: Partial<ClientsOrder>) => Promise<void>;
   onDeleteClientsOrder: (id: string) => Promise<void>;
   onOrderRestored?: (order: ClientsOrder) => void;
   onViewOffer?: (offerId: string) => void;
   currency: string;
   canViewInternalListing?: boolean;
+  canViewSupplierOrders?: boolean;
   offerFilterId?: string | null;
   orderFilterId?: string | null;
 }
@@ -179,15 +188,11 @@ const PricingCell: React.FC<PricingCellProps> = ({
   currency,
 }) => {
   if (dashOnZero && value <= 0) {
-    return (
-      <span className={`text-sm font-semibold ${isHistory ? 'text-zinc-300' : 'text-zinc-400'}`}>
-        -
-      </span>
-    );
+    return <span className="text-sm font-semibold text-muted-foreground">-</span>;
   }
   return (
     <span
-      className={`text-sm ${bold ? 'font-bold' : 'font-semibold'} whitespace-nowrap ${isHistory ? 'text-zinc-400' : colorClass}`}
+      className={`text-sm ${bold ? 'font-bold' : 'font-semibold'} whitespace-nowrap ${isHistory ? 'text-muted-foreground' : colorClass}`}
     >
       {prefix}
       {value.toFixed(2)} {currency}
@@ -212,12 +217,14 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   orders,
   clients,
   products,
+  supplierOrders = [],
   onUpdateClientsOrder,
   onDeleteClientsOrder,
   onOrderRestored,
   onViewOffer,
   currency,
   canViewInternalListing = true,
+  canViewSupplierOrders = true,
   offerFilterId,
   orderFilterId,
 }) => {
@@ -236,6 +243,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     previewVersion,
     formData,
   } = viewState;
+  const [productRowToDelete, setProductRowToDelete] = useState<number | null>(null);
 
   const setIsModalOpen = useCallback((value: React.SetStateAction<boolean>) => {
     dispatchViewState({ type: 'setIsModalOpen', value });
@@ -289,6 +297,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   const closeEditModal = useCallback(() => {
     setIsModalOpen(false);
     setPreviewVersion(null);
+    setProductRowToDelete(null);
   }, [setIsModalOpen, setPreviewVersion]);
 
   const handleVersionPreview = useCallback(
@@ -528,6 +537,10 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   // All product ids (incl. archived) so the quick-view shortcut on a line that
   // references a now-disabled product still deep-links to that record.
   const allProductIds = useMemo(() => new Set(products.map((p) => p.id)), [products]);
+  const allSupplierOrderIds = useMemo(
+    () => new Set(supplierOrders.map((o) => o.id)),
+    [supplierOrders],
+  );
   const activeProductIds = useMemo(
     () => new Set(activeProducts.map((p) => p.id)),
     [activeProducts],
@@ -586,7 +599,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         id: 'id',
         accessorFn: (row: ClientsOrder) => row.id,
         cell: ({ row }: { row: ClientsOrder }) => (
-          <span className="font-bold text-zinc-700">{row.id}</span>
+          <span className="font-bold text-foreground">{row.id}</span>
         ),
       },
       {
@@ -595,9 +608,9 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         accessorFn: (row: ClientsOrder) => row.createdAt ?? 0,
         className: 'whitespace-nowrap',
         cell: ({ row }: { row: ClientsOrder }) => {
-          if (!row.createdAt) return <span className="text-xs text-zinc-400">-</span>;
+          if (!row.createdAt) return <span className="text-xs text-muted-foreground">-</span>;
           return (
-            <span className="text-xs text-slate-500 whitespace-nowrap">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
               {formatInsertDate(row.createdAt, i18n.language)}
             </span>
           );
@@ -614,7 +627,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         cell: ({ row }: { row: ClientsOrder }) => (
           <div>
             <div
-              className={`font-bold ${isHistoryRow(row.status) ? 'text-zinc-400' : 'text-zinc-800'}`}
+              className={`font-bold ${isHistoryRow(row.status) ? 'text-muted-foreground' : 'text-foreground'}`}
             >
               {row.clientName}
             </div>
@@ -633,7 +646,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           const history = isHistoryRow(row.status);
           return (
             <span
-              className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-zinc-600'}`}
+              className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-muted-foreground' : 'text-foreground'}`}
             >
               {formatDiscountValue(row.discount, row.discountType, currency)}
             </span>
@@ -651,7 +664,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           <PricingCell
             value={Number(value)}
             isHistory={isHistoryRow(row.status)}
-            colorClass="text-zinc-700"
+            colorClass="text-foreground"
             currency={currency}
           />
         ),
@@ -702,7 +715,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           <PricingCell
             value={Number(value)}
             isHistory={isHistoryRow(row.status)}
-            colorClass="text-zinc-700"
+            colorClass="text-foreground"
             currency={currency}
           />
         ),
@@ -717,7 +730,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           <PricingCell
             value={Number(value)}
             isHistory={isHistoryRow(row.status)}
-            colorClass="text-zinc-700"
+            colorClass="text-foreground"
             bold
             currency={currency}
           />
@@ -732,7 +745,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         headerClassName: 'min-w-[10rem]',
         cell: ({ row }: { row: ClientsOrder }) => (
           <span
-            className={`text-sm font-semibold ${isHistoryRow(row.status) ? 'text-zinc-400' : 'text-zinc-600'}`}
+            className={`text-sm font-semibold ${isHistoryRow(row.status) ? 'text-muted-foreground' : 'text-foreground'}`}
           >
             {row.paymentTerms === 'immediate' ? t('crm:paymentTerms.immediate') : row.paymentTerms}
           </span>
@@ -773,7 +786,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         onViewOffer(row.linkedOfferId as string);
                       }}
                       aria-label={t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })}
-                      className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
+                      className={TABLE_ROW_ACTION_BUTTON_CLASSNAME}
                     >
                       <i className="fa-solid fa-link"></i>
                     </button>
@@ -798,7 +811,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         ? t('accounting:clientsOrders.editOrder')
                         : t('accounting:clientsOrders.viewOrder')
                     }
-                    className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
+                    className={TABLE_ROW_ACTION_BUTTON_CLASSNAME}
                   >
                     <i
                       className={`fa-solid ${row.status === 'draft' ? 'fa-pen-to-square' : 'fa-eye'}`}
@@ -1095,6 +1108,10 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                           item.productId,
                           allProductIds,
                         );
+                        const supplierOrderHref = buildSupplierOrderQuickViewHref(
+                          item.supplierSaleId,
+                          allSupplierOrderIds,
+                        );
 
                         const handleCostChange = (value: string) => {
                           if (isReadOnly) return;
@@ -1115,9 +1132,9 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                             key={item.id}
                             className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
                           >
-                            <div className="flex items-start gap-2 lg:items-center">
-                              <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center lg:pt-5">
-                                <div className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0">
+                            <div className="flex items-start gap-2 lg:items-center lg:pt-5">
+                              <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center">
+                                <div className="relative min-w-0 space-y-1 lg:col-span-2 lg:space-y-0">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('accounting:clientsOrders.supplierOrderColumn', {
                                       defaultValue: 'Supplier Order',
@@ -1125,16 +1142,32 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                   </FieldLabel>
                                   <div className="flex h-9 items-center rounded-md border border-border bg-background px-3">
                                     {item.supplierSaleId ? (
-                                      <span className="truncate text-xs font-medium text-foreground">
+                                      <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
                                         {item.supplierSaleSupplierName ?? '-'} ·{' '}
                                         {item.supplierSaleId}
                                       </span>
                                     ) : (
-                                      <span className="text-xs text-muted-foreground">
+                                      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                                         {t('accounting:clientsOrders.noSupplierOrder', {
                                           defaultValue: 'No supplier order',
                                         })}
                                       </span>
+                                    )}
+                                    {/* Always rendered (disabled with a tooltip when nothing is
+                                        linked), matching the product / supplier-quote shortcuts. */}
+                                    {canViewSupplierOrders && (
+                                      <QuickViewLinkButton
+                                        href={supplierOrderHref}
+                                        label={t(
+                                          'accounting:clientsOrders.openSupplierOrderInNewTab',
+                                          { defaultValue: 'Open supplier order in a new tab' },
+                                        )}
+                                        disabledLabel={t(
+                                          'accounting:clientsOrders.supplierOrderShortcutUnavailable',
+                                          { defaultValue: 'No linked supplier order to open' },
+                                        )}
+                                        floating
+                                      />
                                     )}
                                   </div>
                                 </div>
@@ -1268,7 +1301,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                   <div className="flex h-9 items-center justify-center gap-1">
                                     <ValidatedNumberInput
                                       value={molPercentage}
-                                      formatDecimals={1}
+                                      formatDecimals={MOL_PERCENTAGE_DECIMALS}
                                       onValueChange={handleMolChange}
                                       disabled={isReadOnly}
                                       className={compactInputClass}
@@ -1315,7 +1348,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 type="button"
                                 variant="ghost"
                                 size="icon-sm"
-                                onClick={() => removeProductRow(index)}
+                                onClick={() => setProductRowToDelete(index)}
                                 disabled={isReadOnly || Boolean(item.supplierSaleId)}
                                 title={
                                   item.supplierSaleId
@@ -1459,13 +1492,30 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         })}
       />
 
+      {/* Line-item (product) delete confirmation */}
+      <DeleteConfirmModal
+        isOpen={productRowToDelete !== null}
+        onClose={() => setProductRowToDelete(null)}
+        onConfirm={() => {
+          if (productRowToDelete !== null) {
+            removeProductRow(productRowToDelete);
+          }
+          setProductRowToDelete(null);
+        }}
+        title={t('accounting:clientsOrders.removeProductTitle')}
+        description={t('accounting:clientsOrders.removeProductConfirm')}
+        zIndex={70}
+      />
+
       <div className="space-y-4">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h2 className="text-2xl font-semibold text-zinc-800">
+            <h2 className="text-2xl font-semibold text-foreground">
               {t('accounting:clientsOrders.title')}
             </h2>
-            <p className="text-sm text-zinc-500">{t('accounting:clientsOrders.subtitle')}</p>
+            <p className="text-sm text-muted-foreground">
+              {t('accounting:clientsOrders.subtitle')}
+            </p>
           </div>
         </div>
       </div>
@@ -1479,7 +1529,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         initialFilterState={tableInitialFilterState}
         containerClassName="overflow-visible"
         rowClassName={(row: ClientsOrder) =>
-          isHistoryRow(row.status) ? 'bg-zinc-50 text-zinc-400' : 'hover:bg-zinc-50/50'
+          isHistoryRow(row.status) ? 'bg-muted text-muted-foreground' : 'hover:bg-muted/50'
         }
         onRowClick={(row: ClientsOrder) => openEditModal(row)}
       />

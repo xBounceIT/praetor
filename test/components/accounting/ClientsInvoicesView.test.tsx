@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { Client, Invoice, Product } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
+import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { render } from '../../helpers/render';
+import { rowDeleteButtons } from '../../helpers/rowDeleteButtons';
 import {
   expectSourceContainsAll,
   expectSourceOmitsAll,
@@ -10,6 +12,12 @@ import {
 } from '../modalStylingTestUtils';
 
 installI18nMock();
+
+// Other suites globally stub DeleteConfirmModal (Bun's mock.module is process-wide and
+// last-write-wins), so pin the shared deterministic stub against this file's binding.
+mock.module('../../../components/shared/DeleteConfirmModal', () => ({
+  default: LineDeleteConfirmStub,
+}));
 
 const ClientsInvoicesView = (await import('../../../components/accounting/ClientsInvoicesView'))
   .default;
@@ -134,6 +142,18 @@ describe('ClientsInvoicesView modal styling', () => {
       '<FieldLabel htmlFor="client-invoice-notes" className="sr-only">',
       'id="client-invoice-notes"',
     ]);
+  });
+
+  // Regression: the `lg:pt-5` quick-view gutter must sit on the row flex (with `lg:items-center`,
+  // alongside the trash button), not the inner grid — else the delete button misaligns above the inputs.
+  test('delete button shares the floated quick-view gutter so it stays aligned with the line', async () => {
+    const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
+
+    expectSourceContainsAll(source, [
+      'className="flex items-start gap-2 lg:items-center lg:pt-5"',
+      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14"',
+    ]);
+    expectSourceOmitsAll(source, ['lg:grid-cols-14 lg:pt-5']);
   });
 
   test('item rows render unit, currency, and percentage beside inputs instead of headers', async () => {
@@ -274,5 +294,55 @@ describe('<ClientsInvoicesView /> product quick-view shortcut', () => {
         name: 'sales:clientQuotes.productShortcutUnavailable',
       }).length,
     ).toBeGreaterThan(0);
+  });
+});
+
+describe('<ClientsInvoicesView /> line-item delete confirmation', () => {
+  const openEditor = async () => {
+    render(
+      <ClientsInvoicesView
+        invoices={[buildInvoice('INV-DEL', 'months')]}
+        clients={clients}
+        products={[]}
+        onAddInvoice={mock(() => {})}
+        onUpdateInvoice={mock(() => {})}
+        onDeleteInvoice={mock(() => {})}
+        currency="EUR"
+      />,
+    );
+    fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
+    return screen.findByRole('dialog');
+  };
+
+  test('confirms before removing a product line and removes it only after confirming', async () => {
+    const dialog = await openEditor();
+    const rowDeletes = rowDeleteButtons(dialog);
+    expect(rowDeletes.length).toBeGreaterThan(0);
+
+    // Clicking the trash icon must NOT remove the row immediately — it opens a confirmation.
+    fireEvent.click(rowDeletes[0]);
+    const confirmUi = await screen.findByTestId('line-delete-confirm');
+    expect(within(confirmUi).getByTestId('line-delete-title')).toHaveTextContent(
+      'accounting:clientsInvoices.removeProductTitle',
+    );
+    expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
+
+    fireEvent.click(within(confirmUi).getByTestId('line-delete-confirm-btn'));
+    await waitFor(() => {
+      expect(rowDeleteButtons(dialog)).toHaveLength(0);
+    });
+  });
+
+  test('keeps the product line when the confirmation is dismissed', async () => {
+    const dialog = await openEditor();
+    const rowDeletes = rowDeleteButtons(dialog);
+
+    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await screen.findByTestId('line-delete-cancel'));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('line-delete-confirm')).not.toBeInTheDocument();
+    });
+    expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
   });
 });

@@ -3,6 +3,7 @@ import {
   check,
   date,
   index,
+  integer,
   numeric,
   pgTable,
   text,
@@ -79,6 +80,14 @@ export const supplierQuoteItems = pgTable(
     // pre-existing unit_price so legacy rows keep their net cost (discount_percent = 0).
     listPrice: numeric('list_price', { precision: 15, scale: 2 }).notNull().default('0'),
     discountPercent: numeric('discount_percent', { precision: 5, scale: 2 }).notNull().default('0'),
+    // Number of months the line item's service runs (issue #776, same logic as quote_items #757).
+    // Acts as a multiplier alongside `quantity` for the line total. Defaults to 1 (one-off item),
+    // which keeps totals identical to the pre-duration behavior.
+    durationMonths: integer('duration_months').notNull().default(1),
+    // Display unit for `durationMonths` (issue #776): 'months' (default), 'years', or 'na'. 'na'
+    // (N/A) marks a line where duration does not apply and never multiplies (issue #775). Pricing
+    // always uses `durationMonths`; this only controls how the value is shown/entered.
+    durationUnit: text('duration_unit').notNull().default('months'),
   },
   (table) => [
     index('idx_supplier_quote_items_quote_id').on(table.quoteId),
@@ -91,6 +100,11 @@ export const supplierQuoteItems = pgTable(
     check(
       'chk_supplier_quote_items_discount_percent',
       sql`${table.discountPercent} >= 0 AND ${table.discountPercent} <= 100`,
+    ),
+    check('chk_supplier_quote_items_duration_months', sql`${table.durationMonths} >= 1`),
+    check(
+      'chk_supplier_quote_items_duration_unit',
+      sql`${table.durationUnit} IN ('months', 'years', 'na')`,
     ),
   ],
 );

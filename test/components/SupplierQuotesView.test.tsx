@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { Client, Product, Supplier, SupplierQuote } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
 import { render } from '../helpers/render';
@@ -29,6 +29,10 @@ const buildQuote = (overrides: Partial<SupplierQuote>): SupplierQuote => ({
   id: 'SQ-base',
   supplierId: 'sup-1',
   supplierName: 'Acme Supplies',
+  // Every supplier quote is associated with a customer (issue #777); default to one so edit/submit
+  // fixtures pass the mandatory-customer check. Tests that need a client-less quote override these.
+  clientId: 'cli-1',
+  clientName: 'Globex Corp',
   items: [
     {
       id: 'sqi-1',
@@ -252,20 +256,93 @@ describe('<SupplierQuotesView /> deep-link filter', () => {
   });
 });
 
-describe('<SupplierQuotesView /> optional customer association (issue #759)', () => {
-  test('renders the Customer field in the add-quote dialog', () => {
+// Opens the New-quote dialog and fills every required field (supplier, code, one line item).
+// Pass a customer name to also pick it from the Customer combobox. The caller must render with
+// `quotes={[]}` so the supplier/customer names are unambiguous (no table rows behind the modal).
+const fillNewQuoteForm = (customerName?: string) => {
+  fireEvent.click(screen.getByText('sales:supplierQuotes.addQuote'));
+  fireEvent.click(document.getElementById('supplier-quote-supplier') as HTMLElement);
+  fireEvent.click(screen.getByText('Acme Supplies'));
+  if (customerName) {
+    fireEvent.click(document.getElementById('supplier-quote-client') as HTMLElement);
+    fireEvent.click(screen.getByText(customerName));
+  }
+  fireEvent.change(document.getElementById('supplier-quote-code') as HTMLInputElement, {
+    target: { value: 'SQ-NEW' },
+  });
+  fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
+};
+
+// The customer link used to be optional (issue #759); issue #777 makes it mandatory.
+describe('<SupplierQuotesView /> mandatory customer association (issue #777)', () => {
+  test('marks the Customer field required and drops the empty "No customer" option', () => {
     render(<SupplierQuotesView {...baseProps} />);
     fireEvent.click(screen.getByText('sales:supplierQuotes.addQuote'));
     expect(screen.getByText('sales:supplierQuotes.newQuote')).toBeInTheDocument();
-    // The customer select trigger renders; with nothing linked it shows the "No customer" option
-    // (scoped by id because the same i18n key is also the list column header behind the modal).
+
+    // The Customer field now carries the required `*` indicator, like Supplier / Quote Code.
+    const clientLabel = document.querySelector('label[for="supplier-quote-client"]');
+    expect(clientLabel?.textContent).toContain('*');
+
+    // With nothing linked the trigger shows the placeholder; the empty "No customer" clearing
+    // option is gone (scoped by id since the same key is also the list column header behind it).
     const trigger = document.getElementById('supplier-quote-client');
     expect(trigger).not.toBeNull();
-    expect(trigger?.textContent).toContain('sales:supplierQuotes.noClient');
-    // Saving with no customer selected must be allowed: the Save button is shown.
-    expect(screen.getByText('common:buttons.save')).toBeInTheDocument();
+    expect(trigger?.textContent).toContain('sales:supplierQuotes.selectClient');
+    expect(trigger?.textContent).not.toContain('sales:supplierQuotes.noClient');
   });
 
+  test('blocks updating an existing client-less draft until a customer is chosen', () => {
+    // A draft created while the link was optional (clientId null) must now name a customer to save.
+    const clientless = buildQuote({
+      id: 'SQ-NO-CLIENT',
+      status: 'draft',
+      clientId: null,
+      clientName: null,
+    });
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+    render(
+      <SupplierQuotesView {...baseProps} quotes={[clientless]} onUpdateQuote={onUpdateQuote} />,
+    );
+    fireEvent.click(screen.getByText('SQ-NO-CLIENT'));
+
+    // Supplier, code, and items are all valid — only the customer is missing.
+    fireEvent.click(screen.getByText('common:buttons.update'));
+
+    expect(onUpdateQuote).not.toHaveBeenCalled();
+    expect(screen.getByText('sales:supplierQuotes.errors.clientRequired')).toBeInTheDocument();
+  });
+
+  test('blocks saving a NEW quote when no customer is selected', () => {
+    const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
+    // No table rows so the supplier name is unambiguous in the combobox.
+    render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
+
+    // Fill every required field except the customer.
+    fillNewQuoteForm();
+    fireEvent.click(screen.getByText('common:buttons.save'));
+
+    // The create path is blocked and the customer-required error surfaces.
+    expect(onAddQuote).not.toHaveBeenCalled();
+    expect(screen.getByText('sales:supplierQuotes.errors.clientRequired')).toBeInTheDocument();
+  });
+
+  test('saves a new quote once a customer is selected', async () => {
+    const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
+    // No table rows (quotes: []) so the supplier/customer names are unambiguous in the combobox.
+    render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
+
+    fillNewQuoteForm('Globex Corp');
+    fireEvent.click(screen.getByText('common:buttons.save'));
+
+    await waitFor(() => expect(onAddQuote).toHaveBeenCalledTimes(1));
+    const payload = onAddQuote.mock.calls[0]?.[0] as Partial<SupplierQuote>;
+    expect(payload.clientId).toBe('cli-1');
+    expect(payload.clientName).toBe('Globex Corp');
+  });
+});
+
+describe('<SupplierQuotesView /> linked customer display', () => {
   test('shows the linked customer name in the list', () => {
     const withClient = buildQuote({
       id: 'SQ-CLIENT',
@@ -312,6 +389,182 @@ describe('<SupplierQuotesView /> optional customer association (issue #759)', ()
   });
 });
 
+describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
+  const daysLineQuote = buildQuote({
+    id: 'SQ-DURATION',
+    status: 'draft',
+    items: [
+      {
+        id: 'sqi-dur',
+        quoteId: 'SQ-DURATION',
+        productName: 'Managed service',
+        quantity: 2,
+        listPrice: 100,
+        discountPercent: 0,
+        unitPrice: 100,
+        // Time-based line (days) → duration is editable, unlike the default "unit" lines.
+        unitType: 'days',
+        durationMonths: 3,
+        durationUnit: 'months',
+      },
+    ],
+  });
+
+  test('renders the Durata column and an editable duration for a time-based line', () => {
+    render(<SupplierQuotesView {...baseProps} quotes={[daysLineQuote]} />);
+    fireEvent.click(screen.getByText('SQ-DURATION'));
+    // The Durata column header renders once a line item exists...
+    expect(screen.getAllByText('sales:supplierQuotes.durationColumn').length).toBeGreaterThan(0);
+    // ...and the row carries a duration input reflecting the stored value (3 months).
+    const durationInputs = screen
+      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
+    expect(durationInputs.length).toBeGreaterThan(0);
+    expect(durationInputs[0].value).toBe('3');
+  });
+
+  test('scales the quote total by the line duration', () => {
+    render(<SupplierQuotesView {...baseProps} quotes={[daysLineQuote]} />);
+    // Total column = unitPrice 100 × quantity 2 × durationMonths 3 = 600.00
+    // (without the duration multiplier it would be 200.00).
+    expect(screen.getAllByText('600.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.queryByText('200.00 EUR')).not.toBeInTheDocument();
+  });
+
+  test('renders an editable duration for a unit-measured line (duration applies to every type)', () => {
+    // SQ-DRAFT's sample item is unitType "unit". Under the new model duration applies to every line
+    // type (issue #775) — the cell shows the editable value + selector, not a static N/A.
+    render(<SupplierQuotesView {...baseProps} />);
+    fireEvent.click(screen.getByText('SQ-DRAFT'));
+    expect(screen.queryAllByText('common:labels.notApplicable')).toHaveLength(0);
+    const durationInputs = screen
+      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
+    expect(durationInputs.length).toBeGreaterThan(0);
+  });
+
+  test('treats a line with durationUnit "na" as no-duration (x1) and disables its value input', () => {
+    const naQuote = buildQuote({
+      id: 'SQ-DUR-NA',
+      status: 'draft',
+      items: [
+        {
+          id: 'sqi-na',
+          quoteId: 'SQ-DUR-NA',
+          productName: 'Managed service',
+          quantity: 2,
+          listPrice: 100,
+          discountPercent: 0,
+          unitPrice: 100,
+          unitType: 'days',
+          // N/A duration: the stored months must never multiply the total (issue #775).
+          durationMonths: 3,
+          durationUnit: 'na',
+        },
+      ],
+    });
+    render(<SupplierQuotesView {...baseProps} quotes={[naQuote]} />);
+    fireEvent.click(screen.getByText('SQ-DUR-NA'));
+    // 2 × 100 × 1 (na) = 200.00 — not 600.00, even though durationMonths is 3.
+    expect(screen.getAllByText('200.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.queryByText('600.00 EUR')).not.toBeInTheDocument();
+    // The value input is disabled while the unit is N/A; the selector stays usable.
+    const durationInputs = screen
+      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
+    expect(durationInputs.length).toBeGreaterThan(0);
+    expect(durationInputs.every((el) => el.disabled)).toBe(true);
+  });
+
+  test('editing the duration updates the submitted multiplier', () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+    const editableQuote = buildQuote({
+      id: 'SQ-DUR-EDIT',
+      status: 'draft',
+      items: [
+        {
+          id: 'sqi-edit',
+          quoteId: 'SQ-DUR-EDIT',
+          productName: 'Managed service',
+          quantity: 2,
+          listPrice: 100,
+          discountPercent: 0,
+          unitPrice: 100,
+          unitType: 'days',
+          durationMonths: 1,
+          durationUnit: 'months',
+        },
+      ],
+    });
+    render(
+      <SupplierQuotesView {...baseProps} quotes={[editableQuote]} onUpdateQuote={onUpdateQuote} />,
+    );
+    fireEvent.click(screen.getByText('SQ-DUR-EDIT'));
+
+    const durationInputs = screen
+      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
+    fireEvent.change(durationInputs[0], { target: { value: '4' } });
+
+    fireEvent.click(screen.getByText('common:buttons.update'));
+
+    expect(onUpdateQuote).toHaveBeenCalledTimes(1);
+    const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
+    expect(updates.items?.[0]?.durationMonths).toBe(4);
+    expect(updates.items?.[0]?.durationUnit).toBe('months');
+  });
+
+  test("submits each line's stored duration verbatim (no unit-line coercion)", () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+    const mixedQuote = buildQuote({
+      id: 'SQ-DUR-MIX',
+      status: 'draft',
+      items: [
+        {
+          id: 'sqi-days',
+          quoteId: 'SQ-DUR-MIX',
+          productName: 'Managed service',
+          quantity: 1,
+          listPrice: 100,
+          discountPercent: 0,
+          unitPrice: 100,
+          unitType: 'days',
+          durationMonths: 3,
+          durationUnit: 'months',
+        },
+        {
+          id: 'sqi-unit',
+          quoteId: 'SQ-DUR-MIX',
+          productName: 'Widget',
+          quantity: 1,
+          listPrice: 50,
+          discountPercent: 0,
+          unitPrice: 50,
+          // Unit lines are no longer coerced — duration applies to every type now (issue #775),
+          // so the stored value/unit must round-trip unchanged on submit.
+          unitType: 'unit',
+          durationMonths: 24,
+          durationUnit: 'years',
+        },
+      ],
+    });
+    render(
+      <SupplierQuotesView {...baseProps} quotes={[mixedQuote]} onUpdateQuote={onUpdateQuote} />,
+    );
+    fireEvent.click(screen.getByText('SQ-DUR-MIX'));
+    fireEvent.click(screen.getByText('common:buttons.update'));
+
+    expect(onUpdateQuote).toHaveBeenCalledTimes(1);
+    const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
+    expect(updates.items?.[0]).toEqual(
+      expect.objectContaining({ durationMonths: 3, durationUnit: 'months' }),
+    );
+    expect(updates.items?.[1]).toEqual(
+      expect.objectContaining({ durationMonths: 24, durationUnit: 'years' }),
+    );
+  });
+});
+
 describe('<SupplierQuotesView /> new-quote attachment staging (issue #781)', () => {
   test('the New-quote dialog shows the attachment dropzone instead of a "save first" notice', () => {
     render(<SupplierQuotesView {...baseProps} />);
@@ -343,5 +596,38 @@ describe('<SupplierQuotesView /> dark-mode banners (issue #768)', () => {
       'border border-amber-200 bg-amber-50',
       'border border-amber-300 bg-amber-50',
     ]);
+  });
+});
+
+describe('<SupplierQuotesView /> compact line-item numeric columns', () => {
+  test('discount/quantity inputs are width-capped and unit cost is content-sized', async () => {
+    const source = await readComponentSource('sales/SupplierQuotesView.tsx');
+    // The desktop "Sconto a noi (%)" and "Quantità" inputs are BOTH capped at max-w-[5rem] so the
+    // columns only have to fit values like "100" or "45.47" instead of stretching the cell. The cap
+    // sits directly after text-center (the duration input also uses max-w-[5rem], but not adjacent
+    // to text-center), so this regex matches exactly those two inputs. Assert both carry it —
+    // reverting either one alone would be a regression a single substring check would miss.
+    expect((source.match(/text-center max-w-\[5rem\]/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    // "Costo unitario" and the discount column are centered under their centered headers; gap-1.5
+    // is unique to the unit-cost cell, sized to its content rather than spanning the column.
+    expectSourceContainsAll(source, ['flex items-center justify-center gap-1.5']);
+    // The old full-width unit-cost treatment is gone: the value no longer spans the cell right-aligned.
+    expectSourceOmitsAll(source, ['flex-1 text-right text-sm font-semibold text-zinc-700']);
+    // The editable "Prezzo listino" input right-aligns its value so the amount sits beside the
+    // currency symbol like the other money figures; `flex-1 text-right` is unique to that input now.
+    expectSourceContainsAll(source, ['flex-1 text-right']);
+  });
+
+  test('uses the compact 16-col grid with a widened product column', async () => {
+    const source = await readComponentSource('sales/SupplierQuotesView.tsx');
+    // Desktop line-item rows use the same tighter grid as ClientQuotesView (16 cols / gap-2)
+    // instead of the old evenly-split 12-col / gap-3 that left big gaps between the capped numeric
+    // inputs. Both the header row and the data row carry it → at least 2 occurrences.
+    expect((source.match(/grid grid-cols-16 gap-2/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    // The product column is widened to col-span-6 (the five remaining columns stay col-span-2:
+    // 6 + 5×2 = 16) to soak up the reclaimed width — header + data row → at least 2 occurrences.
+    expect((source.match(/col-span-6/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    // The old evenly-split 12-col grid that wasted horizontal space is gone from both rows.
+    expectSourceOmitsAll(source, ['grid grid-cols-12 gap-3']);
   });
 });

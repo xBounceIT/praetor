@@ -14,7 +14,12 @@ import type {
 } from '../../services/api/products';
 import type { Product } from '../../types';
 import { formatInsertDate } from '../../utils/date';
-import { calcProductSalePrice, parseNumberInputValue } from '../../utils/numbers';
+import {
+  calcProductSalePrice,
+  formatMolPercentage,
+  MOL_PERCENTAGE_DECIMALS,
+  parseNumberInputValue,
+} from '../../utils/numbers';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
@@ -1652,7 +1657,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                     <div className="flex gap-2">
                       <ValidatedNumberInput
                         value={formData.molPercentage ?? ''}
-                        formatDecimals={2}
+                        formatDecimals={MOL_PERCENTAGE_DECIMALS}
                         onValueChange={handleNumericValueChange('molPercentage')}
                         className="flex-1 min-w-0"
                         aria-invalid={Boolean(errors.molPercentage)}
@@ -1821,10 +1826,10 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             align: 'right',
             className: 'px-6 py-5 whitespace-nowrap text-right',
             accessorKey: 'molPercentage',
-            filterFormat: (val) => Number(val).toFixed(2),
+            filterFormat: (val) => Number(val).toFixed(MOL_PERCENTAGE_DECIMALS),
             cell: ({ row: p }) => (
               <span className="text-sm font-semibold text-zinc-500">
-                {Number(p.molPercentage).toFixed(2)}%
+                {formatMolPercentage(Number(p.molPercentage))}
               </span>
             ),
           },

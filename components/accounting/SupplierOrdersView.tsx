@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type {
+  DurationUnit,
   Product,
   Supplier,
   SupplierOrderVersion,
@@ -15,10 +16,18 @@ import type {
   SupplierSaleOrderItem,
 } from '../../types';
 import { formatInsertDateTime } from '../../utils/date';
-import { formatDiscountValue } from '../../utils/numbers';
+import {
+  durationValueToMonths,
+  formatDiscountValue,
+  getDurationDisplayValue,
+  getEffectiveDurationMonths,
+  normalizeDurationUnit,
+  parseDurationValueToMonths,
+} from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import DurationUnitSelector from '../shared/DurationUnitSelector';
 import Modal from '../shared/Modal';
 import {
   ModalBody,
@@ -31,6 +40,7 @@ import {
 import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
+import { TABLE_ROW_ACTION_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import SupplierOrderVersionsPanel from './SupplierOrderVersionsPanel';
 
@@ -58,7 +68,10 @@ const calculateTotals = (
   let subtotal = 0;
 
   items.forEach((item) => {
-    const lineSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0);
+    // Duration multiplies the line total alongside quantity (issue #776), matching the supplier
+    // quote the order was created from.
+    const durationMonths = getEffectiveDurationMonths(item);
+    const lineSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0) * durationMonths;
     const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
     const lineNet = lineSubtotal - lineDiscount;
     subtotal += lineNet;
@@ -222,6 +235,10 @@ export interface SupplierOrdersViewProps {
   onOrderRestored?: (order: SupplierSaleOrder) => void | Promise<void>;
   currency: string;
   quoteFilterId?: string | null;
+  // Pre-filters the list to a single supplier order by its own id, via a clearable
+  // table column filter — set by the client-order line shortcut that deep-links here
+  // (#/accounting/supplier-orders?filterId=…).
+  orderFilterId?: string | null;
 }
 
 const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
@@ -236,6 +253,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   onOrderRestored,
   currency,
   quoteFilterId,
+  orderFilterId,
 }) => {
   const { t, i18n } = useTranslation(['accounting', 'sales', 'common', 'crm']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
@@ -319,6 +337,36 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
     [isReadOnly],
   );
 
+  // Duration is carried over from the supplier quote (issue #776) and stays editable on the order.
+  // Orders have no unit-type concept, so it is a plain multiplier with a Mese/Anno selector.
+  const handleDurationValueChange = useCallback(
+    (index: number, value: string) => {
+      if (isReadOnly) return;
+      const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
+      updateItem(index, 'durationMonths', parseDurationValueToMonths(value, unit));
+    },
+    [formData.items, isReadOnly, updateItem],
+  );
+
+  const handleDurationUnitChange = useCallback(
+    (index: number, newUnit: DurationUnit) => {
+      if (isReadOnly) return;
+      const items = formData.items || [];
+      const item = items[index];
+      if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
+      // Switch unit and recompute canonical months in a single update so the line never lands in a
+      // transient state (durationMonths under the old unit). 'na' (N/A) drops the multiplier to a
+      // single month — the value input is disabled and the line never multiplies (issue #775).
+      const durationMonths =
+        newUnit === 'na' ? 1 : durationValueToMonths(getDurationDisplayValue(item), newUnit);
+      const nextItems = items.map((current, i) =>
+        i === index ? { ...current, durationMonths, durationUnit: newUnit } : current,
+      );
+      dispatch({ type: 'patchForm', patch: { items: nextItems } });
+    },
+    [formData.items, isReadOnly],
+  );
+
   const handleSubmit = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault();
@@ -349,13 +397,24 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
     [formData.discount, formData.discountType, formData.items],
   );
 
-  // Filter orders by quoteFilterId if provided
+  // A client-order line shortcut deep-links here pre-filtered to a single supplier
+  // order by its own id. That filter is handed to the table as a *clearable* column
+  // filter (see tableInitialFilterState below), like the product / client-order
+  // quick-view shortcuts, so the user can drop back to the full list in place rather
+  // than being stuck on one row. The own-id deep link wins over the linked-quote
+  // (quoteFilterId) array filter, and skipping the latter leaves the column filter the
+  // full list to match against.
   const filteredOrders = useMemo(() => {
-    if (quoteFilterId) {
+    if (!orderFilterId && quoteFilterId) {
       return orders.filter((o) => o.linkedQuoteId === quoteFilterId);
     }
     return orders;
-  }, [orders, quoteFilterId]);
+  }, [orders, orderFilterId, quoteFilterId]);
+
+  const tableInitialFilterState = useMemo(
+    () => (orderFilterId ? { id: [orderFilterId] } : undefined),
+    [orderFilterId],
+  );
 
   const columns = useMemo(
     () => [
@@ -364,7 +423,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         id: 'id',
         accessorFn: (row: SupplierSaleOrder) => row.id,
         cell: ({ row }: { row: SupplierSaleOrder }) => (
-          <span className="font-bold text-zinc-700">{row.id}</span>
+          <span className="font-bold text-foreground">{row.id}</span>
         ),
       },
       {
@@ -375,14 +434,36 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
           const isMuted = row.status === 'sent';
 
           return (
-            <div>
-              <div className={`font-bold ${isMuted ? 'text-zinc-400' : 'text-zinc-800'}`}>
-                {row.supplierName}
-              </div>
-              <div className="font-mono text-[10px] font-black uppercase tracking-wider text-zinc-400">
-                {row.linkedQuoteId || t('accounting:supplierOrders.noQuoteLink')}
-              </div>
-            </div>
+            <span className={`font-bold ${isMuted ? 'text-muted-foreground' : 'text-foreground'}`}>
+              {row.supplierName}
+            </span>
+          );
+        },
+      },
+      {
+        header: t('accounting:supplierOrders.linkedQuote'),
+        id: 'linkedQuote',
+        accessorFn: (row: SupplierSaleOrder) => row.linkedQuoteId ?? '',
+        className: 'whitespace-nowrap',
+        cell: ({ row }: { row: SupplierSaleOrder }) => {
+          if (!row.linkedQuoteId) {
+            return (
+              <span className="text-sm italic text-muted-foreground">
+                {t('accounting:supplierOrders.noQuoteLink')}
+              </span>
+            );
+          }
+
+          const isMuted = row.status === 'sent';
+
+          return (
+            <span
+              className={`font-mono text-xs font-semibold uppercase tracking-wider ${
+                isMuted ? 'text-muted-foreground' : 'text-foreground'
+              }`}
+            >
+              {row.linkedQuoteId}
+            </span>
           );
         },
       },
@@ -398,7 +479,9 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
           const isMuted = row.status === 'sent';
 
           return (
-            <span className={`text-sm font-bold ${isMuted ? 'text-zinc-400' : 'text-zinc-700'}`}>
+            <span
+              className={`text-sm font-bold ${isMuted ? 'text-muted-foreground' : 'text-foreground'}`}
+            >
               {total.toFixed(2)} {currency}
             </span>
           );
@@ -416,7 +499,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 
           return (
             <span
-              className={`text-sm font-semibold ${isMuted ? 'text-zinc-400' : 'text-zinc-600'}`}
+              className={`text-sm font-semibold ${isMuted ? 'text-muted-foreground' : 'text-foreground'}`}
             >
               {getPaymentTermsLabel(row.paymentTerms, t)}
             </span>
@@ -465,7 +548,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                           onViewQuote(linkedQuoteId);
                         }}
                         aria-label={t('accounting:supplierOrders.viewQuote')}
-                        className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
+                        className={TABLE_ROW_ACTION_BUTTON_CLASSNAME}
                       >
                         <i className="fa-solid fa-link"></i>
                       </button>
@@ -488,7 +571,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                           ? t('accounting:supplierOrders.editOrder')
                           : t('accounting:supplierOrders.viewOrder')
                       }
-                      className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
+                      className={TABLE_ROW_ACTION_BUTTON_CLASSNAME}
                     >
                       <i className={`fa-solid ${isDraft ? 'fa-pen-to-square' : 'fa-eye'}`}></i>
                     </button>
@@ -533,7 +616,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                           void onCreateInvoice(row);
                         }}
                         aria-label={t('accounting:supplierOrders.createInvoice')}
-                        className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
+                        className={TABLE_ROW_ACTION_BUTTON_CLASSNAME}
                       >
                         <i className="fa-solid fa-file-invoice-dollar"></i>
                       </button>
@@ -714,12 +797,17 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                   {(formData.items || []).length > 0 && (
                     <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
                       <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        <div className="col-span-3 ml-1">{t('crm:quotes.productsServices')}</div>
+                        <div className="col-span-2 ml-1">{t('crm:quotes.productsServices')}</div>
                         <div className="col-span-1">{t('common:labels.quantity')}</div>
                         <div className="col-span-2">
                           {t('crm:internalListing.salePrice')} ({currency})
                         </div>
                         <div className="col-span-1">{t('accounting:supplierOrders.discount')}</div>
+                        <div className="col-span-2">
+                          {t('accounting:supplierOrders.durationColumn', {
+                            defaultValue: 'Duration',
+                          })}
+                        </div>
                         <div className="col-span-2">{t('accounting:supplierOrders.notes')}</div>
                         <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
                       </div>
@@ -730,8 +818,12 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                   {(formData.items || []).length > 0 ? (
                     <div className="space-y-3">
                       {formData.items?.map((item, index) => {
+                        // Duration multiplies the line total alongside quantity (issue #776).
+                        const durationMonths = getEffectiveDurationMonths(item);
+                        const durationUnit = normalizeDurationUnit(item.durationUnit);
+                        const durationValue = getDurationDisplayValue(item);
                         const lineSubtotal =
-                          Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0);
+                          Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0) * durationMonths;
                         const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
                         const lineTotal = lineSubtotal - lineDiscount;
 
@@ -807,6 +899,38 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                                 </div>
                                 <div className="space-y-1">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                    {t('accounting:supplierOrders.durationColumn', {
+                                      defaultValue: 'Duration',
+                                    })}
+                                  </FieldLabel>
+                                  <div className="flex items-center gap-1">
+                                    <ValidatedNumberInput
+                                      step="1"
+                                      min="1"
+                                      placeholder={t('accounting:supplierOrders.durationColumn', {
+                                        defaultValue: 'Duration',
+                                      })}
+                                      value={durationValue}
+                                      disabled={isReadOnly || durationUnit === 'na'}
+                                      onValueChange={(value) =>
+                                        handleDurationValueChange(index, value)
+                                      }
+                                      className="text-center"
+                                    />
+                                    <span className="shrink-0 text-xs font-semibold text-muted-foreground">
+                                      /
+                                    </span>
+                                    <DurationUnitSelector
+                                      value={durationUnit}
+                                      onChange={(val) => handleDurationUnitChange(index, val)}
+                                      count={durationValue}
+                                      disabled={isReadOnly}
+                                      i18nPrefix="accounting:supplierOrders"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="space-y-1">
+                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                                     {t('common:labels.total')}
                                   </FieldLabel>
                                   <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground">
@@ -837,7 +961,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                             </div>
                             <div className="hidden lg:flex items-start gap-2">
                               <div className="grid flex-1 grid-cols-12 gap-2">
-                                <div className="lg:col-span-3 min-w-0">
+                                <div className="lg:col-span-2 min-w-0">
                                   <SelectControl
                                     options={productOptions}
                                     value={item.productId}
@@ -891,6 +1015,31 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                                       )
                                     }
                                     className="font-medium"
+                                  />
+                                </div>
+                                <div className="lg:col-span-2 flex items-center gap-1">
+                                  <ValidatedNumberInput
+                                    step="1"
+                                    min="1"
+                                    placeholder={t('accounting:supplierOrders.durationColumn', {
+                                      defaultValue: 'Duration',
+                                    })}
+                                    value={durationValue}
+                                    disabled={isReadOnly || durationUnit === 'na'}
+                                    onValueChange={(value) =>
+                                      handleDurationValueChange(index, value)
+                                    }
+                                    className="font-medium"
+                                  />
+                                  <span className="shrink-0 text-xs font-semibold text-muted-foreground">
+                                    /
+                                  </span>
+                                  <DurationUnitSelector
+                                    value={durationUnit}
+                                    onChange={(val) => handleDurationUnitChange(index, val)}
+                                    count={durationValue}
+                                    disabled={isReadOnly}
+                                    i18nPrefix="accounting:supplierOrders"
                                   />
                                 </div>
                                 <div className="lg:col-span-2">
@@ -1030,10 +1179,12 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
       <div className="space-y-4">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h2 className="text-2xl font-semibold text-zinc-800">
+            <h2 className="text-2xl font-semibold text-foreground">
               {t('accounting:supplierOrders.title')}
             </h2>
-            <p className="text-sm text-zinc-500">{t('accounting:supplierOrders.subtitle')}</p>
+            <p className="text-sm text-muted-foreground">
+              {t('accounting:supplierOrders.subtitle')}
+            </p>
           </div>
         </div>
       </div>
@@ -1042,10 +1193,11 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         title={t('accounting:supplierOrders.title')}
         data={filteredOrders}
         columns={columns}
+        initialFilterState={tableInitialFilterState}
         defaultRowsPerPage={10}
         containerClassName="overflow-visible"
         rowClassName={(row: SupplierSaleOrder) =>
-          row.status === 'sent' ? 'bg-zinc-50 text-zinc-400' : 'hover:bg-zinc-50/50'
+          row.status === 'sent' ? 'bg-muted text-muted-foreground' : 'hover:bg-muted/50'
         }
         onRowClick={(row: SupplierSaleOrder) => openEditModal(row)}
       />

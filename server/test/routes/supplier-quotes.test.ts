@@ -452,6 +452,228 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     );
   });
 
+  test('200 persists a line item duration on a time-based line (issue #776)', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            productName: 'Service',
+            quantity: 2,
+            listPrice: 100,
+            discountPercent: 0,
+            unitType: 'days',
+            durationMonths: 3,
+            durationUnit: 'months',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const itemsArg = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    expect(itemsArg[0]).toEqual(
+      expect.objectContaining({ durationMonths: 3, durationUnit: 'months' }),
+    );
+  });
+
+  test('200 keeps a years duration on a time-based line (issue #776)', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            productName: 'Service',
+            quantity: 1,
+            listPrice: 100,
+            unitType: 'days',
+            durationMonths: 24,
+            durationUnit: 'years',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const itemsArg = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    expect(itemsArg[0]).toEqual(
+      expect.objectContaining({ durationMonths: 24, durationUnit: 'years' }),
+    );
+  });
+
+  test('200 passes a line duration through verbatim — no unit-line coercion (issue #775)', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    // Duration applies to every line type now (issue #775); the route no longer forces a unit line
+    // to a single month — it persists exactly what the client submitted.
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            productName: 'Widget',
+            quantity: 4,
+            listPrice: 100,
+            unitType: 'unit',
+            durationMonths: 5,
+            durationUnit: 'years',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const itemsArg = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    expect(itemsArg[0]).toEqual(
+      expect.objectContaining({ durationMonths: 5, durationUnit: 'years' }),
+    );
+  });
+
+  test('200 accepts the "na" duration unit (issue #775)', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            productName: 'Service',
+            quantity: 2,
+            listPrice: 100,
+            unitType: 'days',
+            durationMonths: 3,
+            durationUnit: 'na',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const itemsArg = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    expect(itemsArg[0]).toEqual(expect.objectContaining({ durationUnit: 'na' }));
+  });
+
+  test('200 defaults the line duration to one month when omitted (issue #776)', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [{ productName: 'Service', quantity: 1, listPrice: 50, unitType: 'days' }],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const itemsArg = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    expect(itemsArg[0]).toEqual(
+      expect.objectContaining({ durationMonths: 1, durationUnit: 'months' }),
+    );
+  });
+
+  test('400 rejects a non-integer durationMonths (issue #776)', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            productName: 'Service',
+            quantity: 1,
+            listPrice: 10,
+            unitType: 'days',
+            durationMonths: 1.5,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(sqReplaceItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('400 rejects a durationMonths below 1 (issue #776)', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            productName: 'Service',
+            quantity: 1,
+            listPrice: 10,
+            unitType: 'days',
+            durationMonths: 0,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(sqReplaceItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('400 rejects an unknown durationUnit (issue #776)', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            productName: 'Service',
+            quantity: 1,
+            listPrice: 10,
+            unitType: 'days',
+            durationUnit: 'weeks',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(sqReplaceItemsMock).not.toHaveBeenCalled();
+  });
+
   test('400 rejects an item discount above 100', async () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);

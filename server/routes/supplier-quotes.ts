@@ -10,6 +10,7 @@ import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
+import type { DurationUnit } from '../utils/duration-unit.ts';
 import {
   ATTACHMENT_MAX_BYTES,
   deleteSupplierQuoteAttachment,
@@ -31,6 +32,8 @@ import { deriveSupplierLinePricing, MAX_LINE_AMOUNT } from '../utils/supplier-qu
 import {
   badRequest,
   optionalDateString,
+  optionalDurationMonths,
+  optionalDurationUnit,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   parseDateString,
@@ -89,6 +92,8 @@ const supplierQuoteItemSchema = {
     unitPrice: { type: 'number' },
     note: { type: ['string', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
+    durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
   required: ['id', 'quoteId', 'productName', 'quantity', 'unitPrice'],
 } as const;
@@ -138,6 +143,8 @@ const supplierQuoteItemBodySchema = {
     unitPrice: { type: 'number' },
     note: { type: 'string' },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
+    durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
   required: ['productName', 'quantity'],
 } as const;
@@ -184,6 +191,8 @@ type ItemBody = {
   unitPrice?: string | number;
   note?: string;
   unitType?: 'hours' | 'days' | 'unit';
+  durationMonths?: string | number;
+  durationUnit?: DurationUnit;
 };
 
 const validateAndNormalizeItems = (
@@ -238,6 +247,21 @@ const validateAndNormalizeItems = (
       return null;
     }
     const discountPercent = discountResult.value ?? 0;
+    // Duration in months: a positive whole number, defaulting to 1 (one-off line item). Mirrors
+    // the client-quote items so the two modules price the same way (issue #776 / #757).
+    const durationMonthsResult = optionalDurationMonths(
+      item.durationMonths,
+      `items[${i}].durationMonths`,
+    );
+    if (!durationMonthsResult.ok) {
+      badRequest(reply, durationMonthsResult.message);
+      return null;
+    }
+    const durationUnitResult = optionalDurationUnit(item.durationUnit, `items[${i}].durationUnit`);
+    if (!durationUnitResult.ok) {
+      badRequest(reply, durationUnitResult.message);
+      return null;
+    }
     // Round both inputs to the persisted DB scale and derive the net cost (Costo unitario) from the
     // rounded values, so the stored row always satisfies unitPrice = listPrice × (1 − discount/100)
     // even when a caller submits more than two decimals. Derived server-side so it can never drift
@@ -250,6 +274,11 @@ const validateAndNormalizeItems = (
       badRequest(reply, `items[${i}].listPrice must not exceed ${MAX_LINE_AMOUNT}`);
       return null;
     }
+    const unitType = normalizeUnitType(item.unitType);
+    // Duration applies to every line type now (issue #775); the 'na' unit marks a line that never
+    // multiplies. The value is stored as-is and gated through effectiveDurationMonths downstream.
+    const durationMonths = durationMonthsResult.value ?? 1;
+    const durationUnit = durationUnitResult.value ?? 'months';
     result.push({
       id: generatePrefixedId(ITEM_ID_PREFIXES.supplierQuoteItem),
       productId: item.productId || null,
@@ -259,7 +288,9 @@ const validateAndNormalizeItems = (
       discountPercent: pricing.discountPercent,
       unitPrice: pricing.unitPrice,
       note: item.note || null,
-      unitType: normalizeUnitType(item.unitType),
+      unitType,
+      durationMonths,
+      durationUnit,
     });
   }
   return result;
@@ -1025,6 +1056,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             unitPrice: pricing.unitPrice,
             unitType: rest.unitType ?? 'unit',
             note: rest.note ?? null,
+            // Snapshots taken before duration existed (issue #776) lack these keys; default to a
+            // single month. insertItems applies the final unit-line coercion on the way in.
+            durationMonths: rest.durationMonths ?? 1,
+            durationUnit: rest.durationUnit ?? 'months',
           };
         },
       );

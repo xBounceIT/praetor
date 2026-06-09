@@ -39,3 +39,5 @@ Without the matching HR permissions, HR fields are omitted from user API respons
 ## Competence centers
 
 Competence centers connect people, costs, and assignments. Keep HR profiles current before analyzing costs, availability, and team composition on projects.
+
+Each competence center card shows the initials of its assigned members; hover an initial to read the full name. When members exceed the space available, a `+N` badge sums up the rest and, on hover, lists the complete membership so you can see it without opening the card.

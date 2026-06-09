@@ -123,9 +123,13 @@ const SAMPLE_UNIT = {
   id: 'wu-1',
   name: 'Engineering',
   managers: [{ id: 'u1', name: 'Alice' }],
+  members: [
+    { id: 'u1', name: 'Alice' },
+    { id: 'u2', name: 'Bob' },
+  ],
   description: null,
   isDisabled: false,
-  userCount: 3,
+  userCount: 2,
 };
 
 const allMocks = [
@@ -182,6 +186,11 @@ describe('GET /api/work-units', () => {
     expect(res.statusCode).toBe(200);
     expect(listAllMock).toHaveBeenCalledTimes(1);
     expect(listManagedByMock).not.toHaveBeenCalled();
+    // The member list is serialized for the card preview (issue #761).
+    expect(JSON.parse(res.body)[0].members).toEqual([
+      { id: 'u1', name: 'Alice' },
+      { id: 'u2', name: 'Bob' },
+    ]);
   });
 
   test('200 without all-view → listManagedBy(viewer.id)', async () => {

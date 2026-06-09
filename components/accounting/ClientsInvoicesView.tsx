@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useMemo, useReducer } from 'react';
+import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
@@ -35,6 +35,7 @@ import QuickViewLinkButton from '../shared/QuickViewLinkButton';
 import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
+import { TABLE_ROW_ACTION_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 export interface ClientsInvoicesViewProps {
@@ -167,6 +168,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   );
   const { isModalOpen, editingInvoice, isDeleteConfirmOpen, invoiceToDelete, errors, formData } =
     invoiceState;
+  const [productRowToDelete, setProductRowToDelete] = useState<number | null>(null);
   const setFormData = useCallback((update: StateUpdate<Partial<Invoice>>) => {
     dispatchInvoiceState({ type: 'setFormData', update });
   }, []);
@@ -175,6 +177,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   }, []);
   const closeModal = useCallback(() => {
     dispatchInvoiceState({ type: 'closeModal' });
+    setProductRowToDelete(null);
   }, []);
   const closeDeleteConfirm = useCallback(() => {
     dispatchInvoiceState({ type: 'closeDeleteConfirm' });
@@ -486,7 +489,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
-          <span className="font-bold text-zinc-700">{row.id}</span>
+          <span className="font-bold text-foreground">{row.id}</span>
         ),
       },
       {
@@ -494,7 +497,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         id: 'clientName',
         accessorFn: (row: Invoice) => row.clientName,
         cell: ({ row }: { row: Invoice }) => (
-          <span className="font-bold text-zinc-800">{row.clientName}</span>
+          <span className="font-bold text-foreground">{row.clientName}</span>
         ),
       },
       {
@@ -504,7 +507,9 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
-          <span className="text-sm text-zinc-600">{formatDateOnlyForLocale(row.issueDate)}</span>
+          <span className="text-sm text-muted-foreground">
+            {formatDateOnlyForLocale(row.issueDate)}
+          </span>
         ),
       },
       {
@@ -514,7 +519,9 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
-          <span className="text-sm text-zinc-600">{formatDateOnlyForLocale(row.dueDate)}</span>
+          <span className="text-sm text-muted-foreground">
+            {formatDateOnlyForLocale(row.dueDate)}
+          </span>
         ),
       },
       {
@@ -524,7 +531,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
-          <span className="font-bold text-zinc-700">
+          <span className="font-bold text-foreground">
             {(row.total ?? 0).toFixed(2)} {currency}
           </span>
         ),
@@ -589,7 +596,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                       openEditModal(row);
                     }}
                     aria-label={t('common:buttons.edit')}
-                    className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
+                    className={TABLE_ROW_ACTION_BUTTON_CLASSNAME}
                   >
                     <i className="fa-solid fa-pen-to-square"></i>
                   </button>
@@ -772,8 +779,8 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                         key={item.id}
                         className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
                       >
-                        <div className="flex items-start gap-2">
-                          <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:pt-5">
+                        <div className="flex items-start gap-2 lg:items-center lg:pt-5">
+                          <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14">
                             <div className="space-y-1 lg:col-span-3 min-w-0">
                               <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                 {t('common:labels.product')}
@@ -965,7 +972,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                             type="button"
                             variant="ghost"
                             size="icon-sm"
-                            onClick={() => removeItemRow(index)}
+                            onClick={() => setProductRowToDelete(index)}
                             className="text-muted-foreground hover:text-destructive"
                           >
                             <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
@@ -1086,13 +1093,30 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         })}
       />
 
+      {/* Line-item (product) delete confirmation */}
+      <DeleteConfirmModal
+        isOpen={productRowToDelete !== null}
+        onClose={() => setProductRowToDelete(null)}
+        onConfirm={() => {
+          if (productRowToDelete !== null) {
+            removeItemRow(productRowToDelete);
+          }
+          setProductRowToDelete(null);
+        }}
+        title={t('accounting:clientsInvoices.removeProductTitle')}
+        description={t('accounting:clientsInvoices.removeProductConfirm')}
+        zIndex={70}
+      />
+
       <div className="space-y-4">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h2 className="text-2xl font-semibold text-zinc-800">
+            <h2 className="text-2xl font-semibold text-foreground">
               {t('accounting:clientsInvoices.title')}
             </h2>
-            <p className="text-sm text-zinc-500">{t('accounting:clientsInvoices.subtitle')}</p>
+            <p className="text-sm text-muted-foreground">
+              {t('accounting:clientsInvoices.subtitle')}
+            </p>
           </div>
           <HeaderAddButton onClick={openAddModal}>
             {t('accounting:clientsInvoices.addInvoice')}

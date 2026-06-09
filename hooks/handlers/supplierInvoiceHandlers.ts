@@ -2,6 +2,7 @@ import type React from 'react';
 import api from '../../services/api';
 import type { SupplierInvoice, SupplierSaleOrder, View } from '../../types';
 import { addDaysToDateOnly, getLocalDateString } from '../../utils/date';
+import { getEffectiveDurationMonths } from '../../utils/numbers';
 import { makeTempId } from '../../utils/tempId';
 import { toastError } from '../../utils/toast';
 
@@ -46,10 +47,14 @@ export const makeSupplierInvoiceHandlers = (deps: SupplierInvoiceHandlersDeps) =
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         discount: item.discount || 0,
+        // Carry the order line's duration so the invoice total matches the order (issue #776/#775);
+        // 'na' lines never multiply (effectiveDurationMonths returns 1).
+        durationMonths: item.durationMonths ?? 1,
+        durationUnit: item.durationUnit ?? 'months',
       }));
       const totals = items.reduce(
         (acc, item) => {
-          const lineSubtotal = item.quantity * item.unitPrice;
+          const lineSubtotal = item.quantity * item.unitPrice * getEffectiveDurationMonths(item);
           const lineDiscount = (lineSubtotal * item.discount) / 100;
           const lineNet = lineSubtotal - lineDiscount;
           acc.subtotal += lineNet;

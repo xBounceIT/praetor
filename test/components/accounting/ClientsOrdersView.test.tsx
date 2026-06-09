@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import type { Client, ClientsOrder, Product } from '../../../types';
+import type { Client, ClientsOrder, Product, SupplierSaleOrder } from '../../../types';
+import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { render } from '../../helpers/render';
+import { rowDeleteButtons } from '../../helpers/rowDeleteButtons';
 import {
   expectSourceContainsAll,
   expectSourceOmitsAll,
@@ -46,6 +48,12 @@ mock.module('../../../services/api/clientsOrders', () => ({
 afterEach(() => {
   document.body.style.overflow = '';
 });
+
+// Other suites globally stub DeleteConfirmModal (Bun's mock.module is process-wide and
+// last-write-wins), so pin the shared deterministic stub against this file's binding.
+mock.module('../../../components/shared/DeleteConfirmModal', () => ({
+  default: LineDeleteConfirmStub,
+}));
 
 const ClientsOrdersView = (await import('../../../components/accounting/ClientsOrdersView'))
   .default;
@@ -212,6 +220,51 @@ describe('<ClientsOrdersView />', () => {
     expect(screen.getAllByText('1920.00 EUR').length).toBeGreaterThan(0);
   });
 
+  test('MOL line input keeps two decimals instead of rounding to one (issue #780)', async () => {
+    const twoDecimalMolOrder: ClientsOrder = {
+      id: 'dm_so_mol',
+      clientId: 'client-1',
+      clientName: 'Helios Energy Services',
+      items: [
+        {
+          id: 'item-mol',
+          orderId: 'dm_so_mol',
+          productId: 'product-1',
+          productName: 'Consulting',
+          quantity: 2,
+          unitPrice: 2000,
+          productCost: 1200,
+          productMolPercentage: 12.34,
+        },
+      ],
+      paymentTerms: '30gg',
+      discount: 0,
+      discountType: 'percentage',
+      status: 'draft',
+      createdAt: Date.UTC(2026, 3, 24),
+      updatedAt: Date.UTC(2026, 3, 24),
+    };
+
+    render(
+      <ClientsOrdersView
+        orders={[twoDecimalMolOrder]}
+        clients={clients}
+        products={[]}
+        currency="EUR"
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
+    await screen.findByRole('dialog');
+
+    // The MOL input must preserve both decimals (12.34). The pre-fix formatDecimals={1}
+    // rounded the displayed value to a single decimal (12.3), silently dropping precision.
+    expect(screen.queryAllByDisplayValue('12.34').length).toBeGreaterThan(0);
+    expect(screen.queryAllByDisplayValue('12.3')).toHaveLength(0);
+  });
+
   test('edit modal uses the shared shadcn modal layout and form primitives', async () => {
     const source = await readComponentSource('accounting/ClientsOrdersView.tsx');
 
@@ -239,9 +292,10 @@ describe('<ClientsOrdersView />', () => {
     const source = await readComponentSource('accounting/ClientsOrdersView.tsx');
 
     expectSourceContainsAll(source, [
-      'className="flex items-start gap-2 lg:items-center"',
-      // lg:pt-5 reserves the top gutter the floated product quick-view shortcut sits in (desktop).
-      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center lg:pt-5"',
+      // lg:pt-5 quick-view gutter lives on the row flex (with the trash button), not the grid, so
+      // the delete button stays vertically aligned with the inputs.
+      'className="flex items-start gap-2 lg:items-center lg:pt-5"',
+      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center"',
       'className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0"',
       'className="flex h-9 items-center rounded-md border border-border bg-background px-3"',
       // Quantity and duration controls both center their compact value input + unit selector.
@@ -507,5 +561,163 @@ describe('<ClientsOrdersView /> product quick-view shortcut', () => {
         name: 'sales:clientQuotes.productShortcutUnavailable',
       }).length,
     ).toBeGreaterThan(0);
+  });
+});
+
+describe('<ClientsOrdersView /> supplier-order quick-view shortcut', () => {
+  // A line auto-created behind a supplier quote carries the supplier order it spawned.
+  const supplierBackedOrder: ClientsOrder = {
+    id: 'dm_so_sup',
+    clientId: 'client-1',
+    clientName: 'Helios Energy Services',
+    items: [
+      {
+        id: 'item-sup-link',
+        orderId: 'dm_so_sup',
+        productId: 'product-1',
+        productName: 'Consulting',
+        quantity: 1,
+        unitPrice: 1000,
+        productCost: 600,
+        supplierSaleId: 'ss-42',
+        supplierSaleItemId: 'ssi-42',
+        supplierSaleSupplierName: 'SupplierX',
+      },
+    ],
+    paymentTerms: '30gg',
+    discount: 0,
+    discountType: 'percentage',
+    status: 'draft',
+    createdAt: Date.UTC(2026, 3, 24),
+    updatedAt: Date.UTC(2026, 3, 24),
+  };
+
+  // The builder only reads o.id, so a one-field fixture is enough.
+  const supplierOrders = [{ id: 'ss-42' }] as unknown as SupplierSaleOrder[];
+
+  const openModal = (extraProps: Record<string, unknown> = {}) => {
+    render(
+      <ClientsOrdersView
+        orders={[supplierBackedOrder]}
+        clients={clients}
+        products={[]}
+        supplierOrders={supplierOrders}
+        currency="EUR"
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+        {...extraProps}
+      />,
+    );
+    fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
+    return screen.findByRole('dialog');
+  };
+
+  test('opens the referenced supplier order on its pre-filtered page', async () => {
+    const dialog = await openModal();
+    const links = within(dialog).getAllByRole('link', {
+      name: 'accounting:clientsOrders.openSupplierOrderInNewTab',
+    });
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) {
+      expect(link).toHaveAttribute('href', '#/accounting/supplier-orders?filterId=ss-42');
+      expect(link).toHaveAttribute('target', '_blank');
+    }
+    // Floats above the field on desktop (lg:absolute), matching the product shortcut.
+    expect(links.some((link) => link.className.includes('lg:absolute'))).toBe(true);
+  });
+
+  test('hides the supplier-order shortcut entirely without supplier-orders access', async () => {
+    const dialog = await openModal({ canViewSupplierOrders: false });
+    expect(
+      within(dialog).queryAllByRole('link', {
+        name: 'accounting:clientsOrders.openSupplierOrderInNewTab',
+      }),
+    ).toHaveLength(0);
+    expect(
+      within(dialog).queryAllByRole('button', {
+        name: 'accounting:clientsOrders.supplierOrderShortcutUnavailable',
+      }),
+    ).toHaveLength(0);
+  });
+
+  test('keeps the shortcut visible but disabled when the supplier order is not loaded', async () => {
+    // The line still references ss-42, but it isn't in the loaded supplier-orders set,
+    // so the shortcut has nothing to open and renders disabled rather than as a link.
+    const dialog = await openModal({ supplierOrders: [] });
+    expect(
+      within(dialog).queryAllByRole('link', {
+        name: 'accounting:clientsOrders.openSupplierOrderInNewTab',
+      }),
+    ).toHaveLength(0);
+    expect(
+      within(dialog).getAllByRole('button', {
+        name: 'accounting:clientsOrders.supplierOrderShortcutUnavailable',
+      }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  test('shows the shortcut disabled on a line with no supplier order', async () => {
+    // orders[0]'s single line has no supplierSaleId. Like the product/supplier-quote
+    // shortcuts, the icon still renders (reserving a stable slot) but disabled, with
+    // the "nothing to open" tooltip rather than as a link.
+    const dialog = await openModal({ orders: [orders[0]] });
+    expect(
+      within(dialog).queryAllByRole('link', {
+        name: 'accounting:clientsOrders.openSupplierOrderInNewTab',
+      }),
+    ).toHaveLength(0);
+    expect(
+      within(dialog).getAllByRole('button', {
+        name: 'accounting:clientsOrders.supplierOrderShortcutUnavailable',
+      }).length,
+    ).toBeGreaterThan(0);
+  });
+});
+
+describe('<ClientsOrdersView /> line-item delete confirmation', () => {
+  const openEditor = async () => {
+    render(
+      <ClientsOrdersView
+        orders={orders}
+        clients={clients}
+        products={[]}
+        currency="EUR"
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+      />,
+    );
+    fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
+    return screen.findByRole('dialog');
+  };
+
+  test('confirms before removing a product line and removes it only after confirming', async () => {
+    const dialog = await openEditor();
+    const rowDeletes = rowDeleteButtons(dialog);
+    expect(rowDeletes.length).toBeGreaterThan(0);
+
+    fireEvent.click(rowDeletes[0]);
+    const confirmUi = await screen.findByTestId('line-delete-confirm');
+    expect(within(confirmUi).getByTestId('line-delete-title')).toHaveTextContent(
+      'accounting:clientsOrders.removeProductTitle',
+    );
+    expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
+
+    fireEvent.click(within(confirmUi).getByTestId('line-delete-confirm-btn'));
+    await waitFor(() => {
+      expect(rowDeleteButtons(dialog)).toHaveLength(0);
+    });
+  });
+
+  test('keeps the product line when the confirmation is dismissed', async () => {
+    const dialog = await openEditor();
+    const rowDeletes = rowDeleteButtons(dialog);
+
+    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await screen.findByTestId('line-delete-cancel'));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('line-delete-confirm')).not.toBeInTheDocument();
+    });
+    expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
   });
 });

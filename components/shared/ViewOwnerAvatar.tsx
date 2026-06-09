@@ -2,17 +2,7 @@ import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-
-// Initials for a shared view's owner, derived from the display name (the view
-// DTOs only carry `ownerName`, not avatar initials). First letter of the first
-// and last word, or the first two letters of a single word.
-const initialsFromName = (name: string): string => {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  const initials =
-    parts.length === 1 ? parts[0].slice(0, 2) : parts[0][0] + parts[parts.length - 1][0];
-  return initials.toUpperCase();
-};
+import { getInitials } from '@/utils/initials';
 
 export interface ViewOwnerAvatarProps {
   ownerName: string;
@@ -39,7 +29,7 @@ const ViewOwnerAvatar: React.FC<ViewOwnerAvatarProps> = ({ ownerName, className 
             className,
           )}
         >
-          <span aria-hidden="true">{initialsFromName(ownerName)}</span>
+          <span aria-hidden="true">{getInitials(ownerName)}</span>
           <span className="sr-only">{label}</span>
         </span>
       </TooltipTrigger>

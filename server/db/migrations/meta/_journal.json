@@ -586,8 +586,15 @@
     {
       "idx": 83,
       "version": "7",
-      "when": 1781008619477,
-      "tag": "0083_quote_status_model_and_supplier_link",
+      "when": 1780999692884,
+      "tag": "0083_add_duration_to_supplier_line_items",
+      "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1781040575554,
+      "tag": "0084_quote_status_model_and_supplier_link",
       "breakpoints": true
     }
   ]

@@ -136,6 +136,7 @@
     "noCompetenceCentersAssigned": "No competence centers assigned",
     "noCompetenceCentersAssignedDescription": "You are not assigned to any competence centers. Please contact a top manager for assistance.",
     "noManagersAssigned": "No managers assigned",
+    "noMembersAssigned": "No members assigned",
     "users": "users",
     "noUsersFound": "No users found matching your search.",
     "addRemoveUsers": "Add or remove users from {{name}}"
