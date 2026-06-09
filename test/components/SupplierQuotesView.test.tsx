@@ -296,6 +296,27 @@ describe('<SupplierQuotesView /> mandatory customer association (issue #777)', (
     expect(screen.getByText('sales:supplierQuotes.errors.clientRequired')).toBeInTheDocument();
   });
 
+  test('blocks saving a NEW quote when no customer is selected', () => {
+    const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
+    // No table rows so the supplier name is unambiguous in the combobox.
+    render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
+    fireEvent.click(screen.getByText('sales:supplierQuotes.addQuote'));
+
+    // Fill every OTHER required field (supplier, code, one item); leave only the customer empty.
+    fireEvent.click(document.getElementById('supplier-quote-supplier') as HTMLElement);
+    fireEvent.click(screen.getByText('Acme Supplies'));
+    fireEvent.change(document.getElementById('supplier-quote-code') as HTMLInputElement, {
+      target: { value: 'SQ-NEW' },
+    });
+    fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
+
+    fireEvent.click(screen.getByText('common:buttons.save'));
+
+    // The create path is blocked and the customer-required error surfaces.
+    expect(onAddQuote).not.toHaveBeenCalled();
+    expect(screen.getByText('sales:supplierQuotes.errors.clientRequired')).toBeInTheDocument();
+  });
+
   test('saves a new quote once a customer is selected', async () => {
     const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
     // No table rows (quotes: []) so the supplier/customer names are unambiguous in the combobox.
