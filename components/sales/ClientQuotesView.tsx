@@ -323,6 +323,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     [isExpired],
   );
 
+  // Single derived-status policy for the Status column: the badge, the filter options, and
+  // sorting all use this value, so an expired quote surfaces as a filterable "Expired" entry
+  // instead of hiding under its stored Draft/Sent (#779).
+  const effectiveRowStatus = useCallback(
+    (quote: Quote) => quote.effectiveStatus ?? (isQuoteExpired(quote) ? 'expired' : quote.status),
+    [isQuoteExpired],
+  );
+
   const hasOfferForQuote = useCallback(
     (quote: Quote) => Boolean(quote.linkedOfferId || quoteIdsWithOffers?.has(quote.id)),
     [quoteIdsWithOffers],
@@ -1244,13 +1252,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     {
       header: t('sales:clientQuotes.statusColumn'),
       accessorKey: 'status',
+      // Filter/sort on the DERIVED status (#779): expired quotes get their own filter option.
+      accessorFn: effectiveRowStatus,
+      filterFormat: (value) => getStatusLabel(String(value ?? '')),
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[9rem]',
       cell: ({ row }) => {
         const history = isHistoryRow(row);
-        // Prefer the server effective status so `offer` and `expired` render correctly (#779).
-        const badgeStatus = (row.effectiveStatus ??
-          (isQuoteExpired(row) ? 'expired' : row.status)) as StatusType;
+        const badgeStatus = effectiveRowStatus(row) as StatusType;
         return (
           <div className={`flex items-center gap-1.5 ${history ? 'opacity-60' : ''}`}>
             <StatusBadge type={badgeStatus} label={getStatusLabel(badgeStatus)} />

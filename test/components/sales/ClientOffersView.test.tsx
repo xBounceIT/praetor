@@ -802,6 +802,31 @@ describe('<ClientOffersView /> expired-offer handling (issue #779)', () => {
     expect(trashIcon?.closest('button')).toBeDisabled();
   });
 
+  test('the status filter offers an Expired option that isolates expired rows', async () => {
+    const user = userEvent.setup();
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[
+          buildOffer({ id: 'O-PAST', status: 'sent', expirationDate: '2000-01-01' }),
+          buildOffer({ id: 'O-VALID', status: 'sent', expirationDate: '2999-12-31' }),
+        ]}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'table.filters sales:clientOffers.statusColumn' }),
+    );
+    // The filter is built from the DERIVED status, so expired rows get their own option
+    // instead of hiding under the stored Sent value (#779).
+    await user.click(
+      await screen.findByRole('menuitemcheckbox', { name: 'sales:clientOffers.statusExpired' }),
+    );
+
+    expect(screen.getByText('O-PAST')).toBeInTheDocument();
+    expect(screen.queryByText('O-VALID')).toBeNull();
+  });
+
   test('a valid sent offer stays fully read-only — no submit button, date field disabled', async () => {
     render(
       <ClientOffersView

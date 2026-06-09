@@ -435,6 +435,14 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     [today],
   );
 
+  // Single derived-status policy for the Status column: the badge, the filter options, and
+  // sorting all use this value, so an expired offer surfaces as a filterable "Expired" entry
+  // instead of hiding under its stored Draft/Sent (#779).
+  const effectiveRowStatus = useCallback(
+    (offer: ClientOffer) => (isOfferExpired(offer) ? 'expired' : offer.status),
+    [isOfferExpired],
+  );
+
   const isEditingExpired = Boolean(editingOffer && isOfferExpired(editingOffer));
   // Expired offers are read-only EXCEPT their expiration date — extending it is the only exit
   // from `expired` (issue #779) — so an expired DRAFT offer locks too.
@@ -743,12 +751,12 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     {
       header: t('sales:clientOffers.statusColumn', { defaultValue: 'Status' }),
       accessorKey: 'status',
+      // Filter/sort on the DERIVED status (#779): expired offers get their own filter option.
+      accessorFn: effectiveRowStatus,
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[9rem]',
       cell: ({ row }) => {
-        // Single expiry policy: the same helper that dims rows and disables actions also picks
-        // the badge, so the badge can never disagree with the row behavior (#779).
-        const badgeStatus = (isOfferExpired(row) ? 'expired' : row.status) as StatusType;
+        const badgeStatus = effectiveRowStatus(row) as StatusType;
         return <StatusBadge type={badgeStatus} label={getStatusLabel(badgeStatus)} />;
       },
       filterFormat: (value) => getStatusLabel(String(value ?? '')),

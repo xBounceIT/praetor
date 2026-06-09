@@ -1,6 +1,7 @@
 import type React from 'react';
 import api from '../../services/api';
 import type { ClientOffer, ClientsOrder, Invoice, Quote, View } from '../../types';
+import { addMonthsToDateOnly, getLocalDateString, isDateOnlyBeforeToday } from '../../utils/date';
 import { makeTempId } from '../../utils/tempId';
 import { toastError } from '../../utils/toast';
 
@@ -188,6 +189,13 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
 
   const createClientOfferFromQuote = async (quote: Quote) => {
     try {
+      // A stale source-quote date would mint a born-expired, immediately read-only offer
+      // (accepted quotes never expire, so their date can be long past — #779). A new offer is a
+      // fresh commercial document: give it the standard one-month validity window instead.
+      const expirationDate =
+        !quote.expirationDate || isDateOnlyBeforeToday(quote.expirationDate)
+          ? addMonthsToDateOnly(getLocalDateString(), 1)
+          : quote.expirationDate;
       const offer = await api.clientOffers.create({
         id: `${quote.id}-OF`,
         linkedQuoteId: quote.id,
@@ -196,7 +204,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
         paymentTerms: quote.paymentTerms,
         discount: quote.discount,
         status: 'draft',
-        expirationDate: quote.expirationDate,
+        expirationDate,
         notes: quote.notes,
         items: quote.items.map((item) => ({
           ...item,

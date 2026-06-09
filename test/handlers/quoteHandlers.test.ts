@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { addMonthsToDateOnly, getLocalDateString } from '../../utils/date';
 import { ApiErrorStub } from '../helpers/apiErrorStub';
 import { clearSpyStateAfterAll } from '../helpers/mockCleanup.ts';
 
@@ -498,7 +499,8 @@ describe('makeQuoteHandlers', () => {
       clientName: 'Acme',
       paymentTerms: '30',
       discount: 5,
-      expirationDate: '2026-12-31',
+      // Far future: a past date would trigger the fresh-validity-window branch instead.
+      expirationDate: '2999-12-31',
       notes: 'note',
       items: [{ id: 'orig-1', productId: 'p1', quantity: 1, unitPrice: 10 }],
     };
@@ -518,6 +520,34 @@ describe('makeQuoteHandlers', () => {
     expect(ctx.clientOffers.get()[0].id).toBe('of-new');
     expect(ctx.quotes.get()[0].linkedOfferId).toBe('of-new');
     expect(ctx.setActiveView).toHaveBeenCalledWith('sales/client-offers');
+    // A still-valid source date is copied verbatim.
+    const payload = apiMocks.clientOffersCreate.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.expirationDate).toBe('2999-12-31');
+  });
+
+  test('createClientOfferFromQuote refreshes a dead validity window instead of copying it', async () => {
+    apiMocks.clientOffersCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({ ...(data as object), id: 'of-new' }),
+    );
+    const ctx = buildHandlers();
+    ctx.quotes.setter([{ id: 'q1', clientId: 'c1' }] as never);
+
+    await ctx.handlers.createClientOfferFromQuote({
+      id: 'q1',
+      clientId: 'c1',
+      clientName: 'Acme',
+      paymentTerms: '30',
+      discount: 0,
+      // Long past — e.g. an accepted quote converted months later (terminal quotes never expire).
+      expirationDate: '2000-01-01',
+      notes: '',
+      items: [],
+    } as never);
+
+    const payload = apiMocks.clientOffersCreate.mock.calls[0][0] as Record<string, unknown>;
+    // Copying the dead date would mint a born-expired, immediately read-only offer (#779);
+    // the conversion mints the standard one-month window instead.
+    expect(payload.expirationDate).toBe(addMonthsToDateOnly(getLocalDateString(), 1));
   });
 
   test('createClientOfferFromQuote toasts on api error', async () => {
@@ -531,7 +561,7 @@ describe('makeQuoteHandlers', () => {
         clientName: 'Acme',
         paymentTerms: '30',
         discount: 0,
-        expirationDate: '2026-12-31',
+        expirationDate: '2999-12-31',
         notes: '',
         items: [],
       } as never);
