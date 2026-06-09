@@ -611,9 +611,10 @@ describe('<ClientsOrdersView /> supplier-order quick-view shortcut', () => {
     ).toBeGreaterThan(0);
   });
 
-  test('omits the shortcut on a line with no supplier order', async () => {
-    // orders[0]'s single line has no supplierSaleId: the shortcut is meaningless there,
-    // so neither a link nor a disabled placeholder button is rendered.
+  test('shows the shortcut disabled on a line with no supplier order', async () => {
+    // orders[0]'s single line has no supplierSaleId. Like the product/supplier-quote
+    // shortcuts, the icon still renders (reserving a stable slot) but disabled, with
+    // the "nothing to open" tooltip rather than as a link.
     const dialog = await openModal({ orders: [orders[0]] });
     expect(
       within(dialog).queryAllByRole('link', {
@@ -621,10 +622,10 @@ describe('<ClientsOrdersView /> supplier-order quick-view shortcut', () => {
       }),
     ).toHaveLength(0);
     expect(
-      within(dialog).queryAllByRole('button', {
+      within(dialog).getAllByRole('button', {
         name: 'accounting:clientsOrders.supplierOrderShortcutUnavailable',
-      }),
-    ).toHaveLength(0);
+      }).length,
+    ).toBeGreaterThan(0);
   });
 });
 

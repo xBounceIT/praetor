@@ -1149,14 +1149,15 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                         {item.supplierSaleId}
                                       </span>
                                     ) : (
-                                      <span className="text-xs text-muted-foreground">
+                                      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                                         {t('accounting:clientsOrders.noSupplierOrder', {
                                           defaultValue: 'No supplier order',
                                         })}
                                       </span>
                                     )}
-                                    {/* Omitted (not just disabled) on lines with no supplier order. */}
-                                    {canViewSupplierOrders && item.supplierSaleId && (
+                                    {/* Always rendered (disabled with a tooltip when nothing is
+                                        linked), matching the product / supplier-quote shortcuts. */}
+                                    {canViewSupplierOrders && (
                                       <QuickViewLinkButton
                                         href={supplierOrderHref}
                                         label={t(
