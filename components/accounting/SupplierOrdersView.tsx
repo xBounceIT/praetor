@@ -375,14 +375,36 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
           const isMuted = row.status === 'sent';
 
           return (
-            <div>
-              <div className={`font-bold ${isMuted ? 'text-zinc-400' : 'text-zinc-800'}`}>
-                {row.supplierName}
-              </div>
-              <div className="font-mono text-[10px] font-black uppercase tracking-wider text-zinc-400">
-                {row.linkedQuoteId || t('accounting:supplierOrders.noQuoteLink')}
-              </div>
-            </div>
+            <span className={`font-bold ${isMuted ? 'text-zinc-400' : 'text-zinc-800'}`}>
+              {row.supplierName}
+            </span>
+          );
+        },
+      },
+      {
+        header: t('accounting:supplierOrders.linkedQuote'),
+        id: 'linkedQuote',
+        accessorFn: (row: SupplierSaleOrder) => row.linkedQuoteId ?? '',
+        className: 'whitespace-nowrap',
+        cell: ({ row }: { row: SupplierSaleOrder }) => {
+          const isMuted = row.status === 'sent';
+
+          if (!row.linkedQuoteId) {
+            return (
+              <span className={`text-sm italic ${isMuted ? 'text-zinc-300' : 'text-zinc-400'}`}>
+                {t('accounting:supplierOrders.noQuoteLink')}
+              </span>
+            );
+          }
+
+          return (
+            <span
+              className={`font-mono text-xs font-semibold uppercase tracking-wider ${
+                isMuted ? 'text-zinc-400' : 'text-zinc-600'
+              }`}
+            >
+              {row.linkedQuoteId}
+            </span>
           );
         },
       },
