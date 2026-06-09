@@ -31,6 +31,7 @@ import {
 import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
+import { TABLE_ROW_ACTION_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import SupplierOrderVersionsPanel from './SupplierOrderVersionsPanel';
 
@@ -489,7 +490,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                           onViewQuote(linkedQuoteId);
                         }}
                         aria-label={t('accounting:supplierOrders.viewQuote')}
-                        className="rounded-lg p-2 text-muted-foreground transition-all hover:bg-muted hover:text-praetor"
+                        className={TABLE_ROW_ACTION_BUTTON_CLASSNAME}
                       >
                         <i className="fa-solid fa-link"></i>
                       </button>
@@ -512,7 +513,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                           ? t('accounting:supplierOrders.editOrder')
                           : t('accounting:supplierOrders.viewOrder')
                       }
-                      className="rounded-lg p-2 text-muted-foreground transition-all hover:bg-muted hover:text-praetor"
+                      className={TABLE_ROW_ACTION_BUTTON_CLASSNAME}
                     >
                       <i className={`fa-solid ${isDraft ? 'fa-pen-to-square' : 'fa-eye'}`}></i>
                     </button>
@@ -557,7 +558,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                           void onCreateInvoice(row);
                         }}
                         aria-label={t('accounting:supplierOrders.createInvoice')}
-                        className="rounded-lg p-2 text-muted-foreground transition-all hover:bg-muted hover:text-praetor"
+                        className={TABLE_ROW_ACTION_BUTTON_CLASSNAME}
                       >
                         <i className="fa-solid fa-file-invoice-dollar"></i>
                       </button>

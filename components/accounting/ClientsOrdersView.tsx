@@ -59,6 +59,7 @@ import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';
+import { TABLE_ROW_ACTION_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import OrderVersionsPanel from './OrderVersionsPanel';
@@ -769,7 +770,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         onViewOffer(row.linkedOfferId as string);
                       }}
                       aria-label={t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })}
-                      className="p-2 text-muted-foreground hover:text-praetor hover:bg-muted rounded-lg transition-all"
+                      className={TABLE_ROW_ACTION_BUTTON_CLASSNAME}
                     >
                       <i className="fa-solid fa-link"></i>
                     </button>
@@ -794,7 +795,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         ? t('accounting:clientsOrders.editOrder')
                         : t('accounting:clientsOrders.viewOrder')
                     }
-                    className="p-2 text-muted-foreground hover:text-praetor hover:bg-muted rounded-lg transition-all"
+                    className={TABLE_ROW_ACTION_BUTTON_CLASSNAME}
                   >
                     <i
                       className={`fa-solid ${row.status === 'draft' ? 'fa-pen-to-square' : 'fa-eye'}`}

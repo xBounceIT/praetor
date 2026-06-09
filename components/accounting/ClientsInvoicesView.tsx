@@ -35,6 +35,7 @@ import QuickViewLinkButton from '../shared/QuickViewLinkButton';
 import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
+import { TABLE_ROW_ACTION_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 export interface ClientsInvoicesViewProps {
@@ -593,7 +594,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                       openEditModal(row);
                     }}
                     aria-label={t('common:buttons.edit')}
-                    className="rounded-lg p-2 text-muted-foreground transition-all hover:bg-muted hover:text-praetor"
+                    className={TABLE_ROW_ACTION_BUTTON_CLASSNAME}
                   >
                     <i className="fa-solid fa-pen-to-square"></i>
                   </button>
