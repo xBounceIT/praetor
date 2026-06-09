@@ -13,7 +13,7 @@ Ogni riga del preventivo include la colonna **Durata**, posizionata tra **Quanti
 
 La **Durata** segue l'intera catena documentale: quando converti un preventivo in offerta e poi in ordine di vendita, le righe mantengono sia il valore sia l'unità (mesi o anni) impostati, così i totali del documento derivato coincidono con quelli del preventivo. Anche le **fatture clienti** hanno la colonna Durata sulle righe e moltiplicano l'imponibile (e quindi IVA e totale) per i mesi corrispondenti; sulle fatture la durata si imposta manualmente, dato che le righe non vengono copiate automaticamente da un ordine.
 
-La durata si applica solo alle righe basate sul tempo (**Ore** / **Giorni**). Per le righe a **Unità** — quantità conteggiabili che non hanno una durata — il campo Durata mostra **N/D** al posto del valore e del selettore, e qualsiasi durata viene riportata a un solo mese: il vincolo è imposto sia nell'interfaccia sia sul server (anche via API e al ripristino di una versione), così queste righe non moltiplicano mai i totali per la durata.
+La durata si applica a **tutte le righe**, indipendentemente dall'unità di quantità (**Ore**, **Giorni** o **Unità**): il campo Durata è modificabile con il selettore **Mesi** / **Anni** / **N/D** e moltiplica i totali della riga. Selezionando **N/D** la durata non si applica alla riga: il campo numerico accanto viene disabilitato e i totali della riga non vengono moltiplicati per la durata.
 
 La lista dei preventivi mostra codice, data di inserimento, cliente, subtotale, sconto percentuale, sconto assoluto, totale scontato, margine, MOL, termini di pagamento, scadenza e stato per controllare rapidamente i valori principali senza aprire ogni record.
 

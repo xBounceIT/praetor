@@ -349,7 +349,7 @@ describe('POST /api/invoices', () => {
     );
   });
 
-  test('201 forbids duration on a "unit" line: it neither multiplies the total nor persists', async () => {
+  test('201 folds a "unit" line duration into the total and persists it (Durata always applies)', async () => {
     generateNextIdMock.mockResolvedValue('inv-1');
     createMock.mockImplementation(async (input: Record<string, unknown>) => ({
       ...SAMPLE_INVOICE,
@@ -378,16 +378,16 @@ describe('POST /api/invoices', () => {
     });
 
     expect(res.statusCode).toBe(201);
-    // 2 * 50 = 100. The 12-month duration is forbidden on a unit line, so the server-authoritative
-    // total does NOT scale by it (would be 1200 if duration applied).
+    // 2 * 50 * 12 = 1200: a unit line carries a duration like any other, so the server-authoritative
+    // total scales by it.
     expect(createMock).toHaveBeenCalledWith(
-      expect.objectContaining({ subtotal: 100, taxTotal: 0, total: 100 }),
+      expect.objectContaining({ subtotal: 1200, taxTotal: 0, total: 1200 }),
       TX_SENTINEL,
     );
-    // ...and the persisted line carries the coerced single-month duration.
+    // ...and the persisted line keeps the multi-month duration.
     const persistedItems = insertItemsMock.mock.calls[0][1];
-    expect(persistedItems[0].durationMonths).toBe(1);
-    expect(persistedItems[0].durationUnit).toBe('months');
+    expect(persistedItems[0].durationMonths).toBe(12);
+    expect(persistedItems[0].durationUnit).toBe('years');
   });
 
   test('400 amountPaid exceeds computed total', async () => {

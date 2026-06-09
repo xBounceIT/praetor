@@ -10,11 +10,7 @@ import { standardErrorResponses, standardRateLimitedErrorResponses } from '../sc
 import { logAudit } from '../utils/audit.ts';
 import { todayLocalDateOnly } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
-import {
-  coerceUnitLineDuration,
-  type DurationUnit,
-  isUnitMeasure,
-} from '../utils/duration-unit.ts';
+import type { DurationUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
@@ -73,7 +69,7 @@ const offerItemSchema = {
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
     durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years'] },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
   required: ['id', 'offerId', 'productName', 'quantity', 'unitPrice', 'productCost', 'discount'],
 } as const;
@@ -128,9 +124,12 @@ const offerItemBodySchema = {
     discount: { type: 'number' },
     note: { type: 'string' },
     durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years'] },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
-  required: ['productName', 'quantity', 'unitPrice'],
+  // unitType is required: it drives per-unit pricing (a 'days' line bills at 8x the hourly rate)
+  // and is stored on every line, so the API must not silently default the unit. Mirrors invoices'
+  // required unitOfMeasure.
+  required: ['productName', 'quantity', 'unitPrice', 'unitType'],
 } as const;
 
 const offerCreateBodySchema = {
@@ -261,12 +260,8 @@ const normalizeItems = (
       return null;
     }
     const unitType = normalizeUnitType(item.unitType);
-    // A "unit"-measured line can't run for a period, so its duration is forced to a single month.
-    const { durationMonths, durationUnit } = coerceUnitLineDuration(
-      isUnitMeasure(unitType),
-      durationMonthsResult.value ?? 1,
-      durationUnitResult.value ?? 'months',
-    );
+    const durationMonths = durationMonthsResult.value ?? 1;
+    const durationUnit = durationUnitResult.value ?? 'months';
     normalizedItems.push({
       productId: item.productId || null,
       productName: productNameResult.value,

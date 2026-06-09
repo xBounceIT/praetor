@@ -1,15 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  coerceUnitLineDuration,
   DURATION_UNITS,
   type DurationUnit,
-  isUnitMeasure,
+  effectiveDurationMonths,
   normalizeDurationUnit,
 } from '../../utils/duration-unit.ts';
 
 describe('DURATION_UNITS', () => {
-  test('is the ordered allow-list ["months", "years"]', () => {
-    expect([...DURATION_UNITS]).toEqual(['months', 'years']);
+  test('is the ordered allow-list ["months", "years", "na"]', () => {
+    expect([...DURATION_UNITS]).toEqual(['months', 'years', 'na']);
   });
 });
 
@@ -20,6 +19,10 @@ describe('normalizeDurationUnit', () => {
 
   test('returns "months" for the literal "months"', () => {
     expect(normalizeDurationUnit('months')).toBe('months');
+  });
+
+  test('returns "na" for the literal "na" (issue #775)', () => {
+    expect(normalizeDurationUnit('na')).toBe('na');
   });
 
   test('falls back to "months" for nullish input', () => {
@@ -40,32 +43,21 @@ describe('normalizeDurationUnit', () => {
   });
 });
 
-describe('isUnitMeasure', () => {
-  test('is true only for the literal "unit"', () => {
-    expect(isUnitMeasure('unit')).toBe(true);
-    expect(isUnitMeasure('hours')).toBe(false);
-    expect(isUnitMeasure('days')).toBe(false);
-    expect(isUnitMeasure(null)).toBe(false);
-    expect(isUnitMeasure(undefined)).toBe(false);
-  });
-});
-
-describe('coerceUnitLineDuration', () => {
-  test('forces a unit-measured line to a single month', () => {
-    expect(coerceUnitLineDuration(true, 12, 'years')).toEqual({
-      durationMonths: 1,
-      durationUnit: 'months',
-    });
+describe('effectiveDurationMonths', () => {
+  test('returns the stored months for months/years units', () => {
+    expect(effectiveDurationMonths('months', 6)).toBe(6);
+    expect(effectiveDurationMonths('years', 24)).toBe(24);
   });
 
-  test('leaves a non-unit line untouched', () => {
-    expect(coerceUnitLineDuration(false, 12, 'years')).toEqual({
-      durationMonths: 12,
-      durationUnit: 'years',
-    });
-    expect(coerceUnitLineDuration(false, 3, 'months')).toEqual({
-      durationMonths: 3,
-      durationUnit: 'months',
-    });
+  test("returns 1 for an 'na' unit regardless of the stored months (issue #775)", () => {
+    expect(effectiveDurationMonths('na', 6)).toBe(1);
+    expect(effectiveDurationMonths('na', 24)).toBe(1);
+  });
+
+  test('falls back to 1 for absent, zero, negative, or non-finite months', () => {
+    expect(effectiveDurationMonths('months', undefined)).toBe(1);
+    expect(effectiveDurationMonths('months', 0)).toBe(1);
+    expect(effectiveDurationMonths('months', -3)).toBe(1);
+    expect(effectiveDurationMonths('months', Number.NaN)).toBe(1);
   });
 });

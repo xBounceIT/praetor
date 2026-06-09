@@ -9,11 +9,7 @@ import {
   getForeignKeyViolation,
   getUniqueViolation,
 } from '../utils/db-errors.ts';
-import {
-  coerceUnitLineDuration,
-  type DurationUnit,
-  isUnitMeasure,
-} from '../utils/duration-unit.ts';
+import type { DurationUnit } from '../utils/duration-unit.ts';
 import { computeInvoiceTotals, roundCurrency } from '../utils/invoice-math.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -60,7 +56,7 @@ const invoiceItemSchema = {
     discount: { type: 'number' },
     taxRate: { type: 'number' },
     durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years'] },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
   required: [
     'id',
@@ -121,7 +117,7 @@ const invoiceItemBodySchema = {
     discount: { type: 'number' },
     taxRate: { type: 'number' },
     durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years'] },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
   required: ['description', 'unitOfMeasure', 'quantity', 'unitPrice'],
 } as const;
@@ -260,13 +256,8 @@ const validateAndNormalizeItems = (
     }
 
     const unitOfMeasure = unitOfMeasureResult.value as 'unit' | 'hours';
-    // A "unit"-measured line can't run for a period, so its duration is forced to a single month —
-    // applied before computeInvoiceTotals below so the (server-authoritative) totals stay correct.
-    const { durationMonths, durationUnit } = coerceUnitLineDuration(
-      isUnitMeasure(unitOfMeasure),
-      durationMonthsResult.value ?? 1,
-      durationUnitResult.value ?? 'months',
-    );
+    const durationMonths = durationMonthsResult.value ?? 1;
+    const durationUnit = durationUnitResult.value ?? 'months';
 
     normalizedItems.push({
       productId: productIdResult.value || null,

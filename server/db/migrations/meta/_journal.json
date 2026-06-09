@@ -575,6 +575,13 @@
       "when": 1780962907073,
       "tag": "0081_drop_sale_items_product_id_not_null",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1780996378276,
+      "tag": "0082_allow_na_duration_unit",
+      "breakpoints": true
     }
   ]
 }

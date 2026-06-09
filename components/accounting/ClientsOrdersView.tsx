@@ -32,7 +32,6 @@ import {
   formatMolPercentage,
   getDurationDisplayValue,
   getItemPricingContext,
-  isUnitLine,
   MOL_PERCENTAGE_DECIMALS,
   normalizeDurationUnit,
   type PricingTotals,
@@ -348,14 +347,12 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     }
 
     const itemsWithSnapshots = (formData.items || []).map((item) => {
-      // Unit-measured lines cannot carry a duration — coerce to a single month.
-      const unitLine = isUnitLine(item);
       return {
         ...item,
         unitPrice: item.unitPrice,
         discount: item.discount ? item.discount : 0,
-        durationMonths: unitLine ? 1 : Number(item.durationMonths ?? 1) || 1,
-        durationUnit: normalizeDurationUnit(unitLine ? 'months' : item.durationUnit),
+        durationMonths: Number(item.durationMonths ?? 1) || 1,
+        durationUnit: normalizeDurationUnit(item.durationUnit),
         productCost: Number(item.productCost ?? 0),
         productMolPercentage:
           item.productMolPercentage === undefined || item.productMolPercentage === null
@@ -514,12 +511,15 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     if (isReadOnly) return;
     const item = formData.items?.[index];
     if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
-    const displayValue = getDurationDisplayValue(item);
+    // 'N/A' marks the line as duration-less: reset to the neutral 1 month so it never multiplies
+    // (issue #775). Months/years instead keeps the displayed number under the new unit.
+    const durationMonths =
+      newUnit === 'na' ? 1 : durationValueToMonths(getDurationDisplayValue(item), newUnit);
     const newItems = [...(formData.items || [])];
     newItems[index] = {
       ...newItems[index],
       durationUnit: newUnit,
-      durationMonths: durationValueToMonths(displayValue, newUnit),
+      durationMonths,
     };
     setFormData((prev) => ({ ...prev, items: newItems }));
   };
@@ -1088,8 +1088,6 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                           getItemPricingContext(item, DEFAULT_UNIT_TYPE);
                         const durationUnit = normalizeDurationUnit(item.durationUnit);
                         const durationValue = getDurationDisplayValue(item);
-                        // "Unit"-measured lines can't carry a duration → Durata shows N/A.
-                        const isUnitDurationLine = isUnitLine(item);
                         const salePrice = Number(item.unitPrice || 0);
                         const lineSalePrice = salePrice * quantity * durationMonths;
                         const margin = lineSalePrice - lineCost;
@@ -1118,8 +1116,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                             key={item.id}
                             className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
                           >
-                            <div className="flex items-start gap-2 lg:items-center">
-                              <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center lg:pt-5">
+                            <div className="flex items-start gap-2 lg:items-center lg:pt-5">
+                              <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center">
                                 <div className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('accounting:clientsOrders.supplierOrderColumn', {
@@ -1222,36 +1220,28 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                     })}
                                   </FieldLabel>
                                   <div className="flex h-9 items-center justify-center gap-1">
-                                    {isUnitDurationLine ? (
-                                      <span className="text-sm font-medium text-muted-foreground">
-                                        {t('common:labels.notApplicable')}
-                                      </span>
-                                    ) : (
-                                      <>
-                                        <ValidatedNumberInput
-                                          step="1"
-                                          min="1"
-                                          placeholder={t('sales:clientQuotes.durationColumn', {
-                                            defaultValue: 'Duration',
-                                          })}
-                                          value={durationValue}
-                                          onValueChange={(value) =>
-                                            handleDurationValueChange(index, value)
-                                          }
-                                          disabled={isReadOnly}
-                                          className={`${compactInputClass} max-w-[5rem]`}
-                                        />
-                                        <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
-                                          /
-                                        </span>
-                                        <DurationUnitSelector
-                                          value={durationUnit}
-                                          onChange={(val) => handleDurationUnitChange(index, val)}
-                                          count={durationValue}
-                                          disabled={isReadOnly}
-                                        />
-                                      </>
-                                    )}
+                                    <ValidatedNumberInput
+                                      step="1"
+                                      min="1"
+                                      placeholder={t('sales:clientQuotes.durationColumn', {
+                                        defaultValue: 'Duration',
+                                      })}
+                                      value={durationValue}
+                                      onValueChange={(value) =>
+                                        handleDurationValueChange(index, value)
+                                      }
+                                      disabled={isReadOnly || durationUnit === 'na'}
+                                      className={`${compactInputClass} max-w-[5rem]`}
+                                    />
+                                    <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
+                                      /
+                                    </span>
+                                    <DurationUnitSelector
+                                      value={durationUnit}
+                                      onChange={(val) => handleDurationUnitChange(index, val)}
+                                      count={durationValue}
+                                      disabled={isReadOnly}
+                                    />
                                   </div>
                                 </div>
                                 <div className="space-y-1 lg:col-span-1 lg:space-y-0">

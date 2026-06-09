@@ -10,11 +10,7 @@ import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
-import {
-  coerceUnitLineDuration,
-  type DurationUnit,
-  isUnitMeasure,
-} from '../utils/duration-unit.ts';
+import type { DurationUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import {
   generateClientOrderId,
@@ -66,7 +62,7 @@ const clientOrderItemSchema = {
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
     durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years'] },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
   required: ['id', 'orderId', 'productName', 'quantity', 'unitPrice', 'productCost', 'discount'],
 } as const;
@@ -130,8 +126,11 @@ const clientOrderItemBodySchema = {
     discount: { type: 'number' },
     note: { type: ['string', 'null'] },
     durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years'] },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
+  // productId is intentionally NOT required so free-form supplier-quote lines (no linked product)
+  // can be converted into orders (#783/#795). unitType is likewise optional here — product-less
+  // lines may omit it and the route defaults it via normalizeUnitType.
   required: ['productName', 'quantity', 'unitPrice'],
 } as const;
 
@@ -254,12 +253,8 @@ const normalizeIncomingItems = (
       return null;
     }
     const unitType = normalizeUnitType(item.unitType);
-    // A "unit"-measured line can't run for a period, so its duration is forced to a single month.
-    const { durationMonths, durationUnit } = coerceUnitLineDuration(
-      isUnitMeasure(unitType),
-      durationMonthsResult.value ?? 1,
-      durationUnitResult.value ?? 'months',
-    );
+    const durationMonths = durationMonthsResult.value ?? 1;
+    const durationUnit = durationUnitResult.value ?? 'months';
     normalized.push({
       id: typeof item.id === 'string' ? item.id : undefined,
       productId,

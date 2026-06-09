@@ -136,6 +136,18 @@ describe('ClientsInvoicesView modal styling', () => {
     ]);
   });
 
+  // Regression: the `lg:pt-5` quick-view gutter must sit on the row flex (with `lg:items-center`,
+  // alongside the trash button), not the inner grid — else the delete button misaligns above the inputs.
+  test('delete button shares the floated quick-view gutter so it stays aligned with the line', async () => {
+    const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
+
+    expectSourceContainsAll(source, [
+      'className="flex items-start gap-2 lg:items-center lg:pt-5"',
+      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14"',
+    ]);
+    expectSourceOmitsAll(source, ['lg:grid-cols-14 lg:pt-5']);
+  });
+
   test('item rows render unit, currency, and percentage beside inputs instead of headers', async () => {
     const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
 
