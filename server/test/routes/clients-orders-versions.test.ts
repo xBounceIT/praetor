@@ -46,6 +46,7 @@ const coReplaceItemsMock = mock();
 
 const clientsExistsByIdMock = mock();
 const productsGetSnapshotsMock = mock();
+const sqGetQuoteItemSnapshotsMock = mock();
 
 const ovListForOrderMock = mock();
 const ovFindByIdMock = mock();
@@ -101,6 +102,7 @@ beforeAll(async () => {
   }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
+    getQuoteItemSnapshots: sqGetQuoteItemSnapshotsMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
@@ -225,6 +227,7 @@ const allMocks = [
   coReplaceItemsMock,
   clientsExistsByIdMock,
   productsGetSnapshotsMock,
+  sqGetQuoteItemSnapshotsMock,
   ovListForOrderMock,
   ovFindByIdMock,
   ovInsertMock,
@@ -353,6 +356,21 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     clientsExistsByIdMock.mockResolvedValue(true);
     productsGetSnapshotsMock.mockResolvedValue(
       new Map([['p-1', { productCost: 50, productMolPercentage: null }]]),
+    );
+    // Default: a product-less snapshot line's supplier-quote item still resolves to an accepted quote.
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-1',
+          {
+            supplierQuoteId: 'sq-1',
+            supplierName: 'ACME',
+            productId: null,
+            unitPrice: 50,
+            netCost: 50,
+          },
+        ],
+      ]),
     );
     coRestoreSnapshotOrderMock.mockResolvedValue(SAMPLE_ORDER);
     coReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
@@ -489,6 +507,43 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     expect(coRestoreSnapshotOrderMock).not.toHaveBeenCalled();
     expect(coReplaceItemsMock).not.toHaveBeenCalled();
     expect(ovInsertMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when restoring a product-less line whose supplier quote is stale (issue #783)', async () => {
+    setupHappyPath();
+    // The referenced supplier-quote item was deleted or its quote is no longer accepted, so it no
+    // longer resolves. Restoring would persist a dead reference that the next edit rejects, so the
+    // restore is blocked here instead — mirroring the POST/PUT resolveSupplierQuoteRefs validation.
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(new Map());
+    ovFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [
+          {
+            ...SAMPLE_ITEM,
+            id: 'si-stale',
+            productId: null,
+            supplierQuoteId: 'sq-1',
+            supplierQuoteItemId: 'sqi-gone',
+          },
+        ],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders/o-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain(
+      'references a supplier quote that no longer exists or is not accepted',
+    );
+    expect(sqGetQuoteItemSnapshotsMock).toHaveBeenCalledWith(['sqi-gone']);
+    expect(coRestoreSnapshotOrderMock).not.toHaveBeenCalled();
+    expect(coReplaceItemsMock).not.toHaveBeenCalled();
   });
 
   test('404 when current order does not exist', async () => {

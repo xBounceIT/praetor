@@ -497,12 +497,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     if (missingProductId) {
       return `Snapshot product "${missingProductId}" no longer exists`;
     }
-    // A product-less snapshot item must carry a supplier-quote reference — the same invariant the
-    // POST/PUT path enforces. Restoring an orphaned line (no product AND no supplier quote) would
-    // insert a row that fails normal item validation and is invisible to product-based reporting.
-    const orphanedItem = snapshot.items.find(
+    // A product-less snapshot item (no catalog product) must resolve to an *accepted* supplier-quote
+    // item — the same invariant POST/PUT enforce. Two failure modes are rejected before any write:
+    //  - orphaned: missing either supplier-quote id, so it could never be re-saved through the
+    //    POST/PUT presence gate and is invisible to product-based reporting;
+    //  - stale: the referenced item was deleted or its quote is no longer accepted, so restoring it
+    //    persists a dead reference that the next draft edit (which re-runs `resolveSupplierQuoteRefs`)
+    //    rejects, stranding the order in an un-saveable state.
+    const productlessItems = snapshot.items.filter(
+      (item) => !normalizeNullableString(item.productId),
+    );
+    const orphanedItem = productlessItems.find(
       (item) =>
-        !normalizeNullableString(item.productId) &&
         !(
           normalizeNullableString(item.supplierQuoteId) &&
           normalizeNullableString(item.supplierQuoteItemId)
@@ -510,6 +516,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     );
     if (orphanedItem) {
       return `Snapshot item "${orphanedItem.productName}" has no catalog product and no supplier-quote reference`;
+    }
+    const supplierQuoteItemIds = productlessItems
+      .map((item) => normalizeNullableString(item.supplierQuoteItemId))
+      .filter((id): id is string => id !== null);
+    if (supplierQuoteItemIds.length > 0) {
+      const quoteItemSnapshots =
+        await supplierQuotesRepo.getQuoteItemSnapshots(supplierQuoteItemIds);
+      const staleItem = productlessItems.find((item) => {
+        const itemId = normalizeNullableString(item.supplierQuoteItemId);
+        return itemId !== null && !quoteItemSnapshots.has(itemId);
+      });
+      if (staleItem) {
+        return `Snapshot item "${staleItem.productName}" references a supplier quote that no longer exists or is not accepted`;
+      }
     }
     return null;
   };
