@@ -24,6 +24,8 @@
     "deleteOrder": "Elimina Ordine",
     "deleteOrderTitle": "Eliminare Ordine?",
     "deleteOrderConfirm": "Sei sicuro di voler eliminare questo ordine per {{clientName}}? Questa azione non può essere annullata.",
+    "removeProductTitle": "Rimuovere il prodotto?",
+    "removeProductConfirm": "Sei sicuro di voler rimuovere questo prodotto dall'ordine?",
     "readOnlyStatus": "Gli ordini {{status}} sono in sola lettura",
     "clientColumn": "Cliente",
     "totalColumn": "Totale",
@@ -128,6 +130,8 @@
     "summary": "Riepilogo",
     "deleteTitle": "Eliminare fattura?",
     "deleteMessage": "Sei sicuro di voler eliminare la fattura {{invoiceNumber}}? Questa azione non può essere annullata.",
+    "removeProductTitle": "Rimuovere il prodotto?",
+    "removeProductConfirm": "Sei sicuro di voler rimuovere questo prodotto dalla fattura?",
     "notesPlaceholder": "Note aggiuntive..."
   },
   "supplierOrders": {

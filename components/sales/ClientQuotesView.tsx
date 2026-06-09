@@ -268,6 +268,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     isDeleting,
   } = state;
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [productRowToDelete, setProductRowToDelete] = useState<number | null>(null);
 
   const getStatusLabel = useCallback(
     (status: string) => {
@@ -1798,7 +1799,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 type="button"
                                 variant="ghost"
                                 size="icon-sm"
-                                onClick={() => removeProductRow(index)}
+                                onClick={() => setProductRowToDelete(index)}
                                 disabled={isReadOnly}
                                 className="mt-5 shrink-0 text-muted-foreground hover:text-destructive"
                               >
@@ -2137,7 +2138,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 type="button"
                                 variant="ghost"
                                 size="icon-sm"
-                                onClick={() => removeProductRow(index)}
+                                onClick={() => setProductRowToDelete(index)}
                                 disabled={isReadOnly}
                                 className="shrink-0 text-muted-foreground hover:text-destructive"
                               >
@@ -2334,6 +2335,21 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         description={t('sales:clientQuotes.deleteConfirm', {
           clientName: quoteToDelete?.clientName,
         })}
+      />
+
+      {/* Line-item (product) delete confirmation */}
+      <DeleteConfirmModal
+        isOpen={productRowToDelete !== null}
+        onClose={() => setProductRowToDelete(null)}
+        onConfirm={() => {
+          if (productRowToDelete !== null) {
+            removeProductRow(productRowToDelete);
+          }
+          setProductRowToDelete(null);
+        }}
+        title={t('sales:clientQuotes.removeProductTitle')}
+        description={t('sales:clientQuotes.removeProductConfirm')}
+        zIndex={70}
       />
 
       <div className="space-y-4">

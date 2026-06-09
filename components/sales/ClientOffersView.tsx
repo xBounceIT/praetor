@@ -399,6 +399,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<Partial<ClientOffer>>(() => getDefaultFormData());
   const [previewVersion, setPreviewVersion] = useState<OfferVersion | null>(null);
+  const [productRowToDelete, setProductRowToDelete] = useState<number | null>(null);
 
   const baseReadOnly = Boolean(editingOffer && editingOffer.status !== 'draft');
   const isReadOnly = baseReadOnly || previewVersion !== null;
@@ -1489,7 +1490,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                 type="button"
                                 variant="ghost"
                                 size="icon-sm"
-                                onClick={() => removeItem(index)}
+                                onClick={() => setProductRowToDelete(index)}
                                 disabled={isReadOnly}
                                 className="mt-5 shrink-0 text-muted-foreground hover:text-destructive"
                               >
@@ -1815,7 +1816,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                 type="button"
                                 variant="ghost"
                                 size="icon-sm"
-                                onClick={() => removeItem(index)}
+                                onClick={() => setProductRowToDelete(index)}
                                 disabled={isReadOnly}
                                 className="shrink-0 text-muted-foreground hover:text-destructive"
                               >
@@ -2060,6 +2061,21 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         isDeleting={isDeleting}
         title={t('sales:clientOffers.deleteTitle', { defaultValue: 'Delete offer?' })}
         description={offerToDelete?.id ?? ''}
+      />
+
+      {/* Line-item (product) delete confirmation */}
+      <DeleteConfirmModal
+        isOpen={productRowToDelete !== null}
+        onClose={() => setProductRowToDelete(null)}
+        onConfirm={() => {
+          if (productRowToDelete !== null) {
+            removeItem(productRowToDelete);
+          }
+          setProductRowToDelete(null);
+        }}
+        title={t('sales:clientOffers.removeProductTitle')}
+        description={t('sales:clientOffers.removeProductConfirm')}
+        zIndex={70}
       />
 
       <div className="space-y-4">

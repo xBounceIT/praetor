@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next';
 import type React from 'react';
-import { useCallback, useMemo, useReducer } from 'react';
+import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
@@ -236,6 +236,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     previewVersion,
     formData,
   } = viewState;
+  const [productRowToDelete, setProductRowToDelete] = useState<number | null>(null);
 
   const setIsModalOpen = useCallback((value: React.SetStateAction<boolean>) => {
     dispatchViewState({ type: 'setIsModalOpen', value });
@@ -1315,7 +1316,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 type="button"
                                 variant="ghost"
                                 size="icon-sm"
-                                onClick={() => removeProductRow(index)}
+                                onClick={() => setProductRowToDelete(index)}
                                 disabled={isReadOnly || Boolean(item.supplierSaleId)}
                                 title={
                                   item.supplierSaleId
@@ -1457,6 +1458,21 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         description={t('accounting:clientsOrders.deleteOrderConfirm', {
           clientName: orderToDelete?.clientName,
         })}
+      />
+
+      {/* Line-item (product) delete confirmation */}
+      <DeleteConfirmModal
+        isOpen={productRowToDelete !== null}
+        onClose={() => setProductRowToDelete(null)}
+        onConfirm={() => {
+          if (productRowToDelete !== null) {
+            removeProductRow(productRowToDelete);
+          }
+          setProductRowToDelete(null);
+        }}
+        title={t('accounting:clientsOrders.removeProductTitle')}
+        description={t('accounting:clientsOrders.removeProductConfirm')}
+        zIndex={70}
       />
 
       <div className="space-y-4">

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import type { Client, Invoice, Product } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
@@ -10,6 +11,35 @@ import {
 } from '../modalStylingTestUtils';
 
 installI18nMock();
+
+// Other suites globally stub DeleteConfirmModal (Bun's mock.module is process-wide and
+// last-write-wins), so the real component can't be relied on in the full-suite run. Pin a
+// deterministic passthrough that exposes the confirm/cancel actions to keep the line-item
+// deletion tests stable regardless of file ordering.
+mock.module('../../../components/shared/DeleteConfirmModal', () => ({
+  default: ({
+    isOpen,
+    onConfirm,
+    onClose,
+    title,
+  }: {
+    isOpen: boolean;
+    onConfirm: () => void;
+    onClose: () => void;
+    title?: ReactNode;
+  }) =>
+    isOpen ? (
+      <div data-testid="line-delete-confirm">
+        <span data-testid="line-delete-title">{title}</span>
+        <button type="button" data-testid="line-delete-cancel" onClick={onClose}>
+          cancel
+        </button>
+        <button type="button" data-testid="line-delete-confirm-btn" onClick={onConfirm}>
+          confirm
+        </button>
+      </div>
+    ) : null,
+}));
 
 const ClientsInvoicesView = (await import('../../../components/accounting/ClientsInvoicesView'))
   .default;
@@ -274,5 +304,64 @@ describe('<ClientsInvoicesView /> product quick-view shortcut', () => {
         name: 'sales:clientQuotes.productShortcutUnavailable',
       }).length,
     ).toBeGreaterThan(0);
+  });
+});
+
+describe('<ClientsInvoicesView /> line-item delete confirmation', () => {
+  // The row trash control labels itself via an sr-only span (whose text the test
+  // environment's accessible-name computation does not surface), and once the
+  // confirmation opens Radix marks the underlying edit dialog aria-hidden — so match
+  // on the icon and include hidden nodes to keep counting the rows behind the prompt.
+  const rowDeleteButtons = (dialog: HTMLElement) =>
+    within(dialog)
+      .getAllByRole('button', { hidden: true })
+      .filter((button) => button.querySelector('.fa-trash-can'));
+
+  const openEditor = async () => {
+    render(
+      <ClientsInvoicesView
+        invoices={[buildInvoice('INV-DEL', 'months')]}
+        clients={clients}
+        products={[]}
+        onAddInvoice={mock(() => {})}
+        onUpdateInvoice={mock(() => {})}
+        onDeleteInvoice={mock(() => {})}
+        currency="EUR"
+      />,
+    );
+    fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
+    return screen.findByRole('dialog');
+  };
+
+  test('confirms before removing a product line and removes it only after confirming', async () => {
+    const dialog = await openEditor();
+    const rowDeletes = rowDeleteButtons(dialog);
+    expect(rowDeletes.length).toBeGreaterThan(0);
+
+    // Clicking the trash icon must NOT remove the row immediately — it opens a confirmation.
+    fireEvent.click(rowDeletes[0]);
+    const confirmUi = await screen.findByTestId('line-delete-confirm');
+    expect(within(confirmUi).getByTestId('line-delete-title')).toHaveTextContent(
+      'accounting:clientsInvoices.removeProductTitle',
+    );
+    expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
+
+    fireEvent.click(within(confirmUi).getByTestId('line-delete-confirm-btn'));
+    await waitFor(() => {
+      expect(rowDeleteButtons(dialog)).toHaveLength(0);
+    });
+  });
+
+  test('keeps the product line when the confirmation is dismissed', async () => {
+    const dialog = await openEditor();
+    const rowDeletes = rowDeleteButtons(dialog);
+
+    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await screen.findByTestId('line-delete-cancel'));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('line-delete-confirm')).not.toBeInTheDocument();
+    });
+    expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
   });
 });

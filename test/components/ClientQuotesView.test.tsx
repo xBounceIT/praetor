@@ -47,6 +47,35 @@ mock.module('../../services/api/views', () => ({
   },
 }));
 
+// The sibling sales/ClientQuotesView test pins a deterministic DeleteConfirmModal stub for
+// its line-item deletion tests. Bun's mock.module is process-wide and binds at first import
+// of the SUT, so register the same stub here to keep that binding stable no matter which
+// quote-view test file Bun evaluates first.
+mock.module('../../components/shared/DeleteConfirmModal', () => ({
+  default: ({
+    isOpen,
+    onConfirm,
+    onClose,
+    title,
+  }: {
+    isOpen: boolean;
+    onConfirm: () => void;
+    onClose: () => void;
+    title?: ReactNode;
+  }) =>
+    isOpen ? (
+      <div data-testid="line-delete-confirm">
+        <span data-testid="line-delete-title">{title}</span>
+        <button type="button" data-testid="line-delete-cancel" onClick={onClose}>
+          cancel
+        </button>
+        <button type="button" data-testid="line-delete-confirm-btn" onClick={onConfirm}>
+          confirm
+        </button>
+      </div>
+    ) : null,
+}));
+
 const ClientQuotesView = (await import('../../components/sales/ClientQuotesView')).default;
 
 const product: Product = {

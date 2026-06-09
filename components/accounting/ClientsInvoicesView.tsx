@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useMemo, useReducer } from 'react';
+import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
@@ -167,6 +167,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   );
   const { isModalOpen, editingInvoice, isDeleteConfirmOpen, invoiceToDelete, errors, formData } =
     invoiceState;
+  const [productRowToDelete, setProductRowToDelete] = useState<number | null>(null);
   const setFormData = useCallback((update: StateUpdate<Partial<Invoice>>) => {
     dispatchInvoiceState({ type: 'setFormData', update });
   }, []);
@@ -965,7 +966,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                             type="button"
                             variant="ghost"
                             size="icon-sm"
-                            onClick={() => removeItemRow(index)}
+                            onClick={() => setProductRowToDelete(index)}
                             className="text-muted-foreground hover:text-destructive"
                           >
                             <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
@@ -1084,6 +1085,21 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         description={t('accounting:clientsInvoices.deleteMessage', {
           invoiceNumber: invoiceToDelete?.id || '',
         })}
+      />
+
+      {/* Line-item (product) delete confirmation */}
+      <DeleteConfirmModal
+        isOpen={productRowToDelete !== null}
+        onClose={() => setProductRowToDelete(null)}
+        onConfirm={() => {
+          if (productRowToDelete !== null) {
+            removeItemRow(productRowToDelete);
+          }
+          setProductRowToDelete(null);
+        }}
+        title={t('accounting:clientsInvoices.removeProductTitle')}
+        description={t('accounting:clientsInvoices.removeProductConfirm')}
+        zIndex={70}
       />
 
       <div className="space-y-4">

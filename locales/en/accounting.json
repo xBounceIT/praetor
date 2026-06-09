@@ -24,6 +24,8 @@
     "deleteOrder": "Delete Order",
     "deleteOrderTitle": "Delete Order?",
     "deleteOrderConfirm": "Are you sure you want to delete this order for {{clientName}}? This action cannot be undone.",
+    "removeProductTitle": "Remove product?",
+    "removeProductConfirm": "Are you sure you want to remove this product from the order?",
     "readOnlyStatus": "{{status}} orders are read-only",
     "clientColumn": "Client",
     "totalColumn": "Total",
@@ -128,6 +130,8 @@
     "summary": "Summary",
     "deleteTitle": "Delete invoice?",
     "deleteMessage": "Are you sure you want to delete invoice {{invoiceNumber}}? This action cannot be undone.",
+    "removeProductTitle": "Remove product?",
+    "removeProductConfirm": "Are you sure you want to remove this product from the invoice?",
     "notesPlaceholder": "Additional notes..."
   },
   "supplierOrders": {
