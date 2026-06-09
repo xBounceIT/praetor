@@ -918,6 +918,9 @@ const AppContent: React.FC = () => {
   const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(() =>
     initialViewHash.path === 'sales/supplier-quotes' ? initialViewHash.filterId : null,
   );
+  const [supplierOrderFilterId, setSupplierOrderFilterId] = useState<string | null>(() =>
+    initialViewHash.path === 'accounting/supplier-orders' ? initialViewHash.filterId : null,
+  );
   const [clientsOrderFilterId, setClientsOrderFilterId] = useState<string | null>(null);
   const [productFilterId, setProductFilterId] = useState<string | null>(() =>
     initialViewHash.path === 'catalog/internal-listing' ? initialViewHash.filterId : null,
@@ -958,6 +961,9 @@ const AppContent: React.FC = () => {
     }
     if (resolved !== 'sales/supplier-quotes' && resolved !== 'accounting/supplier-orders') {
       setSupplierQuoteFilterId(null);
+    }
+    if (resolved !== 'accounting/supplier-orders') {
+      setSupplierOrderFilterId(null);
     }
     if (resolved !== 'accounting/clients-orders') {
       setClientsOrderFilterId(null);
@@ -2834,6 +2840,7 @@ const AppContent: React.FC = () => {
                   orders={clientsOrders}
                   clients={clients}
                   products={products}
+                  supplierOrders={supplierOrders}
                   onUpdateClientsOrder={handleUpdateClientsOrder}
                   onDeleteClientsOrder={handleDeleteClientsOrder}
                   onOrderRestored={(restored) => {
@@ -2845,6 +2852,10 @@ const AppContent: React.FC = () => {
                   canViewInternalListing={hasViewAccess(
                     currentUser.permissions,
                     'catalog/internal-listing',
+                  )}
+                  canViewSupplierOrders={hasViewAccess(
+                    currentUser.permissions,
+                    'accounting/supplier-orders',
                   )}
                   onViewOffer={(offerId) => {
                     setClientQuoteFilterId(null);
@@ -2896,6 +2907,7 @@ const AppContent: React.FC = () => {
                   onOrderRestored={refreshSupplierOrderFlow}
                   currency={generalSettings.currency}
                   quoteFilterId={supplierQuoteFilterId}
+                  orderFilterId={supplierOrderFilterId}
                 />
               )}
 

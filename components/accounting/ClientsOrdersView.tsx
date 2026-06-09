@@ -14,6 +14,7 @@ import type {
   DurationUnit,
   OrderVersion,
   Product,
+  SupplierSaleOrder,
   SupplierUnitType,
 } from '../../types';
 import {
@@ -40,7 +41,10 @@ import {
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
-import { buildProductQuickViewHref } from '../../utils/quickViewLinks';
+import {
+  buildProductQuickViewHref,
+  buildSupplierOrderQuickViewHref,
+} from '../../utils/quickViewLinks';
 import { toastError } from '../../utils/toast';
 import ProductSelectOrFallback from '../sales/ProductSelectOrFallback';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
@@ -68,12 +72,15 @@ export interface ClientsOrdersViewProps {
   orders: ClientsOrder[];
   clients: Client[];
   products: Product[];
+  // Supplier orders behind supplier-quoted lines (only ids are read; see buildSupplierOrderQuickViewHref).
+  supplierOrders?: SupplierSaleOrder[];
   onUpdateClientsOrder: (id: string, updates: Partial<ClientsOrder>) => Promise<void>;
   onDeleteClientsOrder: (id: string) => Promise<void>;
   onOrderRestored?: (order: ClientsOrder) => void;
   onViewOffer?: (offerId: string) => void;
   currency: string;
   canViewInternalListing?: boolean;
+  canViewSupplierOrders?: boolean;
   offerFilterId?: string | null;
   orderFilterId?: string | null;
 }
@@ -213,12 +220,14 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   orders,
   clients,
   products,
+  supplierOrders = [],
   onUpdateClientsOrder,
   onDeleteClientsOrder,
   onOrderRestored,
   onViewOffer,
   currency,
   canViewInternalListing = true,
+  canViewSupplierOrders = true,
   offerFilterId,
   orderFilterId,
 }) => {
@@ -531,6 +540,10 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   // All product ids (incl. archived) so the quick-view shortcut on a line that
   // references a now-disabled product still deep-links to that record.
   const allProductIds = useMemo(() => new Set(products.map((p) => p.id)), [products]);
+  const allSupplierOrderIds = useMemo(
+    () => new Set(supplierOrders.map((o) => o.id)),
+    [supplierOrders],
+  );
   const activeProductIds = useMemo(
     () => new Set(activeProducts.map((p) => p.id)),
     [activeProducts],
@@ -1098,6 +1111,10 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                           item.productId,
                           allProductIds,
                         );
+                        const supplierOrderHref = buildSupplierOrderQuickViewHref(
+                          item.supplierSaleId,
+                          allSupplierOrderIds,
+                        );
 
                         const handleCostChange = (value: string) => {
                           if (isReadOnly) return;
@@ -1120,7 +1137,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                           >
                             <div className="flex items-start gap-2 lg:items-center lg:pt-5">
                               <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center">
-                                <div className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0">
+                                <div className="relative min-w-0 space-y-1 lg:col-span-2 lg:space-y-0">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('accounting:clientsOrders.supplierOrderColumn', {
                                       defaultValue: 'Supplier Order',
@@ -1128,16 +1145,32 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                   </FieldLabel>
                                   <div className="flex h-9 items-center rounded-md border border-border bg-background px-3">
                                     {item.supplierSaleId ? (
-                                      <span className="truncate text-xs font-medium text-foreground">
+                                      <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
                                         {item.supplierSaleSupplierName ?? '-'} ·{' '}
                                         {item.supplierSaleId}
                                       </span>
                                     ) : (
-                                      <span className="text-xs text-muted-foreground">
+                                      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                                         {t('accounting:clientsOrders.noSupplierOrder', {
                                           defaultValue: 'No supplier order',
                                         })}
                                       </span>
+                                    )}
+                                    {/* Always rendered (disabled with a tooltip when nothing is
+                                        linked), matching the product / supplier-quote shortcuts. */}
+                                    {canViewSupplierOrders && (
+                                      <QuickViewLinkButton
+                                        href={supplierOrderHref}
+                                        label={t(
+                                          'accounting:clientsOrders.openSupplierOrderInNewTab',
+                                          { defaultValue: 'Open supplier order in a new tab' },
+                                        )}
+                                        disabledLabel={t(
+                                          'accounting:clientsOrders.supplierOrderShortcutUnavailable',
+                                          { defaultValue: 'No linked supplier order to open' },
+                                        )}
+                                        floating
+                                      />
                                     )}
                                   </div>
                                 </div>
