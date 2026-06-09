@@ -1962,8 +1962,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 </div>
                               </div>
                             </div>
-                            <div className="hidden lg:flex gap-2 items-center">
-                              <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center pt-5">
+                            <div className="hidden lg:flex gap-2 items-center pt-5">
+                              <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center">
                                 <div className="relative col-span-3 min-w-0">
                                   {canViewSupplierQuotes && (
                                     <QuickViewLinkButton

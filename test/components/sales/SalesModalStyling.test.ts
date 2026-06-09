@@ -85,4 +85,21 @@ describe('sales modal styling', () => {
     ]);
     expectSourceOmitsAll(source, ['rounded-2xl bg-white', '<button']);
   });
+
+  // Regression: the desktop product-line `pt-5` gutter that reserves room for the floated
+  // quick-view shortcut must live on the row flex that also holds the trash button — not on the
+  // inner grid. When it sits on the grid, the sibling delete button centers against the grid's
+  // padded box and floats ~10px above the inputs instead of aligning with the row.
+  test.each([
+    ['client quotes', 'sales/ClientQuotesView.tsx'],
+    ['client offers', 'sales/ClientOffersView.tsx'],
+  ])('%s desktop line row shares the quick-view gutter with the delete button', async (_name, path) => {
+    const source = await readComponentSource(path);
+
+    expectSourceContainsAll(source, [
+      'className="hidden lg:flex gap-2 items-center pt-5"',
+      'className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center"',
+    ]);
+    expectSourceOmitsAll(source, ['grid grid-cols-16 gap-2 items-center pt-5']);
+  });
 });

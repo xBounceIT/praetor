@@ -136,6 +136,20 @@ describe('ClientsInvoicesView modal styling', () => {
     ]);
   });
 
+  // Regression: the lg:pt-5 gutter that reserves room for the floated product quick-view shortcut
+  // must live on the row flex that also holds the trash button — not on the inner grid. When it
+  // sits on the grid, the sibling delete button (items-start) pins to the gutter's top edge and
+  // floats above the inputs. Moving it to the row (with lg:items-center) keeps them aligned.
+  test('delete button shares the floated quick-view gutter so it stays aligned with the line', async () => {
+    const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
+
+    expectSourceContainsAll(source, [
+      'className="flex items-start gap-2 lg:items-center lg:pt-5"',
+      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14"',
+    ]);
+    expectSourceOmitsAll(source, ['lg:grid-cols-14 lg:pt-5']);
+  });
+
   test('item rows render unit, currency, and percentage beside inputs instead of headers', async () => {
     const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
 
