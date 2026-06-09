@@ -1215,10 +1215,10 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 title={t('crm:clients.manageValues')}
                 data={profileOptions[manageCategory]}
                 defaultRowsPerPage={5}
-                containerClassName="shadow-none border-zinc-200 rounded-2xl"
+                containerClassName="shadow-none border-border rounded-2xl"
                 tableContainerClassName="max-h-[35vh] overflow-y-auto"
                 emptyState={
-                  <div className="text-center py-6 text-zinc-500">
+                  <div className="text-center py-6 text-muted-foreground">
                     <p>{t('crm:clients.noValues')}</p>
                   </div>
                 }
@@ -1323,7 +1323,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                    <label className="text-xs font-bold text-muted-foreground ml-1">
                       {t('crm:clients.clientCode')} <RequiredMark />
                     </label>
                     <Input
@@ -1342,7 +1342,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     )}
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                    <label className="text-xs font-bold text-muted-foreground ml-1">
                       {t('crm:clients.name')} <RequiredMark />
                     </label>
                     <Input
@@ -1360,7 +1360,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     )}
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                    <label className="text-xs font-bold text-muted-foreground ml-1">
                       {t('crm:clients.clientType')}
                     </label>
                     <SelectControl
@@ -1392,7 +1392,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                    <label className="text-xs font-bold text-muted-foreground ml-1">
                       {t('crm:clients.website')}
                     </label>
                     <Input
@@ -1405,7 +1405,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                    <label className="text-xs font-bold text-muted-foreground ml-1">
                       {t('crm:clients.country')}
                     </label>
                     <Input
@@ -1421,7 +1421,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                    <label className="text-xs font-bold text-muted-foreground ml-1">
                       {t('crm:clients.state')}
                     </label>
                     <Input
@@ -1434,7 +1434,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                    <label className="text-xs font-bold text-muted-foreground ml-1">
                       {t('crm:clients.cap')}
                     </label>
                     <Input
@@ -1447,7 +1447,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                    <label className="text-xs font-bold text-muted-foreground ml-1">
                       {t('crm:clients.province')}
                     </label>
                     <Input
@@ -1463,7 +1463,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                    <label className="text-xs font-bold text-muted-foreground ml-1">
                       {t('crm:clients.civicNumber')}
                     </label>
                     <Input
@@ -1479,7 +1479,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     />
                   </div>
                   <div className="col-span-full space-y-1.5">
-                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                    <label className="text-xs font-bold text-muted-foreground ml-1">
                       {t('crm:clients.address')}
                     </label>
                     <Input
@@ -1525,7 +1525,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                       {contactDraft && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-xl border border-border">
                           <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-zinc-500 ml-1">
+                            <label className="text-xs font-bold text-muted-foreground ml-1">
                               {t('crm:clients.fullName')} <RequiredMark />
                             </label>
                             <Input
@@ -1537,7 +1537,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-zinc-500 ml-1">
+                            <label className="text-xs font-bold text-muted-foreground ml-1">
                               {t('crm:clients.role')}
                             </label>
                             <Input
@@ -1548,7 +1548,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-zinc-500 ml-1">
+                            <label className="text-xs font-bold text-muted-foreground ml-1">
                               {t('crm:clients.email')}
                             </label>
                             <Input
@@ -1559,7 +1559,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-zinc-500 ml-1">
+                            <label className="text-xs font-bold text-muted-foreground ml-1">
                               {t('crm:clients.phone')}
                             </label>
                             <Input
@@ -1602,7 +1602,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                         data={contactTableRows}
                         columns={contactColumns}
                         defaultRowsPerPage={5}
-                        containerClassName="shadow-none border-zinc-200 rounded-2xl"
+                        containerClassName="shadow-none border-border rounded-2xl"
                         tableContainerClassName="max-h-[35vh] overflow-y-auto"
                       />
                     </div>
@@ -1617,7 +1617,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                    <label className="text-xs font-bold text-muted-foreground ml-1">
                       {t('crm:clients.fiscalCode')} <RequiredMark />
                     </label>
                     <Input
@@ -1636,7 +1636,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                     )}
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                    <label className="text-xs font-bold text-muted-foreground ml-1">
                       {t('crm:clients.atecoCode')}
                     </label>
                     <Input
@@ -1659,7 +1659,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <div className="flex items-end justify-between ml-1 min-h-5">
-                      <label className="text-xs font-bold text-zinc-500">
+                      <label className="text-xs font-bold text-muted-foreground">
                         {t('crm:clients.sector')}
                       </label>
                       {canUpdateClients && (
@@ -1690,7 +1690,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
                   <div className="space-y-1.5">
                     <div className="flex items-end justify-between ml-1 min-h-5">
-                      <label className="text-xs font-bold text-zinc-500">
+                      <label className="text-xs font-bold text-muted-foreground">
                         {t('crm:clients.numberOfEmployees')}
                       </label>
                       {canUpdateClients && (
@@ -1723,7 +1723,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
                   <div className="space-y-1.5">
                     <div className="flex items-end justify-between ml-1 min-h-5">
-                      <label className="text-xs font-bold text-zinc-500">
+                      <label className="text-xs font-bold text-muted-foreground">
                         {t('crm:clients.revenue')}
                       </label>
                       {canUpdateClients && (
@@ -1754,7 +1754,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
 
                   <div className="space-y-1.5">
                     <div className="flex items-end justify-between ml-1 min-h-5">
-                      <label className="text-xs font-bold text-zinc-500">
+                      <label className="text-xs font-bold text-muted-foreground">
                         {t('crm:clients.officeCountRange')}
                       </label>
                       {canUpdateClients && (
@@ -1784,7 +1784,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
                   </div>
 
                   <div className="col-span-full space-y-1.5">
-                    <label className="text-xs font-bold text-zinc-500 ml-1">
+                    <label className="text-xs font-bold text-muted-foreground ml-1">
                       {t('crm:clients.description')}
                     </label>
                     <Textarea
@@ -1835,8 +1835,8 @@ const ClientsView: React.FC<ClientsViewProps> = ({
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-2xl font-semibold text-zinc-800">{t('crm:clients.title')}</h2>
-            <p className="text-zinc-500 text-sm">{t('crm:clients.subtitle')}</p>
+            <h2 className="text-2xl font-semibold text-foreground">{t('crm:clients.title')}</h2>
+            <p className="text-muted-foreground text-sm">{t('crm:clients.subtitle')}</p>
           </div>
           {canCreateClients && (
             <HeaderAddButton onClick={openAddModal}>{t('crm:clients.addClient')}</HeaderAddButton>
