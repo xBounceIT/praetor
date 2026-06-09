@@ -68,10 +68,26 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     setInvoices(invoicesData);
   };
 
+  // A linked supplier quote derives its visible status / isStatusSynced from its client quote at
+  // read time (#779), so creating or changing that link — or changing the client quote's status —
+  // can leave the separately-cached supplier quotes table showing stale unsynced/draft state until
+  // a full module reload. Refresh it too, best-effort: a refresh failure must not fail the primary
+  // client-quote write (mirrors createClientsOrderFromOffer below).
+  const refreshLinkedSupplierQuotes = async () => {
+    try {
+      await refreshSupplierQuoteFlow();
+    } catch (refreshErr) {
+      console.error('Failed to refresh supplier data:', refreshErr);
+    }
+  };
+
   const addQuote = async (quoteData: Partial<Quote>) => {
     try {
       const quote = await api.quotes.create(quoteData);
       setQuotes((prev) => [quote, ...prev]);
+      if (quote.linkedSupplierQuoteId) {
+        await refreshLinkedSupplierQuotes();
+      }
     } catch (err) {
       console.error('Failed to add quote:', err);
       throw err;
@@ -88,6 +104,11 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
         setClientQuoteFilterId(updated.id);
       }
       await refreshClientQuoteFlow();
+      // Only a status change or a link change can flip a linked supplier quote's synced status —
+      // a plain content edit (notes/items) cannot — so scope the extra fetch to those updates.
+      if (updates.status !== undefined || updates.linkedSupplierQuoteId !== undefined) {
+        await refreshLinkedSupplierQuotes();
+      }
     } catch (err) {
       console.error('Failed to update quote:', err);
       throw err;

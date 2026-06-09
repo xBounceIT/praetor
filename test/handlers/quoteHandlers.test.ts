@@ -256,6 +256,91 @@ describe('makeQuoteHandlers', () => {
     }
   });
 
+  // A linked supplier quote's visible status is derived from its client quote (#779), so a status
+  // or link change must also refresh the separately-cached supplier quotes table.
+  const stubQuoteUpdateFlow = () => {
+    apiMocks.quotesUpdate.mockImplementation((id: string, updates: unknown) =>
+      Promise.resolve({ id, ...(updates as object) }),
+    );
+    apiMocks.quotesList.mockImplementation(() => Promise.resolve([]));
+    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([]));
+    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
+  };
+
+  test('updateQuote refreshes supplier quotes when the status changes', async () => {
+    stubQuoteUpdateFlow();
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'offer' }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.updateQuote('q1', { status: 'accepted' } as never);
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
+
+  test('updateQuote refreshes supplier quotes when the linked supplier quote changes', async () => {
+    stubQuoteUpdateFlow();
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'draft' }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.updateQuote('q1', { linkedSupplierQuoteId: 'sq-9' } as never);
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
+
+  test('updateQuote does NOT refresh supplier quotes for a plain content edit', async () => {
+    stubQuoteUpdateFlow();
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'draft' }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.updateQuote('q1', { notes: 'just a note' } as never);
+    expect(refreshSupplierQuoteFlow).not.toHaveBeenCalled();
+  });
+
+  test('updateQuote still resolves when the supplier-quote refresh fails (best-effort)', async () => {
+    stubQuoteUpdateFlow();
+    const refreshSupplierQuoteFlow = mock(() => Promise.reject(new Error('supplier boom')));
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'offer' }],
+      refreshSupplierQuoteFlow,
+    });
+    const restore = silenceConsole();
+    try {
+      await ctx.handlers.updateQuote('q1', { status: 'accepted' } as never);
+      expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+    } finally {
+      restore();
+    }
+  });
+
+  test('addQuote refreshes supplier quotes when the created quote carries a link', async () => {
+    apiMocks.quotesCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({ id: 'q-new', linkedSupplierQuoteId: 'sq-9', ...(data as object) }),
+    );
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({ refreshSupplierQuoteFlow });
+
+    await ctx.handlers.addQuote({ status: 'draft', linkedSupplierQuoteId: 'sq-9' } as never);
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
+
+  test('addQuote does NOT refresh supplier quotes for an unlinked create', async () => {
+    apiMocks.quotesCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({ id: 'q-new', ...(data as object) }),
+    );
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({ refreshSupplierQuoteFlow });
+
+    await ctx.handlers.addQuote({ status: 'draft' } as never);
+    expect(refreshSupplierQuoteFlow).not.toHaveBeenCalled();
+  });
+
   test('deleteQuote removes from list', async () => {
     apiMocks.quotesDelete.mockImplementation(() => Promise.resolve());
     const ctx = buildHandlers();
