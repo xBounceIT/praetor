@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Client, ClientOffer, Product, SupplierQuote } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
+import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { render } from '../../helpers/render';
+import { rowDeleteButtons } from '../../helpers/rowDeleteButtons';
 import {
   expectSourceContainsAll,
   expectSourceOmitsAll,
@@ -14,6 +16,12 @@ installI18nMock({ includeInterpolatedValues: true });
 
 mock.module('../../../components/sales/OfferVersionsPanel', () => ({
   default: () => null,
+}));
+
+// Other suites globally stub DeleteConfirmModal (Bun's mock.module is process-wide and
+// last-write-wins), so pin the shared deterministic stub against this file's binding.
+mock.module('../../../components/shared/DeleteConfirmModal', () => ({
+  default: LineDeleteConfirmStub,
 }));
 
 const ClientOffersView = (await import('../../../components/sales/ClientOffersView')).default;
@@ -593,5 +601,44 @@ describe('<ClientOffersView /> MOL precision (issue #780)', () => {
     // pre-fix rounded 12.3 that silently dropped the second decimal.
     expect(screen.queryAllByDisplayValue('12.34').length).toBeGreaterThan(0);
     expect(screen.queryAllByDisplayValue('12.3')).toHaveLength(0);
+  });
+});
+
+describe('<ClientOffersView /> line-item delete confirmation', () => {
+  const openEditor = async () => {
+    render(<ClientOffersView {...baseProps} offers={[acmeDraft]} />);
+    fireEvent.click(screen.getByText('O-ACME-DRAFT'));
+    return screen.findByRole('dialog');
+  };
+
+  test('confirms before removing a product line and removes it only after confirming', async () => {
+    const dialog = await openEditor();
+    const rowDeletes = rowDeleteButtons(dialog);
+    expect(rowDeletes.length).toBeGreaterThan(0);
+
+    fireEvent.click(rowDeletes[0]);
+    const confirmUi = await screen.findByTestId('line-delete-confirm');
+    expect(within(confirmUi).getByTestId('line-delete-title')).toHaveTextContent(
+      'sales:clientOffers.removeProductTitle',
+    );
+    expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
+
+    fireEvent.click(within(confirmUi).getByTestId('line-delete-confirm-btn'));
+    await waitFor(() => {
+      expect(rowDeleteButtons(dialog)).toHaveLength(0);
+    });
+  });
+
+  test('keeps the product line when the confirmation is dismissed', async () => {
+    const dialog = await openEditor();
+    const rowDeletes = rowDeleteButtons(dialog);
+
+    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await screen.findByTestId('line-delete-cancel'));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('line-delete-confirm')).not.toBeInTheDocument();
+    });
+    expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
   });
 });

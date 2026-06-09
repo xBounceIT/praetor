@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { check, index, numeric, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
+import {
+  check,
+  index,
+  integer,
+  numeric,
+  pgTable,
+  text,
+  timestamp,
+  varchar,
+} from 'drizzle-orm/pg-core';
 import { products } from './products.ts';
 import { supplierQuotes } from './supplierQuotes.ts';
 import { suppliers } from './suppliers.ts';
@@ -57,6 +66,20 @@ export const supplierSaleItems = pgTable(
     discount: numeric('discount', { precision: 5, scale: 2 }).default('0'),
     note: text('note'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
+    // Number of months the line runs (issue #776). Multiplies the line total alongside `quantity`;
+    // carried over from the originating supplier quote so the order total matches the quote.
+    // Defaults to 1 (one-off), which keeps legacy orders' totals identical.
+    durationMonths: integer('duration_months').notNull().default(1),
+    // Display unit for `durationMonths` (issue #776): 'months' (default), 'years', or 'na'. 'na'
+    // (N/A) marks a line where duration does not apply and never multiplies (issue #775).
+    durationUnit: text('duration_unit').notNull().default('months'),
   },
-  (table) => [index('idx_supplier_sale_items_sale_id').on(table.saleId)],
+  (table) => [
+    index('idx_supplier_sale_items_sale_id').on(table.saleId),
+    check('chk_supplier_sale_items_duration_months', sql`${table.durationMonths} >= 1`),
+    check(
+      'chk_supplier_sale_items_duration_unit',
+      sql`${table.durationUnit} IN ('months', 'years', 'na')`,
+    ),
+  ],
 );
