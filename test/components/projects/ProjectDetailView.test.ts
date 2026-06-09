@@ -139,6 +139,17 @@ describe('ProjectDetailView wiring', () => {
     expect(source).toMatch(/widgetPermitted\('teamSize'\) && \(\s*<DashboardItem id="teamSize"/);
     expect(source).toMatch(/id === 'teamSize'\) return canManageAssignments/);
   });
+
+  test('team-size member avatars expose the full name via a hover tooltip', async () => {
+    // Each assigned-user circle in the team-size KPI is wrapped in a shadcn Tooltip so the
+    // initials reveal the full name on hover (and carry it as the avatar's accessible name).
+    const source = await readSource();
+    expect(source).toMatch(
+      /assignedUsers\.slice\(0, 6\)\.map\(\(u\) => \(\s*<Tooltip key=\{u\.id\}>\s*<TooltipTrigger asChild>/,
+    );
+    expect(source).toMatch(/<Avatar\s+role="img"\s+aria-label=\{u\.name\}/);
+    expect(source).toMatch(/<TooltipContent>\{u\.name\}<\/TooltipContent>/);
+  });
 });
 
 describe('ProjectDetailView chart scaling on wide displays', () => {

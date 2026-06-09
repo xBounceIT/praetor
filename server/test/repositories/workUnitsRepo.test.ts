@@ -21,6 +21,7 @@ const aggRow = {
   description: 'Eng team',
   isDisabled: false,
   managers: [{ id: 'u-1', name: 'Alice' }],
+  members: [{ id: 'u-1', name: 'Alice' }],
   userCount: 7,
 };
 
@@ -35,6 +36,16 @@ describe('findById', () => {
   test('returns null when not found', async () => {
     exec.enqueue({ rows: [] });
     expect(await workUnitsRepo.findById('wu-x', testDb)).toBeNull();
+  });
+
+  test('baseSelect aggregates assigned members (id + name) from user_work_units', async () => {
+    exec.enqueue({ rows: [aggRow] });
+    const result = await workUnitsRepo.findById('wu-1', testDb);
+    const emitted = exec.calls[0].sql.toLowerCase();
+    expect(emitted).toContain('as members');
+    expect(emitted).toContain('from user_work_units muw');
+    expect(emitted).toContain("json_build_object('id', mu.id, 'name', mu.name)");
+    expect(result?.members).toEqual([{ id: 'u-1', name: 'Alice' }]);
   });
 });
 

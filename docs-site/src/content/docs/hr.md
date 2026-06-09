@@ -39,3 +39,5 @@ Senza i permessi HR corretti, i campi HR non vengono restituiti dalle API utenti
 ## Competence Center
 
 I Competence Center collegano persone, costi e assegnazioni. Mantieni aggiornate le anagrafiche HR prima di analizzare costi, disponibilità e composizione dei team sui progetti.
+
+Ogni scheda Competence Center mostra le iniziali dei membri assegnati: passa il mouse su un'iniziale per vederne il nome completo. Quando i membri superano lo spazio disponibile, un badge `+N` riassume i restanti e, al passaggio del mouse, ne elenca l'intera composizione senza dover aprire la scheda.

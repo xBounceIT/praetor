@@ -285,13 +285,15 @@ beforeEach(async () => {
       name: 'Engineering',
       description: null,
       managers: [{ id: 'u1', name: 'Alice' }],
+      // The repo carries member display names; the hierarchy tool must NOT leak them
+      // (it exposes only userIds). The response assertion below omits `members`.
+      members: [
+        { id: 'u1', name: 'Alice' },
+        { id: 'u2', name: 'Bob' },
+      ],
       isDisabled: false,
       userCount: 2,
     },
-  ]);
-  workUnitsListUserIdsByUnitIdsMock.mockResolvedValue([
-    { workUnitId: 'wu1', userId: 'u1' },
-    { workUnitId: 'wu1', userId: 'u2' },
   ]);
   notificationsListForUserMock.mockResolvedValue([]);
   notificationsCountUnreadForUserMock.mockResolvedValue(0);
@@ -545,6 +547,8 @@ describe('/api/mcp', () => {
         isAdminOnly: false,
       },
     ]);
+    // `members` is intentionally absent: the tool exposes only `userIds`, never member
+    // display names (toEqual is exact, so a regression that leaks `members` fails here).
     expect(body.result.structuredContent.workUnits).toEqual([
       {
         id: 'wu1',
@@ -569,7 +573,8 @@ describe('/api/mcp', () => {
       canViewExternal: false,
     });
     expect(workUnitsListManagedByMock).toHaveBeenCalledWith('u1');
-    expect(workUnitsListUserIdsByUnitIdsMock).toHaveBeenCalledWith(['wu1']);
+    // userIds is derived from the members the repo already returns — no second query.
+    expect(workUnitsListUserIdsByUnitIdsMock).not.toHaveBeenCalled();
     expect(usersListAllForAdminMock).not.toHaveBeenCalled();
     expect(workUnitsListAllMock).not.toHaveBeenCalled();
   });
@@ -715,11 +720,11 @@ describe('/api/mcp', () => {
         name: 'Operations',
         description: 'Ops',
         managers: [{ id: 'u2', name: 'Bob' }],
+        members: [{ id: 'u2', name: 'Bob' }],
         isDisabled: false,
         userCount: 1,
       },
     ]);
-    workUnitsListUserIdsByUnitIdsMock.mockResolvedValue([{ workUnitId: 'wu-all', userId: 'u2' }]);
 
     const res = await rpc({
       jsonrpc: '2.0',

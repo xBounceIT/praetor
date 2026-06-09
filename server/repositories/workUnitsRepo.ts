@@ -5,11 +5,13 @@ import { workUnitManagers } from '../db/schema/workUnitManagers.ts';
 import { workUnits } from '../db/schema/workUnits.ts';
 
 export type Manager = { id: string; name: string };
+export type Member = { id: string; name: string };
 
 export type WorkUnit = {
   id: string;
   name: string;
   managers: Manager[];
+  members: Member[];
   description: string | null;
   isDisabled: boolean;
   userCount: number;
@@ -18,7 +20,9 @@ export type WorkUnit = {
 // SQL fragment used by findById/listAll/listManagedBy. Uses raw aliases (`w`, `wum`, `u`, `uw`)
 // because the JSON aggregate / scalar subquery shape is awkward to express in the query builder
 // and the legacy SQL is already battle-tested. The `AS "isDisabled"`/`AS "userCount"` aliases
-// emit the camelCase keys directly, which is why these functions skip a mapRow step.
+// emit the camelCase keys directly, which is why these functions skip a mapRow step. The
+// `members` aggregate carries the assigned users (id + name) so the UI can render member
+// initials on each card without a follow-up fetch; ordered by name for a stable display.
 const baseSelect = sql`
   SELECT w.id, w.name, w.description, w.is_disabled AS "isDisabled",
     (
@@ -27,6 +31,15 @@ const baseSelect = sql`
       JOIN users u ON wum.user_id = u.id
       WHERE wum.work_unit_id = w.id
     ) AS managers,
+    (
+      SELECT COALESCE(
+        json_agg(json_build_object('id', mu.id, 'name', mu.name) ORDER BY mu.name),
+        '[]'
+      )
+      FROM user_work_units muw
+      JOIN users mu ON muw.user_id = mu.id
+      WHERE muw.work_unit_id = w.id
+    ) AS members,
     (SELECT COUNT(*)::int FROM user_work_units uw WHERE uw.work_unit_id = w.id) AS "userCount"
   FROM work_units w
 `;
