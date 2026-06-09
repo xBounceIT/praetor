@@ -15,16 +15,17 @@ export interface MemberAvatarGroupProps {
   className?: string;
 }
 
-// `ring-2 ring-background` is applied directly on each avatar rather than relying on
-// AvatarGroup's `*:data-[slot=avatar]` ring selector: wrapping the Avatar in a Radix
-// `TooltipTrigger asChild` merges the trigger's `data-slot="tooltip-trigger"` onto the
-// avatar element, so the group's avatar-scoped selector would no longer match it.
-const avatarClassName = 'size-7 ring-2 ring-background';
+// `border-2 border-card` matches the card surface, so the overlapping avatars read as clean
+// cut-outs (same treatment as the project dashboard team avatars). `ring-background` paints
+// the page background instead, which is darker than the card in dark mode and shows up as a
+// black ring. The separator is applied directly on each avatar rather than via AvatarGroup's
+// `*:data-[slot=avatar]` selector, which the `TooltipTrigger asChild` data-slot merge defeats.
+const avatarClassName = 'size-7 border-2 border-card';
 // AvatarFallback already provides `bg-muted text-muted-foreground`; only the smaller
 // initials size and weight are additive here.
 const fallbackClassName = 'text-[10px] font-medium';
 const overflowBadgeClassName =
-  'relative flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground ring-2 ring-background';
+  'relative flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-card bg-muted text-[10px] font-medium text-muted-foreground';
 
 /**
  * Overlapping row of member initials with the full name on hover (per-badge tooltip).
