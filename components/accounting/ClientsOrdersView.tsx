@@ -33,6 +33,7 @@ import {
   getDurationDisplayValue,
   getItemPricingContext,
   isUnitLine,
+  MOL_PERCENTAGE_DECIMALS,
   normalizeDurationUnit,
   type PricingTotals,
   parseDurationValueToMonths,
@@ -1278,7 +1279,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                   <div className="flex h-9 items-center justify-center gap-1">
                                     <ValidatedNumberInput
                                       value={molPercentage}
-                                      formatDecimals={2}
+                                      formatDecimals={MOL_PERCENTAGE_DECIMALS}
                                       onValueChange={handleMolChange}
                                       disabled={isReadOnly}
                                       className={compactInputClass}

@@ -14,7 +14,11 @@ import type {
 } from '../../services/api/products';
 import type { Product } from '../../types';
 import { formatInsertDate } from '../../utils/date';
-import { calcProductSalePrice, parseNumberInputValue } from '../../utils/numbers';
+import {
+  calcProductSalePrice,
+  MOL_PERCENTAGE_DECIMALS,
+  parseNumberInputValue,
+} from '../../utils/numbers';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
@@ -1652,7 +1656,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                     <div className="flex gap-2">
                       <ValidatedNumberInput
                         value={formData.molPercentage ?? ''}
-                        formatDecimals={2}
+                        formatDecimals={MOL_PERCENTAGE_DECIMALS}
                         onValueChange={handleNumericValueChange('molPercentage')}
                         className="flex-1 min-w-0"
                         aria-invalid={Boolean(errors.molPercentage)}
