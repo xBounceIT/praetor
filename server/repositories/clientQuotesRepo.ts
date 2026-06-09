@@ -21,6 +21,11 @@ export type ClientQuote = {
   notes: string | null;
   createdAt: number;
   updatedAt: number;
+  // 1-to-1 link to a supplier quote (issue #779). `linkedSupplierQuoteExpiration` is the linked
+  // supplier quote's OWN expiration date, surfaced so the route can compute the "linked supplier
+  // quote expired" guard/indicator without a second round-trip. Both are null when unlinked.
+  linkedSupplierQuoteId: string | null;
+  linkedSupplierQuoteExpiration: string | null;
 };
 
 export type ClientQuoteItem = {
@@ -49,6 +54,13 @@ const linkedOfferIdSubquery = sql<
   string | null
 >`(SELECT co.id FROM customer_offers co WHERE co.linked_quote_id = ${quotes.id} LIMIT 1)`;
 
+// The linked supplier quote's OWN expiration date (issue #779). Read-time correlated subquery so
+// the route can derive the "linked supplier quote expired" guard without joining; null when the
+// quote is unlinked or the supplier quote is gone.
+const linkedSupplierQuoteExpirationSubquery = sql<
+  string | null
+>`(SELECT sq.expiration_date FROM supplier_quotes sq WHERE sq.id = ${quotes.linkedSupplierQuoteId} LIMIT 1)`;
+
 const QUOTE_LIST_PROJECTION = {
   id: quotes.id,
   linkedOfferId: linkedOfferIdSubquery,
@@ -62,6 +74,9 @@ const QUOTE_LIST_PROJECTION = {
   notes: quotes.notes,
   createdAt: quotes.createdAt,
   updatedAt: quotes.updatedAt,
+  // Appended after updatedAt so positional row fixtures keep their indices (see repo tests).
+  linkedSupplierQuoteId: quotes.linkedSupplierQuoteId,
+  linkedSupplierQuoteExpiration: linkedSupplierQuoteExpirationSubquery,
 } as const;
 
 const QUOTE_BASE_PROJECTION = {
@@ -77,6 +92,10 @@ const QUOTE_BASE_PROJECTION = {
   notes: quotes.notes,
   createdAt: quotes.createdAt,
   updatedAt: quotes.updatedAt,
+  // The link id is a real column (returned on writes); the linked expiration is a read-only
+  // derivation we don't reconstruct on the write path (mirrors linkedOfferId being null here).
+  linkedSupplierQuoteId: quotes.linkedSupplierQuoteId,
+  linkedSupplierQuoteExpiration: sql<string | null>`null::date`,
 } as const;
 
 type ClientQuoteSelectRow = {
@@ -92,6 +111,8 @@ type ClientQuoteSelectRow = {
   notes: string | null;
   createdAt: Date | null;
   updatedAt: Date | null;
+  linkedSupplierQuoteId: string | null;
+  linkedSupplierQuoteExpiration: string | null;
 };
 
 const mapQuote = (row: ClientQuoteSelectRow): ClientQuote => ({
@@ -107,6 +128,11 @@ const mapQuote = (row: ClientQuoteSelectRow): ClientQuote => ({
   notes: row.notes,
   createdAt: row.createdAt?.getTime() ?? 0,
   updatedAt: row.updatedAt?.getTime() ?? 0,
+  linkedSupplierQuoteId: row.linkedSupplierQuoteId ?? null,
+  linkedSupplierQuoteExpiration: normalizeNullableDateOnly(
+    row.linkedSupplierQuoteExpiration,
+    'quote.linkedSupplierQuoteExpiration',
+  ),
 });
 
 // `quote_items.product_id` is nullable in the DB (an item can be sourced from a supplier quote
@@ -166,31 +192,56 @@ export const findIdConflict = async (
   return rows.length > 0;
 };
 
+// Shared shape for the update/restore/offer-create gates. Carries the quote's own status +
+// expiration (to derive the effective status, including `expired`) and the 1-to-1 link plus the
+// linked supplier quote's OWN expiration (to enforce the "linked supplier quote expired" guard on
+// client-status progression — issue #779).
+export type ClientQuoteGate = {
+  status: string;
+  discount: number;
+  discountType: 'percentage' | 'currency';
+  expirationDate: string | null;
+  linkedSupplierQuoteId: string | null;
+  linkedSupplierQuoteExpiration: string | null;
+};
+
+const GATE_PROJECTION = {
+  status: quotes.status,
+  discount: quotes.discount,
+  discountType: quotes.discountType,
+  expirationDate: quotes.expirationDate,
+  linkedSupplierQuoteId: quotes.linkedSupplierQuoteId,
+  linkedSupplierQuoteExpiration: linkedSupplierQuoteExpirationSubquery,
+} as const;
+
+const mapGateRow = (row: {
+  status: string;
+  discount: string | number;
+  discountType: string;
+  expirationDate: string | null;
+  linkedSupplierQuoteId: string | null;
+  linkedSupplierQuoteExpiration: string | null;
+}): ClientQuoteGate => ({
+  status: row.status,
+  discount: parseDbNumber(row.discount, 0),
+  discountType: row.discountType === 'currency' ? 'currency' : 'percentage',
+  expirationDate: normalizeNullableDateOnly(row.expirationDate, 'quote.expirationDate'),
+  linkedSupplierQuoteId: row.linkedSupplierQuoteId ?? null,
+  linkedSupplierQuoteExpiration: normalizeNullableDateOnly(
+    row.linkedSupplierQuoteExpiration,
+    'quote.linkedSupplierQuoteExpiration',
+  ),
+});
+
 // Reads the minimal set of fields needed to gate updates / restores. Does not acquire a row
 // lock - safe for non-mutating reads, but TOCTOU-prone when a write decision depends on it.
 // For SELECT ... FOR UPDATE semantics call `lockCurrentById` inside `withDbTransaction`.
 export const findCurrent = async (
   id: string,
   exec: DbExecutor = db,
-): Promise<{
-  status: string;
-  discount: number;
-  discountType: 'percentage' | 'currency';
-} | null> => {
-  const rows = await exec
-    .select({
-      status: quotes.status,
-      discount: quotes.discount,
-      discountType: quotes.discountType,
-    })
-    .from(quotes)
-    .where(eq(quotes.id, id));
-  if (rows.length === 0) return null;
-  return {
-    status: rows[0].status,
-    discount: parseDbNumber(rows[0].discount, 0),
-    discountType: rows[0].discountType === 'currency' ? 'currency' : 'percentage',
-  };
+): Promise<ClientQuoteGate | null> => {
+  const rows = await exec.select(GATE_PROJECTION).from(quotes).where(eq(quotes.id, id));
+  return rows[0] ? mapGateRow(rows[0]) : null;
 };
 
 // SELECT ... FOR UPDATE variant of `findCurrent`. Must be called inside a transaction; the
@@ -199,37 +250,48 @@ export const findCurrent = async (
 export const lockCurrentById = async (
   id: string,
   exec: DbExecutor = db,
-): Promise<{
-  status: string;
-  discount: number;
-  discountType: 'percentage' | 'currency';
-} | null> => {
+): Promise<ClientQuoteGate | null> => {
   const rows = await exec
-    .select({
-      status: quotes.status,
-      discount: quotes.discount,
-      discountType: quotes.discountType,
-    })
+    .select(GATE_PROJECTION)
     .from(quotes)
     .where(eq(quotes.id, id))
     .for('update');
-  if (rows.length === 0) return null;
-  return {
-    status: rows[0].status,
-    discount: parseDbNumber(rows[0].discount, 0),
-    discountType: rows[0].discountType === 'currency' ? 'currency' : 'percentage',
-  };
+  return rows[0] ? mapGateRow(rows[0]) : null;
 };
 
 export const findStatusAndClientName = async (
   id: string,
   exec: DbExecutor = db,
-): Promise<{ status: string; clientName: string } | null> => {
+): Promise<{ status: string; clientName: string; expirationDate: string | null } | null> => {
   const rows = await exec
-    .select({ status: quotes.status, clientName: quotes.clientName })
+    .select({
+      status: quotes.status,
+      clientName: quotes.clientName,
+      expirationDate: quotes.expirationDate,
+    })
     .from(quotes)
     .where(eq(quotes.id, id));
-  return rows[0] ?? null;
+  if (!rows[0]) return null;
+  return {
+    status: rows[0].status,
+    clientName: rows[0].clientName,
+    expirationDate: normalizeNullableDateOnly(rows[0].expirationDate, 'quote.expirationDate'),
+  };
+};
+
+// True when another client quote (≠ currentQuoteId) is already linked to the given supplier quote.
+// Surfaces a friendly 409 before the partial-unique index would raise a write error (issue #779).
+export const findLinkConflict = async (
+  supplierQuoteId: string,
+  currentQuoteId: string,
+  exec: DbExecutor = db,
+): Promise<boolean> => {
+  const rows = await exec
+    .select({ id: quotes.id })
+    .from(quotes)
+    .where(and(eq(quotes.linkedSupplierQuoteId, supplierQuoteId), ne(quotes.id, currentQuoteId)))
+    .limit(1);
+  return rows.length > 0;
 };
 
 export const findLinkedOfferId = async (
@@ -387,6 +449,7 @@ export type NewClientQuote = {
   status: string;
   expirationDate: string;
   notes: string | null;
+  linkedSupplierQuoteId?: string | null;
 };
 
 export const create = async (
@@ -405,6 +468,7 @@ export const create = async (
       status: input.status,
       expirationDate: input.expirationDate,
       notes: input.notes,
+      linkedSupplierQuoteId: input.linkedSupplierQuoteId ?? null,
     })
     .returning(QUOTE_BASE_PROJECTION);
   return mapQuote(rows[0]);
@@ -419,6 +483,9 @@ export type ClientQuoteUpdate = {
   status?: string | null;
   expirationDate?: string | null;
   notes?: string | null;
+  // `undefined` leaves the link untouched; an explicit `null` clears it (direct write, not
+  // COALESCE — the 1-to-1 supplier-quote link must be removable, mirroring supplierQuotes.clientId).
+  linkedSupplierQuoteId?: string | null;
 };
 
 export type ClientQuoteRestoreFields = Pick<
@@ -445,6 +512,11 @@ export const update = async (
       status: sql`COALESCE(${patch.status ?? null}, ${quotes.status})`,
       expirationDate: sql`COALESCE(${patch.expirationDate ?? null}::date, ${quotes.expirationDate})`,
       notes: sql`COALESCE(${patch.notes ?? null}, ${quotes.notes})`,
+      // Direct write (not COALESCE) so an explicit null clears the 1-to-1 link; `undefined` keeps it.
+      linkedSupplierQuoteId:
+        patch.linkedSupplierQuoteId === undefined
+          ? sql`${quotes.linkedSupplierQuoteId}`
+          : patch.linkedSupplierQuoteId,
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })
     .where(eq(quotes.id, id))

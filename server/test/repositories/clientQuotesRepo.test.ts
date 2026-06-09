@@ -113,14 +113,23 @@ describe('existsById / findIdConflict', () => {
 });
 
 describe('findCurrent', () => {
-  test('returns parsed status and discount fields', async () => {
-    exec.enqueue({ rows: [['sent', '15.5', 'currency']] });
+  // GATE_PROJECTION order: status, discount, discountType, expirationDate, linkedSupplierQuoteId,
+  // linkedSupplierQuoteExpiration (the last is the linked supplier quote's own expiration subquery).
+  test('returns parsed status, discount, expiration and link fields', async () => {
+    exec.enqueue({ rows: [['sent', '15.5', 'currency', '2026-06-01', null, null]] });
     const result = await clientQuotesRepo.findCurrent('cq-1', testDb);
-    expect(result).toEqual({ status: 'sent', discount: 15.5, discountType: 'currency' });
+    expect(result).toEqual({
+      status: 'sent',
+      discount: 15.5,
+      discountType: 'currency',
+      expirationDate: '2026-06-01',
+      linkedSupplierQuoteId: null,
+      linkedSupplierQuoteExpiration: null,
+    });
   });
 
   test('defaults discountType to percentage when null', async () => {
-    exec.enqueue({ rows: [['draft', 0, null]] });
+    exec.enqueue({ rows: [['draft', 0, null, '2026-06-01', null, null]] });
     const result = await clientQuotesRepo.findCurrent('cq-1', testDb);
     expect(result?.discountType).toBe('percentage');
   });
@@ -133,16 +142,23 @@ describe('findCurrent', () => {
 
 describe('lockCurrentById', () => {
   test('uses FOR UPDATE in the emitted SQL', async () => {
-    exec.enqueue({ rows: [['sent', '0', 'percentage']] });
+    exec.enqueue({ rows: [['sent', '0', 'percentage', '2026-06-01', null, null]] });
     await clientQuotesRepo.lockCurrentById('cq-1', testDb);
     expect(exec.calls[0].sql.toLowerCase()).toContain('for update');
     expect(exec.calls[0].params).toContain('cq-1');
   });
 
-  test('returns parsed row when present', async () => {
-    exec.enqueue({ rows: [['draft', '7.25', 'currency']] });
+  test('returns parsed row including the linked supplier quote expiration', async () => {
+    exec.enqueue({ rows: [['draft', '7.25', 'currency', '2026-07-15', 'sq-9', '2026-05-01']] });
     const result = await clientQuotesRepo.lockCurrentById('cq-1', testDb);
-    expect(result).toEqual({ status: 'draft', discount: 7.25, discountType: 'currency' });
+    expect(result).toEqual({
+      status: 'draft',
+      discount: 7.25,
+      discountType: 'currency',
+      expirationDate: '2026-07-15',
+      linkedSupplierQuoteId: 'sq-9',
+      linkedSupplierQuoteExpiration: '2026-05-01',
+    });
   });
 
   test('returns null when row missing', async () => {
@@ -390,17 +406,34 @@ describe('replaceItems', () => {
 });
 
 describe('findStatusAndClientName', () => {
-  test('returns status and clientName when found', async () => {
-    exec.enqueue({ rows: [['draft', 'Acme']] });
+  test('returns status, clientName and expiration when found', async () => {
+    exec.enqueue({ rows: [['draft', 'Acme', '2026-06-01']] });
     expect(await clientQuotesRepo.findStatusAndClientName('cq-1', testDb)).toEqual({
       status: 'draft',
       clientName: 'Acme',
+      expirationDate: '2026-06-01',
     });
   });
 
   test('returns null when not found', async () => {
     exec.enqueue({ rows: [] });
     expect(await clientQuotesRepo.findStatusAndClientName('cq-x', testDb)).toBeNull();
+  });
+});
+
+describe('findLinkConflict', () => {
+  test('filters by linked_supplier_quote_id and excludes self', async () => {
+    exec.enqueue({ rows: [] });
+    const result = await clientQuotesRepo.findLinkConflict('sq-1', 'cq-1', testDb);
+    expect(result).toBe(false);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('"linked_supplier_quote_id"');
+    expect(exec.calls[0].params).toContain('sq-1');
+    expect(exec.calls[0].params).toContain('cq-1');
+  });
+
+  test('returns true when another quote already links the supplier quote', async () => {
+    exec.enqueue({ rows: [['cq-2']] });
+    expect(await clientQuotesRepo.findLinkConflict('sq-1', 'cq-1', testDb)).toBe(true);
   });
 });
 

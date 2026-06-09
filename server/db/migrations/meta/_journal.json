@@ -582,6 +582,13 @@
       "when": 1780996378276,
       "tag": "0082_allow_na_duration_unit",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1781008619477,
+      "tag": "0083_quote_status_model_and_supplier_link",
+      "breakpoints": true
     }
   ]
 }

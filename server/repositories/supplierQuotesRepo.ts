@@ -18,7 +18,23 @@ export type SupplierQuote = {
   notes: string | null;
   createdAt: number;
   updatedAt: number;
+  // The client quote (if any) that links to this supplier quote via the 1-to-1
+  // quotes.linked_supplier_quote_id FK (issue #779). When linked, the route mirrors the client
+  // quote's status onto this supplier quote (read-only). `linkedClientQuoteStatus` is that
+  // client quote's stored pipeline status; both are null when this supplier quote is unlinked.
+  linkedClientQuoteId: string | null;
+  linkedClientQuoteStatus: string | null;
 };
+
+// Reverse-lookup correlated subqueries: the at-most-one client quote pointing at this supplier
+// quote (the partial-unique index on quotes.linked_supplier_quote_id guarantees ≤ 1). Mirrors the
+// linkedOrderId subquery pattern; null when this supplier quote is unlinked.
+const linkedClientQuoteIdSubquery = sql<string | null>`(
+  SELECT q.id FROM quotes q WHERE q.linked_supplier_quote_id = ${supplierQuotes.id} LIMIT 1
+)`;
+const linkedClientQuoteStatusSubquery = sql<string | null>`(
+  SELECT q.status FROM quotes q WHERE q.linked_supplier_quote_id = ${supplierQuotes.id} LIMIT 1
+)`;
 
 export type SupplierQuoteItem = {
   id: string;
@@ -33,7 +49,11 @@ export type SupplierQuoteItem = {
   unitType: string;
 };
 
-type QuoteRow = typeof supplierQuotes.$inferSelect & { linkedOrderId?: string | null };
+type QuoteRow = typeof supplierQuotes.$inferSelect & {
+  linkedOrderId?: string | null;
+  linkedClientQuoteId?: string | null;
+  linkedClientQuoteStatus?: string | null;
+};
 
 const mapQuote = (row: QuoteRow): SupplierQuote => ({
   id: row.id,
@@ -48,6 +68,8 @@ const mapQuote = (row: QuoteRow): SupplierQuote => ({
   notes: row.notes,
   createdAt: row.createdAt?.getTime() ?? 0,
   updatedAt: row.updatedAt?.getTime() ?? 0,
+  linkedClientQuoteId: row.linkedClientQuoteId ?? null,
+  linkedClientQuoteStatus: row.linkedClientQuoteStatus ?? null,
 });
 
 const mapItem = (row: typeof supplierQuoteItems.$inferSelect): SupplierQuoteItem => ({
@@ -72,6 +94,9 @@ export const listAll = async (exec: DbExecutor = db): Promise<SupplierQuote[]> =
         WHERE ss.linked_quote_id = ${supplierQuotes.id}
         LIMIT 1
       )`,
+      // Appended after linkedOrderId so positional row fixtures keep their indices (repo tests).
+      linkedClientQuoteId: linkedClientQuoteIdSubquery,
+      linkedClientQuoteStatus: linkedClientQuoteStatusSubquery,
     })
     .from(supplierQuotes)
     .orderBy(desc(supplierQuotes.createdAt));
@@ -90,8 +115,31 @@ export const findById = async (
   id: string,
   exec: DbExecutor = db,
 ): Promise<SupplierQuote | null> => {
-  const rows = await exec.select().from(supplierQuotes).where(eq(supplierQuotes.id, id));
+  const rows = await exec
+    .select({
+      ...getTableColumns(supplierQuotes),
+      linkedClientQuoteId: linkedClientQuoteIdSubquery,
+      linkedClientQuoteStatus: linkedClientQuoteStatusSubquery,
+    })
+    .from(supplierQuotes)
+    .where(eq(supplierQuotes.id, id));
   return rows[0] ? mapQuote(rows[0]) : null;
+};
+
+// The supplier quote's own expiration date, used by the client-quotes route to compute the
+// "linked supplier quote expired" indicator on the write path (where the response is built from
+// the BASE projection, which doesn't reconstruct that derivation). Null when the quote is gone.
+export const findExpirationById = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<string | null> => {
+  const rows = await exec
+    .select({ expirationDate: supplierQuotes.expirationDate })
+    .from(supplierQuotes)
+    .where(eq(supplierQuotes.id, id));
+  return rows[0]
+    ? normalizeNullableDateOnly(rows[0].expirationDate, 'supplierQuote.expirationDate')
+    : null;
 };
 
 export const existsById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
@@ -115,6 +163,39 @@ export const lockStatusById = async (
     .where(eq(supplierQuotes.id, id))
     .for('update');
   return rows[0] ?? null;
+};
+
+// SELECT ... FOR UPDATE variant that also resolves the linked client quote's status, so callers
+// (supplier-order create / clients-order supplier auto-create) can decide "is this supplier quote
+// effectively accepted?" — mirror the linked client status, override with `expired` from the
+// supplier quote's OWN expiration — atomically under the row lock (issue #779). The scalar
+// subquery on `quotes` is unaffected by FOR UPDATE (only the supplier_quotes row is locked).
+export const lockEffectiveStatusById = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<{
+  ownStatus: string;
+  expirationDate: string | null;
+  linkedClientStatus: string | null;
+} | null> => {
+  const rows = await exec
+    .select({
+      ownStatus: supplierQuotes.status,
+      expirationDate: supplierQuotes.expirationDate,
+      linkedClientStatus: linkedClientQuoteStatusSubquery,
+    })
+    .from(supplierQuotes)
+    .where(eq(supplierQuotes.id, id))
+    .for('update');
+  if (!rows[0]) return null;
+  return {
+    ownStatus: rows[0].ownStatus,
+    expirationDate: normalizeNullableDateOnly(
+      rows[0].expirationDate,
+      'supplierQuote.expirationDate',
+    ),
+    linkedClientStatus: rows[0].linkedClientStatus ?? null,
+  };
 };
 
 export const findItemsForQuote = async (
@@ -330,8 +411,11 @@ export type QuoteItemSnapshot = {
 
 /**
  * Resolves per-item snapshots used by the client-quotes route to lock in supplier-quote pricing
- * at the moment a client quote is created/updated. Only items belonging to *accepted* supplier
- * quotes are returned.
+ * at the moment a client quote is created/updated. Only items belonging to *effectively accepted*
+ * supplier quotes are returned (issue #779): the effective pipeline status — the linked client
+ * quote's status when linked, otherwise the supplier quote's own status — must be `accepted`.
+ * (`accepted` is terminal/frozen, so a past own-expiration does not demote it — matching the
+ * pre-#779 behavior where an accepted supplier quote's items stayed sourceable.)
  */
 export const getQuoteItemSnapshots = async (
   itemIds: string[],
@@ -351,7 +435,13 @@ export const getQuoteItemSnapshots = async (
     })
     .from(supplierQuoteItems)
     .innerJoin(supplierQuotes, eq(supplierQuotes.id, supplierQuoteItems.quoteId))
-    .where(and(inArray(supplierQuoteItems.id, uniqueIds), eq(supplierQuotes.status, 'accepted')));
+    .where(
+      and(
+        inArray(supplierQuoteItems.id, uniqueIds),
+        // Effective status (linked client status when linked, else own) is accepted.
+        sql`COALESCE((SELECT q.status FROM quotes q WHERE q.linked_supplier_quote_id = ${supplierQuotes.id} LIMIT 1), ${supplierQuotes.status}) = 'accepted'`,
+      ),
+    );
 
   for (const row of rows) {
     const unitPrice = parseDbNumber(row.unitPrice, 0);

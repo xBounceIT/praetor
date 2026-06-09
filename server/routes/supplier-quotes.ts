@@ -9,6 +9,7 @@ import * as supplierQuoteVersionsRepo from '../repositories/supplierQuoteVersion
 import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
+import { isPastLocalDate } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import {
   ATTACHMENT_MAX_BYTES,
@@ -20,6 +21,7 @@ import {
 } from '../utils/fileStorage.ts';
 import { createChildLogger } from '../utils/logger.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import { effectiveSupplierQuoteStatus, normalizeQuoteStatus } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { deriveSupplierLinePricing, MAX_LINE_AMOUNT } from '../utils/supplier-quote-pricing.ts';
@@ -48,16 +50,24 @@ const normalizeUnitType = (value: unknown): 'hours' | 'days' | 'unit' => {
   return 'unit';
 };
 
-const normalizeSupplierQuoteStatus = (status: string) => {
-  if (status === 'received') return 'sent';
-  if (status === 'approved') return 'accepted';
-  if (status === 'rejected') return 'denied';
-  return status;
-};
+// Effective status for a supplier quote (issue #779): mirrors the linked client quote's pipeline
+// status when linked, otherwise its own; `expired` is computed from its OWN expiration date.
+const supplierQuoteEffectiveStatus = (quote: supplierQuotesRepo.SupplierQuote) =>
+  effectiveSupplierQuoteStatus({
+    ownStatus: quote.status,
+    linkedClientStatus: quote.linkedClientQuoteStatus,
+    isPastOwnExpiration: quote.expirationDate ? isPastLocalDate(quote.expirationDate) : false,
+  });
 
 const projectQuote = (quote: supplierQuotesRepo.SupplierQuote) => ({
   ...quote,
-  status: normalizeSupplierQuoteStatus(quote.status),
+  // `status` is the EFFECTIVE status (synced from the linked client quote + the `expired` overlay);
+  // `ownStatus` is the raw stored pipeline status the form edits while the quote is unlinked.
+  status: supplierQuoteEffectiveStatus(quote),
+  ownStatus: normalizeQuoteStatus(quote.status),
+  isLinked: quote.linkedClientQuoteId !== null,
+  isStatusSynced: quote.linkedClientQuoteId !== null,
+  linkedClientQuoteId: quote.linkedClientQuoteId,
 });
 
 const projectItem = (item: supplierQuotesRepo.SupplierQuoteItem) => ({
@@ -92,6 +102,12 @@ const supplierQuoteSchema = {
     clientName: { type: ['string', 'null'] },
     paymentTerms: { type: ['string', 'null'] },
     status: { type: 'string' },
+    // Raw stored pipeline status (issue #779) — the editable value when the quote is unlinked.
+    ownStatus: { type: 'string' },
+    // Whether a client quote drives this supplier quote's status (then it's read-only/synced).
+    isLinked: { type: 'boolean' },
+    isStatusSynced: { type: 'boolean' },
+    linkedClientQuoteId: { type: ['string', 'null'] },
     expirationDate: { type: ['string', 'null'], format: 'date' },
     linkedOrderId: { type: ['string', 'null'] },
     notes: { type: ['string', 'null'] },
@@ -99,7 +115,17 @@ const supplierQuoteSchema = {
     updatedAt: { type: 'number' },
     items: { type: 'array', items: supplierQuoteItemSchema },
   },
-  required: ['id', 'supplierId', 'supplierName', 'status', 'createdAt', 'updatedAt', 'items'],
+  required: [
+    'id',
+    'supplierId',
+    'supplierName',
+    'status',
+    'isLinked',
+    'isStatusSynced',
+    'createdAt',
+    'updatedAt',
+    'items',
+  ],
 } as const;
 
 const supplierQuoteItemBodySchema = {
@@ -526,6 +552,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDate !== undefined ||
         notes !== undefined;
       const hasContentUpdate = hasNonStatusOrIdUpdates || status !== undefined;
+      // Like hasNonStatusOrIdUpdates but EXCLUDING expirationDate: a non-draft/synced/expired
+      // supplier quote stays editable for its expiration date alone (issue #779), so the
+      // read-only guard must not trip on an expiration-only PUT.
+      const hasNonExpirationContentUpdate =
+        supplierId !== undefined ||
+        supplierName !== undefined ||
+        clientId !== undefined ||
+        items !== undefined ||
+        paymentTerms !== undefined ||
+        notes !== undefined;
 
       const patch: supplierQuotesRepo.SupplierQuoteUpdate = {};
 
@@ -606,14 +642,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           details: { secondaryLabel: 'order_exists' },
         });
       }
-      if (normalizeSupplierQuoteStatus(current.status) !== 'draft' && hasNonStatusOrIdUpdates) {
+      const currentEffective = supplierQuoteEffectiveStatus(current);
+      // A linked supplier quote's status is synced from its client quote and read-only — reject any
+      // attempt to set it directly (issue #779). The expiration date stays editable (handled below).
+      if (current.linkedClientQuoteId && status !== undefined) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'This supplier quote’s status is synced from its client quote and read-only',
+          action: 'supplier_quote.update.conflict',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'status_synced_read_only', fromValue: currentEffective },
+        });
+      }
+      if (currentEffective !== 'draft' && hasNonExpirationContentUpdate) {
         return replyError(request, reply, {
           statusCode: 409,
           message: 'Non-draft supplier quotes are read-only',
           action: 'supplier_quote.update.conflict',
           entityType: 'supplier_quote',
           entityId: idResult.value,
-          details: { secondaryLabel: 'non_draft_read_only', fromValue: current.status },
+          details: { secondaryLabel: 'non_draft_read_only', fromValue: currentEffective },
         });
       }
       if (idConflict) {
@@ -945,7 +994,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             clientId: version.snapshot.quote.clientId ?? null,
             clientName: version.snapshot.quote.clientName ?? null,
             paymentTerms: version.snapshot.quote.paymentTerms ?? 'immediate',
-            status: version.snapshot.quote.status,
+            // Fold legacy received/approved/rejected (and any other pre-#779 spelling) to the
+            // canonical set so the tightened CHECK (migration 0083) accepts the restore write.
+            status: normalizeQuoteStatus(version.snapshot.quote.status),
             expirationDate: snapshotExpirationDate,
             notes: version.snapshot.quote.notes,
           },
@@ -1057,14 +1108,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
       return null;
     }
-    if (normalizeSupplierQuoteStatus(quote.status) !== 'draft') {
+    if (supplierQuoteEffectiveStatus(quote) !== 'draft') {
       await replyError(request, reply, {
         statusCode: 409,
         message: 'Attachments can only be modified on draft supplier quotes',
         action: 'supplier_quote_attachment.mutate.conflict',
         entityType: 'supplier_quote',
         entityId: id,
-        details: { secondaryLabel: 'non_draft_status', fromValue: quote.status },
+        details: {
+          secondaryLabel: 'non_draft_status',
+          fromValue: supplierQuoteEffectiveStatus(quote),
+        },
       });
       return null;
     }

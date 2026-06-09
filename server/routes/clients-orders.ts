@@ -9,6 +9,7 @@ import * as productsRepo from '../repositories/productsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
+import { isPastLocalDate } from '../utils/date.ts';
 import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
 import type { DurationUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
@@ -18,6 +19,7 @@ import {
   generateSupplierOrderId,
   ITEM_ID_PREFIXES,
 } from '../utils/order-ids.ts';
+import { effectiveSupplierQuoteStatus } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
@@ -804,7 +806,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             supplierQuotesRepo.findById(sqId),
             supplierQuotesRepo.findLinkedOrderId(sqId),
           ]);
-          if (!fastFailQuote || fastFailQuote.status !== 'accepted') continue;
+          if (
+            !fastFailQuote ||
+            effectiveSupplierQuoteStatus({
+              ownStatus: fastFailQuote.status,
+              linkedClientStatus: fastFailQuote.linkedClientQuoteStatus,
+              isPastOwnExpiration: fastFailQuote.expirationDate
+                ? isPastLocalDate(fastFailQuote.expirationDate)
+                : false,
+            }) !== 'accepted'
+          )
+            continue;
           if (fastFailLinked) continue;
 
           const autoCreated = await withDbTransaction(async (tx) => {
@@ -814,8 +826,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             // pre-tx read isn't reused because a metadata update could have committed
             // between that read and lock acquisition, landing stale supplier name / payment
             // terms on the auto-created order.
-            const lockedStatus = await supplierQuotesRepo.lockStatusById(sqId, tx);
-            if (!lockedStatus || lockedStatus.status !== 'accepted') return false;
+            const lockedStatus = await supplierQuotesRepo.lockEffectiveStatusById(sqId, tx);
+            if (
+              !lockedStatus ||
+              effectiveSupplierQuoteStatus({
+                ownStatus: lockedStatus.ownStatus,
+                linkedClientStatus: lockedStatus.linkedClientStatus,
+                isPastOwnExpiration: lockedStatus.expirationDate
+                  ? isPastLocalDate(lockedStatus.expirationDate)
+                  : false,
+              }) !== 'accepted'
+            )
+              return false;
             const linkedUnderLock = await supplierQuotesRepo.findLinkedOrderId(sqId, tx);
             if (linkedUnderLock) return false;
             const supplierQuote = await supplierQuotesRepo.findById(sqId, tx);

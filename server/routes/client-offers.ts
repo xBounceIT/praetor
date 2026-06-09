@@ -14,6 +14,7 @@ import type { DurationUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
+import { normalizeQuoteStatus } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
@@ -450,7 +451,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: linkedQuoteIdResult.value,
         });
       }
-      if (sourceQuote.status !== 'accepted') {
+      // Effective accepted: `accepted` is terminal/frozen, so this equals the normalized stored
+      // status and also folds the legacy `confirmed` spelling (issue #779).
+      if (normalizeQuoteStatus(sourceQuote.status) !== 'accepted') {
         return replyError(request, reply, {
           statusCode: 409,
           message: 'Offers can only be created from accepted quotes',
@@ -514,7 +517,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               action: 'client_offer.create.not_found',
             };
           }
-          if (lockedQuote.status !== 'accepted') {
+          if (normalizeQuoteStatus(lockedQuote.status) !== 'accepted') {
             return {
               ok: false,
               statusCode: 409,

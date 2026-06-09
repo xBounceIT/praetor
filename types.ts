@@ -537,10 +537,17 @@ export interface Quote {
     | '365gg';
   discount: number;
   discountType: DiscountType;
-  status: 'draft' | 'sent' | 'accepted' | 'denied';
+  // Stored pipeline status. `offer` (Offerta) is a manual status between sent and accepted (#779).
+  status: 'draft' | 'sent' | 'offer' | 'accepted' | 'denied';
+  // Effective status from the server: the stored status with the derived `expired` overlay (#779).
+  effectiveStatus?: 'draft' | 'sent' | 'offer' | 'accepted' | 'denied' | 'expired';
   expirationDate: string; // YYYY-MM-DD date-only string
   isExpired?: boolean;
   linkedOfferId?: string;
+  // 1-to-1 link to a supplier quote, set from the client-quote form (#779). `null`/absent = unlinked.
+  linkedSupplierQuoteId?: string | null;
+  // True when the linked supplier quote has expired — blocks progression to sent/offer/accepted.
+  linkedSupplierQuoteExpired?: boolean;
   notes?: string;
   createdAt: number;
   updatedAt: number;
@@ -550,7 +557,15 @@ export type QuoteVersionReason = 'update' | 'restore';
 
 export interface QuoteVersionSnapshot {
   schemaVersion: 1;
-  quote: Omit<Quote, 'items' | 'isExpired' | 'linkedOfferId'>;
+  quote: Omit<
+    Quote,
+    | 'items'
+    | 'isExpired'
+    | 'linkedOfferId'
+    | 'effectiveStatus'
+    | 'linkedSupplierQuoteId'
+    | 'linkedSupplierQuoteExpired'
+  >;
   items: QuoteItem[];
 }
 
@@ -937,7 +952,15 @@ export interface SupplierQuote {
     | '180gg'
     | '240gg'
     | '365gg';
-  status: 'draft' | 'sent' | 'accepted' | 'denied';
+  // Effective status (issue #779): synced from the linked client quote + the `expired` overlay.
+  // `offer`/`expired` only appear here (server-computed), never as a manually-set value.
+  status: 'draft' | 'sent' | 'offer' | 'accepted' | 'denied' | 'expired';
+  // Raw stored pipeline status — the editable value the form uses while the quote is unlinked.
+  ownStatus?: 'draft' | 'sent' | 'offer' | 'accepted' | 'denied';
+  // When linked to a client quote, the status is read-only and mirrors it (#779).
+  isLinked?: boolean;
+  isStatusSynced?: boolean;
+  linkedClientQuoteId?: string | null;
   expirationDate: string;
   linkedOrderId?: string;
   notes?: string;
@@ -949,7 +972,10 @@ export type SupplierQuoteVersionReason = 'update' | 'restore';
 
 export interface SupplierQuoteVersionSnapshot {
   schemaVersion: 1;
-  quote: Omit<SupplierQuote, 'items' | 'linkedOrderId'>;
+  quote: Omit<
+    SupplierQuote,
+    'items' | 'linkedOrderId' | 'ownStatus' | 'isLinked' | 'isStatusSynced' | 'linkedClientQuoteId'
+  >;
   items: SupplierQuoteItem[];
 }
 

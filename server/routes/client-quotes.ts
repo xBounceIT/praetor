@@ -13,6 +13,12 @@ import { getUniqueViolation } from '../utils/db-errors.ts';
 import { type DurationUnit, effectiveDurationMonths } from '../utils/duration-unit.ts';
 import { normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import {
+  canTransitionClientQuote,
+  effectiveQuoteStatus,
+  isTerminalQuoteStatus,
+  normalizeQuoteStatus,
+} from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
@@ -353,6 +359,14 @@ const quoteSchema = {
     updatedAt: { type: 'number' },
     items: { type: 'array', items: quoteItemSchema },
     isExpired: { type: 'boolean' },
+    // Issue #779: the effective status folds in the derived `expired` overlay; the link fields
+    // surface the 1-to-1 supplier quote and whether it has expired (drives the client guard).
+    effectiveStatus: {
+      type: 'string',
+      enum: ['draft', 'sent', 'offer', 'accepted', 'denied', 'expired'],
+    },
+    linkedSupplierQuoteId: { type: ['string', 'null'] },
+    linkedSupplierQuoteExpired: { type: 'boolean' },
   },
   required: [
     'id',
@@ -365,6 +379,8 @@ const quoteSchema = {
     'updatedAt',
     'items',
     'isExpired',
+    'effectiveStatus',
+    'linkedSupplierQuoteExpired',
   ],
 } as const;
 
@@ -404,6 +420,8 @@ const quoteCreateBodySchema = {
     status: { type: 'string' },
     expirationDate: { type: 'string', format: 'date' },
     notes: { type: 'string' },
+    // 1-to-1 link to a supplier quote, set from the client-quote form (issue #779).
+    linkedSupplierQuoteId: { type: ['string', 'null'] },
   },
   required: ['id', 'clientId', 'clientName', 'items', 'expirationDate'],
 } as const;
@@ -422,6 +440,8 @@ const quoteUpdateBodySchema = {
     expirationDate: { type: 'string', format: 'date' },
     notes: { type: 'string' },
     isExpired: { type: 'boolean' },
+    // `null` clears the 1-to-1 supplier-quote link; a string sets it; omitted leaves it (issue #779).
+    linkedSupplierQuoteId: { type: ['string', 'null'] },
   },
 } as const;
 
@@ -448,10 +468,94 @@ const buildItemsForInsert = (items: ResolvedQuoteItem[]): clientQuotesRepo.NewCl
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
-  const isQuoteExpired = (status: string, expirationDate: string | null | undefined) => {
-    if (status === 'confirmed') return false;
-    if (!expirationDate) return false;
-    return isPastLocalDate(expirationDate);
+  // `isExpired` is retained for backward compatibility (existing consumers / optimistic restore);
+  // it now derives from the canonical effective status so terminal accepted/denied never report
+  // expired (issue #779). Prefer `effectiveStatus` in new code.
+  const isQuoteExpired = (status: string, expirationDate: string | null | undefined) =>
+    !!expirationDate && effectiveQuoteStatus(status, isPastLocalDate(expirationDate)) === 'expired';
+
+  const computeEffectiveStatus = (status: string, expirationDate: string | null | undefined) =>
+    effectiveQuoteStatus(status, expirationDate ? isPastLocalDate(expirationDate) : false);
+
+  // Builds the response payload with the derived #779 fields. `linkedSupplierQuoteExpiration` is
+  // populated by the list projection; on write paths (BASE projection) it's null, so we read the
+  // linked supplier quote's expiration on demand — and only when a link actually exists.
+  const buildQuoteResponse = async (
+    quote: clientQuotesRepo.ClientQuote,
+    items: clientQuotesRepo.ClientQuoteItem[],
+    isExpiredOverride?: boolean,
+  ) => {
+    const linkedExpiration =
+      quote.linkedSupplierQuoteExpiration ??
+      (quote.linkedSupplierQuoteId
+        ? await supplierQuotesRepo.findExpirationById(quote.linkedSupplierQuoteId)
+        : null);
+    return {
+      ...quote,
+      items,
+      isExpired: isExpiredOverride ?? isQuoteExpired(quote.status, quote.expirationDate),
+      effectiveStatus: computeEffectiveStatus(quote.status, quote.expirationDate),
+      linkedSupplierQuoteId: quote.linkedSupplierQuoteId,
+      linkedSupplierQuoteExpired: !!linkedExpiration && isPastLocalDate(linkedExpiration),
+    };
+  };
+
+  // Validates a requested supplier-quote link (issue #779): the supplier quote must exist and must
+  // not already be claimed by a different client quote (the link is 1-to-1). Returns the validated
+  // value (string to set, null to clear) on success; on failure it sends the error and returns null.
+  const validateLinkedSupplierQuoteId = async (
+    raw: unknown,
+    ownQuoteId: string,
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<{ value: string | null } | null> => {
+    const parsed = optionalNonEmptyString(raw, 'linkedSupplierQuoteId');
+    if (!parsed.ok) {
+      badRequest(reply, parsed.message);
+      return null;
+    }
+    if (parsed.value !== null) {
+      if (!(await supplierQuotesRepo.existsById(parsed.value))) {
+        badRequest(reply, 'linkedSupplierQuoteId does not reference an existing supplier quote');
+        return null;
+      }
+      if (await clientQuotesRepo.findLinkConflict(parsed.value, ownQuoteId)) {
+        await replyError(request, reply, {
+          statusCode: 409,
+          message: 'This supplier quote is already linked to another client quote',
+          action: 'client_quote.link.conflict',
+          entityType: 'client_quote',
+          entityId: ownQuoteId,
+          details: { secondaryLabel: 'supplier_quote_already_linked', toValue: parsed.value },
+        });
+        return null;
+      }
+    }
+    return { value: parsed.value };
+  };
+
+  // Guard: a client quote cannot progress to sent/offer/accepted while its linked supplier quote
+  // is expired (issue #779). Returns true (after sending a 409) when the transition is blocked.
+  const blockIfLinkedSupplierExpired = async (
+    targetStatus: string,
+    linkedExpiration: string | null,
+    quoteId: string,
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<boolean> => {
+    const target = normalizeQuoteStatus(targetStatus);
+    if (target !== 'sent' && target !== 'offer' && target !== 'accepted') return false;
+    if (!linkedExpiration || !isPastLocalDate(linkedExpiration)) return false;
+    await replyError(request, reply, {
+      statusCode: 409,
+      message:
+        'The linked supplier quote has expired; extend its validity before progressing this quote',
+      action: 'client_quote.update.conflict',
+      entityType: 'client_quote',
+      entityId: quoteId,
+      details: { secondaryLabel: 'linked_supplier_quote_expired' },
+    });
+    return true;
   };
 
   const snapshotPreState = async (
@@ -526,11 +630,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         else itemsByQuote.set(item.quoteId, [item]);
       }
 
-      return quotes.map((quote) => ({
-        ...quote,
-        items: itemsByQuote.get(quote.id) ?? [],
-        isExpired: isQuoteExpired(quote.status, quote.expirationDate),
-      }));
+      // buildQuoteResponse is async only on write paths; here the list projection already carries
+      // linkedSupplierQuoteExpiration, so it resolves without any extra per-row query.
+      return Promise.all(
+        quotes.map((quote) => buildQuoteResponse(quote, itemsByQuote.get(quote.id) ?? [])),
+      );
     },
   );
 
@@ -561,6 +665,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         status,
         expirationDate,
         notes,
+        linkedSupplierQuoteId,
       } = request.body as {
         id: unknown;
         clientId: unknown;
@@ -572,6 +677,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         status: unknown;
         expirationDate: unknown;
         notes: unknown;
+        linkedSupplierQuoteId: unknown;
       };
 
       const nextIdResult = requireNonEmptyString(nextId, 'id');
@@ -611,6 +717,37 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Total must be greater than 0');
       }
 
+      let linkedSupplierQuoteIdValue: string | null = null;
+      if (linkedSupplierQuoteId !== undefined) {
+        const linkResult = await validateLinkedSupplierQuoteId(
+          linkedSupplierQuoteId,
+          nextIdResult.value,
+          request,
+          reply,
+        );
+        if (!linkResult) return;
+        linkedSupplierQuoteIdValue = linkResult.value;
+      }
+
+      const initialStatus = typeof status === 'string' && status ? status : 'draft';
+      // A quote created directly in sent/offer/accepted must respect the expired-supplier guard.
+      if (linkedSupplierQuoteIdValue) {
+        const linkedExpiration = await supplierQuotesRepo.findExpirationById(
+          linkedSupplierQuoteIdValue,
+        );
+        if (
+          await blockIfLinkedSupplierExpired(
+            initialStatus,
+            linkedExpiration,
+            nextIdResult.value,
+            request,
+            reply,
+          )
+        ) {
+          return;
+        }
+      }
+
       try {
         const { quote, createdItems } = await withDbTransaction(async (tx) => {
           const created = await clientQuotesRepo.create(
@@ -622,9 +759,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 typeof paymentTerms === 'string' && paymentTerms ? paymentTerms : 'immediate',
               discount: discountValue,
               discountType: discountTypeValue,
-              status: typeof status === 'string' && status ? status : 'draft',
+              status: initialStatus,
               expirationDate: expirationDateResult.value,
               notes: (notes as string | null | undefined) ?? null,
+              linkedSupplierQuoteId: linkedSupplierQuoteIdValue,
             },
             tx,
           );
@@ -646,11 +784,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             secondaryLabel: clientNameResult.value,
           },
         });
-        return reply.code(201).send({
-          ...quote,
-          items: createdItems,
-          isExpired: isQuoteExpired(quote.status, quote.expirationDate),
-        });
+        return reply.code(201).send(await buildQuoteResponse(quote, createdItems));
       } catch (err) {
         const dup = getUniqueViolation(err);
         if (dup && (dup.constraint === 'quotes_pkey' || dup.detail?.includes('(id)'))) {
@@ -698,6 +832,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDate,
         notes,
         isExpired: isExpiredOverride,
+        linkedSupplierQuoteId,
       } = request.body as {
         id: unknown;
         clientId: unknown;
@@ -710,6 +845,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDate: unknown;
         notes: unknown;
         isExpired: unknown;
+        linkedSupplierQuoteId: unknown;
       };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
@@ -725,7 +861,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         status === undefined &&
         expirationDate === undefined &&
         notes === undefined &&
-        isExpiredOverride === undefined;
+        isExpiredOverride === undefined &&
+        linkedSupplierQuoteId === undefined;
 
       const linkedOfferId = await clientQuotesRepo.findLinkedOfferId(idResult.value);
       if (linkedOfferId && !isIdOnlyUpdate) {
@@ -761,15 +898,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discountType !== undefined ||
         expirationDate !== undefined ||
         notes !== undefined ||
-        isExpiredOverride !== undefined;
-      if (currentStatus === 'confirmed' && hasNonStatusOrIdUpdates) {
+        isExpiredOverride !== undefined ||
+        linkedSupplierQuoteId !== undefined;
+      // Terminal (accepted/denied) quotes are content-read-only — only a status transition or an
+      // id rename is allowed (issue #779; replaces the legacy `confirmed` literal). Mirrors the
+      // frontend, which already locks accepted/denied forms.
+      if (isTerminalQuoteStatus(currentStatus) && hasNonStatusOrIdUpdates) {
         return replyError(request, reply, {
           statusCode: 409,
-          message: 'Confirmed quotes are read-only',
+          message: 'Accepted or rejected quotes are read-only',
           action: 'client_quote.update.conflict',
           entityType: 'client_quote',
           entityId: idResult.value,
-          details: { secondaryLabel: 'confirmed_read_only', fromValue: currentStatus },
+          details: { secondaryLabel: 'terminal_read_only', fromValue: currentStatus },
         });
       }
 
@@ -826,24 +967,83 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             : 'percentage';
 
       const effectiveDiscount = discountValue ?? existingDiscount;
-      const isRestore = status === 'quoted' && isExpiredOverride === false;
 
-      if (isRestore) {
-        if (await clientQuotesRepo.findNonDraftLinkedSale(idResult.value)) {
+      // --- Issue #779: link handling + status transition rules --------------------------------
+      // `linkPatch`: undefined ⇒ leave the link untouched; null ⇒ clear; string ⇒ set.
+      // `guardLinkedExpiration`: the linked supplier quote's own expiration that the progression
+      // guard checks — the freshly-linked one when relinking, otherwise the current link.
+      let linkPatch: string | null | undefined;
+      let guardLinkedExpiration = current.linkedSupplierQuoteExpiration;
+      if (linkedSupplierQuoteId !== undefined) {
+        const linkResult = await validateLinkedSupplierQuoteId(
+          linkedSupplierQuoteId,
+          idResult.value,
+          request,
+          reply,
+        );
+        if (!linkResult) return;
+        linkPatch = linkResult.value;
+        guardLinkedExpiration = linkResult.value
+          ? await supplierQuotesRepo.findExpirationById(linkResult.value)
+          : null;
+      }
+
+      // Only enforce the status rules when the status ACTUALLY changes — the edit forms resend the
+      // current status on every save, so a no-op resend (e.g. draft→draft, or re-saving an expired
+      // quote while extending its date) must not trip the transition/expired/guard checks (#779).
+      const targetStatus = typeof status === 'string' ? status : '';
+      const statusChanged =
+        status !== undefined &&
+        normalizeQuoteStatus(targetStatus) !== normalizeQuoteStatus(current.status);
+      if (statusChanged) {
+        const currentEffective = effectiveQuoteStatus(
+          current.status,
+          current.expirationDate ? isPastLocalDate(current.expirationDate) : false,
+        );
+        // Scaduto freezes manual status changes — a quote leaves `expired` only by extending its
+        // expiration date (a plain expirationDate write, no status change).
+        if (currentEffective === 'expired') {
           return replyError(request, reply, {
             statusCode: 409,
-            message: 'Restore is only possible when linked sale orders are in draft status',
+            message: 'Expired quotes cannot change status; extend the expiration date instead',
             action: 'client_quote.update.conflict',
             entityType: 'client_quote',
             entityId: idResult.value,
-            details: { secondaryLabel: 'non_draft_linked_sale' },
+            details: { secondaryLabel: 'expired_read_only', fromValue: 'expired' },
           });
         }
-        await clientQuotesRepo.deleteDraftSalesForQuote(idResult.value);
-      }
-
-      if (status === 'quoted') {
-        if (await clientQuotesRepo.findAnyLinkedSale(idResult.value)) {
+        // Back-to-draft only from sent/offer.
+        if (!canTransitionClientQuote(current.status, targetStatus)) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'This status transition is not allowed',
+            action: 'client_quote.update.conflict',
+            entityType: 'client_quote',
+            entityId: idResult.value,
+            details: {
+              secondaryLabel: 'invalid_transition',
+              fromValue: String(current.status),
+              toValue: targetStatus,
+            },
+          });
+        }
+        // A linked, expired supplier quote blocks progression to sent/offer/accepted.
+        if (
+          await blockIfLinkedSupplierExpired(
+            targetStatus,
+            guardLinkedExpiration,
+            idResult.value,
+            request,
+            reply,
+          )
+        ) {
+          return;
+        }
+        // Reverting to draft is rejected when the quote already spawned sale orders.
+        if (
+          normalizeQuoteStatus(targetStatus) === 'draft' &&
+          (await clientQuotesRepo.findAnyLinkedSale(idResult.value))
+        ) {
           return replyError(request, reply, {
             statusCode: 409,
             message: 'Cannot revert quote with existing sale orders',
@@ -947,6 +1147,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     status: (status as string | null | undefined) ?? null,
                     expirationDate: (expirationDateValue as string | null | undefined) ?? null,
                     notes: (notes as string | null | undefined) ?? null,
+                    linkedSupplierQuoteId: linkPatch,
                   },
                   tx,
                 );
@@ -1004,14 +1205,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           toValue: didStatusChange ? String(nextStatus) : undefined,
         },
       });
-      return {
-        ...updatedQuote,
-        items: updatedItems,
-        isExpired:
-          typeof isExpiredOverride === 'boolean'
-            ? isExpiredOverride
-            : isQuoteExpired(updatedQuote.status, updatedQuote.expirationDate),
-      };
+      return buildQuoteResponse(
+        updatedQuote,
+        updatedItems,
+        typeof isExpiredOverride === 'boolean' ? isExpiredOverride : undefined,
+      );
     },
   );
 
@@ -1175,13 +1373,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             action: 'client_quote.restore.not_found',
           };
         }
-        if (current.status === 'confirmed') {
+        if (isTerminalQuoteStatus(current.status)) {
           return {
             ok: false,
             statusCode: 409,
-            message: 'Confirmed quotes are read-only',
+            message: 'Accepted or rejected quotes are read-only',
             action: 'client_quote.restore.conflict',
-            secondaryLabel: 'confirmed_read_only',
+            secondaryLabel: 'terminal_read_only',
           };
         }
 
@@ -1266,7 +1464,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             paymentTerms: version.snapshot.quote.paymentTerms ?? 'immediate',
             discount: version.snapshot.quote.discount,
             discountType: version.snapshot.quote.discountType,
-            status: version.snapshot.quote.status,
+            // Legacy snapshots may hold quoted/confirmed/received/etc.; fold to the canonical set
+            // so the tightened CHECK (migration 0083) doesn't reject the restore write (issue #779).
+            status: normalizeQuoteStatus(version.snapshot.quote.status),
             expirationDate: snapshotExpirationDate,
             notes: version.snapshot.quote.notes,
           },
@@ -1308,11 +1508,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
 
-      return {
-        ...restored.quote,
-        items: restored.items,
-        isExpired: isQuoteExpired(restored.quote.status, restored.quote.expirationDate),
-      };
+      return buildQuoteResponse(restored.quote, restored.items);
     },
   );
 
@@ -1357,14 +1553,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
         });
       }
-      if (status.status === 'confirmed') {
+      if (normalizeQuoteStatus(status.status) === 'accepted') {
         return replyError(request, reply, {
           statusCode: 409,
-          message: 'Cannot delete a confirmed quote',
+          message: 'Cannot delete an accepted quote',
           action: 'client_quote.delete.conflict',
           entityType: 'client_quote',
           entityId: idResult.value,
-          details: { secondaryLabel: 'confirmed_status' },
+          details: { secondaryLabel: 'accepted_status' },
         });
       }
 

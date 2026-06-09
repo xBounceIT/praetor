@@ -304,6 +304,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     () => [
       { id: 'draft', name: t('sales:supplierQuotes.statusDraft', { defaultValue: 'Draft' }) },
       { id: 'sent', name: t('sales:supplierQuotes.statusSent', { defaultValue: 'Sent' }) },
+      { id: 'offer', name: t('sales:supplierQuotes.statusOffer', { defaultValue: 'Offer' }) },
       {
         id: 'accepted',
         name: t('sales:supplierQuotes.statusAccepted', { defaultValue: 'Accepted' }),
@@ -346,8 +347,16 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     stagedAttachments,
   } = state;
 
+  // `status` is the EFFECTIVE status (synced from the linked client quote + the `expired` overlay,
+  // issue #779), so a linked supplier quote mirroring a non-draft client quote is correctly
+  // read-only here even when its own stored status is still draft.
   const baseReadOnly = Boolean(editingQuote && editingQuote.status !== 'draft');
   const isReadOnly = baseReadOnly || previewVersion !== null;
+  // The expiration date stays editable while read-only due to status/sync/expiry (so the quote can
+  // be revalidated) — but not once an order locks the quote, and not in version preview.
+  const expirationEditableWhileReadOnly = Boolean(
+    editingQuote && baseReadOnly && !editingQuote.linkedOrderId && previewVersion === null,
+  );
 
   const readOnlyLinkedReason = t('sales:supplierQuotes.readOnlyLinked', {
     defaultValue: 'This quote is read-only because an order was created from it.',
@@ -433,10 +442,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
   const getStatusLabel = useCallback(
     (status: string) => {
+      if (status === 'expired') {
+        return t('sales:supplierQuotes.statusExpired', { defaultValue: 'Expired' });
+      }
       const option = statusOptions.find((item) => item.id === status);
       return option ? option.name : status;
     },
-    [statusOptions],
+    [statusOptions, t],
   );
 
   const handleSupplierChange = useCallback(
@@ -666,8 +678,20 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         cell: ({ row }) => {
           const history = isHistoryRow(row);
           return (
-            <div className={history ? 'opacity-60' : ''}>
+            <div className={`flex items-center gap-1.5 ${history ? 'opacity-60' : ''}`}>
               <StatusBadge type={row.status as StatusType} label={getStatusLabel(row.status)} />
+              {row.isStatusSynced && (
+                <i
+                  role="img"
+                  className="fa-solid fa-link text-zinc-400 text-xs"
+                  title={t('sales:supplierQuotes.syncedFromClientQuote', {
+                    defaultValue: 'Status synced from the linked client quote',
+                  })}
+                  aria-label={t('sales:supplierQuotes.syncedFromClientQuote', {
+                    defaultValue: 'Status synced from the linked client quote',
+                  })}
+                ></i>
+              )}
             </div>
           );
         },
@@ -684,6 +708,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           const hasOrder = hasOrderForQuote(row);
           const history = isHistoryRow(row);
           const isRowReadOnly = row.status !== 'draft';
+          // A linked supplier quote's status is synced from its client quote and read-only, so the
+          // manual status-transition buttons are hidden (issue #779).
+          const isSynced = Boolean(row.isStatusSynced);
 
           const isEditDisabled = hasOrder;
           const editTitle = hasOrder
@@ -749,7 +776,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 </TooltipTrigger>
                 <TooltipContent>{editTitle}</TooltipContent>
               </Tooltip>
-              {row.status === 'draft' && !hasOrder && (
+              {row.status === 'draft' && !hasOrder && !isSynced && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
@@ -773,7 +800,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   </TooltipContent>
                 </Tooltip>
               )}
-              {row.status === 'sent' && !hasOrder && (
+              {row.status === 'sent' && !hasOrder && !isSynced && (
                 <>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -870,7 +897,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   </TooltipContent>
                 </Tooltip>
               )}
-              {history && (
+              {history && !isSynced && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
@@ -962,6 +989,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         ),
       })),
     };
+    if (editingQuote) {
+      // On edit, `formData.status` holds the EFFECTIVE status (which may be `expired`/`offer` or a
+      // value synced from the linked client quote). Resending it would either fail the DB CHECK or
+      // hit the synced-status guard, so never carry status through the content form — status is
+      // managed by the row actions for unlinked quotes and synced for linked ones (issue #779).
+      delete payload.status;
+    }
 
     dispatch({ type: 'setIsSubmitting', value: true });
     try {
@@ -1183,10 +1217,19 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       <DateField
                         id="supplier-quote-expiration-date"
                         value={formData.expirationDate || ''}
-                        disabled={isReadOnly}
-                        onChange={(value) =>
-                          dispatch({ type: 'patchFormData', value: { expirationDate: value } })
-                        }
+                        // Editable while synced/expired so the supplier quote can be revalidated
+                        // (and the linked client quote unblocked) — issue #779.
+                        disabled={isReadOnly && !expirationEditableWhileReadOnly}
+                        onChange={(value) => {
+                          dispatch({ type: 'patchFormData', value: { expirationDate: value } });
+                          // When the form is read-only except the expiration (synced/expired/
+                          // non-draft, #779), the quote has no submit button — so picking a date
+                          // saves immediately as an "extend validity" action that re-syncs the
+                          // linked client quote and clears its expired-supplier block.
+                          if (expirationEditableWhileReadOnly && editingQuote) {
+                            void onUpdateQuote(editingQuote.id, { expirationDate: value });
+                          }
+                        }}
                       />
                     </Field>
                   </div>

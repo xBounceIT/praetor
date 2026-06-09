@@ -30,8 +30,9 @@ const QUOTE_BASE: readonly unknown[] = [
 
 const quoteRow = (overrides: Record<number, unknown> = {}) => makeRow(QUOTE_BASE, overrides);
 
-// listAll's projection appends linkedOrderId at position 11.
-const QUOTE_LIST_BASE: readonly unknown[] = [...QUOTE_BASE, null];
+// listAll's projection appends linkedOrderId (11), then the reverse-lookup linkedClientQuoteId
+// (12) and linkedClientQuoteStatus (13) for the linking client quote (issue #779).
+const QUOTE_LIST_BASE: readonly unknown[] = [...QUOTE_BASE, null, null, null];
 
 const quoteListRow = (overrides: Record<number, unknown> = {}) =>
   makeRow(QUOTE_LIST_BASE, overrides);
@@ -65,6 +66,14 @@ describe('listAll', () => {
     expect(sql).toContain('order by "supplier_quotes"."created_at" desc');
     expect(result[0].linkedOrderId).toBe('so-1');
     expect(result[0].expirationDate).toBe('2026-06-01');
+  });
+
+  test('resolves the linking client quote id and status via reverse lookup', async () => {
+    exec.enqueue({ rows: [quoteListRow({ 12: 'cq-7', 13: 'sent' })] });
+    const result = await supplierQuotesRepo.listAll(testDb);
+    expect(exec.calls[0].sql).toContain('linked_supplier_quote_id');
+    expect(result[0].linkedClientQuoteId).toBe('cq-7');
+    expect(result[0].linkedClientQuoteStatus).toBe('sent');
   });
 
   test('returns empty array when no rows', async () => {
@@ -225,17 +234,22 @@ describe('getQuoteItemSnapshots', () => {
   test('deduplicates ids and filters falsy values', async () => {
     exec.enqueue({ rows: [] });
     await supplierQuotesRepo.getQuoteItemSnapshots(['', 'a', 'a', 'b'], testDb);
-    // Drizzle inArray expands the array to individual params (a, b after dedup/filter).
-    expect(exec.calls[0].params).toEqual(['a', 'b', 'accepted']);
+    // Drizzle inArray expands the array to individual params (a, b after dedup/filter). The
+    // effective-accepted predicate inlines 'accepted' / CURRENT_DATE, so they are not params.
+    expect(exec.calls[0].params).toEqual(['a', 'b']);
   });
 
-  test('joins on supplier_quotes filtered to status=accepted', async () => {
+  test('gates on effective-accepted: linked client status when linked, else own', async () => {
     exec.enqueue({ rows: [] });
     await supplierQuotesRepo.getQuoteItemSnapshots(['a'], testDb);
-    expect(exec.calls[0].sql).toContain('"supplier_quotes"');
-    expect(exec.calls[0].sql).toContain('inner join');
-    // The status filter is parameterized; verify the param is present.
-    expect(exec.calls[0].params).toContain('accepted');
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('"supplier_quotes"');
+    expect(sql).toContain('inner join');
+    // Effective status (linked client status when linked, else own) must be accepted.
+    expect(sql).toContain('coalesce');
+    expect(sql).toContain('linked_supplier_quote_id');
+    expect(sql).toContain("= 'accepted'");
+    expect(exec.calls[0].params).toEqual(['a']);
   });
 
   test('maps row fields into snapshot shape with netCost mirroring unitPrice', async () => {
@@ -291,6 +305,43 @@ describe('lockStatusById', () => {
   test('returns null when row missing', async () => {
     exec.enqueue({ rows: [] });
     expect(await supplierQuotesRepo.lockStatusById('q-x', testDb)).toBeNull();
+  });
+});
+
+describe('lockEffectiveStatusById', () => {
+  test('locks the row and resolves own status, expiration and linked client status', async () => {
+    exec.enqueue({ rows: [['draft', '2026-06-01', 'accepted']] });
+    const result = await supplierQuotesRepo.lockEffectiveStatusById('q-1', testDb);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('for update');
+    expect(exec.calls[0].sql).toContain('linked_supplier_quote_id');
+    expect(result).toEqual({
+      ownStatus: 'draft',
+      expirationDate: '2026-06-01',
+      linkedClientStatus: 'accepted',
+    });
+  });
+
+  test('returns null linkedClientStatus when unlinked', async () => {
+    exec.enqueue({ rows: [['accepted', '2026-06-01', null]] });
+    const result = await supplierQuotesRepo.lockEffectiveStatusById('q-1', testDb);
+    expect(result?.linkedClientStatus).toBeNull();
+  });
+
+  test('returns null when row missing', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await supplierQuotesRepo.lockEffectiveStatusById('q-x', testDb)).toBeNull();
+  });
+});
+
+describe('findExpirationById', () => {
+  test('returns the expiration date when the quote exists', async () => {
+    exec.enqueue({ rows: [['2026-09-30']] });
+    expect(await supplierQuotesRepo.findExpirationById('q-1', testDb)).toBe('2026-09-30');
+  });
+
+  test('returns null when the quote is missing', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await supplierQuotesRepo.findExpirationById('q-x', testDb)).toBeNull();
   });
 });
 
