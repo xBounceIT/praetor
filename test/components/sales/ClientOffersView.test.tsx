@@ -565,3 +565,33 @@ describe('<ClientOffersView /> dark-mode banners (issue #768)', () => {
     ]);
   });
 });
+
+describe('<ClientOffersView /> MOL precision (issue #780)', () => {
+  test('MOL line input keeps two decimals instead of rounding to one', async () => {
+    const twoDecimalMolOffer = buildOffer({
+      id: 'O-MOL',
+      items: [
+        {
+          id: 'item-mol',
+          offerId: 'O-MOL',
+          productId: 'p-1',
+          productName: 'Widget',
+          quantity: 1,
+          unitPrice: 100,
+          productCost: 50,
+          productMolPercentage: 12.34,
+          unitType: 'unit',
+        },
+      ],
+    });
+
+    render(<ClientOffersView {...baseProps} offers={[twoDecimalMolOffer]} />);
+    fireEvent.click(screen.getByText('O-MOL'));
+    await screen.findByRole('dialog');
+
+    // formatDecimals={2}: the MOL inputs (mobile + desktop layouts) show 12.34, not the
+    // pre-fix rounded 12.3 that silently dropped the second decimal.
+    expect(screen.queryAllByDisplayValue('12.34').length).toBeGreaterThan(0);
+    expect(screen.queryAllByDisplayValue('12.3')).toHaveLength(0);
+  });
+});

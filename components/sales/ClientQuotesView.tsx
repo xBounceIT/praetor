@@ -1936,7 +1936,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 <div className="flex items-center gap-1">
                                   <ValidatedNumberInput
                                     value={molPercentage}
-                                    formatDecimals={1}
+                                    formatDecimals={2}
                                     onValueChange={handleMolChange}
                                     disabled={isReadOnly}
                                     className="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2127,7 +2127,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 <div className="col-span-1 flex items-center justify-center gap-1">
                                   <ValidatedNumberInput
                                     value={molPercentage}
-                                    formatDecimals={1}
+                                    formatDecimals={2}
                                     onValueChange={handleMolChange}
                                     disabled={isReadOnly}
                                     className="w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"

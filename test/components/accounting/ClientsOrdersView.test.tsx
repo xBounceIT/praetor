@@ -212,6 +212,51 @@ describe('<ClientsOrdersView />', () => {
     expect(screen.getAllByText('1920.00 EUR').length).toBeGreaterThan(0);
   });
 
+  test('MOL line input keeps two decimals instead of rounding to one (issue #780)', async () => {
+    const twoDecimalMolOrder: ClientsOrder = {
+      id: 'dm_so_mol',
+      clientId: 'client-1',
+      clientName: 'Helios Energy Services',
+      items: [
+        {
+          id: 'item-mol',
+          orderId: 'dm_so_mol',
+          productId: 'product-1',
+          productName: 'Consulting',
+          quantity: 2,
+          unitPrice: 2000,
+          productCost: 1200,
+          productMolPercentage: 12.34,
+        },
+      ],
+      paymentTerms: '30gg',
+      discount: 0,
+      discountType: 'percentage',
+      status: 'draft',
+      createdAt: Date.UTC(2026, 3, 24),
+      updatedAt: Date.UTC(2026, 3, 24),
+    };
+
+    render(
+      <ClientsOrdersView
+        orders={[twoDecimalMolOrder]}
+        clients={clients}
+        products={[]}
+        currency="EUR"
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
+    await screen.findByRole('dialog');
+
+    // The MOL input must preserve both decimals (12.34). The pre-fix formatDecimals={1}
+    // rounded the displayed value to a single decimal (12.3), silently dropping precision.
+    expect(screen.queryAllByDisplayValue('12.34').length).toBeGreaterThan(0);
+    expect(screen.queryAllByDisplayValue('12.3')).toHaveLength(0);
+  });
+
   test('edit modal uses the shared shadcn modal layout and form primitives', async () => {
     const source = await readComponentSource('accounting/ClientsOrdersView.tsx');
 
