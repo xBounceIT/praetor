@@ -1115,8 +1115,8 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                             key={item.id}
                             className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
                           >
-                            <div className="flex items-start gap-2 lg:items-center">
-                              <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center lg:pt-5">
+                            <div className="flex items-start gap-2 lg:items-center lg:pt-5">
+                              <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center">
                                 <div className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('accounting:clientsOrders.supplierOrderColumn', {

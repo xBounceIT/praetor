@@ -18,8 +18,11 @@ import { cn } from '@/lib/utils';
  * control, consuming no inline width) on the dense desktop line-item grids, and
  * stays inline below `lg` for the stacked/mobile layouts that show a field label
  * above the control. So a single responsive cell can use the same prop as the
- * dedicated desktop blocks. The owning cell must be `position: relative` and the
- * row must reserve top room on `lg` (e.g. `pt-5` / `lg:pt-5`).
+ * dedicated desktop blocks. The owning cell must be `position: relative`, and the
+ * top room (`pt-5` / `lg:pt-5`) must be reserved on the flex row that holds both the
+ * line grid and its sibling action buttons (with `items-center`) — not on the grid
+ * alone, or the sibling delete button won't share the gutter and will misalign with
+ * the inputs.
  */
 const QuickViewLinkButton: React.FC<{
   href: string | null;

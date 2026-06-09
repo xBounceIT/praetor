@@ -239,9 +239,10 @@ describe('<ClientsOrdersView />', () => {
     const source = await readComponentSource('accounting/ClientsOrdersView.tsx');
 
     expectSourceContainsAll(source, [
-      'className="flex items-start gap-2 lg:items-center"',
-      // lg:pt-5 reserves the top gutter the floated product quick-view shortcut sits in (desktop).
-      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center lg:pt-5"',
+      // lg:pt-5 quick-view gutter lives on the row flex (with the trash button), not the grid, so
+      // the delete button stays vertically aligned with the inputs.
+      'className="flex items-start gap-2 lg:items-center lg:pt-5"',
+      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center"',
       'className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0"',
       'className="flex h-9 items-center rounded-md border border-border bg-background px-3"',
       // Quantity and duration controls both center their compact value input + unit selector.
