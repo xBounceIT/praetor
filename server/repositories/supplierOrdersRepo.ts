@@ -2,6 +2,7 @@ import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { supplierInvoices } from '../db/schema/supplierInvoices.ts';
 import { supplierSaleItems, supplierSales } from '../db/schema/supplierSales.ts';
+import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
 
 export type SupplierOrder = {
@@ -27,6 +28,8 @@ export type SupplierOrderItem = {
   unitPrice: number;
   discount: number;
   note: string | null;
+  durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 const mapOrder = (row: typeof supplierSales.$inferSelect): SupplierOrder => ({
@@ -52,6 +55,8 @@ const mapItem = (row: typeof supplierSaleItems.$inferSelect): SupplierOrderItem 
   unitPrice: parseDbNumber(row.unitPrice, 0),
   discount: parseDbNumber(row.discount, 0),
   note: row.note,
+  durationMonths: row.durationMonths ?? 1,
+  durationUnit: normalizeDurationUnit(row.durationUnit),
 });
 
 export const listAll = async (exec: DbExecutor = db): Promise<SupplierOrder[]> => {
@@ -334,6 +339,8 @@ export type NewSupplierOrderItem = {
   unitPrice: number;
   discount: number;
   note: string | null;
+  durationMonths: number;
+  durationUnit: DurationUnit;
 };
 
 export const insertItems = async (
@@ -354,6 +361,8 @@ export const insertItems = async (
         unitPrice: numericForDb(item.unitPrice),
         discount: numericForDb(item.discount),
         note: item.note,
+        durationMonths: item.durationMonths,
+        durationUnit: item.durationUnit,
       })),
     )
     .returning();

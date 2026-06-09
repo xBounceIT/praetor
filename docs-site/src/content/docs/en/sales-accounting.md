@@ -33,7 +33,9 @@ Supplier quotes help compare purchase costs and conditions. Link rows to the cor
 
 In the **Supplier Information** section of the **New Supplier Quote** dialog you can optionally link a **Customer**: use it when the quote relates to a specific customer engagement. The association is optional — a supplier quote with no customer is a valid state and saves without errors — and can be removed at any time by selecting *No customer*. When set, the linked customer is visible both in the quote detail and in the **Customer** column of the list.
 
-The **Items** table makes the purchase pricing chain explicit with the **Product**, **List Price**, **Discount to Us (%)**, **Unit Cost**, **Qty**, and **Total** columns. Enter the supplier's list price and the discount percentage they grant you (capped at 0–100%, since a larger discount would push the cost below zero): Praetor derives the **Unit Cost** as `List Price × (1 − Discount to Us / 100)`, while the row **Total** stays `Unit Cost × Qty`. The Unit Cost field is read-only because it is derived. In the **Summary**, the **Subtotal** sums the list prices (`List Price × Qty`), the **Discount** row highlights the total discount granted by the suppliers, and the **Total** reports the net cost (`Unit Cost × Qty`). The Discount row appears only when at least one line has a discount.
+The **Items** table makes the purchase pricing chain explicit with the **Product**, **List Price**, **Discount to Us (%)**, **Unit Cost**, **Qty**, **Duration**, and **Total** columns. Enter the supplier's list price and the discount percentage they grant you (capped at 0–100%, since a larger discount would push the cost below zero): Praetor derives the **Unit Cost** as `List Price × (1 − Discount to Us / 100)`, while the row **Total** is `Unit Cost × Qty × Duration (in months)`. The Unit Cost field is read-only because it is derived. In the **Summary**, the **Subtotal** sums the list prices (`List Price × Qty × Duration`), the **Discount** row highlights the total discount granted by the suppliers, and the **Total** reports the net cost (`Unit Cost × Qty × Duration`). The Discount row appears only when at least one line has a discount.
+
+The **Duration** column sits after **Qty** and works exactly like the one on [client quotes](#customer-quotes-and-offers): it multiplies the row total by the number of months, with a **Months** / **Years** / **N/A** selector (1 year = 12 months). It applies to **every line**, regardless of the quantity unit (**Hours**, **Days**, or **Unit**). Selecting **N/A** marks the line as duration-less: the numeric field beside it is disabled and the row total is not multiplied by duration. For one-off items leave **Duration = 1 month** (or **N/A**) so totals stay identical to the previous behavior.
 
 You can attach the supplier's files (**xlsx**, **pdf**, or **docx**, up to 10 MB each) in the **Attachments** section. Files can be added straight from the **New Supplier Quote** dialog — they are queued while you fill in the quote and uploaded automatically when you save it — as well as later while the quote is still a draft. Attachments can only be changed on draft quotes with no linked order; once the quote leaves draft or an order is created from it the section becomes read-only and existing files can only be downloaded.
 
@@ -45,6 +47,8 @@ A sale order created from an accepted offer starts as a **Draft** and stays full
 
 Rows that automatically generated a **supplier order** (identifiable from the *Supplier order* column) stay locked even in draft: they cannot be removed, nor can their product or quantity change, so the linked procurement order never falls out of sync. You can still update their sale price, add other rows, and edit the header fields.
 
+**Supplier orders** inherit the **Duration** column from the quote: when you create an order from a supplier quote (with the dedicated button or through the automatic conversion) each line keeps the number of months you set and the order **Total** is computed as `Unit Cost × Qty × Duration`, so it matches the quote instead of collapsing the duration to a single month. The duration stays editable, with the **Months** / **Years** / **N/A** selector, while the order is a draft; choosing **N/A** leaves the line out of the duration multiplier.
+
 ## Invoices
 
 Customer and supplier invoices should match actual orders and deliveries. Check taxable amounts, VAT, totals, and references to the linked document.
@@ -52,6 +56,8 @@ Customer and supplier invoices should match actual orders and deliveries. Check 
 After an invoice leaves draft status it becomes read-only: it cannot be moved back to draft or deleted. Delete only draft invoices that were created by mistake, before issuing them.
 
 The amount paid cannot exceed the invoice total. When an invoice is set to **paid**, the amount paid must cover at least the full total; otherwise Praetor rejects the save so aging, balances, and reports stay consistent.
+
+Both **customer and supplier invoices** carry the **Duration** column on their lines, with the same **Months** / **Years** / **N/A** selector, and multiply the line total by the corresponding months. When you create a **supplier invoice** from a supplier order the duration is carried over so the invoice total matches the order; otherwise it can be edited per line while the invoice is a draft. Selecting **N/A** leaves the line out of the duration multiplier.
 
 Praetor rounds taxable amounts, VAT, costs, and totals to two currency decimals using commercial half-cent rounding: values such as 1.005 become 1.01.
 

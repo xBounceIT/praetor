@@ -312,6 +312,182 @@ describe('<SupplierQuotesView /> optional customer association (issue #759)', ()
   });
 });
 
+describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
+  const daysLineQuote = buildQuote({
+    id: 'SQ-DURATION',
+    status: 'draft',
+    items: [
+      {
+        id: 'sqi-dur',
+        quoteId: 'SQ-DURATION',
+        productName: 'Managed service',
+        quantity: 2,
+        listPrice: 100,
+        discountPercent: 0,
+        unitPrice: 100,
+        // Time-based line (days) → duration is editable, unlike the default "unit" lines.
+        unitType: 'days',
+        durationMonths: 3,
+        durationUnit: 'months',
+      },
+    ],
+  });
+
+  test('renders the Durata column and an editable duration for a time-based line', () => {
+    render(<SupplierQuotesView {...baseProps} quotes={[daysLineQuote]} />);
+    fireEvent.click(screen.getByText('SQ-DURATION'));
+    // The Durata column header renders once a line item exists...
+    expect(screen.getAllByText('sales:supplierQuotes.durationColumn').length).toBeGreaterThan(0);
+    // ...and the row carries a duration input reflecting the stored value (3 months).
+    const durationInputs = screen
+      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
+    expect(durationInputs.length).toBeGreaterThan(0);
+    expect(durationInputs[0].value).toBe('3');
+  });
+
+  test('scales the quote total by the line duration', () => {
+    render(<SupplierQuotesView {...baseProps} quotes={[daysLineQuote]} />);
+    // Total column = unitPrice 100 × quantity 2 × durationMonths 3 = 600.00
+    // (without the duration multiplier it would be 200.00).
+    expect(screen.getAllByText('600.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.queryByText('200.00 EUR')).not.toBeInTheDocument();
+  });
+
+  test('renders an editable duration for a unit-measured line (duration applies to every type)', () => {
+    // SQ-DRAFT's sample item is unitType "unit". Under the new model duration applies to every line
+    // type (issue #775) — the cell shows the editable value + selector, not a static N/A.
+    render(<SupplierQuotesView {...baseProps} />);
+    fireEvent.click(screen.getByText('SQ-DRAFT'));
+    expect(screen.queryAllByText('common:labels.notApplicable')).toHaveLength(0);
+    const durationInputs = screen
+      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
+    expect(durationInputs.length).toBeGreaterThan(0);
+  });
+
+  test('treats a line with durationUnit "na" as no-duration (x1) and disables its value input', () => {
+    const naQuote = buildQuote({
+      id: 'SQ-DUR-NA',
+      status: 'draft',
+      items: [
+        {
+          id: 'sqi-na',
+          quoteId: 'SQ-DUR-NA',
+          productName: 'Managed service',
+          quantity: 2,
+          listPrice: 100,
+          discountPercent: 0,
+          unitPrice: 100,
+          unitType: 'days',
+          // N/A duration: the stored months must never multiply the total (issue #775).
+          durationMonths: 3,
+          durationUnit: 'na',
+        },
+      ],
+    });
+    render(<SupplierQuotesView {...baseProps} quotes={[naQuote]} />);
+    fireEvent.click(screen.getByText('SQ-DUR-NA'));
+    // 2 × 100 × 1 (na) = 200.00 — not 600.00, even though durationMonths is 3.
+    expect(screen.getAllByText('200.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.queryByText('600.00 EUR')).not.toBeInTheDocument();
+    // The value input is disabled while the unit is N/A; the selector stays usable.
+    const durationInputs = screen
+      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
+    expect(durationInputs.length).toBeGreaterThan(0);
+    expect(durationInputs.every((el) => el.disabled)).toBe(true);
+  });
+
+  test('editing the duration updates the submitted multiplier', () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+    const editableQuote = buildQuote({
+      id: 'SQ-DUR-EDIT',
+      status: 'draft',
+      items: [
+        {
+          id: 'sqi-edit',
+          quoteId: 'SQ-DUR-EDIT',
+          productName: 'Managed service',
+          quantity: 2,
+          listPrice: 100,
+          discountPercent: 0,
+          unitPrice: 100,
+          unitType: 'days',
+          durationMonths: 1,
+          durationUnit: 'months',
+        },
+      ],
+    });
+    render(
+      <SupplierQuotesView {...baseProps} quotes={[editableQuote]} onUpdateQuote={onUpdateQuote} />,
+    );
+    fireEvent.click(screen.getByText('SQ-DUR-EDIT'));
+
+    const durationInputs = screen
+      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
+    fireEvent.change(durationInputs[0], { target: { value: '4' } });
+
+    fireEvent.click(screen.getByText('common:buttons.update'));
+
+    expect(onUpdateQuote).toHaveBeenCalledTimes(1);
+    const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
+    expect(updates.items?.[0]?.durationMonths).toBe(4);
+    expect(updates.items?.[0]?.durationUnit).toBe('months');
+  });
+
+  test("submits each line's stored duration verbatim (no unit-line coercion)", () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+    const mixedQuote = buildQuote({
+      id: 'SQ-DUR-MIX',
+      status: 'draft',
+      items: [
+        {
+          id: 'sqi-days',
+          quoteId: 'SQ-DUR-MIX',
+          productName: 'Managed service',
+          quantity: 1,
+          listPrice: 100,
+          discountPercent: 0,
+          unitPrice: 100,
+          unitType: 'days',
+          durationMonths: 3,
+          durationUnit: 'months',
+        },
+        {
+          id: 'sqi-unit',
+          quoteId: 'SQ-DUR-MIX',
+          productName: 'Widget',
+          quantity: 1,
+          listPrice: 50,
+          discountPercent: 0,
+          unitPrice: 50,
+          // Unit lines are no longer coerced — duration applies to every type now (issue #775),
+          // so the stored value/unit must round-trip unchanged on submit.
+          unitType: 'unit',
+          durationMonths: 24,
+          durationUnit: 'years',
+        },
+      ],
+    });
+    render(
+      <SupplierQuotesView {...baseProps} quotes={[mixedQuote]} onUpdateQuote={onUpdateQuote} />,
+    );
+    fireEvent.click(screen.getByText('SQ-DUR-MIX'));
+    fireEvent.click(screen.getByText('common:buttons.update'));
+
+    expect(onUpdateQuote).toHaveBeenCalledTimes(1);
+    const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
+    expect(updates.items?.[0]).toEqual(
+      expect.objectContaining({ durationMonths: 3, durationUnit: 'months' }),
+    );
+    expect(updates.items?.[1]).toEqual(
+      expect.objectContaining({ durationMonths: 24, durationUnit: 'years' }),
+    );
+  });
+});
+
 describe('<SupplierQuotesView /> new-quote attachment staging (issue #781)', () => {
   test('the New-quote dialog shows the attachment dropzone instead of a "save first" notice', () => {
     render(<SupplierQuotesView {...baseProps} />);

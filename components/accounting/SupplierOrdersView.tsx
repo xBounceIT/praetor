@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type {
+  DurationUnit,
   Product,
   Supplier,
   SupplierOrderVersion,
@@ -15,10 +16,18 @@ import type {
   SupplierSaleOrderItem,
 } from '../../types';
 import { formatInsertDateTime } from '../../utils/date';
-import { formatDiscountValue } from '../../utils/numbers';
+import {
+  durationValueToMonths,
+  formatDiscountValue,
+  getDurationDisplayValue,
+  getEffectiveDurationMonths,
+  normalizeDurationUnit,
+  parseDurationValueToMonths,
+} from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import DurationUnitSelector from '../shared/DurationUnitSelector';
 import Modal from '../shared/Modal';
 import {
   ModalBody,
@@ -58,7 +67,10 @@ const calculateTotals = (
   let subtotal = 0;
 
   items.forEach((item) => {
-    const lineSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0);
+    // Duration multiplies the line total alongside quantity (issue #776), matching the supplier
+    // quote the order was created from.
+    const durationMonths = getEffectiveDurationMonths(item);
+    const lineSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0) * durationMonths;
     const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
     const lineNet = lineSubtotal - lineDiscount;
     subtotal += lineNet;
@@ -317,6 +329,36 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
       dispatch({ type: 'removeItem', index });
     },
     [isReadOnly],
+  );
+
+  // Duration is carried over from the supplier quote (issue #776) and stays editable on the order.
+  // Orders have no unit-type concept, so it is a plain multiplier with a Mese/Anno selector.
+  const handleDurationValueChange = useCallback(
+    (index: number, value: string) => {
+      if (isReadOnly) return;
+      const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
+      updateItem(index, 'durationMonths', parseDurationValueToMonths(value, unit));
+    },
+    [formData.items, isReadOnly, updateItem],
+  );
+
+  const handleDurationUnitChange = useCallback(
+    (index: number, newUnit: DurationUnit) => {
+      if (isReadOnly) return;
+      const items = formData.items || [];
+      const item = items[index];
+      if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
+      // Switch unit and recompute canonical months in a single update so the line never lands in a
+      // transient state (durationMonths under the old unit). 'na' (N/A) drops the multiplier to a
+      // single month — the value input is disabled and the line never multiplies (issue #775).
+      const durationMonths =
+        newUnit === 'na' ? 1 : durationValueToMonths(getDurationDisplayValue(item), newUnit);
+      const nextItems = items.map((current, i) =>
+        i === index ? { ...current, durationMonths, durationUnit: newUnit } : current,
+      );
+      dispatch({ type: 'patchForm', patch: { items: nextItems } });
+    },
+    [formData.items, isReadOnly],
   );
 
   const handleSubmit = useCallback(
@@ -714,12 +756,17 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                   {(formData.items || []).length > 0 && (
                     <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
                       <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        <div className="col-span-3 ml-1">{t('crm:quotes.productsServices')}</div>
+                        <div className="col-span-2 ml-1">{t('crm:quotes.productsServices')}</div>
                         <div className="col-span-1">{t('common:labels.quantity')}</div>
                         <div className="col-span-2">
                           {t('crm:internalListing.salePrice')} ({currency})
                         </div>
                         <div className="col-span-1">{t('accounting:supplierOrders.discount')}</div>
+                        <div className="col-span-2">
+                          {t('accounting:supplierOrders.durationColumn', {
+                            defaultValue: 'Duration',
+                          })}
+                        </div>
                         <div className="col-span-2">{t('accounting:supplierOrders.notes')}</div>
                         <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
                       </div>
@@ -730,8 +777,12 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                   {(formData.items || []).length > 0 ? (
                     <div className="space-y-3">
                       {formData.items?.map((item, index) => {
+                        // Duration multiplies the line total alongside quantity (issue #776).
+                        const durationMonths = getEffectiveDurationMonths(item);
+                        const durationUnit = normalizeDurationUnit(item.durationUnit);
+                        const durationValue = getDurationDisplayValue(item);
                         const lineSubtotal =
-                          Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0);
+                          Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0) * durationMonths;
                         const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
                         const lineTotal = lineSubtotal - lineDiscount;
 
@@ -807,6 +858,38 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                                 </div>
                                 <div className="space-y-1">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                    {t('accounting:supplierOrders.durationColumn', {
+                                      defaultValue: 'Duration',
+                                    })}
+                                  </FieldLabel>
+                                  <div className="flex items-center gap-1">
+                                    <ValidatedNumberInput
+                                      step="1"
+                                      min="1"
+                                      placeholder={t('accounting:supplierOrders.durationColumn', {
+                                        defaultValue: 'Duration',
+                                      })}
+                                      value={durationValue}
+                                      disabled={isReadOnly || durationUnit === 'na'}
+                                      onValueChange={(value) =>
+                                        handleDurationValueChange(index, value)
+                                      }
+                                      className="text-center"
+                                    />
+                                    <span className="shrink-0 text-xs font-semibold text-muted-foreground">
+                                      /
+                                    </span>
+                                    <DurationUnitSelector
+                                      value={durationUnit}
+                                      onChange={(val) => handleDurationUnitChange(index, val)}
+                                      count={durationValue}
+                                      disabled={isReadOnly}
+                                      i18nPrefix="accounting:supplierOrders"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="space-y-1">
+                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                                     {t('common:labels.total')}
                                   </FieldLabel>
                                   <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground">
@@ -837,7 +920,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                             </div>
                             <div className="hidden lg:flex items-start gap-2">
                               <div className="grid flex-1 grid-cols-12 gap-2">
-                                <div className="lg:col-span-3 min-w-0">
+                                <div className="lg:col-span-2 min-w-0">
                                   <SelectControl
                                     options={productOptions}
                                     value={item.productId}
@@ -891,6 +974,31 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
                                       )
                                     }
                                     className="font-medium"
+                                  />
+                                </div>
+                                <div className="lg:col-span-2 flex items-center gap-1">
+                                  <ValidatedNumberInput
+                                    step="1"
+                                    min="1"
+                                    placeholder={t('accounting:supplierOrders.durationColumn', {
+                                      defaultValue: 'Duration',
+                                    })}
+                                    value={durationValue}
+                                    disabled={isReadOnly || durationUnit === 'na'}
+                                    onValueChange={(value) =>
+                                      handleDurationValueChange(index, value)
+                                    }
+                                    className="font-medium"
+                                  />
+                                  <span className="shrink-0 text-xs font-semibold text-muted-foreground">
+                                    /
+                                  </span>
+                                  <DurationUnitSelector
+                                    value={durationUnit}
+                                    onChange={(val) => handleDurationUnitChange(index, val)}
+                                    count={durationValue}
+                                    disabled={isReadOnly}
+                                    i18nPrefix="accounting:supplierOrders"
                                   />
                                 </div>
                                 <div className="lg:col-span-2">
