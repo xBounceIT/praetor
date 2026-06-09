@@ -376,7 +376,7 @@ const WorkUnitCard: React.FC<{
               <p className="font-bold text-[10px] text-zinc-400 uppercase tracking-wider">
                 {t('hr:competenceCenters.members')}
               </p>
-              {unit.members && unit.members.length > 0 ? (
+              {unit.members?.length ? (
                 <MemberAvatarGroup members={unit.members} className="mt-1.5" />
               ) : (
                 <p className="text-sm text-zinc-400 italic">

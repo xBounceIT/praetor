@@ -20,7 +20,9 @@ export interface MemberAvatarGroupProps {
 // `TooltipTrigger asChild` merges the trigger's `data-slot="tooltip-trigger"` onto the
 // avatar element, so the group's avatar-scoped selector would no longer match it.
 const avatarClassName = 'size-7 ring-2 ring-background';
-const fallbackClassName = 'bg-muted text-[10px] font-medium text-muted-foreground';
+// AvatarFallback already provides `bg-muted text-muted-foreground`; only the smaller
+// initials size and weight are additive here.
+const fallbackClassName = 'text-[10px] font-medium';
 const overflowBadgeClassName =
   'relative flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground ring-2 ring-background';
 

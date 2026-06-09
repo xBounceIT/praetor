@@ -295,10 +295,6 @@ beforeEach(async () => {
       userCount: 2,
     },
   ]);
-  workUnitsListUserIdsByUnitIdsMock.mockResolvedValue([
-    { workUnitId: 'wu1', userId: 'u1' },
-    { workUnitId: 'wu1', userId: 'u2' },
-  ]);
   notificationsListForUserMock.mockResolvedValue([]);
   notificationsCountUnreadForUserMock.mockResolvedValue(0);
   markNotificationReadForUserMock.mockResolvedValue(true);
@@ -577,7 +573,8 @@ describe('/api/mcp', () => {
       canViewExternal: false,
     });
     expect(workUnitsListManagedByMock).toHaveBeenCalledWith('u1');
-    expect(workUnitsListUserIdsByUnitIdsMock).toHaveBeenCalledWith(['wu1']);
+    // userIds is derived from the members the repo already returns — no second query.
+    expect(workUnitsListUserIdsByUnitIdsMock).not.toHaveBeenCalled();
     expect(usersListAllForAdminMock).not.toHaveBeenCalled();
     expect(workUnitsListAllMock).not.toHaveBeenCalled();
   });
@@ -723,11 +720,11 @@ describe('/api/mcp', () => {
         name: 'Operations',
         description: 'Ops',
         managers: [{ id: 'u2', name: 'Bob' }],
+        members: [{ id: 'u2', name: 'Bob' }],
         isDisabled: false,
         userCount: 1,
       },
     ]);
-    workUnitsListUserIdsByUnitIdsMock.mockResolvedValue([{ workUnitId: 'wu-all', userId: 'u2' }]);
 
     const res = await rpc({
       jsonrpc: '2.0',
