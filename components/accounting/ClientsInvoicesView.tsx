@@ -35,6 +35,7 @@ import QuickViewLinkButton from '../shared/QuickViewLinkButton';
 import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
+import { TABLE_ROW_ACTION_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 export interface ClientsInvoicesViewProps {
@@ -488,7 +489,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
-          <span className="font-bold text-zinc-700">{row.id}</span>
+          <span className="font-bold text-foreground">{row.id}</span>
         ),
       },
       {
@@ -496,7 +497,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         id: 'clientName',
         accessorFn: (row: Invoice) => row.clientName,
         cell: ({ row }: { row: Invoice }) => (
-          <span className="font-bold text-zinc-800">{row.clientName}</span>
+          <span className="font-bold text-foreground">{row.clientName}</span>
         ),
       },
       {
@@ -506,7 +507,9 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
-          <span className="text-sm text-zinc-600">{formatDateOnlyForLocale(row.issueDate)}</span>
+          <span className="text-sm text-muted-foreground">
+            {formatDateOnlyForLocale(row.issueDate)}
+          </span>
         ),
       },
       {
@@ -516,7 +519,9 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
-          <span className="text-sm text-zinc-600">{formatDateOnlyForLocale(row.dueDate)}</span>
+          <span className="text-sm text-muted-foreground">
+            {formatDateOnlyForLocale(row.dueDate)}
+          </span>
         ),
       },
       {
@@ -526,7 +531,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
-          <span className="font-bold text-zinc-700">
+          <span className="font-bold text-foreground">
             {(row.total ?? 0).toFixed(2)} {currency}
           </span>
         ),
@@ -591,7 +596,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                       openEditModal(row);
                     }}
                     aria-label={t('common:buttons.edit')}
-                    className="rounded-lg p-2 text-zinc-400 transition-all hover:bg-zinc-100 hover:text-praetor"
+                    className={TABLE_ROW_ACTION_BUTTON_CLASSNAME}
                   >
                     <i className="fa-solid fa-pen-to-square"></i>
                   </button>
@@ -1106,10 +1111,12 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       <div className="space-y-4">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h2 className="text-2xl font-semibold text-zinc-800">
+            <h2 className="text-2xl font-semibold text-foreground">
               {t('accounting:clientsInvoices.title')}
             </h2>
-            <p className="text-sm text-zinc-500">{t('accounting:clientsInvoices.subtitle')}</p>
+            <p className="text-sm text-muted-foreground">
+              {t('accounting:clientsInvoices.subtitle')}
+            </p>
           </div>
           <HeaderAddButton onClick={openAddModal}>
             {t('accounting:clientsInvoices.addInvoice')}

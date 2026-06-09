@@ -64,6 +64,7 @@ import SelectControl from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';
+import { TABLE_ROW_ACTION_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import OrderVersionsPanel from './OrderVersionsPanel';
@@ -187,15 +188,11 @@ const PricingCell: React.FC<PricingCellProps> = ({
   currency,
 }) => {
   if (dashOnZero && value <= 0) {
-    return (
-      <span className={`text-sm font-semibold ${isHistory ? 'text-zinc-300' : 'text-zinc-400'}`}>
-        -
-      </span>
-    );
+    return <span className="text-sm font-semibold text-muted-foreground">-</span>;
   }
   return (
     <span
-      className={`text-sm ${bold ? 'font-bold' : 'font-semibold'} whitespace-nowrap ${isHistory ? 'text-zinc-400' : colorClass}`}
+      className={`text-sm ${bold ? 'font-bold' : 'font-semibold'} whitespace-nowrap ${isHistory ? 'text-muted-foreground' : colorClass}`}
     >
       {prefix}
       {value.toFixed(2)} {currency}
@@ -602,7 +599,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         id: 'id',
         accessorFn: (row: ClientsOrder) => row.id,
         cell: ({ row }: { row: ClientsOrder }) => (
-          <span className="font-bold text-zinc-700">{row.id}</span>
+          <span className="font-bold text-foreground">{row.id}</span>
         ),
       },
       {
@@ -611,9 +608,9 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         accessorFn: (row: ClientsOrder) => row.createdAt ?? 0,
         className: 'whitespace-nowrap',
         cell: ({ row }: { row: ClientsOrder }) => {
-          if (!row.createdAt) return <span className="text-xs text-zinc-400">-</span>;
+          if (!row.createdAt) return <span className="text-xs text-muted-foreground">-</span>;
           return (
-            <span className="text-xs text-slate-500 whitespace-nowrap">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
               {formatInsertDate(row.createdAt, i18n.language)}
             </span>
           );
@@ -630,7 +627,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         cell: ({ row }: { row: ClientsOrder }) => (
           <div>
             <div
-              className={`font-bold ${isHistoryRow(row.status) ? 'text-zinc-400' : 'text-zinc-800'}`}
+              className={`font-bold ${isHistoryRow(row.status) ? 'text-muted-foreground' : 'text-foreground'}`}
             >
               {row.clientName}
             </div>
@@ -649,7 +646,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           const history = isHistoryRow(row.status);
           return (
             <span
-              className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-zinc-600'}`}
+              className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-muted-foreground' : 'text-foreground'}`}
             >
               {formatDiscountValue(row.discount, row.discountType, currency)}
             </span>
@@ -667,7 +664,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           <PricingCell
             value={Number(value)}
             isHistory={isHistoryRow(row.status)}
-            colorClass="text-zinc-700"
+            colorClass="text-foreground"
             currency={currency}
           />
         ),
@@ -718,7 +715,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           <PricingCell
             value={Number(value)}
             isHistory={isHistoryRow(row.status)}
-            colorClass="text-zinc-700"
+            colorClass="text-foreground"
             currency={currency}
           />
         ),
@@ -733,7 +730,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
           <PricingCell
             value={Number(value)}
             isHistory={isHistoryRow(row.status)}
-            colorClass="text-zinc-700"
+            colorClass="text-foreground"
             bold
             currency={currency}
           />
@@ -748,7 +745,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         headerClassName: 'min-w-[10rem]',
         cell: ({ row }: { row: ClientsOrder }) => (
           <span
-            className={`text-sm font-semibold ${isHistoryRow(row.status) ? 'text-zinc-400' : 'text-zinc-600'}`}
+            className={`text-sm font-semibold ${isHistoryRow(row.status) ? 'text-muted-foreground' : 'text-foreground'}`}
           >
             {row.paymentTerms === 'immediate' ? t('crm:paymentTerms.immediate') : row.paymentTerms}
           </span>
@@ -789,7 +786,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         onViewOffer(row.linkedOfferId as string);
                       }}
                       aria-label={t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })}
-                      className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
+                      className={TABLE_ROW_ACTION_BUTTON_CLASSNAME}
                     >
                       <i className="fa-solid fa-link"></i>
                     </button>
@@ -814,7 +811,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                         ? t('accounting:clientsOrders.editOrder')
                         : t('accounting:clientsOrders.viewOrder')
                     }
-                    className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
+                    className={TABLE_ROW_ACTION_BUTTON_CLASSNAME}
                   >
                     <i
                       className={`fa-solid ${row.status === 'draft' ? 'fa-pen-to-square' : 'fa-eye'}`}
@@ -1513,10 +1510,12 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
       <div className="space-y-4">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h2 className="text-2xl font-semibold text-zinc-800">
+            <h2 className="text-2xl font-semibold text-foreground">
               {t('accounting:clientsOrders.title')}
             </h2>
-            <p className="text-sm text-zinc-500">{t('accounting:clientsOrders.subtitle')}</p>
+            <p className="text-sm text-muted-foreground">
+              {t('accounting:clientsOrders.subtitle')}
+            </p>
           </div>
         </div>
       </div>
@@ -1530,7 +1529,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         initialFilterState={tableInitialFilterState}
         containerClassName="overflow-visible"
         rowClassName={(row: ClientsOrder) =>
-          isHistoryRow(row.status) ? 'bg-zinc-50 text-zinc-400' : 'hover:bg-zinc-50/50'
+          isHistoryRow(row.status) ? 'bg-muted text-muted-foreground' : 'hover:bg-muted/50'
         }
         onRowClick={(row: ClientsOrder) => openEditModal(row)}
       />
