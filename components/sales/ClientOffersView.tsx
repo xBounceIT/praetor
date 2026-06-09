@@ -51,7 +51,7 @@ import {
   buildSupplierQuoteQuickViewHref,
   resolveLinkedSupplierQuoteId,
 } from '../../utils/quickViewLinks';
-import { effectiveQuoteStatus, isTerminalQuoteStatus } from '../../utils/quoteStatus';
+import { effectiveQuoteStatus } from '../../utils/quoteStatus';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DateField from '../shared/DateField';
@@ -423,17 +423,15 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     setProductRowToDelete(null);
   }, []);
 
-  // Derived #779 status: prefer the server-computed effectiveStatus; fall back to the shared
-  // status model for optimistic updates that haven't round-tripped yet. Accepted/denied are
-  // frozen and never expire.
+  // Derived #779 status: the server-computed effectiveStatus is OR-combined with the local date
+  // derivation, so a row that crosses its expiration while the list sits unrefreshed (midnight
+  // rollover) still locks, and a server-flagged row stays locked under clock skew. Terminal
+  // accepted/denied never expire — the shared model returns them unchanged for any date.
   const isOfferExpired = useCallback(
-    (offer: ClientOffer) => {
-      if (offer.effectiveStatus) return offer.effectiveStatus === 'expired';
-      return (
-        effectiveQuoteStatus(offer.status, isDateOnlyBeforeToday(offer.expirationDate, today)) ===
-        'expired'
-      );
-    },
+    (offer: ClientOffer) =>
+      offer.effectiveStatus === 'expired' ||
+      effectiveQuoteStatus(offer.status, isDateOnlyBeforeToday(offer.expirationDate, today)) ===
+        'expired',
     [today],
   );
 
@@ -445,15 +443,11 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   );
   const isReadOnly = baseReadOnly || previewVersion !== null;
   const isClientLocked = Boolean(editingOffer?.linkedQuoteId);
-  // The expiration DateField stays enabled while the form is otherwise read-only, so a sent or
-  // expired offer can have its validity renewed; terminal accepted/denied offers never expire
-  // and stay fully frozen (issue #779).
-  const expirationEditableWhileReadOnly = Boolean(
-    editingOffer &&
-      isReadOnly &&
-      previewVersion === null &&
-      !isTerminalQuoteStatus(editingOffer.status),
-  );
+  // Expired offers only (quote-style): the expiration DateField stays enabled while the rest of
+  // the form is read-only, because extending the date is the one exit from `expired` (#779).
+  // Valid sent offers stay fully read-only in the form — exposing the date there invited no-op
+  // submits that wrote needless version snapshots and audit rows.
+  const expirationEditableWhileReadOnly = isEditingExpired && previewVersion === null;
 
   const readOnlyReason = isEditingExpired
     ? t('sales:clientOffers.readOnlyExpired', {
@@ -752,9 +746,9 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[9rem]',
       cell: ({ row }) => {
-        // Prefer the server effective status so `expired` renders correctly (#779).
-        const badgeStatus = (row.effectiveStatus ??
-          (isOfferExpired(row) ? 'expired' : row.status)) as StatusType;
+        // Single expiry policy: the same helper that dims rows and disables actions also picks
+        // the badge, so the badge can never disagree with the row behavior (#779).
+        const badgeStatus = (isOfferExpired(row) ? 'expired' : row.status) as StatusType;
         return <StatusBadge type={badgeStatus} label={getStatusLabel(badgeStatus)} />;
       },
       filterFormat: (value) => getStatusLabel(String(value ?? '')),
@@ -780,6 +774,11 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         const expiredTitle = t('sales:clientOffers.expiredActionsDisabled', {
           defaultValue: 'Expired offers cannot change status; extend the expiration date.',
         });
+        const deleteTitle = expired
+          ? t('sales:clientOffers.expiredCannotDelete', {
+              defaultValue: 'Expired offers cannot be deleted',
+            })
+          : t('common:buttons.delete');
         const canRevertRowToDraft =
           canRevertTerminalStatus &&
           Boolean(onRevertOfferToDraft) &&
@@ -843,7 +842,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                       aria-label={t('sales:clientOffers.markSent', {
                         defaultValue: 'Mark as sent',
                       })}
-                      className={`p-2 rounded-lg transition-all ${expired ? 'cursor-not-allowed opacity-50 text-blue-700' : 'text-blue-700 hover:text-blue-600 hover:bg-blue-50'}`}
+                      className={`p-2 rounded-lg transition-all text-blue-700 ${expired ? 'cursor-not-allowed opacity-50' : 'hover:text-blue-600 hover:bg-blue-50'}`}
                     >
                       <i className="fa-solid fa-paper-plane"></i>
                     </button>
@@ -872,7 +871,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         aria-label={t('sales:clientOffers.markAccepted', {
                           defaultValue: 'Mark as accepted',
                         })}
-                        className={`p-2 rounded-lg transition-all ${expired ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                        className={`p-2 rounded-lg transition-all text-emerald-700 ${expired ? 'cursor-not-allowed opacity-50' : 'hover:text-emerald-600 hover:bg-emerald-50'}`}
                       >
                         <i className="fa-solid fa-check"></i>
                       </button>
@@ -900,7 +899,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         aria-label={t('sales:clientOffers.markDenied', {
                           defaultValue: 'Mark as denied',
                         })}
-                        className={`p-2 rounded-lg transition-all ${expired ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
+                        className={`p-2 rounded-lg transition-all text-red-600 ${expired ? 'cursor-not-allowed opacity-50' : 'hover:text-red-600 hover:bg-red-50'}`}
                       >
                         <i className="fa-solid fa-xmark"></i>
                       </button>
@@ -980,16 +979,18 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (expired) return;
                         dispatch({ type: 'promptDelete', offer: row });
                       }}
-                      aria-label={t('common:buttons.delete')}
-                      className="p-2 text-red-600 rounded-lg transition-all hover:text-red-600 hover:bg-red-50"
+                      disabled={expired}
+                      aria-label={deleteTitle}
+                      className={`p-2 text-red-600 rounded-lg transition-all ${expired ? 'cursor-not-allowed opacity-50' : 'hover:text-red-600 hover:bg-red-50'}`}
                     >
                       <i className="fa-solid fa-trash-can"></i>
                     </button>
                   </span>
                 </TooltipTrigger>
-                <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
+                <TooltipContent>{deleteTitle}</TooltipContent>
               </Tooltip>
             )}
           </div>
@@ -2207,10 +2208,10 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         defaultRowsPerPage={5}
         onRowClick={(row) => openEditModal(row)}
         rowClassName={(row) =>
-          // Expired offers are dimmed like the quotes views' history rows; they stay clickable —
-          // the modal is where the expiration gets extended (issue #779).
+          // Mirror the quotes views' expired styling (#779): a light red tint; rows stay
+          // clickable — the modal is where the expiration gets extended.
           isOfferExpired(row)
-            ? 'bg-zinc-50 text-zinc-400 hover:bg-zinc-100 cursor-pointer'
+            ? 'hover:bg-zinc-50/50 cursor-pointer bg-red-50/30'
             : 'cursor-pointer hover:bg-zinc-50/50'
         }
         initialFilterState={tableInitialFilterState}

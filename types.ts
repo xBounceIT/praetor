@@ -625,7 +625,7 @@ export interface ClientOffer {
   status: 'draft' | 'sent' | 'accepted' | 'denied';
   // Derived (issue #779): `expired` overrides a non-terminal stored status once the offer's own
   // expiration date has passed; accepted/denied are frozen and never expire. Server-computed.
-  effectiveStatus?: 'draft' | 'sent' | 'accepted' | 'denied' | 'expired';
+  effectiveStatus?: ClientOffer['status'] | 'expired';
   deliveryDate: string | null;
   expirationDate: string;
   notes?: string;

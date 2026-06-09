@@ -994,6 +994,7 @@ const AppContent: React.FC = () => {
   const clientOfferFilterIdRef = useRef(clientOfferFilterId);
   const supplierQuoteFilterIdRef = useRef(supplierQuoteFilterId);
   const projectsRef = useRef(projects);
+  const quotesRef = useRef(quotes);
   // Sync in render rather than a passive effect: an in-flight promise can
   // resume between commit and useEffect (microtask vs effect-task), reading
   // a stale ref. React allows writing to refs during render as long as the
@@ -1002,6 +1003,7 @@ const AppContent: React.FC = () => {
   clientOfferFilterIdRef.current = clientOfferFilterId;
   supplierQuoteFilterIdRef.current = supplierQuoteFilterId;
   projectsRef.current = projects;
+  quotesRef.current = quotes;
 
   const clearAuthScopedAppState = useCallback(() => {
     // Bump cancellation tokens before any setter call so in-flight async
@@ -1163,6 +1165,7 @@ const AppContent: React.FC = () => {
         // latest value instead of the snapshot captured at factory creation.
         getClientQuoteFilterId: () => clientQuoteFilterIdRef.current,
         getClientOfferFilterId: () => clientOfferFilterIdRef.current,
+        getQuotes: () => quotesRef.current,
         setQuotes,
         setClientOffers,
         setClientsOrders,
@@ -2735,6 +2738,16 @@ const AppContent: React.FC = () => {
                     setQuotes(quotesData);
                     setClientOffers(offersData);
                     setClientsOrders(ordersData);
+                    // A restore rewrites the snapshot status while the supplier link survives
+                    // it, so a linked supplier quote's mirrored status can change too (#779).
+                    // Best-effort: a refresh failure must not fail the completed restore.
+                    if (restored.linkedSupplierQuoteId) {
+                      try {
+                        await supplierQuoteHandlers.refreshSupplierQuoteFlow();
+                      } catch (refreshErr) {
+                        console.error('Failed to refresh supplier data:', refreshErr);
+                      }
+                    }
                   }}
                   onDeleteQuote={handleDeleteQuote}
                   onCreateOffer={handleCreateClientOfferFromQuote}

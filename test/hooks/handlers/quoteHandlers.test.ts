@@ -130,6 +130,7 @@ describe('makeQuoteHandlers', () => {
       // Getter reads the LATEST holder value — this is the invariant we want.
       getClientQuoteFilterId: () => filterIdHolder.get(),
       getClientOfferFilterId: () => null,
+      getQuotes: () => [],
       setQuotes: makeStubSetter<QuoteLike>([]).setter,
       setClientOffers: makeStubSetter<OfferLike>([]).setter,
       setClientsOrders: makeStubSetter<OrderLike>([]).setter,
@@ -164,6 +165,7 @@ describe('makeQuoteHandlers', () => {
     const handlers = makeQuoteHandlers({
       getClientQuoteFilterId: () => filterIdHolder.get(),
       getClientOfferFilterId: () => null,
+      getQuotes: () => [],
       setQuotes: makeStubSetter<QuoteLike>([]).setter,
       setClientOffers: makeStubSetter<OfferLike>([]).setter,
       setClientsOrders: makeStubSetter<OrderLike>([]).setter,
@@ -192,6 +194,7 @@ describe('makeQuoteHandlers', () => {
     const handlers = makeQuoteHandlers({
       getClientQuoteFilterId: () => null,
       getClientOfferFilterId: () => filterIdHolder.get(),
+      getQuotes: () => [],
       setQuotes: makeStubSetter<QuoteLike>([]).setter,
       setClientOffers: makeStubSetter<OfferLike>([]).setter,
       setClientsOrders: makeStubSetter<OrderLike>([]).setter,
@@ -219,6 +222,7 @@ describe('makeQuoteHandlers', () => {
     const handlers = makeQuoteHandlers({
       getClientQuoteFilterId: () => null,
       getClientOfferFilterId: () => filterIdHolder.get(),
+      getQuotes: () => [],
       setQuotes: makeStubSetter<QuoteLike>([]).setter,
       setClientOffers: makeStubSetter<OfferLike>([]).setter,
       setClientsOrders: makeStubSetter<OrderLike>([]).setter,
@@ -243,6 +247,7 @@ describe('makeQuoteHandlers', () => {
     const handlers = makeQuoteHandlers({
       getClientQuoteFilterId: () => null,
       getClientOfferFilterId: () => filterIdHolder.get(),
+      getQuotes: () => [],
       setQuotes: makeStubSetter<QuoteLike>([]).setter,
       setClientOffers: makeStubSetter<OfferLike>([]).setter,
       setClientsOrders: makeStubSetter<OrderLike>([]).setter,
@@ -267,6 +272,7 @@ describe('makeQuoteHandlers', () => {
     const handlers = makeQuoteHandlers({
       getClientQuoteFilterId: () => null,
       getClientOfferFilterId: () => null,
+      getQuotes: () => [],
       setQuotes: setter.setter,
       setClientOffers: makeStubSetter<OfferLike>([]).setter,
       setClientsOrders: makeStubSetter<OrderLike>([]).setter,
@@ -292,6 +298,7 @@ describe('makeQuoteHandlers', () => {
     const handlers = makeQuoteHandlers({
       getClientQuoteFilterId: () => null,
       getClientOfferFilterId: () => null,
+      getQuotes: () => [],
       setQuotes: setter.setter,
       setClientOffers: makeStubSetter<OfferLike>([]).setter,
       setClientsOrders: makeStubSetter<OrderLike>([]).setter,

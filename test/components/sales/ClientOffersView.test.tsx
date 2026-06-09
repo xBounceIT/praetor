@@ -785,4 +785,36 @@ describe('<ClientOffersView /> expired-offer handling (issue #779)', () => {
     // The still-past date cannot revalidate the offer — rejected with a toast, no API call.
     expect(onUpdateOffer).not.toHaveBeenCalled();
   });
+
+  test('the delete action is disabled on an expired draft offer', async () => {
+    const user = userEvent.setup();
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[buildOffer({ id: 'O-PAST', status: 'draft', expirationDate: '2000-01-01' })]}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'table.rowActions' }));
+
+    // Mirrors the quotes view: expired documents cannot be deleted, only revalidated.
+    const trashIcon = document.querySelector('.fa-trash-can');
+    expect(trashIcon).not.toBeNull();
+    expect(trashIcon?.closest('button')).toBeDisabled();
+  });
+
+  test('a valid sent offer stays fully read-only — no submit button, date field disabled', async () => {
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[buildOffer({ id: 'O-SENT', status: 'sent', expirationDate: '2999-12-31' })]}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('O-SENT'));
+    await screen.findByRole('button', { name: 'common:buttons.cancel' });
+    // The extend-only submit path is for EXPIRED offers; exposing it on valid sent offers let a
+    // no-op "Update" click write needless version snapshots and audit rows.
+    expect(screen.queryByRole('button', { name: 'common:buttons.update' })).toBeNull();
+    expect(document.getElementById('client-offer-expiration-date')).toBeDisabled();
+  });
 });

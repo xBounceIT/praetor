@@ -252,6 +252,7 @@
     "statusDenied": "Rifiutata",
     "statusExpired": "Scaduta",
     "expiredActionsDisabled": "Le offerte scadute non possono cambiare stato; estendi la data di scadenza.",
+    "expiredCannotDelete": "Le offerte scadute non possono essere eliminate",
     "expirationExtendInvalid": "Imposta una data di scadenza odierna o successiva per riconvalidare l'offerta",
     "markSent": "Segna come inviata",
     "markAccepted": "Segna come accettata",

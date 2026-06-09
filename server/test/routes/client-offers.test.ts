@@ -277,4 +277,67 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).effectiveStatus).toBe('accepted');
   });
+
+  test('400 rejects an unknown status spelling instead of hitting the DB CHECK constraint', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'draft' }));
+
+    const res = await putOffer({ status: 'bogus' });
+    expect(res.statusCode).toBe(400);
+    expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test("400 rejects the derived-only 'expired' round-tripped from a GET response", async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'draft' }));
+
+    const res = await putOffer({ status: 'expired' });
+    expect(res.statusCode).toBe(400);
+    expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test("400 rejects 'offer' (quote-pipeline-only status)", async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'draft' }));
+
+    const res = await putOffer({ status: 'offer' });
+    expect(res.statusCode).toBe(400);
+    expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 folds a legacy spelling to canonical before the write', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'sent' }));
+    coUpdateMock.mockResolvedValue(updatedOffer({ status: 'denied' }));
+
+    const res = await putOffer({ status: 'rejected' });
+    expect(res.statusCode).toBe(200);
+    const patch = coUpdateMock.mock.calls[0][1] as { status: string | null };
+    expect(patch.status).toBe('denied');
+  });
+
+  test('200 a legacy no-op resend on an expired offer writes the CANONICAL value, not the raw one', async () => {
+    // 'received' normalizes to 'sent' — the freeze tolerates it as a no-op, and the write must
+    // store the folded value or the CHECK constraint would 500.
+    coFindExistingMock.mockResolvedValue(gate({ status: 'sent', expirationDate: '2000-01-01' }));
+    coUpdateMock.mockResolvedValue(updatedOffer({ status: 'sent', expirationDate: '2000-01-01' }));
+
+    const res = await putOffer({ status: 'received' });
+    expect(res.statusCode).toBe(200);
+    const patch = coUpdateMock.mock.calls[0][1] as { status: string | null };
+    expect(patch.status).toBe('sent');
+  });
+
+  test('409 terminal accepted offers cannot flip to denied via a plain status PUT', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'accepted' }));
+
+    const res = await putOffer({ status: 'denied' });
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('revert-to-draft');
+    expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 terminal accepted offers cannot walk back to sent (two-step draft bypass)', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'accepted' }));
+
+    const res = await putOffer({ status: 'sent' });
+    expect(res.statusCode).toBe(409);
+    expect(coUpdateMock).not.toHaveBeenCalled();
+  });
 });

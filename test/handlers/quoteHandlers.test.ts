@@ -125,6 +125,7 @@ const buildHandlers = (overrides: Record<string, unknown> = {}) => {
   const handlers = makeQuoteHandlers({
     getClientQuoteFilterId: () => clientQuoteFilterId.get(),
     getClientOfferFilterId: () => clientOfferFilterId.get(),
+    getQuotes: () => quotes.get() as never,
     setQuotes: quotes.setter as never,
     setClientOffers: clientOffers.setter as never,
     setClientsOrders: clientsOrders.setter as never,
@@ -267,11 +268,11 @@ describe('makeQuoteHandlers', () => {
     apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
   };
 
-  test('updateQuote refreshes supplier quotes when the status changes', async () => {
+  test('updateQuote refreshes supplier quotes when a linked quote changes status', async () => {
     stubQuoteUpdateFlow();
     const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
     const ctx = buildHandlers({
-      quotes: [{ id: 'q1', status: 'offer' }],
+      quotes: [{ id: 'q1', status: 'offer', linkedSupplierQuoteId: 'sq-9' }],
       refreshSupplierQuoteFlow,
     });
 
@@ -303,11 +304,68 @@ describe('makeQuoteHandlers', () => {
     expect(refreshSupplierQuoteFlow).not.toHaveBeenCalled();
   });
 
+  test('updateQuote does NOT refresh supplier quotes when an unlinked quote saves its full form', async () => {
+    stubQuoteUpdateFlow();
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'draft' }],
+      refreshSupplierQuoteFlow,
+    });
+
+    // The edit modal spreads formData, so status and a null link ride along on EVERY save —
+    // the gate must key on the actual link, not on which request fields are present.
+    await ctx.handlers.updateQuote('q1', {
+      status: 'draft',
+      linkedSupplierQuoteId: null,
+      notes: 'edited',
+    } as never);
+    expect(refreshSupplierQuoteFlow).not.toHaveBeenCalled();
+  });
+
+  test('updateQuote refreshes supplier quotes when the link is removed', async () => {
+    stubQuoteUpdateFlow();
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'draft', linkedSupplierQuoteId: 'sq-9' }],
+      refreshSupplierQuoteFlow,
+    });
+
+    // The response carries null after an unlink — only the pre-await snapshot knows sq-9 just
+    // became un-synced.
+    await ctx.handlers.updateQuote('q1', { linkedSupplierQuoteId: null } as never);
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
+
+  test('deleteQuote refreshes supplier quotes when the deleted quote was linked', async () => {
+    apiMocks.quotesDelete.mockImplementation(() => Promise.resolve());
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'sent', linkedSupplierQuoteId: 'sq-9' }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.deleteQuote('q1');
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+    expect(ctx.quotes.get()).toHaveLength(0);
+  });
+
+  test('deleteQuote does NOT refresh supplier quotes for an unlinked quote', async () => {
+    apiMocks.quotesDelete.mockImplementation(() => Promise.resolve());
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'draft' }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.deleteQuote('q1');
+    expect(refreshSupplierQuoteFlow).not.toHaveBeenCalled();
+  });
+
   test('updateQuote still resolves when the supplier-quote refresh fails (best-effort)', async () => {
     stubQuoteUpdateFlow();
     const refreshSupplierQuoteFlow = mock(() => Promise.reject(new Error('supplier boom')));
     const ctx = buildHandlers({
-      quotes: [{ id: 'q1', status: 'offer' }],
+      quotes: [{ id: 'q1', status: 'offer', linkedSupplierQuoteId: 'sq-9' }],
       refreshSupplierQuoteFlow,
     });
     const restore = silenceConsole();

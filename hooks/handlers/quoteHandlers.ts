@@ -24,6 +24,9 @@ import { toastError } from '../../utils/toast';
 export type QuoteHandlersDeps = {
   getClientQuoteFilterId: () => string | null;
   getClientOfferFilterId: () => string | null;
+  // Read BEFORE awaited writes: whether a quote carried a supplier link decides if the
+  // supplier-quotes cache must refresh after an update/unlink/delete.
+  getQuotes: () => Quote[];
   setQuotes: React.Dispatch<React.SetStateAction<Quote[]>>;
   setClientOffers: React.Dispatch<React.SetStateAction<ClientOffer[]>>;
   setClientsOrders: React.Dispatch<React.SetStateAction<ClientsOrder[]>>;
@@ -38,6 +41,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
   const {
     getClientQuoteFilterId,
     getClientOfferFilterId,
+    getQuotes,
     setQuotes,
     setClientOffers,
     setClientsOrders,
@@ -69,10 +73,10 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
   };
 
   // A linked supplier quote derives its visible status / isStatusSynced from its client quote at
-  // read time (#779), so creating or changing that link — or changing the client quote's status —
-  // can leave the separately-cached supplier quotes table showing stale unsynced/draft state until
-  // a full module reload. Refresh it too, best-effort: a refresh failure must not fail the primary
-  // client-quote write (mirrors createClientsOrderFromOffer below).
+  // read time (#779), so creating, changing, or severing that link — or changing the client
+  // quote's status — can leave the separately-cached supplier quotes table showing stale
+  // unsynced/draft state until a full module reload. Refresh it too, best-effort: a refresh
+  // failure must not fail the primary write.
   const refreshLinkedSupplierQuotes = async () => {
     try {
       await refreshSupplierQuoteFlow();
@@ -96,6 +100,9 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
 
   const updateQuote = async (id: string, updates: Partial<Quote>) => {
     try {
+      // Captured before the await: after an unlink the response carries null, indistinguishable
+      // from never-linked — yet the previously linked supplier quote just became un-synced.
+      const wasLinked = getQuotes().some((q) => q.id === id && q.linkedSupplierQuoteId != null);
       const updated = await api.quotes.update(id, updates);
       // Re-read the filter via the getter so we observe the latest value, not
       // the one captured when this handler was created. Navigation effects in
@@ -103,12 +110,16 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       if (getClientQuoteFilterId() === id) {
         setClientQuoteFilterId(updated.id);
       }
-      await refreshClientQuoteFlow();
-      // Only a status change or a link change can flip a linked supplier quote's synced status —
-      // a plain content edit (notes/items) cannot — so scope the extra fetch to those updates.
-      if (updates.status !== undefined || updates.linkedSupplierQuoteId !== undefined) {
-        await refreshLinkedSupplierQuotes();
-      }
+      // Only a quote that is (or was) linked can stale the supplier-quotes cache — its visible
+      // status is derived from this client quote at read time (#779). Gating on the LINK rather
+      // than the request fields matters: the edit form spreads formData, so `updates.status` is
+      // defined on every save and would refetch for plain edits of unlinked quotes. The two
+      // flows set disjoint state, so they run in parallel.
+      const supplierRefreshNeeded = updated.linkedSupplierQuoteId != null || wasLinked;
+      await Promise.all([
+        refreshClientQuoteFlow(),
+        supplierRefreshNeeded ? refreshLinkedSupplierQuotes() : Promise.resolve(),
+      ]);
     } catch (err) {
       console.error('Failed to update quote:', err);
       throw err;
@@ -117,8 +128,15 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
 
   const deleteQuote = async (id: string) => {
     try {
+      // Read before the awaits — after the delete the quote is gone from state. Deleting a
+      // linked client quote un-syncs its supplier quote server-side (the reverse-lookup row
+      // vanishes), the same staleness class the update path refreshes for.
+      const wasLinked = getQuotes().some((q) => q.id === id && q.linkedSupplierQuoteId != null);
       await api.quotes.delete(id);
       setQuotes((prev) => prev.filter((q) => q.id !== id));
+      if (wasLinked) {
+        await refreshLinkedSupplierQuotes();
+      }
     } catch (err) {
       console.error('Failed to delete quote:', err);
       throw err;
@@ -240,11 +258,8 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       const order = await api.clientsOrders.create(orderData);
       setClientsOrders((prev) => [...prev, order]);
       setActiveView('accounting/clients-orders');
-      try {
-        await refreshSupplierQuoteFlow();
-      } catch (refreshErr) {
-        console.error('Failed to refresh supplier data:', refreshErr);
-      }
+      // Order creation can auto-create supplier orders and consume supplier quotes.
+      await refreshLinkedSupplierQuotes();
     } catch (err) {
       console.error('Failed to create order from offer:', err);
       toastError((err as Error).message || 'Failed to create order from offer');

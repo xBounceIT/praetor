@@ -252,6 +252,7 @@
     "statusDenied": "Denied",
     "statusExpired": "Expired",
     "expiredActionsDisabled": "Expired offers cannot change status; extend the expiration date.",
+    "expiredCannotDelete": "Expired offers cannot be deleted",
     "expirationExtendInvalid": "Set an expiration date of today or later to revalidate the offer",
     "markSent": "Mark as sent",
     "markAccepted": "Mark as accepted",
