@@ -256,6 +256,23 @@ describe('<SupplierQuotesView /> deep-link filter', () => {
   });
 });
 
+// Opens the New-quote dialog and fills every required field (supplier, code, one line item).
+// Pass a customer name to also pick it from the Customer combobox. The caller must render with
+// `quotes={[]}` so the supplier/customer names are unambiguous (no table rows behind the modal).
+const fillNewQuoteForm = (customerName?: string) => {
+  fireEvent.click(screen.getByText('sales:supplierQuotes.addQuote'));
+  fireEvent.click(document.getElementById('supplier-quote-supplier') as HTMLElement);
+  fireEvent.click(screen.getByText('Acme Supplies'));
+  if (customerName) {
+    fireEvent.click(document.getElementById('supplier-quote-client') as HTMLElement);
+    fireEvent.click(screen.getByText(customerName));
+  }
+  fireEvent.change(document.getElementById('supplier-quote-code') as HTMLInputElement, {
+    target: { value: 'SQ-NEW' },
+  });
+  fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
+};
+
 // The customer link used to be optional (issue #759); issue #777 makes it mandatory.
 describe('<SupplierQuotesView /> mandatory customer association (issue #777)', () => {
   test('marks the Customer field required and drops the empty "No customer" option', () => {
@@ -300,16 +317,9 @@ describe('<SupplierQuotesView /> mandatory customer association (issue #777)', (
     const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
     // No table rows so the supplier name is unambiguous in the combobox.
     render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
-    fireEvent.click(screen.getByText('sales:supplierQuotes.addQuote'));
 
-    // Fill every OTHER required field (supplier, code, one item); leave only the customer empty.
-    fireEvent.click(document.getElementById('supplier-quote-supplier') as HTMLElement);
-    fireEvent.click(screen.getByText('Acme Supplies'));
-    fireEvent.change(document.getElementById('supplier-quote-code') as HTMLInputElement, {
-      target: { value: 'SQ-NEW' },
-    });
-    fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
-
+    // Fill every required field except the customer.
+    fillNewQuoteForm();
     fireEvent.click(screen.getByText('common:buttons.save'));
 
     // The create path is blocked and the customer-required error surfaces.
@@ -321,17 +331,8 @@ describe('<SupplierQuotesView /> mandatory customer association (issue #777)', (
     const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
     // No table rows (quotes: []) so the supplier/customer names are unambiguous in the combobox.
     render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
-    fireEvent.click(screen.getByText('sales:supplierQuotes.addQuote'));
 
-    fireEvent.click(document.getElementById('supplier-quote-supplier') as HTMLElement);
-    fireEvent.click(screen.getByText('Acme Supplies'));
-    fireEvent.click(document.getElementById('supplier-quote-client') as HTMLElement);
-    fireEvent.click(screen.getByText('Globex Corp'));
-    fireEvent.change(document.getElementById('supplier-quote-code') as HTMLInputElement, {
-      target: { value: 'SQ-NEW' },
-    });
-    fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
-
+    fillNewQuoteForm('Globex Corp');
     fireEvent.click(screen.getByText('common:buttons.save'));
 
     await waitFor(() => expect(onAddQuote).toHaveBeenCalledTimes(1));
