@@ -286,8 +286,7 @@
     "supplier": "Fornitore",
     "selectSupplier": "Seleziona fornitore",
     "client": "Cliente",
-    "selectClient": "Seleziona cliente (opzionale)",
-    "noClient": "Nessun cliente",
+    "selectClient": "Seleziona cliente",
     "quoteCode": "Codice Preventivo",
     "quoteDetails": "Dettagli Preventivo",
     "paymentTerms": "Termini di Pagamento",
@@ -324,6 +323,7 @@
     "restoreQuote": "Ripristina preventivo",
     "errors": {
       "supplierRequired": "Il fornitore è obbligatorio",
+      "clientRequired": "Il cliente è obbligatorio",
       "quoteCodeRequired": "Il codice preventivo è obbligatorio",
       "itemsRequired": "Almeno un articolo è obbligatorio"
     },

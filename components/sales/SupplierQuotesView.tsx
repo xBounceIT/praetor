@@ -464,18 +464,16 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     [suppliers],
   );
 
-  // The customer link is optional (issue #759); the leading empty-id option clears it.
-  // Keep an already-linked-but-now-disabled client visible so editing an existing quote doesn't
-  // hide its customer; otherwise only offer active clients.
+  // The customer link is mandatory (issue #777): every supplier quote must name a customer, so
+  // there is no empty "No customer" option — the field starts on the placeholder and submission is
+  // blocked until one is picked (see handleSubmit). Keep an already-linked-but-now-disabled client
+  // visible so editing an existing quote doesn't hide its customer; otherwise only offer active ones.
   const clientOptions = useMemo(() => {
-    const options = [
-      { id: '', name: t('sales:supplierQuotes.noClient', { defaultValue: 'No customer' }) },
-      ...clients.flatMap((client) =>
-        !client.isDisabled || client.id === editingQuote?.clientId
-          ? [{ id: client.id, name: client.name }]
-          : [],
-      ),
-    ];
+    const options = clients.flatMap((client) =>
+      !client.isDisabled || client.id === editingQuote?.clientId
+        ? [{ id: client.id, name: client.name }]
+        : [],
+    );
     // The linked client may be missing from a user-scoped /clients list (no crm.clients_all.view
     // and not assigned to it). Synthesize an option from the quote's stored name so the select
     // shows the customer instead of falling back to the placeholder.
@@ -484,7 +482,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       options.push({ id: linkedId, name: editingQuote?.clientName || linkedId });
     }
     return options;
-  }, [clients, editingQuote, t]);
+  }, [clients, editingQuote]);
 
   const handleClientChange = useCallback(
     (clientId: string) => {
@@ -493,6 +491,10 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         type: 'patchFormData',
         value: { clientId: clientId || null, clientName: client?.name || null },
       });
+      // Mirror the Quote Code field: clear the required-customer error as soon as one is chosen.
+      if (clientId) {
+        dispatch({ type: 'clearError', key: 'clientId' });
+      }
     },
     [clients],
   );
@@ -977,6 +979,11 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         defaultValue: 'Supplier is required',
       });
     }
+    if (!formData.clientId) {
+      nextErrors.clientId = t('sales:supplierQuotes.errors.clientRequired', {
+        defaultValue: 'Customer is required',
+      });
+    }
     if (!formData.id?.trim()) {
       nextErrors.id = t('sales:supplierQuotes.errors.quoteCodeRequired', {
         defaultValue: 'Quote Code is required',
@@ -1167,20 +1174,23 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       />
                       <FieldError className="text-xs">{errors.supplierId}</FieldError>
                     </Field>
-                    <Field>
+                    <Field data-invalid={Boolean(errors.clientId)}>
                       <SelectControl
                         id="supplier-quote-client"
                         options={clientOptions}
                         value={formData.clientId || ''}
                         onChange={(value) => handleClientChange(value as string)}
                         placeholder={t('sales:supplierQuotes.selectClient', {
-                          defaultValue: 'Select a customer (optional)',
+                          defaultValue: 'Select a customer',
                         })}
                         searchable={true}
                         disabled={isReadOnly}
                         label={t('sales:supplierQuotes.client', { defaultValue: 'Customer' })}
+                        required
                         buttonClassName="h-9"
+                        className={errors.clientId ? 'border-red-300' : ''}
                       />
+                      <FieldError className="text-xs">{errors.clientId}</FieldError>
                     </Field>
                     <Field data-invalid={Boolean(errors.id)}>
                       <FieldLabel htmlFor="supplier-quote-code" required>
