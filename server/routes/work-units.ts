@@ -40,6 +40,7 @@ const workUnitSchema = {
     id: { type: 'string' },
     name: { type: 'string' },
     managers: { type: 'array', items: managerSchema },
+    members: { type: 'array', items: managerSchema },
     description: { type: ['string', 'null'] },
     isDisabled: { type: 'boolean' },
     userCount: { type: 'number' },

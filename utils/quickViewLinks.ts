@@ -55,3 +55,14 @@ export const buildProductQuickViewHref = (
   productId && productIds.has(productId)
     ? buildViewDeepLink('catalog/internal-listing', productId)
     : null;
+
+// Deep-link href to a supplier order's pre-filtered page, guarded like
+// buildProductQuickViewHref above. Used by the client-order line shortcut that
+// jumps to the supplier order auto-created behind a supplier-quoted line.
+export const buildSupplierOrderQuickViewHref = (
+  supplierOrderId: string | null | undefined,
+  supplierOrderIds: ReadonlySet<string>,
+): string | null =>
+  supplierOrderId && supplierOrderIds.has(supplierOrderId)
+    ? buildViewDeepLink('accounting/supplier-orders', supplierOrderId)
+    : null;

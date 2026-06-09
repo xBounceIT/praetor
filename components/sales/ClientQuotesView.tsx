@@ -38,6 +38,7 @@ import {
   formatMolPercentage,
   getDurationDisplayValue,
   getItemPricingContext,
+  MOL_PERCENTAGE_DECIMALS,
   normalizeDurationUnit,
   type PricingTotals,
   parseDurationValueToMonths,
@@ -268,6 +269,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     isDeleting,
   } = state;
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [productRowToDelete, setProductRowToDelete] = useState<number | null>(null);
 
   const getStatusLabel = useCallback(
     (status: string) => {
@@ -386,6 +388,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   const closeModal = useCallback(() => {
     dispatch({ type: 'closeModal' });
     setPreviewVersion(null);
+    setProductRowToDelete(null);
   }, []);
 
   const openAddModal = () => {
@@ -1798,7 +1801,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 type="button"
                                 variant="ghost"
                                 size="icon-sm"
-                                onClick={() => removeProductRow(index)}
+                                onClick={() => setProductRowToDelete(index)}
                                 disabled={isReadOnly}
                                 className="mt-5 shrink-0 text-muted-foreground hover:text-destructive"
                               >
@@ -1925,7 +1928,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 <div className="flex items-center gap-1">
                                   <ValidatedNumberInput
                                     value={molPercentage}
-                                    formatDecimals={1}
+                                    formatDecimals={MOL_PERCENTAGE_DECIMALS}
                                     onValueChange={handleMolChange}
                                     disabled={isReadOnly}
                                     className="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1962,8 +1965,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 </div>
                               </div>
                             </div>
-                            <div className="hidden lg:flex gap-2 items-center">
-                              <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center pt-5">
+                            <div className="hidden lg:flex gap-2 items-center pt-5">
+                              <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center">
                                 <div className="relative col-span-3 min-w-0">
                                   {canViewSupplierQuotes && (
                                     <QuickViewLinkButton
@@ -2108,7 +2111,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 <div className="col-span-1 flex items-center justify-center gap-1">
                                   <ValidatedNumberInput
                                     value={molPercentage}
-                                    formatDecimals={1}
+                                    formatDecimals={MOL_PERCENTAGE_DECIMALS}
                                     onValueChange={handleMolChange}
                                     disabled={isReadOnly}
                                     className="w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2137,7 +2140,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                                 type="button"
                                 variant="ghost"
                                 size="icon-sm"
-                                onClick={() => removeProductRow(index)}
+                                onClick={() => setProductRowToDelete(index)}
                                 disabled={isReadOnly}
                                 className="shrink-0 text-muted-foreground hover:text-destructive"
                               >
@@ -2334,6 +2337,21 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         description={t('sales:clientQuotes.deleteConfirm', {
           clientName: quoteToDelete?.clientName,
         })}
+      />
+
+      {/* Line-item (product) delete confirmation */}
+      <DeleteConfirmModal
+        isOpen={productRowToDelete !== null}
+        onClose={() => setProductRowToDelete(null)}
+        onConfirm={() => {
+          if (productRowToDelete !== null) {
+            removeProductRow(productRowToDelete);
+          }
+          setProductRowToDelete(null);
+        }}
+        title={t('sales:clientQuotes.removeProductTitle')}
+        description={t('sales:clientQuotes.removeProductConfirm')}
+        zIndex={70}
       />
 
       <div className="space-y-4">

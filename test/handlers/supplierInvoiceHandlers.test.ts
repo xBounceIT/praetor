@@ -197,6 +197,57 @@ describe('makeSupplierInvoiceHandlers', () => {
     expect(setActiveView).toHaveBeenCalledWith('accounting/supplier-invoices');
   });
 
+  test('createFromOrder carries the line duration and scales the total by it (issue #776/#775)', async () => {
+    apiMocks.supplierInvoicesCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({ id: 'si-new', ...(data as object) }),
+    );
+    const handlers = makeSupplierInvoiceHandlers({
+      setSupplierInvoices: makeStubSetter<SupplierInvoiceLike>([]).setter,
+      setActiveView: mock(() => {}) as never,
+    });
+
+    await handlers.createFromOrder({
+      id: 'order-dur',
+      supplierId: 'sup-1',
+      supplierName: 'Acme',
+      paymentTerms: '30',
+      notes: '',
+      items: [
+        // 12-month service: the invoice total must reflect the duration → 2 * 100 * 12 = 2400,
+        // not 200 (the pre-fix bug that underbilled by the duration multiplier).
+        {
+          productId: 'p1',
+          productName: 'Service',
+          quantity: 2,
+          unitPrice: 100,
+          discount: 0,
+          durationMonths: 12,
+          durationUnit: 'months',
+        },
+        // N/A line: never multiplies regardless of the stored months → 1 * 50 * 1 = 50.
+        {
+          productId: 'p2',
+          productName: 'Widget',
+          quantity: 1,
+          unitPrice: 50,
+          discount: 0,
+          durationMonths: 6,
+          durationUnit: 'na',
+        },
+      ],
+    } as never);
+
+    const callArg = apiMocks.supplierInvoicesCreate.mock.calls[0][0] as Record<string, unknown>;
+    // 2*100*12 + 1*50*1 = 2400 + 50 = 2450
+    expect(callArg.subtotal).toBe(2450);
+    expect(callArg.total).toBe(2450);
+    const items = callArg.items as Array<Record<string, unknown>>;
+    expect(items[0]).toEqual(
+      expect.objectContaining({ durationMonths: 12, durationUnit: 'months' }),
+    );
+    expect(items[1]).toEqual(expect.objectContaining({ durationMonths: 6, durationUnit: 'na' }));
+  });
+
   test('createFromOrder defaults paymentTerms to 30 days when missing', async () => {
     apiMocks.supplierInvoicesCreate.mockImplementation((data: unknown) =>
       Promise.resolve({ id: 'si-new', ...(data as object) }),

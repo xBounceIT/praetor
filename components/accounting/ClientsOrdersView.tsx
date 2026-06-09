@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next';
 import type React from 'react';
-import { useCallback, useMemo, useReducer } from 'react';
+import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import type {
   DurationUnit,
   OrderVersion,
   Product,
+  SupplierSaleOrder,
   SupplierUnitType,
 } from '../../types';
 import {
@@ -32,6 +33,7 @@ import {
   formatMolPercentage,
   getDurationDisplayValue,
   getItemPricingContext,
+  MOL_PERCENTAGE_DECIMALS,
   normalizeDurationUnit,
   type PricingTotals,
   parseDurationValueToMonths,
@@ -39,7 +41,10 @@ import {
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
-import { buildProductQuickViewHref } from '../../utils/quickViewLinks';
+import {
+  buildProductQuickViewHref,
+  buildSupplierOrderQuickViewHref,
+} from '../../utils/quickViewLinks';
 import { toastError } from '../../utils/toast';
 import ProductSelectOrFallback from '../sales/ProductSelectOrFallback';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
@@ -68,12 +73,15 @@ export interface ClientsOrdersViewProps {
   orders: ClientsOrder[];
   clients: Client[];
   products: Product[];
+  // Supplier orders behind supplier-quoted lines (only ids are read; see buildSupplierOrderQuickViewHref).
+  supplierOrders?: SupplierSaleOrder[];
   onUpdateClientsOrder: (id: string, updates: Partial<ClientsOrder>) => Promise<void>;
   onDeleteClientsOrder: (id: string) => Promise<void>;
   onOrderRestored?: (order: ClientsOrder) => void;
   onViewOffer?: (offerId: string) => void;
   currency: string;
   canViewInternalListing?: boolean;
+  canViewSupplierOrders?: boolean;
   offerFilterId?: string | null;
   orderFilterId?: string | null;
 }
@@ -209,12 +217,14 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   orders,
   clients,
   products,
+  supplierOrders = [],
   onUpdateClientsOrder,
   onDeleteClientsOrder,
   onOrderRestored,
   onViewOffer,
   currency,
   canViewInternalListing = true,
+  canViewSupplierOrders = true,
   offerFilterId,
   orderFilterId,
 }) => {
@@ -233,6 +243,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     previewVersion,
     formData,
   } = viewState;
+  const [productRowToDelete, setProductRowToDelete] = useState<number | null>(null);
 
   const setIsModalOpen = useCallback((value: React.SetStateAction<boolean>) => {
     dispatchViewState({ type: 'setIsModalOpen', value });
@@ -286,6 +297,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   const closeEditModal = useCallback(() => {
     setIsModalOpen(false);
     setPreviewVersion(null);
+    setProductRowToDelete(null);
   }, [setIsModalOpen, setPreviewVersion]);
 
   const handleVersionPreview = useCallback(
@@ -525,6 +537,10 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   // All product ids (incl. archived) so the quick-view shortcut on a line that
   // references a now-disabled product still deep-links to that record.
   const allProductIds = useMemo(() => new Set(products.map((p) => p.id)), [products]);
+  const allSupplierOrderIds = useMemo(
+    () => new Set(supplierOrders.map((o) => o.id)),
+    [supplierOrders],
+  );
   const activeProductIds = useMemo(
     () => new Set(activeProducts.map((p) => p.id)),
     [activeProducts],
@@ -1092,6 +1108,10 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                           item.productId,
                           allProductIds,
                         );
+                        const supplierOrderHref = buildSupplierOrderQuickViewHref(
+                          item.supplierSaleId,
+                          allSupplierOrderIds,
+                        );
 
                         const handleCostChange = (value: string) => {
                           if (isReadOnly) return;
@@ -1112,9 +1132,9 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                             key={item.id}
                             className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
                           >
-                            <div className="flex items-start gap-2 lg:items-center">
-                              <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center lg:pt-5">
-                                <div className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0">
+                            <div className="flex items-start gap-2 lg:items-center lg:pt-5">
+                              <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center">
+                                <div className="relative min-w-0 space-y-1 lg:col-span-2 lg:space-y-0">
                                   <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
                                     {t('accounting:clientsOrders.supplierOrderColumn', {
                                       defaultValue: 'Supplier Order',
@@ -1122,16 +1142,32 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                   </FieldLabel>
                                   <div className="flex h-9 items-center rounded-md border border-border bg-background px-3">
                                     {item.supplierSaleId ? (
-                                      <span className="truncate text-xs font-medium text-foreground">
+                                      <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
                                         {item.supplierSaleSupplierName ?? '-'} ·{' '}
                                         {item.supplierSaleId}
                                       </span>
                                     ) : (
-                                      <span className="text-xs text-muted-foreground">
+                                      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                                         {t('accounting:clientsOrders.noSupplierOrder', {
                                           defaultValue: 'No supplier order',
                                         })}
                                       </span>
+                                    )}
+                                    {/* Always rendered (disabled with a tooltip when nothing is
+                                        linked), matching the product / supplier-quote shortcuts. */}
+                                    {canViewSupplierOrders && (
+                                      <QuickViewLinkButton
+                                        href={supplierOrderHref}
+                                        label={t(
+                                          'accounting:clientsOrders.openSupplierOrderInNewTab',
+                                          { defaultValue: 'Open supplier order in a new tab' },
+                                        )}
+                                        disabledLabel={t(
+                                          'accounting:clientsOrders.supplierOrderShortcutUnavailable',
+                                          { defaultValue: 'No linked supplier order to open' },
+                                        )}
+                                        floating
+                                      />
                                     )}
                                   </div>
                                 </div>
@@ -1265,7 +1301,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                   <div className="flex h-9 items-center justify-center gap-1">
                                     <ValidatedNumberInput
                                       value={molPercentage}
-                                      formatDecimals={1}
+                                      formatDecimals={MOL_PERCENTAGE_DECIMALS}
                                       onValueChange={handleMolChange}
                                       disabled={isReadOnly}
                                       className={compactInputClass}
@@ -1312,7 +1348,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                 type="button"
                                 variant="ghost"
                                 size="icon-sm"
-                                onClick={() => removeProductRow(index)}
+                                onClick={() => setProductRowToDelete(index)}
                                 disabled={isReadOnly || Boolean(item.supplierSaleId)}
                                 title={
                                   item.supplierSaleId
@@ -1454,6 +1490,21 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
         description={t('accounting:clientsOrders.deleteOrderConfirm', {
           clientName: orderToDelete?.clientName,
         })}
+      />
+
+      {/* Line-item (product) delete confirmation */}
+      <DeleteConfirmModal
+        isOpen={productRowToDelete !== null}
+        onClose={() => setProductRowToDelete(null)}
+        onConfirm={() => {
+          if (productRowToDelete !== null) {
+            removeProductRow(productRowToDelete);
+          }
+          setProductRowToDelete(null);
+        }}
+        title={t('accounting:clientsOrders.removeProductTitle')}
+        description={t('accounting:clientsOrders.removeProductConfirm')}
+        zIndex={70}
       />
 
       <div className="space-y-4">

@@ -1185,6 +1185,42 @@ describe('normalizeSupplierQuoteItem', () => {
     expect(result.discountPercent).toBe(0);
     expect(result.unitPrice).toBe(9);
   });
+
+  test('coerces durationMonths and defaults a missing/invalid value to 1 (issue #776)', () => {
+    expect(
+      normalizeSupplierQuoteItem(
+        make<SupplierQuoteItem>(baseSupplierQuoteItem, { durationMonths: '12' }),
+      ).durationMonths,
+    ).toBe(12);
+    expect(
+      normalizeSupplierQuoteItem(
+        make<SupplierQuoteItem>(baseSupplierQuoteItem, { durationMonths: undefined }),
+      ).durationMonths,
+    ).toBe(1);
+    expect(
+      normalizeSupplierQuoteItem(
+        make<SupplierQuoteItem>(baseSupplierQuoteItem, { durationMonths: 0 }),
+      ).durationMonths,
+    ).toBe(1);
+  });
+
+  test("durationUnit defaults to 'months', preserves 'years', and normalizes invalid values (issue #776)", () => {
+    expect(
+      normalizeSupplierQuoteItem(
+        make<SupplierQuoteItem>(baseSupplierQuoteItem, { durationUnit: undefined }),
+      ).durationUnit,
+    ).toBe('months');
+    expect(
+      normalizeSupplierQuoteItem(
+        make<SupplierQuoteItem>(baseSupplierQuoteItem, { durationUnit: 'years' }),
+      ).durationUnit,
+    ).toBe('years');
+    expect(
+      normalizeSupplierQuoteItem(
+        make<SupplierQuoteItem>(baseSupplierQuoteItem, { durationUnit: 'decades' }),
+      ).durationUnit,
+    ).toBe('months');
+  });
 });
 
 describe('normalizeSupplierQuote', () => {
@@ -1230,6 +1266,42 @@ describe('normalizeSupplierSaleOrderItem', () => {
     expect(result.unitPrice).toBe(0);
     expect(result.discount).toBe(0);
     expect(result.note).toBe('');
+  });
+
+  test('coerces durationMonths and defaults a missing/invalid value to 1 (issue #776)', () => {
+    expect(
+      normalizeSupplierSaleOrderItem(
+        make<SupplierSaleOrderItem>(baseSupplierSaleOrderItem, { durationMonths: '12' }),
+      ).durationMonths,
+    ).toBe(12);
+    expect(
+      normalizeSupplierSaleOrderItem(
+        make<SupplierSaleOrderItem>(baseSupplierSaleOrderItem, { durationMonths: undefined }),
+      ).durationMonths,
+    ).toBe(1);
+    expect(
+      normalizeSupplierSaleOrderItem(
+        make<SupplierSaleOrderItem>(baseSupplierSaleOrderItem, { durationMonths: 0 }),
+      ).durationMonths,
+    ).toBe(1);
+  });
+
+  test("durationUnit defaults to 'months', preserves 'years', and normalizes invalid values (issue #776)", () => {
+    expect(
+      normalizeSupplierSaleOrderItem(
+        make<SupplierSaleOrderItem>(baseSupplierSaleOrderItem, { durationUnit: undefined }),
+      ).durationUnit,
+    ).toBe('months');
+    expect(
+      normalizeSupplierSaleOrderItem(
+        make<SupplierSaleOrderItem>(baseSupplierSaleOrderItem, { durationUnit: 'years' }),
+      ).durationUnit,
+    ).toBe('years');
+    expect(
+      normalizeSupplierSaleOrderItem(
+        make<SupplierSaleOrderItem>(baseSupplierSaleOrderItem, { durationUnit: 'decades' }),
+      ).durationUnit,
+    ).toBe('months');
   });
 });
 

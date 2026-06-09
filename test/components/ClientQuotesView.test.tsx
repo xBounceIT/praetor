@@ -2,6 +2,7 @@ import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { Client, Product, Quote, SupplierQuote } from '../../types';
+import { LineDeleteConfirmStub } from '../helpers/lineItemDeleteConfirm';
 import { render } from '../helpers/render';
 
 // Stable `t`/`i18n`: opening the edit modal mounts QuoteVersionsPanel, whose `reload`
@@ -45,6 +46,14 @@ mock.module('../../services/api/views', () => ({
     update: () => Promise.reject(new Error('not used')),
     remove: () => Promise.resolve(),
   },
+}));
+
+// The sibling sales/ClientQuotesView test pins a deterministic DeleteConfirmModal stub for
+// its line-item deletion tests. Bun's mock.module is process-wide and binds at first import
+// of the SUT, so register the same stub here to keep that binding stable no matter which
+// quote-view test file Bun evaluates first.
+mock.module('../../components/shared/DeleteConfirmModal', () => ({
+  default: LineDeleteConfirmStub,
 }));
 
 const ClientQuotesView = (await import('../../components/sales/ClientQuotesView')).default;

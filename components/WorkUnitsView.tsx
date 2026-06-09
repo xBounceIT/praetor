@@ -10,6 +10,7 @@ import { workUnitsApi } from '../services/api/workUnits';
 import type { User, WorkUnit } from '../types';
 import { hasScopedActionPermission } from '../utils/permissions';
 import HeaderAddButton from './shared/HeaderAddButton';
+import MemberAvatarGroup from './shared/MemberAvatarGroup';
 import Modal from './shared/Modal';
 import {
   ModalBody,
@@ -366,18 +367,22 @@ const WorkUnitCard: React.FC<{
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="flex size-8 items-center justify-center rounded-full bg-zinc-100 font-bold text-xs text-zinc-500">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-zinc-100 font-bold text-xs text-zinc-500">
               <i className="fa-solid fa-users" aria-hidden="true"></i>
             </div>
             <div>
               <p className="font-bold text-[10px] text-zinc-400 uppercase tracking-wider">
                 {t('hr:competenceCenters.members')}
               </p>
-              <p className="font-bold text-sm text-zinc-700">
-                {unit.userCount || 0} {t('hr:competenceCenters.users')}
-              </p>
+              {unit.members?.length ? (
+                <MemberAvatarGroup members={unit.members} className="mt-1.5" />
+              ) : (
+                <p className="text-sm text-zinc-400 italic">
+                  {t('hr:competenceCenters.noMembersAssigned')}
+                </p>
+              )}
             </div>
           </div>
           {canManageMembers && (
