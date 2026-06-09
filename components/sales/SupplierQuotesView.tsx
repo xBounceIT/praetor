@@ -1265,8 +1265,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
                   {formData.items && formData.items.length > 0 && (
                     <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                      <div className="flex-1 min-w-0 grid grid-cols-12 gap-3">
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
+                      <div className="flex-1 min-w-0 grid grid-cols-16 gap-2">
+                        <div className="col-span-6 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
                           {t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
                         </div>
                         <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
@@ -1481,8 +1481,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                               </div>
                             </div>
                             <div className="hidden lg:flex gap-2 items-center">
-                              <div className="flex-1 min-w-0 grid grid-cols-12 gap-3 items-center">
-                                <div className="col-span-2">
+                              <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center">
+                                <div className="col-span-6">
                                   <Input
                                     type="text"
                                     value={item.productName || ''}
