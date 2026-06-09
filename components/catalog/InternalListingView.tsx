@@ -16,6 +16,7 @@ import type { Product } from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import {
   calcProductSalePrice,
+  formatMolPercentage,
   MOL_PERCENTAGE_DECIMALS,
   parseNumberInputValue,
 } from '../../utils/numbers';
@@ -1825,10 +1826,10 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
             align: 'right',
             className: 'px-6 py-5 whitespace-nowrap text-right',
             accessorKey: 'molPercentage',
-            filterFormat: (val) => Number(val).toFixed(2),
+            filterFormat: (val) => Number(val).toFixed(MOL_PERCENTAGE_DECIMALS),
             cell: ({ row: p }) => (
               <span className="text-sm font-semibold text-zinc-500">
-                {Number(p.molPercentage).toFixed(2)}%
+                {formatMolPercentage(Number(p.molPercentage))}
               </span>
             ),
           },
