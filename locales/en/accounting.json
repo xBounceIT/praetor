@@ -157,6 +157,12 @@
     "noItemsAdded": "No items added yet",
     "orderDetails": "Order Details",
     "items": "Items",
+    "durationColumn": "Duration",
+    "month": "Month",
+    "months": "Months",
+    "year": "Year",
+    "years": "Years",
+    "durationNa": "N/A",
     "subtotal": "Subtotal",
     "summary": "Summary",
     "versionHistory": {
@@ -202,6 +208,12 @@
     "totalDiscount": "Total Discount",
     "noItems": "No items yet. Add a line to start.",
     "descriptionPlaceholder": "Description",
-    "notesPlaceholder": "Additional notes..."
+    "notesPlaceholder": "Additional notes...",
+    "durationColumn": "Duration",
+    "month": "Month",
+    "months": "Months",
+    "year": "Year",
+    "years": "Years",
+    "durationNa": "N/A"
   }
 }

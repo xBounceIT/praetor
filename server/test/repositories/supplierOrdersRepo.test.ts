@@ -28,6 +28,9 @@ const ORDER_BASE: readonly unknown[] = [
 
 const orderRow = (overrides: Record<number, unknown> = {}) => makeRow(ORDER_BASE, overrides);
 
+// Column order in db/schema/supplierSales.ts (supplier_sale_items):
+//   [id, saleId, productId, productName, quantity, unitPrice, discount, note, createdAt,
+//    durationMonths, durationUnit]
 const ITEM_BASE: readonly unknown[] = [
   'ssi-1',
   'so-1',
@@ -38,6 +41,8 @@ const ITEM_BASE: readonly unknown[] = [
   '0',
   null,
   new Date(1735689600000),
+  1,
+  'months',
 ];
 
 const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, overrides);
@@ -208,6 +213,8 @@ describe('replaceItems', () => {
           unitPrice: 5,
           discount: 0,
           note: null,
+          durationMonths: 9,
+          durationUnit: 'years' as const,
         },
       ],
       testDb,
@@ -215,6 +222,9 @@ describe('replaceItems', () => {
     expect(exec.calls).toHaveLength(2);
     expect(exec.calls[0].sql).toContain('delete from "supplier_sale_items"');
     expect(exec.calls[1].sql).toContain('insert into "supplier_sale_items"');
+    // Duration is written to the INSERT (issue #776).
+    expect(exec.calls[1].params).toContain(9);
+    expect(exec.calls[1].params).toContain('years');
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('ssi-a');
   });
@@ -248,6 +258,20 @@ describe('listAllItems', () => {
     expect(result[0].id).toBe('ssi-1');
     expect(result[0].orderId).toBe('so-1');
     expect(result[0].quantity).toBe(1);
+  });
+
+  test('maps the duration columns (issue #776)', async () => {
+    exec.enqueue({ rows: [itemRow({ 9: 18, 10: 'years' })] });
+    const result = await supplierOrdersRepo.listAllItems(testDb);
+    expect(result[0].durationMonths).toBe(18);
+    expect(result[0].durationUnit).toBe('years');
+  });
+
+  test('defaults a null/legacy duration to one month (issue #776)', async () => {
+    exec.enqueue({ rows: [itemRow({ 9: null, 10: null })] });
+    const result = await supplierOrdersRepo.listAllItems(testDb);
+    expect(result[0].durationMonths).toBe(1);
+    expect(result[0].durationUnit).toBe('months');
   });
 });
 

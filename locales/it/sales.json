@@ -323,6 +323,12 @@
       "quoteCodeRequired": "Il codice preventivo è obbligatorio",
       "itemsRequired": "Almeno un articolo è obbligatorio"
     },
+    "durationColumn": "Durata",
+    "month": "Mese",
+    "months": "Mesi",
+    "year": "Anno",
+    "years": "Anni",
+    "durationNa": "N/D",
     "hour": "Ora",
     "hours": "Ore",
     "day": "Giorno",

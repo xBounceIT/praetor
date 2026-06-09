@@ -157,6 +157,12 @@
     "noItemsAdded": "Nessun articolo aggiunto",
     "orderDetails": "Dettagli Ordine",
     "items": "Articoli",
+    "durationColumn": "Durata",
+    "month": "Mese",
+    "months": "Mesi",
+    "year": "Anno",
+    "years": "Anni",
+    "durationNa": "N/D",
     "subtotal": "Subtotale",
     "summary": "Riepilogo",
     "versionHistory": {
@@ -202,6 +208,12 @@
     "totalDiscount": "Sconto Totale",
     "noItems": "Nessuna voce ancora. Aggiungi una riga per iniziare.",
     "descriptionPlaceholder": "Descrizione",
-    "notesPlaceholder": "Note aggiuntive..."
+    "notesPlaceholder": "Note aggiuntive...",
+    "durationColumn": "Durata",
+    "month": "Mese",
+    "months": "Mesi",
+    "year": "Anno",
+    "years": "Anni",
+    "durationNa": "N/D"
   }
 }

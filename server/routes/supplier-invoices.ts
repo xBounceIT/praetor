@@ -12,6 +12,8 @@ import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
   optionalDateString,
+  optionalDurationMonths,
+  optionalDurationUnit,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   parseDateString,
@@ -60,6 +62,8 @@ const invoiceItemSchema = {
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
+    durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
   required: ['id', 'invoiceId', 'description', 'quantity', 'unitPrice', 'discount'],
 } as const;
@@ -106,6 +110,8 @@ const invoiceItemBodySchema = {
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
+    durationMonths: { type: 'number' },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
   required: ['description', 'quantity', 'unitPrice'],
 } as const;
@@ -152,6 +158,8 @@ type SupplierInvoiceItemInput = {
   quantity?: string | number;
   unitPrice?: string | number;
   discount?: string | number;
+  durationMonths?: string | number;
+  durationUnit?: string;
 };
 
 const normalizeItems = (
@@ -187,6 +195,19 @@ const normalizeItems = (
       badRequest(reply, discountResult.message);
       return null;
     }
+    const durationMonthsResult = optionalDurationMonths(
+      item.durationMonths,
+      `items[${i}].durationMonths`,
+    );
+    if (!durationMonthsResult.ok) {
+      badRequest(reply, durationMonthsResult.message);
+      return null;
+    }
+    const durationUnitResult = optionalDurationUnit(item.durationUnit, `items[${i}].durationUnit`);
+    if (!durationUnitResult.ok) {
+      badRequest(reply, durationUnitResult.message);
+      return null;
+    }
     normalizedItems.push({
       id: generatePrefixedId(ITEM_ID_PREFIXES.supplierInvoiceItem),
       productId: item.productId || null,
@@ -194,6 +215,9 @@ const normalizeItems = (
       quantity: quantityResult.value,
       unitPrice: unitPriceResult.value,
       discount: discountResult.value || 0,
+      // Duration applies to every line type (issue #775); 'na' is gated via effectiveDurationMonths.
+      durationMonths: durationMonthsResult.value ?? 1,
+      durationUnit: durationUnitResult.value ?? 'months',
     });
   }
   return normalizedItems;
