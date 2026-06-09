@@ -128,6 +128,12 @@ describe('getEffectiveDurationMonths', () => {
     expect(getEffectiveDurationMonths({ unitType: 'hours', durationMonths: 12 })).toBe(12);
     expect(getEffectiveDurationMonths({ unitType: 'days', durationMonths: 6 })).toBe(6);
   });
+
+  test("returns 1 for an 'N/A' line, ignoring any stored durationMonths (issue #775)", () => {
+    // 'na' marks a line where duration does not apply, so it never multiplies.
+    expect(getEffectiveDurationMonths({ durationUnit: 'na', durationMonths: 6 })).toBe(1);
+    expect(getEffectiveDurationMonths({ durationUnit: 'na', durationMonths: 24 })).toBe(1);
+  });
 });
 
 describe('normalizeDurationUnit', () => {
@@ -142,6 +148,10 @@ describe('normalizeDurationUnit', () => {
     expect(normalizeDurationUnit(undefined)).toBe('months');
     expect(normalizeDurationUnit(null)).toBe('months');
     expect(normalizeDurationUnit(12)).toBe('months');
+  });
+
+  test("returns 'na' for the literal 'na' (issue #775)", () => {
+    expect(normalizeDurationUnit('na')).toBe('na');
   });
 });
 
@@ -182,6 +192,11 @@ describe('getDurationDisplayValue', () => {
     // getEffectiveDurationMonths floors invalid durations to 1, so years shows 1/12.
     expect(getDurationDisplayValue({ durationUnit: 'months' })).toBe(1);
     expect(getDurationDisplayValue({ durationMonths: 0, durationUnit: 'years' })).toBe(1 / 12);
+  });
+
+  test("shows the neutral 1 for an 'N/A' line (issue #775)", () => {
+    // 'na' never multiplies, so the (disabled) input reads 1 regardless of the stored months.
+    expect(getDurationDisplayValue({ durationMonths: 6, durationUnit: 'na' })).toBe(1);
   });
 });
 
@@ -332,6 +347,17 @@ describe('calculatePricingTotals', () => {
     ];
     const without: PricingItem[] = [{ unitPrice: 100, quantity: 2, productCost: 60 }];
     expect(calculatePricingTotals(withDuration, 0)).toEqual(calculatePricingTotals(without, 0));
+  });
+
+  test("an 'N/A' line never multiplies by duration, even with a stored durationMonths (issue #775)", () => {
+    const naItems: PricingItem[] = [
+      { unitPrice: 100, quantity: 2, productCost: 60, durationMonths: 12, durationUnit: 'na' },
+    ];
+    const t = calculatePricingTotals(naItems, 0);
+    // Revenue 100 × 2 = 200 (not ×12); cost 60 × 2 = 120; margin 80.
+    expect(t.subtotal).toBe(200);
+    expect(t.totalCost).toBe(120);
+    expect(t.margin).toBe(80);
   });
 
   test('applies a global percentage discount on top of per-line discounts', () => {

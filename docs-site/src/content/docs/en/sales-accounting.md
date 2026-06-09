@@ -13,7 +13,7 @@ Each quote line includes a **Duration** column, placed between **Quantity** and 
 
 **Duration** flows through the whole document chain: when you convert a quote into an offer and then into a sales order, the lines keep both the value and the unit (months or years) you set, so the derived document's totals match the quote. **Customer invoices** also carry the Duration column on their lines and multiply the taxable amount (and therefore VAT and total) by the corresponding months; on invoices the duration is set manually, since invoice lines are not copied automatically from an order.
 
-Duration applies to **every line**, regardless of the quantity unit (**Hours**, **Days**, or **Unit**): the Duration field is always editable with the **Months** / **Years** selector and always multiplies the line totals.
+Duration applies to **every line**, regardless of the quantity unit (**Hours**, **Days**, or **Unit**): the Duration field is editable with the **Months** / **Years** / **N/A** selector and multiplies the line totals. Selecting **N/A** marks the line as duration-less: the numeric field beside it is disabled and the line totals are not multiplied by duration.
 
 The quote list shows code, insertion date, client, subtotal, discount percentage, absolute discount, discounted total, margin, MOL, payment terms, due date, and status so the main values can be checked without opening each record.
 

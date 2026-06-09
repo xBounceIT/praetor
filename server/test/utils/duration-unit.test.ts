@@ -6,8 +6,8 @@ import {
 } from '../../utils/duration-unit.ts';
 
 describe('DURATION_UNITS', () => {
-  test('is the ordered allow-list ["months", "years"]', () => {
-    expect([...DURATION_UNITS]).toEqual(['months', 'years']);
+  test('is the ordered allow-list ["months", "years", "na"]', () => {
+    expect([...DURATION_UNITS]).toEqual(['months', 'years', 'na']);
   });
 });
 
@@ -18,6 +18,10 @@ describe('normalizeDurationUnit', () => {
 
   test('returns "months" for the literal "months"', () => {
     expect(normalizeDurationUnit('months')).toBe('months');
+  });
+
+  test('returns "na" for the literal "na" (issue #775)', () => {
+    expect(normalizeDurationUnit('na')).toBe('na');
   });
 
   test('falls back to "months" for nullish input', () => {

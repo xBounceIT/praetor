@@ -1063,11 +1063,14 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       const items = [...(prev.items || [])];
       const item = items[index];
       if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return prev;
-      const displayValue = getDurationDisplayValue(item);
+      // 'N/A' marks the line as duration-less: reset to the neutral 1 month so it never multiplies
+      // (issue #775). Months/years instead keeps the displayed number under the new unit.
+      const durationMonths =
+        newUnit === 'na' ? 1 : durationValueToMonths(getDurationDisplayValue(item), newUnit);
       items[index] = {
         ...items[index],
         durationUnit: newUnit,
-        durationMonths: durationValueToMonths(displayValue, newUnit),
+        durationMonths,
       };
       return { ...prev, items };
     });
@@ -1557,7 +1560,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     onValueChange={(value) =>
                                       handleDurationValueChange(index, value)
                                     }
-                                    disabled={isReadOnly}
+                                    disabled={isReadOnly || durationUnit === 'na'}
                                     className="w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
                                   />
                                   <span className="text-xs font-semibold text-zinc-400 shrink-0">
@@ -1748,7 +1751,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     onValueChange={(value) =>
                                       handleDurationValueChange(index, value)
                                     }
-                                    disabled={isReadOnly}
+                                    disabled={isReadOnly || durationUnit === 'na'}
                                     className="w-full max-w-[5rem] text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                   />
                                   <span className="text-[9px] font-semibold text-zinc-400 shrink-0">

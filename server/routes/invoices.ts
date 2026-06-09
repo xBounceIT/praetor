@@ -56,7 +56,7 @@ const invoiceItemSchema = {
     discount: { type: 'number' },
     taxRate: { type: 'number' },
     durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years'] },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
   required: [
     'id',
@@ -117,7 +117,7 @@ const invoiceItemBodySchema = {
     discount: { type: 'number' },
     taxRate: { type: 'number' },
     durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years'] },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
   required: ['description', 'unitOfMeasure', 'quantity', 'unitPrice'],
 } as const;

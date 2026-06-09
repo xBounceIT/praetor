@@ -897,8 +897,9 @@ export type SupplierUnitType = 'hours' | 'days' | 'unit';
 
 // Display unit for a line item's duration (issue #757). `durationMonths` stays the canonical
 // pricing multiplier (always whole months); `durationUnit` only controls how that value is
-// shown/entered — 'years' renders `durationMonths / 12`.
-export type DurationUnit = 'months' | 'years';
+// shown/entered — 'years' renders `durationMonths / 12`. 'na' (N/A) marks a line where duration
+// does not apply: the value beside the selector is disabled and the line never multiplies (×1).
+export type DurationUnit = 'months' | 'years' | 'na';
 
 export interface SupplierQuoteItem {
   id: string;

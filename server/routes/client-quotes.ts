@@ -320,7 +320,7 @@ const quoteItemSchema = {
     note: { type: ['string', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years'] },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
   required: [
     'id',
@@ -381,7 +381,7 @@ const quoteItemBodySchema = {
     note: { type: 'string' },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years'] },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
   // unitType is required: it drives per-unit pricing (a 'days' line bills at 8x the hourly rate)
   // and is stored on every line, so the API must not silently default the unit. Mirrors invoices'

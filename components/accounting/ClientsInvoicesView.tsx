@@ -388,12 +388,15 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   const handleDurationUnitChange = (index: number, newUnit: DurationUnit) => {
     const item = formData.items?.[index];
     if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
-    const displayValue = getDurationDisplayValue(item);
+    // 'N/A' marks the line as duration-less: reset to the neutral 1 month so it never multiplies
+    // (issue #775). Months/years instead keeps the displayed number under the new unit.
+    const durationMonths =
+      newUnit === 'na' ? 1 : durationValueToMonths(getDurationDisplayValue(item), newUnit);
     const nextItems = [...(formData.items || [])];
     nextItems[index] = {
       ...nextItems[index],
       durationUnit: newUnit,
-      durationMonths: durationValueToMonths(displayValue, newUnit),
+      durationMonths,
     };
     setFormData((prev) => ({ ...prev, items: nextItems }));
   };
@@ -855,6 +858,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                                   step="1"
                                   value={durationValue}
                                   onValueChange={(value) => handleDurationValueChange(index, value)}
+                                  disabled={durationUnit === 'na'}
                                   className="min-w-0 max-w-[5rem]"
                                 />
                                 <span className="shrink-0 text-xs font-medium text-muted-foreground">

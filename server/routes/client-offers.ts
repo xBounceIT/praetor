@@ -69,7 +69,7 @@ const offerItemSchema = {
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
     durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years'] },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
   required: ['id', 'offerId', 'productName', 'quantity', 'unitPrice', 'productCost', 'discount'],
 } as const;
@@ -124,7 +124,7 @@ const offerItemBodySchema = {
     discount: { type: 'number' },
     note: { type: 'string' },
     durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years'] },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
   // unitType is required: it drives per-unit pricing (a 'days' line bills at 8x the hourly rate)
   // and is stored on every line, so the API must not silently default the unit. Mirrors invoices'

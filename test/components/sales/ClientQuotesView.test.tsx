@@ -248,6 +248,57 @@ describe('<ClientQuotesView />', () => {
     expect(durationInputs.some((el) => el.value === '6')).toBe(true);
   });
 
+  test("disables the duration input when the line's duration unit is 'N/A' (issue #775)", async () => {
+    const naQuote: Quote = {
+      id: 'Q-NA',
+      clientId: 'client-1',
+      clientName: 'Helios Energy Services',
+      items: [
+        {
+          id: 'item-na',
+          quoteId: 'Q-NA',
+          productId: 'product-1',
+          productName: 'Consulting',
+          quantity: 2,
+          unitPrice: 100,
+          productCost: 60,
+          productMolPercentage: 40,
+          durationMonths: 6,
+          durationUnit: 'na',
+        },
+      ],
+      paymentTerms: '30gg',
+      discount: 0,
+      discountType: 'percentage',
+      status: 'draft',
+      expirationDate: '2026-06-30',
+      createdAt: Date.UTC(2026, 4, 14),
+      updatedAt: Date.UTC(2026, 4, 14),
+    };
+
+    render(
+      <ClientQuotesView
+        quotes={[naQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+    fireEvent.click(screen.getByText('Q-NA'));
+    await screen.findByRole('dialog');
+
+    // Selecting N/A disables the numeric duration input beside the unit selector (issue #775).
+    const durationInputs = screen
+      .getAllByPlaceholderText('sales:clientQuotes.durationColumn')
+      .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
+    expect(durationInputs.length).toBeGreaterThan(0);
+    expect(durationInputs.every((el) => el.disabled)).toBe(true);
+  });
+
   test('a years duration prices off the canonical months, matching the months equivalent (issue #757)', () => {
     // durationUnit only changes how the duration is displayed/entered; pricing always uses the
     // canonical durationMonths (24). So 24 months shown as "2 years" must total the same as

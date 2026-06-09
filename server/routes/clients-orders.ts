@@ -62,7 +62,7 @@ const clientOrderItemSchema = {
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
     durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years'] },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
   required: ['id', 'orderId', 'productName', 'quantity', 'unitPrice', 'productCost', 'discount'],
 } as const;
@@ -126,7 +126,7 @@ const clientOrderItemBodySchema = {
     discount: { type: 'number' },
     note: { type: ['string', 'null'] },
     durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years'] },
+    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
   // productId is intentionally NOT required so free-form supplier-quote lines (no linked product)
   // can be converted into orders (#783/#795). unitType is likewise optional here — product-less

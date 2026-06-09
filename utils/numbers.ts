@@ -76,15 +76,19 @@ export const getEffectiveMol = (item: PricingItem): number => {
 };
 
 export const getEffectiveDurationMonths = (item: PricingItem): number => {
-  // Duration always multiplies the line (issue #757) and applies to every unit type; absent or
+  // 'N/A' marks a line where duration does not apply, so it never multiplies regardless of the
+  // stored months (issue #775).
+  if (normalizeDurationUnit(item.durationUnit) === 'na') return 1;
+  // Otherwise duration multiplies the line (issue #757) and applies to every unit type; absent or
   // non-positive values fall back to a single month.
   const months = Number(item.durationMonths ?? 1);
   return Number.isFinite(months) && months > 0 ? months : 1;
 };
 
 // Coerce an arbitrary value to a valid duration unit, defaulting to 'months' (issue #757).
+// 'na' (N/A) marks a line where duration does not apply (issue #775).
 export const normalizeDurationUnit = (value: unknown): DurationUnit =>
-  value === 'years' ? 'years' : 'months';
+  value === 'years' ? 'years' : value === 'na' ? 'na' : 'months';
 
 // Convert a value entered in `unit` into canonical whole months ≥ 1. Years are multiplied by 12;
 // the result is rounded so the integer `duration_months` column never sees a fractional value.

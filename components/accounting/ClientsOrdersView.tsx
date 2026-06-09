@@ -510,12 +510,15 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     if (isReadOnly) return;
     const item = formData.items?.[index];
     if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
-    const displayValue = getDurationDisplayValue(item);
+    // 'N/A' marks the line as duration-less: reset to the neutral 1 month so it never multiplies
+    // (issue #775). Months/years instead keeps the displayed number under the new unit.
+    const durationMonths =
+      newUnit === 'na' ? 1 : durationValueToMonths(getDurationDisplayValue(item), newUnit);
     const newItems = [...(formData.items || [])];
     newItems[index] = {
       ...newItems[index],
       durationUnit: newUnit,
-      durationMonths: durationValueToMonths(displayValue, newUnit),
+      durationMonths,
     };
     setFormData((prev) => ({ ...prev, items: newItems }));
   };
@@ -1226,7 +1229,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                       onValueChange={(value) =>
                                         handleDurationValueChange(index, value)
                                       }
-                                      disabled={isReadOnly}
+                                      disabled={isReadOnly || durationUnit === 'na'}
                                       className={`${compactInputClass} max-w-[5rem]`}
                                     />
                                     <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
