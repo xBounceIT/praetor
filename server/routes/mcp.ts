@@ -561,7 +561,10 @@ const buildServer = () => {
             canViewEmails: hasEmailView,
           }),
         ),
-        workUnits: visibleWorkUnits.map((unit) => ({
+        // Drop the `members` array (id + name) carried by the work-unit shape: this tool
+        // exposes only member user IDs, and member display names would bypass the per-user
+        // `maskUser` scoping applied to `users` above.
+        workUnits: visibleWorkUnits.map(({ members: _members, ...unit }) => ({
           ...unit,
           userIds: userIdsByWorkUnit.get(unit.id) ?? [],
         })),

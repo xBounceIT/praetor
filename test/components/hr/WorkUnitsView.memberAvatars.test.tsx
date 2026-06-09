@@ -58,11 +58,12 @@ describe('<WorkUnitsView /> member preview (issue #761)', () => {
     expect(screen.getByLabelText('Andrea Scognamiglio')).toBeInTheDocument();
     // 6 members, inline cap of 5 → one collapses into a "+1" badge.
     expect(screen.getByText('+1')).toBeInTheDocument();
-    // The "{count} utenti" line is replaced by the avatar row.
+    // The avatar row replaces both the count line and the empty-state text.
     expect(screen.queryByText(/competenceCenters\.users/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/competenceCenters\.noMembersAssigned/)).not.toBeInTheDocument();
   });
 
-  test('keeps the member count as the empty state when a unit has no members', () => {
+  test('shows a "no members assigned" empty state when a unit has no members', () => {
     renderView([
       {
         id: 'wu-2',
@@ -74,6 +75,6 @@ describe('<WorkUnitsView /> member preview (issue #761)', () => {
     ]);
 
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
-    expect(screen.getByText(/competenceCenters\.users/)).toBeInTheDocument();
+    expect(screen.getByText(/competenceCenters\.noMembersAssigned/)).toBeInTheDocument();
   });
 });

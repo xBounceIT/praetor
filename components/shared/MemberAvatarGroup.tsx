@@ -1,6 +1,7 @@
 import type React from 'react';
 import { Avatar, AvatarFallback, AvatarGroup } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { getInitials } from '@/utils/initials';
 
 export interface MemberAvatarGroupMember {
   id: string;
@@ -14,31 +15,26 @@ export interface MemberAvatarGroupProps {
   className?: string;
 }
 
-// Initials from a display name: first letter of the first and last word, or the first
-// two letters of a single-word name. Mirrors the avatar abbreviations used elsewhere in
-// the app (ViewOwnerAvatar, the project dashboard team-size avatars).
-const getInitials = (name: string): string => {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  const initials =
-    parts.length === 1 ? parts[0].slice(0, 2) : parts[0][0] + parts[parts.length - 1][0];
-  return initials.toUpperCase();
-};
-
-const avatarClassName = 'size-7';
+// `ring-2 ring-background` is applied directly on each avatar rather than relying on
+// AvatarGroup's `*:data-[slot=avatar]` ring selector: wrapping the Avatar in a Radix
+// `TooltipTrigger asChild` merges the trigger's `data-slot="tooltip-trigger"` onto the
+// avatar element, so the group's avatar-scoped selector would no longer match it.
+const avatarClassName = 'size-7 ring-2 ring-background';
 const fallbackClassName = 'bg-muted text-[10px] font-medium text-muted-foreground';
+const overflowBadgeClassName =
+  'relative flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground ring-2 ring-background';
 
 /**
  * Overlapping row of member initials with the full name on hover (per-badge tooltip).
- * When there are more members than `max`, the remainder collapses into a `+N` badge whose
- * tooltip lists every member, so the complete membership is visible without opening the
- * card. Renders nothing for an empty member list. Issue #761.
+ * When there are more members than `max`, the remainder collapses into a `+N` badge that
+ * is keyboard-focusable and whose tooltip lists the whole membership, so the complete set
+ * is reachable without opening the card. Renders nothing for an empty member list. Issue #761.
  */
 const MemberAvatarGroup: React.FC<MemberAvatarGroupProps> = ({ members, max = 5, className }) => {
   if (members.length === 0) return null;
 
   const visible = members.slice(0, max);
-  const overflowCount = members.length - visible.length;
+  const overflow = members.slice(max);
 
   return (
     <AvatarGroup className={className}>
@@ -54,16 +50,19 @@ const MemberAvatarGroup: React.FC<MemberAvatarGroupProps> = ({ members, max = 5,
           <TooltipContent>{member.name}</TooltipContent>
         </Tooltip>
       ))}
-      {overflowCount > 0 && (
+      {overflow.length > 0 && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span
-              role="img"
-              aria-label={members.map((member) => member.name).join(', ')}
-              className="relative flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground ring-2 ring-background"
+            {/* A real button so the full-roster tooltip is reachable by keyboard focus;
+                labelled with only the hidden members so screen readers don't re-announce
+                the visible ones. */}
+            <button
+              type="button"
+              aria-label={overflow.map((member) => member.name).join(', ')}
+              className={overflowBadgeClassName}
             >
-              +{overflowCount}
-            </span>
+              +{overflow.length}
+            </button>
           </TooltipTrigger>
           <TooltipContent>
             <ul className="space-y-0.5 text-left">

@@ -25,23 +25,26 @@ describe('<MemberAvatarGroup />', () => {
   });
 
   test('collapses the remainder into a +N badge once the limit is exceeded', () => {
-    // 7 members, default max 5 → 5 initials + a "+2" overflow badge.
+    // 7 members, default max 5 → 5 inline avatars (role="img") + a "+2" overflow badge.
     render(<MemberAvatarGroup members={makeMembers(7)} />);
     expect(screen.getByText('+2')).toBeInTheDocument();
-    // 5 visible avatars + the overflow badge are all role="img".
-    expect(screen.getAllByRole('img')).toHaveLength(6);
+    expect(screen.getAllByRole('img')).toHaveLength(5);
   });
 
-  test('the overflow badge exposes the full membership for hover/screen readers', () => {
+  test('the overflow badge is a keyboard-focusable button labelled with only the hidden members', () => {
     render(<MemberAvatarGroup members={makeMembers(7)} />);
-    // "Member 7" is hidden from the inline row, so the only element naming it is the badge.
-    expect(screen.getByLabelText(/Member 7/)).toHaveTextContent('+2');
+    // A <button> is inherently focusable, so the full-roster tooltip is reachable by keyboard.
+    const badge = screen.getByRole('button', { name: 'Member 6, Member 7' });
+    expect(badge).toHaveTextContent('+2');
+    // The 5 visible avatars are NOT re-announced by the badge label.
+    expect(badge.getAttribute('aria-label')).not.toContain('Member 1');
   });
 
   test('honours a custom max', () => {
     render(<MemberAvatarGroup members={makeMembers(3)} max={2} />);
     expect(screen.getByText('+1')).toBeInTheDocument();
-    expect(screen.getAllByRole('img')).toHaveLength(3);
+    // 2 inline avatars; the 3rd member is collapsed into the badge.
+    expect(screen.getAllByRole('img')).toHaveLength(2);
   });
 
   test('renders nothing for an empty member list', () => {

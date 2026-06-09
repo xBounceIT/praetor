@@ -379,8 +379,8 @@ const WorkUnitCard: React.FC<{
               {unit.members && unit.members.length > 0 ? (
                 <MemberAvatarGroup members={unit.members} className="mt-1.5" />
               ) : (
-                <p className="font-bold text-sm text-zinc-700">
-                  {unit.userCount || 0} {t('hr:competenceCenters.users')}
+                <p className="text-sm text-zinc-400 italic">
+                  {t('hr:competenceCenters.noMembersAssigned')}
                 </p>
               )}
             </div>

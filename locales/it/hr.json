@@ -136,6 +136,7 @@
     "noCompetenceCentersAssigned": "Nessun Competence Center assegnato",
     "noCompetenceCentersAssignedDescription": "Non sei assegnato a nessun Competence Center. Contatta un top manager per assistenza.",
     "noManagersAssigned": "Nessun manager assegnato",
+    "noMembersAssigned": "Nessun membro assegnato",
     "users": "utenti",
     "noUsersFound": "Nessun utente trovato corrispondente alla tua ricerca.",
     "addRemoveUsers": "Aggiungi o rimuovi utenti da {{name}}"
