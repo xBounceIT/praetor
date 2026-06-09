@@ -11,6 +11,12 @@ interface DeleteConfirmModalProps {
   title: React.ReactNode;
   description?: React.ReactNode;
   isDeleting?: boolean;
+  /**
+   * Stacking order for the underlying Modal. Defaults to the Modal's own
+   * default (60). Raise it when the confirmation must sit above another open
+   * modal (e.g. deleting a line item from within a document edit form).
+   */
+  zIndex?: number;
 }
 
 const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
@@ -20,10 +26,11 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   title,
   description,
   isDeleting = false,
+  zIndex,
 }) => {
   const { t } = useTranslation('common');
   return (
-    <Modal isOpen={isOpen} onClose={onClose} ariaLabel={null}>
+    <Modal isOpen={isOpen} onClose={onClose} ariaLabel={null} zIndex={zIndex}>
       {() => (
         <ModalContent size="sm">
           <ModalHeader className="justify-center text-center">
