@@ -262,21 +262,12 @@ export const lockCurrentById = async (
 export const findStatusAndClientName = async (
   id: string,
   exec: DbExecutor = db,
-): Promise<{ status: string; clientName: string; expirationDate: string | null } | null> => {
+): Promise<{ status: string; clientName: string } | null> => {
   const rows = await exec
-    .select({
-      status: quotes.status,
-      clientName: quotes.clientName,
-      expirationDate: quotes.expirationDate,
-    })
+    .select({ status: quotes.status, clientName: quotes.clientName })
     .from(quotes)
     .where(eq(quotes.id, id));
-  if (!rows[0]) return null;
-  return {
-    status: rows[0].status,
-    clientName: rows[0].clientName,
-    expirationDate: normalizeNullableDateOnly(rows[0].expirationDate, 'quote.expirationDate'),
-  };
+  return rows[0] ?? null;
 };
 
 // True when another client quote (≠ currentQuoteId) is already linked to the given supplier quote.

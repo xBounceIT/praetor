@@ -158,11 +158,16 @@ const SAMPLE_QUOTE = {
   supplierName: 'Acme',
   paymentTerms: 'immediate',
   status: 'draft',
-  expirationDate: '2026-12-31',
+  // Far future: effective-status guards compare against the real clock, so a near date would flip
+  // this fixture to `expired` one day and break the suite (#779 second-pass review).
+  expirationDate: '2999-12-31',
   linkedOrderId: null,
   notes: null,
   createdAt: 1_700_000_000_000,
   updatedAt: 1_700_000_000_000,
+  // The real findById always materializes the reverse-lookup link fields (null when unlinked).
+  linkedClientQuoteId: null as string | null,
+  linkedClientQuoteStatus: null as string | null,
 };
 
 const SAMPLE_ITEM = {
@@ -392,7 +397,8 @@ describe('POST /api/sales/supplier-quotes/:id/versions/:versionId/restore', () =
 
   test('404 when current quote does not exist', async () => {
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
-    sqExistsByIdMock.mockResolvedValue(false);
+    // The restore pre-check reads the full row (findById) so it can also see the link fields.
+    sqFindByIdMock.mockResolvedValue(null);
     sqvFindByIdMock.mockResolvedValue(SAMPLE_VERSION);
 
     const res = await testApp.inject({
@@ -403,6 +409,29 @@ describe('POST /api/sales/supplier-quotes/:id/versions/:versionId/restore', () =
 
     expect(res.statusCode).toBe(404);
     expect(sqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when the supplier quote is linked to a client quote (synced read-only)', async () => {
+    // A linked quote's content and stored status are driven by the client quote (issue #779); a
+    // restore would rewrite the stored lifecycle underneath the sync.
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqFindByIdMock.mockResolvedValue({
+      ...SAMPLE_QUOTE,
+      linkedClientQuoteId: 'cq-1',
+      linkedClientQuoteStatus: 'sent',
+    });
+    sqvFindByIdMock.mockResolvedValue(SAMPLE_VERSION);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes/sq-1/versions/sqv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('synced');
+    expect(sqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
+    expect(sqvInsertMock).not.toHaveBeenCalled();
   });
 
   test('409 when snapshot supplier no longer exists', async () => {

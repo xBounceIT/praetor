@@ -255,6 +255,11 @@ const EMPTY_PRICING_TOTALS: PricingTotals = {
   marginPercentage: 0,
 };
 
+// One label shape for a supplier-quote line item, shared by the picker options and the
+// display-value lookup so the two can never drift.
+const supplierQuoteItemLabel = (quote: SupplierQuote, item: SupplierQuote['items'][number]) =>
+  `${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)})`;
+
 const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   offers,
   clients,
@@ -316,10 +321,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     const options: Array<{ id: string; name: string }> = [];
     for (const quote of acceptedSupplierQuotes) {
       for (const item of quote.items) {
-        options.push({
-          id: item.id,
-          name: `${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)})`,
-        });
+        options.push({ id: item.id, name: supplierQuoteItemLabel(quote, item) });
       }
     }
     return options;
@@ -333,10 +335,23 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     [supplierQuoteItemOptions, t],
   );
 
+  // Display labels resolve across ALL supplier quotes (not just the accepted/selectable ones): an
+  // existing line may reference an accepted quote whose expiration has passed — the picker hides
+  // it from NEW sourcing, but the line's label must still render instead of the "no supplier
+  // quote" fallback (the link is intact and the server still accepts the item).
+  const supplierQuoteItemLabelById = useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const quote of supplierQuotes) {
+      for (const item of quote.items) {
+        labels.set(item.id, supplierQuoteItemLabel(quote, item));
+      }
+    }
+    return labels;
+  }, [supplierQuotes]);
+
   const getSupplierQuoteItemDisplayValue = (itemId?: string | null) => {
     if (!itemId) return t('sales:clientQuotes.noSupplierQuote');
-    const option = supplierQuoteItemOptions.find((o) => o.id === itemId);
-    return option?.name ?? t('sales:clientQuotes.noSupplierQuote');
+    return supplierQuoteItemLabelById.get(itemId) ?? t('sales:clientQuotes.noSupplierQuote');
   };
 
   const activeProductIds = useMemo(

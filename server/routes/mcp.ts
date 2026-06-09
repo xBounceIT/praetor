@@ -26,8 +26,10 @@ import {
   TimeEntryServiceError,
   updateTimeEntry,
 } from '../services/timeEntries.ts';
-import { isPastLocalDate } from '../utils/date.ts';
-import { effectiveQuoteStatus, effectiveSupplierQuoteStatus } from '../utils/quote-status.ts';
+import {
+  effectiveQuoteStatusFromDate,
+  effectiveSupplierQuoteStatusFromDate,
+} from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { normalizeUnitType } from '../utils/unit-type.ts';
 
@@ -362,10 +364,7 @@ const buildServer = () => {
 
       return jsonResult({
         clientQuotes: clientQuotes.map((quote) => {
-          const effectiveStatus = effectiveQuoteStatus(
-            quote.status,
-            quote.expirationDate ? isPastLocalDate(quote.expirationDate) : false,
-          );
+          const effectiveStatus = effectiveQuoteStatusFromDate(quote.status, quote.expirationDate);
           return {
             ...quote,
             items: clientItemsByQuote.get(quote.id) ?? [],
@@ -377,13 +376,11 @@ const buildServer = () => {
           ...quote,
           // Effective status: synced from the linked client quote + the supplier quote's own
           // `expired` overlay (issue #779).
-          status: effectiveSupplierQuoteStatus({
-            ownStatus: quote.status,
-            linkedClientStatus: quote.linkedClientQuoteStatus,
-            isPastOwnExpiration: quote.expirationDate
-              ? isPastLocalDate(quote.expirationDate)
-              : false,
-          }),
+          status: effectiveSupplierQuoteStatusFromDate(
+            quote.status,
+            quote.linkedClientQuoteStatus,
+            quote.expirationDate,
+          ),
           items: (supplierItemsByQuote.get(quote.id) ?? []).map((item) => ({
             ...item,
             unitType: normalizeUnitType(item.unitType),

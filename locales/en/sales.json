@@ -93,7 +93,8 @@
       "totalGreaterThanZero": "Total must be greater than 0",
       "quoteCodeRequired": "Quote Code is required",
       "expiredCannotModify": "Expired quotes cannot be confirmed or reverted",
-      "expiredCannotDelete": "Expired quotes cannot be deleted"
+      "expiredCannotDelete": "Expired quotes cannot be deleted",
+      "expirationExtendInvalid": "Set an expiration date of today or later to revalidate the quote"
     },
     "clientInformation": "Client Information",
     "productsServices": "Products / Services",
@@ -106,7 +107,6 @@
     "orderExpirationAsc": "Order by expiration date (ascending)",
     "orderExpirationDesc": "Order by expiration date (descending)",
     "clearExpirationOrder": "Clear expiration date ordering",
-    "markAsConfirmed": "Mark as Confirmed",
     "markAsSent": "Mark as Sent",
     "markAsOffer": "Mark as Offer",
     "markAsAccepted": "Mark as Accepted",
@@ -332,7 +332,8 @@
     "errors": {
       "supplierRequired": "Supplier is required",
       "quoteCodeRequired": "Quote Code is required",
-      "itemsRequired": "At least one item is required"
+      "itemsRequired": "At least one item is required",
+      "expirationExtendInvalid": "Set an expiration date of today or later to revalidate the supplier quote"
     },
     "hour": "Hour",
     "hours": "Hours",

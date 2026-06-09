@@ -42,7 +42,6 @@ const cqFindItemsForQuoteMock = mock();
 const cqFindIdConflictMock = mock();
 const cqUpdateMock = mock();
 
-const sqExistsByIdMock = mock();
 const sqFindExpirationByIdMock = mock();
 
 const qvInsertMock = mock();
@@ -81,7 +80,6 @@ beforeAll(async () => {
   }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
-    existsById: sqExistsByIdMock,
     findExpirationById: sqFindExpirationByIdMock,
   }));
   mock.module('../../repositories/quoteVersionsRepo.ts', () => ({
@@ -128,7 +126,9 @@ const baseGate = () => ({
   status: 'draft',
   discount: 0,
   discountType: 'percentage' as const,
-  expirationDate: '2026-12-31',
+  // Far future: the effective-status guards compare against the real clock, so a near date would
+  // flip these fixtures to `expired` one day and break the suite (#779 second-pass review).
+  expirationDate: '2999-12-31',
   linkedSupplierQuoteId: null as string | null,
   linkedSupplierQuoteExpiration: null as string | null,
 });
@@ -143,7 +143,7 @@ const updatedQuote = (over: Record<string, unknown> = {}) => ({
   discount: 0,
   discountType: 'percentage' as const,
   status: 'sent',
-  expirationDate: '2026-12-31',
+  expirationDate: '2999-12-31',
   notes: null,
   createdAt: 1_700_000_000_000,
   updatedAt: 1_700_000_000_000,
@@ -164,7 +164,6 @@ const allMocks = [
   cqFindItemsForQuoteMock,
   cqFindIdConflictMock,
   cqUpdateMock,
-  sqExistsByIdMock,
   sqFindExpirationByIdMock,
   qvInsertMock,
   qvBuildSnapshotMock,
@@ -190,8 +189,9 @@ beforeEach(async () => {
   cqFindFullForSnapshotMock.mockResolvedValue({ quote: updatedQuote(), items: [] });
   cqFindItemsForQuoteMock.mockResolvedValue([]);
   qvInsertMock.mockResolvedValue(undefined);
-  sqExistsByIdMock.mockResolvedValue(true);
-  sqFindExpirationByIdMock.mockResolvedValue(null);
+  // Existence and expiration come from ONE read post-#779 (expiration_date is NOT NULL): a null
+  // expiration means "supplier quote missing", so the happy default is a real future date.
+  sqFindExpirationByIdMock.mockResolvedValue('2999-12-31');
 
   testApp = await buildRouteTestApp(routePlugin, '/api/sales/client-quotes');
 });
@@ -318,5 +318,121 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
 
     const res = await putStatus({ status: 'denied' });
     expect(res.statusCode).toBe(200);
+  });
+
+  test('409 expired quote rejects content edits (only the expiration date is editable)', async () => {
+    // The expired-frozen rule must cover CONTENT, not just status: a PUT touching notes/items/etc.
+    // (no status field) on an effectively-expired quote is rejected (issue #779).
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent', expirationDate: '2000-01-01' }));
+
+    const res = await putStatus({ notes: 'edited while expired' });
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Expired');
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 blocks (re)linking an expired supplier quote onto an already-sent quote', async () => {
+    // No status change — the supplier-expired guard must still fire when an expired supplier quote
+    // is linked onto a quote that already sits in sent/offer/accepted (issue #779).
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent' }));
+    sqFindExpirationByIdMock.mockResolvedValue('2000-01-01');
+
+    const res = await putStatus({ linkedSupplierQuoteId: 'sq-9' });
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('expired');
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 allows linking an expired supplier quote to a draft quote (not progressing yet)', async () => {
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    sqFindExpirationByIdMock.mockResolvedValue('2000-01-01');
+    cqUpdateMock.mockResolvedValue(
+      updatedQuote({ status: 'draft', linkedSupplierQuoteId: 'sq-9' }),
+    );
+
+    const res = await putStatus({ linkedSupplierQuoteId: 'sq-9' });
+    expect(res.statusCode).toBe(200);
+  });
+
+  test('200 tolerates a resend of the UNCHANGED expired link on a sent quote (no-op save)', async () => {
+    // The edit form resends linkedSupplierQuoteId on every save; an unchanged link on an
+    // already-sent quote must not trip the supplier-expired guard (only NEW links do).
+    cqFindCurrentMock.mockResolvedValue(
+      gate({
+        status: 'sent',
+        linkedSupplierQuoteId: 'sq-9',
+        linkedSupplierQuoteExpiration: '2000-01-01',
+      }),
+    );
+    sqFindExpirationByIdMock.mockResolvedValue('2000-01-01');
+    cqUpdateMock.mockResolvedValue(
+      updatedQuote({ status: 'sent', linkedSupplierQuoteId: 'sq-9', notes: 'edited' }),
+    );
+
+    const res = await putStatus({ status: 'sent', linkedSupplierQuoteId: 'sq-9', notes: 'edited' });
+    expect(res.statusCode).toBe(200);
+  });
+
+  test('response does not flag linkedSupplierQuoteExpired on a terminal (accepted) quote', async () => {
+    // Accepted/denied are frozen and can never progress, so the "extend before progressing"
+    // indicator must not show even when the linked supplier quote is past its expiration (#779).
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'accepted' }));
+    cqUpdateMock.mockResolvedValue(
+      updatedQuote({
+        status: 'accepted',
+        linkedSupplierQuoteId: 'sq-9',
+        linkedSupplierQuoteExpiration: '2000-01-01',
+      }),
+    );
+
+    const res = await putStatus({ status: 'accepted' });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).linkedSupplierQuoteExpired).toBe(false);
+  });
+
+  test('normalizes a legacy status value on write so the tightened CHECK is never hit', async () => {
+    // The request schema does not constrain status; a legacy 'quoted' must be folded to 'draft'
+    // before the write (issue #779) rather than reaching the DB CHECK as-is.
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'draft' }));
+
+    const res = await putStatus({ status: 'quoted' });
+    expect(res.statusCode).toBe(200);
+    expect(cqUpdateMock).toHaveBeenCalled();
+    expect(cqUpdateMock.mock.calls[0][1].status).toBe('draft');
+  });
+
+  test('400 rejects an unknown status value instead of silently flooring it to draft', async () => {
+    // The derived-only `expired` (or any typo) must never round-trip into a write: the old floor
+    // would have demoted a sent quote to draft with a 200 (#779 second-pass review).
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent' }));
+
+    const res = await putStatus({ status: 'expired' });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain('status must be one of');
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 when the linked supplier quote does not exist (null expiration = missing row)', async () => {
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    sqFindExpirationByIdMock.mockResolvedValue(null);
+
+    const res = await putStatus({ linkedSupplierQuoteId: 'sq-missing' });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain('does not reference');
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('a stale request-side isExpired field is ignored and the response value is computed', async () => {
+    // The pre-#779 optimistic-restore override is gone: a body carrying only `isExpired` is a
+    // no-op update (not a content edit) and the response reports the derived value.
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent', expirationDate: '2000-01-01' }));
+    cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'sent', expirationDate: '2000-01-01' }));
+
+    const res = await putStatus({ isExpired: false });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.isExpired).toBe(true);
+    expect(body.effectiveStatus).toBe('expired');
   });
 });

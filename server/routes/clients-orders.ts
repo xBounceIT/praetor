@@ -9,7 +9,6 @@ import * as productsRepo from '../repositories/productsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
-import { isPastLocalDate } from '../utils/date.ts';
 import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
 import type { DurationUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
@@ -19,7 +18,7 @@ import {
   generateSupplierOrderId,
   ITEM_ID_PREFIXES,
 } from '../utils/order-ids.ts';
-import { effectiveSupplierQuoteStatus } from '../utils/quote-status.ts';
+import { effectiveSupplierQuoteStatusFromDate } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
@@ -808,13 +807,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ]);
           if (
             !fastFailQuote ||
-            effectiveSupplierQuoteStatus({
-              ownStatus: fastFailQuote.status,
-              linkedClientStatus: fastFailQuote.linkedClientQuoteStatus,
-              isPastOwnExpiration: fastFailQuote.expirationDate
-                ? isPastLocalDate(fastFailQuote.expirationDate)
-                : false,
-            }) !== 'accepted'
+            effectiveSupplierQuoteStatusFromDate(
+              fastFailQuote.status,
+              fastFailQuote.linkedClientQuoteStatus,
+              fastFailQuote.expirationDate,
+            ) !== 'accepted'
           )
             continue;
           if (fastFailLinked) continue;
@@ -829,13 +826,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             const lockedStatus = await supplierQuotesRepo.lockEffectiveStatusById(sqId, tx);
             if (
               !lockedStatus ||
-              effectiveSupplierQuoteStatus({
-                ownStatus: lockedStatus.ownStatus,
-                linkedClientStatus: lockedStatus.linkedClientStatus,
-                isPastOwnExpiration: lockedStatus.expirationDate
-                  ? isPastLocalDate(lockedStatus.expirationDate)
-                  : false,
-              }) !== 'accepted'
+              effectiveSupplierQuoteStatusFromDate(
+                lockedStatus.ownStatus,
+                lockedStatus.linkedClientStatus,
+                lockedStatus.expirationDate,
+              ) !== 'accepted'
             )
               return false;
             const linkedUnderLock = await supplierQuotesRepo.findLinkedOrderId(sqId, tx);

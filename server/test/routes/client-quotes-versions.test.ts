@@ -431,6 +431,98 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     expect(qvInsertMock).not.toHaveBeenCalled();
   });
 
+  test('409 when the quote is effectively expired (restore would rewrite frozen content)', async () => {
+    // Expired quotes are content-read-only and exit only via a date extension (issue #779);
+    // restore must enforce the same rule the PUT does.
+    setupHappyPath();
+    cqLockCurrentByIdMock.mockResolvedValue({
+      status: 'sent',
+      discount: 0,
+      discountType: 'percentage',
+      expirationDate: '2000-01-01',
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes/q-1/versions/qv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Expired');
+    expect(cqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
+    expect(qvInsertMock).not.toHaveBeenCalled();
+  });
+
+  test('200 restores a sent quote whose expiration is still in the future', async () => {
+    setupHappyPath();
+    cqLockCurrentByIdMock.mockResolvedValue({
+      status: 'sent',
+      discount: 0,
+      discountType: 'percentage',
+      expirationDate: '2999-12-31',
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes/q-1/versions/qv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(cqRestoreSnapshotQuoteMock).toHaveBeenCalled();
+  });
+
+  test('409 when the snapshot would park the quote in sent beside an expired linked supplier', async () => {
+    // The PUT guard blocks progressing to — or being parked in — sent/offer/accepted while the
+    // linked supplier quote is expired (issue #779); restore must not bypass it. The link is not
+    // part of the snapshot and survives the restore.
+    setupHappyPath();
+    cqLockCurrentByIdMock.mockResolvedValue({
+      status: 'draft',
+      discount: 0,
+      discountType: 'percentage',
+      linkedSupplierQuoteId: 'sq-9',
+      linkedSupplierQuoteExpiration: '2000-01-01',
+    });
+    qvFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: { ...SAMPLE_SNAPSHOT, quote: { ...SAMPLE_QUOTE, status: 'sent' } },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes/q-1/versions/qv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('expired');
+    expect(cqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
+    expect(qvInsertMock).not.toHaveBeenCalled();
+  });
+
+  test('200 restores a draft snapshot even while the linked supplier quote is expired', async () => {
+    // Parking in draft is not a progressed state — mirrors the PUT guard's tolerance.
+    setupHappyPath();
+    cqLockCurrentByIdMock.mockResolvedValue({
+      status: 'draft',
+      discount: 0,
+      discountType: 'percentage',
+      linkedSupplierQuoteId: 'sq-9',
+      linkedSupplierQuoteExpiration: '2000-01-01',
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes/q-1/versions/qv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(cqRestoreSnapshotQuoteMock).toHaveBeenCalled();
+  });
+
   test('404 when current quote does not exist', async () => {
     cqFindLinkedOfferIdMock.mockResolvedValue(null);
     cqLockCurrentByIdMock.mockResolvedValue(null);

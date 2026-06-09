@@ -150,22 +150,8 @@ export const existsById = async (id: string, exec: DbExecutor = db): Promise<boo
   return rows.length > 0;
 };
 
-// SELECT status ... FOR UPDATE. Must be called inside a transaction. Use when a write that
-// references this quote (creating a supplier order linked to it) needs to serialize against
-// concurrent inserts/updates of the same quote.
-export const lockStatusById = async (
-  id: string,
-  exec: DbExecutor = db,
-): Promise<{ status: string } | null> => {
-  const rows = await exec
-    .select({ status: supplierQuotes.status })
-    .from(supplierQuotes)
-    .where(eq(supplierQuotes.id, id))
-    .for('update');
-  return rows[0] ?? null;
-};
-
-// SELECT ... FOR UPDATE variant that also resolves the linked client quote's status, so callers
+// SELECT ... FOR UPDATE (must be called inside a transaction) that also resolves the linked
+// client quote's status, so callers
 // (supplier-order create / clients-order supplier auto-create) can decide "is this supplier quote
 // effectively accepted?" — mirror the linked client status, override with `expired` from the
 // supplier quote's OWN expiration — atomically under the row lock (issue #779). The scalar
@@ -439,7 +425,7 @@ export const getQuoteItemSnapshots = async (
       and(
         inArray(supplierQuoteItems.id, uniqueIds),
         // Effective status (linked client status when linked, else own) is accepted.
-        sql`COALESCE((SELECT q.status FROM quotes q WHERE q.linked_supplier_quote_id = ${supplierQuotes.id} LIMIT 1), ${supplierQuotes.status}) = 'accepted'`,
+        sql`COALESCE(${linkedClientQuoteStatusSubquery}, ${supplierQuotes.status}) = 'accepted'`,
       ),
     );
 

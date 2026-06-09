@@ -984,7 +984,6 @@ const AppContent: React.FC = () => {
   // factories observe up-to-date state once promises resolve (a navigation can
   // clear `clientQuoteFilterId` mid-await, or a new project can land between
   // factory creation and a `clients.remove()` call, for example).
-  const quotesRef = useRef(quotes);
   const clientQuoteFilterIdRef = useRef(clientQuoteFilterId);
   const clientOfferFilterIdRef = useRef(clientOfferFilterId);
   const supplierQuoteFilterIdRef = useRef(supplierQuoteFilterId);
@@ -993,7 +992,6 @@ const AppContent: React.FC = () => {
   // resume between commit and useEffect (microtask vs effect-task), reading
   // a stale ref. React allows writing to refs during render as long as the
   // value is deterministic in the state.
-  quotesRef.current = quotes;
   clientQuoteFilterIdRef.current = clientQuoteFilterId;
   clientOfferFilterIdRef.current = clientOfferFilterId;
   supplierQuoteFilterIdRef.current = supplierQuoteFilterId;
@@ -1157,7 +1155,6 @@ const AppContent: React.FC = () => {
       makeQuoteHandlers({
         // Getters back onto refs so reads after awaited API calls see the
         // latest value instead of the snapshot captured at factory creation.
-        getQuotes: () => quotesRef.current,
         getClientQuoteFilterId: () => clientQuoteFilterIdRef.current,
         getClientOfferFilterId: () => clientOfferFilterIdRef.current,
         setQuotes,

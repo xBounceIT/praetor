@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import type { Client, Product, Quote, SupplierQuote } from '../../types';
 import { render } from '../helpers/render';
@@ -325,5 +326,141 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
       0,
     );
     expect(screen.getAllByRole('button', { name: PRODUCT_DISABLED }).length).toBeGreaterThan(0);
+  });
+});
+
+describe('<ClientQuotesView /> expired-quote handling (issue #779)', () => {
+  const expiredQuote = (over: Partial<Quote> = {}): Quote =>
+    buildQuote({
+      id: 'Q-EXPIRED',
+      status: 'sent',
+      // The server marks an expired quote via effectiveStatus; the view trusts it (it short-circuits
+      // the date math) so the row/modal go into the expired read-only-except-date mode. The default
+      // prefilled date is FUTURE so the extend-submit passes its past-date validation.
+      effectiveStatus: 'expired',
+      expirationDate: '2999-12-31',
+      items: [
+        {
+          id: 'qi-exp-1',
+          quoteId: 'Q-EXPIRED',
+          productId: 'prod-1',
+          productName: 'Solar Panel',
+          quantity: 1,
+          unitPrice: 100,
+        },
+      ],
+      ...over,
+    });
+
+  test('the restore (back-to-draft) button is disabled on an expired sent quote', async () => {
+    // It would otherwise be a 409 dead-end: enabled in the UI, rejected by the server (issue #779).
+    // Row actions live behind the StandardTable overflow menu ("table.rowActions").
+    const user = userEvent.setup();
+    render(<ClientQuotesView {...baseProps} quotes={[expiredQuote()]} />);
+
+    await user.click(screen.getByRole('button', { name: 'table.rowActions' }));
+
+    const restoreIcon = document.querySelector('.fa-rotate-left');
+    expect(restoreIcon).not.toBeNull();
+    expect(restoreIcon?.closest('button')).toBeDisabled();
+  });
+
+  test('submitting an expired quote extends ONLY the expiration date', async () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<Quote>) => Promise.resolve());
+    render(
+      <ClientQuotesView {...baseProps} quotes={[expiredQuote()]} onUpdateQuote={onUpdateQuote} />,
+    );
+
+    // Expired rows must stay openable — the modal is where the expiration gets extended (#779).
+    fireEvent.click(screen.getByText('Q-EXPIRED'));
+    const submit = (
+      await screen.findAllByRole('button', { name: 'sales:clientQuotes.updateQuote' })
+    )[0];
+    expect(submit).toBeEnabled();
+    const form = submit.closest('form');
+    expect(form).not.toBeNull();
+    fireEvent.submit(form as HTMLFormElement);
+
+    await waitFor(() => expect(onUpdateQuote).toHaveBeenCalledTimes(1));
+    const [id, payload] = onUpdateQuote.mock.calls[0];
+    expect(id).toBe('Q-EXPIRED');
+    // Only the expiration date is sent — no status/items/discount leak through (the form is
+    // otherwise read-only and the server rejects content edits on an expired quote).
+    expect(Object.keys(payload as object)).toEqual(['expirationDate']);
+    expect((payload as { expirationDate: string }).expirationDate).toBeTruthy();
+  });
+
+  test('submitting with a still-past expiration date is rejected client-side', async () => {
+    // Revalidation requires a date from today onward — saving the old past date would close the
+    // modal while the quote silently stays expired (#779 second-pass review).
+    const onUpdateQuote = mock((_id: string, _updates: Partial<Quote>) => Promise.resolve());
+    render(
+      <ClientQuotesView
+        {...baseProps}
+        quotes={[expiredQuote({ expirationDate: '2000-01-01' })]}
+        onUpdateQuote={onUpdateQuote}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Q-EXPIRED'));
+    const submit = (
+      await screen.findAllByRole('button', { name: 'sales:clientQuotes.updateQuote' })
+    )[0];
+    const form = submit.closest('form');
+    expect(form).not.toBeNull();
+    fireEvent.submit(form as HTMLFormElement);
+
+    // The guard rejects before any API call; the modal stays open for the user to pick a date.
+    expect(onUpdateQuote).not.toHaveBeenCalled();
+    const stillOpen = screen.getAllByRole('button', { name: 'sales:clientQuotes.updateQuote' });
+    expect(stillOpen.length).toBeGreaterThan(0);
+  });
+});
+
+describe('<ClientQuotesView /> supplier-quote item labels', () => {
+  test('an existing line keeps its label when the accepted supplier quote is past-dated', () => {
+    // The picker hides past-dated accepted quotes from NEW sourcing (intentional, #154), but an
+    // existing line's display label must resolve across ALL supplier quotes — the link is intact
+    // and the server-side sourcing gate still accepts the item.
+    const pastDatedAccepted: SupplierQuote = {
+      ...supplierQuote,
+      id: 'SQ-OLD',
+      expirationDate: '2000-01-01',
+      items: [
+        {
+          id: 'sqi-old',
+          quoteId: 'SQ-OLD',
+          productId: 'prod-1',
+          productName: 'Solar Panel',
+          quantity: 1,
+          listPrice: 60,
+          discountPercent: 0,
+          unitPrice: 60,
+          unitType: 'unit',
+        },
+      ],
+    };
+    const quote = buildQuote({
+      id: 'Q-OLD-SOURCE',
+      items: [
+        {
+          id: 'qi-old-1',
+          quoteId: 'Q-OLD-SOURCE',
+          productId: 'prod-1',
+          productName: 'Solar Panel',
+          quantity: 1,
+          unitPrice: 80,
+          supplierQuoteId: 'SQ-OLD',
+          supplierQuoteItemId: 'sqi-old',
+        },
+      ],
+    });
+
+    render(
+      <ClientQuotesView {...baseProps} quotes={[quote]} supplierQuotes={[pastDatedAccepted]} />,
+    );
+    fireEvent.click(screen.getByText('Q-OLD-SOURCE'));
+
+    expect(screen.getAllByText('Acme Supplies · Solar Panel (60.00)').length).toBeGreaterThan(0);
   });
 });

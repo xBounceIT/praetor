@@ -958,7 +958,6 @@ export interface SupplierQuote {
   // Raw stored pipeline status — the editable value the form uses while the quote is unlinked.
   ownStatus?: 'draft' | 'sent' | 'offer' | 'accepted' | 'denied';
   // When linked to a client quote, the status is read-only and mirrors it (#779).
-  isLinked?: boolean;
   isStatusSynced?: boolean;
   linkedClientQuoteId?: string | null;
   expirationDate: string;
@@ -974,7 +973,7 @@ export interface SupplierQuoteVersionSnapshot {
   schemaVersion: 1;
   quote: Omit<
     SupplierQuote,
-    'items' | 'linkedOrderId' | 'ownStatus' | 'isLinked' | 'isStatusSynced' | 'linkedClientQuoteId'
+    'items' | 'linkedOrderId' | 'ownStatus' | 'isStatusSynced' | 'linkedClientQuoteId'
   >;
   items: SupplierQuoteItem[];
 }

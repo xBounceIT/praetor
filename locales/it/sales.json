@@ -93,7 +93,8 @@
       "totalGreaterThanZero": "Il totale deve essere maggiore di 0",
       "quoteCodeRequired": "Il codice preventivo è obbligatorio",
       "expiredCannotModify": "I preventivi scaduti non possono essere confermati o ripristinati",
-      "expiredCannotDelete": "I preventivi scaduti non possono essere eliminati"
+      "expiredCannotDelete": "I preventivi scaduti non possono essere eliminati",
+      "expirationExtendInvalid": "Imposta una data di scadenza odierna o successiva per riconvalidare il preventivo"
     },
     "clientInformation": "Informazioni Cliente",
     "productsServices": "Prodotti / Servizi",
@@ -106,7 +107,6 @@
     "orderExpirationAsc": "Ordina per data scadenza (crescente)",
     "orderExpirationDesc": "Ordina per data scadenza (decrescente)",
     "clearExpirationOrder": "Cancella ordinamento scadenza",
-    "markAsConfirmed": "Segna come Confermato",
     "markAsSent": "Segna come Inviato",
     "markAsOffer": "Segna come Offerta",
     "markAsAccepted": "Segna come Accettato",
@@ -332,7 +332,8 @@
     "errors": {
       "supplierRequired": "Il fornitore è obbligatorio",
       "quoteCodeRequired": "Il codice preventivo è obbligatorio",
-      "itemsRequired": "Almeno un articolo è obbligatorio"
+      "itemsRequired": "Almeno un articolo è obbligatorio",
+      "expirationExtendInvalid": "Imposta una data di scadenza odierna o successiva per riconvalidare il preventivo fornitore"
     },
     "hour": "Ora",
     "hours": "Ore",

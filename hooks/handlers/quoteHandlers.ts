@@ -1,14 +1,13 @@
 import type React from 'react';
 import api from '../../services/api';
 import type { ClientOffer, ClientsOrder, Invoice, Quote, View } from '../../types';
-import { getLocalDateString } from '../../utils/date';
 import { makeTempId } from '../../utils/tempId';
 import { toastError } from '../../utils/toast';
 
 /**
- * Quote handlers read three pieces of shared state — `quotes`,
- * `clientQuoteFilterId`, and `clientOfferFilterId` — both before and AFTER
- * awaited network calls. Capturing those values from the deps closure would
+ * Quote handlers read two pieces of shared state — `clientQuoteFilterId` and
+ * `clientOfferFilterId` — both before and AFTER awaited network calls.
+ * Capturing those values from the deps closure would
  * surface a stale-closure bug: the handler factory is created with the values
  * at the time of the surrounding `useMemo` render, but an awaited API call can
  * outlive that render. While the await is pending the user can navigate or
@@ -23,7 +22,6 @@ import { toastError } from '../../utils/toast';
  * always see the current value — even across awaits.
  */
 export type QuoteHandlersDeps = {
-  getQuotes: () => Quote[];
   getClientQuoteFilterId: () => string | null;
   getClientOfferFilterId: () => string | null;
   setQuotes: React.Dispatch<React.SetStateAction<Quote[]>>;
@@ -38,7 +36,6 @@ export type QuoteHandlersDeps = {
 
 export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
   const {
-    getQuotes,
     getClientQuoteFilterId,
     getClientOfferFilterId,
     setQuotes,
@@ -83,18 +80,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
 
   const updateQuote = async (id: string, updates: Partial<Quote>) => {
     try {
-      const currentQuote = getQuotes().find((quote) => quote.id === id);
-      const isRestore = Boolean(
-        updates.status === 'draft' &&
-          updates.isExpired === false &&
-          currentQuote &&
-          (currentQuote.status !== 'draft' || currentQuote.isExpired),
-      );
-      const updatesWithRestore = isRestore
-        ? { ...updates, expirationDate: getLocalDateString() }
-        : updates;
-
-      const updated = await api.quotes.update(id, updatesWithRestore);
+      const updated = await api.quotes.update(id, updates);
       // Re-read the filter via the getter so we observe the latest value, not
       // the one captured when this handler was created. Navigation effects in
       // App.tsx can clear the filter while the API call is in flight.

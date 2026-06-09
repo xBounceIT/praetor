@@ -23,10 +23,12 @@ import {
   formatInsertDate,
   formatInsertDateTime,
   getLocalDateString,
+  isDateOnlyBeforeToday,
   normalizeDateOnlyString,
 } from '../../utils/date';
 import { convertUnitPrice, parseNumberInputValue, roundCurrency } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
+import { isTerminalQuoteStatus } from '../../utils/quoteStatus';
 import { uploadStagedAttachments } from '../../utils/supplierQuoteAttachments';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
@@ -377,6 +379,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       return quote.status === 'denied' || hasOrder;
     },
     [hasOrderForQuote],
+  );
+
+  // History rows (denied / order-linked) are not editable, but terminal accepted/denied still OPEN
+  // in read-only mode for viewing — one predicate keeps onRowClick and rowClassName in sync.
+  const canOpenQuoteModal = useCallback(
+    (quote: SupplierQuote) => !isHistoryRow(quote) || isTerminalQuoteStatus(quote.status),
+    [isHistoryRow],
   );
 
   const totalsBreakdown = calculateTotals(formData.items || []);
@@ -1227,7 +1236,36 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                           // saves immediately as an "extend validity" action that re-syncs the
                           // linked client quote and clears its expired-supplier block.
                           if (expirationEditableWhileReadOnly && editingQuote) {
-                            void onUpdateQuote(editingQuote.id, { expirationDate: value });
+                            // Revalidation needs a date from today onward; a cleared or past date
+                            // would leave the quote expired — say so instead of silently saving.
+                            if (!value || isDateOnlyBeforeToday(value)) {
+                              toastError(
+                                t('sales:supplierQuotes.errors.expirationExtendInvalid', {
+                                  defaultValue:
+                                    'Set an expiration date of today or later to revalidate the supplier quote',
+                                }),
+                              );
+                              return;
+                            }
+                            // onUpdateQuote may return void or a promise; normalize so a rejection
+                            // is surfaced rather than swallowed.
+                            Promise.resolve(
+                              onUpdateQuote(editingQuote.id, { expirationDate: value }),
+                            ).catch((err: unknown) => {
+                              // Surface the failure and resync the field — the optimistic patch
+                              // above already painted the new date into the form.
+                              toastError(
+                                (err as Error).message ||
+                                  t('sales:supplierQuotes.failedToSave', {
+                                    defaultValue:
+                                      'Failed to save the supplier quote. Please retry.',
+                                  }),
+                              );
+                              dispatch({
+                                type: 'patchFormData',
+                                value: { expirationDate: editingQuote.expirationDate || '' },
+                              });
+                            });
                           }
                         }}
                       />
@@ -1701,16 +1739,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         columns={columns}
         defaultRowsPerPage={5}
         onRowClick={(row) => {
-          const canOpenModal =
-            !isHistoryRow(row) || row.status === 'accepted' || row.status === 'denied';
-          if (canOpenModal) {
+          if (canOpenQuoteModal(row)) {
             openEditModal(row);
           }
         }}
         rowClassName={(row) => {
           const history = isHistoryRow(row);
-          const canOpenModal = !history || row.status === 'accepted' || row.status === 'denied';
-          const cursorClass = canOpenModal ? 'cursor-pointer' : 'cursor-not-allowed';
+          const cursorClass = canOpenQuoteModal(row) ? 'cursor-pointer' : 'cursor-not-allowed';
           return history
             ? `bg-zinc-50 text-zinc-400 hover:bg-zinc-100 ${cursorClass}`
             : `hover:bg-zinc-50/50 ${cursorClass}`;

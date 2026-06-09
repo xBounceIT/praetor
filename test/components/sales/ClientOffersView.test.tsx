@@ -565,3 +565,59 @@ describe('<ClientOffersView /> dark-mode banners (issue #768)', () => {
     ]);
   });
 });
+
+describe('<ClientOffersView /> supplier-quote item labels', () => {
+  test('an existing line keeps its label when the accepted supplier quote is past-dated', () => {
+    // The picker hides past-dated accepted quotes from NEW sourcing (intentional, #154), but an
+    // existing line's display label must resolve across ALL supplier quotes — the link is intact
+    // and the server-side sourcing gate still accepts the item.
+    const pastDatedAccepted: SupplierQuote = {
+      id: 'SQ-OLD',
+      supplierId: 'sup-1',
+      supplierName: 'Acme Supplies',
+      items: [
+        {
+          id: 'sqi-old',
+          quoteId: 'SQ-OLD',
+          productId: 'p-1',
+          productName: 'Widget',
+          quantity: 1,
+          listPrice: 60,
+          discountPercent: 0,
+          unitPrice: 60,
+          unitType: 'unit',
+        },
+      ],
+      paymentTerms: 'immediate',
+      status: 'accepted',
+      expirationDate: '2000-01-01',
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+    };
+    const offer = buildOffer({
+      id: 'O-OLD-SOURCE',
+      items: [
+        {
+          id: 'item-old',
+          offerId: 'O-OLD-SOURCE',
+          productId: 'p-1',
+          productName: 'Widget',
+          quantity: 1,
+          unitPrice: 100,
+          productCost: 50,
+          productMolPercentage: 50,
+          unitType: 'unit',
+          supplierQuoteId: 'SQ-OLD',
+          supplierQuoteItemId: 'sqi-old',
+        },
+      ],
+    });
+
+    render(
+      <ClientOffersView {...baseProps} offers={[offer]} supplierQuotes={[pastDatedAccepted]} />,
+    );
+    fireEvent.click(screen.getByText('O-OLD-SOURCE'));
+
+    expect(screen.getAllByText('Acme Supplies · Widget (60.00)').length).toBeGreaterThan(0);
+  });
+});

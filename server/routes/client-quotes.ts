@@ -9,15 +9,17 @@ import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { isPastLocalDate } from '../utils/date.ts';
-import { getUniqueViolation } from '../utils/db-errors.ts';
+import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
 import { type DurationUnit, effectiveDurationMonths } from '../utils/duration-unit.ts';
 import { normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import {
   canTransitionClientQuote,
-  effectiveQuoteStatus,
+  effectiveQuoteStatusFromDate,
   isTerminalQuoteStatus,
   normalizeQuoteStatus,
+  parseQuoteStatusInput,
+  type QuotePipelineStatus,
 } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -439,7 +441,6 @@ const quoteUpdateBodySchema = {
     status: { type: 'string' },
     expirationDate: { type: 'string', format: 'date' },
     notes: { type: 'string' },
-    isExpired: { type: 'boolean' },
     // `null` clears the 1-to-1 supplier-quote link; a string sets it; omitted leaves it (issue #779).
     linkedSupplierQuoteId: { type: ['string', 'null'] },
   },
@@ -468,70 +469,103 @@ const buildItemsForInsert = (items: ResolvedQuoteItem[]): clientQuotesRepo.NewCl
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
-  // `isExpired` is retained for backward compatibility (existing consumers / optimistic restore);
-  // it now derives from the canonical effective status so terminal accepted/denied never report
-  // expired (issue #779). Prefer `effectiveStatus` in new code.
-  const isQuoteExpired = (status: string, expirationDate: string | null | undefined) =>
-    !!expirationDate && effectiveQuoteStatus(status, isPastLocalDate(expirationDate)) === 'expired';
-
-  const computeEffectiveStatus = (status: string, expirationDate: string | null | undefined) =>
-    effectiveQuoteStatus(status, expirationDate ? isPastLocalDate(expirationDate) : false);
-
   // Builds the response payload with the derived #779 fields. `linkedSupplierQuoteExpiration` is
-  // populated by the list projection; on write paths (BASE projection) it's null, so we read the
-  // linked supplier quote's expiration on demand — and only when a link actually exists.
+  // populated by the list projection; on write paths (BASE projection) it's null, so we use the
+  // expiration the handler already holds (`knownLinkedExpiration`) and fall back to an on-demand
+  // read only when neither is available — and only when a link actually exists.
   const buildQuoteResponse = async (
     quote: clientQuotesRepo.ClientQuote,
     items: clientQuotesRepo.ClientQuoteItem[],
-    isExpiredOverride?: boolean,
+    knownLinkedExpiration?: string | null,
   ) => {
     const linkedExpiration =
       quote.linkedSupplierQuoteExpiration ??
+      knownLinkedExpiration ??
       (quote.linkedSupplierQuoteId
         ? await supplierQuotesRepo.findExpirationById(quote.linkedSupplierQuoteId)
         : null);
+    const effectiveStatus = effectiveQuoteStatusFromDate(quote.status, quote.expirationDate);
     return {
       ...quote,
       items,
-      isExpired: isExpiredOverride ?? isQuoteExpired(quote.status, quote.expirationDate),
-      effectiveStatus: computeEffectiveStatus(quote.status, quote.expirationDate),
-      linkedSupplierQuoteId: quote.linkedSupplierQuoteId,
-      linkedSupplierQuoteExpired: !!linkedExpiration && isPastLocalDate(linkedExpiration),
+      // `isExpired` is retained for backward compatibility (existing consumers); it derives from
+      // the effective status so terminal accepted/denied never report expired (issue #779).
+      // Prefer `effectiveStatus` in new code.
+      isExpired: effectiveStatus === 'expired',
+      effectiveStatus,
+      // Only surface the supplier-expired block indicator while the quote can still progress AND
+      // is still linked; terminal accepted/denied quotes are frozen (the progression guard never
+      // applies), and a stale expiration must not flag a quote whose link was just cleared (#779).
+      linkedSupplierQuoteExpired:
+        !isTerminalQuoteStatus(quote.status) &&
+        !!quote.linkedSupplierQuoteId &&
+        !!linkedExpiration &&
+        isPastLocalDate(linkedExpiration),
     };
   };
 
+  // The 1-to-1 link's "already claimed" 409 in one place: sent by the pre-check below and by both
+  // write catch-blocks when the partial-unique index wins a race past that pre-check (issue #779).
+  const isSupplierLinkUniqueViolation = (dup: ReturnType<typeof getUniqueViolation>) =>
+    !!dup &&
+    (dup.constraint === 'idx_quotes_linked_supplier_quote_id_unique' ||
+      !!dup.detail?.includes('linked_supplier_quote_id'));
+  const replySupplierLinkConflict = (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    opts: { action: string; entityId?: string; toValue?: string },
+  ) =>
+    replyError(request, reply, {
+      statusCode: 409,
+      message: 'This supplier quote is already linked to another client quote',
+      action: opts.action,
+      entityType: 'client_quote',
+      entityId: opts.entityId,
+      details: { secondaryLabel: 'supplier_quote_already_linked', toValue: opts.toValue },
+    });
+
   // Validates a requested supplier-quote link (issue #779): the supplier quote must exist and must
-  // not already be claimed by a different client quote (the link is 1-to-1). Returns the validated
-  // value (string to set, null to clear) on success; on failure it sends the error and returns null.
+  // not already be claimed by a different client quote (the link is 1-to-1). An UNCHANGED link
+  // (`currentValue`) skips the lookups — while this quote holds the link a conflict is impossible
+  // (partial-unique index) and existence is guaranteed by the FK (ON DELETE SET NULL clears the
+  // column) — because the edit form resends the link on every save. Existence and expiration come
+  // from ONE read: `supplier_quotes.expiration_date` is NOT NULL, so a null expiration means the
+  // row is missing. Returns the validated value, whether it differs from `currentValue`, and (for
+  // a changed link) the linked quote's expiration; on failure it replies and returns null.
   const validateLinkedSupplierQuoteId = async (
     raw: unknown,
     ownQuoteId: string,
     request: FastifyRequest,
     reply: FastifyReply,
-  ): Promise<{ value: string | null } | null> => {
+    currentValue: string | null = null,
+  ): Promise<{ value: string | null; changed: boolean; expiration: string | null } | null> => {
     const parsed = optionalNonEmptyString(raw, 'linkedSupplierQuoteId');
     if (!parsed.ok) {
       badRequest(reply, parsed.message);
       return null;
     }
-    if (parsed.value !== null) {
-      if (!(await supplierQuotesRepo.existsById(parsed.value))) {
+    const changed = parsed.value !== currentValue;
+    let expiration: string | null = null;
+    if (parsed.value !== null && changed) {
+      const [linkedExpiration, conflict] = await Promise.all([
+        supplierQuotesRepo.findExpirationById(parsed.value),
+        clientQuotesRepo.findLinkConflict(parsed.value, ownQuoteId),
+      ]);
+      if (linkedExpiration === null) {
         badRequest(reply, 'linkedSupplierQuoteId does not reference an existing supplier quote');
         return null;
       }
-      if (await clientQuotesRepo.findLinkConflict(parsed.value, ownQuoteId)) {
-        await replyError(request, reply, {
-          statusCode: 409,
-          message: 'This supplier quote is already linked to another client quote',
+      if (conflict) {
+        await replySupplierLinkConflict(request, reply, {
           action: 'client_quote.link.conflict',
-          entityType: 'client_quote',
           entityId: ownQuoteId,
-          details: { secondaryLabel: 'supplier_quote_already_linked', toValue: parsed.value },
+          toValue: parsed.value,
         });
         return null;
       }
+      expiration = linkedExpiration;
     }
-    return { value: parsed.value };
+    return { value: parsed.value, changed, expiration };
   };
 
   // Guard: a client quote cannot progress to sent/offer/accepted while its linked supplier quote
@@ -718,6 +752,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       let linkedSupplierQuoteIdValue: string | null = null;
+      let linkedExpiration: string | null = null;
       if (linkedSupplierQuoteId !== undefined) {
         const linkResult = await validateLinkedSupplierQuoteId(
           linkedSupplierQuoteId,
@@ -727,25 +762,31 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
         if (!linkResult) return;
         linkedSupplierQuoteIdValue = linkResult.value;
+        linkedExpiration = linkResult.expiration;
       }
 
-      const initialStatus = typeof status === 'string' && status ? status : 'draft';
-      // A quote created directly in sent/offer/accepted must respect the expired-supplier guard.
-      if (linkedSupplierQuoteIdValue) {
-        const linkedExpiration = await supplierQuotesRepo.findExpirationById(
-          linkedSupplierQuoteIdValue,
-        );
-        if (
-          await blockIfLinkedSupplierExpired(
-            initialStatus,
-            linkedExpiration,
-            nextIdResult.value,
-            request,
-            reply,
-          )
-        ) {
-          return;
+      // Strict write-path status parse (issue #779): canonical + known legacy spellings pass (the
+      // request schema doesn't constrain status); anything else is a 400 — flooring it to draft
+      // would hide the caller's mistake behind a silent demotion.
+      let initialStatus: QuotePipelineStatus = 'draft';
+      if (typeof status === 'string' && status) {
+        const parsedStatus = parseQuoteStatusInput(status);
+        if (parsedStatus === null) {
+          return badRequest(reply, 'status must be one of draft, sent, offer, accepted, denied');
         }
+        initialStatus = parsedStatus;
+      }
+      // A quote created directly in sent/offer/accepted must respect the expired-supplier guard.
+      if (
+        await blockIfLinkedSupplierExpired(
+          initialStatus,
+          linkedExpiration,
+          nextIdResult.value,
+          request,
+          reply,
+        )
+      ) {
+        return;
       }
 
       try {
@@ -784,7 +825,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             secondaryLabel: clientNameResult.value,
           },
         });
-        return reply.code(201).send(await buildQuoteResponse(quote, createdItems));
+        return reply
+          .code(201)
+          .send(await buildQuoteResponse(quote, createdItems, linkedExpiration));
       } catch (err) {
         const dup = getUniqueViolation(err);
         if (dup && (dup.constraint === 'quotes_pkey' || dup.detail?.includes('(id)'))) {
@@ -795,6 +838,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             entityType: 'client_quote',
             details: { secondaryLabel: 'duplicate_id' },
           });
+        }
+        // The 1-to-1 supplier-quote link can lose a race past the app-level findLinkConflict check;
+        // surface the partial-unique-index violation as the same friendly 409 (issue #779).
+        if (isSupplierLinkUniqueViolation(dup)) {
+          return replySupplierLinkConflict(request, reply, {
+            action: 'client_quote.create.conflict',
+          });
+        }
+        // A supplier quote deleted between validation and the insert surfaces as an FK violation;
+        // map it to the same friendly 400 as the pre-check (issue #779).
+        const fk = getForeignKeyViolation(err);
+        if (fk?.detail?.includes('linked_supplier_quote_id')) {
+          return badRequest(
+            reply,
+            'linkedSupplierQuoteId does not reference an existing supplier quote',
+          );
         }
         request.log.error({ err }, 'CRITICAL ERROR creating quote');
         return reply.code(500).send({ error: `Internal Server Error: ${(err as Error).message}` });
@@ -831,7 +890,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         status,
         expirationDate,
         notes,
-        isExpired: isExpiredOverride,
         linkedSupplierQuoteId,
       } = request.body as {
         id: unknown;
@@ -844,27 +902,34 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         status: unknown;
         expirationDate: unknown;
         notes: unknown;
-        isExpired: unknown;
         linkedSupplierQuoteId: unknown;
       };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
+      // One declared field set, three derived guards (issue #779): `hasNonExpirationContentUpdate`
+      // drives the expired read-only rule (everything except the expiration date and status is
+      // frozen), `hasNonStatusOrIdUpdates` adds the date field for the terminal read-only rule
+      // (transitions and id renames stay allowed), and `isIdOnlyUpdate` further excludes status.
+      // Deriving keeps the three in lock-step when a PUT body field is added.
+      const hasNonExpirationContentUpdate =
+        clientId !== undefined ||
+        clientName !== undefined ||
+        items !== undefined ||
+        paymentTerms !== undefined ||
+        discount !== undefined ||
+        discountType !== undefined ||
+        notes !== undefined ||
+        linkedSupplierQuoteId !== undefined;
+      const hasNonStatusOrIdUpdates = hasNonExpirationContentUpdate || expirationDate !== undefined;
       const isIdOnlyUpdate =
-        nextId !== undefined &&
-        clientId === undefined &&
-        clientName === undefined &&
-        items === undefined &&
-        paymentTerms === undefined &&
-        discount === undefined &&
-        discountType === undefined &&
-        status === undefined &&
-        expirationDate === undefined &&
-        notes === undefined &&
-        isExpiredOverride === undefined &&
-        linkedSupplierQuoteId === undefined;
+        nextId !== undefined && status === undefined && !hasNonStatusOrIdUpdates;
 
-      const linkedOfferId = await clientQuotesRepo.findLinkedOfferId(idResult.value);
+      // Independent gate reads, fetched together (one round-trip) and checked in the usual order.
+      const [linkedOfferId, current] = await Promise.all([
+        clientQuotesRepo.findLinkedOfferId(idResult.value),
+        clientQuotesRepo.findCurrent(idResult.value),
+      ]);
       if (linkedOfferId && !isIdOnlyUpdate) {
         return replyError(request, reply, {
           statusCode: 409,
@@ -876,7 +941,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const current = await clientQuotesRepo.findCurrent(idResult.value);
       if (!current) {
         return replyError(request, reply, {
           statusCode: 404,
@@ -887,19 +951,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
       const currentStatus = current.status;
+      const currentEffective = effectiveQuoteStatusFromDate(current.status, current.expirationDate);
       const existingDiscount = current.discount;
       const existingDiscountType = current.discountType;
-      const hasNonStatusOrIdUpdates =
-        clientId !== undefined ||
-        clientName !== undefined ||
-        items !== undefined ||
-        paymentTerms !== undefined ||
-        discount !== undefined ||
-        discountType !== undefined ||
-        expirationDate !== undefined ||
-        notes !== undefined ||
-        isExpiredOverride !== undefined ||
-        linkedSupplierQuoteId !== undefined;
       // Terminal (accepted/denied) quotes are content-read-only — only a status transition or an
       // id rename is allowed (issue #779; replaces the legacy `confirmed` literal). Mirrors the
       // frontend, which already locks accepted/denied forms.
@@ -911,6 +965,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityType: 'client_quote',
           entityId: idResult.value,
           details: { secondaryLabel: 'terminal_read_only', fromValue: currentStatus },
+        });
+      }
+      // Expired quotes are content-read-only EXCEPT their expiration date — a plain expirationDate
+      // write is how a quote leaves `expired` (issue #779). Mirrors the frontend (form locked but the
+      // date editable) and the supplier-quote rule; status changes are handled by the freeze below.
+      if (currentEffective === 'expired' && hasNonExpirationContentUpdate) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Expired quotes are read-only; extend the expiration date instead',
+          action: 'client_quote.update.conflict',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'expired_read_only', fromValue: 'expired' },
         });
       }
 
@@ -974,32 +1041,43 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // guard checks — the freshly-linked one when relinking, otherwise the current link.
       let linkPatch: string | null | undefined;
       let guardLinkedExpiration = current.linkedSupplierQuoteExpiration;
+      let linkChanged = false;
       if (linkedSupplierQuoteId !== undefined) {
         const linkResult = await validateLinkedSupplierQuoteId(
           linkedSupplierQuoteId,
           idResult.value,
           request,
           reply,
+          current.linkedSupplierQuoteId,
         );
         if (!linkResult) return;
         linkPatch = linkResult.value;
-        guardLinkedExpiration = linkResult.value
-          ? await supplierQuotesRepo.findExpirationById(linkResult.value)
-          : null;
+        linkChanged = linkResult.changed;
+        // Only a CHANGED link carries a fresh expiration (fetched by the validation read); an
+        // unchanged one is already in `current` (the edit form resends the link on every save).
+        if (linkChanged) {
+          guardLinkedExpiration = linkResult.expiration;
+        }
       }
 
+      // Strict write-path parse (issue #779): canonical + known legacy spellings only. Anything
+      // else — a typo, or the derived-only `expired` round-tripped from a GET — is a 400 here;
+      // normalizeQuoteStatus's draft floor would instead silently demote the quote. `targetStatus`
+      // is `const` so its non-null narrowing flows into the `statusChanged` block below (`null`
+      // means no status field in the body).
+      const targetStatus =
+        status === undefined
+          ? null
+          : parseQuoteStatusInput(typeof status === 'string' ? status : '');
+      if (status !== undefined && targetStatus === null) {
+        return badRequest(reply, 'status must be one of draft, sent, offer, accepted, denied');
+      }
       // Only enforce the status rules when the status ACTUALLY changes — the edit forms resend the
       // current status on every save, so a no-op resend (e.g. draft→draft, or re-saving an expired
       // quote while extending its date) must not trip the transition/expired/guard checks (#779).
-      const targetStatus = typeof status === 'string' ? status : '';
       const statusChanged =
-        status !== undefined &&
-        normalizeQuoteStatus(targetStatus) !== normalizeQuoteStatus(current.status);
+        targetStatus !== null && targetStatus !== normalizeQuoteStatus(current.status);
       if (statusChanged) {
-        const currentEffective = effectiveQuoteStatus(
-          current.status,
-          current.expirationDate ? isPastLocalDate(current.expirationDate) : false,
-        );
         // Scaduto freezes manual status changes — a quote leaves `expired` only by extending its
         // expiration date (a plain expirationDate write, no status change).
         if (currentEffective === 'expired') {
@@ -1027,21 +1105,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             },
           });
         }
-        // A linked, expired supplier quote blocks progression to sent/offer/accepted.
-        if (
-          await blockIfLinkedSupplierExpired(
-            targetStatus,
-            guardLinkedExpiration,
-            idResult.value,
-            request,
-            reply,
-          )
-        ) {
-          return;
-        }
         // Reverting to draft is rejected when the quote already spawned sale orders.
         if (
-          normalizeQuoteStatus(targetStatus) === 'draft' &&
+          targetStatus === 'draft' &&
           (await clientQuotesRepo.findAnyLinkedSale(idResult.value))
         ) {
           return replyError(request, reply, {
@@ -1052,6 +1118,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             entityId: idResult.value,
             details: { secondaryLabel: 'has_linked_sale_orders' },
           });
+        }
+      }
+
+      // A linked, expired supplier quote blocks a quote from progressing to — or being parked in —
+      // sent/offer/accepted (issue #779). This fires both when the status advances AND when an
+      // expired supplier quote is NEWLY linked onto an already-advanced quote: either path would
+      // otherwise leave the quote in a progressed state alongside an expired linked supplier. A
+      // resend of the unchanged link (the edit form sends it on every save) must NOT trip the
+      // guard — mirroring the no-op status-resend tolerance above.
+      const linkBeingSet = linkChanged && typeof linkPatch === 'string';
+      if (statusChanged || linkBeingSet) {
+        const effectiveTarget = statusChanged ? targetStatus : current.status;
+        if (
+          await blockIfLinkedSupplierExpired(
+            effectiveTarget,
+            guardLinkedExpiration,
+            idResult.value,
+            request,
+            reply,
+          )
+        ) {
+          return;
         }
       }
 
@@ -1144,7 +1232,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     paymentTerms: (paymentTerms as string | null | undefined) ?? null,
                     discount: (discountValue as number | null | undefined) ?? null,
                     discountType: discountTypeValue ?? null,
-                    status: (status as string | null | undefined) ?? null,
+                    status: targetStatus,
                     expirationDate: (expirationDateValue as string | null | undefined) ?? null,
                     notes: (notes as string | null | undefined) ?? null,
                     linkedSupplierQuoteId: linkPatch,
@@ -1173,6 +1261,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             details: { secondaryLabel: 'duplicate_id' },
           });
         }
+        // The 1-to-1 supplier-quote link can lose a race past the app-level findLinkConflict check;
+        // surface the partial-unique-index violation as the same friendly 409 (issue #779).
+        if (isSupplierLinkUniqueViolation(dup)) {
+          return replySupplierLinkConflict(request, reply, {
+            action: 'client_quote.update.conflict',
+            entityId: idResult.value,
+          });
+        }
+        // A supplier quote deleted between validation and the write surfaces as an FK violation;
+        // map it to the same friendly 400 as the pre-check (issue #779).
+        const fk = getForeignKeyViolation(err);
+        if (fk?.detail?.includes('linked_supplier_quote_id')) {
+          return badRequest(
+            reply,
+            'linkedSupplierQuoteId does not reference an existing supplier quote',
+          );
+        }
         throw err;
       }
 
@@ -1190,8 +1295,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const updatedQuoteId = updatedQuote.id;
 
-      const nextStatus = typeof status === 'string' ? status : updatedQuote.status;
-      const didStatusChange = status !== undefined && currentStatus !== nextStatus;
+      // Audit with the CANONICAL target (the value actually written) — the raw body string could
+      // log a phantom transition (e.g. accepted → confirmed) that no longer exists in the DB.
+      const nextStatus = targetStatus ?? updatedQuote.status;
+      const didStatusChange = statusChanged;
 
       await logAudit({
         request,
@@ -1205,11 +1312,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           toValue: didStatusChange ? String(nextStatus) : undefined,
         },
       });
-      return buildQuoteResponse(
-        updatedQuote,
-        updatedItems,
-        typeof isExpiredOverride === 'boolean' ? isExpiredOverride : undefined,
-      );
+      return buildQuoteResponse(updatedQuote, updatedItems, guardLinkedExpiration);
     },
   );
 
@@ -1382,6 +1485,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             secondaryLabel: 'terminal_read_only',
           };
         }
+        // Expired quotes are content-read-only and the ONLY exit is extending the expiration date
+        // (the PUT enforces both, issue #779) — a restore would rewrite content, status AND the
+        // date in one shot, so it is blocked symmetrically.
+        if (effectiveQuoteStatusFromDate(current.status, current.expirationDate) === 'expired') {
+          return {
+            ok: false,
+            statusCode: 409,
+            message: 'Expired quotes are read-only; extend the expiration date instead',
+            action: 'client_quote.restore.conflict',
+            secondaryLabel: 'expired_read_only',
+          };
+        }
 
         const linkedOfferId = await clientQuotesRepo.findLinkedOfferId(idResult.value, tx);
         const nonDraftLinkedSale = await clientQuotesRepo.findNonDraftLinkedSale(
@@ -1437,6 +1552,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             secondaryLabel: 'snapshot_expiration_missing',
           };
         }
+        // Legacy snapshots may hold quoted/confirmed/received/etc.; fold to the canonical set so
+        // the tightened CHECK (migration 0083) doesn't reject the restore write (issue #779).
+        const restoredStatus = normalizeQuoteStatus(version.snapshot.quote.status);
+        // Restoring a snapshot whose status is sent/offer/accepted would park the quote in a
+        // progressed state alongside an expired linked supplier — the same transition the PUT
+        // guard blocks (issue #779). The link is not part of the snapshot and survives the restore.
+        if (
+          (restoredStatus === 'sent' ||
+            restoredStatus === 'offer' ||
+            restoredStatus === 'accepted') &&
+          current.linkedSupplierQuoteExpiration &&
+          isPastLocalDate(current.linkedSupplierQuoteExpiration)
+        ) {
+          return {
+            ok: false,
+            statusCode: 409,
+            message:
+              'The linked supplier quote has expired; extend its validity before progressing this quote',
+            action: 'client_quote.restore.conflict',
+            secondaryLabel: 'linked_supplier_quote_expired',
+          };
+        }
 
         const snapshotItems: clientQuotesRepo.NewClientQuoteItem[] = version.snapshot.items.map(
           ({ quoteId: _q, ...rest }) => ({
@@ -1464,9 +1601,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             paymentTerms: version.snapshot.quote.paymentTerms ?? 'immediate',
             discount: version.snapshot.quote.discount,
             discountType: version.snapshot.quote.discountType,
-            // Legacy snapshots may hold quoted/confirmed/received/etc.; fold to the canonical set
-            // so the tightened CHECK (migration 0083) doesn't reject the restore write (issue #779).
-            status: normalizeQuoteStatus(version.snapshot.quote.status),
+            status: restoredStatus,
             expirationDate: snapshotExpirationDate,
             notes: version.snapshot.quote.notes,
           },

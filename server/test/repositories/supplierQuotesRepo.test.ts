@@ -289,25 +289,6 @@ describe('existsById', () => {
   });
 });
 
-describe('lockStatusById', () => {
-  test('uses FOR UPDATE in the emitted SQL', async () => {
-    exec.enqueue({ rows: [['accepted']] });
-    await supplierQuotesRepo.lockStatusById('q-1', testDb);
-    expect(exec.calls[0].sql.toLowerCase()).toContain('for update');
-    expect(exec.calls[0].params).toContain('q-1');
-  });
-
-  test('returns status row when present', async () => {
-    exec.enqueue({ rows: [['accepted']] });
-    expect(await supplierQuotesRepo.lockStatusById('q-1', testDb)).toEqual({ status: 'accepted' });
-  });
-
-  test('returns null when row missing', async () => {
-    exec.enqueue({ rows: [] });
-    expect(await supplierQuotesRepo.lockStatusById('q-x', testDb)).toBeNull();
-  });
-});
-
 describe('lockEffectiveStatusById', () => {
   test('locks the row and resolves own status, expiration and linked client status', async () => {
     exec.enqueue({ rows: [['draft', '2026-06-01', 'accepted']] });

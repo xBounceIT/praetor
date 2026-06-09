@@ -150,7 +150,8 @@ const DRAFT_QUOTE = {
   supplierName: 'Acme',
   paymentTerms: 'immediate',
   status: 'draft',
-  expirationDate: '2026-12-31',
+  // Far future so the effective-status gate never flips this fixture to `expired` with the clock.
+  expirationDate: '2999-12-31',
   linkedOrderId: null,
   notes: null,
   createdAt: 1_700_000_000_000,

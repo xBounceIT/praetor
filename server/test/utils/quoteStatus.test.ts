@@ -2,9 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import {
   canTransitionClientQuote,
   effectiveQuoteStatus,
+  effectiveQuoteStatusFromDate,
   effectiveSupplierQuoteStatus,
+  effectiveSupplierQuoteStatusFromDate,
   isTerminalQuoteStatus,
   normalizeQuoteStatus,
+  parseQuoteStatusInput,
   QUOTE_PIPELINE_STATUSES,
 } from '../../utils/quote-status.ts';
 
@@ -132,5 +135,44 @@ describe('canTransitionClientQuote', () => {
     expect(canTransitionClientQuote('sent', 'offer')).toBe(true);
     expect(canTransitionClientQuote('offer', 'accepted')).toBe(true);
     expect(canTransitionClientQuote('sent', 'denied')).toBe(true);
+  });
+});
+
+describe('parseQuoteStatusInput', () => {
+  test('accepts canonical and legacy spellings', () => {
+    for (const s of QUOTE_PIPELINE_STATUSES) {
+      expect(parseQuoteStatusInput(s)).toBe(s);
+    }
+    expect(parseQuoteStatusInput('quoted')).toBe('draft');
+    expect(parseQuoteStatusInput('confirmed')).toBe('accepted');
+    expect(parseQuoteStatusInput('received')).toBe('sent');
+    expect(parseQuoteStatusInput('approved')).toBe('accepted');
+    expect(parseQuoteStatusInput('rejected')).toBe('denied');
+  });
+
+  test('rejects unknown values instead of flooring them (write-path safety)', () => {
+    expect(parseQuoteStatusInput('expired')).toBeNull(); // derived-only, never writable
+    expect(parseQuoteStatusInput('Draft')).toBeNull(); // case-sensitive
+    expect(parseQuoteStatusInput('')).toBeNull();
+    expect(parseQuoteStatusInput('whatever')).toBeNull();
+  });
+});
+
+describe('date-accepting wrappers', () => {
+  test('effectiveQuoteStatusFromDate expires past dates and keeps null/future ones', () => {
+    expect(effectiveQuoteStatusFromDate('sent', '2000-01-01')).toBe('expired');
+    expect(effectiveQuoteStatusFromDate('sent', '2999-12-31')).toBe('sent');
+    expect(effectiveQuoteStatusFromDate('sent', null)).toBe('sent');
+    // Terminal statuses stay frozen regardless of the date.
+    expect(effectiveQuoteStatusFromDate('accepted', '2000-01-01')).toBe('accepted');
+  });
+
+  test('effectiveSupplierQuoteStatusFromDate mirrors the link with own-date overlay', () => {
+    expect(effectiveSupplierQuoteStatusFromDate('draft', 'sent', '2999-12-31')).toBe('sent');
+    expect(effectiveSupplierQuoteStatusFromDate('draft', 'sent', '2000-01-01')).toBe('expired');
+    expect(effectiveSupplierQuoteStatusFromDate('draft', 'accepted', '2000-01-01')).toBe(
+      'accepted',
+    );
+    expect(effectiveSupplierQuoteStatusFromDate('sent', null, null)).toBe('sent');
   });
 });

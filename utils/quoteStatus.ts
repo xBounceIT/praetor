@@ -1,8 +1,9 @@
 // Canonical status model shared by client quotes and supplier quotes — issue #779. The five
 // PIPELINE statuses below are the only values ever stored; `expired` (Scaduto) is NEVER stored —
 // it is derived from each quote's own expiration date (see effectiveQuoteStatus). Mirrors the
-// backend copy in `server/utils/quote-status.ts` — kept separate because the frontend can't
-// import server modules (server is excluded from the frontend tsconfig).
+// PURE CORE of the backend copy in `server/utils/quote-status.ts` — kept separate because the
+// frontend can't import server modules (server is excluded from the frontend tsconfig). The
+// backend file additionally carries server-only date adapters and the strict write-path parser.
 export const QUOTE_PIPELINE_STATUSES = ['draft', 'sent', 'offer', 'accepted', 'denied'] as const;
 export type QuotePipelineStatus = (typeof QUOTE_PIPELINE_STATUSES)[number];
 export type EffectiveQuoteStatus = QuotePipelineStatus | 'expired';

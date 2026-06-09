@@ -123,7 +123,6 @@ const buildHandlers = (overrides: Record<string, unknown> = {}) => {
   const refreshSupplierQuoteFlow = mock(() => Promise.resolve()) as unknown as () => Promise<void>;
 
   const handlers = makeQuoteHandlers({
-    getQuotes: (() => quotes.get()) as never,
     getClientQuoteFilterId: () => clientQuoteFilterId.get(),
     getClientOfferFilterId: () => clientOfferFilterId.get(),
     setQuotes: quotes.setter as never,
@@ -214,27 +213,7 @@ describe('makeQuoteHandlers', () => {
     }
   });
 
-  test('updateQuote restores expirationDate when status flips back to draft', async () => {
-    apiMocks.quotesUpdate.mockImplementation((id: string, updates: unknown) =>
-      Promise.resolve({ id, ...(updates as object) }),
-    );
-    apiMocks.quotesList.mockImplementation(() => Promise.resolve([]));
-    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([]));
-    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
-    const ctx = buildHandlers({
-      quotes: [{ id: 'q1', status: 'rejected', isExpired: true, expirationDate: '2020-01-01' }],
-    });
-
-    await ctx.handlers.updateQuote('q1', { status: 'draft', isExpired: false } as never);
-
-    const callArgs = apiMocks.quotesUpdate.mock.calls[0] as [string, Record<string, unknown>];
-    expect(callArgs[0]).toBe('q1');
-    expect(callArgs[1].status).toBe('draft');
-    expect(callArgs[1].isExpired).toBe(false);
-    expect(callArgs[1].expirationDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-  });
-
-  test('updateQuote does not inject expirationDate when not a restore', async () => {
+  test('updateQuote passes the payload through to the API untouched', async () => {
     apiMocks.quotesUpdate.mockImplementation((id: string, updates: unknown) =>
       Promise.resolve({ id, ...(updates as object) }),
     );

@@ -133,11 +133,17 @@ const DRAFT_QUOTE = {
   supplierName: 'Acme',
   paymentTerms: 'immediate',
   status: 'draft',
-  expirationDate: '2026-12-31',
+  // Far future: effective-status guards compare against the real clock, so a near date would flip
+  // this fixture to `expired` one day and break the suite (#779 second-pass review).
+  expirationDate: '2999-12-31',
   linkedOrderId: null,
   notes: null,
   createdAt: 1_700_000_000_000,
   updatedAt: 1_700_000_000_000,
+  // The real findById always materializes the reverse-lookup link fields (null when unlinked);
+  // fixtures must too, or `linkedClientQuoteId !== null` reads `undefined !== null` → true.
+  linkedClientQuoteId: null as string | null,
+  linkedClientQuoteStatus: null as string | null,
 };
 
 const SAMPLE_ITEM = {
@@ -622,5 +628,124 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
 
     expect(res.statusCode).toBe(409);
     expect(sqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('normalizes a legacy status (received → sent) on write', async () => {
+    // The request schema does not constrain status; a legacy 'received' must be folded to the
+    // canonical 'sent' before the write so the tightened CHECK (migration 0083) never rejects it.
+    sqFindByIdMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      linkedClientQuoteId: null,
+      linkedClientQuoteStatus: null,
+    });
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'sent' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { status: 'received' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sqUpdateMock).toHaveBeenCalledTimes(1);
+    expect(sqUpdateMock.mock.calls[0]?.[1]?.status).toBe('sent');
+  });
+
+  test('409 expired unlinked quote rejects a status change (extend the date instead)', async () => {
+    // Without this guard an effectively-expired quote could be promoted straight to the frozen
+    // `accepted` state and become orderable, bypassing the #779 expired model (API-only path —
+    // the UI hides the transition buttons on expired rows).
+    sqFindByIdMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      status: 'sent',
+      expirationDate: '2000-01-01',
+    });
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { status: 'accepted' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Expired');
+    expect(sqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 expired quote can still be revalidated by extending the expiration date', async () => {
+    sqFindByIdMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      status: 'sent',
+      expirationDate: '2000-01-01',
+    });
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      status: 'sent',
+      expirationDate: '2999-12-31',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { expirationDate: '2999-12-31' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sqUpdateMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('400 rejects an unknown status value instead of silently flooring it to draft', async () => {
+    // The derived-only `expired` round-tripped from a GET must never demote a sent quote.
+    sqFindByIdMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'sent' });
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { status: 'expired' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain('status must be one of');
+    expect(sqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('PUT response carries the synced link fields, not just the bare update() row', async () => {
+    // update() uses a bare .returning() that omits the reverse-lookup link fields; the route must
+    // carry them over from the pre-read `current` row so the response reports the synced status
+    // (issue #779).
+    sqFindByIdMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      status: 'draft',
+      linkedClientQuoteId: 'cq-1',
+      linkedClientQuoteStatus: 'sent',
+    });
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      status: 'draft',
+      linkedClientQuoteId: null,
+      linkedClientQuoteStatus: null,
+      expirationDate: '2027-06-30',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { expirationDate: '2027-06-30' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.isStatusSynced).toBe(true);
+    expect(body.status).toBe('sent');
   });
 });

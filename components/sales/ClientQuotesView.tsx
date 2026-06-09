@@ -51,6 +51,11 @@ import {
   buildSupplierQuoteQuickViewHref,
   resolveLinkedSupplierQuoteId,
 } from '../../utils/quickViewLinks';
+import {
+  canTransitionClientQuote,
+  effectiveQuoteStatus,
+  isTerminalQuoteStatus,
+} from '../../utils/quoteStatus';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DateField from '../shared/DateField';
@@ -140,6 +145,11 @@ const quoteToFormData = (quote: Quote): Partial<Quote> => ({
   notes: quote.notes || '',
   linkedSupplierQuoteId: quote.linkedSupplierQuoteId ?? null,
 });
+
+// One label shape for a supplier-quote line item, shared by the picker options and the
+// display-value lookup so the two can never drift.
+const supplierQuoteItemLabel = (quote: SupplierQuote, item: SupplierQuote['items'][number]) =>
+  `${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)})`;
 
 interface PendingClientChange {
   clientId: string;
@@ -299,14 +309,13 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
   const isQuoteExpired = useCallback(
     (quote: Quote) => {
-      // Prefer the server-computed effective status (issue #779); fall back to the local derivation
-      // for optimistic updates that haven't round-tripped yet.
+      // Prefer the server-computed effective status (issue #779); fall back to the shared status
+      // model — seeded with the response's `isExpired` hint when present — for optimistic updates
+      // that haven't round-tripped yet.
       if (quote.effectiveStatus) return quote.effectiveStatus === 'expired';
       return (
-        quote.status !== 'accepted' &&
-        quote.status !== 'denied' &&
-        quote.isExpired !== false &&
-        (quote.isExpired === true || isExpired(quote.expirationDate))
+        effectiveQuoteStatus(quote.status, quote.isExpired ?? isExpired(quote.expirationDate)) ===
+        'expired'
       );
     },
     [isExpired],
@@ -331,6 +340,17 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     [isQuoteExpired, hasOfferForQuote],
   );
 
+  // History rows are not editable, but some still OPEN in read-only mode: accepted/denied for
+  // viewing, and expired (non-offer-linked) quotes so their expiration date can be extended out of
+  // the `expired` state — the modal is the only place that action lives (issue #779).
+  const canOpenQuoteModal = useCallback(
+    (quote: Quote) =>
+      !isHistoryRow(quote) ||
+      isTerminalQuoteStatus(quote.status) ||
+      (isQuoteExpired(quote) && !hasOfferForQuote(quote)),
+    [isHistoryRow, isQuoteExpired, hasOfferForQuote],
+  );
+
   const [formData, setFormData] = useState<Partial<Quote>>(() => getDefaultFormData());
   const [previewVersion, setPreviewVersion] = useState<QuoteVersion | null>(null);
   // Expired quotes are read-only EXCEPT their expiration date, which stays editable so the user can
@@ -339,8 +359,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   const baseReadOnly = Boolean(
     editingQuote &&
       (editingQuote.linkedOfferId ||
-        editingQuote.status === 'accepted' ||
-        editingQuote.status === 'denied' ||
+        isTerminalQuoteStatus(editingQuote.status) ||
         isEditingExpired),
   );
   const isReadOnly = baseReadOnly || previewVersion !== null;
@@ -350,8 +369,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     isEditingExpired &&
       previewVersion === null &&
       !editingQuote?.linkedOfferId &&
-      editingQuote?.status !== 'accepted' &&
-      editingQuote?.status !== 'denied',
+      !isTerminalQuoteStatus(editingQuote?.status ?? ''),
   );
 
   const readOnlyReason = editingQuote?.linkedOfferId
@@ -462,6 +480,34 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Expired quotes are read-only EXCEPT their expiration date: submitting in that mode extends
+    // ONLY the expiration (lifting the quote out of `expired`). Every other field stays untouched —
+    // and the server rejects content edits on an expired quote — so send just the date (issue #779).
+    if (expirationEditableWhileReadOnly && editingQuote) {
+      if (isSubmitting) return;
+      // Revalidation needs a date from today onward; a cleared or still-past date would leave the
+      // quote expired, so reject it loudly instead of silently "saving" (issue #779).
+      if (!formData.expirationDate || isDateOnlyBeforeToday(formData.expirationDate)) {
+        toastError(
+          t('sales:clientQuotes.errors.expirationExtendInvalid', {
+            defaultValue: 'Set an expiration date of today or later to revalidate the quote',
+          }),
+        );
+        return;
+      }
+      dispatch({ type: 'setIsSubmitting', value: true });
+      try {
+        await onUpdateQuote(editingQuote.id, { expirationDate: formData.expirationDate });
+      } catch (err) {
+        toastError((err as Error).message || t('sales:clientQuotes.failedToSave'));
+        return;
+      } finally {
+        dispatch({ type: 'setIsSubmitting', value: false });
+      }
+      closeModal();
+      return;
+    }
 
     if (isReadOnly) {
       return;
@@ -901,7 +947,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       for (const item of quote.items) {
         options.push({
           id: item.id,
-          name: `${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)})`,
+          name: supplierQuoteItemLabel(quote, item),
           quoteId: quote.id,
           productId: item.productId,
           unitPrice: item.unitPrice,
@@ -921,10 +967,23 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     [supplierQuotes],
   );
 
+  // Display labels resolve across ALL supplier quotes (not just the accepted/selectable ones): an
+  // existing line may reference an accepted quote whose expiration has passed — the picker hides
+  // it from NEW sourcing, but the line's label must still render instead of the "no supplier
+  // quote" fallback (the link is intact and the server still accepts the item).
+  const supplierQuoteItemLabelById = useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const quote of supplierQuotes) {
+      for (const item of quote.items) {
+        labels.set(item.id, supplierQuoteItemLabel(quote, item));
+      }
+    }
+    return labels;
+  }, [supplierQuotes]);
+
   const getSupplierQuoteItemDisplayValue = (itemId?: string | null) => {
     if (!itemId) return t('sales:clientQuotes.noSupplierQuote');
-    const option = supplierQuoteItemOptions.find((o) => o.id === itemId);
-    return option?.name ?? t('sales:clientQuotes.noSupplierQuote');
+    return supplierQuoteItemLabelById.get(itemId) ?? t('sales:clientQuotes.noSupplierQuote');
   };
 
   const isLinkedProductMissing = (item: QuoteItem) =>
@@ -1251,11 +1310,19 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               });
 
         const canRestore = !hasOffer || offerStatus === 'draft';
+        // Back-to-draft is rejected by the server from accepted/denied/expired, and history rows are
+        // immutable — so a sent/offer row whose EFFECTIVE status is expired must not show an enabled
+        // restore button (it would 409). `history` already folds in the expired check.
+        const restoreDisabled = !canRestore || history;
         const restoreTitle = !canRestore
           ? t('sales:clientQuotes.restoreDisabledOfferStatus', {
               defaultValue: 'Restore is only possible when the linked offer is in draft status.',
             })
-          : t('sales:clientQuotes.restoreQuote', { defaultValue: 'Restore quote' });
+          : history
+            ? t('sales:clientQuotes.historyActionsDisabled', {
+                defaultValue: 'History entries cannot be modified.',
+              })
+            : t('sales:clientQuotes.restoreQuote', { defaultValue: 'Restore quote' });
 
         return (
           <div className="flex justify-end gap-2">
@@ -1361,120 +1428,94 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               </Tooltip>
             )}
             {row.status === 'sent' && (
-              <>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (history || supplierExpired) return;
-                          handleStatusUpdate(row.id, { status: 'offer' });
-                        }}
-                        disabled={history || supplierExpired}
-                        aria-label={t('sales:clientQuotes.markAsOffer')}
-                        className={`p-2 rounded-lg transition-all ${history || supplierExpired ? 'cursor-not-allowed opacity-50 text-indigo-700' : 'text-indigo-700 hover:text-indigo-600 hover:bg-indigo-50'}`}
-                      >
-                        <i className="fa-solid fa-file-signature"></i>
-                      </button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {history
-                      ? t('sales:clientQuotes.historyActionsDisabled', {
-                          defaultValue: 'History entries cannot be modified.',
-                        })
-                      : supplierExpired
-                        ? progressBlockedTitle
-                        : t('sales:clientQuotes.markAsOffer')}
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (history) return;
-                          handleStatusUpdate(row.id, { status: 'denied' });
-                        }}
-                        disabled={history}
-                        aria-label={t('sales:clientQuotes.markAsDenied')}
-                        className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
-                      >
-                        <i className="fa-solid fa-xmark"></i>
-                      </button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {history
-                      ? t('sales:clientQuotes.historyActionsDisabled', {
-                          defaultValue: 'History entries cannot be modified.',
-                        })
-                      : t('sales:clientQuotes.markAsDenied')}
-                  </TooltipContent>
-                </Tooltip>
-              </>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (history || supplierExpired) return;
+                        handleStatusUpdate(row.id, { status: 'offer' });
+                      }}
+                      disabled={history || supplierExpired}
+                      aria-label={t('sales:clientQuotes.markAsOffer')}
+                      className={`p-2 rounded-lg transition-all ${history || supplierExpired ? 'cursor-not-allowed opacity-50 text-indigo-700' : 'text-indigo-700 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                    >
+                      <i className="fa-solid fa-file-signature"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {history
+                    ? t('sales:clientQuotes.historyActionsDisabled', {
+                        defaultValue: 'History entries cannot be modified.',
+                      })
+                    : supplierExpired
+                      ? progressBlockedTitle
+                      : t('sales:clientQuotes.markAsOffer')}
+                </TooltipContent>
+              </Tooltip>
             )}
             {row.status === 'offer' && (
-              <>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (history || supplierExpired) return;
-                          handleStatusUpdate(row.id, { status: 'accepted' });
-                        }}
-                        disabled={history || supplierExpired}
-                        aria-label={t('sales:clientQuotes.markAsAccepted')}
-                        className={`p-2 rounded-lg transition-all ${history || supplierExpired ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50'}`}
-                      >
-                        <i className="fa-solid fa-check"></i>
-                      </button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {history
-                      ? t('sales:clientQuotes.historyActionsDisabled', {
-                          defaultValue: 'History entries cannot be modified.',
-                        })
-                      : supplierExpired
-                        ? progressBlockedTitle
-                        : t('sales:clientQuotes.markAsAccepted')}
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (history) return;
-                          handleStatusUpdate(row.id, { status: 'denied' });
-                        }}
-                        disabled={history}
-                        aria-label={t('sales:clientQuotes.markAsDenied')}
-                        className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
-                      >
-                        <i className="fa-solid fa-xmark"></i>
-                      </button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {history
-                      ? t('sales:clientQuotes.historyActionsDisabled', {
-                          defaultValue: 'History entries cannot be modified.',
-                        })
-                      : t('sales:clientQuotes.markAsDenied')}
-                  </TooltipContent>
-                </Tooltip>
-              </>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (history || supplierExpired) return;
+                        handleStatusUpdate(row.id, { status: 'accepted' });
+                      }}
+                      disabled={history || supplierExpired}
+                      aria-label={t('sales:clientQuotes.markAsAccepted')}
+                      className={`p-2 rounded-lg transition-all ${history || supplierExpired ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                    >
+                      <i className="fa-solid fa-check"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {history
+                    ? t('sales:clientQuotes.historyActionsDisabled', {
+                        defaultValue: 'History entries cannot be modified.',
+                      })
+                    : supplierExpired
+                      ? progressBlockedTitle
+                      : t('sales:clientQuotes.markAsAccepted')}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {/* "Mark as denied" is reachable from both sent and offer; one shared block keeps the
+                guard, label and tooltip in sync (it renders last in both states). */}
+            {(row.status === 'sent' || row.status === 'offer') && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (history) return;
+                        handleStatusUpdate(row.id, { status: 'denied' });
+                      }}
+                      disabled={history}
+                      aria-label={t('sales:clientQuotes.markAsDenied')}
+                      className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
+                    >
+                      <i className="fa-solid fa-xmark"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {history
+                    ? t('sales:clientQuotes.historyActionsDisabled', {
+                        defaultValue: 'History entries cannot be modified.',
+                      })
+                    : t('sales:clientQuotes.markAsDenied')}
+                </TooltipContent>
+              </Tooltip>
             )}
             {row.status === 'draft' && (
               <Tooltip>
@@ -1498,7 +1539,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 <TooltipContent>{deleteTitle}</TooltipContent>
               </Tooltip>
             )}
-            {!row.linkedOfferId && (row.status === 'sent' || row.status === 'offer') && (
+            {!row.linkedOfferId && canTransitionClientQuote(row.status, 'draft') && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
@@ -1506,14 +1547,14 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (!canRestore) return;
+                        if (restoreDisabled) return;
                         // Back-to-draft is allowed only from sent/offer (#779); the server
                         // enforces the same rule and rejects it from accepted/denied/expired.
                         handleStatusUpdate(row.id, { status: 'draft' });
                       }}
-                      disabled={!canRestore}
+                      disabled={restoreDisabled}
                       aria-label={restoreTitle}
-                      className={`p-2 rounded-lg transition-all ${canRestore ? 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50' : 'cursor-not-allowed opacity-50 text-emerald-700'}`}
+                      className={`p-2 rounded-lg transition-all ${restoreDisabled ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'}`}
                     >
                       <i className="fa-solid fa-rotate-left"></i>
                     </button>
@@ -2505,20 +2546,16 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         defaultRowsPerPage={5}
         initialFilterState={tableInitialFilterState}
         onRowClick={(row) => {
-          // Allow viewing/editing for all quotes except those in history (expired/denied with special handling)
-          // Accepted and denied quotes open in read-only mode via isReadOnly flag
-          const canOpenModal =
-            !isHistoryRow(row) || row.status === 'accepted' || row.status === 'denied';
-          if (canOpenModal) {
+          // Accepted/denied open read-only (isReadOnly flag); expired opens read-only-except-date so
+          // the expiration can be extended (#779); offer-linked history rows stay closed.
+          if (canOpenQuoteModal(row)) {
             openEditModal(row);
           }
         }}
         rowClassName={(row) => {
           const expired = isQuoteExpired(row);
           const history = isHistoryRow(row);
-          const canOpenModal =
-            !isHistoryRow(row) || row.status === 'accepted' || row.status === 'denied';
-          const cursorClass = canOpenModal ? 'cursor-pointer' : 'cursor-not-allowed';
+          const cursorClass = canOpenQuoteModal(row) ? 'cursor-pointer' : 'cursor-not-allowed';
           return history
             ? `bg-zinc-50 text-zinc-400 hover:bg-zinc-100 ${cursorClass}`
             : expired
