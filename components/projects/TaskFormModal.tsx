@@ -6,6 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { useBillingFrequencyOptions, useBillingTypeOptions } from '@/hooks/useBillingOptions';
+import {
+  DEFAULT_BILLING_FREQUENCY,
+  DEFAULT_BILLING_TYPE,
+  toStoredBillingType,
+} from '@/utils/billing';
 import type {
   BillingFrequency,
   Client,
@@ -26,16 +32,6 @@ import SelectControl from '../shared/SelectControl';
 import Toggle from '../shared/Toggle';
 
 const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
-
-const billingTypeOptions = [
-  { id: 'time_and_materials', name: 'projects:projects.billingTypes.timeAndMaterials' },
-  { id: 'retainer', name: 'projects:projects.billingTypes.retainer' },
-];
-
-const billingFrequencyOptions = [
-  { id: 'monthly', name: 'projects:projects.billingFrequencies.monthly' },
-  { id: 'one_time', name: 'projects:projects.billingFrequencies.oneTime' },
-];
 
 export type RecurringConfig = { isRecurring: boolean; pattern: 'daily' | 'weekly' | 'monthly' };
 
@@ -108,10 +104,8 @@ type TaskFormAction =
   | { type: 'setSubmitting'; isSubmitting: boolean };
 
 const deriveBillingFromProject = (project: Project | undefined) => {
-  const billingType: StoredBillingType =
-    project?.billingType === 'retainer' ? 'retainer' : 'time_and_materials';
-  const billingFrequency: BillingFrequency =
-    billingType === 'time_and_materials' ? 'monthly' : (project?.billingFrequency ?? 'monthly');
+  const billingType: StoredBillingType = toStoredBillingType(project?.billingType);
+  const billingFrequency: BillingFrequency = project?.billingFrequency ?? DEFAULT_BILLING_FREQUENCY;
   return { billingType, billingFrequency };
 };
 
@@ -133,11 +127,8 @@ const createTaskFormState = (
       name: editingTask.name,
       projectId: editingTask.projectId,
       description: editingTask.description || '',
-      billingType: editingTask.billingType ?? 'time_and_materials',
-      billingFrequency:
-        editingTask.billingType === 'time_and_materials'
-          ? 'monthly'
-          : (editingTask.billingFrequency ?? 'monthly'),
+      billingType: editingTask.billingType ?? DEFAULT_BILLING_TYPE,
+      billingFrequency: editingTask.billingFrequency ?? DEFAULT_BILLING_FREQUENCY,
       monthlyEffort:
         editingTask.monthlyEffort !== undefined ? String(editingTask.monthlyEffort) : '',
       expectedEffort:
@@ -179,12 +170,7 @@ const taskFormReducer = (state: TaskFormState, action: TaskFormAction): TaskForm
         ...(action.billing ?? {}),
       };
     case 'setBillingType':
-      return {
-        ...state,
-        billingType: action.billingType,
-        billingFrequency:
-          action.billingType === 'time_and_materials' ? 'monthly' : state.billingFrequency,
-      };
+      return { ...state, billingType: action.billingType };
     case 'setBillingFrequency':
       return { ...state, billingFrequency: action.billingFrequency };
     case 'toggleDisabled':
@@ -340,14 +326,8 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
     isSubmitting,
   } = formState;
 
-  const translatedBillingTypeOptions = useMemo(
-    () => billingTypeOptions.map((option) => ({ id: option.id, name: t(option.name) })),
-    [t],
-  );
-  const translatedBillingFrequencyOptions = useMemo(
-    () => billingFrequencyOptions.map((option) => ({ id: option.id, name: t(option.name) })),
-    [t],
-  );
+  const translatedBillingTypeOptions = useBillingTypeOptions();
+  const translatedBillingFrequencyOptions = useBillingFrequencyOptions();
 
   const projectSelectOptions = useMemo(
     () => projects.map((p) => ({ id: p.id, name: p.name })),
@@ -370,7 +350,7 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
     if (!name || !projectId) return;
     const details: TaskFormDetails = {
       billingType,
-      billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
+      billingFrequency,
       monthlyEffort: monthlyEffort ? parseFloat(monthlyEffort) : undefined,
       expectedEffort: expectedEffort ? parseFloat(expectedEffort) : undefined,
       revenue: revenue ? parseFloat(revenue) : undefined,
@@ -498,14 +478,8 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
                 />
                 <SelectControl
                   id="task-billing-frequency"
-                  options={
-                    billingType === 'retainer'
-                      ? translatedBillingFrequencyOptions
-                      : translatedBillingFrequencyOptions.filter(
-                          (option) => option.id === 'monthly',
-                        )
-                  }
-                  value={billingType === 'time_and_materials' ? 'monthly' : billingFrequency}
+                  options={translatedBillingFrequencyOptions}
+                  value={billingFrequency}
                   onChange={(val) =>
                     dispatch({
                       type: 'setBillingFrequency',
@@ -513,7 +487,6 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
                     })
                   }
                   label={t('projects:projects.billingFrequency')}
-                  disabled={billingType === 'time_and_materials'}
                   searchable={false}
                   buttonClassName="h-9"
                 />

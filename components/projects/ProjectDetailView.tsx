@@ -37,6 +37,12 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useBillingFrequencyOptions, useBillingTypeOptions } from '@/hooks/useBillingOptions';
+import {
+  DEFAULT_BILLING_FREQUENCY,
+  DEFAULT_BILLING_TYPE,
+  toStoredBillingType,
+} from '@/utils/billing';
 import { useCurrentUserId } from '../../contexts/useCurrentUserId';
 import { entriesApi, projectsApi } from '../../services/api';
 import type {
@@ -47,6 +53,7 @@ import type {
   ClientsOrder,
   Project,
   ProjectTask,
+  ProjectTipo,
   Role,
   StoredBillingType,
   TimeEntry,
@@ -103,17 +110,9 @@ const DASHBOARD_WIDGETS: readonly DashboardWidgetDef[] = [
 
 const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
 
-const toStoredBillingType = (value: BillingType | undefined): StoredBillingType =>
-  value === 'retainer' ? 'retainer' : 'time_and_materials';
-
-const billingTypeOptions = [
-  { id: 'time_and_materials', name: 'projects:projects.billingTypes.timeAndMaterials' },
-  { id: 'retainer', name: 'projects:projects.billingTypes.retainer' },
-];
-
-const billingFrequencyOptions = [
-  { id: 'monthly', name: 'projects:projects.billingFrequencies.monthly' },
-  { id: 'one_time', name: 'projects:projects.billingFrequencies.oneTime' },
+const tipoOptions = [
+  { id: 'attivo', name: 'projects:projects.tipoValues.attivo' },
+  { id: 'passivo', name: 'projects:projects.tipoValues.passivo' },
 ];
 
 const getInitials = (name: string): string => {
@@ -226,14 +225,19 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     project.revenue !== null && project.revenue !== undefined ? String(project.revenue) : '',
   );
   const [tempIsDisabled, setTempIsDisabled] = useState(project.isDisabled ?? false);
-  const storedInitialBillingType = toStoredBillingType(project.billingType);
-  const [billingType, setBillingType] = useState<StoredBillingType>(storedInitialBillingType);
+  const [billingType, setBillingType] = useState<StoredBillingType>(
+    toStoredBillingType(project.billingType),
+  );
   const [billingFrequency, setBillingFrequency] = useState<BillingFrequency>(
-    storedInitialBillingType === 'time_and_materials'
-      ? 'monthly'
-      : (project.billingFrequency ?? 'monthly'),
+    project.billingFrequency ?? DEFAULT_BILLING_FREQUENCY,
   );
   const [projectBillingChanged, setProjectBillingChanged] = useState(false);
+  // `tipo` (issue #784). A rollout-defaulted project (`tipoConfirmed === false`) starts with an
+  // EMPTY selector so the user must make a deliberate first choice before saving — we don't
+  // pre-fill the silent 'attivo' default. A confirmed project shows its stored value.
+  const tipoNeedsConfirmation = !project.tipoConfirmed;
+  const baselineTipo: ProjectTipo | '' = project.tipoConfirmed ? (project.tipo ?? '') : '';
+  const [tipo, setTipo] = useState<ProjectTipo | ''>(baselineTipo);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // No prop-sync useEffect: the parent passes `key={project.id}` so this component
@@ -589,11 +593,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     }
   }
 
-  const translatedBillingTypeOptions = billingTypeOptions.map((o) => ({
-    id: o.id,
-    name: t(o.name),
-  }));
-  const translatedBillingFrequencyOptions = billingFrequencyOptions.map((o) => ({
+  const translatedBillingTypeOptions = useBillingTypeOptions();
+  const translatedBillingFrequencyOptions = useBillingFrequencyOptions();
+  const translatedTipoOptions = tipoOptions.map((o) => ({
     id: o.id,
     name: t(o.name),
   }));
@@ -607,7 +609,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const derivedBillingType: BillingType = useMemo(() => {
     if (project.billingType === 'mixed') return 'mixed';
     const stored = toStoredBillingType(project.billingType);
-    const taskTypes = new Set(projectTasks.map((t) => t.billingType ?? 'time_and_materials'));
+    const taskTypes = new Set(projectTasks.map((t) => t.billingType ?? DEFAULT_BILLING_TYPE));
     if (taskTypes.size === 0) return stored;
     if (taskTypes.size > 1) return 'mixed';
     return taskTypes.has(stored) ? stored : 'mixed';
@@ -695,7 +697,10 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     offerId !== (project.offerId ?? '') ||
     revenueChanged ||
     tempIsDisabled !== (project.isDisabled ?? false) ||
-    projectBillingChanged;
+    projectBillingChanged ||
+    // For an unconfirmed project baselineTipo is '', so picking a value (or any other edit)
+    // raises the save bar; for a confirmed project this fires only on an actual tipo change.
+    tipo !== baselineTipo;
 
   const handleDiscard = () => {
     setName(project.name);
@@ -708,12 +713,10 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       project.revenue !== null && project.revenue !== undefined ? String(project.revenue) : '',
     );
     setTempIsDisabled(project.isDisabled ?? false);
-    const stored = toStoredBillingType(project.billingType);
-    setBillingType(stored);
-    setBillingFrequency(
-      stored === 'time_and_materials' ? 'monthly' : (project.billingFrequency ?? 'monthly'),
-    );
+    setBillingType(toStoredBillingType(project.billingType));
+    setBillingFrequency(project.billingFrequency ?? DEFAULT_BILLING_FREQUENCY);
     setProjectBillingChanged(false);
+    setTipo(baselineTipo);
     setErrors({});
   };
 
@@ -736,6 +739,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     if (startDate && endDate && startDate > endDate) {
       newErrors.dateRange = t('projects:projects.dateRangeInvalid');
     }
+    // Force a deliberate tipo choice before saving: required for confirmed projects and the
+    // forced first-edit confirmation for rollout-defaulted ones (issue #784).
+    if (!tipo) newErrors.tipo = t('projects:projects.tipoConfirmRequired');
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -748,6 +754,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       offerId,
       startDate: startDate || null,
       endDate: endDate || null,
+      // Guaranteed non-empty by the `!tipo` guard above. Sending it confirms the field
+      // server-side (tipo_confirmed = true), clearing the forced-confirmation state.
+      tipo: tipo as ProjectTipo,
     };
     // Only touch `revenue` when the source is manual: derived values (activities
     // sum or linked-order total) are recomputed on read. Sending `null` here would
@@ -756,10 +765,14 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     if (revenueSource === 'manual') {
       updates.revenue = persistedRevenue ?? null;
     }
-    if (derivedBillingType !== 'mixed' || projectBillingChanged) {
+    if (derivedBillingType !== 'mixed') {
       updates.billingType = billingType;
-      updates.billingFrequency =
-        billingType === 'time_and_materials' ? 'monthly' : billingFrequency;
+      updates.billingFrequency = billingFrequency;
+    } else if (projectBillingChanged) {
+      // A mixed project has no single billing type to set, but its frequency is a real
+      // project-level value (inherited by quick-added tasks), so persist a frequency edit
+      // without touching the derived/mixed type.
+      updates.billingFrequency = billingFrequency;
     }
     // Await so we can clear the billing-change latch only on success. Every other
     // hasChanges contributor compares local state to project.* (so a rejected save
@@ -1098,45 +1111,66 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               />
               <p className="text-xs text-muted-foreground">{revenueHintBySource[revenueSource]}</p>
             </Field>
+            <div className="space-y-1.5">
+              <SelectControl
+                id="detail-tipo"
+                options={translatedTipoOptions}
+                value={tipo}
+                onChange={(val) => {
+                  setTipo(val as ProjectTipo);
+                  if (errors.tipo) setErrors((prev) => ({ ...prev, tipo: '' }));
+                }}
+                label={
+                  <>
+                    {t('projects:projects.tipo')} <RequiredMark />
+                  </>
+                }
+                placeholder={t('projects:projects.selectTipo')}
+                searchable={false}
+                buttonClassName="h-9"
+                disabled={!canUpdateProjects}
+              />
+              {/* Show the explanatory hint until the user acts. Once a blocked save sets the
+                  required error, defer to it (the red error is the actionable message) so the
+                  two near-duplicate "confirm the type" notices don't stack. */}
+              {tipoNeedsConfirmation && !tipo && !errors.tipo && (
+                <p className="flex items-center gap-1 text-[10px] font-medium text-amber-600">
+                  <i className="fa-solid fa-circle-info" aria-hidden="true"></i>
+                  {t('projects:projects.tipoConfirmHint')}
+                </p>
+              )}
+              <FieldError className="text-xs">{errors.tipo}</FieldError>
+            </div>
             <SelectControl
               id="detail-billing-type"
               options={projectBillingTypeOptions}
               value={derivedBillingType}
               onChange={(val) => {
-                const next = val as StoredBillingType;
                 setProjectBillingChanged(true);
-                setBillingType(next);
-                if (next === 'time_and_materials') setBillingFrequency('monthly');
+                setBillingType(val as StoredBillingType);
               }}
               label={t('projects:projects.billingType')}
               disabled={!canUpdateProjects || derivedBillingType === 'mixed'}
               searchable={false}
               buttonClassName="h-9"
             />
+            {/*
+              The billing *type* is disabled when `mixed` (a project whose tasks have differing
+              types has no single type to set). The *frequency*, though, is a single project-level
+              value even for a mixed project - it's the default new quick-added tasks inherit
+              (POST /tasks falls back to the project's billingFrequency), so it stays editable and
+              shows the real stored value rather than a hardcoded default.
+            */}
             <SelectControl
               id="detail-billing-frequency"
-              options={
-                billingType === 'retainer'
-                  ? translatedBillingFrequencyOptions
-                  : translatedBillingFrequencyOptions.filter((o) => o.id === 'monthly')
-              }
-              value={
-                derivedBillingType === 'mixed'
-                  ? 'monthly'
-                  : billingType === 'time_and_materials'
-                    ? 'monthly'
-                    : billingFrequency
-              }
+              options={translatedBillingFrequencyOptions}
+              value={billingFrequency}
               onChange={(val) => {
                 setProjectBillingChanged(true);
                 setBillingFrequency(val as BillingFrequency);
               }}
               label={t('projects:projects.billingFrequency')}
-              disabled={
-                !canUpdateProjects ||
-                derivedBillingType === 'mixed' ||
-                billingType === 'time_and_materials'
-              }
+              disabled={!canUpdateProjects}
               searchable={false}
               buttonClassName="h-9"
             />

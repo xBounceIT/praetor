@@ -12,6 +12,7 @@ import {
 import { getForeignKeyViolation } from '../utils/db-errors.ts';
 import { ForeignKeyError } from '../utils/http-errors.ts';
 import { numericForDb, parseNullableDbNumber } from '../utils/parse.ts';
+import { DEFAULT_PROJECT_TIPO, type ProjectTipo } from '../utils/projectTipo.ts';
 import {
   MANUAL_ASSIGNMENT_SOURCE,
   PROJECT_CASCADE_ASSIGNMENT_SOURCE,
@@ -32,6 +33,8 @@ export type Project = {
   revenue: number | null;
   billingType: BillingType;
   billingFrequency: BillingFrequency;
+  tipo: ProjectTipo;
+  tipoConfirmed: boolean;
 };
 
 const mapRow = (row: typeof projects.$inferSelect): Project => ({
@@ -50,6 +53,8 @@ const mapRow = (row: typeof projects.$inferSelect): Project => ({
   revenue: parseNullableDbNumber(row.revenue),
   billingType: row.billingType ?? DEFAULT_BILLING_TYPE,
   billingFrequency: row.billingFrequency ?? DEFAULT_BILLING_FREQUENCY,
+  tipo: row.tipo ?? DEFAULT_PROJECT_TIPO,
+  tipoConfirmed: row.tipoConfirmed ?? false,
 });
 
 type ProjectRawRow = {
@@ -66,6 +71,8 @@ type ProjectRawRow = {
   revenue: string | number | null;
   billing_type: BillingType | null;
   billing_frequency: BillingFrequency | null;
+  tipo: ProjectTipo | null;
+  tipo_confirmed: boolean | null;
 };
 
 const derivedBillingTypeSql = sql`CASE
@@ -94,11 +101,13 @@ const mapRawRow = (row: ProjectRawRow): Project => ({
   revenue: parseNullableDbNumber(row.revenue),
   billingType: row.billing_type ?? DEFAULT_BILLING_TYPE,
   billingFrequency: row.billing_frequency ?? DEFAULT_BILLING_FREQUENCY,
+  tipo: row.tipo ?? DEFAULT_PROJECT_TIPO,
+  tipoConfirmed: row.tipo_confirmed ?? false,
 });
 
 const projectSelectSql = sql`p.id, p.name, p.client_id, p.description, p.is_disabled, p.created_at, p.order_id,
        p.offer_id, p.start_date::text AS start_date, p.end_date::text AS end_date, p.revenue,
-       ${derivedBillingTypeSql} AS billing_type, p.billing_frequency`;
+       ${derivedBillingTypeSql} AS billing_type, p.billing_frequency, p.tipo, p.tipo_confirmed`;
 
 export const listAll = async (exec: DbExecutor = db): Promise<Project[]> => {
   const rows = await executeRows<ProjectRawRow>(
@@ -265,6 +274,7 @@ export type NewProject = {
   revenue?: number | null;
   billingType?: StoredBillingType;
   billingFrequency?: BillingFrequency;
+  tipo: ProjectTipo;
 };
 
 // Legacy auto-generated name from schema.sql, plus the canonical Drizzle name produced by
@@ -292,10 +302,11 @@ export const create = async (project: NewProject, exec: DbExecutor = db): Promis
         endDate: project.endDate ?? null,
         revenue: numericForDb(project.revenue),
         billingType: project.billingType ?? DEFAULT_BILLING_TYPE,
-        billingFrequency: normalizeBillingFrequency(
-          project.billingType ?? DEFAULT_BILLING_TYPE,
-          project.billingFrequency,
-        ),
+        billingFrequency: normalizeBillingFrequency(project.billingFrequency),
+        tipo: project.tipo,
+        // A project created through the app always has an explicitly chosen tipo (NewProject
+        // requires it), so it is confirmed by definition.
+        tipoConfirmed: true,
       })
       .returning();
     return (await findById(project.id, exec)) ?? mapRow(rows[0]);
@@ -323,6 +334,7 @@ export type ProjectUpdate = {
   revenue?: number | null;
   billingType?: StoredBillingType | null;
   billingFrequency?: BillingFrequency | null;
+  tipo?: ProjectTipo | null;
 };
 
 export const update = async (
@@ -342,19 +354,21 @@ export const update = async (
   if (patch.revenue !== undefined) {
     set.revenue = numericForDb(patch.revenue);
   }
+  // billing_type and billing_frequency are independent columns now, so each is set on its
+  // own - no need to read back the current type to normalize the frequency against it.
   if (patch.billingType !== undefined) {
-    const nextBillingType = patch.billingType ?? DEFAULT_BILLING_TYPE;
-    set.billingType = nextBillingType;
-    set.billingFrequency = normalizeBillingFrequency(nextBillingType, patch.billingFrequency);
-  } else if (patch.billingFrequency !== undefined) {
-    const currentRows = await exec
-      .select({ billingType: projects.billingType })
-      .from(projects)
-      .where(eq(projects.id, id));
-    set.billingFrequency = normalizeBillingFrequency(
-      currentRows[0]?.billingType ?? DEFAULT_BILLING_TYPE,
-      patch.billingFrequency,
-    );
+    set.billingType = patch.billingType ?? DEFAULT_BILLING_TYPE;
+  }
+  if (patch.billingFrequency !== undefined) {
+    set.billingFrequency = normalizeBillingFrequency(patch.billingFrequency);
+  }
+  // An explicit tipo choice both stores the value and confirms the field (issue #784),
+  // clearing the "force a choice on first edit" state for rollout-defaulted projects.
+  // Confirmation is always a side-effect of choosing a tipo — there is no separate
+  // "confirm" path. `tipo` is NOT NULL, so a null patch is "no change", not a clear.
+  if (patch.tipo != null) {
+    set.tipo = patch.tipo;
+    set.tipoConfirmed = true;
   }
 
   if (Object.keys(set).length === 0) {

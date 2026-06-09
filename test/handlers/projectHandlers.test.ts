@@ -89,6 +89,7 @@ describe('makeProjectHandlers', () => {
       clientId: 'client-A',
       orderId: 'order-1',
       offerId: 'of-1',
+      tipo: 'attivo',
     });
     expect(apiMocks.projectsCreate).toHaveBeenCalled();
     const callArg = apiMocks.projectsCreate.mock.calls[0][0] as Record<string, unknown>;
@@ -110,7 +111,12 @@ describe('makeProjectHandlers', () => {
       setEntries: makeStubSetter<EntryLike>([]).setter,
     });
 
-    await handlers.add({ name: 'Project Beta', clientId: 'client-B', offerId: 'of-1' });
+    await handlers.add({
+      name: 'Project Beta',
+      clientId: 'client-B',
+      offerId: 'of-1',
+      tipo: 'attivo',
+    });
     expect(apiMocks.projectsCreate).toHaveBeenCalled();
     const callArg = apiMocks.projectsCreate.mock.calls[0][0] as Record<string, unknown>;
     expect(callArg.clientId).toBe('client-B');
@@ -137,12 +143,15 @@ describe('makeProjectHandlers', () => {
       startDate: '2026-01-01',
       endDate: '2026-12-31',
       revenue: 5000,
+      tipo: 'passivo',
     });
     const callArg = apiMocks.projectsCreate.mock.calls[0][0] as Record<string, unknown>;
     expect(callArg.startDate).toBe('2026-01-01');
     expect(callArg.endDate).toBe('2026-12-31');
     expect(callArg.revenue).toBe(5000);
     expect(callArg.offerId).toBe('of-1');
+    // tipo (issue #784) is forwarded to the create API.
+    expect(callArg.tipo).toBe('passivo');
   });
 
   test('add with draftTasks creates tasks too', async () => {
@@ -164,6 +173,7 @@ describe('makeProjectHandlers', () => {
       clientId: 'c1',
       orderId: 'order-1',
       offerId: 'of-1',
+      tipo: 'attivo',
       draftTasks: [{ name: 'task-A' }, { name: 'task-B' }] as never,
     });
 
@@ -182,7 +192,7 @@ describe('makeProjectHandlers', () => {
     const originalError = console.error;
     console.error = mock(() => {}) as unknown as typeof console.error;
     try {
-      await handlers.add({ name: 'P', clientId: '', offerId: 'of-1' });
+      await handlers.add({ name: 'P', clientId: '', offerId: 'of-1', tipo: 'attivo' });
       expect(apiMocks.projectsCreate).not.toHaveBeenCalled();
       expect(projects.get()).toEqual([]);
       expect(toastErrorMock).toHaveBeenCalledTimes(1);
@@ -204,7 +214,13 @@ describe('makeProjectHandlers', () => {
     const originalError = console.error;
     console.error = mock(() => {}) as unknown as typeof console.error;
     try {
-      await handlers.add({ name: 'P', clientId: 'c1', orderId: 'order-1', offerId: 'of-1' });
+      await handlers.add({
+        name: 'P',
+        clientId: 'c1',
+        orderId: 'order-1',
+        offerId: 'of-1',
+        tipo: 'attivo',
+      });
       expect(projects.get()).toEqual([]);
       expect(toastErrorMock).toHaveBeenCalledTimes(1);
       expect((toastErrorMock.mock.calls[0]?.[0] as string) ?? '').toContain('api down');

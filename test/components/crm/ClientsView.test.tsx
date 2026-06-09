@@ -186,6 +186,26 @@ describe('<ClientsView /> contact validation', () => {
   });
 });
 
+describe('<ClientsView /> dark-mode form inputs', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    listAllProfileOptions.mockClear();
+  });
+
+  test('form fields render the theme-aware shadcn Input, not a hardcoded light fill', async () => {
+    renderClientsView();
+    await openAddClientModal();
+
+    const codeInput = screen.getByPlaceholderText('crm:clients.clientCodePlaceholder');
+    // Migrated to the shadcn Input primitive so the theme-aware base (and aria-invalid
+    // destructive state) applies instead of the old bg-zinc-50 / bg-red-50 light slab.
+    expect(codeInput).toHaveAttribute('data-slot', 'input');
+    expect(codeInput.className).not.toContain('bg-zinc-50');
+    expect(codeInput.className).not.toContain('bg-red-50');
+    expect(codeInput.className).not.toContain('border-zinc-200');
+  });
+});
+
 describe('<ClientsView /> dark-mode error banners (issue #768 follow-up)', () => {
   test('the contact + general validation banners avoid light-only red classes', async () => {
     const source = await readComponentSource('CRM/ClientsView.tsx');
@@ -195,5 +215,27 @@ describe('<ClientsView /> dark-mode error banners (issue #768 follow-up)', () =>
     // The old light-only banner border (a pale red slab in dark mode) is gone. Input invalid
     // states use border-red-500, so border-red-200 is unique to the message banners here.
     expectSourceOmitsAll(source, ['border-red-200']);
+  });
+});
+
+describe('<ClientsView /> dark-mode form chrome', () => {
+  test('field labels, table containers, and the page header use theme tokens, not light zinc', async () => {
+    const source = await readComponentSource('CRM/ClientsView.tsx');
+    // Field labels, the manage-values table containers, and the page title/subtitle adapt to the
+    // theme instead of rendering as low-contrast zinc text/borders on the dark surface. The
+    // contact-draft panel must be themed too: its labels resolve to text-muted-foreground, so a
+    // light bg-zinc-50 panel would make them low-contrast in dark mode (PR #798 review).
+    expectSourceContainsAll(source, [
+      'text-xs font-bold text-muted-foreground',
+      'containerClassName="shadow-none border-border rounded-2xl"',
+      '<h2 className="text-2xl font-semibold text-foreground">',
+      'p-4 bg-muted/50 rounded-xl border border-border',
+    ]);
+    expectSourceOmitsAll(source, [
+      'text-xs font-bold text-zinc-500',
+      'shadow-none border-zinc-200 rounded-2xl',
+      'text-2xl font-semibold text-zinc-800',
+      'p-4 bg-zinc-50 rounded-xl border border-zinc-200',
+    ]);
   });
 });

@@ -106,6 +106,27 @@ describe('ProjectDetailView wiring', () => {
     expect(source).toContain('{project.endDate && <RequiredMark />}');
   });
 
+  test('forces an explicit tipo confirmation on first edit of a rollout-defaulted project (issue #784)', async () => {
+    const source = await readSource();
+    // Unconfirmed (rollout-defaulted) projects need a deliberate choice; the selector
+    // baseline starts EMPTY rather than silently pre-filling the 'attivo' default.
+    expect(source).toContain('const tipoNeedsConfirmation = !project.tipoConfirmed;');
+    expect(source).toContain(
+      "const baselineTipo: ProjectTipo | '' = project.tipoConfirmed ? (project.tipo ?? '') : '';",
+    );
+    // Save is blocked until a tipo is chosen.
+    expect(source).toContain(
+      "if (!tipo) newErrors.tipo = t('projects:projects.tipoConfirmRequired')",
+    );
+    // The chosen value is sent so the server confirms the field (tipo_confirmed = true).
+    expect(source).toContain('tipo: tipo as ProjectTipo,');
+    // The selector + the explanatory hint render in the detail form.
+    expect(source).toContain('id="detail-tipo"');
+    expect(source).toContain("t('projects:projects.tipoConfirmHint')");
+    // Picking a value (or any other edit) raises the save bar via the baseline comparison.
+    expect(source).toContain('tipo !== baselineTipo');
+  });
+
   test('team-size KPI and assignment fetch are gated on canManageAssignments', async () => {
     // GET /projects/:id/users is server-gated on `projects.assignments.update`. Without
     // that permission the fetch 403s and the KPI would show a misleading "0".
@@ -614,5 +635,22 @@ describe('ProjectDetailView dashboard customization', () => {
     expect(source).toMatch(/id="timeline"[\s\S]{0,120}<Card className="h-full">/); // timeline
     // KPI cells are tall enough (h3 + minH3) to fit the team-size avatar footer.
     expect(source).toMatch(/id: 'teamSize', x: \d+, y: \d+, w: \d+, h: 3, minW: \d+, minH: 3/);
+  });
+
+  test('mixed projects can still see and edit the project-level billing frequency (issue #785)', async () => {
+    const source = await readSource();
+    // The frequency is a single project-level value new quick-added tasks inherit, so unlike the
+    // billing TYPE it must NOT be gated on `mixed`: it shows the real stored value and stays
+    // editable. (The value/disabled props are bound to the detail-billing-frequency control.)
+    expect(source).toMatch(/id="detail-billing-frequency"[\s\S]{0,140}value=\{billingFrequency\}/);
+    expect(source).toMatch(
+      /id="detail-billing-frequency"[\s\S]{0,400}disabled=\{!canUpdateProjects\}/,
+    );
+    // Saving a frequency edit on a mixed project persists only the frequency (the local
+    // billingType is a coerced default for a mixed project, so it must not be written).
+    expect(source).toContain('} else if (projectBillingChanged) {');
+    expect(source).toMatch(
+      /else if \(projectBillingChanged\) \{[\s\S]{0,260}updates\.billingFrequency = billingFrequency;/,
+    );
   });
 });

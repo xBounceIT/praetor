@@ -1537,9 +1537,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                       onChange={(val) => handleTypeChange(val as string)}
                       searchable={false}
                       buttonClassName={
-                        errors.type
-                          ? 'py-2.5 text-sm border-red-500 bg-red-50 focus:ring-red-200'
-                          : 'py-2.5 text-sm'
+                        errors.type ? 'py-2.5 text-sm border-destructive' : 'py-2.5 text-sm'
                       }
                     />
                     {errors.type && (
@@ -1640,7 +1638,8 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                         value={formData.costo ?? ''}
                         formatDecimals={2}
                         onValueChange={handleNumericValueChange('costo')}
-                        className={`flex-1 text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 outline-none transition-all min-w-0 ${errors.costo ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
+                        className="flex-1 min-w-0"
+                        aria-invalid={Boolean(errors.costo)}
                       />
                     </div>
                     {errors.costo && (
@@ -1655,7 +1654,8 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
                         value={formData.molPercentage ?? ''}
                         formatDecimals={2}
                         onValueChange={handleNumericValueChange('molPercentage')}
-                        className={`flex-1 text-sm px-4 py-2.5 bg-zinc-50 border rounded-xl focus:ring-2 outline-none transition-all min-w-0 ${errors.molPercentage ? 'border-red-500 bg-red-50 focus:ring-red-200' : 'border-zinc-200 focus:ring-praetor'}`}
+                        className="flex-1 min-w-0"
+                        aria-invalid={Boolean(errors.molPercentage)}
                       />
                     </div>
                     {errors.molPercentage && (

@@ -35,4 +35,17 @@ describe('InternalListingView modal styling', () => {
     ]);
     expectSourceOmitsAll(source, ['items-end justify-between ml-1 min-h-5']);
   });
+
+  test('cost/MOL inputs and type select flag invalid theme-aware, not a light bg-red-50 fill', async () => {
+    const source = await readComponentSource('catalog/InternalListingView.tsx');
+
+    // Invalid styling is theme-aware (aria-invalid on the shadcn Input, border-destructive on the
+    // select trigger) instead of the old hardcoded light bg-red-50 slab (dark-mode bug).
+    expectSourceContainsAll(source, [
+      'aria-invalid={Boolean(errors.costo)}',
+      'aria-invalid={Boolean(errors.molPercentage)}',
+      "? 'py-2.5 text-sm border-destructive'",
+    ]);
+    expectSourceOmitsAll(source, ['border-red-500 bg-red-50']);
+  });
 });

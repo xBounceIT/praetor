@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
+import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { tasks, userTasks } from '../db/schema/tasks.ts';
 import { timeEntries } from '../db/schema/timeEntries.ts';
 import {
@@ -147,7 +147,7 @@ export const create = async (task: NewTask, exec: DbExecutor = db): Promise<Task
         notes: task.notes,
         isDisabled: task.isDisabled,
         billingType: task.billingType,
-        billingFrequency: normalizeBillingFrequency(task.billingType, task.billingFrequency),
+        billingFrequency: normalizeBillingFrequency(task.billingFrequency),
       })
       .returning();
     return mapRow(rows[0]);
@@ -155,18 +155,6 @@ export const create = async (task: NewTask, exec: DbExecutor = db): Promise<Task
     if (getForeignKeyViolation(err)) throw new ForeignKeyError('Project');
     throw err;
   }
-};
-
-const lockBillingTypeById = async (
-  id: string,
-  exec: DbExecutor,
-): Promise<StoredBillingType | null> => {
-  const rows = await exec
-    .select({ billingType: tasks.billingType })
-    .from(tasks)
-    .where(eq(tasks.id, id))
-    .for('update');
-  return rows[0]?.billingType ?? null;
 };
 
 export type TaskUpdate = {
@@ -207,22 +195,13 @@ export const update = async (
   if (patch.monthlyEffort !== undefined) set.monthlyEffort = numericForDb(patch.monthlyEffort);
   if (patch.revenue !== undefined) set.revenue = numericForDb(patch.revenue);
   if (patch.notes !== undefined) set.notes = patch.notes;
+  // billing_type and billing_frequency are independent columns now, so each is set on its
+  // own - no cross-field normalization or row lock needed.
   if (patch.billingType !== undefined) {
-    const nextBillingType = patch.billingType ?? DEFAULT_BILLING_TYPE;
-    set.billingType = nextBillingType;
-    set.billingFrequency = normalizeBillingFrequency(nextBillingType, patch.billingFrequency);
-  } else if (patch.billingFrequency !== undefined) {
-    // Lock billing_type while we normalize against it: a concurrent UPDATE of billing_type
-    // between the SELECT and our UPDATE would otherwise leave billing_frequency mismatched.
-    return runAtomically(exec, async (tx) => {
-      const billingType = await lockBillingTypeById(id, tx);
-      set.billingFrequency = normalizeBillingFrequency(
-        billingType ?? DEFAULT_BILLING_TYPE,
-        patch.billingFrequency,
-      );
-      const rows = await tx.update(tasks).set(set).where(eq(tasks.id, id)).returning();
-      return rows[0] ? mapRow(rows[0]) : null;
-    });
+    set.billingType = patch.billingType ?? DEFAULT_BILLING_TYPE;
+  }
+  if (patch.billingFrequency !== undefined) {
+    set.billingFrequency = normalizeBillingFrequency(patch.billingFrequency);
   }
 
   if (Object.keys(set).length === 0) {

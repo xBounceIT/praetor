@@ -432,16 +432,16 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
       zIndex={50}
       backdropClass="bg-zinc-900/50 backdrop-blur-sm"
     >
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        <div className="px-6 py-4 border-b border-zinc-200 flex items-center justify-between bg-zinc-50">
-          <h3 className="font-semibold text-lg text-zinc-800">
+      <div className="bg-card rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/50">
+          <h3 className="font-semibold text-lg text-foreground">
             {t('hr:workforce.manageAccess', { name: user.name })}
           </h3>
           <button
             type="button"
             onClick={onClose}
             aria-label={t('common:buttons.close')}
-            className="text-zinc-400 hover:text-zinc-600 transition-colors"
+            className="text-muted-foreground hover:text-foreground transition-colors"
           >
             <i className="fa-solid fa-xmark text-xl"></i>
           </button>
@@ -455,7 +455,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
           ) : loadFailed ? (
             <div className="flex flex-col items-center justify-center py-12 text-center px-4">
               <i className="fa-solid fa-triangle-exclamation text-3xl text-red-500 mb-3"></i>
-              <p className="text-sm text-zinc-600 max-w-sm">
+              <p className="text-sm text-muted-foreground max-w-sm">
                 {t('hr:workforce.failedToLoadAssignments')}
               </p>
             </div>
@@ -470,7 +470,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                   }
                   placeholder={t('hr:workforce.filterByClient')}
                   searchable={true}
-                  buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-semibold text-zinc-700 shadow-sm"
+                  buttonClassName="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm font-semibold text-foreground shadow-sm"
                 />
                 <SelectControl
                   options={projectFilterOptions}
@@ -480,19 +480,19 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                   }
                   placeholder={t('hr:workforce.filterByProject')}
                   searchable={true}
-                  buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-semibold text-zinc-700 shadow-sm"
+                  buttonClassName="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm font-semibold text-foreground shadow-sm"
                   disabled={projectFilterOptions.length === 1}
                 />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-3">
-                  <div className="sticky top-0 bg-white z-10 pb-2 border-b border-zinc-100 mb-2">
+                  <div className="sticky top-0 bg-card z-10 pb-2 border-b border-border mb-2">
                     <div className="flex items-center justify-between py-2">
-                      <h4 className="font-semibold text-zinc-700 text-sm uppercase tracking-wider">
+                      <h4 className="font-semibold text-foreground text-sm uppercase tracking-wider">
                         {t('hr:workforce.clients')}
                       </h4>
-                      <span className="text-xs font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full">
+                      <span className="text-xs font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
                         {assignments.clientIds.length}
                       </span>
                     </div>
@@ -504,7 +504,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                       onChange={(event) =>
                         dispatch({ type: 'setClientSearch', value: event.target.value })
                       }
-                      className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                      className="w-full px-3 py-1.5 text-sm border border-border bg-background text-foreground rounded-lg focus:ring-2 focus:ring-praetor outline-none placeholder:text-muted-foreground"
                     />
                   </div>
                   <div className="space-y-2">
@@ -513,8 +513,8 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                         key={client.id}
                         className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                           assignments.clientIds.includes(client.id)
-                            ? 'bg-zinc-50 border-zinc-300 shadow-sm'
-                            : 'bg-white border-zinc-200 hover:border-zinc-300'
+                            ? 'bg-accent border-border shadow-sm'
+                            : 'bg-card border-border hover:border-input'
                         }`}
                       >
                         <div className="relative flex items-center justify-center shrink-0">
@@ -525,7 +525,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                             aria-label={client.name}
                             className="sr-only peer"
                           />
-                          <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                          <div className="size-5 rounded-full border-2 border-border relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
                             <div
                               className={`size-2 rounded-full transition-all duration-200 ${
                                 assignments.clientIds.includes(client.id)
@@ -538,8 +538,8 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                         <span
                           className={`text-sm font-semibold ${
                             assignments.clientIds.includes(client.id)
-                              ? 'text-zinc-900'
-                              : 'text-zinc-600'
+                              ? 'text-foreground'
+                              : 'text-muted-foreground'
                           }`}
                         >
                           {client.name}
@@ -547,7 +547,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                       </label>
                     ))}
                     {clients.length === 0 && (
-                      <p className="text-xs text-zinc-400 italic">
+                      <p className="text-xs text-muted-foreground italic">
                         {t('hr:workforce.noClientsFound')}
                       </p>
                     )}
@@ -555,12 +555,12 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                 </div>
 
                 <div className="space-y-3">
-                  <div className="sticky top-0 bg-white z-10 pb-2 border-b border-zinc-100 mb-2">
+                  <div className="sticky top-0 bg-card z-10 pb-2 border-b border-border mb-2">
                     <div className="flex items-center justify-between py-2">
-                      <h4 className="font-semibold text-zinc-700 text-sm uppercase tracking-wider">
+                      <h4 className="font-semibold text-foreground text-sm uppercase tracking-wider">
                         {t('hr:workforce.projects')}
                       </h4>
-                      <span className="text-xs font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full">
+                      <span className="text-xs font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
                         {assignments.projectIds.length}
                       </span>
                     </div>
@@ -572,7 +572,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                       onChange={(event) =>
                         dispatch({ type: 'setProjectSearch', value: event.target.value })
                       }
-                      className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                      className="w-full px-3 py-1.5 text-sm border border-border bg-background text-foreground rounded-lg focus:ring-2 focus:ring-praetor outline-none placeholder:text-muted-foreground"
                     />
                   </div>
                   <div className="space-y-2">
@@ -581,8 +581,8 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                         key={project.id}
                         className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                           assignments.projectIds.includes(project.id)
-                            ? 'bg-zinc-50 border-zinc-300 shadow-sm'
-                            : 'bg-white border-zinc-200 hover:border-zinc-300'
+                            ? 'bg-accent border-border shadow-sm'
+                            : 'bg-card border-border hover:border-input'
                         }`}
                       >
                         <div className="relative flex items-center justify-center shrink-0">
@@ -593,7 +593,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                             aria-label={project.name}
                             className="sr-only peer"
                           />
-                          <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                          <div className="size-5 rounded-full border-2 border-border relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
                             <div
                               className={`size-2 rounded-full transition-all duration-200 ${
                                 assignments.projectIds.includes(project.id)
@@ -607,13 +607,13 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                           <span
                             className={`text-sm font-semibold ${
                               assignments.projectIds.includes(project.id)
-                                ? 'text-zinc-900'
-                                : 'text-zinc-600'
+                                ? 'text-foreground'
+                                : 'text-muted-foreground'
                             }`}
                           >
                             {project.name}
                           </span>
-                          <span className="text-[10px] text-zinc-400">
+                          <span className="text-[10px] text-muted-foreground">
                             {clients.find((client) => client.id === project.clientId)?.name ||
                               t('hr:workforce.unknownClient')}
                           </span>
@@ -621,7 +621,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                       </label>
                     ))}
                     {projects.length === 0 && (
-                      <p className="text-xs text-zinc-400 italic">
+                      <p className="text-xs text-muted-foreground italic">
                         {t('hr:workforce.noProjectsFound')}
                       </p>
                     )}
@@ -629,12 +629,12 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                 </div>
 
                 <div className="space-y-3">
-                  <div className="sticky top-0 bg-white z-10 pb-2 border-b border-zinc-100 mb-2">
+                  <div className="sticky top-0 bg-card z-10 pb-2 border-b border-border mb-2">
                     <div className="flex items-center justify-between py-2">
-                      <h4 className="font-semibold text-zinc-700 text-sm uppercase tracking-wider">
+                      <h4 className="font-semibold text-foreground text-sm uppercase tracking-wider">
                         {t('hr:workforce.tasks')}
                       </h4>
-                      <span className="text-xs font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full">
+                      <span className="text-xs font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
                         {assignments.taskIds.length}
                       </span>
                     </div>
@@ -646,7 +646,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                       onChange={(event) =>
                         dispatch({ type: 'setTaskSearch', value: event.target.value })
                       }
-                      className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none"
+                      className="w-full px-3 py-1.5 text-sm border border-border bg-background text-foreground rounded-lg focus:ring-2 focus:ring-praetor outline-none placeholder:text-muted-foreground"
                     />
                   </div>
                   <div className="space-y-2">
@@ -657,8 +657,8 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                           key={task.id}
                           className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
                             assignments.taskIds.includes(task.id)
-                              ? 'bg-zinc-50 border-zinc-300 shadow-sm'
-                              : 'bg-white border-zinc-200 hover:border-zinc-300'
+                              ? 'bg-accent border-border shadow-sm'
+                              : 'bg-card border-border hover:border-input'
                           }`}
                         >
                           <div className="relative flex items-center justify-center shrink-0">
@@ -669,7 +669,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                               aria-label={task.name}
                               className="sr-only peer"
                             />
-                            <div className="size-5 rounded-full border-2 border-zinc-200 relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-white shadow-sm flex items-center justify-center">
+                            <div className="size-5 rounded-full border-2 border-border relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
                               <div
                                 className={`size-2 rounded-full transition-all duration-200 ${
                                   assignments.taskIds.includes(task.id)
@@ -683,13 +683,13 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                             <span
                               className={`text-sm font-semibold ${
                                 assignments.taskIds.includes(task.id)
-                                  ? 'text-zinc-900'
-                                  : 'text-zinc-600'
+                                  ? 'text-foreground'
+                                  : 'text-muted-foreground'
                               }`}
                             >
                               {task.name}
                             </span>
-                            <span className="text-[10px] text-zinc-400">
+                            <span className="text-[10px] text-muted-foreground">
                               {project?.name || t('hr:workforce.unknownProject')}
                             </span>
                           </div>
@@ -697,7 +697,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
                       );
                     })}
                     {tasks.length === 0 && (
-                      <p className="text-xs text-zinc-400 italic">
+                      <p className="text-xs text-muted-foreground italic">
                         {t('hr:workforce.noTasksFound')}
                       </p>
                     )}
@@ -708,11 +708,11 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
           )}
         </div>
 
-        <div className="p-6 border-t border-zinc-200 bg-zinc-50 flex justify-end gap-3">
+        <div className="p-6 border-t border-border bg-muted/50 flex justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-zinc-600 font-bold hover:bg-zinc-200 rounded-lg transition-colors text-sm"
+            className="px-4 py-2 text-muted-foreground font-bold hover:bg-muted rounded-lg transition-colors text-sm"
           >
             {t('common:buttons.cancel')}
           </button>
@@ -722,8 +722,8 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
             disabled={!isDirty || loadFailed}
             className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${
               !isDirty || loadFailed
-                ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
-                : 'bg-praetor text-white hover:bg-zinc-800'
+                ? 'bg-muted text-muted-foreground cursor-not-allowed border border-border'
+                : 'bg-praetor text-white hover:bg-praetor/90'
             }`}
           >
             {t('hr:workforce.saveAssignments')}

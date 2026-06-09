@@ -368,6 +368,32 @@ describe('POST /api/tasks', () => {
     );
   });
 
+  test('201: time and materials task keeps a one-time frequency (issue #785)', async () => {
+    createMock.mockResolvedValue(SAMPLE_TASK);
+    findClientIdMock.mockResolvedValue('c-1');
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers: authHeader(),
+      payload: {
+        name: 'Fixed-scope deliverable',
+        projectId: 'p-1',
+        billingType: 'time_and_materials',
+        billingFrequency: 'one_time',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        billingType: 'time_and_materials',
+        billingFrequency: 'one_time',
+      }),
+      TX_SENTINEL,
+    );
+  });
+
   test('201: recurring task without recurrenceStart defaults to today', async () => {
     createMock.mockResolvedValue({ ...SAMPLE_TASK, isRecurring: true });
     findClientIdMock.mockResolvedValue(null);

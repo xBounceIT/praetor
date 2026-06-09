@@ -12,6 +12,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useBillingFrequencyOptions, useBillingTypeOptions } from '@/hooks/useBillingOptions';
+import {
+  DEFAULT_BILLING_FREQUENCY,
+  DEFAULT_BILLING_TYPE,
+  toStoredBillingType,
+} from '@/utils/billing';
 import { projectsApi, tasksApi } from '../../services/api';
 import type {
   BillingFrequency,
@@ -21,6 +27,7 @@ import type {
   ClientsOrder,
   Project,
   ProjectTask,
+  ProjectTipo,
   Role,
   StoredBillingType,
   User,
@@ -70,18 +77,10 @@ export type DraftTaskInput = {
   notes?: string;
 };
 
-const billingTypeOptions = [
-  { id: 'time_and_materials', name: 'projects:projects.billingTypes.timeAndMaterials' },
-  { id: 'retainer', name: 'projects:projects.billingTypes.retainer' },
+const tipoOptions = [
+  { id: 'attivo', name: 'projects:projects.tipoValues.attivo' },
+  { id: 'passivo', name: 'projects:projects.tipoValues.passivo' },
 ];
-
-const billingFrequencyOptions = [
-  { id: 'monthly', name: 'projects:projects.billingFrequencies.monthly' },
-  { id: 'one_time', name: 'projects:projects.billingFrequencies.oneTime' },
-];
-
-const toStoredBillingType = (value: BillingType | undefined): StoredBillingType =>
-  value === 'retainer' ? 'retainer' : 'time_and_materials';
 
 type RevenueSource = 'activities' | 'order' | 'manual';
 type RevenueLike = { revenue?: number | string | null };
@@ -107,6 +106,7 @@ export type AddProjectFormInput = {
   startDate?: string | null;
   endDate?: string | null;
   revenue?: number | null;
+  tipo: ProjectTipo;
 };
 
 export interface ProjectsViewProps {
@@ -155,6 +155,8 @@ interface ProjectsViewState {
   startDate: string;
   endDate: string;
   revenue: string;
+  // '' = no choice yet; the create form requires a deliberate Attivo/Passivo pick (issue #784).
+  tipo: ProjectTipo | '';
   errors: Record<string, string>;
   draftTasks: DraftTask[];
 }
@@ -168,12 +170,13 @@ const INITIAL_PROJECTS_STATE: ProjectsViewState = {
   orderId: '',
   clientId: '',
   description: '',
-  billingType: 'time_and_materials',
-  billingFrequency: 'monthly',
+  billingType: DEFAULT_BILLING_TYPE,
+  billingFrequency: DEFAULT_BILLING_FREQUENCY,
   offerId: '',
   startDate: '',
   endDate: '',
   revenue: '',
+  tipo: '',
   errors: {},
   draftTasks: [],
 };
@@ -189,6 +192,7 @@ type ProjectsViewAction =
   | { type: 'setStartDate'; value: string }
   | { type: 'setEndDate'; value: string }
   | { type: 'setRevenue'; value: string }
+  | { type: 'setTipo'; value: ProjectTipo | '' }
   | { type: 'setErrors'; value: Record<string, string> }
   | { type: 'patchErrors'; value: Record<string, string> }
   | { type: 'setDraftTasks'; value: DraftTask[] }
@@ -222,6 +226,8 @@ const projectsViewReducer = (
       return { ...state, endDate: action.value };
     case 'setRevenue':
       return { ...state, revenue: action.value };
+    case 'setTipo':
+      return { ...state, tipo: action.value };
     case 'setErrors':
       return { ...state, errors: action.value };
     case 'patchErrors':
@@ -235,12 +241,13 @@ const projectsViewReducer = (
         orderId: '',
         clientId: '',
         description: '',
-        billingType: 'time_and_materials',
-        billingFrequency: 'monthly',
+        billingType: DEFAULT_BILLING_TYPE,
+        billingFrequency: DEFAULT_BILLING_FREQUENCY,
         offerId: '',
         startDate: '',
         endDate: '',
         revenue: '',
+        tipo: '',
         draftTasks: [],
         errors: {},
         isModalOpen: true,
@@ -303,6 +310,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     startDate,
     endDate,
     revenue,
+    tipo,
     errors,
     draftTasks,
   } = state;
@@ -429,6 +437,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     if (!offerId) newErrors.offerId = t('projects:projects.offerRequired');
     if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');
     if (!endDate) newErrors.endDate = t('projects:projects.endDateRequired');
+    if (!tipo) newErrors.tipo = t('projects:projects.tipoRequired');
     if (startDate && endDate && startDate > endDate) {
       newErrors.dateRange = t('projects:projects.dateRangeInvalid');
     }
@@ -444,8 +453,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       taskInputs.push({
         name: taskName,
         billingType: task.billingType,
-        billingFrequency:
-          task.billingType === 'time_and_materials' ? 'monthly' : task.billingFrequency,
+        billingFrequency: task.billingFrequency,
         monthlyEffort: task.monthlyEffort ? parseFloat(task.monthlyEffort) : undefined,
         expectedEffort: task.expectedEffort ? parseFloat(task.expectedEffort) : undefined,
         revenue: task.revenue ? parseFloat(task.revenue) : undefined,
@@ -460,10 +468,12 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       description,
       draftTasks: taskInputs.length > 0 ? taskInputs : undefined,
       billingType,
-      billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
+      billingFrequency,
       startDate: startDate || null,
       endDate: endDate || null,
       revenue: persistedRevenue,
+      // Guaranteed non-empty by the `!tipo` validation guard above.
+      tipo: tipo as ProjectTipo,
     });
     closeModal();
     if (result && onNavigateToProject) {
@@ -502,7 +512,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           _id: String(Date.now() + Math.random()),
           name: '',
           billingType,
-          billingFrequency: billingType === 'time_and_materials' ? 'monthly' : billingFrequency,
+          billingFrequency,
           monthlyEffort: '',
           expectedEffort: '',
           revenue: '',
@@ -517,15 +527,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       type: 'setDraftTasks',
       value: draftTasks.map((t) => {
         if (t._id !== id) return t;
-        if (field === 'billingType') {
-          const nextBillingType = value as StoredBillingType;
-          return {
-            ...t,
-            billingType: nextBillingType,
-            billingFrequency:
-              nextBillingType === 'time_and_materials' ? 'monthly' : t.billingFrequency,
-          };
-        }
         return { ...t, [field]: value };
       }),
     });
@@ -541,7 +542,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     const taskBillingTypes = new Set<StoredBillingType>();
     for (const task of tasks) {
       if (task.projectId === project.id) {
-        taskBillingTypes.add(task.billingType ?? 'time_and_materials');
+        taskBillingTypes.add(task.billingType ?? DEFAULT_BILLING_TYPE);
       }
     }
     if (taskBillingTypes.size === 0) return storedProjectBillingType;
@@ -549,20 +550,21 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     return taskBillingTypes.has(storedProjectBillingType) ? storedProjectBillingType : 'mixed';
   };
 
-  const translatedBillingTypeOptions = billingTypeOptions.map((option) => ({
-    id: option.id,
-    name: t(option.name),
-  }));
-  const translatedBillingFrequencyOptions = billingFrequencyOptions.map((option) => ({
-    id: option.id,
-    name: t(option.name),
-  }));
+  const translatedBillingTypeOptions = useBillingTypeOptions();
+  const translatedBillingFrequencyOptions = useBillingFrequencyOptions();
   const formatBillingType = (value: Project['billingType'] | ProjectTask['billingType']) =>
     value === 'mixed'
       ? t('projects:projects.billingTypes.mixed')
       : (translatedBillingTypeOptions.find((option) => option.id === value)?.name ?? '-');
   const formatBillingFrequency = (value: BillingFrequency | undefined) =>
     translatedBillingFrequencyOptions.find((option) => option.id === value)?.name ?? '-';
+
+  const translatedTipoOptions = tipoOptions.map((option) => ({
+    id: option.id,
+    name: t(option.name),
+  }));
+  const formatTipo = (value: ProjectTipo | undefined) =>
+    translatedTipoOptions.find((option) => option.id === value)?.name ?? '-';
 
   const clientOptions = clients.map((c: Client) => ({ id: c.id, name: c.name }));
 
@@ -660,14 +662,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       disableFiltering: true,
       cell: ({ row }) => (
         <SelectControl
-          options={
-            row.billingType === 'retainer'
-              ? translatedBillingFrequencyOptions
-              : translatedBillingFrequencyOptions.filter((option) => option.id === 'monthly')
-          }
-          value={row.billingType === 'time_and_materials' ? 'monthly' : row.billingFrequency}
+          options={translatedBillingFrequencyOptions}
+          value={row.billingFrequency}
           onChange={(val) => updateDraftTask(row._id, 'billingFrequency', val as string)}
-          disabled={row.billingType === 'time_and_materials'}
           className="min-w-[120px]"
           buttonClassName="h-8 text-xs"
           searchable={false}
@@ -991,35 +988,48 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <SelectControl
+                        id="project-tipo"
+                        options={translatedTipoOptions}
+                        value={tipo}
+                        onChange={(val) => {
+                          dispatch({ type: 'setTipo', value: val as ProjectTipo });
+                          if (errors.tipo) dispatch({ type: 'patchErrors', value: { tipo: '' } });
+                        }}
+                        label={
+                          <>
+                            {t('projects:projects.tipo')} <RequiredMark />
+                          </>
+                        }
+                        placeholder={t('projects:projects.selectTipo')}
+                        searchable={false}
+                        buttonClassName="h-9"
+                      />
+                      <FieldError className="text-xs">{errors.tipo}</FieldError>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
                     <SelectControl
                       id="project-billing-type"
                       options={translatedBillingTypeOptions}
                       value={billingType}
-                      onChange={(val) => {
-                        const nextBillingType = val as StoredBillingType;
-                        dispatch({ type: 'setBillingType', value: nextBillingType });
-                        if (nextBillingType === 'time_and_materials')
-                          dispatch({ type: 'setBillingFrequency', value: 'monthly' });
-                      }}
+                      onChange={(val) =>
+                        dispatch({ type: 'setBillingType', value: val as StoredBillingType })
+                      }
                       label={t('projects:projects.billingType')}
                       searchable={false}
                       buttonClassName="h-9"
                     />
                     <SelectControl
                       id="project-billing-frequency"
-                      options={
-                        billingType === 'retainer'
-                          ? translatedBillingFrequencyOptions
-                          : translatedBillingFrequencyOptions.filter(
-                              (option) => option.id === 'monthly',
-                            )
-                      }
-                      value={billingType === 'time_and_materials' ? 'monthly' : billingFrequency}
+                      options={translatedBillingFrequencyOptions}
+                      value={billingFrequency}
                       onChange={(val) =>
                         dispatch({ type: 'setBillingFrequency', value: val as BillingFrequency })
                       }
                       label={t('projects:projects.billingFrequency')}
-                      disabled={billingType === 'time_and_materials'}
                       searchable={false}
                       buttonClassName="h-9"
                     />
@@ -1172,6 +1182,14 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                 >
                   {row.description || t('projects:projects.noDescriptionProvided')}
                 </p>
+              ),
+            },
+            {
+              header: t('projects:projects.tipo'),
+              id: 'tipo',
+              accessorFn: (row) => formatTipo(row.tipo),
+              cell: ({ row }) => (
+                <span className="text-xs font-bold text-zinc-600">{formatTipo(row.tipo)}</span>
               ),
             },
             {

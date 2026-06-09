@@ -18,7 +18,6 @@ import { deriveToggleAction, getAuditChangedFields, logAudit } from '../utils/au
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import {
   BILLING_FREQUENCIES,
-  DEFAULT_BILLING_FREQUENCY,
   DEFAULT_BILLING_TYPE,
   normalizeBillingFrequency,
   normalizeStoredBillingType,
@@ -267,10 +266,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         billingTypeResult.value ??
         normalizeStoredBillingType(projectBilling?.billingType ?? DEFAULT_BILLING_TYPE);
       const taskBillingFrequency = normalizeBillingFrequency(
-        taskBillingType,
-        billingFrequencyResult.value ??
-          projectBilling?.billingFrequency ??
-          DEFAULT_BILLING_FREQUENCY,
+        billingFrequencyResult.value ?? projectBilling?.billingFrequency,
       );
 
       const isRecurringResult = parseBooleanField(body, 'isRecurring');
