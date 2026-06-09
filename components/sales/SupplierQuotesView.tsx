@@ -1503,7 +1503,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                       updateItem(index, 'listPrice', parseNumberInputValue(value))
                                     }
                                     disabled={isReadOnly}
-                                    className={`${itemInputClassName} flex-1`}
+                                    className={`${itemInputClassName} flex-1 text-right`}
                                   />
                                   <span className="text-xs font-semibold text-zinc-400 shrink-0 whitespace-nowrap">
                                     {currency}

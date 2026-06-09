@@ -536,6 +536,9 @@ describe('<SupplierQuotesView /> compact line-item numeric columns', () => {
     expectSourceContainsAll(source, ['flex items-center justify-center gap-1.5']);
     // The old full-width unit-cost treatment is gone: the value no longer spans the cell right-aligned.
     expectSourceOmitsAll(source, ['flex-1 text-right text-sm font-semibold text-zinc-700']);
+    // The editable "Prezzo listino" input right-aligns its value so the amount sits beside the
+    // currency symbol like the other money figures; `flex-1 text-right` is unique to that input now.
+    expectSourceContainsAll(source, ['flex-1 text-right']);
   });
 
   test('uses the compact 16-col grid with a widened product column', async () => {
