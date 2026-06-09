@@ -1275,14 +1275,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
                   {formData.items && formData.items.length > 0 && (
                     <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                      <div className="flex-1 min-w-0 grid grid-cols-12 gap-3">
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
+                      <div className="flex-1 min-w-0 grid grid-cols-16 gap-2">
+                        <div className="col-span-6 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
                           {t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
                         </div>
                         <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
                           {t('sales:supplierQuotes.listPrice', { defaultValue: 'List Price' })}
                         </div>
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
+                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
                           {t('sales:supplierQuotes.discountToUs', {
                             defaultValue: 'Discount to Us (%)',
                           })}
@@ -1491,8 +1491,8 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                               </div>
                             </div>
                             <div className="hidden lg:flex gap-2 items-center">
-                              <div className="flex-1 min-w-0 grid grid-cols-12 gap-3 items-center">
-                                <div className="col-span-2">
+                              <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center">
+                                <div className="col-span-6">
                                   <Input
                                     type="text"
                                     value={item.productName || ''}
@@ -1513,13 +1513,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                       updateItem(index, 'listPrice', parseNumberInputValue(value))
                                     }
                                     disabled={isReadOnly}
-                                    className={`${itemInputClassName} flex-1`}
+                                    className={`${itemInputClassName} flex-1 text-right`}
                                   />
                                   <span className="text-xs font-semibold text-zinc-400 shrink-0 whitespace-nowrap">
                                     {currency}
                                   </span>
                                 </div>
-                                <div className="col-span-2 flex items-center gap-1">
+                                <div className="col-span-2 flex items-center justify-center gap-1">
                                   <ValidatedNumberInput
                                     value={itemDiscountPercent}
                                     min={0}
@@ -1532,28 +1532,28 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                                       )
                                     }
                                     disabled={isReadOnly}
-                                    className={`${itemInputClassName} text-center flex-1`}
+                                    className={`${itemInputClassName} text-center max-w-[5rem]`}
                                   />
                                   <span className="text-xs font-semibold text-zinc-400 shrink-0">
                                     %
                                   </span>
                                 </div>
-                                <div className="col-span-2 flex items-center justify-end gap-1.5">
-                                  <span className="flex-1 text-right text-sm font-semibold text-zinc-700 whitespace-nowrap tabular-nums">
+                                <div className="col-span-2 flex items-center justify-center gap-1.5">
+                                  <span className="text-sm font-semibold text-zinc-700 whitespace-nowrap tabular-nums">
                                     {itemUnitCost.toFixed(2)}
                                   </span>
                                   <span className="text-xs font-semibold text-zinc-400 shrink-0 whitespace-nowrap">
                                     {currency}
                                   </span>
                                 </div>
-                                <div className="col-span-2 flex items-center gap-1">
+                                <div className="col-span-2 flex items-center justify-center gap-1">
                                   <ValidatedNumberInput
                                     value={item.quantity}
                                     onValueChange={(value) =>
                                       updateItem(index, 'quantity', parseNumberInputValue(value))
                                     }
                                     disabled={isReadOnly}
-                                    className={`${itemInputClassName} text-center`}
+                                    className={`${itemInputClassName} text-center max-w-[5rem]`}
                                   />
                                   <span className="text-xs font-semibold text-zinc-400 shrink-0">
                                     /

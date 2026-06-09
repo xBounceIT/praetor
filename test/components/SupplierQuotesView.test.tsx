@@ -598,3 +598,36 @@ describe('<SupplierQuotesView /> dark-mode banners (issue #768)', () => {
     ]);
   });
 });
+
+describe('<SupplierQuotesView /> compact line-item numeric columns', () => {
+  test('discount/quantity inputs are width-capped and unit cost is content-sized', async () => {
+    const source = await readComponentSource('sales/SupplierQuotesView.tsx');
+    // The desktop "Sconto a noi (%)" and "Quantità" inputs are BOTH capped at max-w-[5rem] so the
+    // columns only have to fit values like "100" or "45.47" instead of stretching the cell. The cap
+    // sits directly after text-center (the duration input also uses max-w-[5rem], but not adjacent
+    // to text-center), so this regex matches exactly those two inputs. Assert both carry it —
+    // reverting either one alone would be a regression a single substring check would miss.
+    expect((source.match(/text-center max-w-\[5rem\]/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    // "Costo unitario" and the discount column are centered under their centered headers; gap-1.5
+    // is unique to the unit-cost cell, sized to its content rather than spanning the column.
+    expectSourceContainsAll(source, ['flex items-center justify-center gap-1.5']);
+    // The old full-width unit-cost treatment is gone: the value no longer spans the cell right-aligned.
+    expectSourceOmitsAll(source, ['flex-1 text-right text-sm font-semibold text-zinc-700']);
+    // The editable "Prezzo listino" input right-aligns its value so the amount sits beside the
+    // currency symbol like the other money figures; `flex-1 text-right` is unique to that input now.
+    expectSourceContainsAll(source, ['flex-1 text-right']);
+  });
+
+  test('uses the compact 16-col grid with a widened product column', async () => {
+    const source = await readComponentSource('sales/SupplierQuotesView.tsx');
+    // Desktop line-item rows use the same tighter grid as ClientQuotesView (16 cols / gap-2)
+    // instead of the old evenly-split 12-col / gap-3 that left big gaps between the capped numeric
+    // inputs. Both the header row and the data row carry it → at least 2 occurrences.
+    expect((source.match(/grid grid-cols-16 gap-2/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    // The product column is widened to col-span-6 (the five remaining columns stay col-span-2:
+    // 6 + 5×2 = 16) to soak up the reclaimed width — header + data row → at least 2 occurrences.
+    expect((source.match(/col-span-6/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    // The old evenly-split 12-col grid that wasted horizontal space is gone from both rows.
+    expectSourceOmitsAll(source, ['grid grid-cols-12 gap-3']);
+  });
+});
