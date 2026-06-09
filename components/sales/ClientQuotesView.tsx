@@ -387,6 +387,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   const closeModal = useCallback(() => {
     dispatch({ type: 'closeModal' });
     setPreviewVersion(null);
+    setProductRowToDelete(null);
   }, []);
 
   const openAddModal = () => {

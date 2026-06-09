@@ -401,6 +401,11 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   const [previewVersion, setPreviewVersion] = useState<OfferVersion | null>(null);
   const [productRowToDelete, setProductRowToDelete] = useState<number | null>(null);
 
+  const closeModal = useCallback(() => {
+    dispatch({ type: 'closeModal' });
+    setProductRowToDelete(null);
+  }, []);
+
   const baseReadOnly = Boolean(editingOffer && editingOffer.status !== 'draft');
   const isReadOnly = baseReadOnly || previewVersion !== null;
   const isClientLocked = Boolean(editingOffer?.linkedQuoteId);
@@ -1124,12 +1129,12 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     } finally {
       dispatch({ type: 'setIsSubmitting', value: false });
     }
-    dispatch({ type: 'closeModal' });
+    closeModal();
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <Modal isOpen={isModalOpen} onClose={() => dispatch({ type: 'closeModal' })}>
+      <Modal isOpen={isModalOpen} onClose={closeModal}>
         <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
           <ModalContent size="full" className="max-h-[90vh]">
             <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
@@ -1147,7 +1152,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                       ? t('sales:clientOffers.editOffer', { defaultValue: 'Edit offer' })
                       : t('sales:clientOffers.newOffer', { defaultValue: 'New offer' })}
                 </ModalTitle>
-                <ModalCloseButton onClick={() => dispatch({ type: 'closeModal' })} />
+                <ModalCloseButton onClick={closeModal} />
               </ModalHeader>
 
               <ModalBody className="flex-1 space-y-5">
@@ -1941,11 +1946,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
               </ModalBody>
 
               <ModalFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => dispatch({ type: 'closeModal' })}
-                >
+                <Button type="button" variant="outline" onClick={closeModal}>
                   {t('common:buttons.cancel')}
                 </Button>
                 {!isReadOnly && (

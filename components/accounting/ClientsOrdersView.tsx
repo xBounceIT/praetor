@@ -290,6 +290,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   const closeEditModal = useCallback(() => {
     setIsModalOpen(false);
     setPreviewVersion(null);
+    setProductRowToDelete(null);
   }, [setIsModalOpen, setPreviewVersion]);
 
   const handleVersionPreview = useCallback(

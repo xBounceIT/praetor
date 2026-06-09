@@ -176,6 +176,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   }, []);
   const closeModal = useCallback(() => {
     dispatchInvoiceState({ type: 'closeModal' });
+    setProductRowToDelete(null);
   }, []);
   const closeDeleteConfirm = useCallback(() => {
     dispatchInvoiceState({ type: 'closeDeleteConfirm' });
