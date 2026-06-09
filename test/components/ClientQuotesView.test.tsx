@@ -2,6 +2,7 @@ import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { Client, Product, Quote, SupplierQuote } from '../../types';
+import { LineDeleteConfirmStub } from '../helpers/lineItemDeleteConfirm';
 import { render } from '../helpers/render';
 
 // Stable `t`/`i18n`: opening the edit modal mounts QuoteVersionsPanel, whose `reload`
@@ -52,28 +53,7 @@ mock.module('../../services/api/views', () => ({
 // of the SUT, so register the same stub here to keep that binding stable no matter which
 // quote-view test file Bun evaluates first.
 mock.module('../../components/shared/DeleteConfirmModal', () => ({
-  default: ({
-    isOpen,
-    onConfirm,
-    onClose,
-    title,
-  }: {
-    isOpen: boolean;
-    onConfirm: () => void;
-    onClose: () => void;
-    title?: ReactNode;
-  }) =>
-    isOpen ? (
-      <div data-testid="line-delete-confirm">
-        <span data-testid="line-delete-title">{title}</span>
-        <button type="button" data-testid="line-delete-cancel" onClick={onClose}>
-          cancel
-        </button>
-        <button type="button" data-testid="line-delete-confirm-btn" onClick={onConfirm}>
-          confirm
-        </button>
-      </div>
-    ) : null,
+  default: LineDeleteConfirmStub,
 }));
 
 const ClientQuotesView = (await import('../../components/sales/ClientQuotesView')).default;

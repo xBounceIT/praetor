@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ReactNode } from 'react';
 import type { Client, ClientOffer, Product, SupplierQuote } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
+import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { render } from '../../helpers/render';
+import { rowDeleteButtons } from '../../helpers/rowDeleteButtons';
 import {
   expectSourceContainsAll,
   expectSourceOmitsAll,
@@ -18,32 +19,9 @@ mock.module('../../../components/sales/OfferVersionsPanel', () => ({
 }));
 
 // Other suites globally stub DeleteConfirmModal (Bun's mock.module is process-wide and
-// last-write-wins), so the real component can't be relied on in the full-suite run. Pin a
-// deterministic passthrough that exposes the confirm/cancel actions to keep the line-item
-// deletion tests stable regardless of file ordering.
+// last-write-wins), so pin the shared deterministic stub against this file's binding.
 mock.module('../../../components/shared/DeleteConfirmModal', () => ({
-  default: ({
-    isOpen,
-    onConfirm,
-    onClose,
-    title,
-  }: {
-    isOpen: boolean;
-    onConfirm: () => void;
-    onClose: () => void;
-    title?: ReactNode;
-  }) =>
-    isOpen ? (
-      <div data-testid="line-delete-confirm">
-        <span data-testid="line-delete-title">{title}</span>
-        <button type="button" data-testid="line-delete-cancel" onClick={onClose}>
-          cancel
-        </button>
-        <button type="button" data-testid="line-delete-confirm-btn" onClick={onConfirm}>
-          confirm
-        </button>
-      </div>
-    ) : null,
+  default: LineDeleteConfirmStub,
 }));
 
 const ClientOffersView = (await import('../../../components/sales/ClientOffersView')).default;
@@ -597,15 +575,6 @@ describe('<ClientOffersView /> dark-mode banners (issue #768)', () => {
 });
 
 describe('<ClientOffersView /> line-item delete confirmation', () => {
-  // The row trash control labels itself via an sr-only span (whose text the test
-  // environment's accessible-name computation does not surface), and once the
-  // confirmation opens Radix marks the underlying edit dialog aria-hidden — so match
-  // on the icon and include hidden nodes to keep counting the rows behind the prompt.
-  const rowDeleteButtons = (dialog: HTMLElement) =>
-    within(dialog)
-      .getAllByRole('button', { hidden: true })
-      .filter((button) => button.querySelector('.fa-trash-can'));
-
   const openEditor = async () => {
     render(<ClientOffersView {...baseProps} offers={[acmeDraft]} />);
     fireEvent.click(screen.getByText('O-ACME-DRAFT'));
