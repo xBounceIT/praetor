@@ -1159,7 +1159,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                         auto-created behind this line. Only meaningful when the line
                                         actually references one, so it's omitted (not just disabled)
                                         on supplier-order-less lines. */}
-                                    {canViewSupplierOrders && item.supplierSaleId && (
+                                    {canViewSupplierOrders && Boolean(item.supplierSaleId) && (
                                       <QuickViewLinkButton
                                         href={supplierOrderHref}
                                         label={t(

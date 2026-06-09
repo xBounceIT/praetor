@@ -222,8 +222,9 @@ export interface SupplierOrdersViewProps {
   onOrderRestored?: (order: SupplierSaleOrder) => void | Promise<void>;
   currency: string;
   quoteFilterId?: string | null;
-  // Pre-filters the list to a single supplier order by its own id — set by the
-  // client-order line shortcut that deep-links here (#/accounting/supplier-orders?filterId=…).
+  // Pre-filters the list to a single supplier order by its own id, via a clearable
+  // table column filter — set by the client-order line shortcut that deep-links here
+  // (#/accounting/supplier-orders?filterId=…).
   orderFilterId?: string | null;
 }
 
@@ -353,18 +354,24 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
     [formData.discount, formData.discountType, formData.items],
   );
 
-  // Filter orders by orderFilterId (own id, from a client-order shortcut) or
-  // quoteFilterId (linked supplier quote) if provided. The own-id filter wins so
-  // the per-line shortcut always lands on exactly the referenced order.
+  // A client-order line shortcut deep-links here pre-filtered to a single supplier
+  // order by its own id. That filter is handed to the table as a *clearable* column
+  // filter (see tableInitialFilterState below), like the product / client-order
+  // quick-view shortcuts, so the user can drop back to the full list in place rather
+  // than being stuck on one row. The own-id deep link wins over the linked-quote
+  // (quoteFilterId) array filter, and skipping the latter leaves the column filter the
+  // full list to match against.
   const filteredOrders = useMemo(() => {
-    if (orderFilterId) {
-      return orders.filter((o) => o.id === orderFilterId);
-    }
-    if (quoteFilterId) {
+    if (!orderFilterId && quoteFilterId) {
       return orders.filter((o) => o.linkedQuoteId === quoteFilterId);
     }
     return orders;
   }, [orders, orderFilterId, quoteFilterId]);
+
+  const tableInitialFilterState = useMemo(
+    () => (orderFilterId ? { id: [orderFilterId] } : undefined),
+    [orderFilterId],
+  );
 
   const columns = useMemo(
     () => [
@@ -1051,6 +1058,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
         title={t('accounting:supplierOrders.title')}
         data={filteredOrders}
         columns={columns}
+        initialFilterState={tableInitialFilterState}
         defaultRowsPerPage={10}
         containerClassName="overflow-visible"
         rowClassName={(row: SupplierSaleOrder) =>
