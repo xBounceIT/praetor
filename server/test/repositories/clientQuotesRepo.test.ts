@@ -65,6 +65,19 @@ describe('listAll', () => {
     expect(exec.calls[0].sql.toLowerCase()).toContain('order by "quotes"."created_at" desc');
     expect(result[0].linkedOfferId).toBe('co-1');
   });
+
+  test('correlated subqueries qualify the outer quotes.* column, not the inner table', async () => {
+    // The list query is join-less, so `${quotes.id}` renders as a BARE "id" that would resolve
+    // against the SUBQUERY's own inner table (customer_offers also has an id) — silently matching
+    // co.id instead of the outer quote, so linkedOfferId was always null. The correlation must
+    // reference the qualified outer column.
+    exec.enqueue({ rows: [] });
+    await clientQuotesRepo.listAll(testDb);
+    const sql = exec.calls[0].sql;
+    expect(sql).toContain('co.linked_quote_id = "quotes"."id"');
+    expect(sql).toContain('sq.id = "quotes"."linked_supplier_quote_id"');
+    expect(sql).not.toMatch(/co\.linked_quote_id = "id"/);
+  });
 });
 
 describe('listAllItems', () => {

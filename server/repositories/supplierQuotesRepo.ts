@@ -33,30 +33,40 @@ export type SupplierQuote = {
   linkedOfferExpiration: string | null;
 };
 
+// The outer supplier_quotes.id, qualified to the OUTER table for use inside the correlated
+// subqueries below. Hand-qualified on purpose: `${supplierQuotes.id}` renders as a BARE "id"
+// because the outer query is join-less (Drizzle omits the table prefix), which then (a) shadows
+// to the subquery's own inner table id — a silently wrong correlation — and (b) is AMBIGUOUS in
+// the offer subqueries that join two id-bearing tables (customer_offers + quotes), aborting the
+// whole list query with "column reference \"id\" is ambiguous". The outer table is always
+// selected unaliased as "supplier_quotes" (see listAll/findById/lockEffectiveStatusById), so the
+// explicit reference is stable. Do NOT replace with ${supplierQuotes.id}.
+const outerSupplierQuoteId = sql.raw('"supplier_quotes"."id"');
+
 // Reverse-lookup correlated subqueries: the at-most-one client quote pointing at this supplier
 // quote (the partial-unique index on quotes.linked_supplier_quote_id guarantees ≤ 1), and the
 // at-most-one offer created from that quote (partial-unique on customer_offers.linked_quote_id).
 // Mirrors the linkedOrderId subquery pattern; all null when this supplier quote is unlinked.
 const linkedClientQuoteIdSubquery = sql<string | null>`(
-  SELECT q.id FROM quotes q WHERE q.linked_supplier_quote_id = ${supplierQuotes.id} LIMIT 1
+  SELECT q.id FROM quotes q WHERE q.linked_supplier_quote_id = ${outerSupplierQuoteId} LIMIT 1
 )`;
 const linkedClientQuoteStatusSubquery = sql<string | null>`(
-  SELECT q.status FROM quotes q WHERE q.linked_supplier_quote_id = ${supplierQuotes.id} LIMIT 1
+  SELECT q.status FROM quotes q WHERE q.linked_supplier_quote_id = ${outerSupplierQuoteId} LIMIT 1
 )`;
 // ::text so the driver returns the plain 'YYYY-MM-DD' string instead of a Date object.
 const linkedClientQuoteExpirationSubquery = sql<string | null>`(
   SELECT q.expiration_date::text FROM quotes q
-  WHERE q.linked_supplier_quote_id = ${supplierQuotes.id} LIMIT 1
+  WHERE q.linked_supplier_quote_id = ${outerSupplierQuoteId} LIMIT 1
 )`;
 const linkedOfferStatusSubquery = sql<string | null>`(
   SELECT o.status FROM customer_offers o
   JOIN quotes q ON o.linked_quote_id = q.id
-  WHERE q.linked_supplier_quote_id = ${supplierQuotes.id} LIMIT 1
+  WHERE q.linked_supplier_quote_id = ${outerSupplierQuoteId} LIMIT 1
 )`;
 const linkedOfferExpirationSubquery = sql<string | null>`(
   SELECT o.expiration_date::text FROM customer_offers o
   JOIN quotes q ON o.linked_quote_id = q.id
-  WHERE q.linked_supplier_quote_id = ${supplierQuotes.id} LIMIT 1
+  WHERE q.linked_supplier_quote_id = ${outerSupplierQuoteId} LIMIT 1
 )`;
 
 export type SupplierQuoteItem = {
@@ -124,7 +134,7 @@ export const listAll = async (exec: DbExecutor = db): Promise<SupplierQuote[]> =
       ...getTableColumns(supplierQuotes),
       linkedOrderId: sql<string | null>`(
         SELECT ss.id FROM supplier_sales ss
-        WHERE ss.linked_quote_id = ${supplierQuotes.id}
+        WHERE ss.linked_quote_id = ${outerSupplierQuoteId}
         LIMIT 1
       )`,
       // Appended after linkedOrderId so positional row fixtures keep their indices (repo tests).

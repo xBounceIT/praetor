@@ -82,6 +82,19 @@ describe('listAll', () => {
     exec.enqueue({ rows: [] });
     expect(await supplierQuotesRepo.listAll(testDb)).toEqual([]);
   });
+
+  test('correlated subqueries qualify the outer supplier_quotes.id (no ambiguous bare "id")', async () => {
+    // The list query is join-less, so `${supplierQuotes.id}` renders as a BARE "id". In the offer
+    // subqueries (FROM customer_offers o JOIN quotes q — both have an id) a bare "id" is AMBIGUOUS
+    // and Postgres aborts the whole query; in the single-table ones it silently shadows to the
+    // inner table's id. Every correlation must reference the qualified outer column.
+    exec.enqueue({ rows: [] });
+    await supplierQuotesRepo.listAll(testDb);
+    const sql = exec.calls[0].sql;
+    expect(sql).toContain('ss.linked_quote_id = "supplier_quotes"."id"');
+    expect(sql).toContain('q.linked_supplier_quote_id = "supplier_quotes"."id"');
+    expect(sql).not.toMatch(/linked_(supplier_)?quote_id = "id"/);
+  });
 });
 
 describe('listAllItems', () => {
