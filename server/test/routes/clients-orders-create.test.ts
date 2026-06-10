@@ -338,6 +338,68 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     }>;
     expect(insertedItems[0].productId).toBeNull();
     expect(insertedItems[0].supplierQuoteId).toBe('sq-1');
+    // The vanished supplier quote is surfaced, not silently skipped (#779).
+    expect(JSON.parse(res.body).warnings).toEqual([
+      expect.stringContaining('supplier quote sq-1 no longer exists'),
+    ]);
+  });
+
+  test('201 with a warning when a sourced supplier quote is not derived-accepted (#779)', async () => {
+    // Line-sourced only — no header link — so the quote derives 'draft' forever and the
+    // auto-create must skip it LOUDLY: silent skips left multi-supplier procurement undone.
+    coInsertItemsMock.mockResolvedValue([
+      insertedItem({
+        productId: null,
+        productName: 'Sourced line',
+        supplierQuoteId: 'sq-1',
+        supplierQuoteItemId: 'sqi-1',
+      }),
+    ]);
+    sqFindByIdMock.mockResolvedValue({
+      id: 'sq-1',
+      supplierId: 's-1',
+      supplierName: 'Supplier Co',
+      clientId: null,
+      clientName: null,
+      paymentTerms: 'net30',
+      status: 'draft',
+      expirationDate: '2999-12-31',
+      linkedOrderId: null,
+      notes: null,
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+      linkedClientQuoteId: null,
+      linkedClientQuoteStatus: null,
+      linkedClientQuoteExpiration: null,
+      linkedOfferStatus: null,
+      linkedOfferExpiration: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: 'co-1',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            productId: null,
+            productName: 'Sourced line',
+            quantity: 1,
+            unitPrice: 100,
+            supplierQuoteId: 'sq-1',
+            supplierQuoteItemId: 'sqi-1',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(JSON.parse(res.body).warnings).toEqual([
+      expect.stringContaining("its status is 'draft', not 'accepted'"),
+    ]);
   });
 
   test('201 still creates a normal catalog-product line', async () => {
@@ -444,7 +506,7 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toContain(
-      'is invalid or its supplier quote is not accepted',
+      'does not reference an existing supplier quote item',
     );
     expect(coCreateMock).not.toHaveBeenCalled();
     expect(coInsertItemsMock).not.toHaveBeenCalled();

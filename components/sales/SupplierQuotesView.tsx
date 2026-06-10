@@ -926,10 +926,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       })),
     };
     if (editingQuote) {
-      // On edit, `formData.status` holds the EFFECTIVE status (which may be `expired`/`offer` or a
-      // value synced from the linked client quote). Resending it would either fail the DB CHECK or
-      // hit the synced-status guard, so never carry status through the content form — status is
-      // managed by the row actions for unlinked quotes and synced for linked ones (issue #779).
+      // Status is fully derived server-side (issue #779) and the PUT ignores a client-sent
+      // value; never carry the formData copy (the derived `expired`/`offer` projection) through
+      // the content form.
       delete payload.status;
     }
 

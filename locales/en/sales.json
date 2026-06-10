@@ -17,6 +17,9 @@
     "statusLabel": "Status:",
     "fieldLockedBySupplierQuote": "Locked due to linked supplier quote"
   },
+  "clientsOrders": {
+    "supplierQuoteCostTooltip": "Cost from supplier quote"
+  },
   "clientQuotes": {
     "title": "Quotes",
     "subtitle": "Create and manage client quotes",

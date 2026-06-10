@@ -23,7 +23,12 @@ import {
 } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
-import { syncSupplierItemsFromClientLines } from '../utils/supplier-item-sync.ts';
+import {
+  type PreviousClientLine,
+  type SupplierItemSyncAudit,
+  SupplierItemSyncError,
+  syncSupplierItemsFromClientLines,
+} from '../utils/supplier-item-sync.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
@@ -272,7 +277,7 @@ const resolveQuoteItemSnapshots = async (
       const supplierQuoteSnapshot = supplierQuoteSnapshots.get(normalizedSupplierQuoteItemId);
       if (!supplierQuoteSnapshot) {
         throw new Error(
-          `supplierQuoteItemId "${normalizedSupplierQuoteItemId}" is invalid or supplier quote is not accepted`,
+          `supplierQuoteItemId "${normalizedSupplierQuoteItemId}" does not reference an existing supplier quote item`,
         );
       }
       if (!resolvedProductId && supplierQuoteSnapshot.productId !== null) {
@@ -1176,6 +1181,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       let normalizedItems: ResolvedQuoteItem[] | null = null;
+      let previousSyncLines: PreviousClientLine[] = [];
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
@@ -1191,7 +1197,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             id: snap.id,
             productId: snap.productId,
             productName: '',
-            quantity: 0,
+            quantity: snap.quantity,
             unitPrice: 0,
             discount: 0,
             // Placeholder: this stub only feeds the cost/MOL "unchanged" comparison below;
@@ -1207,6 +1213,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             unitType: snap.unitType,
           });
         }
+        // Previous stored lines for the supplier-item sync's genuine-edit diff (issue #779).
+        previousSyncLines = existingSnapshots.map((snap) => ({
+          supplierQuoteItemId: snap.supplierQuoteItemId,
+          quantity: snap.quantity,
+          supplierQuoteUnitPrice: snap.supplierQuoteUnitPrice,
+        }));
 
         try {
           normalizedItems = await resolveQuoteItemSnapshots(incomingItems, existingItemsById);
@@ -1239,6 +1251,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let result: {
         quote: clientQuotesRepo.ClientQuote | null;
         items: clientQuotesRepo.ClientQuoteItem[];
+        syncAudits: SupplierItemSyncAudit[];
       };
       try {
         result = await withDbTransaction(async (tx) => {
@@ -1250,7 +1263,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           let renamedQuote: clientQuotesRepo.ClientQuote | null = null;
           if (nextIdValue && nextIdValue !== idResult.value) {
             renamedQuote = await clientQuotesRepo.rename(idResult.value, nextIdValue, tx);
-            if (!renamedQuote) return { quote: null, items: [] };
+            if (!renamedQuote) return { quote: null, items: [], syncAudits: [] };
           }
           // id-only renames have nothing left to write — reuse the row returned by rename().
           const quote =
@@ -1271,7 +1284,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   },
                   tx,
                 );
-          if (!quote) return { quote: null, items: [] };
+          if (!quote) return { quote: null, items: [], syncAudits: [] };
           const items = normalizedItems
             ? await clientQuotesRepo.replaceItems(
                 quote.id,
@@ -1279,20 +1292,40 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 tx,
               )
             : await clientQuotesRepo.findItemsForQuote(quote.id, tx);
-          // Bidirectional sync (issue #779): push client-side edits of supplier-sourced line
-          // fields (quantity, unit cost) onto the referenced supplier quote items, atomically
-          // with the quote write.
-          if (normalizedItems) {
-            await syncSupplierItemsFromClientLines(
-              request,
-              'client_quote.update',
-              normalizedItems,
-              tx,
-            );
-          }
-          return { quote, items };
+          // Bidirectional sync (issue #779): push GENUINE client-side edits of supplier-sourced
+          // line fields (quantity, unit cost) onto the referenced supplier quote items,
+          // atomically with the quote write. The audit entries are logged after commit.
+          const syncAudits = normalizedItems
+            ? await syncSupplierItemsFromClientLines(
+                request,
+                'client_quote.update',
+                normalizedItems,
+                previousSyncLines,
+                tx,
+              )
+            : [];
+          return { quote, items, syncAudits };
         });
       } catch (err) {
+        // The client→supplier item sync refuses to write frozen/order-locked supplier quotes or
+        // to run without the supplier-quote update grant; the tx rolled back, so the quote write
+        // was rejected together with the supplier write (issue #779).
+        if (err instanceof SupplierItemSyncError) {
+          return replyError(request, reply, {
+            statusCode: err.statusCode,
+            message: err.message,
+            action:
+              err.statusCode === 403
+                ? 'client_quote.update.forbidden'
+                : 'client_quote.update.conflict',
+            entityType: 'client_quote',
+            entityId: idResult.value,
+            details: {
+              secondaryLabel: err.secondaryLabel,
+              targetLabel: err.supplierQuoteId ?? undefined,
+            },
+          });
+        }
         const dup = getUniqueViolation(err);
         if (dup && (dup.constraint === 'quotes_pkey' || dup.detail?.includes('(id)'))) {
           return replyError(request, reply, {
@@ -1337,6 +1370,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const updatedQuoteId = updatedQuote.id;
+
+      // Synced supplier quotes are audited AFTER commit — logAudit writes through the global
+      // pool, so an in-tx call would survive a rollback and record mutations that never happened.
+      for (const sync of result.syncAudits) {
+        await logAudit({
+          request,
+          action: 'supplier_quote.updated',
+          entityType: 'supplier_quote',
+          entityId: sync.supplierQuoteId,
+          details: {
+            targetLabel: sync.supplierQuoteId,
+            secondaryLabel: 'synced_from_client_line',
+            changedFields: ['items'],
+            reason: sync.sourceAction,
+          },
+        });
+      }
 
       // Audit with the CANONICAL target (the value actually written) — the raw body string could
       // log a phantom transition (e.g. accepted → confirmed) that no longer exists in the DB.

@@ -53,6 +53,8 @@ const sqFindItemsByIdsMock = mock();
 const sqFindLinkedOrderIdMock = mock();
 const sqFindFullForSnapshotMock = mock();
 const sqSyncItemPricingMock = mock();
+const sqLockEffectiveStatusMock = mock();
+const sqGetQuoteItemSnapshotsMock = mock();
 const sqvInsertMock = mock();
 const sqvBuildSnapshotMock = mock();
 
@@ -101,6 +103,8 @@ beforeAll(async () => {
     findLinkedOrderId: sqFindLinkedOrderIdMock,
     findFullForSnapshot: sqFindFullForSnapshotMock,
     syncItemPricing: sqSyncItemPricingMock,
+    lockEffectiveStatusById: sqLockEffectiveStatusMock,
+    getQuoteItemSnapshots: sqGetQuoteItemSnapshotsMock,
   }));
   mock.module('../../repositories/supplierQuoteVersionsRepo.ts', () => ({
     ...supplierQuoteVersionsRepoSnap,
@@ -147,7 +151,13 @@ const HAPPY_USER = {
   sessionVersion: 1,
 };
 
-const FULL_PERMS = ['sales.client_quotes.update', 'sales.client_quotes.delete'];
+// supplier_quotes.update rides along: the #779 forward sync requires it whenever a save pushes
+// sourced-line edits onto a supplier quote.
+const FULL_PERMS = [
+  'sales.client_quotes.update',
+  'sales.client_quotes.delete',
+  'sales.supplier_quotes.update',
+];
 
 // findCurrent returns the ClientQuoteGate shape.
 const gate = (over: Partial<ReturnType<typeof baseGate>> = {}) => ({ ...baseGate(), ...over });
@@ -202,6 +212,8 @@ const allMocks = [
   sqFindLinkedOrderIdMock,
   sqFindFullForSnapshotMock,
   sqSyncItemPricingMock,
+  sqLockEffectiveStatusMock,
+  sqGetQuoteItemSnapshotsMock,
   sqvInsertMock,
   sqvBuildSnapshotMock,
   qvInsertMock,
@@ -238,6 +250,15 @@ beforeEach(async () => {
   sqFindLinkedOrderIdMock.mockResolvedValue(null);
   sqFindFullForSnapshotMock.mockResolvedValue(null);
   sqSyncItemPricingMock.mockResolvedValue(undefined);
+  // Unlinked live chain → derived 'draft': the sync's freeze guard stays open by default.
+  sqLockEffectiveStatusMock.mockResolvedValue({
+    expirationDate: '2999-12-31',
+    linkedClientStatus: null,
+    linkedClientQuoteExpiration: null,
+    linkedOfferStatus: null,
+    linkedOfferExpiration: null,
+  });
+  sqGetQuoteItemSnapshotsMock.mockResolvedValue(new Map());
   sqvInsertMock.mockResolvedValue(undefined);
   sqvBuildSnapshotMock.mockImplementation((quote, items) => ({ schemaVersion: 1, quote, items }));
 
@@ -531,10 +552,12 @@ describe('DELETE /api/sales/client-quotes/:id', () => {
 });
 
 describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', () => {
-  // findItemSnapshotsForQuote shape: the stored snapshot of the line being edited.
+  // findItemSnapshotsForQuote shape: the stored snapshot of the line being edited. quantity 2 /
+  // cost 50 matches SUPPLIER_ITEM — the baseline state is in sync.
   const EXISTING_SNAP = {
     id: 'qi-1',
     productId: 'p-1',
+    quantity: 2,
     productCost: 50,
     productMolPercentage: null,
     supplierQuoteId: 'sq-9',
@@ -557,25 +580,23 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     durationMonths: 1,
     durationUnit: 'months',
   };
-  const linePayload = (quantity: number, cost: number) => ({
-    items: [
-      {
-        id: 'qi-1',
-        productId: 'p-1',
-        productName: 'Service',
-        supplierQuoteItemId: 'sqi-9',
-        quantity,
-        unitPrice: 100,
-        productCost: 50,
-        productMolPercentage: null,
-        supplierQuoteUnitPrice: cost,
-        discount: 0,
-        unitType: 'hours',
-        durationMonths: 1,
-        durationUnit: 'months',
-      },
-    ],
+  const lineItem = (quantity: number, cost: number, over: Record<string, unknown> = {}) => ({
+    id: 'qi-1',
+    productId: 'p-1',
+    productName: 'Service',
+    supplierQuoteItemId: 'sqi-9',
+    quantity,
+    unitPrice: 100,
+    productCost: 50,
+    productMolPercentage: null,
+    supplierQuoteUnitPrice: cost,
+    discount: 0,
+    unitType: 'hours',
+    durationMonths: 1,
+    durationUnit: 'months',
+    ...over,
   });
+  const linePayload = (quantity: number, cost: number) => ({ items: [lineItem(quantity, cost)] });
 
   const setupDraftQuote = () => {
     cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
@@ -589,7 +610,7 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     });
   };
 
-  test('pushes changed quantity/cost onto the supplier item, with a pre-state snapshot', async () => {
+  test('pushes a genuine quantity/cost edit onto the supplier item, with a pre-state snapshot and post-commit audit', async () => {
     setupDraftQuote();
 
     const res = await putStatus(linePayload(5, 80));
@@ -601,16 +622,51 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
       { itemId: 'sqi-9', quantity: 5, unitCost: 80, discountPercent: 20 },
     ]);
     expect(sqvInsertMock).toHaveBeenCalledTimes(1);
+    // The write serializes on the supplier quote row (FOR UPDATE) before deciding.
+    expect(sqLockEffectiveStatusMock).toHaveBeenCalledWith('sq-9', expect.anything());
+    const auditActions = (logAuditMock.mock.calls as unknown as Array<[{ action?: string }]>).map(
+      (c) => c[0]?.action,
+    );
+    expect(auditActions).toContain('supplier_quote.updated');
   });
 
-  test('skips the sync entirely when the supplier quote already has a linked order', async () => {
+  test('409s instead of writing when the supplier quote already has a linked order', async () => {
     setupDraftQuote();
     sqFindLinkedOrderIdMock.mockResolvedValue('sso-1');
 
     const res = await putStatus(linePayload(5, 80));
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toContain('pricing is final');
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
     expect(sqvInsertMock).not.toHaveBeenCalled();
+  });
+
+  test('409s when the supplier quote derives a frozen status (accepted via another chain)', async () => {
+    setupDraftQuote();
+    sqLockEffectiveStatusMock.mockResolvedValue({
+      expirationDate: '2999-12-31',
+      linkedClientStatus: 'accepted',
+      linkedClientQuoteExpiration: '2999-12-31',
+      linkedOfferStatus: null,
+      linkedOfferExpiration: null,
+    });
+
+    const res = await putStatus(linePayload(5, 80));
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toContain('read-only');
+    expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+  });
+
+  test('403s without the supplier-quote update permission when a push is needed', async () => {
+    setupDraftQuote();
+    getRolePermissionsMock.mockResolvedValue(['sales.client_quotes.update']);
+
+    const res = await putStatus(linePayload(5, 80));
+    expect(res.statusCode).toBe(403);
+    expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+    // But a save WITHOUT a sourced-line edit must not require the permission.
+    const noEdit = await putStatus(linePayload(2, 50));
+    expect(noEdit.statusCode).toBe(200);
   });
 
   test('no-ops when the line already matches the supplier item', async () => {
@@ -618,6 +674,64 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
 
     const res = await putStatus(linePayload(2, 50));
     expect(res.statusCode).toBe(200);
+    expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+  });
+
+  test('re-saving a STALE snapshot does not revert direct supplier-side edits', async () => {
+    // The line still stores cost 40 from before the supplier raised the item to 50; a
+    // notes-only style re-save resends the stored values unchanged — NOT a client edit.
+    setupDraftQuote();
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      { ...EXISTING_SNAP, supplierQuoteUnitPrice: 40 },
+    ]);
+
+    const res = await putStatus(linePayload(2, 40));
+    expect(res.statusCode).toBe(200);
+    expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+    expect(sqvInsertMock).not.toHaveBeenCalled();
+  });
+
+  test('a FRESH link never pushes and stores the server-resolved supplier cost', async () => {
+    setupDraftQuote();
+    // No previous line carries this link — the client-sent cost 80 could be a stale cache.
+    // Product-less on both sides so the resolver skips the (unmocked) products repo.
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-9',
+          {
+            supplierQuoteId: 'sq-9',
+            supplierName: 'Acme',
+            productId: null,
+            unitPrice: 50,
+            netCost: 50,
+          },
+        ],
+      ]),
+    );
+    cqReplaceItemsMock.mockResolvedValue([]);
+
+    const res = await putStatus({ items: [lineItem(5, 80, { productId: null })] });
+    expect(res.statusCode).toBe(200);
+    expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+    // The stored line takes the live supplier value, not the client's copy.
+    const inserted = cqReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(inserted[0].supplierQuoteUnitPrice).toBe(50);
+  });
+
+  test('409s when two lines push conflicting edits to the same supplier item', async () => {
+    setupDraftQuote();
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      EXISTING_SNAP,
+      { ...EXISTING_SNAP, id: 'qi-2' },
+    ]);
+
+    const res = await putStatus({
+      items: [lineItem(5, 80), lineItem(7, 80, { id: 'qi-2' })],
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toContain('different quantities or costs');
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
   });
 });

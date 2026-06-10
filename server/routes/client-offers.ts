@@ -6,6 +6,7 @@ import * as clientQuotesRepo from '../repositories/clientQuotesRepo.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
 import * as offerVersionsRepo from '../repositories/offerVersionsRepo.ts';
 import * as productsRepo from '../repositories/productsRepo.ts';
+import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { todayLocalDateOnly } from '../utils/date.ts';
@@ -21,7 +22,11 @@ import {
 } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
-import { syncSupplierItemsFromClientLines } from '../utils/supplier-item-sync.ts';
+import {
+  type SupplierItemSyncAudit,
+  SupplierItemSyncError,
+  syncSupplierItemsFromClientLines,
+} from '../utils/supplier-item-sync.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
@@ -315,6 +320,59 @@ const normalizeItems = (
   return normalizedItems;
 };
 
+// Server-side supplier-link resolution (issue #779), mirroring the client-quotes route: a
+// FRESHLY picked link takes its cost and metadata from the live supplier item — the client's
+// cached copy may be stale, and storing/pushing it verbatim would let an outdated browser revert
+// newer supplier pricing. A RETAINED link stays client-authoritative for the cost (that edit is
+// pushed back onto the supplier item by the forward sync). "Retained" is keyed on
+// supplierQuoteItemId: offer items get fresh row ids on every save, so the link itself is the
+// only stable correlation. Throws on a NEW link whose id doesn't resolve; a retained link
+// tolerates a vanished supplier item (legacy dangle) by keeping the stored metadata.
+const resolveOfferItemSupplierLinks = async (
+  items: NormalizedOfferItem[],
+  existingItems: clientOffersRepo.ClientOfferItem[] | null,
+): Promise<NormalizedOfferItem[]> => {
+  const linkedIds = items
+    .map((item) => item.supplierQuoteItemId)
+    .filter((id): id is string => id !== null);
+  if (linkedIds.length === 0) return items;
+  const snapshots = await supplierQuotesRepo.getQuoteItemSnapshots(linkedIds);
+  const existingByLink = new Map<string, clientOffersRepo.ClientOfferItem>();
+  for (const existing of existingItems ?? []) {
+    if (existing.supplierQuoteItemId && !existingByLink.has(existing.supplierQuoteItemId)) {
+      existingByLink.set(existing.supplierQuoteItemId, existing);
+    }
+  }
+  return items.map((item) => {
+    if (!item.supplierQuoteItemId) return item;
+    const snapshot = snapshots.get(item.supplierQuoteItemId);
+    const existing = existingByLink.get(item.supplierQuoteItemId);
+    if (!snapshot) {
+      if (existing) {
+        return {
+          ...item,
+          supplierQuoteId: existing.supplierQuoteId ?? item.supplierQuoteId,
+          supplierQuoteSupplierName:
+            existing.supplierQuoteSupplierName ?? item.supplierQuoteSupplierName,
+          supplierQuoteUnitPrice:
+            item.supplierQuoteUnitPrice ?? existing.supplierQuoteUnitPrice ?? null,
+        };
+      }
+      throw new Error(
+        `supplierQuoteItemId "${item.supplierQuoteItemId}" does not reference an existing supplier quote item`,
+      );
+    }
+    return {
+      ...item,
+      supplierQuoteId: snapshot.supplierQuoteId,
+      supplierQuoteSupplierName: snapshot.supplierName,
+      supplierQuoteUnitPrice: existing
+        ? (item.supplierQuoteUnitPrice ?? existing.supplierQuoteUnitPrice ?? snapshot.netCost)
+        : snapshot.netCost,
+    };
+  });
+};
+
 const buildItemsForInsert = (items: NormalizedOfferItem[]): clientOffersRepo.NewClientOfferItem[] =>
   items.map((item) => ({
     id: generatePrefixedId(ITEM_ID_PREFIXES.clientOfferItem),
@@ -525,8 +583,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const deliveryDateValue =
         deliveryDateResult.value ?? (statusValue === 'sent' ? todayLocalDateOnly() : null);
 
-      const normalizedItems = normalizeItems(items as OfferItemInput[], reply);
+      let normalizedItems = normalizeItems(items as OfferItemInput[], reply);
       if (!normalizedItems) return;
+      // All links are fresh on create — every sourced line takes the live supplier values.
+      try {
+        normalizedItems = await resolveOfferItemSupplierLinks(normalizedItems, null);
+      } catch (err) {
+        return badRequest(reply, (err as Error).message);
+      }
 
       type CreateOutcome =
         | {
@@ -941,12 +1005,32 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const automaticDeliveryDate = shouldStampDeliveryDate ? todayLocalDateOnly() : undefined;
 
       let normalizedItemsForUpdate: NormalizedOfferItem[] | null = null;
+      let previousSyncLines: Array<{
+        supplierQuoteItemId: string | null;
+        quantity: number;
+        supplierQuoteUnitPrice: number | null;
+      }> = [];
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
         }
         normalizedItemsForUpdate = normalizeItems(items as OfferItemInput[], reply);
         if (!normalizedItemsForUpdate) return;
+        const existingOfferItems = await clientOffersRepo.findItemsForOffer(idResult.value);
+        try {
+          normalizedItemsForUpdate = await resolveOfferItemSupplierLinks(
+            normalizedItemsForUpdate,
+            existingOfferItems,
+          );
+        } catch (err) {
+          return badRequest(reply, (err as Error).message);
+        }
+        // Previous stored lines for the supplier-item sync's genuine-edit diff (issue #779).
+        previousSyncLines = existingOfferItems.map((item) => ({
+          supplierQuoteItemId: item.supplierQuoteItemId,
+          quantity: item.quantity,
+          supplierQuoteUnitPrice: item.supplierQuoteUnitPrice,
+        }));
       }
 
       // Derived from the declared field set above so the two lists can't drift (issue #779).
@@ -959,6 +1043,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let result: {
         offer: clientOffersRepo.ClientOffer | null;
         items: clientOffersRepo.ClientOfferItem[];
+        syncAudits: SupplierItemSyncAudit[];
       };
       try {
         result = await withDbTransaction(async (tx) => {
@@ -970,7 +1055,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           let renamedOffer: clientOffersRepo.ClientOffer | null = null;
           if (nextIdValue && nextIdValue !== idResult.value) {
             renamedOffer = await clientOffersRepo.rename(idResult.value, nextIdValue, tx);
-            if (!renamedOffer) return { offer: null, items: [] };
+            if (!renamedOffer) return { offer: null, items: [], syncAudits: [] };
           }
           // id-only renames have nothing left to write — reuse the row returned by rename().
           const offer =
@@ -994,7 +1079,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   },
                   tx,
                 );
-          if (!offer) return { offer: null, items: [] };
+          if (!offer) return { offer: null, items: [], syncAudits: [] };
           const updatedItems = normalizedItemsForUpdate
             ? await clientOffersRepo.replaceItems(
                 offer.id,
@@ -1002,20 +1087,40 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 tx,
               )
             : await clientOffersRepo.findItemsForOffer(offer.id, tx);
-          // Bidirectional sync (issue #779): push client-side edits of supplier-sourced line
-          // fields (quantity, unit cost) onto the referenced supplier quote items, atomically
-          // with the offer write.
-          if (normalizedItemsForUpdate) {
-            await syncSupplierItemsFromClientLines(
-              request,
-              'client_offer.update',
-              normalizedItemsForUpdate,
-              tx,
-            );
-          }
-          return { offer, items: updatedItems };
+          // Bidirectional sync (issue #779): push GENUINE client-side edits of supplier-sourced
+          // line fields (quantity, unit cost) onto the referenced supplier quote items,
+          // atomically with the offer write. The audit entries are logged after commit.
+          const syncAudits = normalizedItemsForUpdate
+            ? await syncSupplierItemsFromClientLines(
+                request,
+                'client_offer.update',
+                normalizedItemsForUpdate,
+                previousSyncLines,
+                tx,
+              )
+            : [];
+          return { offer, items: updatedItems, syncAudits };
         });
       } catch (err) {
+        // The client→supplier item sync refuses to write frozen/order-locked supplier quotes or
+        // to run without the supplier-quote update grant; the tx rolled back, so the offer write
+        // was rejected together with the supplier write (issue #779).
+        if (err instanceof SupplierItemSyncError) {
+          return replyError(request, reply, {
+            statusCode: err.statusCode,
+            message: err.message,
+            action:
+              err.statusCode === 403
+                ? 'client_offer.update.forbidden'
+                : 'client_offer.update.conflict',
+            entityType: 'client_offer',
+            entityId: idResult.value,
+            details: {
+              secondaryLabel: err.secondaryLabel,
+              targetLabel: err.supplierQuoteId ?? undefined,
+            },
+          });
+        }
         const dup = getUniqueViolation(err);
         if (dup && (dup.constraint === 'customer_offers_pkey' || dup.detail?.includes('(id)'))) {
           return replyError(request, reply, {
@@ -1039,6 +1144,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           action: 'client_offer.update.not_found',
           entityType: 'client_offer',
           entityId: idResult.value,
+        });
+      }
+
+      // Synced supplier quotes are audited AFTER commit — logAudit writes through the global
+      // pool, so an in-tx call would survive a rollback and record mutations that never happened.
+      for (const sync of result.syncAudits) {
+        await logAudit({
+          request,
+          action: 'supplier_quote.updated',
+          entityType: 'supplier_quote',
+          entityId: sync.supplierQuoteId,
+          details: {
+            targetLabel: sync.supplierQuoteId,
+            secondaryLabel: 'synced_from_client_line',
+            changedFields: ['items'],
+            reason: sync.sourceAction,
+          },
         });
       }
 

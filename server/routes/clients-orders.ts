@@ -283,11 +283,12 @@ const normalizeIncomingItems = (
 };
 
 // A product-less line (`productId === null`) has the supplier-quote reference as its only anchor,
-// and `sale_items.supplier_quote_*` has no FK. Resolve each referenced item against *accepted*
-// supplier quotes — the same authoritative source the client-quotes route trusts — and stamp the
-// supplier fields from the snapshot. Without this, a direct POST/PUT could persist a line with
-// bogus or non-accepted refs (the supplier-order auto-create silently skips them) that the UI
-// still locks as supplier-backed. Returns null after replying 400 if a reference can't be resolved.
+// and `sale_items.supplier_quote_*` has no FK. Resolve each referenced item against the live
+// supplier-quote items — the same authoritative source the client-quotes route trusts (NOT
+// status-gated: under the #779 derived model, lines legitimately source supplier quotes that
+// derive `draft`) — and stamp the supplier fields from the snapshot. Without this, a direct
+// POST/PUT could persist a line with bogus refs that the UI still locks as supplier-backed.
+// Returns null after replying 400 if a reference can't be resolved.
 const resolveSupplierQuoteRefs = async (
   items: NormalizedOrderItem[],
   reply: FastifyReply,
@@ -305,7 +306,7 @@ const resolveSupplierQuoteRefs = async (
     if (!snapshot) {
       badRequest(
         reply,
-        `items[${i}].supplierQuoteItemId "${item.supplierQuoteItemId}" is invalid or its supplier quote is not accepted`,
+        `items[${i}].supplierQuoteItemId "${item.supplierQuoteItemId}" does not reference an existing supplier quote item`,
       );
       return null;
     }
@@ -492,13 +493,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     if (missingProductId) {
       return `Snapshot product "${missingProductId}" no longer exists`;
     }
-    // A product-less snapshot item (no catalog product) must resolve to an *accepted* supplier-quote
-    // item — the same invariant POST/PUT enforce. Two failure modes are rejected before any write:
+    // A product-less snapshot item (no catalog product) must resolve to a LIVE supplier-quote
+    // item — the same invariant POST/PUT enforce (not status-gated; see resolveSupplierQuoteRefs).
+    // Two failure modes are rejected before any write:
     //  - orphaned: missing either supplier-quote id, so it could never be re-saved through the
     //    POST/PUT presence gate and is invisible to product-based reporting;
-    //  - stale: the referenced item was deleted or its quote is no longer accepted, so restoring it
-    //    persists a dead reference that the next draft edit (which re-runs `resolveSupplierQuoteRefs`)
-    //    rejects, stranding the order in an un-saveable state.
+    //  - stale: the referenced item was deleted, so restoring it persists a dead reference that
+    //    the next draft edit (which re-runs `resolveSupplierQuoteRefs`) rejects, stranding the
+    //    order in an un-saveable state.
     const productlessItems = snapshot.items.filter(
       (item) => !normalizeNullableString(item.productId),
     );
@@ -523,7 +525,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return itemId !== null && !quoteItemSnapshots.has(itemId);
       });
       if (staleItem) {
-        return `Snapshot item "${staleItem.productName}" references a supplier quote that no longer exists or is not accepted`;
+        return `Snapshot item "${staleItem.productName}" references a supplier quote item that no longer exists`;
       }
     }
     return null;
@@ -805,17 +807,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             supplierQuotesRepo.findById(sqId),
             supplierQuotesRepo.findLinkedOrderId(sqId),
           ]);
-          if (
-            !fastFailQuote ||
-            effectiveSupplierQuoteStatusFromDate({
-              expirationDate: fastFailQuote.expirationDate,
-              linkedClientStatus: fastFailQuote.linkedClientQuoteStatus,
-              linkedClientQuoteExpiration: fastFailQuote.linkedClientQuoteExpiration,
-              linkedOfferStatus: fastFailQuote.linkedOfferStatus,
-              linkedOfferExpiration: fastFailQuote.linkedOfferExpiration,
-            }) !== 'accepted'
-          )
+          if (!fastFailQuote) {
+            supplierOrderWarnings.push(
+              `Supplier order not created: supplier quote ${sqId} no longer exists`,
+            );
             continue;
+          }
+          const fastFailStatus = effectiveSupplierQuoteStatusFromDate({
+            expirationDate: fastFailQuote.expirationDate,
+            linkedClientStatus: fastFailQuote.linkedClientQuoteStatus,
+            linkedClientQuoteExpiration: fastFailQuote.linkedClientQuoteExpiration,
+            linkedOfferStatus: fastFailQuote.linkedOfferStatus,
+            linkedOfferExpiration: fastFailQuote.linkedOfferExpiration,
+          });
+          if (fastFailStatus !== 'accepted') {
+            // Under the fully-derived model only the 1-to-1 HEADER-linked supplier quote follows
+            // the client document to `accepted`; a supplier quote that is merely line-sourced
+            // stays `draft` and gets no auto order. Surface the skip instead of silently
+            // dropping procurement (issue #779) — the user must link-and-accept it separately.
+            supplierOrderWarnings.push(
+              `Supplier order not created for supplier quote ${sqId}: its status is '${fastFailStatus}', not 'accepted' (only the supplier quote linked to the accepted client document follows its status)`,
+            );
+            continue;
+          }
           if (fastFailLinked) continue;
 
           const autoCreated = await withDbTransaction(async (tx) => {

@@ -129,6 +129,33 @@ describe('findLinkedOrderId', () => {
   });
 });
 
+describe('isSourcedByClientDocuments', () => {
+  // Three parallel probes in call order: quote_items, customer_offer_items, sale_items — each
+  // matching either the denormalized supplier_quote_id or (legacy rows) the item-id subquery.
+  test('true when any client line references the quote', async () => {
+    exec.enqueue({ rows: [['qi-1']] });
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    expect(await supplierQuotesRepo.isSourcedByClientDocuments('q-1', testDb)).toBe(true);
+    const sqlTexts = exec.calls.map((c) => c.sql.toLowerCase());
+    expect(sqlTexts[0]).toContain('"quote_items"');
+    expect(sqlTexts[1]).toContain('"customer_offer_items"');
+    expect(sqlTexts[2]).toContain('"sale_items"');
+    for (const sqlText of sqlTexts) {
+      expect(sqlText).toContain('"supplier_quote_id" =');
+      expect(sqlText).toContain('"supplier_quote_item_id" in (select');
+    }
+    expect(exec.calls[0].params).toContain('q-1');
+  });
+
+  test('false when nothing references the quote', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    expect(await supplierQuotesRepo.isSourcedByClientDocuments('q-1', testDb)).toBe(false);
+  });
+});
+
 describe('findIdConflict', () => {
   test('excludes self via <> predicate', async () => {
     exec.enqueue({ rows: [] });
@@ -146,23 +173,25 @@ describe('findIdConflict', () => {
 describe('update', () => {
   test('binds patch values via COALESCE, WHERE id last - no id in SET (issue #621)', async () => {
     exec.enqueue({ rows: [quoteRow()] });
-    await supplierQuotesRepo.update('q-1', { status: 'sent', notes: 'hi' }, testDb);
+    await supplierQuotesRepo.update('q-1', { notes: 'hi' }, testDb);
     const sql = exec.calls[0].sql;
     expect(sql).toContain('update "supplier_quotes"');
     expect(sql).toContain('COALESCE');
     expect(sql).toContain('CURRENT_TIMESTAMP');
     // The SET clause must NOT touch the primary key column.
     expect(sql).not.toMatch(/set[^"]*"id"\s*=/i);
-    expect(sql).toContain('"id" = $7');
-    expect(exec.calls[0].params).toHaveLength(7);
-    expect(exec.calls[0].params[3]).toBe('sent'); // status
-    expect(exec.calls[0].params[5]).toBe('hi'); // notes
-    expect(exec.calls[0].params[6]).toBe('q-1'); // where id
+    // Nor the vestigial status column (it still appears in RETURNING): it is fully derived
+    // (issue #779) and update() must not offer a path to desync it.
+    expect(sql).not.toContain('"status" =');
+    expect(sql).toContain('"id" = $6');
+    expect(exec.calls[0].params).toHaveLength(6);
+    expect(exec.calls[0].params[4]).toBe('hi'); // notes
+    expect(exec.calls[0].params[5]).toBe('q-1'); // where id
   });
 
   test('returns null when no row updated', async () => {
     exec.enqueue({ rows: [] });
-    expect(await supplierQuotesRepo.update('q-x', { status: 'sent' }, testDb)).toBeNull();
+    expect(await supplierQuotesRepo.update('q-x', { notes: 'x' }, testDb)).toBeNull();
   });
 
   test('empty patch falls back to SELECT (no UPDATE issued, updated_at preserved)', async () => {

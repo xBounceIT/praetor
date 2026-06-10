@@ -7,6 +7,8 @@ import * as realClientsRepo from '../../repositories/clientsRepo.ts';
 import * as realOfferVersionsRepo from '../../repositories/offerVersionsRepo.ts';
 import * as realProductsRepo from '../../repositories/productsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
+import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
+import * as realSupplierQuoteVersionsRepo from '../../repositories/supplierQuoteVersionsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realPermissions from '../../utils/permissions.ts';
@@ -30,6 +32,8 @@ const clientOffersRepoSnap = { ...realClientOffersRepo };
 const clientQuotesRepoSnap = { ...realClientQuotesRepo };
 const productsRepoSnap = { ...realProductsRepo };
 const offerVersionsRepoSnap = { ...realOfferVersionsRepo };
+const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
+const supplierQuoteVersionsRepoSnap = { ...realSupplierQuoteVersionsRepo };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
 
@@ -43,6 +47,22 @@ const coFindItemsForOfferMock = mock();
 const coFindIdConflictMock = mock();
 const coUpdateMock = mock();
 const coRenameMock = mock();
+const coReplaceItemsMock = mock();
+const coCreateMock = mock();
+const coInsertItemsMock = mock();
+const coFindExistingForQuoteMock = mock();
+
+const cqFindStatusAndClientNameMock = mock();
+const cqLockCurrentByIdMock = mock();
+
+const sqGetQuoteItemSnapshotsMock = mock();
+const sqFindItemsByIdsMock = mock();
+const sqFindLinkedOrderIdMock = mock();
+const sqLockEffectiveStatusMock = mock();
+const sqSyncItemPricingMock = mock();
+const sqFindFullForSnapshotMock = mock();
+const sqvInsertMock = mock();
+const sqvBuildSnapshotMock = mock();
 
 const ovInsertMock = mock();
 const ovBuildSnapshotMock = mock();
@@ -76,8 +96,30 @@ beforeAll(async () => {
     findIdConflict: coFindIdConflictMock,
     update: coUpdateMock,
     rename: coRenameMock,
+    replaceItems: coReplaceItemsMock,
+    create: coCreateMock,
+    insertItems: coInsertItemsMock,
+    findExistingForQuote: coFindExistingForQuoteMock,
   }));
-  mock.module('../../repositories/clientQuotesRepo.ts', () => ({ ...clientQuotesRepoSnap }));
+  mock.module('../../repositories/clientQuotesRepo.ts', () => ({
+    ...clientQuotesRepoSnap,
+    findStatusAndClientName: cqFindStatusAndClientNameMock,
+    lockCurrentById: cqLockCurrentByIdMock,
+  }));
+  mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
+    ...supplierQuotesRepoSnap,
+    getQuoteItemSnapshots: sqGetQuoteItemSnapshotsMock,
+    findItemsByIds: sqFindItemsByIdsMock,
+    findLinkedOrderId: sqFindLinkedOrderIdMock,
+    lockEffectiveStatusById: sqLockEffectiveStatusMock,
+    syncItemPricing: sqSyncItemPricingMock,
+    findFullForSnapshot: sqFindFullForSnapshotMock,
+  }));
+  mock.module('../../repositories/supplierQuoteVersionsRepo.ts', () => ({
+    ...supplierQuoteVersionsRepoSnap,
+    insert: sqvInsertMock,
+    buildSnapshot: sqvBuildSnapshotMock,
+  }));
   mock.module('../../repositories/productsRepo.ts', () => ({ ...productsRepoSnap }));
   mock.module('../../repositories/offerVersionsRepo.ts', () => ({
     ...offerVersionsRepoSnap,
@@ -101,6 +143,11 @@ afterAll(() => {
   mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
   mock.module('../../repositories/clientOffersRepo.ts', () => clientOffersRepoSnap);
   mock.module('../../repositories/clientQuotesRepo.ts', () => clientQuotesRepoSnap);
+  mock.module('../../repositories/supplierQuotesRepo.ts', () => supplierQuotesRepoSnap);
+  mock.module(
+    '../../repositories/supplierQuoteVersionsRepo.ts',
+    () => supplierQuoteVersionsRepoSnap,
+  );
   mock.module('../../repositories/productsRepo.ts', () => productsRepoSnap);
   mock.module('../../repositories/offerVersionsRepo.ts', () => offerVersionsRepoSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
@@ -117,7 +164,13 @@ const HAPPY_USER = {
   sessionVersion: 1,
 };
 
-const FULL_PERMS = ['sales.client_offers.update'];
+// supplier_quotes.update rides along: the #779 forward sync requires it whenever a save pushes
+// sourced-line edits onto a supplier quote.
+const FULL_PERMS = [
+  'sales.client_offers.update',
+  'sales.client_offers.create',
+  'sales.supplier_quotes.update',
+];
 
 // findExisting returns the ExistingOffer gate shape.
 const gate = (over: Partial<ReturnType<typeof baseGate>> = {}) => ({ ...baseGate(), ...over });
@@ -161,6 +214,20 @@ const allMocks = [
   coFindIdConflictMock,
   coUpdateMock,
   coRenameMock,
+  coReplaceItemsMock,
+  coCreateMock,
+  coInsertItemsMock,
+  coFindExistingForQuoteMock,
+  cqFindStatusAndClientNameMock,
+  cqLockCurrentByIdMock,
+  sqGetQuoteItemSnapshotsMock,
+  sqFindItemsByIdsMock,
+  sqFindLinkedOrderIdMock,
+  sqLockEffectiveStatusMock,
+  sqSyncItemPricingMock,
+  sqFindFullForSnapshotMock,
+  sqvInsertMock,
+  sqvBuildSnapshotMock,
   ovInsertMock,
   ovBuildSnapshotMock,
   logAuditMock,
@@ -182,6 +249,23 @@ beforeEach(async () => {
   coFindItemsForOfferMock.mockResolvedValue([]);
   coFindIdConflictMock.mockResolvedValue(false);
   ovInsertMock.mockResolvedValue(undefined);
+  // Supplier resolution / forward-sync defaults: nothing linked, nothing pushed.
+  coReplaceItemsMock.mockResolvedValue([]);
+  sqGetQuoteItemSnapshotsMock.mockResolvedValue(new Map());
+  sqFindItemsByIdsMock.mockResolvedValue([]);
+  sqFindLinkedOrderIdMock.mockResolvedValue(null);
+  // Unlinked live chain → derived 'draft': the sync's freeze guard stays open by default.
+  sqLockEffectiveStatusMock.mockResolvedValue({
+    expirationDate: '2999-12-31',
+    linkedClientStatus: null,
+    linkedClientQuoteExpiration: null,
+    linkedOfferStatus: null,
+    linkedOfferExpiration: null,
+  });
+  sqSyncItemPricingMock.mockResolvedValue(undefined);
+  sqFindFullForSnapshotMock.mockResolvedValue(null);
+  sqvInsertMock.mockResolvedValue(undefined);
+  sqvBuildSnapshotMock.mockImplementation((quote, items) => ({ schemaVersion: 1, quote, items }));
 
   testApp = await buildRouteTestApp(routePlugin, '/api/sales/client-offers');
 });
@@ -339,5 +423,166 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
     const res = await putOffer({ status: 'sent' });
     expect(res.statusCode).toBe(409);
     expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('client-offers supplier-link resolution + forward sync (#779)', () => {
+  const SUPPLIER_SNAPSHOT = new Map([
+    [
+      'sqi-9',
+      {
+        supplierQuoteId: 'sq-9',
+        supplierName: 'Snapshot Co',
+        productId: null,
+        unitPrice: 50,
+        netCost: 50,
+      },
+    ],
+  ]);
+  const SUPPLIER_ITEM = {
+    id: 'sqi-9',
+    quoteId: 'sq-9',
+    productId: null,
+    productName: 'Service',
+    quantity: 2,
+    listPrice: 62.5,
+    discountPercent: 20,
+    unitPrice: 50,
+    note: null,
+    unitType: 'hours',
+    durationMonths: 1,
+    durationUnit: 'months',
+  };
+  // The stored offer line whose link is being retained (qty 2 / cost 50 = in sync).
+  const EXISTING_OFFER_ITEM = {
+    id: 'oi-1',
+    offerId: 'off-1',
+    productId: null,
+    productName: 'Service',
+    quantity: 2,
+    unitPrice: 100,
+    productCost: 50,
+    productMolPercentage: null,
+    supplierQuoteId: 'sq-9',
+    supplierQuoteItemId: 'sqi-9',
+    supplierQuoteSupplierName: 'Snapshot Co',
+    supplierQuoteUnitPrice: 50,
+    unitType: 'hours',
+    note: null,
+    discount: 0,
+    durationMonths: 1,
+    durationUnit: 'months',
+  };
+  const lineItem = (quantity: number, cost: number | null, over: Record<string, unknown> = {}) => ({
+    productName: 'Service',
+    quantity,
+    unitPrice: 100,
+    productCost: 50,
+    productMolPercentage: null,
+    supplierQuoteId: 'sq-client-says',
+    supplierQuoteItemId: 'sqi-9',
+    supplierQuoteSupplierName: 'Client Says Co',
+    supplierQuoteUnitPrice: cost,
+    unitType: 'hours',
+    discount: 0,
+    durationMonths: 1,
+    durationUnit: 'months',
+    ...over,
+  });
+
+  const setupDraftOffer = () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'draft' }));
+    coUpdateMock.mockResolvedValue(updatedOffer());
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(SUPPLIER_SNAPSHOT);
+    sqFindItemsByIdsMock.mockResolvedValue([SUPPLIER_ITEM]);
+    sqFindFullForSnapshotMock.mockResolvedValue({ quote: { id: 'sq-9' }, items: [SUPPLIER_ITEM] });
+  };
+
+  test('PUT: a FRESH link stores server-resolved supplier values and never pushes', async () => {
+    setupDraftOffer();
+    coFindItemsForOfferMock.mockResolvedValue([]);
+
+    const res = await putOffer({ items: [lineItem(5, 80)] });
+    expect(res.statusCode).toBe(200);
+    // Stored line takes the live supplier cost/metadata, not the client copy (stale cache).
+    const inserted = coReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(inserted[0].supplierQuoteUnitPrice).toBe(50);
+    expect(inserted[0].supplierQuoteId).toBe('sq-9');
+    expect(inserted[0].supplierQuoteSupplierName).toBe('Snapshot Co');
+    expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+  });
+
+  test('PUT: 400 when a NEW link does not resolve to a live supplier item', async () => {
+    setupDraftOffer();
+    coFindItemsForOfferMock.mockResolvedValue([]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(new Map());
+
+    const res = await putOffer({ items: [lineItem(5, 80)] });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain(
+      'does not reference an existing supplier quote item',
+    );
+    expect(coReplaceItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('PUT: a genuine edit on a RETAINED link pushes onto the supplier item with a snapshot', async () => {
+    setupDraftOffer();
+    coFindItemsForOfferMock.mockResolvedValue([EXISTING_OFFER_ITEM]);
+
+    const res = await putOffer({ items: [lineItem(5, 80)] });
+    expect(res.statusCode).toBe(200);
+    expect(sqSyncItemPricingMock).toHaveBeenCalledTimes(1);
+    expect(sqSyncItemPricingMock.mock.calls[0][0]).toBe('sq-9');
+    expect(sqSyncItemPricingMock.mock.calls[0][1]).toEqual([
+      { itemId: 'sqi-9', quantity: 5, unitCost: 80, discountPercent: 20 },
+    ]);
+    expect(sqvInsertMock).toHaveBeenCalledTimes(1);
+    const auditActions = (logAuditMock.mock.calls as unknown as Array<[{ action?: string }]>).map(
+      (c) => c[0]?.action,
+    );
+    expect(auditActions).toContain('supplier_quote.updated');
+  });
+
+  test('PUT: re-saving a STALE snapshot does not revert direct supplier-side edits', async () => {
+    // Supplier raised the item to 50 while the offer line still stores 40; resending the
+    // stored values unchanged is NOT a client edit.
+    setupDraftOffer();
+    coFindItemsForOfferMock.mockResolvedValue([
+      { ...EXISTING_OFFER_ITEM, supplierQuoteUnitPrice: 40 },
+    ]);
+
+    const res = await putOffer({ items: [lineItem(2, 40)] });
+    expect(res.statusCode).toBe(200);
+    expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+    expect(sqvInsertMock).not.toHaveBeenCalled();
+  });
+
+  test('POST: create resolves fresh links from the live supplier item', async () => {
+    cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'accepted', clientName: 'Client' });
+    cqLockCurrentByIdMock.mockResolvedValue({ status: 'accepted' });
+    coFindExistingForQuoteMock.mockResolvedValue(null);
+    coCreateMock.mockResolvedValue(updatedOffer());
+    coInsertItemsMock.mockResolvedValue([]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(SUPPLIER_SNAPSHOT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers',
+      headers: authHeader(),
+      payload: {
+        id: 'off-1',
+        linkedQuoteId: 'q-1',
+        clientId: 'c1',
+        clientName: 'Client',
+        expirationDate: '2999-12-31',
+        items: [lineItem(5, 80)],
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const inserted = coInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(inserted[0].supplierQuoteUnitPrice).toBe(50);
+    expect(inserted[0].supplierQuoteId).toBe('sq-9');
+    expect(inserted[0].supplierQuoteSupplierName).toBe('Snapshot Co');
+    expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
   });
 });

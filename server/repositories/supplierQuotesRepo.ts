@@ -1,5 +1,8 @@
-import { and, asc, desc, eq, getTableColumns, inArray, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, inArray, ne, or, sql } from 'drizzle-orm';
 import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
+import { customerOfferItems } from '../db/schema/customerOfferItems.ts';
+import { quoteItems } from '../db/schema/quotes.ts';
+import { saleItems } from '../db/schema/sales.ts';
 import { supplierQuoteItems, supplierQuotes } from '../db/schema/supplierQuotes.ts';
 import { supplierSales } from '../db/schema/supplierSales.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
@@ -266,6 +269,55 @@ export const findLinkedOrderId = async (
   return rows[0]?.id ?? null;
 };
 
+// Whether any client document line (quote, offer, or client-order item) still sources this
+// supplier quote. There is deliberately NO FK behind these columns — the link is a soft
+// snapshot reference — so the DELETE route must enforce referential safety itself (issue #779):
+// deleting a sourced quote would strand the client lines with dead supplierQuoteItemIds and
+// 400 their next edit. Checks both the denormalized supplier_quote_id and (for legacy rows
+// that only carry the item id) membership in the quote's items.
+export const isSourcedByClientDocuments = async (
+  quoteId: string,
+  exec: DbExecutor = db,
+): Promise<boolean> => {
+  const itemIdsSubquery = exec
+    .select({ id: supplierQuoteItems.id })
+    .from(supplierQuoteItems)
+    .where(eq(supplierQuoteItems.quoteId, quoteId));
+  const [quoteRefs, offerRefs, orderRefs] = await Promise.all([
+    exec
+      .select({ id: quoteItems.id })
+      .from(quoteItems)
+      .where(
+        or(
+          eq(quoteItems.supplierQuoteId, quoteId),
+          inArray(quoteItems.supplierQuoteItemId, itemIdsSubquery),
+        ),
+      )
+      .limit(1),
+    exec
+      .select({ id: customerOfferItems.id })
+      .from(customerOfferItems)
+      .where(
+        or(
+          eq(customerOfferItems.supplierQuoteId, quoteId),
+          inArray(customerOfferItems.supplierQuoteItemId, itemIdsSubquery),
+        ),
+      )
+      .limit(1),
+    exec
+      .select({ id: saleItems.id })
+      .from(saleItems)
+      .where(
+        or(
+          eq(saleItems.supplierQuoteId, quoteId),
+          inArray(saleItems.supplierQuoteItemId, itemIdsSubquery),
+        ),
+      )
+      .limit(1),
+  ]);
+  return quoteRefs.length > 0 || offerRefs.length > 0 || orderRefs.length > 0;
+};
+
 export const findIdConflict = async (
   newId: string,
   currentId: string,
@@ -320,7 +372,8 @@ export type SupplierQuoteUpdate = {
   clientId?: string | null;
   clientName?: string | null;
   paymentTerms?: string;
-  status?: string;
+  // No `status`: the stored column is vestigial under the fully-derived model (issue #779) — the
+  // routes never patch it, and a writable field here would invite a caller to desync it.
   expirationDate?: string | null;
   notes?: string | null;
 };
@@ -346,7 +399,6 @@ export const update = async (
       clientName:
         patch.clientName === undefined ? sql`${supplierQuotes.clientName}` : patch.clientName,
       paymentTerms: sql`COALESCE(${patch.paymentTerms ?? null}, ${supplierQuotes.paymentTerms})`,
-      status: sql`COALESCE(${patch.status ?? null}, ${supplierQuotes.status})`,
       expirationDate: sql`COALESCE(${patch.expirationDate ?? null}::date, ${supplierQuotes.expirationDate})`,
       notes: sql`COALESCE(${patch.notes ?? null}, ${supplierQuotes.notes})`,
       updatedAt: sql`CURRENT_TIMESTAMP`,
@@ -440,12 +492,10 @@ export type QuoteItemSnapshot = {
 };
 
 /**
- * Resolves per-item snapshots used by the client-quotes route to lock in supplier-quote pricing
- * at the moment a client quote is created/updated. Only items belonging to *effectively accepted*
- * supplier quotes are returned (issue #779): the effective pipeline status — the linked client
- * quote's status when linked, otherwise the supplier quote's own status — must be `accepted`.
- * (`accepted` is terminal/frozen, so a past own-expiration does not demote it — matching the
- * pre-#779 behavior where an accepted supplier quote's items stayed sourceable.)
+ * Resolves per-item snapshots used by the client-quotes/offers/orders routes to lock in
+ * supplier-quote pricing at the moment a client document is created/updated. Deliberately NOT
+ * status-filtered (issue #779 derived model — see the inline comment on the query): the only
+ * way an id misses is that the supplier quote item no longer exists.
  */
 export const getQuoteItemSnapshots = async (
   itemIds: string[],

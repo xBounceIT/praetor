@@ -28,6 +28,7 @@ import {
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { deriveSupplierLinePricing, MAX_LINE_AMOUNT } from '../utils/supplier-quote-pricing.ts';
+import { snapshotSupplierQuotePreState } from '../utils/supplier-quote-version.ts';
 import {
   badRequest,
   optionalDateString,
@@ -324,24 +325,14 @@ const resolveClientLink = async (
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
-  const snapshotPreState = async (
+  // Shared with the client→supplier item sync (issue #779) so version histories restore
+  // identically no matter which write path minted them.
+  const snapshotPreState = (
     quoteId: string,
     reason: supplierQuoteVersionsRepo.SupplierQuoteVersionReason,
     request: FastifyRequest,
     tx: DbExecutor,
-  ) => {
-    const pre = await supplierQuotesRepo.findFullForSnapshot(quoteId, tx);
-    if (!pre) return;
-    await supplierQuoteVersionsRepo.insert(
-      {
-        quoteId,
-        snapshot: supplierQuoteVersionsRepo.buildSnapshot(pre.quote, pre.items),
-        reason,
-        createdByUserId: request.user?.id ?? null,
-      },
-      tx,
-    );
-  };
+  ) => snapshotSupplierQuotePreState(quoteId, reason, request.user?.id ?? null, tx);
 
   const findMissingSnapshotReference = async (
     snapshot: supplierQuoteVersionsRepo.SupplierQuoteVersionSnapshot,
@@ -1494,6 +1485,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityType: 'supplier_quote',
           entityId: idResult.value,
           details: { secondaryLabel: 'order_exists' },
+        });
+      }
+
+      // Sourcing happens from DRAFT quotes under the derived model (issue #779) — exactly the
+      // deletable ones — and the client-line references have no FK behind them, so deleting a
+      // sourced quote would strand those lines with dead supplierQuoteItemIds (their next edit
+      // would 400). Refuse instead.
+      if (await supplierQuotesRepo.isSourcedByClientDocuments(idResult.value)) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message:
+            'Cannot delete a supplier quote whose items are used by client quotes, offers or orders',
+          action: 'supplier_quote.delete.conflict',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'sourced_by_client_documents' },
         });
       }
 

@@ -1291,7 +1291,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
                                     <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
                                       {currency}
                                     </span>
-                                    {item.supplierQuoteItemId && <SupplierQuoteCostHint />}
+                                    {/* Orders have no #779 forward sync — neutral copy, not the
+                                        "edits update the supplier quote too" promise. */}
+                                    {item.supplierQuoteItemId && (
+                                      <SupplierQuoteCostHint descriptionKey="clientsOrders.supplierQuoteCostTooltip" />
+                                    )}
                                   </div>
                                 </div>
                                 <div className="space-y-1 lg:col-span-1 lg:space-y-0">

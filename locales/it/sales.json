@@ -17,6 +17,9 @@
     "statusLabel": "Stato:",
     "fieldLockedBySupplierQuote": "Bloccato per preventivo fornitore collegato"
   },
+  "clientsOrders": {
+    "supplierQuoteCostTooltip": "Costo da preventivo fornitore"
+  },
   "clientQuotes": {
     "title": "Preventivi",
     "subtitle": "Crea e gestisci preventivi clienti",
