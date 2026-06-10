@@ -47,7 +47,6 @@ import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
 import {
   buildProductQuickViewHref,
-  buildQuoteIdBySupplierQuoteItemId,
   buildSupplierQuoteQuickViewHref,
   resolveLinkedSupplierQuoteId,
 } from '../../utils/quickViewLinks';
@@ -351,32 +350,22 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     [supplierQuoteItemOptions, t],
   );
 
-  // Display labels resolve across ALL supplier quotes (not just the accepted/selectable ones): an
-  // existing line may reference an accepted quote whose expiration has passed — the picker hides
-  // it from NEW sourcing, but the line's label must still render instead of the "no supplier
-  // quote" fallback (the link is intact and the server still accepts the item).
-  const supplierQuoteItemLabelById = useMemo(() => {
-    const labels = new Map<string, string>();
-    for (const quote of supplierQuotes) {
-      for (const item of quote.items) {
-        labels.set(item.id, supplierQuoteItemLabel(quote, item));
-      }
-    }
-    return labels;
-  }, [supplierQuotes]);
-
-  const getSupplierQuoteItemDisplayValue = (itemId?: string | null) => {
-    if (!itemId) return t('sales:clientQuotes.noSupplierQuote');
-    return supplierQuoteItemLabelById.get(itemId) ?? t('sales:clientQuotes.noSupplierQuote');
-  };
-
-  // item-id → its CURRENT supplier quote + item, for the bidirectional-sync affordances (#779):
-  // lock detection (order-locked/frozen sourced fields) and stale-data detection (the per-line
-  // "old info — update?" refresh button).
+  // item-id → its CURRENT supplier quote + item, across ALL supplier quotes (not just the
+  // selectable ones), for the bidirectional-sync affordances (#779): lock detection
+  // (order-locked/frozen sourced fields) and stale-data detection (the per-line
+  // "old info — update?" refresh button). Quick-view ids and display labels derive from it,
+  // so an existing line referencing a no-longer-selectable but extant quote still resolves.
   const supplierQuoteItemIndex = useMemo(
     () => buildSupplierQuoteItemIndex(supplierQuotes),
     [supplierQuotes],
   );
+
+  const getSupplierQuoteItemDisplayValue = (itemId?: string | null) => {
+    const ref = itemId ? supplierQuoteItemIndex.get(itemId) : undefined;
+    return ref
+      ? supplierQuoteItemLabel(ref.quote, ref.item)
+      : t('sales:clientQuotes.noSupplierQuote');
+  };
 
   // Pulls the linked supplier item's current quantity/cost back into the line, mirroring the
   // linking math: the sale price is recomputed from the refreshed cost and the line's MOL (#779).
@@ -408,9 +397,10 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     () => new Set(supplierQuotes.map((q) => q.id)),
     [supplierQuotes],
   );
+  // O(1) item-id → parent-quote-id projection for the shared quick-view helpers.
   const quoteIdBySupplierQuoteItemId = useMemo(
-    () => buildQuoteIdBySupplierQuoteItemId(supplierQuotes),
-    [supplierQuotes],
+    () => new Map(Array.from(supplierQuoteItemIndex, ([id, ref]) => [id, ref.quote.id] as const)),
+    [supplierQuoteItemIndex],
   );
 
   const updateProductSelection = (index: number, productId: string) => {
@@ -1532,7 +1522,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         const supplierDataStale =
                           !isReadOnly &&
                           !supplierLineLocked &&
-                          isSupplierLineStale(item, linkedSupplierRef);
+                          isSupplierLineStale(item, linkedSupplierRef?.item);
                         const supplierQuoteHref = buildSupplierQuoteQuickViewHref(
                           resolveLinkedSupplierQuoteId(item, quoteIdBySupplierQuoteItemId),
                           allSupplierQuoteIds,

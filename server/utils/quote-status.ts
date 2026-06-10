@@ -62,6 +62,13 @@ export const parseQuoteStatusInput = (status: string): QuotePipelineStatus | nul
 export const isTerminalQuoteStatus = (status: string): boolean =>
   TERMINAL_STATUSES.has(normalizeQuoteStatus(status));
 
+// Frozen EFFECTIVE statuses are content-read-only under the #779 model: terminal
+// (accepted/denied) plus the derived `expired`. The client→supplier item sync and the
+// sourced-line lock in the editors both gate on this set. Takes the DERIVED status, so
+// `expired` is matched verbatim (normalizeQuoteStatus would floor it to draft).
+export const isFrozenEffectiveStatus = (status: string): boolean =>
+  status === 'expired' || isTerminalQuoteStatus(status);
+
 // Effective status for a single quote: `expired` overrides a non-terminal pipeline status once
 // the quote's own expiration has passed; terminal statuses (accepted/denied) are frozen and
 // never expire. `isPastExpiration` is injected (callers pass `isPastLocalDate(expirationDate)`)

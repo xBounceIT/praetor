@@ -76,21 +76,21 @@ describe('isSupplierLineLocked', () => {
 });
 
 describe('isSupplierLineStale', () => {
-  const ref = { quote: supplierQuote(), item: supplierItem() };
+  const source = supplierItem();
 
   test('false when quantity and cost match the live item', () => {
-    expect(isSupplierLineStale({ quantity: 4, supplierQuoteUnitPrice: 80 }, ref)).toBe(false);
+    expect(isSupplierLineStale({ quantity: 4, supplierQuoteUnitPrice: 80 }, source)).toBe(false);
   });
 
   test('true on a cost drift', () => {
-    expect(isSupplierLineStale({ quantity: 4, supplierQuoteUnitPrice: 60 }, ref)).toBe(true);
+    expect(isSupplierLineStale({ quantity: 4, supplierQuoteUnitPrice: 60 }, source)).toBe(true);
   });
 
   test('true on a quantity drift', () => {
-    expect(isSupplierLineStale({ quantity: 2, supplierQuoteUnitPrice: 80 }, ref)).toBe(true);
+    expect(isSupplierLineStale({ quantity: 2, supplierQuoteUnitPrice: 80 }, source)).toBe(true);
   });
 
-  test('false when the reference cannot be resolved', () => {
+  test('false when the source item cannot be resolved', () => {
     expect(isSupplierLineStale({ quantity: 2, supplierQuoteUnitPrice: 60 }, undefined)).toBe(false);
   });
 });

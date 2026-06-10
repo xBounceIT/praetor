@@ -1,8 +1,10 @@
-import type { FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { DbExecutor } from '../db/drizzle.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
+import { logAudit } from './audit.ts';
 import { requestHasPermission } from './permissions.ts';
-import { effectiveSupplierQuoteStatusFromDate } from './quote-status.ts';
+import { effectiveSupplierQuoteStatusFromDate, isFrozenEffectiveStatus } from './quote-status.ts';
+import { replyError } from './replyError.ts';
 import { snapshotSupplierQuotePreState } from './supplier-quote-version.ts';
 
 // One client line's supplier-relevant fields, as both the quote and offer routes normalize them.
@@ -45,7 +47,48 @@ export class SupplierItemSyncError extends Error {
   }
 }
 
-const FROZEN_EFFECTIVE_STATUSES = new Set(['accepted', 'denied', 'expired']);
+// Maps the sync error onto the routes' replyError envelope — shared so the two PUT routes
+// (client quotes/offers) can't drift apart on the contract for the identical shared failure.
+export const replySupplierItemSyncError = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  err: SupplierItemSyncError,
+  entity: { entityType: 'client_quote' | 'client_offer'; entityId: string },
+) =>
+  replyError(request, reply, {
+    statusCode: err.statusCode,
+    message: err.message,
+    action: `${entity.entityType}.update.${err.statusCode === 403 ? 'forbidden' : 'conflict'}`,
+    entityType: entity.entityType,
+    entityId: entity.entityId,
+    details: {
+      secondaryLabel: err.secondaryLabel,
+      targetLabel: err.supplierQuoteId ?? undefined,
+    },
+  });
+
+// Logs the audit entries returned by the sync. Call AFTER the transaction commits — logAudit
+// writes through the global pool, so an in-tx call would survive a rollback and record
+// mutations that never happened.
+export const logSupplierItemSyncAudits = async (
+  request: FastifyRequest,
+  audits: SupplierItemSyncAudit[],
+): Promise<void> => {
+  for (const sync of audits) {
+    await logAudit({
+      request,
+      action: 'supplier_quote.updated',
+      entityType: 'supplier_quote',
+      entityId: sync.supplierQuoteId,
+      details: {
+        targetLabel: sync.supplierQuoteId,
+        secondaryLabel: 'synced_from_client_line',
+        changedFields: ['items'],
+        reason: sync.sourceAction,
+      },
+    });
+  }
+};
 
 // Bidirectional sync, client → supplier direction (issue #779): when an editable client quote or
 // offer saves lines that reference supplier quote items, GENUINE edits to quantity and unit cost
@@ -154,7 +197,7 @@ export const syncSupplierItemsFromClientLines = async (
       );
     }
     const effectiveStatus = effectiveSupplierQuoteStatusFromDate(lock);
-    if (FROZEN_EFFECTIVE_STATUSES.has(effectiveStatus)) {
+    if (isFrozenEffectiveStatus(effectiveStatus)) {
       throw new SupplierItemSyncError(
         409,
         'supplier_quote_read_only',

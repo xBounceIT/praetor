@@ -260,15 +260,20 @@ describe('makeQuoteHandlers', () => {
     }
   });
 
+  // The three list refetches behind refreshClientQuoteFlow, stubbed empty.
+  const stubFlowListRefetch = () => {
+    apiMocks.quotesList.mockImplementation(() => Promise.resolve([]));
+    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([]));
+    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
+  };
+
   // A linked supplier quote's visible status is derived from its client quote (#779), so a status
   // or link change must also refresh the separately-cached supplier quotes table.
   const stubQuoteUpdateFlow = () => {
     apiMocks.quotesUpdate.mockImplementation((id: string, updates: unknown) =>
       Promise.resolve({ id, ...(updates as object) }),
     );
-    apiMocks.quotesList.mockImplementation(() => Promise.resolve([]));
-    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([]));
-    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
+    stubFlowListRefetch();
   };
 
   test('updateQuote refreshes supplier quotes when a linked quote changes status', async () => {
@@ -422,9 +427,7 @@ describe('makeQuoteHandlers', () => {
     apiMocks.clientOffersUpdate.mockImplementation((id: string, updates: unknown) =>
       Promise.resolve({ id, linkedQuoteId: 'q1', ...(updates as object) }),
     );
-    apiMocks.quotesList.mockImplementation(() => Promise.resolve([]));
-    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([]));
-    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
+    stubFlowListRefetch();
     const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
     const ctx = buildHandlers({
       quotes: [{ id: 'q1', status: 'accepted', linkedSupplierQuoteId: 'sq-9' }],
@@ -444,9 +447,7 @@ describe('makeQuoteHandlers', () => {
         ...(updates as object),
       }),
     );
-    apiMocks.quotesList.mockImplementation(() => Promise.resolve([]));
-    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([]));
-    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
+    stubFlowListRefetch();
     const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
     const ctx = buildHandlers({
       quotes: [{ id: 'q-unlinked', status: 'accepted' }],
@@ -461,9 +462,7 @@ describe('makeQuoteHandlers', () => {
     apiMocks.clientOffersUpdate.mockImplementation((id: string, updates: unknown) =>
       Promise.resolve({ id, linkedQuoteId: 'q-unlinked', items: [], ...(updates as object) }),
     );
-    apiMocks.quotesList.mockImplementation(() => Promise.resolve([]));
-    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([]));
-    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
+    stubFlowListRefetch();
     const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
     const ctx = buildHandlers({
       quotes: [{ id: 'q-unlinked', status: 'accepted' }],
@@ -478,9 +477,7 @@ describe('makeQuoteHandlers', () => {
     apiMocks.clientOffersRevertToDraft.mockImplementation((id: string) =>
       Promise.resolve({ id, status: 'draft', linkedQuoteId: 'q1' }),
     );
-    apiMocks.quotesList.mockImplementation(() => Promise.resolve([]));
-    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([]));
-    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
+    stubFlowListRefetch();
     const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
     const ctx = buildHandlers({
       quotes: [{ id: 'q1', status: 'accepted', linkedSupplierQuoteId: 'sq-9' }],

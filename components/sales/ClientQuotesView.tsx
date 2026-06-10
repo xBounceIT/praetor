@@ -48,7 +48,6 @@ import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
 import {
   buildProductQuickViewHref,
-  buildQuoteIdBySupplierQuoteItemId,
   buildSupplierQuoteQuickViewHref,
   resolveLinkedSupplierQuoteId,
 } from '../../utils/quickViewLinks';
@@ -975,31 +974,27 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     return options;
   }, [sourceableSupplierQuotes]);
 
-  // O(1) lookup from a supplier-quote item id to its parent quote id, across all
-  // supplier quotes (not just the accepted/selectable ones), so the quick-view
-  // shortcut resolves even a line referencing a now-unaccepted but extant quote.
-  const quoteIdBySupplierQuoteItemId = useMemo(
-    () => buildQuoteIdBySupplierQuoteItemId(supplierQuotes),
+  // item-id → its CURRENT supplier quote + item, across ALL supplier quotes (not just the
+  // selectable ones), for the bidirectional-sync affordances (#779): lock detection
+  // (order-locked/frozen sourced fields) and stale-data detection (the per-line
+  // "old info — update?" refresh button). Quick-view ids and display labels derive from it,
+  // so an existing line referencing a no-longer-selectable but extant quote still resolves.
+  const supplierQuoteItemIndex = useMemo(
+    () => buildSupplierQuoteItemIndex(supplierQuotes),
     [supplierQuotes],
   );
 
-  // Display labels resolve across ALL supplier quotes (not just the accepted/selectable ones): an
-  // existing line may reference an accepted quote whose expiration has passed — the picker hides
-  // it from NEW sourcing, but the line's label must still render instead of the "no supplier
-  // quote" fallback (the link is intact and the server still accepts the item).
-  const supplierQuoteItemLabelById = useMemo(() => {
-    const labels = new Map<string, string>();
-    for (const quote of supplierQuotes) {
-      for (const item of quote.items) {
-        labels.set(item.id, supplierQuoteItemLabel(quote, item));
-      }
-    }
-    return labels;
-  }, [supplierQuotes]);
+  // O(1) item-id → parent-quote-id projection for the shared quick-view helpers.
+  const quoteIdBySupplierQuoteItemId = useMemo(
+    () => new Map(Array.from(supplierQuoteItemIndex, ([id, ref]) => [id, ref.quote.id] as const)),
+    [supplierQuoteItemIndex],
+  );
 
   const getSupplierQuoteItemDisplayValue = (itemId?: string | null) => {
-    if (!itemId) return t('sales:clientQuotes.noSupplierQuote');
-    return supplierQuoteItemLabelById.get(itemId) ?? t('sales:clientQuotes.noSupplierQuote');
+    const ref = itemId ? supplierQuoteItemIndex.get(itemId) : undefined;
+    return ref
+      ? supplierQuoteItemLabel(ref.quote, ref.item)
+      : t('sales:clientQuotes.noSupplierQuote');
   };
 
   // Options for the 1-to-1 supplier-quote link selector (issue #779, derived model): only
@@ -1020,14 +1015,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         .map((sq) => ({ id: sq.id, name: `${sq.id} — ${sq.supplierName}` })),
     ],
     [supplierQuotes, formData.linkedSupplierQuoteId, t],
-  );
-
-  // item-id → its CURRENT supplier quote + item, for the bidirectional-sync affordances (#779):
-  // lock detection (order-locked/frozen sourced fields) and stale-data detection (the per-line
-  // "old info — update?" refresh button).
-  const supplierQuoteItemIndex = useMemo(
-    () => buildSupplierQuoteItemIndex(supplierQuotes),
-    [supplierQuotes],
   );
 
   // Pulls the linked supplier item's current quantity/cost back into the line, mirroring the
@@ -1920,7 +1907,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         const supplierDataStale =
                           !isReadOnly &&
                           !supplierLineLocked &&
-                          isSupplierLineStale(item, linkedSupplierRef);
+                          isSupplierLineStale(item, linkedSupplierRef?.item);
                         const supplierQuoteHref = buildSupplierQuoteQuickViewHref(
                           resolveLinkedSupplierQuoteId(item, quoteIdBySupplierQuoteItemId),
                           allSupplierQuoteIds,

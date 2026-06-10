@@ -23,6 +23,9 @@ import {
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
+  logSupplierItemSyncAudits,
+  type PreviousClientLine,
+  replySupplierItemSyncError,
   type SupplierItemSyncAudit,
   SupplierItemSyncError,
   syncSupplierItemsFromClientLines,
@@ -1005,11 +1008,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const automaticDeliveryDate = shouldStampDeliveryDate ? todayLocalDateOnly() : undefined;
 
       let normalizedItemsForUpdate: NormalizedOfferItem[] | null = null;
-      let previousSyncLines: Array<{
-        supplierQuoteItemId: string | null;
-        quantity: number;
-        supplierQuoteUnitPrice: number | null;
-      }> = [];
+      let previousSyncLines: PreviousClientLine[] = [];
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
@@ -1025,12 +1024,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         } catch (err) {
           return badRequest(reply, (err as Error).message);
         }
-        // Previous stored lines for the supplier-item sync's genuine-edit diff (issue #779).
-        previousSyncLines = existingOfferItems.map((item) => ({
-          supplierQuoteItemId: item.supplierQuoteItemId,
-          quantity: item.quantity,
-          supplierQuoteUnitPrice: item.supplierQuoteUnitPrice,
-        }));
+        // Previous stored lines for the supplier-item sync's genuine-edit diff (issue #779) —
+        // the stored item shape structurally satisfies PreviousClientLine.
+        previousSyncLines = existingOfferItems;
       }
 
       // Derived from the declared field set above so the two lists can't drift (issue #779).
@@ -1106,19 +1102,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // to run without the supplier-quote update grant; the tx rolled back, so the offer write
         // was rejected together with the supplier write (issue #779).
         if (err instanceof SupplierItemSyncError) {
-          return replyError(request, reply, {
-            statusCode: err.statusCode,
-            message: err.message,
-            action:
-              err.statusCode === 403
-                ? 'client_offer.update.forbidden'
-                : 'client_offer.update.conflict',
+          return replySupplierItemSyncError(request, reply, err, {
             entityType: 'client_offer',
             entityId: idResult.value,
-            details: {
-              secondaryLabel: err.secondaryLabel,
-              targetLabel: err.supplierQuoteId ?? undefined,
-            },
           });
         }
         const dup = getUniqueViolation(err);
@@ -1147,22 +1133,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      // Synced supplier quotes are audited AFTER commit — logAudit writes through the global
-      // pool, so an in-tx call would survive a rollback and record mutations that never happened.
-      for (const sync of result.syncAudits) {
-        await logAudit({
-          request,
-          action: 'supplier_quote.updated',
-          entityType: 'supplier_quote',
-          entityId: sync.supplierQuoteId,
-          details: {
-            targetLabel: sync.supplierQuoteId,
-            secondaryLabel: 'synced_from_client_line',
-            changedFields: ['items'],
-            reason: sync.sourceAction,
-          },
-        });
-      }
+      await logSupplierItemSyncAudits(request, result.syncAudits);
 
       const nextStatus = targetStatus ?? updatedOffer.status;
       const didStatusChange = targetStatus !== null && existingOffer.status !== nextStatus;

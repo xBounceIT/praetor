@@ -1,5 +1,6 @@
 import type { SupplierQuote, SupplierUnitType } from '../types';
 import { calcProductSalePrice, convertUnitPrice } from './numbers';
+import { isFrozenEffectiveStatus } from './quoteStatus';
 
 // Shared #779 bidirectional-sync helpers for the client-quote and client-offer line editors.
 // The lock and staleness predicates MUST stay aligned with the server-side rules in
@@ -25,9 +26,6 @@ export const buildSupplierQuoteItemIndex = (
   return map;
 };
 
-// Derived statuses whose content the server sync refuses to rewrite.
-const FROZEN_SUPPLIER_STATUSES = new Set(['accepted', 'denied', 'expired']);
-
 // Whether a sourced line's quantity/cost inputs must be disabled. Locks when:
 //  - the referenced supplier quote can't be resolved (no supplier-quotes list permission, list
 //    still loading, or a legacy dangle): editing blind would only earn a server rejection or a
@@ -40,20 +38,21 @@ export const isSupplierLineLocked = (
 ): boolean => {
   if (!item.supplierQuoteItemId) return false;
   if (!ref) return true;
-  return Boolean(ref.quote.linkedOrderId) || FROZEN_SUPPLIER_STATUSES.has(ref.quote.status);
+  return Boolean(ref.quote.linkedOrderId) || isFrozenEffectiveStatus(ref.quote.status);
 };
 
 // Whether the line's stored quantity/cost lag the live supplier item — drives the per-line
 // "Old info — update?" refresh chip.
 export const isSupplierLineStale = (
-  item: { quantity: number; supplierQuoteUnitPrice?: number | null },
-  ref: SupplierQuoteItemRef | undefined,
-): boolean =>
-  Boolean(
-    ref &&
-      (Number(item.supplierQuoteUnitPrice ?? 0) !== ref.item.unitPrice ||
-        Number(item.quantity) !== ref.item.quantity),
+  line: { quantity: number; supplierQuoteUnitPrice?: number | null },
+  source: SupplierQuote['items'][number] | undefined,
+): boolean => {
+  if (!source) return false;
+  return (
+    Number(line.supplierQuoteUnitPrice ?? 0) !== source.unitPrice ||
+    Number(line.quantity) !== source.quantity
   );
+};
 
 // The fields the refresh chip grafts onto a line when pulling the supplier item's current data,
 // mirroring the linking math: the sale price is recomputed from the refreshed cost and the

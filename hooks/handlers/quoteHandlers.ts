@@ -86,6 +86,11 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     }
   };
 
+  // Whether the given client quote carries the 1-to-1 supplier-quote header link — the chain
+  // that makes offer lifecycle changes flip the derived supplier-quote status (#779).
+  const linkedQuoteHasSupplierLink = (quoteId: string | undefined) =>
+    getQuotes().some((q) => q.id === quoteId && q.linkedSupplierQuoteId != null);
+
   const addQuote = async (quoteData: Partial<Quote>) => {
     try {
       const quote = await api.quotes.create(quoteData);
@@ -165,9 +170,8 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       // The offer drives the linked supplier quote's derived status through the offer chain
       // (#779: sent/accepted/denied flow through), and an item edit forward-syncs the supplier
       // items — either leaves the separately-cached supplier quotes stale.
-      const linkedQuote = getQuotes().find((q) => q.id === updated.linkedQuoteId);
       const supplierRefreshNeeded =
-        linkedQuote?.linkedSupplierQuoteId != null ||
+        linkedQuoteHasSupplierLink(updated.linkedQuoteId) ||
         (updated.items?.some((item) => item.supplierQuoteItemId != null) ?? false);
       await Promise.all([
         refreshClientQuoteFlow(),
@@ -187,10 +191,9 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       }
       // accepted/denied → draft flips the linked supplier quote's derived status back to
       // 'offer' (#779 offer chain) — refresh the supplier cache alongside the quote flow.
-      const linkedQuote = getQuotes().find((q) => q.id === updated.linkedQuoteId);
       await Promise.all([
         refreshClientQuoteFlow(),
-        linkedQuote?.linkedSupplierQuoteId != null
+        linkedQuoteHasSupplierLink(updated.linkedQuoteId)
           ? refreshLinkedSupplierQuotes()
           : Promise.resolve(),
       ]);
