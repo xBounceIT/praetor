@@ -563,8 +563,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     return true;
   };
 
-  // Distinct supplier quotes a set of resolved/normalized lines sources (issue #779 follow-up).
-  const sourcedSupplierQuoteIds = (lines: ResolvedQuoteItem[]): string[] =>
+  // Distinct supplier quotes a set of lines sources (issue #779 follow-up). Structurally typed so
+  // it serves resolved/normalized request lines AND restored version-snapshot items alike.
+  const sourcedSupplierQuoteIds = (
+    lines: ReadonlyArray<{ supplierQuoteId?: string | null }>,
+  ): string[] =>
     Array.from(
       new Set(lines.map((line) => line.supplierQuoteId).filter((id): id is string => !!id)),
     );
@@ -1496,31 +1499,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // PUT guard blocks (issue #779 follow-up). The restore REPLACES the lines with the
         // snapshot's (which carry the supplier sourcing), so the guard must read the SNAPSHOT's
         // earliest sourced expiration, not the pre-restore lines'.
-        const restoredSourcedExpiration = await supplierQuotesRepo.findEarliestExpirationByIds(
-          Array.from(
-            new Set(
-              version.snapshot.items
-                .map((item) => item.supplierQuoteId)
-                .filter((id): id is string => !!id),
-            ),
-          ),
-          tx,
-        );
         if (
-          (restoredStatus === 'sent' ||
-            restoredStatus === 'offer' ||
-            restoredStatus === 'accepted') &&
-          restoredSourcedExpiration &&
-          isPastLocalDate(restoredSourcedExpiration)
+          restoredStatus === 'sent' ||
+          restoredStatus === 'offer' ||
+          restoredStatus === 'accepted'
         ) {
-          return {
-            ok: false,
-            statusCode: 409,
-            message:
-              'The linked supplier quote has expired; extend its validity before progressing this quote',
-            action: 'client_quote.restore.conflict',
-            secondaryLabel: 'linked_supplier_quote_expired',
-          };
+          // Only a progressed target can be blocked, so resolve the snapshot's earliest sourced
+          // expiration lazily (avoids a supplier_quotes read inside the lock for draft/denied
+          // restores). Reuses the same line→sourced-ids extraction as the create/update guards.
+          const restoredSourcedExpiration = await supplierQuotesRepo.findEarliestExpirationByIds(
+            sourcedSupplierQuoteIds(version.snapshot.items),
+            tx,
+          );
+          if (restoredSourcedExpiration && isPastLocalDate(restoredSourcedExpiration)) {
+            return {
+              ok: false,
+              statusCode: 409,
+              message:
+                'A supplier quote sourced by this quote has expired; extend its validity before progressing this quote',
+              action: 'client_quote.restore.conflict',
+              secondaryLabel: 'linked_supplier_quote_expired',
+            };
+          }
         }
 
         const snapshotItems: clientQuotesRepo.NewClientQuoteItem[] = version.snapshot.items.map(

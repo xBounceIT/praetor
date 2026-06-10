@@ -131,27 +131,14 @@ const EXPECTED_STATUS: Record<string, string> = {
   dm_sq_14: 'accepted',
 };
 
-// Mirror supplierQuotesRepo's "most-advanced sourcing quote wins" rank.
-const rank = (status: string): number => {
-  switch (status) {
-    case 'accepted':
-    case 'confirmed':
-      return 5;
-    case 'offer':
-      return 4;
-    case 'sent':
-    case 'received':
-      return 3;
-    case 'denied':
-    case 'rejected':
-      return 1;
-    default:
-      return 2;
-  }
-};
-
 const sourcingFor = (supplierQuoteId: string) =>
   sourcing.filter((row) => row.supplierQuoteId === supplierQuoteId);
+
+// Distinct client quotes whose lines source the given supplier quote.
+const sourcingQuoteIdsFor = (supplierQuoteId: string): string[] =>
+  [
+    ...new Set(sourcingFor(supplierQuoteId).map((row) => quoteItems.get(row.cqiId)?.quoteId)),
+  ].filter((id): id is string => !!id);
 
 describe('seed.sql line-sourced supplier-quote linkage (#779 / PR #812)', () => {
   test('parses the demo sourcing rows', () => {
@@ -163,17 +150,20 @@ describe('seed.sql line-sourced supplier-quote linkage (#779 / PR #812)', () => 
     }
   });
 
+  test('each demo supplier quote is sourced by at most one client quote', () => {
+    // The seed deliberately keeps a 1:1 sourcing relationship, so the supplierQuotesRepo
+    // "most-advanced sourcing quote wins" rank/tiebreak never has to disambiguate here — the
+    // status derivation below can read the single sourcing quote directly. (Production handles
+    // multi-sourcing via the SQL CASE rank; the demo just doesn't exercise it.)
+    for (const supplierQuoteId of Object.keys(EXPECTED_STATUS)) {
+      expect(sourcingQuoteIdsFor(supplierQuoteId).length).toBeLessThanOrEqual(1);
+    }
+  });
+
   test('every demo supplier quote derives its documented status from line sourcing', () => {
     for (const [supplierQuoteId, expected] of Object.entries(EXPECTED_STATUS)) {
-      const sources = sourcingFor(supplierQuoteId);
-      // Distinct client quotes whose lines source this supplier quote.
-      const sourcingQuoteIds = [
-        ...new Set(sources.map((row) => quoteItems.get(row.cqiId)?.quoteId).filter(Boolean)),
-      ] as string[];
-
-      const chosenQuoteId = sourcingQuoteIds
-        .map((id) => ({ id, status: quotes.get(id)?.status ?? '' }))
-        .sort((a, b) => rank(b.status) - rank(a.status))[0]?.id;
+      // 1:1 sourcing (asserted above), so the single sourcing quote is the chosen one.
+      const chosenQuoteId = sourcingQuoteIdsFor(supplierQuoteId)[0];
       const chosen = chosenQuoteId ? quotes.get(chosenQuoteId) : undefined;
       const offer = chosenQuoteId ? offersByQuote.get(chosenQuoteId) : undefined;
 
