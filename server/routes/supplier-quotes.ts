@@ -934,10 +934,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const versionIdResult = requireNonEmptyString(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
-      const [linkedOrderId, current, version] = await Promise.all([
+      const [linkedOrderId, current, version, sourcedByClientDocuments] = await Promise.all([
         supplierQuotesRepo.findLinkedOrderId(idResult.value),
         supplierQuotesRepo.findById(idResult.value),
         supplierQuoteVersionsRepo.findById(idResult.value, versionIdResult.value),
+        // Restore always rewrites items with fresh ids (replaceItems below), so the soft-ref
+        // stranding check is always relevant here — run it alongside the other lookups.
+        supplierQuotesRepo.isSourcedByClientDocuments(idResult.value),
       ]);
 
       if (linkedOrderId) {
@@ -980,6 +983,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityType: 'supplier_quote',
           entityId: idResult.value,
           details: { secondaryLabel: 'status_synced_read_only' },
+        });
+      }
+      // The status-sync guard above only catches quotes sourced by a client QUOTE. Restore
+      // regenerates every supplier_quote_item id (generatePrefixedId below) and rewrites them via
+      // replaceItems, so restoring a quote sourced by ANY client document — including order/offer
+      // lines that never surface as linkedClientQuoteId — would strand those lines' soft
+      // supplierQuoteItemId references. The PUT and DELETE paths refuse a sourced quote for the
+      // same reason; restore must too.
+      if (sourcedByClientDocuments) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message:
+            'Cannot restore a supplier quote whose items are used by client quotes, offers or orders',
+          action: 'supplier_quote.restore.conflict',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'sourced_by_client_documents' },
         });
       }
       const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot);

@@ -44,6 +44,7 @@ const sqUpdateMock = mock();
 const sqRenameMock = mock();
 const sqRestoreSnapshotQuoteMock = mock();
 const sqReplaceItemsMock = mock();
+const sqIsSourcedByClientDocumentsMock = mock();
 
 const suppliersFindByIdMock = mock();
 const productsGetSnapshotsMock = mock();
@@ -90,6 +91,7 @@ beforeAll(async () => {
     rename: sqRenameMock,
     restoreSnapshotQuote: sqRestoreSnapshotQuoteMock,
     replaceItems: sqReplaceItemsMock,
+    isSourcedByClientDocuments: sqIsSourcedByClientDocumentsMock,
   }));
   mock.module('../../repositories/productsRepo.ts', () => ({
     ...productsRepoSnap,
@@ -211,6 +213,7 @@ const allMocks = [
   sqRenameMock,
   sqRestoreSnapshotQuoteMock,
   sqReplaceItemsMock,
+  sqIsSourcedByClientDocumentsMock,
   suppliersFindByIdMock,
   productsGetSnapshotsMock,
   clientsExistsByIdMock,
@@ -240,6 +243,8 @@ beforeEach(async () => {
   sqFindByIdMock.mockResolvedValue(SAMPLE_QUOTE);
   sqFindItemsForQuoteMock.mockResolvedValue([SAMPLE_ITEM]);
   sqFindIdConflictMock.mockResolvedValue(false);
+  // Default: not sourced by any client document, so the restore stranding guard stays open.
+  sqIsSourcedByClientDocumentsMock.mockResolvedValue(false);
   // Snapshots without a client link never call existsById; default true keeps the rest happy.
   clientsExistsByIdMock.mockResolvedValue(true);
 
@@ -431,6 +436,30 @@ describe('POST /api/sales/supplier-quotes/:id/versions/:versionId/restore', () =
     expect(res.statusCode).toBe(409);
     expect(JSON.parse(res.body).error).toContain('synced');
     expect(sqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
+    expect(sqvInsertMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when the supplier quote is sourced by client documents but not a client quote (#812)', async () => {
+    // Sourced only via an order/offer line: linkedClientQuoteId is null so the status-sync guard
+    // above passes, but restore would replaceItems with fresh ids and strand those soft refs.
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqFindByIdMock.mockResolvedValue({ ...SAMPLE_QUOTE, linkedClientQuoteId: null });
+    sqvFindByIdMock.mockResolvedValue(SAMPLE_VERSION);
+    sqIsSourcedByClientDocumentsMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes/sq-1/versions/sqv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toBe(
+      'Cannot restore a supplier quote whose items are used by client quotes, offers or orders',
+    );
+    expect(sqIsSourcedByClientDocumentsMock).toHaveBeenCalledWith('sq-1');
+    expect(sqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
+    expect(sqReplaceItemsMock).not.toHaveBeenCalled();
     expect(sqvInsertMock).not.toHaveBeenCalled();
   });
 
