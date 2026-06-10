@@ -73,9 +73,12 @@ export const refreshedSupplierLineFields = (
   return {
     quantity: source.quantity,
     supplierQuoteUnitPrice: source.unitPrice,
+    // Convert FROM the supplier item's own unit, not a hardcoded 'hours': source.unitPrice is
+    // priced in source.unitType. Assuming hours would multiply a days-priced item by 8 when the
+    // line is also in days (units match → no conversion), inflating the stored sale price.
     unitPrice: convertUnitPrice(
       calcProductSalePrice(source.unitPrice, mol),
-      'hours',
+      source.unitType || 'hours',
       line.unitType || 'hours',
     ),
   };

@@ -114,4 +114,22 @@ describe('refreshedSupplierLineFields', () => {
     );
     expect(fields.unitPrice).toBe(80 * 8);
   });
+
+  test('a days-priced source refreshed into a days line is NOT re-multiplied (#812)', () => {
+    // The supplier item is already priced per day; treating it as hourly would ×8 it even though
+    // the line is also in days. Units match → no conversion.
+    const fields = refreshedSupplierLineFields(
+      { productMolPercentage: null, unitType: 'days' },
+      supplierItem({ unitType: 'days', unitPrice: 80 }),
+    );
+    expect(fields.unitPrice).toBe(80);
+  });
+
+  test('converts FROM the source unit when units differ (days source → hours line = ÷8)', () => {
+    const fields = refreshedSupplierLineFields(
+      { productMolPercentage: null, unitType: 'hours' },
+      supplierItem({ unitType: 'days', unitPrice: 80 }),
+    );
+    expect(fields.unitPrice).toBe(10);
+  });
 });
