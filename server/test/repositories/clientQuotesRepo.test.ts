@@ -436,22 +436,6 @@ describe('findStatusAndClientName', () => {
   });
 });
 
-describe('findLinkConflict', () => {
-  test('filters by linked_supplier_quote_id and excludes self', async () => {
-    exec.enqueue({ rows: [] });
-    const result = await clientQuotesRepo.findLinkConflict('sq-1', 'cq-1', testDb);
-    expect(result).toBe(false);
-    expect(exec.calls[0].sql.toLowerCase()).toContain('"linked_supplier_quote_id"');
-    expect(exec.calls[0].params).toContain('sq-1');
-    expect(exec.calls[0].params).toContain('cq-1');
-  });
-
-  test('returns true when another quote already links the supplier quote', async () => {
-    exec.enqueue({ rows: [['cq-2']] });
-    expect(await clientQuotesRepo.findLinkConflict('sq-1', 'cq-1', testDb)).toBe(true);
-  });
-});
-
 describe('findAnyLinkedSale', () => {
   test('returns sale id when found', async () => {
     exec.enqueue({ rows: [['s-1']] });

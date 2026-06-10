@@ -38,7 +38,6 @@ const getRolePermissionsMock = mock();
 const cqFindLinkedOfferIdMock = mock();
 const cqFindCurrentMock = mock();
 const cqFindAnyLinkedSaleMock = mock();
-const cqFindLinkConflictMock = mock();
 const cqFindFullForSnapshotMock = mock();
 const cqFindItemsForQuoteMock = mock();
 const cqFindIdConflictMock = mock();
@@ -48,7 +47,6 @@ const cqDeleteByIdMock = mock();
 const cqReplaceItemsMock = mock();
 const cqFindItemSnapshotsForQuoteMock = mock();
 
-const sqFindExpirationByIdMock = mock();
 const sqFindEarliestExpirationByIdsMock = mock();
 const sqFindItemsByIdsMock = mock();
 const sqFindLinkedOrderIdMock = mock();
@@ -87,7 +85,6 @@ beforeAll(async () => {
     findLinkedOfferId: cqFindLinkedOfferIdMock,
     findCurrent: cqFindCurrentMock,
     findAnyLinkedSale: cqFindAnyLinkedSaleMock,
-    findLinkConflict: cqFindLinkConflictMock,
     findFullForSnapshot: cqFindFullForSnapshotMock,
     findItemsForQuote: cqFindItemsForQuoteMock,
     findIdConflict: cqFindIdConflictMock,
@@ -99,7 +96,6 @@ beforeAll(async () => {
   }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
-    findExpirationById: sqFindExpirationByIdMock,
     findItemsByIds: sqFindItemsByIdsMock,
     findLinkedOrderId: sqFindLinkedOrderIdMock,
     findFullForSnapshot: sqFindFullForSnapshotMock,
@@ -200,7 +196,6 @@ const allMocks = [
   cqFindLinkedOfferIdMock,
   cqFindCurrentMock,
   cqFindAnyLinkedSaleMock,
-  cqFindLinkConflictMock,
   cqFindFullForSnapshotMock,
   cqFindItemsForQuoteMock,
   cqFindIdConflictMock,
@@ -209,7 +204,6 @@ const allMocks = [
   cqFindItemSnapshotsForQuoteMock,
   cqFindStatusAndClientNameMock,
   cqDeleteByIdMock,
-  sqFindExpirationByIdMock,
   sqFindEarliestExpirationByIdsMock,
   sqFindItemsByIdsMock,
   sqFindLinkedOrderIdMock,
@@ -238,14 +232,10 @@ beforeEach(async () => {
   // Sensible defaults; individual tests override what they care about.
   cqFindLinkedOfferIdMock.mockResolvedValue(null);
   cqFindAnyLinkedSaleMock.mockResolvedValue(null);
-  cqFindLinkConflictMock.mockResolvedValue(false);
   cqFindIdConflictMock.mockResolvedValue(false);
   cqFindFullForSnapshotMock.mockResolvedValue({ quote: updatedQuote(), items: [] });
   cqFindItemsForQuoteMock.mockResolvedValue([]);
   qvInsertMock.mockResolvedValue(undefined);
-  // Existence and expiration come from ONE read post-#779 (expiration_date is NOT NULL): a null
-  // expiration means "supplier quote missing", so the happy default is a real future date.
-  sqFindExpirationByIdMock.mockResolvedValue('2999-12-31');
   // Line-sourced expiration guard default: nothing sourced is expired (far-future earliest).
   sqFindEarliestExpirationByIdsMock.mockResolvedValue('2999-12-31');
   // Forward-sync defaults: no supplier-sourced lines touched unless a test sets them up.

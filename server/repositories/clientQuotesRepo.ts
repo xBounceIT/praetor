@@ -21,9 +21,11 @@ export type ClientQuote = {
   notes: string | null;
   createdAt: number;
   updatedAt: number;
-  // 1-to-1 link to a supplier quote (issue #779). `linkedSupplierQuoteExpiration` is the linked
-  // supplier quote's OWN expiration date, surfaced so the route can compute the "linked supplier
-  // quote expired" guard/indicator without a second round-trip. Both are null when unlinked.
+  // `linkedSupplierQuoteId` is the vestigial pre-#779 1:1 header link column — never written under
+  // line sourcing (kept only so old rows/snapshots still parse). `linkedSupplierQuoteExpiration` is
+  // the EARLIEST expiration among the supplier quotes this quote sources via its lines (issue #779
+  // follow-up), surfaced so the route computes the "supplier quote expired" guard/indicator without
+  // a second round-trip. Null when the quote sources no supplier quote.
   linkedSupplierQuoteId: string | null;
   linkedSupplierQuoteExpiration: string | null;
 };
@@ -280,21 +282,6 @@ export const findStatusAndClientName = async (
     .from(quotes)
     .where(eq(quotes.id, id));
   return rows[0] ?? null;
-};
-
-// True when another client quote (≠ currentQuoteId) is already linked to the given supplier quote.
-// Surfaces a friendly 409 before the partial-unique index would raise a write error (issue #779).
-export const findLinkConflict = async (
-  supplierQuoteId: string,
-  currentQuoteId: string,
-  exec: DbExecutor = db,
-): Promise<boolean> => {
-  const rows = await exec
-    .select({ id: quotes.id })
-    .from(quotes)
-    .where(and(eq(quotes.linkedSupplierQuoteId, supplierQuoteId), ne(quotes.id, currentQuoteId)))
-    .limit(1);
-  return rows.length > 0;
 };
 
 export const findLinkedOfferId = async (

@@ -195,22 +195,6 @@ export const findById = async (
   return rows[0] ? mapQuote(rows[0]) : null;
 };
 
-// The supplier quote's own expiration date, used by the client-quotes route to compute the
-// "linked supplier quote expired" indicator on the write path (where the response is built from
-// the BASE projection, which doesn't reconstruct that derivation). Null when the quote is gone.
-export const findExpirationById = async (
-  id: string,
-  exec: DbExecutor = db,
-): Promise<string | null> => {
-  const rows = await exec
-    .select({ expirationDate: supplierQuotes.expirationDate })
-    .from(supplierQuotes)
-    .where(eq(supplierQuotes.id, id));
-  return rows[0]
-    ? normalizeNullableDateOnly(rows[0].expirationDate, 'supplierQuote.expirationDate')
-    : null;
-};
-
 // Earliest expiration among the given supplier quotes (the ones a client quote sources via its
 // lines). The client-quotes progression guard reads it to block advancing a quote backed by a
 // stale supplier quote (issue #779 follow-up; replaces the single header-linked expiration).

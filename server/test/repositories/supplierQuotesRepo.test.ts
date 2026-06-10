@@ -450,18 +450,6 @@ describe('syncItemPricing', () => {
   });
 });
 
-describe('findExpirationById', () => {
-  test('returns the expiration date when the quote exists', async () => {
-    exec.enqueue({ rows: [['2026-09-30']] });
-    expect(await supplierQuotesRepo.findExpirationById('q-1', testDb)).toBe('2026-09-30');
-  });
-
-  test('returns null when the quote is missing', async () => {
-    exec.enqueue({ rows: [] });
-    expect(await supplierQuotesRepo.findExpirationById('q-x', testDb)).toBeNull();
-  });
-});
-
 describe('findItemsForQuote', () => {
   test('selects items filtered by quoteId and maps them', async () => {
     exec.enqueue({ rows: [itemRow()] });

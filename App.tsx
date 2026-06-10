@@ -146,6 +146,7 @@ import {
   normalizeRilNoteOptions,
   normalizeRilTransferOptions,
 } from './utils/ril';
+import { sourcesSupplierQuote } from './utils/supplierLineSync';
 import { applyBrowserTheme, applyTheme, getTheme } from './utils/theme';
 import { toastError } from './utils/toast';
 import {
@@ -2726,6 +2727,12 @@ const AppContent: React.FC = () => {
                   onAddQuote={addQuote}
                   onUpdateQuote={handleUpdateQuote}
                   onQuoteRestored={async (restored) => {
+                    // Captured before the patch: a restore that REMOVES the last sourced line drops
+                    // the now-unsourced supplier quote back to draft server-side, so the pre-restore
+                    // sourcing also matters — not just the restored snapshot's lines (#779 follow-up).
+                    const wasSourcing = sourcesSupplierQuote(
+                      quotes.find((q) => q.id === restored.id),
+                    );
                     // Patch the restored quote eagerly so the modal reflects it instantly,
                     // then refetch the whole flow because restore can also delete draft
                     // linked sales server-side.
@@ -2739,10 +2746,10 @@ const AppContent: React.FC = () => {
                     setClientOffers(offersData);
                     setClientsOrders(ordersData);
                     // A restore rewrites the snapshot's lines/status, so a supplier quote those
-                    // lines source has a mirrored derived status that can change too (#779
-                    // follow-up: linkage is line-sourced). Best-effort: a refresh failure must
-                    // not fail the completed restore.
-                    if (restored.items?.some((item) => item.supplierQuoteItemId != null)) {
+                    // lines source (or USED to source) has a mirrored derived status that can change
+                    // too (#779 follow-up: linkage is line-sourced). Best-effort: a refresh failure
+                    // must not fail the completed restore.
+                    if (wasSourcing || sourcesSupplierQuote(restored)) {
                       try {
                         await supplierQuoteHandlers.refreshSupplierQuoteFlow();
                       } catch (refreshErr) {

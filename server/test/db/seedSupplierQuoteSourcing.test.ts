@@ -49,19 +49,19 @@ const supplierExpired = new Map(
   ]),
 );
 
-// supplier_quote_item id -> current net cost (unit_price)
-const supplierItemCost = new Map(
+// supplier_quote_item id -> { cost (current net cost), productId }
+const supplierItems = new Map(
   parseSelectValuesBlocks(SEED_SQL, 'supplier_quote_items')[0].rows.map((row) => [
     row.id,
-    Number(row.unit_price),
+    { cost: Number(row.unit_price), productId: row.product_id },
   ]),
 );
 
-// quote_items id -> { quoteId, sale } (sale = the line's own unit price, the margin numerator)
+// quote_items id -> { quoteId, sale, productId } (sale = the line's own unit price, the margin numerator)
 const quoteItems = new Map(
   parseSelectValuesBlocks(SEED_SQL, 'quote_items')[0].rows.map((row) => [
     row.id,
-    { quoteId: row.quote_id, sale: Number(row.unit_price) },
+    { quoteId: row.quote_id, sale: Number(row.unit_price), productId: row.product_id },
   ]),
 );
 
@@ -159,7 +159,7 @@ describe('seed.sql line-sourced supplier-quote linkage (#779 / PR #812)', () => 
     expect(sourcing.length).toBe(12);
     for (const row of sourcing) {
       expect(quoteItems.has(row.cqiId)).toBe(true);
-      expect(supplierItemCost.has(row.supplierItemId)).toBe(true);
+      expect(supplierItems.has(row.supplierItemId)).toBe(true);
     }
   });
 
@@ -202,9 +202,20 @@ describe('seed.sql line-sourced supplier-quote linkage (#779 / PR #812)', () => 
     }
   });
 
+  test('each sourced line shares its supplier item product (the resolver 400s a mismatch)', () => {
+    // resolveQuoteItemSnapshots (server/routes/client-quotes.ts) rejects a sourced line whose
+    // productId differs from its supplier item's, so a seeded mismatch is latent-invalid data that
+    // 400s the moment the line is edited (and breaks the editable dm_cq_02 stale-data demo).
+    for (const row of sourcing) {
+      const lineProduct = quoteItems.get(row.cqiId)?.productId;
+      const supplierProduct = supplierItems.get(row.supplierItemId)?.productId;
+      expect(`${row.cqiId}:${lineProduct}`).toBe(`${row.cqiId}:${supplierProduct}`);
+    }
+  });
+
   test('snapshots match the live supplier net cost, except the one editable stale-data demo', () => {
     for (const row of sourcing) {
-      const live = supplierItemCost.get(row.supplierItemId) ?? 0;
+      const live = supplierItems.get(row.supplierItemId)?.cost ?? 0;
       if (row.cqiId === 'dm_cqi_03') {
         // dm_cq_02 is sent (editable) → its line intentionally lags so the refresh chip shows.
         expect(row.snapshot).toBeLessThan(live);

@@ -2,6 +2,7 @@ import type React from 'react';
 import api from '../../services/api';
 import type { ClientOffer, ClientsOrder, Invoice, Quote, View } from '../../types';
 import { addMonthsToDateOnly, getLocalDateString, isDateOnlyBeforeToday } from '../../utils/date';
+import { sourcesSupplierQuote } from '../../utils/supplierLineSync';
 import { makeTempId } from '../../utils/tempId';
 import { toastError } from '../../utils/toast';
 
@@ -86,14 +87,6 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     }
   };
 
-  // Whether a quote/offer's PRODUCT LINES source any supplier quote — the relationship that now
-  // drives a supplier quote's derived status and its forward sync (issue #779 follow-up: the 1:1
-  // header link was removed, so line sourcing is the only linkage). Any mutation of such a
-  // document can stale the separately-cached supplier-quotes table.
-  const sourcesSupplierQuote = (
-    doc?: { items?: Array<{ supplierQuoteItemId?: string | null }> } | null,
-  ) => doc?.items?.some((item) => item.supplierQuoteItemId != null) ?? false;
-
   const addQuote = async (quoteData: Partial<Quote>) => {
     try {
       const quote = await api.quotes.create(quoteData);
@@ -162,12 +155,17 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       if (getClientOfferFilterId() === id) {
         setClientOfferFilterId(updated.id);
       }
-      // An offer whose lines source a supplier quote drives that supplier quote's derived status
-      // through the offer chain (#779: sent/accepted/denied flow through), and an item edit
-      // forward-syncs the supplier items — either leaves the supplier-quotes cache stale.
+      // An offer's status drives a supplier quote's derived status through the offer chain (#779:
+      // sent/accepted/denied flow through). That chain hangs off the SOURCE quote's lines
+      // (customer_offers.linked_quote_id → quote_items), so the offer's own items may not carry the
+      // sourcing — check the source quote too (consistent with deleteClientOffer). An offer item
+      // edit also forward-syncs the supplier items, hence checking the offer as well.
+      const sourceQuote = getQuotes().find((q) => q.id === updated.linkedQuoteId);
+      const supplierRefreshNeeded =
+        sourcesSupplierQuote(updated) || sourcesSupplierQuote(sourceQuote);
       await Promise.all([
         refreshClientQuoteFlow(),
-        sourcesSupplierQuote(updated) ? refreshLinkedSupplierQuotes() : Promise.resolve(),
+        supplierRefreshNeeded ? refreshLinkedSupplierQuotes() : Promise.resolve(),
       ]);
     } catch (err) {
       console.error('Failed to update client offer:', err);
@@ -182,10 +180,14 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
         setClientOfferFilterId(updated.id);
       }
       // accepted/denied → draft flips a sourced supplier quote's derived status back to 'offer'
-      // (#779 offer chain) — refresh the supplier cache alongside the quote flow.
+      // (#779 offer chain). The chain follows the SOURCE quote's lines, not the offer's own items,
+      // so check the source quote too (consistent with deleteClientOffer).
+      const sourceQuote = getQuotes().find((q) => q.id === updated.linkedQuoteId);
+      const supplierRefreshNeeded =
+        sourcesSupplierQuote(updated) || sourcesSupplierQuote(sourceQuote);
       await Promise.all([
         refreshClientQuoteFlow(),
-        sourcesSupplierQuote(updated) ? refreshLinkedSupplierQuotes() : Promise.resolve(),
+        supplierRefreshNeeded ? refreshLinkedSupplierQuotes() : Promise.resolve(),
       ]);
     } catch (err) {
       console.error('Failed to revert client offer to draft:', err);

@@ -533,7 +533,7 @@ FROM (
         ('dm_cqi_07', 'dm_cq_05', 'dm_prd_07', 2.00, 1795.00, 0.00, 'Firewall appliances for branch perimeter refresh'),
         ('dm_cqi_08', 'dm_cq_06', 'dm_prd_01', 4.00, 1230.00, 0.00, 'Strategy assessment lot for the operations engagement'),
         ('dm_cqi_15', 'dm_cq_06', 'dm_prd_02', 1.00, 1715.00, 0.00, 'Deployment sprint for the phase-one rollout'),
-        ('dm_cqi_09', 'dm_cq_07', 'dm_prd_01', 2.00, 1230.00, 0.00, 'Assessment for public-sector rollout'),
+        ('dm_cqi_09', 'dm_cq_07', 'dm_prd_08', 2.00, 160.00, 0.00, 'Print collateral for the public-sector rollout'),
         ('dm_cqi_10', 'dm_cq_07', 'dm_prd_02', 1.00, 1715.00, 0.00, 'Deployment sprint for the first implementation lot'),
         ('dm_cqi_11', 'dm_cq_08', 'dm_prd_04', 2.00, 1090.00, 0.00, 'Training package for a small customer'),
         ('dm_cqi_12', 'dm_cq_09', 'dm_prd_05', 3.00, 1159.00, 0.00, 'Rejected hardware offer kept for reporting'),
@@ -824,14 +824,14 @@ SELECT
 FROM (
     VALUES
         ('dm_sqi_01', 'dm_sq_01', 'dm_prd_05', 8.00, 960.00, 'Draft laptop procurement lot'),
-        ('dm_sqi_02', 'dm_sq_02', 'dm_prd_06', 120.00, 182.00, 'Pending licensing quote'),
-        ('dm_sqi_03', 'dm_sq_03', 'dm_prd_07', 1.00, 180.00, 'Accepted security appliance quote without downstream order'),
-        ('dm_sqi_04', 'dm_sq_04', 'dm_prd_05', 10.00, 958.00, 'Accepted quote pending supplier order creation'),
-        ('dm_sqi_05', 'dm_sq_05', 'dm_prd_06', 80.00, 182.00, 'Accepted licensing quote pending supplier order creation'),
-        ('dm_sqi_06', 'dm_sq_06', 'dm_prd_07', 1.00, 1410.00, 'Accepted security quote intentionally left without order'),
+        ('dm_sqi_02', 'dm_sq_02', 'dm_prd_05', 12.00, 960.00, 'Hardware refresh quote pending vendor response'),
+        ('dm_sqi_03', 'dm_sq_03', 'dm_prd_06', 40.00, 180.00, 'Subscription bundle quote, accepted, no downstream order'),
+        ('dm_sqi_04', 'dm_sq_04', 'dm_prd_01', 3.00, 980.00, 'Strategic assessment quote pending supplier order creation'),
+        ('dm_sqi_05', 'dm_sq_05', 'dm_prd_07', 2.00, 1435.00, 'Firewall appliance quote pending supplier order creation'),
+        ('dm_sqi_06', 'dm_sq_06', 'dm_prd_02', 1.00, 1370.00, 'Deployment sprint quote linked to an accepted offer'),
         ('dm_sqi_07', 'dm_sq_07', 'dm_prd_08', 200.00, 118.00, 'Accepted quote feeding an order already in progress'),
-        ('dm_sqi_08', 'dm_sq_08', 'dm_prd_05', 2.00, 965.00, 'Accepted quote without a supplier order'),
-        ('dm_sqi_09', 'dm_sq_09', 'dm_prd_06', 40.00, 183.00, 'Denied supplier licensing quote'),
+        ('dm_sqi_08', 'dm_sq_08', 'dm_prd_04', 2.00, 870.00, 'Training package quote, denied via its offer'),
+        ('dm_sqi_09', 'dm_sq_09', 'dm_prd_05', 3.00, 925.00, 'Denied hardware quote kept for history coverage'),
         ('dm_sqi_10', 'dm_sq_10', 'dm_prd_08', 150.00, 119.00, 'Expired print procurement request'),
         ('dm_sqi_11', 'dm_sq_11', 'dm_prd_05', 4.00, 960.00, 'Accepted quote feeding the editable draft procurement order'),
         ('dm_sqi_12', 'dm_sq_12', 'dm_prd_06', 80.00, 182.00, 'Accepted quote feeding the sent licensing order'),
@@ -879,12 +879,12 @@ UPDATE quote_items AS qi SET
     supplier_quote_unit_price = v.unit_price
 FROM (VALUES
     ('dm_cqi_04', 'dm_sq_03', 'dm_sqi_03', 'SecureEdge Systems', 180.00),
-    ('dm_cqi_05', 'dm_sq_04', 'dm_sqi_04', 'TechSource Distribution', 958.00),
-    ('dm_cqi_07', 'dm_sq_05', 'dm_sqi_05', 'CloudSeat Licensing', 182.00),
-    ('dm_cqi_15', 'dm_sq_06', 'dm_sqi_06', 'SecureEdge Systems', 1410.00),
+    ('dm_cqi_05', 'dm_sq_04', 'dm_sqi_04', 'TechSource Distribution', 980.00),
+    ('dm_cqi_07', 'dm_sq_05', 'dm_sqi_05', 'CloudSeat Licensing', 1435.00),
+    ('dm_cqi_15', 'dm_sq_06', 'dm_sqi_06', 'SecureEdge Systems', 1370.00),
     ('dm_cqi_09', 'dm_sq_07', 'dm_sqi_07', 'PrintLogistics Hub', 118.00),
-    ('dm_cqi_11', 'dm_sq_08', 'dm_sqi_08', 'TechSource Distribution', 965.00),
-    ('dm_cqi_12', 'dm_sq_09', 'dm_sqi_09', 'CloudSeat Licensing', 183.00),
+    ('dm_cqi_11', 'dm_sq_08', 'dm_sqi_08', 'TechSource Distribution', 870.00),
+    ('dm_cqi_12', 'dm_sq_09', 'dm_sqi_09', 'CloudSeat Licensing', 925.00),
     ('dm_cqi_16', 'dm_sq_11', 'dm_sqi_11', 'TechSource Distribution', 960.00),
     ('dm_cqi_17', 'dm_sq_12', 'dm_sqi_12', 'CloudSeat Licensing', 182.00),
     ('dm_cqi_18', 'dm_sq_13', 'dm_sqi_13', 'SecureEdge Systems', 1410.00),
@@ -893,13 +893,13 @@ FROM (VALUES
 WHERE qi.id = v.cqi_id;
 
 -- Editable stale-data demo (#779 reverse sync): dm_cq_02 is sent (still editable), so its
--- sourced line surfaces the "Old info - update?" chip because the stored snapshot price (175)
--- sits behind dm_sqi_02's current net cost (182). Refreshing pulls the live supplier values.
+-- sourced line surfaces the "Old info - update?" chip because the stored snapshot price (940)
+-- sits behind dm_sqi_02's current net cost (960). Refreshing pulls the live supplier values.
 UPDATE quote_items SET
     supplier_quote_id = 'dm_sq_02',
     supplier_quote_item_id = 'dm_sqi_02',
     supplier_quote_supplier_name = 'CloudSeat Licensing',
-    supplier_quote_unit_price = 175.00
+    supplier_quote_unit_price = 940.00
 WHERE id = 'dm_cqi_03';
 
 INSERT INTO supplier_sales (

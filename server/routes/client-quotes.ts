@@ -641,11 +641,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         else itemsByQuote.set(item.quoteId, [item]);
       }
 
-      // buildQuoteResponse is async only on write paths; here the list projection already carries
-      // linkedSupplierQuoteExpiration, so it resolves without any extra per-row query.
-      return Promise.all(
-        quotes.map((quote) => buildQuoteResponse(quote, itemsByQuote.get(quote.id) ?? [])),
-      );
+      // The list projection already carries linkedSupplierQuoteExpiration, so buildQuoteResponse
+      // (synchronous) builds each row without any extra per-row query.
+      return quotes.map((quote) => buildQuoteResponse(quote, itemsByQuote.get(quote.id) ?? []));
     },
   );
 
@@ -1494,14 +1492,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // the tightened CHECK (migration 0083) doesn't reject the restore write (issue #779).
         const restoredStatus = normalizeQuoteStatus(version.snapshot.quote.status);
         // Restoring a snapshot whose status is sent/offer/accepted would park the quote in a
-        // progressed state alongside an expired linked supplier — the same transition the PUT
-        // guard blocks (issue #779). The link is not part of the snapshot and survives the restore.
+        // progressed state alongside an expired sourced supplier quote — the same transition the
+        // PUT guard blocks (issue #779 follow-up). The restore REPLACES the lines with the
+        // snapshot's (which carry the supplier sourcing), so the guard must read the SNAPSHOT's
+        // earliest sourced expiration, not the pre-restore lines'.
+        const restoredSourcedExpiration = await supplierQuotesRepo.findEarliestExpirationByIds(
+          Array.from(
+            new Set(
+              version.snapshot.items
+                .map((item) => item.supplierQuoteId)
+                .filter((id): id is string => !!id),
+            ),
+          ),
+          tx,
+        );
         if (
           (restoredStatus === 'sent' ||
             restoredStatus === 'offer' ||
             restoredStatus === 'accepted') &&
-          current.linkedSupplierQuoteExpiration &&
-          isPastLocalDate(current.linkedSupplierQuoteExpiration)
+          restoredSourcedExpiration &&
+          isPastLocalDate(restoredSourcedExpiration)
         ) {
           return {
             ok: false,

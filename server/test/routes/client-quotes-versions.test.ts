@@ -54,6 +54,7 @@ const cqInsertItemsMock = mock();
 const clientsExistsByIdMock = mock();
 const productsGetSnapshotsMock = mock();
 const sqGetQuoteItemSnapshotsMock = mock();
+const sqFindEarliestExpirationByIdsMock = mock();
 
 const qvListForQuoteMock = mock();
 const qvFindByIdMock = mock();
@@ -117,6 +118,7 @@ beforeAll(async () => {
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
     getQuoteItemSnapshots: sqGetQuoteItemSnapshotsMock,
+    findEarliestExpirationByIds: sqFindEarliestExpirationByIdsMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
@@ -235,6 +237,7 @@ const allMocks = [
   clientsExistsByIdMock,
   productsGetSnapshotsMock,
   sqGetQuoteItemSnapshotsMock,
+  sqFindEarliestExpirationByIdsMock,
   qvListForQuoteMock,
   qvFindByIdMock,
   qvInsertMock,
@@ -263,6 +266,9 @@ beforeEach(async () => {
   cqFindAnyLinkedSaleMock.mockResolvedValue(null);
   // Product-only items resolve no supplier snapshots; default to an empty map.
   sqGetQuoteItemSnapshotsMock.mockResolvedValue(new Map());
+  // Restore's progression guard reads the SNAPSHOT's earliest sourced supplier-quote expiration;
+  // default to "nothing sourced is expired" (far-future) so most tests don't trip it.
+  sqFindEarliestExpirationByIdsMock.mockResolvedValue('2999-12-31');
 
   testApp = await buildRouteTestApp(routePlugin, '/api/sales/client-quotes');
 });
@@ -473,22 +479,23 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     expect(cqRestoreSnapshotQuoteMock).toHaveBeenCalled();
   });
 
-  test('409 when the snapshot would park the quote in sent beside an expired linked supplier', async () => {
-    // The PUT guard blocks progressing to — or being parked in — sent/offer/accepted while the
-    // linked supplier quote is expired (issue #779); restore must not bypass it. The link is not
-    // part of the snapshot and survives the restore.
+  test('409 when the snapshot would park the quote in sent beside an expired sourced supplier', async () => {
+    // The PUT guard blocks progressing to — or being parked in — sent/offer/accepted while a
+    // sourced supplier quote is expired (issue #779 follow-up); restore must not bypass it. The
+    // restore REPLACES the lines with the snapshot's, so the guard reads the SNAPSHOT's earliest
+    // sourced expiration, not the pre-restore quote's.
     setupHappyPath();
     cqLockCurrentByIdMock.mockResolvedValue({
       status: 'draft',
       discount: 0,
       discountType: 'percentage',
-      linkedSupplierQuoteId: 'sq-9',
-      linkedSupplierQuoteExpiration: '2000-01-01',
     });
     qvFindByIdMock.mockResolvedValue({
       ...SAMPLE_VERSION,
       snapshot: { ...SAMPLE_SNAPSHOT, quote: { ...SAMPLE_QUOTE, status: 'sent' } },
     });
+    // The snapshot's lines source a supplier quote that is now expired.
+    sqFindEarliestExpirationByIdsMock.mockResolvedValue('2000-01-01');
 
     const res = await testApp.inject({
       method: 'POST',
@@ -502,16 +509,16 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     expect(qvInsertMock).not.toHaveBeenCalled();
   });
 
-  test('200 restores a draft snapshot even while the linked supplier quote is expired', async () => {
+  test('200 restores a draft snapshot even while a sourced supplier quote is expired', async () => {
     // Parking in draft is not a progressed state — mirrors the PUT guard's tolerance.
     setupHappyPath();
     cqLockCurrentByIdMock.mockResolvedValue({
       status: 'draft',
       discount: 0,
       discountType: 'percentage',
-      linkedSupplierQuoteId: 'sq-9',
-      linkedSupplierQuoteExpiration: '2000-01-01',
     });
+    // Even with an expired sourced supplier quote, a draft target is not blocked.
+    sqFindEarliestExpirationByIdsMock.mockResolvedValue('2000-01-01');
 
     const res = await testApp.inject({
       method: 'POST',
