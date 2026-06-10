@@ -150,7 +150,6 @@ const quoteToFormData = (quote: Quote): Partial<Quote> => ({
   status: quote.status,
   expirationDate: quote.expirationDate ? normalizeDateOnlyString(quote.expirationDate) : '',
   notes: quote.notes || '',
-  linkedSupplierQuoteId: quote.linkedSupplierQuoteId ?? null,
 });
 
 // One label shape for a supplier-quote line item, shared by the picker options and the
@@ -997,26 +996,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       : t('sales:clientQuotes.noSupplierQuote');
   };
 
-  // Options for the 1-to-1 supplier-quote link selector (issue #779, derived model): only
-  // UNLINKED, effective-DRAFT supplier quotes are linkable — a linked one is already driven by
-  // another client document (even while that document is still a draft, picking it would 409 on
-  // the partial-unique link index) and an expired one is not draft. The one currently linked to
-  // THIS quote stays listed so an existing selection is visible and clearable. A leading empty
-  // option clears the link.
-  const supplierQuoteLinkOptions = useMemo(
-    () => [
-      { id: '', name: t('sales:clientQuotes.noLinkedSupplierQuote', { defaultValue: 'None' }) },
-      ...supplierQuotes
-        .filter(
-          (sq) =>
-            (sq.status === 'draft' && !sq.linkedClientQuoteId) ||
-            sq.id === formData.linkedSupplierQuoteId,
-        )
-        .map((sq) => ({ id: sq.id, name: `${sq.id} — ${sq.supplierName}` })),
-    ],
-    [supplierQuotes, formData.linkedSupplierQuoteId, t],
-  );
-
   // Pulls the linked supplier item's current quantity/cost back into the line, mirroring the
   // linking math: the sale price is recomputed from the refreshed cost and the line's MOL (#779).
   const refreshLineFromSupplier = (index: number, source: SupplierQuote['items'][number]) => {
@@ -1795,25 +1774,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         // Stays editable when the only read-only reason is expiry, so the quote
                         // can be extended out of the `expired` state (issue #779).
                         disabled={isReadOnly && !expirationEditableWhileReadOnly}
-                      />
-                    </Field>
-                    <Field>
-                      <SelectControl
-                        id="client-quote-linked-supplier-quote"
-                        options={supplierQuoteLinkOptions}
-                        value={formData.linkedSupplierQuoteId || ''}
-                        onChange={(val) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            linkedSupplierQuoteId: (val as string) || null,
-                          }))
-                        }
-                        searchable={true}
-                        disabled={isReadOnly}
-                        label={t('sales:clientQuotes.linkedSupplierQuote', {
-                          defaultValue: 'Linked Supplier Quote',
-                        })}
-                        buttonClassName="h-9"
                       />
                     </Field>
                   </div>

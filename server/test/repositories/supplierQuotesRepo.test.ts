@@ -70,10 +70,12 @@ describe('listAll', () => {
     expect(result[0].expirationDate).toBe('2026-06-01');
   });
 
-  test('resolves the linking client quote id and status via reverse lookup', async () => {
+  test('resolves the linking client quote id and status via line-sourcing reverse lookup', async () => {
     exec.enqueue({ rows: [quoteListRow({ 12: 'cq-7', 13: 'sent' })] });
     const result = await supplierQuotesRepo.listAll(testDb);
-    expect(exec.calls[0].sql).toContain('linked_supplier_quote_id');
+    // The link is now resolved through product-line sourcing, not a header column (issue #779
+    // follow-up): the supplier quote follows the client quote whose quote_items source it.
+    expect(exec.calls[0].sql).toContain('qi.supplier_quote_id = "supplier_quotes"."id"');
     expect(result[0].linkedClientQuoteId).toBe('cq-7');
     expect(result[0].linkedClientQuoteStatus).toBe('sent');
   });
@@ -84,16 +86,15 @@ describe('listAll', () => {
   });
 
   test('correlated subqueries qualify the outer supplier_quotes.id (no ambiguous bare "id")', async () => {
-    // The list query is join-less, so `${supplierQuotes.id}` renders as a BARE "id". In the offer
-    // subqueries (FROM customer_offers o JOIN quotes q — both have an id) a bare "id" is AMBIGUOUS
-    // and Postgres aborts the whole query; in the single-table ones it silently shadows to the
-    // inner table's id. Every correlation must reference the qualified outer column.
+    // The list query is join-less, so a bare `${supplierQuotes.id}` would render as "id" and
+    // resolve against the subquery's own inner table (silent mis-correlation, or an ambiguity
+    // abort in the JOIN subqueries). Every correlation must reference the qualified outer column.
     exec.enqueue({ rows: [] });
     await supplierQuotesRepo.listAll(testDb);
     const sql = exec.calls[0].sql;
     expect(sql).toContain('ss.linked_quote_id = "supplier_quotes"."id"');
-    expect(sql).toContain('q.linked_supplier_quote_id = "supplier_quotes"."id"');
-    expect(sql).not.toMatch(/linked_(supplier_)?quote_id = "id"/);
+    expect(sql).toContain('qi.supplier_quote_id = "supplier_quotes"."id"');
+    expect(sql).not.toMatch(/supplier_quote_id = "id"/);
   });
 });
 
@@ -382,7 +383,8 @@ describe('lockEffectiveStatusById', () => {
     exec.enqueue({ rows: [['2999-06-01', 'accepted', '2999-12-31', null, null]] });
     const result = await supplierQuotesRepo.lockEffectiveStatusById('q-1', testDb);
     expect(exec.calls[0].sql.toLowerCase()).toContain('for update');
-    expect(exec.calls[0].sql).toContain('linked_supplier_quote_id');
+    // The linked chain is resolved through line-sourcing (issue #779 follow-up).
+    expect(exec.calls[0].sql).toContain('qi.supplier_quote_id = "supplier_quotes"."id"');
     expect(result).toEqual({
       expirationDate: '2999-06-01',
       linkedClientStatus: 'accepted',

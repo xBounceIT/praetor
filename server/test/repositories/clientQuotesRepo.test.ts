@@ -75,7 +75,9 @@ describe('listAll', () => {
     await clientQuotesRepo.listAll(testDb);
     const sql = exec.calls[0].sql;
     expect(sql).toContain('co.linked_quote_id = "quotes"."id"');
-    expect(sql).toContain('sq.id = "quotes"."linked_supplier_quote_id"');
+    // The supplier-expiration lookup is now line-sourced (earliest sourced supplier quote),
+    // correlated on the qualified outer quote id (issue #779 follow-up).
+    expect(sql).toContain('WHERE qi.quote_id = "quotes"."id"');
     expect(sql).not.toMatch(/co\.linked_quote_id = "id"/);
   });
 });

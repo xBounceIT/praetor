@@ -50,28 +50,28 @@ export type ClientQuoteItem = {
 
 // Correlated subquery used by list/find projections. create/update use `null::varchar`
 // instead because no offer can exist yet for a freshly-written row.
-// The outer quotes.* correlations, qualified to the OUTER table for use inside the correlated
-// subqueries below. Hand-qualified on purpose: `${quotes.id}` / `${quotes.linkedSupplierQuoteId}`
-// render as BARE "id" / "linked_supplier_quote_id" because the consuming queries are join-less
-// (Drizzle omits the table prefix). A bare correlation then resolves against the SUBQUERY's own
-// inner table first: "id" exists on customer_offers, so the linked-offer lookup silently matched
-// `co.id` instead of the outer quote — always null. The outer table is always selected unaliased
-// as "quotes" (listAll / findCurrent / lockCurrentById), so the explicit reference is stable.
-// See supplierQuotesRepo for the same trap (it additionally ERRORED on a JOIN subquery). Do NOT
-// replace with ${quotes.*}.
+// The outer quotes.id, qualified to the OUTER table for use inside the correlated subqueries
+// below. Hand-qualified on purpose: `${quotes.id}` renders as a BARE "id" because the consuming
+// queries are join-less (Drizzle omits the table prefix), and a bare "id" then resolves against
+// the SUBQUERY's own inner table first (customer_offers/quote_items also have an id) — silently
+// mis-correlating. The outer table is always selected unaliased as "quotes" (listAll /
+// findCurrent / lockCurrentById), so the explicit reference is stable. See supplierQuotesRepo for
+// the same trap (it additionally ERRORED on a JOIN subquery). Do NOT replace with ${quotes.id}.
 const outerQuoteId = sql.raw('"quotes"."id"');
-const outerQuoteLinkedSupplierQuoteId = sql.raw('"quotes"."linked_supplier_quote_id"');
 
 const linkedOfferIdSubquery = sql<
   string | null
 >`(SELECT co.id FROM customer_offers co WHERE co.linked_quote_id = ${outerQuoteId} LIMIT 1)`;
 
-// The linked supplier quote's OWN expiration date (issue #779). Read-time correlated subquery so
-// the route can derive the "linked supplier quote expired" guard without joining; null when the
-// quote is unlinked or the supplier quote is gone.
-const linkedSupplierQuoteExpirationSubquery = sql<
-  string | null
->`(SELECT sq.expiration_date FROM supplier_quotes sq WHERE sq.id = ${outerQuoteLinkedSupplierQuoteId} LIMIT 1)`;
+// The earliest expiration among the supplier quotes this client quote SOURCES via its product
+// lines (issue #779 follow-up: the 1:1 header link was removed). The route's progression guard and
+// the response `linkedSupplierQuoteExpired` flag both read this — an earliest-date past today means
+// at least one sourced supplier quote is stale. NULL when the quote sources no supplier quote.
+const linkedSupplierQuoteExpirationSubquery = sql<string | null>`(
+  SELECT MIN(sq.expiration_date)::text FROM quote_items qi
+  JOIN supplier_quotes sq ON sq.id = qi.supplier_quote_id
+  WHERE qi.quote_id = ${outerQuoteId}
+)`;
 
 const QUOTE_LIST_PROJECTION = {
   id: quotes.id,

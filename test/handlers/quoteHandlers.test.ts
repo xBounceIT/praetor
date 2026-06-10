@@ -267,20 +267,22 @@ describe('makeQuoteHandlers', () => {
     apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
   };
 
-  // A linked supplier quote's visible status is derived from its client quote (#779), so a status
-  // or link change must also refresh the separately-cached supplier quotes table.
-  const stubQuoteUpdateFlow = () => {
+  // A supplier quote's visible status is derived from the client quote/offer whose lines SOURCE it
+  // (#779 follow-up: line-sourced, no header link), so a save of such a document must refresh the
+  // separately-cached supplier quotes table. `sourced` returns the line-sourcing marker.
+  const sourced = [{ supplierQuoteItemId: 'sqi-9' }];
+  const stubQuoteUpdateFlow = (updatedFields: object = {}) => {
     apiMocks.quotesUpdate.mockImplementation((id: string, updates: unknown) =>
-      Promise.resolve({ id, ...(updates as object) }),
+      Promise.resolve({ id, ...(updates as object), ...updatedFields }),
     );
     stubFlowListRefetch();
   };
 
-  test('updateQuote refreshes supplier quotes when a linked quote changes status', async () => {
-    stubQuoteUpdateFlow();
+  test('updateQuote refreshes supplier quotes when a sourcing quote changes status', async () => {
+    stubQuoteUpdateFlow({ items: sourced });
     const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
     const ctx = buildHandlers({
-      quotes: [{ id: 'q1', status: 'offer', linkedSupplierQuoteId: 'sq-9' }],
+      quotes: [{ id: 'q1', status: 'offer', items: sourced }],
       refreshSupplierQuoteFlow,
     });
 
@@ -288,15 +290,15 @@ describe('makeQuoteHandlers', () => {
     expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
   });
 
-  test('updateQuote refreshes supplier quotes when the linked supplier quote changes', async () => {
-    stubQuoteUpdateFlow();
+  test('updateQuote refreshes supplier quotes when a save adds line sourcing', async () => {
+    stubQuoteUpdateFlow({ items: sourced });
     const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
     const ctx = buildHandlers({
       quotes: [{ id: 'q1', status: 'draft' }],
       refreshSupplierQuoteFlow,
     });
 
-    await ctx.handlers.updateQuote('q1', { linkedSupplierQuoteId: 'sq-9' } as never);
+    await ctx.handlers.updateQuote('q1', { items: sourced } as never);
     expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
   });
 
@@ -312,43 +314,25 @@ describe('makeQuoteHandlers', () => {
     expect(refreshSupplierQuoteFlow).not.toHaveBeenCalled();
   });
 
-  test('updateQuote does NOT refresh supplier quotes when an unlinked quote saves its full form', async () => {
-    stubQuoteUpdateFlow();
+  test('updateQuote refreshes supplier quotes when a save REMOVES line sourcing', async () => {
+    // The previously-sourced supplier quote drops back to draft, so a refresh is still needed even
+    // though the post-save quote no longer sources anything (the pre-save snapshot knows it did).
+    stubQuoteUpdateFlow({ items: [{ supplierQuoteItemId: null }] });
     const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
     const ctx = buildHandlers({
-      quotes: [{ id: 'q1', status: 'draft' }],
+      quotes: [{ id: 'q1', status: 'draft', items: sourced }],
       refreshSupplierQuoteFlow,
     });
 
-    // The edit modal spreads formData, so status and a null link ride along on EVERY save —
-    // the gate must key on the actual link, not on which request fields are present.
-    await ctx.handlers.updateQuote('q1', {
-      status: 'draft',
-      linkedSupplierQuoteId: null,
-      notes: 'edited',
-    } as never);
-    expect(refreshSupplierQuoteFlow).not.toHaveBeenCalled();
-  });
-
-  test('updateQuote refreshes supplier quotes when the link is removed', async () => {
-    stubQuoteUpdateFlow();
-    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
-    const ctx = buildHandlers({
-      quotes: [{ id: 'q1', status: 'draft', linkedSupplierQuoteId: 'sq-9' }],
-      refreshSupplierQuoteFlow,
-    });
-
-    // The response carries null after an unlink — only the pre-await snapshot knows sq-9 just
-    // became un-synced.
-    await ctx.handlers.updateQuote('q1', { linkedSupplierQuoteId: null } as never);
+    await ctx.handlers.updateQuote('q1', { items: [{ supplierQuoteItemId: null }] } as never);
     expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
   });
 
-  test('deleteQuote refreshes supplier quotes when the deleted quote was linked', async () => {
+  test('deleteQuote refreshes supplier quotes when the deleted quote sourced one', async () => {
     apiMocks.quotesDelete.mockImplementation(() => Promise.resolve());
     const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
     const ctx = buildHandlers({
-      quotes: [{ id: 'q1', status: 'sent', linkedSupplierQuoteId: 'sq-9' }],
+      quotes: [{ id: 'q1', status: 'sent', items: sourced }],
       refreshSupplierQuoteFlow,
     });
 
@@ -357,7 +341,7 @@ describe('makeQuoteHandlers', () => {
     expect(ctx.quotes.get()).toHaveLength(0);
   });
 
-  test('deleteQuote does NOT refresh supplier quotes for an unlinked quote', async () => {
+  test('deleteQuote does NOT refresh supplier quotes for a quote with no sourcing', async () => {
     apiMocks.quotesDelete.mockImplementation(() => Promise.resolve());
     const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
     const ctx = buildHandlers({
@@ -370,10 +354,10 @@ describe('makeQuoteHandlers', () => {
   });
 
   test('updateQuote still resolves when the supplier-quote refresh fails (best-effort)', async () => {
-    stubQuoteUpdateFlow();
+    stubQuoteUpdateFlow({ items: sourced });
     const refreshSupplierQuoteFlow = mock(() => Promise.reject(new Error('supplier boom')));
     const ctx = buildHandlers({
-      quotes: [{ id: 'q1', status: 'offer', linkedSupplierQuoteId: 'sq-9' }],
+      quotes: [{ id: 'q1', status: 'offer', items: sourced }],
       refreshSupplierQuoteFlow,
     });
     const restore = silenceConsole();
@@ -385,18 +369,18 @@ describe('makeQuoteHandlers', () => {
     }
   });
 
-  test('addQuote refreshes supplier quotes when the created quote carries a link', async () => {
+  test('addQuote refreshes supplier quotes when the created quote sources one', async () => {
     apiMocks.quotesCreate.mockImplementation((data: unknown) =>
-      Promise.resolve({ id: 'q-new', linkedSupplierQuoteId: 'sq-9', ...(data as object) }),
+      Promise.resolve({ id: 'q-new', items: sourced, ...(data as object) }),
     );
     const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
     const ctx = buildHandlers({ refreshSupplierQuoteFlow });
 
-    await ctx.handlers.addQuote({ status: 'draft', linkedSupplierQuoteId: 'sq-9' } as never);
+    await ctx.handlers.addQuote({ status: 'draft', items: sourced } as never);
     expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
   });
 
-  test('addQuote does NOT refresh supplier quotes for an unlinked create', async () => {
+  test('addQuote does NOT refresh supplier quotes for a create with no sourcing', async () => {
     apiMocks.quotesCreate.mockImplementation((data: unknown) =>
       Promise.resolve({ id: 'q-new', ...(data as object) }),
     );
@@ -407,38 +391,7 @@ describe('makeQuoteHandlers', () => {
     expect(refreshSupplierQuoteFlow).not.toHaveBeenCalled();
   });
 
-  test('updateQuote refreshes supplier quotes for LINE-sourced items without a header link', async () => {
-    // The forward sync rewrites the supplier item on save even when quotes.linkedSupplierQuoteId
-    // is null — a stale cache would then show a false "old info" chip whose refresh writes the
-    // pre-edit values back (#779).
-    stubQuoteUpdateFlow();
-    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
-    const ctx = buildHandlers({
-      quotes: [{ id: 'q1', status: 'draft', items: [{ supplierQuoteItemId: 'sqi-9' }] }],
-      refreshSupplierQuoteFlow,
-    });
-
-    await ctx.handlers.updateQuote('q1', { notes: 'edited' } as never);
-    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
-  });
-
-  test('updateClientOffer refreshes supplier quotes when its quote is header-linked', async () => {
-    // Offer status drives the derived supplier-quote status through the offer chain (#779).
-    apiMocks.clientOffersUpdate.mockImplementation((id: string, updates: unknown) =>
-      Promise.resolve({ id, linkedQuoteId: 'q1', ...(updates as object) }),
-    );
-    stubFlowListRefetch();
-    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
-    const ctx = buildHandlers({
-      quotes: [{ id: 'q1', status: 'accepted', linkedSupplierQuoteId: 'sq-9' }],
-      refreshSupplierQuoteFlow,
-    });
-
-    await ctx.handlers.updateClientOffer('of-1', { status: 'accepted' } as never);
-    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
-  });
-
-  test('updateClientOffer refreshes supplier quotes when the response carries sourced items', async () => {
+  test('updateClientOffer refreshes supplier quotes when the offer sources one', async () => {
     apiMocks.clientOffersUpdate.mockImplementation((id: string, updates: unknown) =>
       Promise.resolve({
         id,
@@ -473,26 +426,24 @@ describe('makeQuoteHandlers', () => {
     expect(refreshSupplierQuoteFlow).not.toHaveBeenCalled();
   });
 
-  test('revertClientOfferToDraft refreshes supplier quotes when its quote is header-linked', async () => {
+  test('revertClientOfferToDraft refreshes supplier quotes when the offer sources one', async () => {
     apiMocks.clientOffersRevertToDraft.mockImplementation((id: string) =>
-      Promise.resolve({ id, status: 'draft', linkedQuoteId: 'q1' }),
+      Promise.resolve({ id, status: 'draft', linkedQuoteId: 'q1', items: sourced }),
     );
     stubFlowListRefetch();
     const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
-    const ctx = buildHandlers({
-      quotes: [{ id: 'q1', status: 'accepted', linkedSupplierQuoteId: 'sq-9' }],
-      refreshSupplierQuoteFlow,
-    });
+    const ctx = buildHandlers({ refreshSupplierQuoteFlow });
 
     await ctx.handlers.revertClientOfferToDraft('of-1', 'mistake');
     expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
   });
 
-  test('deleteClientOffer refreshes supplier quotes when the offer drove a linked supplier quote', async () => {
+  test('deleteClientOffer refreshes supplier quotes when the source quote sourced one', async () => {
     apiMocks.clientOffersDelete.mockImplementation(() => Promise.resolve());
     const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
     const ctx = buildHandlers({
-      quotes: [{ id: 'q1', linkedOfferId: 'of-1', linkedSupplierQuoteId: 'sq-9' }],
+      // The offer's sourcing mirrors its source quote's lines; the linked quote is found by id.
+      quotes: [{ id: 'q1', linkedOfferId: 'of-1', items: sourced }],
       refreshSupplierQuoteFlow,
     });
 
@@ -500,7 +451,7 @@ describe('makeQuoteHandlers', () => {
     expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
   });
 
-  test('createClientOfferFromQuote refreshes supplier quotes for a header-linked source quote', async () => {
+  test('createClientOfferFromQuote refreshes supplier quotes when the source quote sources one', async () => {
     apiMocks.clientOffersCreate.mockImplementation((data: unknown) =>
       Promise.resolve({ ...(data as object), id: 'of-new' }),
     );
@@ -515,9 +466,8 @@ describe('makeQuoteHandlers', () => {
       paymentTerms: '30',
       discount: 0,
       expirationDate: '2999-12-31',
-      linkedSupplierQuoteId: 'sq-9',
       notes: '',
-      items: [],
+      items: sourced,
     } as never);
     expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
   });

@@ -43,30 +43,50 @@ export type SupplierQuote = {
 // explicit reference is stable. Do NOT replace with ${supplierQuotes.id}.
 const outerSupplierQuoteId = sql.raw('"supplier_quotes"."id"');
 
-// Reverse-lookup correlated subqueries: the at-most-one client quote pointing at this supplier
-// quote (the partial-unique index on quotes.linked_supplier_quote_id guarantees ≤ 1), and the
-// at-most-one offer created from that quote (partial-unique on customer_offers.linked_quote_id).
-// Mirrors the linkedOrderId subquery pattern; all null when this supplier quote is unlinked.
-const linkedClientQuoteIdSubquery = sql<string | null>`(
-  SELECT q.id FROM quotes q WHERE q.linked_supplier_quote_id = ${outerSupplierQuoteId} LIMIT 1
+// The client quote that most-advances this supplier quote, resolved through PRODUCT-LINE sourcing
+// (quote_items.supplier_quote_id) — issue #779 follow-up: the 1:1 quotes.linked_supplier_quote_id
+// header link was removed as redundant with the per-line sourcing, so a supplier quote now follows
+// the furthest-progressed client document whose lines use it. Rank: accepted > offer > sent >
+// draft > denied (a dead-end denied quote never outranks a live one); tiebreak most-recently-
+// updated. NULL when no client quote sources this supplier quote. The downstream offer is still
+// that chosen quote's offer (customer_offers.linked_quote_id), so the derived-status chain
+// (effectiveSupplierQuoteStatus) is unchanged — only the quote it follows changed.
+const chosenClientQuoteId = sql<string | null>`(
+  SELECT cq.id FROM quotes cq
+  WHERE EXISTS (
+    SELECT 1 FROM quote_items qi
+    WHERE qi.quote_id = cq.id AND qi.supplier_quote_id = ${outerSupplierQuoteId}
+  )
+  ORDER BY
+    CASE COALESCE(cq.status, '')
+      WHEN 'accepted' THEN 5
+      WHEN 'confirmed' THEN 5
+      WHEN 'offer' THEN 4
+      WHEN 'sent' THEN 3
+      WHEN 'received' THEN 3
+      WHEN 'denied' THEN 1
+      WHEN 'rejected' THEN 1
+      ELSE 2
+    END DESC,
+    cq.updated_at DESC,
+    cq.id
+  LIMIT 1
 )`;
+
+const linkedClientQuoteIdSubquery = chosenClientQuoteId;
 const linkedClientQuoteStatusSubquery = sql<string | null>`(
-  SELECT q.status FROM quotes q WHERE q.linked_supplier_quote_id = ${outerSupplierQuoteId} LIMIT 1
+  SELECT q.status FROM quotes q WHERE q.id = ${chosenClientQuoteId} LIMIT 1
 )`;
 // ::text so the driver returns the plain 'YYYY-MM-DD' string instead of a Date object.
 const linkedClientQuoteExpirationSubquery = sql<string | null>`(
-  SELECT q.expiration_date::text FROM quotes q
-  WHERE q.linked_supplier_quote_id = ${outerSupplierQuoteId} LIMIT 1
+  SELECT q.expiration_date::text FROM quotes q WHERE q.id = ${chosenClientQuoteId} LIMIT 1
 )`;
 const linkedOfferStatusSubquery = sql<string | null>`(
-  SELECT o.status FROM customer_offers o
-  JOIN quotes q ON o.linked_quote_id = q.id
-  WHERE q.linked_supplier_quote_id = ${outerSupplierQuoteId} LIMIT 1
+  SELECT o.status FROM customer_offers o WHERE o.linked_quote_id = ${chosenClientQuoteId} LIMIT 1
 )`;
 const linkedOfferExpirationSubquery = sql<string | null>`(
   SELECT o.expiration_date::text FROM customer_offers o
-  JOIN quotes q ON o.linked_quote_id = q.id
-  WHERE q.linked_supplier_quote_id = ${outerSupplierQuoteId} LIMIT 1
+  WHERE o.linked_quote_id = ${chosenClientQuoteId} LIMIT 1
 )`;
 
 export type SupplierQuoteItem = {
@@ -189,6 +209,23 @@ export const findExpirationById = async (
   return rows[0]
     ? normalizeNullableDateOnly(rows[0].expirationDate, 'supplierQuote.expirationDate')
     : null;
+};
+
+// Earliest expiration among the given supplier quotes (the ones a client quote sources via its
+// lines). The client-quotes progression guard reads it to block advancing a quote backed by a
+// stale supplier quote (issue #779 follow-up; replaces the single header-linked expiration).
+// Null when the id list is empty or none have an expiration.
+export const findEarliestExpirationByIds = async (
+  ids: string[],
+  exec: DbExecutor = db,
+): Promise<string | null> => {
+  const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+  if (uniqueIds.length === 0) return null;
+  const rows = await exec
+    .select({ expiration: sql<string | null>`MIN(${supplierQuotes.expirationDate})::text` })
+    .from(supplierQuotes)
+    .where(inArray(supplierQuotes.id, uniqueIds));
+  return normalizeNullableDateOnly(rows[0]?.expiration ?? null, 'supplierQuote.expirationDate');
 };
 
 export const existsById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {

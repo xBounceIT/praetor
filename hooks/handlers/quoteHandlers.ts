@@ -86,16 +86,19 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     }
   };
 
-  // Whether the given client quote carries the 1-to-1 supplier-quote header link — the chain
-  // that makes offer lifecycle changes flip the derived supplier-quote status (#779).
-  const linkedQuoteHasSupplierLink = (quoteId: string | undefined) =>
-    getQuotes().some((q) => q.id === quoteId && q.linkedSupplierQuoteId != null);
+  // Whether a quote/offer's PRODUCT LINES source any supplier quote — the relationship that now
+  // drives a supplier quote's derived status and its forward sync (issue #779 follow-up: the 1:1
+  // header link was removed, so line sourcing is the only linkage). Any mutation of such a
+  // document can stale the separately-cached supplier-quotes table.
+  const sourcesSupplierQuote = (
+    doc?: { items?: Array<{ supplierQuoteItemId?: string | null }> } | null,
+  ) => doc?.items?.some((item) => item.supplierQuoteItemId != null) ?? false;
 
   const addQuote = async (quoteData: Partial<Quote>) => {
     try {
       const quote = await api.quotes.create(quoteData);
       setQuotes((prev) => [quote, ...prev]);
-      if (quote.linkedSupplierQuoteId) {
+      if (sourcesSupplierQuote(quote)) {
         await refreshLinkedSupplierQuotes();
       }
     } catch (err) {
@@ -106,14 +109,10 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
 
   const updateQuote = async (id: string, updates: Partial<Quote>) => {
     try {
-      // Captured before the await: after an unlink the response carries null, indistinguishable
-      // from never-linked — yet the previously linked supplier quote just became un-synced.
-      const wasSupplierTouched = getQuotes().some(
-        (q) =>
-          q.id === id &&
-          (q.linkedSupplierQuoteId != null ||
-            q.items?.some((item) => item.supplierQuoteItemId != null)),
-      );
+      // Captured before the await: the response reflects the post-save lines, but a quote that
+      // STOPPED sourcing a supplier quote also needs a refresh (the now-unsourced supplier quote
+      // falls back to draft), so consider the pre-save lines too.
+      const wasSourcing = sourcesSupplierQuote(getQuotes().find((q) => q.id === id));
       const updated = await api.quotes.update(id, updates);
       // Re-read the filter via the getter so we observe the latest value, not
       // the one captured when this handler was created. Navigation effects in
@@ -121,17 +120,13 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       if (getClientQuoteFilterId() === id) {
         setClientQuoteFilterId(updated.id);
       }
-      // Only a quote that touches supplier data can stale the supplier-quotes cache: a header
-      // link drives the derived status (#779), and LINE-level sourcing forward-syncs the
-      // supplier items on save — a stale cache after either would show a false "old info" chip
-      // whose refresh writes pre-edit values back. Gating on the LINK/sourcing rather than the
-      // request fields matters: the edit form spreads formData, so `updates.status` is defined
-      // on every save and would refetch for plain edits of unlinked quotes. The two flows set
-      // disjoint state, so they run in parallel.
-      const supplierRefreshNeeded =
-        updated.linkedSupplierQuoteId != null ||
-        wasSupplierTouched ||
-        (updated.items?.some((item) => item.supplierQuoteItemId != null) ?? false);
+      // Only a quote that sources (or sourced) a supplier quote can stale the supplier-quotes
+      // cache: line sourcing drives the derived status and forward-syncs the supplier items, so a
+      // stale cache would show a false "old info" chip whose refresh writes pre-edit values back.
+      // Gating on sourcing rather than the request fields matters: the edit form spreads formData,
+      // so a plain edit of an unsourced quote would otherwise refetch needlessly. The two flows
+      // set disjoint state, so they run in parallel.
+      const supplierRefreshNeeded = wasSourcing || sourcesSupplierQuote(updated);
       await Promise.all([
         refreshClientQuoteFlow(),
         supplierRefreshNeeded ? refreshLinkedSupplierQuotes() : Promise.resolve(),
@@ -144,13 +139,13 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
 
   const deleteQuote = async (id: string) => {
     try {
-      // Read before the awaits — after the delete the quote is gone from state. Deleting a
-      // linked client quote un-syncs its supplier quote server-side (the reverse-lookup row
-      // vanishes), the same staleness class the update path refreshes for.
-      const wasLinked = getQuotes().some((q) => q.id === id && q.linkedSupplierQuoteId != null);
+      // Read before the awaits — after the delete the quote is gone from state. Deleting a quote
+      // that sourced a supplier quote drops that supplier quote back to draft server-side, the
+      // same staleness class the update path refreshes for.
+      const wasSourcing = sourcesSupplierQuote(getQuotes().find((q) => q.id === id));
       await api.quotes.delete(id);
       setQuotes((prev) => prev.filter((q) => q.id !== id));
-      if (wasLinked) {
+      if (wasSourcing) {
         await refreshLinkedSupplierQuotes();
       }
     } catch (err) {
@@ -167,15 +162,12 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       if (getClientOfferFilterId() === id) {
         setClientOfferFilterId(updated.id);
       }
-      // The offer drives the linked supplier quote's derived status through the offer chain
-      // (#779: sent/accepted/denied flow through), and an item edit forward-syncs the supplier
-      // items — either leaves the separately-cached supplier quotes stale.
-      const supplierRefreshNeeded =
-        linkedQuoteHasSupplierLink(updated.linkedQuoteId) ||
-        (updated.items?.some((item) => item.supplierQuoteItemId != null) ?? false);
+      // An offer whose lines source a supplier quote drives that supplier quote's derived status
+      // through the offer chain (#779: sent/accepted/denied flow through), and an item edit
+      // forward-syncs the supplier items — either leaves the supplier-quotes cache stale.
       await Promise.all([
         refreshClientQuoteFlow(),
-        supplierRefreshNeeded ? refreshLinkedSupplierQuotes() : Promise.resolve(),
+        sourcesSupplierQuote(updated) ? refreshLinkedSupplierQuotes() : Promise.resolve(),
       ]);
     } catch (err) {
       console.error('Failed to update client offer:', err);
@@ -189,13 +181,11 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       if (getClientOfferFilterId() === id) {
         setClientOfferFilterId(updated.id);
       }
-      // accepted/denied → draft flips the linked supplier quote's derived status back to
-      // 'offer' (#779 offer chain) — refresh the supplier cache alongside the quote flow.
+      // accepted/denied → draft flips a sourced supplier quote's derived status back to 'offer'
+      // (#779 offer chain) — refresh the supplier cache alongside the quote flow.
       await Promise.all([
         refreshClientQuoteFlow(),
-        linkedQuoteHasSupplierLink(updated.linkedQuoteId)
-          ? refreshLinkedSupplierQuotes()
-          : Promise.resolve(),
+        sourcesSupplierQuote(updated) ? refreshLinkedSupplierQuotes() : Promise.resolve(),
       ]);
     } catch (err) {
       console.error('Failed to revert client offer to draft:', err);
@@ -205,8 +195,9 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
 
   const deleteClientOffer = async (id: string) => {
     try {
-      // Read before the await — after the delete the linkage is gone from state. Removing the
-      // offer collapses the linked supplier quote's derived status back onto the quote chain.
+      // Read before the await — after the delete the linkage is gone from state. Removing an offer
+      // collapses a sourced supplier quote's derived status back onto the quote chain. The offer's
+      // sourcing mirrors its source quote's, so check that quote's lines.
       const linkedQuote = getQuotes().find((q) => q.linkedOfferId === id);
       await api.clientOffers.delete(id);
       setClientOffers((prev) => prev.filter((offer) => offer.id !== id));
@@ -215,7 +206,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
           quote.linkedOfferId === id ? { ...quote, linkedOfferId: undefined } : quote,
         ),
       );
-      if (linkedQuote?.linkedSupplierQuoteId != null) {
+      if (sourcesSupplierQuote(linkedQuote)) {
         await refreshLinkedSupplierQuotes();
       }
     } catch (err) {
@@ -256,9 +247,9 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
         ),
       );
       setActiveView('sales/client-offers');
-      // The new offer takes over the linked supplier quote's derived status (accepted → 'offer',
+      // The new offer takes over a sourced supplier quote's derived status (accepted → 'offer',
       // #779 offer chain) — without a refresh the supplier table keeps the stale badge.
-      if (quote.linkedSupplierQuoteId != null) {
+      if (sourcesSupplierQuote(quote)) {
         await refreshLinkedSupplierQuotes();
       }
     } catch (err) {

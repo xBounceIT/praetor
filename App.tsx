@@ -2738,10 +2738,11 @@ const AppContent: React.FC = () => {
                     setQuotes(quotesData);
                     setClientOffers(offersData);
                     setClientsOrders(ordersData);
-                    // A restore rewrites the snapshot status while the supplier link survives
-                    // it, so a linked supplier quote's mirrored status can change too (#779).
-                    // Best-effort: a refresh failure must not fail the completed restore.
-                    if (restored.linkedSupplierQuoteId) {
+                    // A restore rewrites the snapshot's lines/status, so a supplier quote those
+                    // lines source has a mirrored derived status that can change too (#779
+                    // follow-up: linkage is line-sourced). Best-effort: a refresh failure must
+                    // not fail the completed restore.
+                    if (restored.items?.some((item) => item.supplierQuoteItemId != null)) {
                       try {
                         await supplierQuoteHandlers.refreshSupplierQuoteFlow();
                       } catch (refreshErr) {
