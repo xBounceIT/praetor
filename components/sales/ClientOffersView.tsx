@@ -1592,6 +1592,9 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                         item.supplierQuoteItemId,
                                       )}
                                       displayValueIsPlaceholder={!item.supplierQuoteItemId}
+                                      // Match the regular weight of neighboring fields rather
+                                      // than over-emphasizing the linked quote (font-semibold).
+                                      valueClassName="font-normal"
                                       searchable={true}
                                       disabled={isReadOnly}
                                       className="min-w-0 flex-1"
@@ -1852,6 +1855,9 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                       item.supplierQuoteItemId,
                                     )}
                                     displayValueIsPlaceholder={!item.supplierQuoteItemId}
+                                    // Match the regular weight of neighboring fields rather
+                                    // than over-emphasizing the linked quote (font-semibold).
+                                    valueClassName="font-normal"
                                     searchable={true}
                                     disabled={isReadOnly}
                                     className="w-full min-w-0"
