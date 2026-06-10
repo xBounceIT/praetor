@@ -306,6 +306,27 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
     expect(cqUpdateMock).not.toHaveBeenCalled();
   });
 
+  test('409 rejects accepted → sent: terminal quotes are frozen (#812)', async () => {
+    // A status-only PUT must not reopen a finalized quote — downstream offers/orders can depend on
+    // the terminal state. The content read-only guard does not fire (no content change), so the
+    // terminal freeze in the statusChanged block must.
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'accepted' }));
+
+    const res = await putStatus({ status: 'sent' });
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toBe('Accepted or rejected quotes are read-only');
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 rejects denied → offer: terminal quotes are frozen (#812)', async () => {
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'denied' }));
+
+    const res = await putStatus({ status: 'offer' });
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toBe('Accepted or rejected quotes are read-only');
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
   test('200 allows offer → draft (back-to-draft from offer)', async () => {
     cqFindCurrentMock.mockResolvedValue(gate({ status: 'offer' }));
     cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'draft' }));

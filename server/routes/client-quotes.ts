@@ -903,9 +903,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const currentEffective = effectiveQuoteStatusFromDate(current.status, current.expirationDate);
       const existingDiscount = current.discount;
       const existingDiscountType = current.discountType;
-      // Terminal (accepted/denied) quotes are content-read-only — only a status transition or an
-      // id rename is allowed (issue #779; replaces the legacy `confirmed` literal). Mirrors the
-      // frontend, which already locks accepted/denied forms.
+      // Terminal (accepted/denied) quotes are frozen — only an id rename is allowed (issue #779;
+      // replaces the legacy `confirmed` literal). This guard blocks content/date edits; the
+      // status-change freeze is enforced in the statusChanged block below. Mirrors the frontend,
+      // which already locks accepted/denied forms.
       if (isTerminalQuoteStatus(currentStatus) && hasNonStatusOrIdUpdates) {
         return replyError(request, reply, {
           statusCode: 409,
@@ -1014,7 +1015,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             details: { secondaryLabel: 'expired_read_only', fromValue: 'expired' },
           });
         }
-        // Back-to-draft only from sent/offer.
+        // Back-to-draft only from sent/offer (this also rejects accepted/denied → draft).
         if (!canTransitionClientQuote(current.status, targetStatus)) {
           return replyError(request, reply, {
             statusCode: 409,
@@ -1027,6 +1028,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               fromValue: String(current.status),
               toValue: targetStatus,
             },
+          });
+        }
+        // Terminal (accepted/denied) quotes are frozen: any OTHER status change — reopening
+        // accepted→sent or denied→offer, or flipping accepted↔denied — would resurrect a finalized
+        // quote that downstream offers/orders may already depend on. The content read-only guard
+        // above only fires for content/date edits (hasNonStatusOrIdUpdates), so a status-only PUT
+        // would otherwise slip through here (canTransitionClientQuote allows any non-draft target;
+        // the back-to-draft case is already rejected just above as invalid_transition).
+        if (isTerminalQuoteStatus(current.status)) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Accepted or rejected quotes are read-only',
+            action: 'client_quote.update.conflict',
+            entityType: 'client_quote',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'terminal_read_only', fromValue: String(current.status) },
           });
         }
         // Reverting to draft is rejected when the quote already spawned sale orders.
