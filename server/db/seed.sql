@@ -483,7 +483,11 @@ INSERT INTO quotes (
     ('dm_cq_07', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'accepted', CURRENT_DATE + INTERVAL '20 days', 'Accepted quote linked to an accepted offer that already generated an order.', CURRENT_TIMESTAMP - INTERVAL '66 days', CURRENT_TIMESTAMP - INTERVAL '61 days'),
     ('dm_cq_08', 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'accepted', CURRENT_DATE + INTERVAL '12 days', 'Accepted quote linked to a denied offer.', CURRENT_TIMESTAMP - INTERVAL '58 days', CURRENT_TIMESTAMP - INTERVAL '54 days'),
     ('dm_cq_09', 'dm_cli_02', 'Helios Energy Services S.r.l.', '30gg', 5.00, 'denied', CURRENT_DATE + INTERVAL '10 days', 'Rejected customer quote kept for history coverage.', CURRENT_TIMESTAMP - INTERVAL '36 days', CURRENT_TIMESTAMP - INTERVAL '34 days'),
-    ('dm_cq_10', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'sent', CURRENT_DATE - INTERVAL '5 days', 'Expired quote to exercise historical and expired state handling.', CURRENT_TIMESTAMP - INTERVAL '24 days', CURRENT_TIMESTAMP - INTERVAL '20 days')
+    ('dm_cq_10', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'sent', CURRENT_DATE - INTERVAL '5 days', 'Expired quote to exercise historical and expired state handling.', CURRENT_TIMESTAMP - INTERVAL '24 days', CURRENT_TIMESTAMP - INTERVAL '20 days'),
+    ('dm_cq_11', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '14 days', 'Accepted procurement driver: its 1-to-1 link keeps supplier quote dm_sq_11 in the Accepted state (#779 derived status).', CURRENT_TIMESTAMP - INTERVAL '53 days', CURRENT_TIMESTAMP - INTERVAL '49 days'),
+    ('dm_cq_12', 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '11 days', 'Accepted procurement driver for supplier quote dm_sq_12.', CURRENT_TIMESTAMP - INTERVAL '42 days', CURRENT_TIMESTAMP - INTERVAL '37 days'),
+    ('dm_cq_13', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '8 days', 'Accepted procurement driver for supplier quote dm_sq_13.', CURRENT_TIMESTAMP - INTERVAL '33 days', CURRENT_TIMESTAMP - INTERVAL '28 days'),
+    ('dm_cq_14', 'dm_cli_04', 'Giulia Ferri', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '6 days', 'Accepted procurement driver for supplier quote dm_sq_14.', CURRENT_TIMESTAMP - INTERVAL '25 days', CURRENT_TIMESTAMP - INTERVAL '21 days')
 ON CONFLICT (id) DO UPDATE SET
     client_id = EXCLUDED.client_id,
     client_name = EXCLUDED.client_name,
@@ -534,7 +538,11 @@ FROM (
         ('dm_cqi_11', 'dm_cq_08', 'dm_prd_04', 2.00, 1090.00, 0.00, 'Training package for a small customer'),
         ('dm_cqi_12', 'dm_cq_09', 'dm_prd_05', 3.00, 1159.00, 0.00, 'Rejected hardware offer kept for reporting'),
         ('dm_cqi_13', 'dm_cq_10', 'dm_prd_03', 6.00, 835.00, 0.00, 'Managed support bundle that expired before confirmation'),
-        ('dm_cqi_14', 'dm_cq_10', 'dm_prd_08', 15.00, 160.00, 0.00, 'Print collateral add-on on the expired quote')
+        ('dm_cqi_14', 'dm_cq_10', 'dm_prd_08', 15.00, 160.00, 0.00, 'Print collateral add-on on the expired quote'),
+        ('dm_cqi_16', 'dm_cq_11', 'dm_prd_05', 4.00, 1180.00, 0.00, 'Hardware lot driving the editable draft supplier order'),
+        ('dm_cqi_17', 'dm_cq_12', 'dm_prd_06', 80.00, 225.00, 0.00, 'Licensing lot driving the sent supplier order'),
+        ('dm_cqi_18', 'dm_cq_13', 'dm_prd_07', 1.00, 1795.00, 0.00, 'Security appliance driving the invoiced supplier order'),
+        ('dm_cqi_19', 'dm_cq_14', 'dm_prd_05', 2.00, 1180.00, 0.00, 'Hardware lot driving the sent supplier order')
 ) AS v(id, quote_id, product_id, quantity, unit_price, discount, note)
 JOIN products p ON p.id = v.product_id
 ON CONFLICT (id) DO UPDATE SET
@@ -771,19 +779,19 @@ INSERT INTO supplier_quotes (
     updated_at
 ) VALUES
     ('dm_sq_01', 'dm_sup_01', 'TechSource Distribution', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 'draft', CURRENT_DATE + INTERVAL '35 days', 'Editable supplier quote for hardware procurement.', CURRENT_TIMESTAMP - INTERVAL '145 days', CURRENT_TIMESTAMP - INTERVAL '144 days'),
-    ('dm_sq_02', 'dm_sup_02', 'CloudSeat Licensing', 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 'sent', CURRENT_DATE + INTERVAL '28 days', 'Sent supplier quote pending vendor response.', CURRENT_TIMESTAMP - INTERVAL '132 days', CURRENT_TIMESTAMP - INTERVAL '130 days'),
-    ('dm_sq_03', 'dm_sup_03', 'SecureEdge Systems', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 'accepted', CURRENT_DATE + INTERVAL '26 days', 'Accepted supplier quote intentionally left without an offer.', CURRENT_TIMESTAMP - INTERVAL '118 days', CURRENT_TIMESTAMP - INTERVAL '114 days'),
-    ('dm_sq_04', 'dm_sup_01', 'TechSource Distribution', 'dm_cli_04', 'Giulia Ferri', '30gg', 'accepted', CURRENT_DATE + INTERVAL '24 days', 'Accepted supplier quote with a draft offer.', CURRENT_TIMESTAMP - INTERVAL '104 days', CURRENT_TIMESTAMP - INTERVAL '100 days'),
-    ('dm_sq_05', 'dm_sup_02', 'CloudSeat Licensing', 'dm_cli_05', 'Atlas Legacy Holdings', '45gg', 'accepted', CURRENT_DATE + INTERVAL '20 days', 'Accepted supplier quote with a sent offer.', CURRENT_TIMESTAMP - INTERVAL '94 days', CURRENT_TIMESTAMP - INTERVAL '89 days'),
-    ('dm_sq_06', 'dm_sup_03', 'SecureEdge Systems', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '60gg', 'accepted', CURRENT_DATE + INTERVAL '18 days', 'Accepted supplier quote linked to an accepted offer ready for order creation.', CURRENT_TIMESTAMP - INTERVAL '82 days', CURRENT_TIMESTAMP - INTERVAL '78 days'),
-    ('dm_sq_07', 'dm_sup_04', 'PrintLogistics Hub', 'dm_cli_02', 'Helios Energy Services S.r.l.', '30gg', 'accepted', CURRENT_DATE + INTERVAL '16 days', 'Accepted supplier quote linked to an order already in progress.', CURRENT_TIMESTAMP - INTERVAL '70 days', CURRENT_TIMESTAMP - INTERVAL '66 days'),
-    ('dm_sq_08', 'dm_sup_01', 'TechSource Distribution', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '30gg', 'accepted', CURRENT_DATE + INTERVAL '12 days', 'Accepted supplier quote linked to a denied offer.', CURRENT_TIMESTAMP - INTERVAL '60 days', CURRENT_TIMESTAMP - INTERVAL '57 days'),
-    ('dm_sq_09', 'dm_sup_02', 'CloudSeat Licensing', 'dm_cli_04', 'Giulia Ferri', '45gg', 'denied', CURRENT_DATE + INTERVAL '9 days', 'Denied supplier quote kept for history coverage.', CURRENT_TIMESTAMP - INTERVAL '39 days', CURRENT_TIMESTAMP - INTERVAL '37 days'),
-    ('dm_sq_10', 'dm_sup_04', 'PrintLogistics Hub', 'dm_cli_05', 'Atlas Legacy Holdings', '30gg', 'sent', CURRENT_DATE - INTERVAL '6 days', 'Expired supplier quote.', CURRENT_TIMESTAMP - INTERVAL '22 days', CURRENT_TIMESTAMP - INTERVAL '19 days'),
-    ('dm_sq_11', 'dm_sup_01', 'TechSource Distribution', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 'accepted', CURRENT_DATE + INTERVAL '14 days', 'Accepted supplier quote linked to a draft order for editable procurement flow.', CURRENT_TIMESTAMP - INTERVAL '52 days', CURRENT_TIMESTAMP - INTERVAL '48 days'),
-    ('dm_sq_12', 'dm_sup_02', 'CloudSeat Licensing', 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 'accepted', CURRENT_DATE + INTERVAL '11 days', 'Accepted supplier quote linked to a sent licensing order without an invoice.', CURRENT_TIMESTAMP - INTERVAL '41 days', CURRENT_TIMESTAMP - INTERVAL '36 days'),
-    ('dm_sq_13', 'dm_sup_03', 'SecureEdge Systems', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 'accepted', CURRENT_DATE + INTERVAL '8 days', 'Accepted supplier quote linked to a sent order already invoiced.', CURRENT_TIMESTAMP - INTERVAL '32 days', CURRENT_TIMESTAMP - INTERVAL '27 days'),
-    ('dm_sq_14', 'dm_sup_01', 'TechSource Distribution', 'dm_cli_04', 'Giulia Ferri', '30gg', 'accepted', CURRENT_DATE + INTERVAL '6 days', 'Accepted supplier quote linked to a sent supplier order for history coverage.', CURRENT_TIMESTAMP - INTERVAL '24 days', CURRENT_TIMESTAMP - INTERVAL '20 days')
+    ('dm_sq_02', 'dm_sup_02', 'CloudSeat Licensing', 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 'draft', CURRENT_DATE + INTERVAL '28 days', 'Sent supplier quote pending vendor response.', CURRENT_TIMESTAMP - INTERVAL '132 days', CURRENT_TIMESTAMP - INTERVAL '130 days'),
+    ('dm_sq_03', 'dm_sup_03', 'SecureEdge Systems', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 'draft', CURRENT_DATE + INTERVAL '26 days', 'Accepted supplier quote intentionally left without an offer.', CURRENT_TIMESTAMP - INTERVAL '118 days', CURRENT_TIMESTAMP - INTERVAL '114 days'),
+    ('dm_sq_04', 'dm_sup_01', 'TechSource Distribution', 'dm_cli_04', 'Giulia Ferri', '30gg', 'draft', CURRENT_DATE + INTERVAL '24 days', 'In offer: driven by the draft offer on the linked quote dm_cq_04 (#779 derived status).', CURRENT_TIMESTAMP - INTERVAL '104 days', CURRENT_TIMESTAMP - INTERVAL '100 days'),
+    ('dm_sq_05', 'dm_sup_02', 'CloudSeat Licensing', 'dm_cli_05', 'Atlas Legacy Holdings', '45gg', 'draft', CURRENT_DATE + INTERVAL '20 days', 'In offer: driven by the sent offer on the linked quote dm_cq_05.', CURRENT_TIMESTAMP - INTERVAL '94 days', CURRENT_TIMESTAMP - INTERVAL '89 days'),
+    ('dm_sq_06', 'dm_sup_03', 'SecureEdge Systems', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '60gg', 'draft', CURRENT_DATE + INTERVAL '18 days', 'Accepted supplier quote linked to an accepted offer ready for order creation.', CURRENT_TIMESTAMP - INTERVAL '82 days', CURRENT_TIMESTAMP - INTERVAL '78 days'),
+    ('dm_sq_07', 'dm_sup_04', 'PrintLogistics Hub', 'dm_cli_02', 'Helios Energy Services S.r.l.', '30gg', 'draft', CURRENT_DATE + INTERVAL '16 days', 'Accepted supplier quote linked to an order already in progress.', CURRENT_TIMESTAMP - INTERVAL '70 days', CURRENT_TIMESTAMP - INTERVAL '66 days'),
+    ('dm_sq_08', 'dm_sup_01', 'TechSource Distribution', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '30gg', 'draft', CURRENT_DATE + INTERVAL '12 days', 'Denied: driven by the denied offer on the linked quote dm_cq_08.', CURRENT_TIMESTAMP - INTERVAL '60 days', CURRENT_TIMESTAMP - INTERVAL '57 days'),
+    ('dm_sq_09', 'dm_sup_02', 'CloudSeat Licensing', 'dm_cli_04', 'Giulia Ferri', '45gg', 'draft', CURRENT_DATE + INTERVAL '9 days', 'Denied supplier quote kept for history coverage.', CURRENT_TIMESTAMP - INTERVAL '39 days', CURRENT_TIMESTAMP - INTERVAL '37 days'),
+    ('dm_sq_10', 'dm_sup_04', 'PrintLogistics Hub', 'dm_cli_05', 'Atlas Legacy Holdings', '30gg', 'draft', CURRENT_DATE - INTERVAL '6 days', 'Expired supplier quote.', CURRENT_TIMESTAMP - INTERVAL '22 days', CURRENT_TIMESTAMP - INTERVAL '19 days'),
+    ('dm_sq_11', 'dm_sup_01', 'TechSource Distribution', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 'draft', CURRENT_DATE + INTERVAL '14 days', 'Accepted supplier quote linked to a draft order for editable procurement flow.', CURRENT_TIMESTAMP - INTERVAL '52 days', CURRENT_TIMESTAMP - INTERVAL '48 days'),
+    ('dm_sq_12', 'dm_sup_02', 'CloudSeat Licensing', 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 'draft', CURRENT_DATE + INTERVAL '11 days', 'Accepted supplier quote linked to a sent licensing order without an invoice.', CURRENT_TIMESTAMP - INTERVAL '41 days', CURRENT_TIMESTAMP - INTERVAL '36 days'),
+    ('dm_sq_13', 'dm_sup_03', 'SecureEdge Systems', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 'draft', CURRENT_DATE + INTERVAL '8 days', 'Accepted supplier quote linked to a sent order already invoiced.', CURRENT_TIMESTAMP - INTERVAL '32 days', CURRENT_TIMESTAMP - INTERVAL '27 days'),
+    ('dm_sq_14', 'dm_sup_01', 'TechSource Distribution', 'dm_cli_04', 'Giulia Ferri', '30gg', 'draft', CURRENT_DATE + INTERVAL '6 days', 'Accepted supplier quote linked to a sent supplier order for history coverage.', CURRENT_TIMESTAMP - INTERVAL '24 days', CURRENT_TIMESTAMP - INTERVAL '20 days')
 ON CONFLICT (id) DO UPDATE SET
     supplier_id = EXCLUDED.supplier_id,
     supplier_name = EXCLUDED.supplier_name,
@@ -839,6 +847,49 @@ ON CONFLICT (id) DO UPDATE SET
     quantity = EXCLUDED.quantity,
     unit_price = EXCLUDED.unit_price,
     note = EXCLUDED.note;
+
+
+-- #779 fully derived supplier-quote statuses: each demo supplier quote gets its visible state
+-- from the client document chain via the 1-to-1 quotes.linked_supplier_quote_id link.
+--   dm_sq_01 stays unlinked               -> Draft (selectable in the client-quote dialog)
+--   dm_sq_02 <- dm_cq_02 (sent)           -> Sent
+--   dm_sq_03 <- dm_cq_03 (accepted)       -> Accepted (no offer downstream)
+--   dm_sq_04 <- dm_cq_04 (draft offer)    -> Offer
+--   dm_sq_05 <- dm_cq_05 (sent offer)     -> Offer
+--   dm_sq_06 <- dm_cq_06 (accepted offer) -> Accepted
+--   dm_sq_07 <- dm_cq_07 (accepted offer) -> Accepted (supplier order in progress)
+--   dm_sq_08 <- dm_cq_08 (denied offer)   -> Denied
+--   dm_sq_09 <- dm_cq_09 (denied quote)   -> Denied
+--   dm_sq_10 stays unlinked               -> Expired (own past expiration date)
+--   dm_sq_11..14 <- dm_cq_11..14          -> Accepted (drivers for the seeded supplier orders)
+UPDATE quotes SET linked_supplier_quote_id = NULL WHERE id LIKE 'dm_cq_%';
+UPDATE quotes q SET linked_supplier_quote_id = v.sq_id
+FROM (VALUES
+    ('dm_cq_02', 'dm_sq_02'),
+    ('dm_cq_03', 'dm_sq_03'),
+    ('dm_cq_04', 'dm_sq_04'),
+    ('dm_cq_05', 'dm_sq_05'),
+    ('dm_cq_06', 'dm_sq_06'),
+    ('dm_cq_07', 'dm_sq_07'),
+    ('dm_cq_08', 'dm_sq_08'),
+    ('dm_cq_09', 'dm_sq_09'),
+    ('dm_cq_11', 'dm_sq_11'),
+    ('dm_cq_12', 'dm_sq_12'),
+    ('dm_cq_13', 'dm_sq_13'),
+    ('dm_cq_14', 'dm_sq_14')
+) AS v(cq_id, sq_id)
+WHERE q.id = v.cq_id;
+
+-- Line-level sourcing demo (#779 bidirectional sync): dm_cq_02's hardware line sources from
+-- the draft supplier quote dm_sq_01. The stored snapshot (cost 940, qty 12) is INTENTIONALLY
+-- behind the supplier item's current values (960, qty 8), so the editable sent quote shows
+-- the "Old info - update?" refresh button out of the box.
+UPDATE quote_items SET
+    supplier_quote_id = 'dm_sq_01',
+    supplier_quote_item_id = 'dm_sqi_01',
+    supplier_quote_supplier_name = 'TechSource Distribution',
+    supplier_quote_unit_price = 940.00
+WHERE id = 'dm_cqi_03';
 
 INSERT INTO supplier_sales (
     id,

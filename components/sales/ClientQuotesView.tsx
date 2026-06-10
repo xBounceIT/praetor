@@ -991,14 +991,20 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   };
 
   // Options for the 1-to-1 supplier-quote link selector (issue #779, derived model): only
-  // effective-DRAFT supplier quotes are linkable — anything else is already driven by another
-  // client document or expired — plus the one currently linked to THIS quote, so an existing
-  // selection stays visible and clearable. A leading empty option clears the link.
+  // UNLINKED, effective-DRAFT supplier quotes are linkable — a linked one is already driven by
+  // another client document (even while that document is still a draft, picking it would 409 on
+  // the partial-unique link index) and an expired one is not draft. The one currently linked to
+  // THIS quote stays listed so an existing selection is visible and clearable. A leading empty
+  // option clears the link.
   const supplierQuoteLinkOptions = useMemo(
     () => [
       { id: '', name: t('sales:clientQuotes.noLinkedSupplierQuote', { defaultValue: 'None' }) },
       ...supplierQuotes
-        .filter((sq) => sq.status === 'draft' || sq.id === formData.linkedSupplierQuoteId)
+        .filter(
+          (sq) =>
+            (sq.status === 'draft' && !sq.linkedClientQuoteId) ||
+            sq.id === formData.linkedSupplierQuoteId,
+        )
         .map((sq) => ({ id: sq.id, name: `${sq.id} — ${sq.supplierName}` })),
     ],
     [supplierQuotes, formData.linkedSupplierQuoteId, t],
