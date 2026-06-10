@@ -825,7 +825,7 @@ FROM (
     VALUES
         ('dm_sqi_01', 'dm_sq_01', 'dm_prd_05', 8.00, 960.00, 'Draft laptop procurement lot'),
         ('dm_sqi_02', 'dm_sq_02', 'dm_prd_06', 120.00, 182.00, 'Pending licensing quote'),
-        ('dm_sqi_03', 'dm_sq_03', 'dm_prd_07', 1.00, 1410.00, 'Accepted security appliance quote without downstream order'),
+        ('dm_sqi_03', 'dm_sq_03', 'dm_prd_07', 1.00, 180.00, 'Accepted security appliance quote without downstream order'),
         ('dm_sqi_04', 'dm_sq_04', 'dm_prd_05', 10.00, 958.00, 'Accepted quote pending supplier order creation'),
         ('dm_sqi_05', 'dm_sq_05', 'dm_prd_06', 80.00, 182.00, 'Accepted licensing quote pending supplier order creation'),
         ('dm_sqi_06', 'dm_sq_06', 'dm_prd_07', 1.00, 1410.00, 'Accepted security quote intentionally left without order'),
@@ -849,46 +849,57 @@ ON CONFLICT (id) DO UPDATE SET
     note = EXCLUDED.note;
 
 
--- #779 fully derived supplier-quote statuses: each demo supplier quote gets its visible state
--- from the client document chain via the 1-to-1 quotes.linked_supplier_quote_id link.
---   dm_sq_01 stays unlinked               -> Draft (selectable in the client-quote dialog)
---   dm_sq_02 <- dm_cq_02 (sent)           -> Sent
---   dm_sq_03 <- dm_cq_03 (accepted)       -> Accepted (no offer downstream)
---   dm_sq_04 <- dm_cq_04 (draft offer)    -> Offer
---   dm_sq_05 <- dm_cq_05 (sent offer)     -> Offer
---   dm_sq_06 <- dm_cq_06 (accepted offer) -> Accepted
---   dm_sq_07 <- dm_cq_07 (accepted offer) -> Accepted (supplier order in progress)
---   dm_sq_08 <- dm_cq_08 (denied offer)   -> Denied
---   dm_sq_09 <- dm_cq_09 (denied quote)   -> Denied
---   dm_sq_10 stays unlinked               -> Expired (own past expiration date)
---   dm_sq_11..14 <- dm_cq_11..14          -> Accepted (drivers for the seeded supplier orders)
+-- #779 fully derived supplier-quote statuses, LINE-SOURCED (no header link): a supplier
+-- quote's visible state follows the most-advanced client quote whose LINES source it
+-- (quote_items.supplier_quote_id) and that quote's offer chain. The status mapping is the
+-- same as the old 1-to-1 header link; only the mechanism moved to per-line sourcing.
+--   dm_sq_01 sourced by nobody              -> Draft (selectable in the client-quote dialog)
+--   dm_sq_02 <- dm_cq_02 line (sent)        -> Sent
+--   dm_sq_03 <- dm_cq_03 line (accepted)    -> Accepted (no offer downstream)
+--   dm_sq_04 <- dm_cq_04 line (draft offer)    -> Offer
+--   dm_sq_05 <- dm_cq_05 line (sent offer)     -> Offer
+--   dm_sq_06 <- dm_cq_06 line (accepted offer) -> Accepted
+--   dm_sq_07 <- dm_cq_07 line (accepted offer) -> Accepted (supplier order in progress)
+--   dm_sq_08 <- dm_cq_08 line (denied offer)   -> Denied
+--   dm_sq_09 <- dm_cq_09 line (denied quote)   -> Denied
+--   dm_sq_10 sourced by nobody              -> Expired (own past expiration date)
+--   dm_sq_11..14 <- dm_cq_11..14 lines      -> Accepted (drivers for the seeded supplier orders)
+-- The header column is vestigial under line sourcing; null it so nothing reads a stale link.
 UPDATE quotes SET linked_supplier_quote_id = NULL WHERE id LIKE 'dm_cq_%';
-UPDATE quotes q SET linked_supplier_quote_id = v.sq_id
-FROM (VALUES
-    ('dm_cq_02', 'dm_sq_02'),
-    ('dm_cq_03', 'dm_sq_03'),
-    ('dm_cq_04', 'dm_sq_04'),
-    ('dm_cq_05', 'dm_sq_05'),
-    ('dm_cq_06', 'dm_sq_06'),
-    ('dm_cq_07', 'dm_sq_07'),
-    ('dm_cq_08', 'dm_sq_08'),
-    ('dm_cq_09', 'dm_sq_09'),
-    ('dm_cq_11', 'dm_sq_11'),
-    ('dm_cq_12', 'dm_sq_12'),
-    ('dm_cq_13', 'dm_sq_13'),
-    ('dm_cq_14', 'dm_sq_14')
-) AS v(cq_id, sq_id)
-WHERE q.id = v.cq_id;
 
--- Line-level sourcing demo (#779 bidirectional sync): dm_cq_02's hardware line sources from
--- the draft supplier quote dm_sq_01. The stored snapshot (cost 940, qty 12) is INTENTIONALLY
--- behind the supplier item's current values (960, qty 8), so the editable sent quote shows
--- the "Old info - update?" refresh button out of the box.
+-- One representative line of each demo client quote sources its supplier quote. The stored
+-- supplier_quote_unit_price is the supplier item's net cost and stays BELOW the line's sale
+-- price, so every sourced line shows a healthy margin. Accepted/denied client quotes are
+-- read-only, so their lines never surface the "Old info - update?" chip even though the seeded
+-- snapshot is a point-in-time copy; the one editable exception is dm_cq_02 below.
+UPDATE quote_items AS qi SET
+    supplier_quote_id = v.sq_id,
+    supplier_quote_item_id = v.sqi_id,
+    supplier_quote_supplier_name = v.supplier_name,
+    supplier_quote_unit_price = v.unit_price
+FROM (VALUES
+    ('dm_cqi_04', 'dm_sq_03', 'dm_sqi_03', 'SecureEdge Systems', 180.00),
+    ('dm_cqi_05', 'dm_sq_04', 'dm_sqi_04', 'TechSource Distribution', 958.00),
+    ('dm_cqi_07', 'dm_sq_05', 'dm_sqi_05', 'CloudSeat Licensing', 182.00),
+    ('dm_cqi_15', 'dm_sq_06', 'dm_sqi_06', 'SecureEdge Systems', 1410.00),
+    ('dm_cqi_09', 'dm_sq_07', 'dm_sqi_07', 'PrintLogistics Hub', 118.00),
+    ('dm_cqi_11', 'dm_sq_08', 'dm_sqi_08', 'TechSource Distribution', 965.00),
+    ('dm_cqi_12', 'dm_sq_09', 'dm_sqi_09', 'CloudSeat Licensing', 183.00),
+    ('dm_cqi_16', 'dm_sq_11', 'dm_sqi_11', 'TechSource Distribution', 960.00),
+    ('dm_cqi_17', 'dm_sq_12', 'dm_sqi_12', 'CloudSeat Licensing', 182.00),
+    ('dm_cqi_18', 'dm_sq_13', 'dm_sqi_13', 'SecureEdge Systems', 1410.00),
+    ('dm_cqi_19', 'dm_sq_14', 'dm_sqi_15', 'TechSource Distribution', 965.00)
+) AS v(cqi_id, sq_id, sqi_id, supplier_name, unit_price)
+WHERE qi.id = v.cqi_id;
+
+-- Editable stale-data demo (#779 reverse sync): dm_cq_02 is sent (still editable), so its
+-- sourced line surfaces the "Old info - update?" chip because the stored snapshot price (175)
+-- sits behind dm_sqi_02's current net cost (182). Refreshing pulls the live supplier values.
 UPDATE quote_items SET
-    supplier_quote_id = 'dm_sq_01',
-    supplier_quote_item_id = 'dm_sqi_01',
-    supplier_quote_supplier_name = 'TechSource Distribution',
-    supplier_quote_unit_price = 940.00
+    supplier_quote_id = 'dm_sq_02',
+    supplier_quote_item_id = 'dm_sqi_02',
+    supplier_quote_supplier_name = 'CloudSeat Licensing',
+    supplier_quote_unit_price = 175.00
 WHERE id = 'dm_cqi_03';
 
 INSERT INTO supplier_sales (
