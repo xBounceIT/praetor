@@ -39,6 +39,7 @@ const sqFindItemsForQuoteMock = mock();
 const sqUpdateMock = mock();
 const sqRenameMock = mock();
 const sqReplaceItemsMock = mock();
+const sqIsSourcedByClientDocumentsMock = mock();
 
 const sqvInsertMock = mock();
 const sqvBuildSnapshotMock = mock();
@@ -73,6 +74,7 @@ beforeAll(async () => {
     update: sqUpdateMock,
     rename: sqRenameMock,
     replaceItems: sqReplaceItemsMock,
+    isSourcedByClientDocuments: sqIsSourcedByClientDocumentsMock,
   }));
   mock.module('../../repositories/supplierQuoteVersionsRepo.ts', () => ({
     ...supplierQuoteVersionsRepoSnap,
@@ -175,6 +177,7 @@ const allMocks = [
   sqUpdateMock,
   sqRenameMock,
   sqReplaceItemsMock,
+  sqIsSourcedByClientDocumentsMock,
   sqvInsertMock,
   sqvBuildSnapshotMock,
   logAuditMock,
@@ -197,6 +200,8 @@ beforeEach(async () => {
   }));
   sqFindItemsForQuoteMock.mockResolvedValue([SAMPLE_ITEM]);
   sqFindIdConflictMock.mockResolvedValue(false);
+  // Default: the quote is not sourced by any client line, so item edits on a draft are allowed.
+  sqIsSourcedByClientDocumentsMock.mockResolvedValue(false);
   // snapshotPreState calls findFullForSnapshot; default to the current draft so the
   // pre-save snapshot path doesn't crash on tests that update content.
   sqFindFullForSnapshotMock.mockResolvedValue({ quote: DRAFT_QUOTE, items: [SAMPLE_ITEM] });
@@ -263,6 +268,52 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     });
     expect(sqUpdateMock).not.toHaveBeenCalled();
     expect(sqReplaceItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('409 blocks item replacement when a draft quote is sourced by client lines (#779)', async () => {
+    // A supplier quote sourced only by a DRAFT client quote derives back to `draft`, so it slips
+    // past the non-draft read-only guard above. replaceItems would recreate supplier_quote_items
+    // with fresh ids and strand those client lines' soft supplierQuoteItemId references — refuse,
+    // mirroring the DELETE route's isSourcedByClientDocuments guard.
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqIsSourcedByClientDocumentsMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { items: [{ productName: 'Service', quantity: 3, unitPrice: 50 }] },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error:
+        'Cannot replace items on a supplier quote whose items are used by client quotes, offers or orders',
+    });
+    expect(sqIsSourcedByClientDocumentsMock).toHaveBeenCalledWith('sq-1');
+    expect(sqReplaceItemsMock).not.toHaveBeenCalled();
+    expect(sqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 allows header-only edits on a sourced quote and skips the sourcing lookup', async () => {
+    // Header edits (payment terms, notes, expiration, client) never touch supplier_quote_items
+    // ids, so they stay allowed even when sourced — and the route skips the lookup entirely.
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqIsSourcedByClientDocumentsMock.mockResolvedValue(true);
+    sqUpdateMock.mockResolvedValue({ ...DRAFT_QUOTE, paymentTerms: '30 days' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { paymentTerms: '30 days' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sqIsSourcedByClientDocumentsMock).not.toHaveBeenCalled();
+    expect(sqUpdateMock).toHaveBeenCalledTimes(1);
   });
 
   test('409 rejects supplier reassignment when the derived status is accepted', async () => {

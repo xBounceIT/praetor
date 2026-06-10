@@ -628,11 +628,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!normalizedItems) return;
       }
 
-      const [current, linkedOrderId, idConflict] = await Promise.all([
+      const [current, linkedOrderId, idConflict, sourcedByClientDocuments] = await Promise.all([
         supplierQuotesRepo.findById(idResult.value),
         supplierQuotesRepo.findLinkedOrderId(idResult.value),
         nextIdValue
           ? supplierQuotesRepo.findIdConflict(nextIdValue, idResult.value)
+          : Promise.resolve(false),
+        // Only relevant when replacing items (the lookup is wasted otherwise): replaceItems
+        // recreates supplier_quote_items with fresh ids, which strands client lines that source
+        // them (guard below). Run it in parallel with the other lookups when items are present.
+        normalizedItems
+          ? supplierQuotesRepo.isSourcedByClientDocuments(idResult.value)
           : Promise.resolve(false),
       ]);
       if (!current) {
@@ -663,6 +669,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityType: 'supplier_quote',
           entityId: idResult.value,
           details: { secondaryLabel: 'non_draft_read_only', fromValue: currentEffective },
+        });
+      }
+      // A draft-DERIVED supplier quote can still be SOURCED by a draft client line: #779 dropped
+      // the status filter in getQuoteItemSnapshots, and a quote sourced only by a draft client
+      // quote derives back to `draft`, slipping past the read-only guard above. replaceItems below
+      // recreates supplier_quote_items with fresh ids, stranding those lines' soft
+      // supplierQuoteItemId references (no FK) so refresh/sync can no longer resolve the source
+      // item — exactly why the DELETE route refuses a sourced quote. Block item replacement here
+      // too; header-only edits (notes, terms, expiration, client) stay allowed. The lookup is only
+      // run when items are being replaced (see the Promise.all above), so this can't trip otherwise.
+      if (sourcedByClientDocuments) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message:
+            'Cannot replace items on a supplier quote whose items are used by client quotes, offers or orders',
+          action: 'supplier_quote.update.conflict',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'sourced_by_client_documents' },
         });
       }
       if (idConflict) {
