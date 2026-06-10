@@ -277,6 +277,18 @@ const normalizeItems = (
       badRequest(reply, unitPriceResult.message);
       return null;
     }
+    // Mirror the client-quote path: a retained supplier-sourced line can carry an edited
+    // supplierQuoteUnitPrice that the #779 forward sync writes back onto the supplier quote item,
+    // so it must be validated non-negative here. normalizeNullableNumber alone let a direct PUT
+    // push a negative supplier cost (negative supplier unit/list prices) through the sync.
+    const supplierQuoteUnitPriceResult = optionalLocalizedNonNegativeNumber(
+      item.supplierQuoteUnitPrice,
+      `items[${i}].supplierQuoteUnitPrice`,
+    );
+    if (!supplierQuoteUnitPriceResult.ok) {
+      badRequest(reply, supplierQuoteUnitPriceResult.message);
+      return null;
+    }
     const itemDiscountResult = optionalLocalizedNonNegativeNumber(
       item.discount,
       `items[${i}].discount`,
@@ -311,7 +323,7 @@ const normalizeItems = (
       supplierQuoteId: normalizeNullableString(item.supplierQuoteId),
       supplierQuoteItemId: normalizeNullableString(item.supplierQuoteItemId),
       supplierQuoteSupplierName: normalizeNullableString(item.supplierQuoteSupplierName),
-      supplierQuoteUnitPrice: normalizeNullableNumber(item.supplierQuoteUnitPrice),
+      supplierQuoteUnitPrice: supplierQuoteUnitPriceResult.value,
       unitType,
       discount: itemDiscountResult.value || 0,
       note: normalizeNullableString(item.note),

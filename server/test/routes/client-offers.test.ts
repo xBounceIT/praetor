@@ -543,6 +543,19 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
     expect(auditActions).toContain('supplier_quote.updated');
   });
 
+  test('PUT: 400 when a retained link sends a negative supplierQuoteUnitPrice (#812)', async () => {
+    // normalizeItems must reject a negative supplier cost up front; otherwise the #779 forward sync
+    // would write it back onto the supplier quote item (negative supplier unit/list prices).
+    setupDraftOffer();
+    coFindItemsForOfferMock.mockResolvedValue([EXISTING_OFFER_ITEM]);
+
+    const res = await putOffer({ items: [lineItem(5, -10)] });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain('supplierQuoteUnitPrice');
+    expect(coReplaceItemsMock).not.toHaveBeenCalled();
+    expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+  });
+
   test('PUT: re-saving a STALE snapshot does not revert direct supplier-side edits', async () => {
     // Supplier raised the item to 50 while the offer line still stores 40; resending the
     // stored values unchanged is NOT a client edit.
