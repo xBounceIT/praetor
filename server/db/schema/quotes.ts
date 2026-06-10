@@ -101,6 +101,13 @@ export const quoteItems = pgTable(
   },
   (table) => [
     index('idx_quote_items_quote_id').on(table.quoteId),
+    // Partial index for the #779 line-sourcing reverse lookups: supplierQuotesRepo's
+    // chosenClientQuoteId EXISTS probe and clientQuotesRepo's earliest-sourced-expiration JOIN both
+    // correlate on supplier_quote_id, which was otherwise unindexed (sequential scan per probe).
+    // Partial (IS NOT NULL) because only supplier-sourced lines carry it — the rest are NULL.
+    index('idx_quote_items_supplier_quote_id')
+      .on(table.supplierQuoteId)
+      .where(sql`${table.supplierQuoteId} IS NOT NULL`),
     check('chk_quote_items_unit_type', sql`${table.unitType} IN ('hours', 'days', 'unit')`),
     check('chk_quote_items_duration_months', sql`${table.durationMonths} >= 1`),
     check('chk_quote_items_duration_unit', sql`${table.durationUnit} IN ('months', 'years', 'na')`),

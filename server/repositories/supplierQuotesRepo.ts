@@ -51,27 +51,64 @@ const outerSupplierQuoteId = sql.raw('"supplier_quotes"."id"');
 // updated. NULL when no client quote sources this supplier quote. The downstream offer is still
 // that chosen quote's offer (customer_offers.linked_quote_id), so the derived-status chain
 // (effectiveSupplierQuoteStatus) is unchanged — only the quote it follows changed.
+// "Most-advanced sourcing quote wins" ordering, shared by the scalar subquery (single-row paths)
+// and the list LATERAL below so the CASE lives in one place. Legacy spellings rank with their
+// canonical equivalents (confirmed→accepted, received→sent, rejected→denied); draft (and any
+// unknown value) sits above the dead-end denied. Tiebreak: most-recently-updated, then id.
+const sourcingRankOrderBy = sql`
+  CASE COALESCE(cq.status, '')
+    WHEN 'accepted' THEN 5
+    WHEN 'confirmed' THEN 5
+    WHEN 'offer' THEN 4
+    WHEN 'sent' THEN 3
+    WHEN 'received' THEN 3
+    WHEN 'denied' THEN 1
+    WHEN 'rejected' THEN 1
+    ELSE 2
+  END DESC,
+  cq.updated_at DESC,
+  cq.id`;
+
 const chosenClientQuoteId = sql<string | null>`(
   SELECT cq.id FROM quotes cq
   WHERE EXISTS (
     SELECT 1 FROM quote_items qi
     WHERE qi.quote_id = cq.id AND qi.supplier_quote_id = ${outerSupplierQuoteId}
   )
-  ORDER BY
-    CASE COALESCE(cq.status, '')
-      WHEN 'accepted' THEN 5
-      WHEN 'confirmed' THEN 5
-      WHEN 'offer' THEN 4
-      WHEN 'sent' THEN 3
-      WHEN 'received' THEN 3
-      WHEN 'denied' THEN 1
-      WHEN 'rejected' THEN 1
-      ELSE 2
-    END DESC,
-    cq.updated_at DESC,
-    cq.id
+  ORDER BY ${sourcingRankOrderBy}
   LIMIT 1
 )`;
+
+// Same chosen-quote resolution as `chosenClientQuoteId`, but as a LEFT JOIN LATERAL that the list
+// query (listAll) joins ONCE per supplier-quote row — then reads id/status/expiration off "chosen"
+// and the downstream offer off "chosen_offer". This replaces inlining the scalar subquery 5× in
+// the SELECT (Drizzle interpolates the `sql` fragment textually, so Postgres would otherwise
+// re-run the ranked quote_items scan once per derived column, per row). The single-row paths
+// (findById, lockEffectiveStatusById) keep the scalar subqueries: the 5× cost is negligible for
+// one row, and lockEffectiveStatusById's `FOR UPDATE` must not lock the joined quotes/offers rows.
+const chosenClientQuoteLateral = sql`LATERAL (
+  SELECT cq.id, cq.status, cq.expiration_date
+  FROM quotes cq
+  WHERE EXISTS (
+    SELECT 1 FROM quote_items qi
+    WHERE qi.quote_id = cq.id AND qi.supplier_quote_id = ${outerSupplierQuoteId}
+  )
+  ORDER BY ${sourcingRankOrderBy}
+  LIMIT 1
+) "chosen"`;
+
+// Derived-status columns for the list projection, read straight off the LATERAL join above
+// (customer_offers is unique on linked_quote_id, so the join yields ≤1 offer — equivalent to the
+// scalar subqueries' LIMIT 1). ::text so the driver returns 'YYYY-MM-DD' strings, not Date objects.
+const lateralDerivedColumns = {
+  linkedClientQuoteId: sql<string | null>`"chosen"."id"`,
+  linkedClientQuoteStatus: sql<string | null>`"chosen"."status"`,
+  linkedClientQuoteExpiration: sql<string | null>`"chosen"."expiration_date"::text`,
+  linkedOfferStatus: sql<string | null>`"chosen_offer"."status"`,
+  linkedOfferExpiration: sql<string | null>`"chosen_offer"."expiration_date"::text`,
+};
+const chosenOfferJoin = sql`"customer_offers" "chosen_offer"`;
+const chosenOfferJoinOn = sql`"chosen_offer"."linked_quote_id" = "chosen"."id"`;
 
 const linkedClientQuoteIdSubquery = chosenClientQuoteId;
 const linkedClientQuoteStatusSubquery = sql<string | null>`(
@@ -158,13 +195,13 @@ export const listAll = async (exec: DbExecutor = db): Promise<SupplierQuote[]> =
         LIMIT 1
       )`,
       // Appended after linkedOrderId so positional row fixtures keep their indices (repo tests).
-      linkedClientQuoteId: linkedClientQuoteIdSubquery,
-      linkedClientQuoteStatus: linkedClientQuoteStatusSubquery,
-      linkedClientQuoteExpiration: linkedClientQuoteExpirationSubquery,
-      linkedOfferStatus: linkedOfferStatusSubquery,
-      linkedOfferExpiration: linkedOfferExpirationSubquery,
+      // Resolved via the LATERAL join below — the chosen-quote ranking runs ONCE per row, not once
+      // per derived column.
+      ...lateralDerivedColumns,
     })
     .from(supplierQuotes)
+    .leftJoin(chosenClientQuoteLateral, sql`true`)
+    .leftJoin(chosenOfferJoin, chosenOfferJoinOn)
     .orderBy(desc(supplierQuotes.createdAt));
   return rows.map(mapQuote);
 };

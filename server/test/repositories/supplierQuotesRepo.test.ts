@@ -96,6 +96,19 @@ describe('listAll', () => {
     expect(sql).toContain('qi.supplier_quote_id = "supplier_quotes"."id"');
     expect(sql).not.toMatch(/supplier_quote_id = "id"/);
   });
+
+  test('resolves the chosen client quote ONCE via a LATERAL join, not 5x inlined subqueries', async () => {
+    // Perf guard (PR #812 follow-up): the chosen-quote ranking used to be inlined into every
+    // derived column (linkedClientQuoteId + 4 dependent subqueries), so Postgres re-ran the ranked
+    // quote_items scan 5x per row. The LATERAL join evaluates it once; the ranking CASE must now
+    // appear exactly once in the rendered SQL, and the offer fields come from a join, not subqueries.
+    exec.enqueue({ rows: [] });
+    await supplierQuotesRepo.listAll(testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('left join lateral');
+    expect(sql).toContain('"chosen_offer"."linked_quote_id" = "chosen"."id"');
+    expect((sql.match(/when 'accepted' then 5/g) ?? []).length).toBe(1);
+  });
 });
 
 describe('listAllItems', () => {
