@@ -21,6 +21,7 @@ import {
 } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
+import { syncSupplierItemsFromClientLines } from '../utils/supplier-item-sync.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
@@ -143,11 +144,13 @@ const offerItemBodySchema = {
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     productCost: { type: 'number' },
-    productMolPercentage: { type: 'number' },
-    supplierQuoteId: { type: 'string' },
-    supplierQuoteItemId: { type: 'string' },
-    supplierQuoteSupplierName: { type: 'string' },
-    supplierQuoteUnitPrice: { type: 'number' },
+    // Nullable: Ajv's coerceTypes would otherwise fold a null into 0 — lying about the value and,
+    // for supplierQuoteUnitPrice, feeding a phantom 0-cost into the #779 supplier-item sync.
+    productMolPercentage: { type: ['number', 'null'] },
+    supplierQuoteId: { type: ['string', 'null'] },
+    supplierQuoteItemId: { type: ['string', 'null'] },
+    supplierQuoteSupplierName: { type: ['string', 'null'] },
+    supplierQuoteUnitPrice: { type: ['number', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     discount: { type: 'number' },
     note: { type: 'string' },
@@ -999,6 +1002,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 tx,
               )
             : await clientOffersRepo.findItemsForOffer(offer.id, tx);
+          // Bidirectional sync (issue #779): push client-side edits of supplier-sourced line
+          // fields (quantity, unit cost) onto the referenced supplier quote items, atomically
+          // with the offer write.
+          if (normalizedItemsForUpdate) {
+            await syncSupplierItemsFromClientLines(
+              request,
+              'client_offer.update',
+              normalizedItemsForUpdate,
+              tx,
+            );
+          }
           return { offer, items: updatedItems };
         });
       } catch (err) {

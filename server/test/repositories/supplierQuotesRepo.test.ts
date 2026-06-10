@@ -286,16 +286,15 @@ describe('getQuoteItemSnapshots', () => {
     expect(exec.calls[0].params).toEqual(['a', 'b']);
   });
 
-  test('gates on effective-accepted: linked client status when linked, else own', async () => {
+  test('does not gate on status (#779 derived model): any existing item resolves', async () => {
     exec.enqueue({ rows: [] });
     await supplierQuotesRepo.getQuoteItemSnapshots(['a'], testDb);
     const sql = exec.calls[0].sql.toLowerCase();
     expect(sql).toContain('"supplier_quotes"');
     expect(sql).toContain('inner join');
-    // Effective status (linked client status when linked, else own) must be accepted.
-    expect(sql).toContain('coalesce');
-    expect(sql).toContain('linked_supplier_quote_id');
-    expect(sql).toContain("= 'accepted'");
+    // Supplier quotes start as draft and progress only with the client document that uses
+    // them, so sourcing must work from any extant quote — no status predicate.
+    expect(sql).not.toContain("= 'accepted'");
     expect(exec.calls[0].params).toEqual(['a']);
   });
 
@@ -337,27 +336,73 @@ describe('existsById', () => {
 });
 
 describe('lockEffectiveStatusById', () => {
-  test('locks the row and resolves own status, expiration and linked client status', async () => {
-    exec.enqueue({ rows: [['draft', '2026-06-01', 'accepted']] });
+  test('locks the row and resolves expiration and the full linked chain', async () => {
+    exec.enqueue({ rows: [['2999-06-01', 'accepted', '2999-12-31', null, null]] });
     const result = await supplierQuotesRepo.lockEffectiveStatusById('q-1', testDb);
     expect(exec.calls[0].sql.toLowerCase()).toContain('for update');
     expect(exec.calls[0].sql).toContain('linked_supplier_quote_id');
     expect(result).toEqual({
-      ownStatus: 'draft',
-      expirationDate: '2026-06-01',
+      expirationDate: '2999-06-01',
       linkedClientStatus: 'accepted',
+      linkedClientQuoteExpiration: '2999-12-31',
+      linkedOfferStatus: null,
+      linkedOfferExpiration: null,
     });
   });
 
-  test('returns null linkedClientStatus when unlinked', async () => {
-    exec.enqueue({ rows: [['accepted', '2026-06-01', null]] });
+  test('returns null linked fields when unlinked', async () => {
+    exec.enqueue({ rows: [['2999-06-01', null, null, null, null]] });
     const result = await supplierQuotesRepo.lockEffectiveStatusById('q-1', testDb);
     expect(result?.linkedClientStatus).toBeNull();
+    expect(result?.linkedOfferStatus).toBeNull();
   });
 
   test('returns null when row missing', async () => {
     exec.enqueue({ rows: [] });
     expect(await supplierQuotesRepo.lockEffectiveStatusById('q-x', testDb)).toBeNull();
+  });
+});
+
+describe('findItemsByIds', () => {
+  test('returns [] without querying when no ids are given', async () => {
+    expect(await supplierQuotesRepo.findItemsByIds([], testDb)).toEqual([]);
+    expect(exec.calls).toHaveLength(0);
+  });
+
+  test('selects items by id list and maps them', async () => {
+    exec.enqueue({ rows: [itemRow()] });
+    const result = await supplierQuotesRepo.findItemsByIds(['sqi-1'], testDb);
+    expect(exec.calls[0].sql).toContain('from "supplier_quote_items"');
+    expect(result[0].id).toBe('sqi-1');
+  });
+});
+
+describe('syncItemPricing', () => {
+  test('writes quantity + unit cost, recomputes list price keeping the discount, touches the quote', async () => {
+    exec.enqueue({ rows: [] }); // item update
+    exec.enqueue({ rows: [] }); // parent updated_at bump
+    await supplierQuotesRepo.syncItemPricing(
+      'q-1',
+      [{ itemId: 'sqi-1', quantity: 3, unitCost: 80, discountPercent: 20 }],
+      testDb,
+    );
+    const itemSql = exec.calls[0].sql.toLowerCase();
+    expect(itemSql).toContain('update "supplier_quote_items"');
+    // listPrice = 80 / (1 − 20/100) = 100, so listPrice × (1 − discount) keeps equaling the cost.
+    expect(exec.calls[0].params).toEqual(expect.arrayContaining(['3', '80', '100', '20', 'sqi-1']));
+    expect(exec.calls[1].sql.toLowerCase()).toContain('update "supplier_quotes"');
+    expect(exec.calls[1].params).toContain('q-1');
+  });
+
+  test('a 100% discount cannot express a non-zero cost: resets to 0 with listPrice = cost', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    await supplierQuotesRepo.syncItemPricing(
+      'q-1',
+      [{ itemId: 'sqi-1', quantity: 1, unitCost: 50, discountPercent: 100 }],
+      testDb,
+    );
+    expect(exec.calls[0].params).toEqual(expect.arrayContaining(['50', '0', 'sqi-1']));
   });
 });
 

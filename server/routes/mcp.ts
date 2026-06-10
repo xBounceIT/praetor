@@ -374,13 +374,15 @@ const buildServer = () => {
         }),
         supplierQuotes: supplierQuotes.map((quote) => ({
           ...quote,
-          // Effective status: synced from the linked client quote + the supplier quote's own
-          // `expired` overlay (issue #779).
-          status: effectiveSupplierQuoteStatusFromDate(
-            quote.status,
-            quote.linkedClientQuoteStatus,
-            quote.expirationDate,
-          ),
+          // Fully derived status (issue #779): unlinked → draft; linked → follows the client
+          // quote/offer chain, with the expiry overlays.
+          status: effectiveSupplierQuoteStatusFromDate({
+            expirationDate: quote.expirationDate,
+            linkedClientStatus: quote.linkedClientQuoteStatus,
+            linkedClientQuoteExpiration: quote.linkedClientQuoteExpiration,
+            linkedOfferStatus: quote.linkedOfferStatus,
+            linkedOfferExpiration: quote.linkedOfferExpiration,
+          }),
           items: (supplierItemsByQuote.get(quote.id) ?? []).map((item) => ({
             ...item,
             unitType: normalizeUnitType(item.unitType),

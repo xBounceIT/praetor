@@ -53,17 +53,33 @@ export const effectiveQuoteStatus = (
   return isPastExpiration ? 'expired' : normalized;
 };
 
-// Effective status for a supplier quote. When linked to a client quote (`linkedClientStatus` is
-// non-null) the supplier quote MIRRORS the client quote's pipeline status; when unlinked it uses
-// its own stored status. The `expired` overlay is always computed from the SUPPLIER quote's OWN
-// expiration (issue #779: Scaduto is never inherited from the client quote).
+// Effective status for a supplier quote — FULLY DERIVED model (issue #779, extended): the
+// visible status never comes from the supplier quote's own stored status, it follows the linked
+// client document chain: unlinked → draft; linked quote (no offer) → the quote's effective
+// status; linked quote with an offer → accepted/denied/expired per the offer, else `offer`. The
+// supplier quote's OWN expiration overlays `expired` onto any non-terminal result.
 export const effectiveSupplierQuoteStatus = (args: {
-  ownStatus: string;
   linkedClientStatus: string | null;
   isPastOwnExpiration: boolean;
+  isPastLinkedQuoteExpiration?: boolean;
+  linkedOfferStatus?: string | null;
+  isPastLinkedOfferExpiration?: boolean;
 }): EffectiveQuoteStatus => {
-  const base = args.linkedClientStatus ?? args.ownStatus;
-  return effectiveQuoteStatus(base, args.isPastOwnExpiration);
+  let base: EffectiveQuoteStatus;
+  if (args.linkedClientStatus === null) {
+    base = 'draft';
+  } else if (args.linkedOfferStatus != null) {
+    const offerEffective = effectiveQuoteStatus(
+      args.linkedOfferStatus,
+      args.isPastLinkedOfferExpiration ?? false,
+    );
+    // A live (draft/sent) offer reads as "in offer"; its terminal/expired states flow through.
+    base = offerEffective === 'draft' || offerEffective === 'sent' ? 'offer' : offerEffective;
+  } else {
+    base = effectiveQuoteStatus(args.linkedClientStatus, args.isPastLinkedQuoteExpiration ?? false);
+  }
+  if (TERMINAL_STATUSES.has(base as QuotePipelineStatus)) return base;
+  return args.isPastOwnExpiration ? 'expired' : base;
 };
 
 // Whether a client quote may transition from `from` to `to`. The only structural restriction

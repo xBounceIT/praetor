@@ -20,21 +20,40 @@ export type SupplierQuote = {
   createdAt: number;
   updatedAt: number;
   // The client quote (if any) that links to this supplier quote via the 1-to-1
-  // quotes.linked_supplier_quote_id FK (issue #779). When linked, the route mirrors the client
-  // quote's status onto this supplier quote (read-only). `linkedClientQuoteStatus` is that
-  // client quote's stored pipeline status; both are null when this supplier quote is unlinked.
+  // quotes.linked_supplier_quote_id FK (issue #779). The supplier quote's visible status is
+  // FULLY DERIVED from this chain: the linked quote's status/expiration, and — when an offer was
+  // created from that quote — the offer's status/expiration. All fields are null when unlinked.
   linkedClientQuoteId: string | null;
   linkedClientQuoteStatus: string | null;
+  linkedClientQuoteExpiration: string | null;
+  linkedOfferStatus: string | null;
+  linkedOfferExpiration: string | null;
 };
 
 // Reverse-lookup correlated subqueries: the at-most-one client quote pointing at this supplier
-// quote (the partial-unique index on quotes.linked_supplier_quote_id guarantees ≤ 1). Mirrors the
-// linkedOrderId subquery pattern; null when this supplier quote is unlinked.
+// quote (the partial-unique index on quotes.linked_supplier_quote_id guarantees ≤ 1), and the
+// at-most-one offer created from that quote (partial-unique on customer_offers.linked_quote_id).
+// Mirrors the linkedOrderId subquery pattern; all null when this supplier quote is unlinked.
 const linkedClientQuoteIdSubquery = sql<string | null>`(
   SELECT q.id FROM quotes q WHERE q.linked_supplier_quote_id = ${supplierQuotes.id} LIMIT 1
 )`;
 const linkedClientQuoteStatusSubquery = sql<string | null>`(
   SELECT q.status FROM quotes q WHERE q.linked_supplier_quote_id = ${supplierQuotes.id} LIMIT 1
+)`;
+// ::text so the driver returns the plain 'YYYY-MM-DD' string instead of a Date object.
+const linkedClientQuoteExpirationSubquery = sql<string | null>`(
+  SELECT q.expiration_date::text FROM quotes q
+  WHERE q.linked_supplier_quote_id = ${supplierQuotes.id} LIMIT 1
+)`;
+const linkedOfferStatusSubquery = sql<string | null>`(
+  SELECT o.status FROM customer_offers o
+  JOIN quotes q ON o.linked_quote_id = q.id
+  WHERE q.linked_supplier_quote_id = ${supplierQuotes.id} LIMIT 1
+)`;
+const linkedOfferExpirationSubquery = sql<string | null>`(
+  SELECT o.expiration_date::text FROM customer_offers o
+  JOIN quotes q ON o.linked_quote_id = q.id
+  WHERE q.linked_supplier_quote_id = ${supplierQuotes.id} LIMIT 1
 )`;
 
 export type SupplierQuoteItem = {
@@ -56,6 +75,9 @@ type QuoteRow = typeof supplierQuotes.$inferSelect & {
   linkedOrderId?: string | null;
   linkedClientQuoteId?: string | null;
   linkedClientQuoteStatus?: string | null;
+  linkedClientQuoteExpiration?: string | null;
+  linkedOfferStatus?: string | null;
+  linkedOfferExpiration?: string | null;
 };
 
 const mapQuote = (row: QuoteRow): SupplierQuote => ({
@@ -73,6 +95,9 @@ const mapQuote = (row: QuoteRow): SupplierQuote => ({
   updatedAt: row.updatedAt?.getTime() ?? 0,
   linkedClientQuoteId: row.linkedClientQuoteId ?? null,
   linkedClientQuoteStatus: row.linkedClientQuoteStatus ?? null,
+  linkedClientQuoteExpiration: row.linkedClientQuoteExpiration ?? null,
+  linkedOfferStatus: row.linkedOfferStatus ?? null,
+  linkedOfferExpiration: row.linkedOfferExpiration ?? null,
 });
 
 const mapItem = (row: typeof supplierQuoteItems.$inferSelect): SupplierQuoteItem => ({
@@ -102,6 +127,9 @@ export const listAll = async (exec: DbExecutor = db): Promise<SupplierQuote[]> =
       // Appended after linkedOrderId so positional row fixtures keep their indices (repo tests).
       linkedClientQuoteId: linkedClientQuoteIdSubquery,
       linkedClientQuoteStatus: linkedClientQuoteStatusSubquery,
+      linkedClientQuoteExpiration: linkedClientQuoteExpirationSubquery,
+      linkedOfferStatus: linkedOfferStatusSubquery,
+      linkedOfferExpiration: linkedOfferExpirationSubquery,
     })
     .from(supplierQuotes)
     .orderBy(desc(supplierQuotes.createdAt));
@@ -125,6 +153,9 @@ export const findById = async (
       ...getTableColumns(supplierQuotes),
       linkedClientQuoteId: linkedClientQuoteIdSubquery,
       linkedClientQuoteStatus: linkedClientQuoteStatusSubquery,
+      linkedClientQuoteExpiration: linkedClientQuoteExpirationSubquery,
+      linkedOfferStatus: linkedOfferStatusSubquery,
+      linkedOfferExpiration: linkedOfferExpirationSubquery,
     })
     .from(supplierQuotes)
     .where(eq(supplierQuotes.id, id));
@@ -165,27 +196,33 @@ export const lockEffectiveStatusById = async (
   id: string,
   exec: DbExecutor = db,
 ): Promise<{
-  ownStatus: string;
   expirationDate: string | null;
   linkedClientStatus: string | null;
+  linkedClientQuoteExpiration: string | null;
+  linkedOfferStatus: string | null;
+  linkedOfferExpiration: string | null;
 } | null> => {
   const rows = await exec
     .select({
-      ownStatus: supplierQuotes.status,
       expirationDate: supplierQuotes.expirationDate,
       linkedClientStatus: linkedClientQuoteStatusSubquery,
+      linkedClientQuoteExpiration: linkedClientQuoteExpirationSubquery,
+      linkedOfferStatus: linkedOfferStatusSubquery,
+      linkedOfferExpiration: linkedOfferExpirationSubquery,
     })
     .from(supplierQuotes)
     .where(eq(supplierQuotes.id, id))
     .for('update');
   if (!rows[0]) return null;
   return {
-    ownStatus: rows[0].ownStatus,
     expirationDate: normalizeNullableDateOnly(
       rows[0].expirationDate,
       'supplierQuote.expirationDate',
     ),
     linkedClientStatus: rows[0].linkedClientStatus ?? null,
+    linkedClientQuoteExpiration: rows[0].linkedClientQuoteExpiration ?? null,
+    linkedOfferStatus: rows[0].linkedOfferStatus ?? null,
+    linkedOfferExpiration: rows[0].linkedOfferExpiration ?? null,
   };
 };
 
@@ -428,13 +465,11 @@ export const getQuoteItemSnapshots = async (
     })
     .from(supplierQuoteItems)
     .innerJoin(supplierQuotes, eq(supplierQuotes.id, supplierQuoteItems.quoteId))
-    .where(
-      and(
-        inArray(supplierQuoteItems.id, uniqueIds),
-        // Effective status (linked client status when linked, else own) is accepted.
-        sql`COALESCE(${linkedClientQuoteStatusSubquery}, ${supplierQuotes.status}) = 'accepted'`,
-      ),
-    );
+    // No status filter (issue #779 derived model): supplier quotes start as draft and progress
+    // only with the client document that uses them, so sourcing must work from draft quotes —
+    // and re-saving a client quote whose supplier quote has since progressed must not 400. The
+    // views gate which quotes are offered for NEW sourcing.
+    .where(inArray(supplierQuoteItems.id, uniqueIds));
 
   for (const row of rows) {
     const unitPrice = parseDbNumber(row.unitPrice, 0);
@@ -447,6 +482,56 @@ export const getQuoteItemSnapshots = async (
     });
   }
   return snapshots;
+};
+
+export const findItemsByIds = async (
+  ids: string[],
+  exec: DbExecutor = db,
+): Promise<SupplierQuoteItem[]> => {
+  if (ids.length === 0) return [];
+  const rows = await exec
+    .select()
+    .from(supplierQuoteItems)
+    .where(inArray(supplierQuoteItems.id, ids));
+  return rows.map(mapItem);
+};
+
+export type SupplierItemSyncPatch = {
+  itemId: string;
+  quantity: number;
+  unitCost: number;
+  discountPercent: number;
+};
+
+// Client-driven pricing sync (issue #779, client → supplier direction): writes the new quantity
+// and unit cost, recomputing the list price so the stored "discount to us" stays meaningful
+// (listPrice × (1 − discount/100) = cost). A 100% discount cannot express a non-zero cost, so it
+// resets to 0 with listPrice = cost. Bumps the parent quote's updated_at like any content edit.
+export const syncItemPricing = async (
+  quoteId: string,
+  patches: SupplierItemSyncPatch[],
+  exec: DbExecutor = db,
+): Promise<void> => {
+  for (const patch of patches) {
+    const keepDiscount = patch.discountPercent < 100;
+    const discountPercent = keepDiscount ? patch.discountPercent : 0;
+    const listPrice = keepDiscount
+      ? patch.unitCost / (1 - patch.discountPercent / 100)
+      : patch.unitCost;
+    await exec
+      .update(supplierQuoteItems)
+      .set({
+        quantity: numericForDb(patch.quantity),
+        unitPrice: numericForDb(patch.unitCost),
+        listPrice: numericForDb(listPrice),
+        discountPercent: numericForDb(discountPercent),
+      })
+      .where(eq(supplierQuoteItems.id, patch.itemId));
+  }
+  await exec
+    .update(supplierQuotes)
+    .set({ updatedAt: sql`CURRENT_TIMESTAMP` })
+    .where(eq(supplierQuotes.id, quoteId));
 };
 
 export const insertItems = async (

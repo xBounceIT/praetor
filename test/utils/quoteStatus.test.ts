@@ -55,37 +55,57 @@ describe('isTerminalQuoteStatus (frontend mirror)', () => {
   });
 });
 
-describe('effectiveSupplierQuoteStatus (frontend mirror)', () => {
-  test('linked: mirrors the client status; own expiry overrides; accepted stays frozen', () => {
+describe('effectiveSupplierQuoteStatus (frontend mirror, fully derived chain)', () => {
+  test('linked: follows the client status; own expiry overrides; accepted stays frozen', () => {
     expect(
-      effectiveSupplierQuoteStatus({
-        ownStatus: 'draft',
-        linkedClientStatus: 'sent',
-        isPastOwnExpiration: false,
-      }),
+      effectiveSupplierQuoteStatus({ linkedClientStatus: 'sent', isPastOwnExpiration: false }),
     ).toBe('sent');
     expect(
-      effectiveSupplierQuoteStatus({
-        ownStatus: 'draft',
-        linkedClientStatus: 'sent',
-        isPastOwnExpiration: true,
-      }),
+      effectiveSupplierQuoteStatus({ linkedClientStatus: 'sent', isPastOwnExpiration: true }),
     ).toBe('expired');
     expect(
-      effectiveSupplierQuoteStatus({
-        ownStatus: 'draft',
-        linkedClientStatus: 'accepted',
-        isPastOwnExpiration: true,
-      }),
+      effectiveSupplierQuoteStatus({ linkedClientStatus: 'accepted', isPastOwnExpiration: true }),
     ).toBe('accepted');
-  });
-
-  test('unlinked: uses its own status with its own expiry overlay', () => {
+    // The linked QUOTE's own expiry flows through too.
     expect(
       effectiveSupplierQuoteStatus({
-        ownStatus: 'sent',
-        linkedClientStatus: null,
-        isPastOwnExpiration: true,
+        linkedClientStatus: 'sent',
+        isPastOwnExpiration: false,
+        isPastLinkedQuoteExpiration: true,
+      }),
+    ).toBe('expired');
+  });
+
+  test('unlinked: always draft, with its own expiry overlay', () => {
+    expect(
+      effectiveSupplierQuoteStatus({ linkedClientStatus: null, isPastOwnExpiration: false }),
+    ).toBe('draft');
+    expect(
+      effectiveSupplierQuoteStatus({ linkedClientStatus: null, isPastOwnExpiration: true }),
+    ).toBe('expired');
+  });
+
+  test('a linked offer drives the chain: live → offer, terminal/expired flow through', () => {
+    expect(
+      effectiveSupplierQuoteStatus({
+        linkedClientStatus: 'offer',
+        linkedOfferStatus: 'sent',
+        isPastOwnExpiration: false,
+      }),
+    ).toBe('offer');
+    expect(
+      effectiveSupplierQuoteStatus({
+        linkedClientStatus: 'offer',
+        linkedOfferStatus: 'denied',
+        isPastOwnExpiration: false,
+      }),
+    ).toBe('denied');
+    expect(
+      effectiveSupplierQuoteStatus({
+        linkedClientStatus: 'offer',
+        linkedOfferStatus: 'sent',
+        isPastLinkedOfferExpiration: true,
+        isPastOwnExpiration: false,
       }),
     ).toBe('expired');
   });

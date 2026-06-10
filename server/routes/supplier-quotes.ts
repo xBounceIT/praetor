@@ -24,7 +24,6 @@ import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import {
   effectiveSupplierQuoteStatusFromDate,
   normalizeQuoteStatus,
-  parseQuoteStatusInput,
 } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -59,18 +58,20 @@ const normalizeUnitType = (value: unknown): 'hours' | 'days' | 'unit' => {
 // Effective status for a supplier quote (issue #779): mirrors the linked client quote's pipeline
 // status when linked, otherwise its own; `expired` is computed from its OWN expiration date.
 const supplierQuoteEffectiveStatus = (quote: supplierQuotesRepo.SupplierQuote) =>
-  effectiveSupplierQuoteStatusFromDate(
-    quote.status,
-    quote.linkedClientQuoteStatus,
-    quote.expirationDate,
-  );
+  effectiveSupplierQuoteStatusFromDate({
+    expirationDate: quote.expirationDate,
+    linkedClientStatus: quote.linkedClientQuoteStatus,
+    linkedClientQuoteExpiration: quote.linkedClientQuoteExpiration,
+    linkedOfferStatus: quote.linkedOfferStatus,
+    linkedOfferExpiration: quote.linkedOfferExpiration,
+  });
 
 const projectQuote = (quote: supplierQuotesRepo.SupplierQuote) => ({
   ...quote,
-  // `status` is the EFFECTIVE status (synced from the linked client quote + the `expired` overlay);
-  // `ownStatus` is the raw stored pipeline status the form edits while the quote is unlinked.
+  // `status` is FULLY DERIVED (issue #779): unlinked → draft; linked → it follows the client
+  // quote and, once one exists, the client offer — plus the expiry overlays. There is no manual
+  // status management anymore; the stored column is vestigial.
   status: supplierQuoteEffectiveStatus(quote),
-  ownStatus: normalizeQuoteStatus(quote.status),
   isStatusSynced: quote.linkedClientQuoteId !== null,
 });
 
@@ -108,8 +109,6 @@ const supplierQuoteSchema = {
     clientName: { type: ['string', 'null'] },
     paymentTerms: { type: ['string', 'null'] },
     status: { type: 'string' },
-    // Raw stored pipeline status (issue #779) — the editable value when the quote is unlinked.
-    ownStatus: { type: 'string' },
     // Whether a client quote drives this supplier quote's status (then it's read-only/synced).
     isStatusSynced: { type: 'boolean' },
     linkedClientQuoteId: { type: ['string', 'null'] },
@@ -436,7 +435,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         clientId,
         items,
         paymentTerms,
-        status,
         expirationDate,
         notes,
       } = request.body as {
@@ -446,7 +444,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         clientId?: string | null;
         items?: ItemBody[];
         paymentTerms?: string;
-        status?: string;
         expirationDate?: string;
         notes?: string;
       };
@@ -472,13 +469,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const clientLink = await resolveClientLink(clientId, reply);
       if (!clientLink) return;
 
-      // Strict write-path status parse (issue #779): canonical + known legacy spellings pass (the
-      // request schema doesn't constrain status); anything else is a 400 — flooring it to draft
-      // would hide the caller's mistake behind a silent demotion.
-      const initialStatus = parseQuoteStatusInput(status || 'draft');
-      if (initialStatus === null) {
-        return badRequest(reply, 'status must be one of draft, sent, offer, accepted, denied');
-      }
+      // Status is fully derived from the linked client documents (issue #779): a new supplier
+      // quote always stores the vestigial 'draft'; any client-sent status is ignored.
 
       let result: {
         quote: supplierQuotesRepo.SupplierQuote;
@@ -494,7 +486,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               clientId: clientLink.clientId,
               clientName: clientLink.clientName,
               paymentTerms: paymentTerms || 'immediate',
-              status: initialStatus,
+              status: 'draft',
               expirationDate: expirationDateResult.value,
               notes: notes ?? null,
             },
@@ -551,6 +543,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
+      // Note: a client-sent `status` is deliberately NOT destructured — the supplier quote's
+      // status is fully derived from its linked client documents (issue #779), so the field is
+      // ignored if present.
       const {
         id: nextId,
         supplierId,
@@ -558,7 +553,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         clientId,
         items,
         paymentTerms,
-        status,
         expirationDate,
         notes,
       } = request.body as {
@@ -568,7 +562,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         clientId?: string | null;
         items?: ItemBody[];
         paymentTerms?: string;
-        status?: string;
         expirationDate?: string;
         notes?: string;
       };
@@ -580,8 +573,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // the non-draft read-only guard — the expiration date is excluded because a
       // non-draft/synced/expired supplier quote stays editable for its expiration date alone, so
       // an expiration-only PUT must not trip the guard. `hasContentUpdate` (any snapshot-worthy
-      // field, expiration and status included) decides whether to take a version snapshot before
-      // writing; id-only renames do not. Derived from one list so the field sets can't drift.
+      // field, expiration included) decides whether to take a version snapshot before writing;
+      // id-only renames do not. Derived from one list so the field sets can't drift. A client-sent
+      // `status` is IGNORED entirely: the status is fully derived from the linked client documents.
       const hasNonExpirationContentUpdate =
         supplierId !== undefined ||
         supplierName !== undefined ||
@@ -589,8 +583,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items !== undefined ||
         paymentTerms !== undefined ||
         notes !== undefined;
-      const hasContentUpdate =
-        hasNonExpirationContentUpdate || expirationDate !== undefined || status !== undefined;
+      const hasContentUpdate = hasNonExpirationContentUpdate || expirationDate !== undefined;
 
       const patch: supplierQuotesRepo.SupplierQuoteUpdate = {};
 
@@ -627,18 +620,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       if (paymentTerms !== undefined) patch.paymentTerms = paymentTerms;
-      // Strict write-path status parse (issue #779): unknown values — a typo, or the derived-only
-      // `expired` round-tripped from a GET — are a 400 instead of normalizeQuoteStatus's silent
-      // draft floor. Linked quotes reject any status change later, so this only ever validates an
-      // unlinked quote's own status.
-      let parsedStatus: ReturnType<typeof parseQuoteStatusInput> = null;
-      if (status !== undefined) {
-        parsedStatus = parseQuoteStatusInput(typeof status === 'string' ? status : '');
-        if (parsedStatus === null) {
-          return badRequest(reply, 'status must be one of draft, sent, offer, accepted, denied');
-        }
-        patch.status = parsedStatus;
-      }
       if (notes !== undefined) patch.notes = notes;
 
       if (expirationDate !== undefined) {
@@ -683,35 +664,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
       const currentEffective = supplierQuoteEffectiveStatus(current);
-      // A linked supplier quote's status is synced from its client quote and read-only — reject any
-      // attempt to set it directly (issue #779). The expiration date stays editable (handled below).
-      if (current.linkedClientQuoteId && status !== undefined) {
-        return replyError(request, reply, {
-          statusCode: 409,
-          message: 'This supplier quote’s status is synced from its client quote and read-only',
-          action: 'supplier_quote.update.conflict',
-          entityType: 'supplier_quote',
-          entityId: idResult.value,
-          details: { secondaryLabel: 'status_synced_read_only', fromValue: currentEffective },
-        });
-      }
-      // Scaduto freezes manual status changes — a supplier quote leaves `expired` only by
-      // extending its expiration date, mirroring the client-quote rule (issue #779). A no-op
-      // resend of the stored status stays tolerated.
-      if (
-        parsedStatus !== null &&
-        currentEffective === 'expired' &&
-        parsedStatus !== normalizeQuoteStatus(current.status)
-      ) {
-        return replyError(request, reply, {
-          statusCode: 409,
-          message: 'Expired quotes cannot change status; extend the expiration date instead',
-          action: 'supplier_quote.update.conflict',
-          entityType: 'supplier_quote',
-          entityId: idResult.value,
-          details: { secondaryLabel: 'expired_read_only', fromValue: 'expired' },
-        });
-      }
       if (currentEffective !== 'draft' && hasNonExpirationContentUpdate) {
         return replyError(request, reply, {
           statusCode: 409,
@@ -817,14 +769,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
       // update()/rename() return only the supplier_quotes columns (bare .returning()), so `updated`
       // lacks the reverse-lookup link fields. This PUT cannot change them — the link is owned by
-      // quotes.linked_supplier_quote_id (renames survive via ON UPDATE CASCADE) and status writes
-      // on linked quotes are rejected above — so carry them over from `current` instead of
-      // re-reading the row (issue #779).
+      // quotes.linked_supplier_quote_id (renames survive via ON UPDATE CASCADE) and status is
+      // fully derived — so carry them over from `current` instead of re-reading the row (#779).
       return {
         ...projectQuote({
           ...updated,
           linkedClientQuoteId: current.linkedClientQuoteId,
           linkedClientQuoteStatus: current.linkedClientQuoteStatus,
+          linkedClientQuoteExpiration: current.linkedClientQuoteExpiration,
+          linkedOfferStatus: current.linkedOfferStatus,
+          linkedOfferExpiration: current.linkedOfferExpiration,
         }),
         items: resultItems.map(projectItem),
       };

@@ -546,13 +546,14 @@ describe('PUT /api/sales/supplier-quotes/:id snapshots pre-update state', () => 
       quote: SAMPLE_QUOTE,
       items: [SAMPLE_ITEM],
     });
-    sqUpdateMock.mockResolvedValue({ ...SAMPLE_QUOTE, status: 'sent' });
+    sqUpdateMock.mockResolvedValue({ ...SAMPLE_QUOTE, notes: 'updated' });
 
     const res = await testApp.inject({
       method: 'PUT',
       url: '/api/sales/supplier-quotes/sq-1',
       headers: authHeader(),
-      payload: { status: 'sent' },
+      // `status` is no longer a content field (fully derived, #779) — notes is.
+      payload: { notes: 'updated' },
     });
 
     expect(res.statusCode).toBe(200);

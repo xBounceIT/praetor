@@ -5,6 +5,7 @@ import * as realClientQuotesRepo from '../../repositories/clientQuotesRepo.ts';
 import * as realQuoteVersionsRepo from '../../repositories/quoteVersionsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
+import * as realSupplierQuoteVersionsRepo from '../../repositories/supplierQuoteVersionsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realPermissions from '../../utils/permissions.ts';
@@ -26,6 +27,7 @@ const permissionsSnap = { ...realPermissions };
 const clientQuotesRepoSnap = { ...realClientQuotesRepo };
 const quoteVersionsRepoSnap = { ...realQuoteVersionsRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
+const supplierQuoteVersionsRepoSnap = { ...realSupplierQuoteVersionsRepo };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
 
@@ -43,8 +45,16 @@ const cqFindIdConflictMock = mock();
 const cqUpdateMock = mock();
 const cqFindStatusAndClientNameMock = mock();
 const cqDeleteByIdMock = mock();
+const cqReplaceItemsMock = mock();
+const cqFindItemSnapshotsForQuoteMock = mock();
 
 const sqFindExpirationByIdMock = mock();
+const sqFindItemsByIdsMock = mock();
+const sqFindLinkedOrderIdMock = mock();
+const sqFindFullForSnapshotMock = mock();
+const sqSyncItemPricingMock = mock();
+const sqvInsertMock = mock();
+const sqvBuildSnapshotMock = mock();
 
 const qvInsertMock = mock();
 const qvBuildSnapshotMock = mock();
@@ -81,10 +91,21 @@ beforeAll(async () => {
     update: cqUpdateMock,
     findStatusAndClientName: cqFindStatusAndClientNameMock,
     deleteById: cqDeleteByIdMock,
+    replaceItems: cqReplaceItemsMock,
+    findItemSnapshotsForQuote: cqFindItemSnapshotsForQuoteMock,
   }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
     findExpirationById: sqFindExpirationByIdMock,
+    findItemsByIds: sqFindItemsByIdsMock,
+    findLinkedOrderId: sqFindLinkedOrderIdMock,
+    findFullForSnapshot: sqFindFullForSnapshotMock,
+    syncItemPricing: sqSyncItemPricingMock,
+  }));
+  mock.module('../../repositories/supplierQuoteVersionsRepo.ts', () => ({
+    ...supplierQuoteVersionsRepoSnap,
+    insert: sqvInsertMock,
+    buildSnapshot: sqvBuildSnapshotMock,
   }));
   mock.module('../../repositories/quoteVersionsRepo.ts', () => ({
     ...quoteVersionsRepoSnap,
@@ -107,6 +128,10 @@ afterAll(() => {
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../repositories/clientQuotesRepo.ts', () => clientQuotesRepoSnap);
   mock.module('../../repositories/supplierQuotesRepo.ts', () => supplierQuotesRepoSnap);
+  mock.module(
+    '../../repositories/supplierQuoteVersionsRepo.ts',
+    () => supplierQuoteVersionsRepoSnap,
+  );
   mock.module('../../repositories/quoteVersionsRepo.ts', () => quoteVersionsRepoSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
@@ -168,9 +193,17 @@ const allMocks = [
   cqFindItemsForQuoteMock,
   cqFindIdConflictMock,
   cqUpdateMock,
+  cqReplaceItemsMock,
+  cqFindItemSnapshotsForQuoteMock,
   cqFindStatusAndClientNameMock,
   cqDeleteByIdMock,
   sqFindExpirationByIdMock,
+  sqFindItemsByIdsMock,
+  sqFindLinkedOrderIdMock,
+  sqFindFullForSnapshotMock,
+  sqSyncItemPricingMock,
+  sqvInsertMock,
+  sqvBuildSnapshotMock,
   qvInsertMock,
   qvBuildSnapshotMock,
   logAuditMock,
@@ -198,6 +231,15 @@ beforeEach(async () => {
   // Existence and expiration come from ONE read post-#779 (expiration_date is NOT NULL): a null
   // expiration means "supplier quote missing", so the happy default is a real future date.
   sqFindExpirationByIdMock.mockResolvedValue('2999-12-31');
+  // Forward-sync defaults: no supplier-sourced lines touched unless a test sets them up.
+  cqReplaceItemsMock.mockResolvedValue([]);
+  cqFindItemSnapshotsForQuoteMock.mockResolvedValue([]);
+  sqFindItemsByIdsMock.mockResolvedValue([]);
+  sqFindLinkedOrderIdMock.mockResolvedValue(null);
+  sqFindFullForSnapshotMock.mockResolvedValue(null);
+  sqSyncItemPricingMock.mockResolvedValue(undefined);
+  sqvInsertMock.mockResolvedValue(undefined);
+  sqvBuildSnapshotMock.mockImplementation((quote, items) => ({ schemaVersion: 1, quote, items }));
 
   testApp = await buildRouteTestApp(routePlugin, '/api/sales/client-quotes');
 });
@@ -485,5 +527,97 @@ describe('DELETE /api/sales/client-quotes/:id', () => {
     const res = await deleteQuote('missing');
     expect(res.statusCode).toBe(404);
     expect(cqDeleteByIdMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', () => {
+  // findItemSnapshotsForQuote shape: the stored snapshot of the line being edited.
+  const EXISTING_SNAP = {
+    id: 'qi-1',
+    productId: 'p-1',
+    productCost: 50,
+    productMolPercentage: null,
+    supplierQuoteId: 'sq-9',
+    supplierQuoteItemId: 'sqi-9',
+    supplierQuoteSupplierName: 'Acme',
+    supplierQuoteUnitPrice: 50,
+    unitType: 'hours',
+  };
+  const SUPPLIER_ITEM = {
+    id: 'sqi-9',
+    quoteId: 'sq-9',
+    productId: 'p-1',
+    productName: 'Service',
+    quantity: 2,
+    listPrice: 62.5,
+    discountPercent: 20,
+    unitPrice: 50,
+    note: null,
+    unitType: 'hours',
+    durationMonths: 1,
+    durationUnit: 'months',
+  };
+  const linePayload = (quantity: number, cost: number) => ({
+    items: [
+      {
+        id: 'qi-1',
+        productId: 'p-1',
+        productName: 'Service',
+        supplierQuoteItemId: 'sqi-9',
+        quantity,
+        unitPrice: 100,
+        productCost: 50,
+        productMolPercentage: null,
+        supplierQuoteUnitPrice: cost,
+        discount: 0,
+        unitType: 'hours',
+        durationMonths: 1,
+        durationUnit: 'months',
+      },
+    ],
+  });
+
+  const setupDraftQuote = () => {
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqFindLinkedOfferIdMock.mockResolvedValue(null);
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([EXISTING_SNAP]);
+    cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'draft' }));
+    sqFindItemsByIdsMock.mockResolvedValue([SUPPLIER_ITEM]);
+    sqFindFullForSnapshotMock.mockResolvedValue({
+      quote: { id: 'sq-9' },
+      items: [SUPPLIER_ITEM],
+    });
+  };
+
+  test('pushes changed quantity/cost onto the supplier item, with a pre-state snapshot', async () => {
+    setupDraftQuote();
+
+    const res = await putStatus(linePayload(5, 80));
+    expect(res.statusCode).toBe(200);
+    expect(sqSyncItemPricingMock).toHaveBeenCalledTimes(1);
+    expect(sqSyncItemPricingMock.mock.calls[0][0]).toBe('sq-9');
+    // The discount-to-us is preserved; the repo recomputes the list price from it.
+    expect(sqSyncItemPricingMock.mock.calls[0][1]).toEqual([
+      { itemId: 'sqi-9', quantity: 5, unitCost: 80, discountPercent: 20 },
+    ]);
+    expect(sqvInsertMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('skips the sync entirely when the supplier quote already has a linked order', async () => {
+    setupDraftQuote();
+    sqFindLinkedOrderIdMock.mockResolvedValue('sso-1');
+
+    const res = await putStatus(linePayload(5, 80));
+    expect(res.statusCode).toBe(200);
+    expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+    expect(sqvInsertMock).not.toHaveBeenCalled();
+  });
+
+  test('no-ops when the line already matches the supplier item', async () => {
+    setupDraftQuote();
+
+    const res = await putStatus(linePayload(2, 50));
+    expect(res.statusCode).toBe(200);
+    expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
   });
 });

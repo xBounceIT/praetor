@@ -606,17 +606,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     });
   };
 
-  const handleStatusUpdate = useCallback(
-    async (id: string, updates: Partial<SupplierQuote>) => {
-      try {
-        await onUpdateQuote(id, updates);
-      } catch (err) {
-        toastError((err as Error).message || t('sales:supplierQuotes.failedToUpdateStatus'));
-      }
-    },
-    [onUpdateQuote, t],
-  );
-
   const columns = useMemo<Column<SupplierQuote>[]>(
     () => [
       {
@@ -762,9 +751,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
           const hasOrder = hasOrderForQuote(row);
           const history = isHistoryRow(row);
           const isRowReadOnly = row.status !== 'draft';
-          // A linked supplier quote's status is synced from its client quote and read-only, so the
-          // manual status-transition buttons are hidden (issue #779).
-          const isSynced = Boolean(row.isStatusSynced);
 
           const isEditDisabled = hasOrder;
           const editTitle = hasOrder
@@ -830,82 +816,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 </TooltipTrigger>
                 <TooltipContent>{editTitle}</TooltipContent>
               </Tooltip>
-              {row.status === 'draft' && !hasOrder && !isSynced && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex">
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleStatusUpdate(row.id, { status: 'sent' });
-                        }}
-                        aria-label={t('sales:supplierQuotes.markSent', {
-                          defaultValue: 'Mark as sent',
-                        })}
-                        className="p-2 rounded-lg transition-all text-blue-700 hover:text-blue-600 hover:bg-blue-50"
-                      >
-                        <i className="fa-solid fa-paper-plane"></i>
-                      </button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {t('sales:supplierQuotes.markSent', { defaultValue: 'Mark as sent' })}
-                  </TooltipContent>
-                </Tooltip>
-              )}
-              {row.status === 'sent' && !hasOrder && !isSynced && (
-                <>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="inline-flex">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleStatusUpdate(row.id, { status: 'accepted' });
-                          }}
-                          aria-label={t('sales:supplierQuotes.markAccepted', {
-                            defaultValue: 'Mark as accepted',
-                          })}
-                          className="p-2 rounded-lg transition-all text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50"
-                        >
-                          <i className="fa-solid fa-check"></i>
-                        </button>
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {t('sales:supplierQuotes.markAccepted', {
-                        defaultValue: 'Mark as accepted',
-                      })}
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="inline-flex">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleStatusUpdate(row.id, { status: 'denied' });
-                          }}
-                          aria-label={t('sales:supplierQuotes.markDenied', {
-                            defaultValue: 'Mark as denied',
-                          })}
-                          className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
-                        >
-                          <i className="fa-solid fa-xmark"></i>
-                        </button>
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {t('sales:supplierQuotes.markDenied', {
-                        defaultValue: 'Mark as denied',
-                      })}
-                    </TooltipContent>
-                  </Tooltip>
-                </>
-              )}
               {row.status === 'accepted' && onCreateOrder && (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -951,42 +861,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   </TooltipContent>
                 </Tooltip>
               )}
-              {history && !isSynced && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex">
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          if (hasOrder) return;
-                          handleStatusUpdate(row.id, { status: 'draft' });
-                        }}
-                        disabled={hasOrder}
-                        aria-label={
-                          hasOrder
-                            ? t('sales:supplierQuotes.orderAlreadyExists', {
-                                defaultValue: 'An order for this quote already exists.',
-                              })
-                            : t('sales:supplierQuotes.restoreQuote', {
-                                defaultValue: 'Restore quote',
-                              })
-                        }
-                        className={`p-2 rounded-lg transition-all ${hasOrder ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'}`}
-                      >
-                        <i className="fa-solid fa-rotate-left"></i>
-                      </button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {hasOrder
-                      ? t('sales:supplierQuotes.orderAlreadyExists', {
-                          defaultValue: 'An order for this quote already exists.',
-                        })
-                      : t('sales:supplierQuotes.restoreQuote', { defaultValue: 'Restore quote' })}
-                  </TooltipContent>
-                </Tooltip>
-              )}
             </div>
           );
         },
@@ -996,7 +870,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       currency,
       getStatusLabel,
       onCreateOrder,
-      handleStatusUpdate,
       onViewOrders,
       openEditModal,
       t,

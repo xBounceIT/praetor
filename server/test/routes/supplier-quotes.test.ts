@@ -144,6 +144,9 @@ const DRAFT_QUOTE = {
   // fixtures must too, or `linkedClientQuoteId !== null` reads `undefined !== null` → true.
   linkedClientQuoteId: null as string | null,
   linkedClientQuoteStatus: null as string | null,
+  linkedClientQuoteExpiration: null as string | null,
+  linkedOfferStatus: null as string | null,
+  linkedOfferExpiration: null as string | null,
 };
 
 const SAMPLE_ITEM = {
@@ -230,8 +233,13 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     );
   });
 
-  test('409 rejects content edits when current status is non-draft', async () => {
-    sqFindByIdMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'sent' });
+  test('409 rejects content edits when the derived status is non-draft', async () => {
+    // Status is fully derived (#779): only a LINKED quote can be non-draft.
+    sqFindByIdMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      linkedClientQuoteId: 'q-1',
+      linkedClientQuoteStatus: 'sent',
+    });
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
 
     const res = await testApp.inject({
@@ -257,8 +265,12 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     expect(sqReplaceItemsMock).not.toHaveBeenCalled();
   });
 
-  test('409 rejects supplier reassignment when current status is accepted', async () => {
-    sqFindByIdMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'accepted' });
+  test('409 rejects supplier reassignment when the derived status is accepted', async () => {
+    sqFindByIdMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      linkedClientQuoteId: 'q-1',
+      linkedClientQuoteStatus: 'accepted',
+    });
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
 
     const res = await testApp.inject({
@@ -272,10 +284,11 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     expect(sqUpdateMock).not.toHaveBeenCalled();
   });
 
-  test('200 allows status-only transition from sent to accepted', async () => {
-    sqFindByIdMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'sent' });
+  test('200 ignores a client-sent status entirely — the status is fully derived (#779)', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
-    sqUpdateMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'accepted' });
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindItemsForQuoteMock.mockResolvedValue([]);
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -285,16 +298,22 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(sqUpdateMock).toHaveBeenCalledTimes(1);
-    expect(sqUpdateMock.mock.calls[0]?.[1]).toEqual(
-      expect.objectContaining({ status: 'accepted' }),
-    );
+    // Nothing written, nothing snapshotted: status is not a content field anymore.
+    expect(sqUpdateMock.mock.calls[0]?.[1]).toEqual({});
+    expect(sqvInsertMock).not.toHaveBeenCalled();
+    // The response carries the DERIVED status: unlinked → draft.
+    expect(JSON.parse(res.body).status).toBe('draft');
   });
 
-  test('200 allows denied → draft transition (status only)', async () => {
-    sqFindByIdMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'denied' });
+  test('200 a linked quote ignores status too — no more synced-status 409 (#779)', async () => {
+    sqFindByIdMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      linkedClientQuoteId: 'q-1',
+      linkedClientQuoteStatus: 'sent',
+    });
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
-    sqUpdateMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'draft' });
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindItemsForQuoteMock.mockResolvedValue([]);
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -304,7 +323,8 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(sqUpdateMock).toHaveBeenCalledTimes(1);
+    expect(sqUpdateMock.mock.calls[0]?.[1]).toEqual({});
+    expect(JSON.parse(res.body).status).toBe('sent');
   });
 
   test('409 rejects ID rename when a linked order exists', async () => {
@@ -340,12 +360,16 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     expect(sqUpdateMock).not.toHaveBeenCalled();
   });
 
-  // When a non-draft quote has both a non-status edit AND a conflicting id rename,
-  // the status guard runs first and the response surfaces status as the reason. The
+  // When a non-draft quote has both a content edit AND a conflicting id rename, the
+  // read-only guard runs first and the response surfaces that as the reason. The
   // id-conflict 409 from the surviving idConflict branch should NEVER appear in this
   // case - asserting the response copy locks in the precedence order.
-  test('409 status guard takes precedence over id-conflict on a non-draft quote', async () => {
-    sqFindByIdMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'sent' });
+  test('409 read-only guard takes precedence over id-conflict on a non-draft quote', async () => {
+    sqFindByIdMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      linkedClientQuoteId: 'q-1',
+      linkedClientQuoteStatus: 'sent',
+    });
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
     sqFindIdConflictMock.mockResolvedValue(true);
 
@@ -836,8 +860,12 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     expect(sqUpdateMock).not.toHaveBeenCalled();
   });
 
-  test('409 rejects customer reassignment when current status is accepted', async () => {
-    sqFindByIdMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'accepted' });
+  test('409 rejects customer reassignment when the derived status is accepted', async () => {
+    sqFindByIdMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      linkedClientQuoteId: 'q-1',
+      linkedClientQuoteStatus: 'accepted',
+    });
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
     clientsFindNameMock.mockResolvedValue('Globex Corp');
 
@@ -852,16 +880,11 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     expect(sqUpdateMock).not.toHaveBeenCalled();
   });
 
-  test('normalizes a legacy status (received → sent) on write', async () => {
-    // The request schema does not constrain status; a legacy 'received' must be folded to the
-    // canonical 'sent' before the write so the tightened CHECK (migration 0083) never rejects it.
-    sqFindByIdMock.mockResolvedValue({
-      ...DRAFT_QUOTE,
-      linkedClientQuoteId: null,
-      linkedClientQuoteStatus: null,
-    });
+  test('any status spelling is ignored, never written (#779 fully derived)', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
-    sqUpdateMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'sent' });
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindItemsForQuoteMock.mockResolvedValue([]);
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -871,17 +894,14 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(sqUpdateMock).toHaveBeenCalledTimes(1);
-    expect(sqUpdateMock.mock.calls[0]?.[1]?.status).toBe('sent');
+    expect(sqUpdateMock.mock.calls[0]?.[1]).toEqual({});
   });
 
-  test('409 expired unlinked quote rejects a status change (extend the date instead)', async () => {
-    // Without this guard an effectively-expired quote could be promoted straight to the frozen
-    // `accepted` state and become orderable, bypassing the #779 expired model (API-only path —
-    // the UI hides the transition buttons on expired rows).
+  test('409 expired unlinked quote stays content-read-only (only the date can change)', async () => {
+    // Unlinked → effective draft, but a past own date overlays `expired`, which is non-draft —
+    // so content edits stay locked until the date is extended (#779).
     sqFindByIdMock.mockResolvedValue({
       ...DRAFT_QUOTE,
-      status: 'sent',
       expirationDate: '2000-01-01',
     });
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
@@ -890,18 +910,17 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
       method: 'PUT',
       url: '/api/sales/supplier-quotes/sq-1',
       headers: authHeader(),
-      payload: { status: 'accepted' },
+      payload: { paymentTerms: '30 days' },
     });
 
     expect(res.statusCode).toBe(409);
-    expect(JSON.parse(res.body).error).toContain('Expired');
+    expect(JSON.parse(res.body).error).toContain('Non-draft');
     expect(sqUpdateMock).not.toHaveBeenCalled();
   });
 
   test('200 expired quote can still be revalidated by extending the expiration date', async () => {
     sqFindByIdMock.mockResolvedValue({
       ...DRAFT_QUOTE,
-      status: 'sent',
       expirationDate: '2000-01-01',
     });
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
@@ -922,21 +941,30 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     expect(sqUpdateMock).toHaveBeenCalledTimes(1);
   });
 
-  test('400 rejects an unknown status value instead of silently flooring it to draft', async () => {
-    // The derived-only `expired` round-tripped from a GET must never demote a sent quote.
-    sqFindByIdMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'sent' });
+  test('response status derives through the linked OFFER chain (#779)', async () => {
+    sqFindByIdMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      linkedClientQuoteId: 'cq-1',
+      linkedClientQuoteStatus: 'offer',
+      linkedClientQuoteExpiration: '2999-12-31',
+      linkedOfferStatus: 'accepted',
+      linkedOfferExpiration: '2000-01-01',
+    });
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue({ ...DRAFT_QUOTE, expirationDate: '2999-12-30' });
+    sqFindItemsForQuoteMock.mockResolvedValue([]);
 
     const res = await testApp.inject({
       method: 'PUT',
       url: '/api/sales/supplier-quotes/sq-1',
       headers: authHeader(),
-      payload: { status: 'expired' },
+      payload: { expirationDate: '2999-12-30' },
     });
 
-    expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body).error).toContain('status must be one of');
-    expect(sqUpdateMock).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    // The accepted OFFER drives the supplier quote: terminal, frozen — even though the offer's
+    // own date has long passed.
+    expect(JSON.parse(res.body).status).toBe('accepted');
   });
 
   test('PUT response carries the synced link fields, not just the bare update() row', async () => {

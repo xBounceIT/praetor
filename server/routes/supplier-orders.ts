@@ -349,11 +349,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Effective accepted (issue #779): a supplier quote linked to an accepted client quote is
       // orderable even if its own stored status is still draft; `accepted` is frozen so its own
       // expiry never demotes it.
-      const sourceEffective = effectiveSupplierQuoteStatusFromDate(
-        sourceQuote.status,
-        sourceQuote.linkedClientQuoteStatus,
-        sourceQuote.expirationDate,
-      );
+      const sourceEffective = effectiveSupplierQuoteStatusFromDate({
+        expirationDate: sourceQuote.expirationDate,
+        linkedClientStatus: sourceQuote.linkedClientQuoteStatus,
+        linkedClientQuoteExpiration: sourceQuote.linkedClientQuoteExpiration,
+        linkedOfferStatus: sourceQuote.linkedOfferStatus,
+        linkedOfferExpiration: sourceQuote.linkedOfferExpiration,
+      });
       if (sourceEffective !== 'accepted') {
         return replyError(request, reply, {
           statusCode: 409,
@@ -418,11 +420,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (!lockedQuote) {
             return { ok: false, status: 404, body: { error: 'Source quote not found' } };
           }
-          const lockedEffective = effectiveSupplierQuoteStatusFromDate(
-            lockedQuote.ownStatus,
-            lockedQuote.linkedClientStatus,
-            lockedQuote.expirationDate,
-          );
+          const lockedEffective = effectiveSupplierQuoteStatusFromDate({
+            expirationDate: lockedQuote.expirationDate,
+            linkedClientStatus: lockedQuote.linkedClientStatus,
+            linkedClientQuoteExpiration: lockedQuote.linkedClientQuoteExpiration,
+            linkedOfferStatus: lockedQuote.linkedOfferStatus,
+            linkedOfferExpiration: lockedQuote.linkedOfferExpiration,
+          });
           if (lockedEffective !== 'accepted') {
             return {
               ok: false,

@@ -807,11 +807,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ]);
           if (
             !fastFailQuote ||
-            effectiveSupplierQuoteStatusFromDate(
-              fastFailQuote.status,
-              fastFailQuote.linkedClientQuoteStatus,
-              fastFailQuote.expirationDate,
-            ) !== 'accepted'
+            effectiveSupplierQuoteStatusFromDate({
+              expirationDate: fastFailQuote.expirationDate,
+              linkedClientStatus: fastFailQuote.linkedClientQuoteStatus,
+              linkedClientQuoteExpiration: fastFailQuote.linkedClientQuoteExpiration,
+              linkedOfferStatus: fastFailQuote.linkedOfferStatus,
+              linkedOfferExpiration: fastFailQuote.linkedOfferExpiration,
+            }) !== 'accepted'
           )
             continue;
           if (fastFailLinked) continue;
@@ -826,11 +828,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             const lockedStatus = await supplierQuotesRepo.lockEffectiveStatusById(sqId, tx);
             if (
               !lockedStatus ||
-              effectiveSupplierQuoteStatusFromDate(
-                lockedStatus.ownStatus,
-                lockedStatus.linkedClientStatus,
-                lockedStatus.expirationDate,
-              ) !== 'accepted'
+              effectiveSupplierQuoteStatusFromDate({
+                expirationDate: lockedStatus.expirationDate,
+                linkedClientStatus: lockedStatus.linkedClientStatus,
+                linkedClientQuoteExpiration: lockedStatus.linkedClientQuoteExpiration,
+                linkedOfferStatus: lockedStatus.linkedOfferStatus,
+                linkedOfferExpiration: lockedStatus.linkedOfferExpiration,
+              }) !== 'accepted'
             )
               return false;
             const linkedUnderLock = await supplierQuotesRepo.findLinkedOrderId(sqId, tx);

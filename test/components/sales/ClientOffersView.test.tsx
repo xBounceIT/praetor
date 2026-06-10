@@ -630,6 +630,73 @@ describe('<ClientOffersView /> supplier-quote item labels', () => {
   });
 });
 
+describe('<ClientOffersView /> supplier-data sync affordances (#779)', () => {
+  test('shows the stale-data button and pulls the latest supplier values on click', async () => {
+    const supplierQuote: SupplierQuote = {
+      id: 'SQ-LIVE',
+      supplierId: 'sup-1',
+      supplierName: 'Acme Supplies',
+      items: [
+        {
+          id: 'sqi-live',
+          quoteId: 'SQ-LIVE',
+          productId: 'p-1',
+          productName: 'Widget',
+          // Current supplier values differ from the line's snapshot below → stale.
+          quantity: 4,
+          listPrice: 80,
+          discountPercent: 0,
+          unitPrice: 80,
+          unitType: 'hours',
+        },
+      ],
+      paymentTerms: 'immediate',
+      status: 'draft',
+      expirationDate: '2999-12-31',
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+    };
+    const staleOffer = buildOffer({
+      id: 'O-STALE',
+      items: [
+        {
+          id: 'item-stale',
+          offerId: 'O-STALE',
+          productId: 'p-1',
+          productName: 'Widget',
+          quantity: 2,
+          unitPrice: 100,
+          productCost: 60,
+          productMolPercentage: null,
+          unitType: 'hours',
+          supplierQuoteId: 'SQ-LIVE',
+          supplierQuoteItemId: 'sqi-live',
+          supplierQuoteUnitPrice: 60,
+        },
+      ],
+    });
+
+    render(
+      <ClientOffersView {...baseProps} offers={[staleOffer]} supplierQuotes={[supplierQuote]} />,
+    );
+    fireEvent.click(screen.getByText('O-STALE'));
+
+    // Rendered once per layout (mobile + desktop) — both share the same line state.
+    const refreshButtons = await screen.findAllByRole('button', {
+      name: 'sales:clientQuotes.staleSupplierData',
+    });
+    expect(refreshButtons.length).toBeGreaterThan(0);
+    fireEvent.click(refreshButtons[0]);
+
+    // Quantity + cost pulled from the supplier item; the affordance disappears once in sync.
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('button', { name: 'sales:clientQuotes.staleSupplierData' }),
+      ).toBeNull();
+    });
+  });
+});
+
 describe('<ClientOffersView /> MOL precision (issue #780)', () => {
   test('MOL line input keeps two decimals instead of rounding to one', async () => {
     const twoDecimalMolOffer = buildOffer({

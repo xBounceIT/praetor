@@ -23,6 +23,7 @@ import {
 } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
+import { syncSupplierItemsFromClientLines } from '../utils/supplier-item-sync.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
@@ -46,6 +47,9 @@ type IncomingQuoteItem = {
   unitPrice: number;
   productCost: number | null;
   productMolPercentage: number | null;
+  // The line's live unit cost for supplier-sourced lines — client-authoritative on edits of an
+  // existing link (issue #779 bidirectional sync); server-resolved on new links.
+  supplierQuoteUnitPrice?: number | null;
   discount: number;
   note?: string | null;
   unitType?: UnitType;
@@ -105,6 +109,13 @@ const normalizeQuoteItems = (
     if (!productMolPercentageResult.ok) {
       return { ok: false, message: productMolPercentageResult.message };
     }
+    const supplierQuoteUnitPriceResult = optionalLocalizedNonNegativeNumber(
+      item.supplierQuoteUnitPrice,
+      `items[${i}].supplierQuoteUnitPrice`,
+    );
+    if (!supplierQuoteUnitPriceResult.ok) {
+      return { ok: false, message: supplierQuoteUnitPriceResult.message };
+    }
     // Duration in months: a positive whole number, defaulting to 1 (one-off line item).
     const durationMonthsResult = optionalDurationMonths(
       item.durationMonths,
@@ -125,6 +136,7 @@ const normalizeQuoteItems = (
       unitPrice: unitPriceResult.value,
       productCost: productCostResult.value,
       productMolPercentage: productMolPercentageResult.value,
+      supplierQuoteUnitPrice: supplierQuoteUnitPriceResult.value,
       discount: itemDiscountResult.value || 0,
       note: normalizeNullableString(item.note),
       unitType,
@@ -223,9 +235,9 @@ const resolveQuoteItemSnapshots = async (
   for (const item of items) {
     const normalizedSupplierQuoteItemId = normalizeNullableString(item.supplierQuoteItemId);
     let resolvedProductId = item.productId;
+    const existingItem = existingItemsById && item.id ? existingItemsById.get(item.id) : undefined;
 
     if (existingItemsById && item.id) {
-      const existingItem = existingItemsById.get(item.id);
       const isUnchanged =
         existingItem &&
         existingItem.productId === item.productId &&
@@ -242,7 +254,11 @@ const resolveQuoteItemSnapshots = async (
           productMolPercentage: existingItem.productMolPercentage ?? null,
           supplierQuoteId: existingItem.supplierQuoteId ?? null,
           supplierQuoteSupplierName: existingItem.supplierQuoteSupplierName ?? null,
-          supplierQuoteUnitPrice: existingItem.supplierQuoteUnitPrice ?? null,
+          // Client-authoritative for an existing link (issue #779 bidirectional sync): a cost
+          // edit on a supplier-sourced line lands here, and is then pushed back onto the
+          // supplier item after the write. Absent → keep the stored snapshot.
+          supplierQuoteUnitPrice:
+            item.supplierQuoteUnitPrice ?? existingItem.supplierQuoteUnitPrice ?? null,
         });
         continue;
       }
@@ -274,6 +290,17 @@ const resolveQuoteItemSnapshots = async (
       supplierQuoteId = supplierQuoteSnapshot.supplierQuoteId;
       supplierQuoteSupplierName = supplierQuoteSnapshot.supplierName;
       supplierQuoteUnitPrice = supplierQuoteSnapshot.netCost;
+      // Same link RETAINED but other snapshot inputs changed (e.g. product/cost/MOL): the
+      // client's live cost still wins (#779 bidirectional sync — it is pushed back onto the
+      // supplier item after the write). A freshly-picked link starts from the supplier value.
+      if (
+        existingItem &&
+        normalizeNullableString(existingItem.supplierQuoteItemId) ===
+          normalizedSupplierQuoteItemId &&
+        item.supplierQuoteUnitPrice != null
+      ) {
+        supplierQuoteUnitPrice = item.supplierQuoteUnitPrice;
+      }
     }
 
     const productSnapshot = resolvedProductId ? productSnapshots.get(resolvedProductId) : undefined;
@@ -396,7 +423,12 @@ const quoteItemBodySchema = {
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     productCost: { type: 'number' },
-    productMolPercentage: { type: 'number' },
+    // Nullable: Ajv's coerceTypes would otherwise fold a null into 0, which both lies about the
+    // value and defeats the "unchanged line" snapshot comparison.
+    productMolPercentage: { type: ['number', 'null'] },
+    // The line's live unit cost for supplier-sourced lines — client-authoritative on edits of an
+    // existing link (issue #779 bidirectional sync).
+    supplierQuoteUnitPrice: { type: ['number', 'null'] },
     discount: { type: 'number' },
     note: { type: 'string' },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
@@ -1247,6 +1279,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 tx,
               )
             : await clientQuotesRepo.findItemsForQuote(quote.id, tx);
+          // Bidirectional sync (issue #779): push client-side edits of supplier-sourced line
+          // fields (quantity, unit cost) onto the referenced supplier quote items, atomically
+          // with the quote write.
+          if (normalizedItems) {
+            await syncSupplierItemsFromClientLines(
+              request,
+              'client_quote.update',
+              normalizedItems,
+              tx,
+            );
+          }
           return { quote, items };
         });
       } catch (err) {

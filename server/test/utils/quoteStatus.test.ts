@@ -71,51 +71,79 @@ describe('isTerminalQuoteStatus', () => {
   });
 });
 
-describe('effectiveSupplierQuoteStatus', () => {
-  test('linked: mirrors the client quote pipeline status', () => {
+describe('effectiveSupplierQuoteStatus (fully derived chain)', () => {
+  test('unlinked: always draft, with its own expiry overlay', () => {
     expect(
-      effectiveSupplierQuoteStatus({
-        ownStatus: 'draft',
-        linkedClientStatus: 'sent',
-        isPastOwnExpiration: false,
-      }),
-    ).toBe('sent');
+      effectiveSupplierQuoteStatus({ linkedClientStatus: null, isPastOwnExpiration: false }),
+    ).toBe('draft');
+    expect(
+      effectiveSupplierQuoteStatus({ linkedClientStatus: null, isPastOwnExpiration: true }),
+    ).toBe('expired');
   });
 
-  test('linked: own expiry overrides the mirrored status (Scaduto is never inherited)', () => {
-    // Client quote still valid (e.g. sent) but the supplier quote is past its own date.
+  test('linked quote without an offer: mirrors the quote, including its expiry', () => {
+    expect(
+      effectiveSupplierQuoteStatus({ linkedClientStatus: 'sent', isPastOwnExpiration: false }),
+    ).toBe('sent');
     expect(
       effectiveSupplierQuoteStatus({
-        ownStatus: 'draft',
         linkedClientStatus: 'sent',
-        isPastOwnExpiration: true,
+        isPastOwnExpiration: false,
+        isPastLinkedQuoteExpiration: true,
       }),
     ).toBe('expired');
   });
 
-  test('linked to an accepted client quote: frozen, never expired even if own date passed', () => {
+  test('own expiry overlays any non-terminal chain result', () => {
     expect(
-      effectiveSupplierQuoteStatus({
-        ownStatus: 'draft',
-        linkedClientStatus: 'accepted',
-        isPastOwnExpiration: true,
-      }),
-    ).toBe('accepted');
+      effectiveSupplierQuoteStatus({ linkedClientStatus: 'sent', isPastOwnExpiration: true }),
+    ).toBe('expired');
   });
 
-  test('unlinked: uses its own status with its own expiry overlay', () => {
+  test('terminal chain results are frozen, never expired', () => {
+    expect(
+      effectiveSupplierQuoteStatus({ linkedClientStatus: 'accepted', isPastOwnExpiration: true }),
+    ).toBe('accepted');
     expect(
       effectiveSupplierQuoteStatus({
-        ownStatus: 'sent',
-        linkedClientStatus: null,
+        linkedClientStatus: 'offer',
+        linkedOfferStatus: 'denied',
+        isPastOwnExpiration: true,
+      }),
+    ).toBe('denied');
+  });
+
+  test('a live offer on the linked quote reads as "offer"', () => {
+    expect(
+      effectiveSupplierQuoteStatus({
+        linkedClientStatus: 'offer',
+        linkedOfferStatus: 'draft',
         isPastOwnExpiration: false,
       }),
-    ).toBe('sent');
+    ).toBe('offer');
     expect(
       effectiveSupplierQuoteStatus({
-        ownStatus: 'sent',
-        linkedClientStatus: null,
-        isPastOwnExpiration: true,
+        linkedClientStatus: 'offer',
+        linkedOfferStatus: 'sent',
+        isPastOwnExpiration: false,
+      }),
+    ).toBe('offer');
+  });
+
+  test("the offer's terminal/expired states flow through to the supplier quote", () => {
+    expect(
+      effectiveSupplierQuoteStatus({
+        linkedClientStatus: 'offer',
+        linkedOfferStatus: 'accepted',
+        isPastOwnExpiration: false,
+      }),
+    ).toBe('accepted');
+    expect(
+      effectiveSupplierQuoteStatus({
+        linkedClientStatus: 'offer',
+        linkedOfferStatus: 'sent',
+        isPastLinkedOfferExpiration: true,
+        isPastOwnExpiration: false,
       }),
     ).toBe('expired');
   });
@@ -167,12 +195,52 @@ describe('date-accepting wrappers', () => {
     expect(effectiveQuoteStatusFromDate('accepted', '2000-01-01')).toBe('accepted');
   });
 
-  test('effectiveSupplierQuoteStatusFromDate mirrors the link with own-date overlay', () => {
-    expect(effectiveSupplierQuoteStatusFromDate('draft', 'sent', '2999-12-31')).toBe('sent');
-    expect(effectiveSupplierQuoteStatusFromDate('draft', 'sent', '2000-01-01')).toBe('expired');
-    expect(effectiveSupplierQuoteStatusFromDate('draft', 'accepted', '2000-01-01')).toBe(
-      'accepted',
-    );
-    expect(effectiveSupplierQuoteStatusFromDate('sent', null, null)).toBe('sent');
+  test('effectiveSupplierQuoteStatusFromDate derives the full chain from dates', () => {
+    expect(
+      effectiveSupplierQuoteStatusFromDate({
+        expirationDate: '2999-12-31',
+        linkedClientStatus: 'sent',
+      }),
+    ).toBe('sent');
+    expect(
+      effectiveSupplierQuoteStatusFromDate({
+        expirationDate: '2000-01-01',
+        linkedClientStatus: 'sent',
+      }),
+    ).toBe('expired');
+    // The linked QUOTE's expiry flows through too.
+    expect(
+      effectiveSupplierQuoteStatusFromDate({
+        expirationDate: '2999-12-31',
+        linkedClientStatus: 'sent',
+        linkedClientQuoteExpiration: '2000-01-01',
+      }),
+    ).toBe('expired');
+    expect(
+      effectiveSupplierQuoteStatusFromDate({
+        expirationDate: '2000-01-01',
+        linkedClientStatus: 'accepted',
+      }),
+    ).toBe('accepted');
+    // Unlinked → draft regardless of any stored status.
+    expect(
+      effectiveSupplierQuoteStatusFromDate({ expirationDate: null, linkedClientStatus: null }),
+    ).toBe('draft');
+    // A live offer reads as "offer"; its acceptance flows through.
+    expect(
+      effectiveSupplierQuoteStatusFromDate({
+        expirationDate: '2999-12-31',
+        linkedClientStatus: 'offer',
+        linkedOfferStatus: 'sent',
+        linkedOfferExpiration: '2999-12-31',
+      }),
+    ).toBe('offer');
+    expect(
+      effectiveSupplierQuoteStatusFromDate({
+        expirationDate: '2999-12-31',
+        linkedClientStatus: 'offer',
+        linkedOfferStatus: 'accepted',
+      }),
+    ).toBe('accepted');
   });
 });

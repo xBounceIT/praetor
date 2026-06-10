@@ -963,12 +963,10 @@ export interface SupplierQuote {
     | '180gg'
     | '240gg'
     | '365gg';
-  // Effective status (issue #779): synced from the linked client quote + the `expired` overlay.
-  // `offer`/`expired` only appear here (server-computed), never as a manually-set value.
+  // FULLY DERIVED status (issue #779): unlinked → draft; linked → follows the client quote and,
+  // once one exists, the client offer — with the `expired` overlays. Never manually set.
   status: 'draft' | 'sent' | 'offer' | 'accepted' | 'denied' | 'expired';
-  // Raw stored pipeline status — the editable value the form uses while the quote is unlinked.
-  ownStatus?: 'draft' | 'sent' | 'offer' | 'accepted' | 'denied';
-  // When linked to a client quote, the status is read-only and mirrors it (#779).
+  // When linked to a client quote, the status is driven by it (#779).
   isStatusSynced?: boolean;
   linkedClientQuoteId?: string | null;
   expirationDate: string;
@@ -982,10 +980,7 @@ export type SupplierQuoteVersionReason = 'update' | 'restore';
 
 export interface SupplierQuoteVersionSnapshot {
   schemaVersion: 1;
-  quote: Omit<
-    SupplierQuote,
-    'items' | 'linkedOrderId' | 'ownStatus' | 'isStatusSynced' | 'linkedClientQuoteId'
-  >;
+  quote: Omit<SupplierQuote, 'items' | 'linkedOrderId' | 'isStatusSynced' | 'linkedClientQuoteId'>;
   items: SupplierQuoteItem[];
 }
 

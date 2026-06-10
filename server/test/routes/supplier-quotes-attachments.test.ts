@@ -351,7 +351,12 @@ describe('POST /api/sales/supplier-quotes/:id/attachments', () => {
   });
 
   test('409 when quote status is not draft', async () => {
-    sqFindByIdMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'sent' });
+    // Status is fully derived (#779): only a LINKED quote can be non-draft.
+    sqFindByIdMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      linkedClientQuoteId: 'q-1',
+      linkedClientQuoteStatus: 'sent',
+    });
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
 
     const { payload, contentType } = buildMultipartBody(
@@ -623,7 +628,12 @@ describe('DELETE /api/sales/supplier-quotes/:id/attachments/:attachmentId', () =
   });
 
   test('409 when quote is not draft', async () => {
-    sqFindByIdMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'sent' });
+    // Status is fully derived (#779): only a LINKED quote can be non-draft.
+    sqFindByIdMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      linkedClientQuoteId: 'q-1',
+      linkedClientQuoteStatus: 'sent',
+    });
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
 
     const res = await testApp.inject({

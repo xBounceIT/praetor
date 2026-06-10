@@ -75,17 +75,36 @@ export const effectiveQuoteStatus = (
   return isPastExpiration ? 'expired' : normalized;
 };
 
-// Effective status for a supplier quote. When linked to a client quote (`linkedClientStatus`
-// is non-null) the supplier quote MIRRORS the client quote's pipeline status; when unlinked it
-// uses its own stored status. In both cases the `expired` overlay is computed from the SUPPLIER
-// quote's OWN expiration (issue #779: Scaduto is never inherited from the client quote).
+// Effective status for a supplier quote — FULLY DERIVED model (issue #779, extended): the
+// visible status never comes from the supplier quote's own stored status (vestigial), it follows
+// the linked client document chain:
+//   unlinked                    → draft (selectable in the client-quote dialog)
+//   linked quote, no offer yet  → the client quote's effective status (quote expiry included)
+//   linked quote with an offer  → accepted/denied/expired per the OFFER, else `offer`
+// On top of the chain, the supplier quote's OWN expiration overlays `expired` onto any
+// non-terminal result; accepted/denied stay frozen (never expired), like everywhere in the model.
 export const effectiveSupplierQuoteStatus = (args: {
-  ownStatus: string;
   linkedClientStatus: string | null;
   isPastOwnExpiration: boolean;
+  isPastLinkedQuoteExpiration?: boolean;
+  linkedOfferStatus?: string | null;
+  isPastLinkedOfferExpiration?: boolean;
 }): EffectiveQuoteStatus => {
-  const base = args.linkedClientStatus ?? args.ownStatus;
-  return effectiveQuoteStatus(base, args.isPastOwnExpiration);
+  let base: EffectiveQuoteStatus;
+  if (args.linkedClientStatus === null) {
+    base = 'draft';
+  } else if (args.linkedOfferStatus != null) {
+    const offerEffective = effectiveQuoteStatus(
+      args.linkedOfferStatus,
+      args.isPastLinkedOfferExpiration ?? false,
+    );
+    // A live (draft/sent) offer reads as "in offer"; its terminal/expired states flow through.
+    base = offerEffective === 'draft' || offerEffective === 'sent' ? 'offer' : offerEffective;
+  } else {
+    base = effectiveQuoteStatus(args.linkedClientStatus, args.isPastLinkedQuoteExpiration ?? false);
+  }
+  if (TERMINAL_STATUSES.has(base as QuotePipelineStatus)) return base;
+  return args.isPastOwnExpiration ? 'expired' : base;
 };
 
 // Date-accepting conveniences over the pure cores above. Every route used to hand-build the
@@ -97,15 +116,23 @@ export const effectiveQuoteStatusFromDate = (
 ): EffectiveQuoteStatus =>
   effectiveQuoteStatus(status, expirationDate ? isPastLocalDate(expirationDate) : false);
 
-export const effectiveSupplierQuoteStatusFromDate = (
-  ownStatus: string,
-  linkedClientStatus: string | null,
-  expirationDate: string | null | undefined,
-): EffectiveQuoteStatus =>
+export const effectiveSupplierQuoteStatusFromDate = (args: {
+  expirationDate: string | null | undefined;
+  linkedClientStatus: string | null;
+  linkedClientQuoteExpiration?: string | null;
+  linkedOfferStatus?: string | null;
+  linkedOfferExpiration?: string | null;
+}): EffectiveQuoteStatus =>
   effectiveSupplierQuoteStatus({
-    ownStatus,
-    linkedClientStatus,
-    isPastOwnExpiration: expirationDate ? isPastLocalDate(expirationDate) : false,
+    linkedClientStatus: args.linkedClientStatus,
+    isPastOwnExpiration: args.expirationDate ? isPastLocalDate(args.expirationDate) : false,
+    isPastLinkedQuoteExpiration: args.linkedClientQuoteExpiration
+      ? isPastLocalDate(args.linkedClientQuoteExpiration)
+      : false,
+    linkedOfferStatus: args.linkedOfferStatus ?? null,
+    isPastLinkedOfferExpiration: args.linkedOfferExpiration
+      ? isPastLocalDate(args.linkedOfferExpiration)
+      : false,
   });
 
 // Whether a client quote may transition from `from` to `to`. The only structural restriction

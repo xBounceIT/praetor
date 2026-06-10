@@ -311,23 +311,26 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   );
   const today = getLocalDateString();
 
-  const acceptedSupplierQuotes = useMemo(
+  // Lines source from DRAFT supplier quotes (#779 derived model): a supplier quote starts as
+  // draft and progresses only with the client document that uses it. The date check is a
+  // stale-cache belt — expired never reads as draft.
+  const sourceableSupplierQuotes = useMemo(
     () =>
       supplierQuotes.filter(
-        (q) => q.status === 'accepted' && !isDateOnlyBeforeToday(q.expirationDate, today),
+        (q) => q.status === 'draft' && !isDateOnlyBeforeToday(q.expirationDate, today),
       ),
     [supplierQuotes, today],
   );
 
   const supplierQuoteItemOptions = useMemo(() => {
     const options: Array<{ id: string; name: string }> = [];
-    for (const quote of acceptedSupplierQuotes) {
+    for (const quote of sourceableSupplierQuotes) {
       for (const item of quote.items) {
         options.push({ id: item.id, name: supplierQuoteItemLabel(quote, item) });
       }
     }
     return options;
-  }, [acceptedSupplierQuotes]);
+  }, [sourceableSupplierQuotes]);
 
   const supplierQuoteSelectOptions = useMemo(
     () => [
@@ -354,6 +357,42 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   const getSupplierQuoteItemDisplayValue = (itemId?: string | null) => {
     if (!itemId) return t('sales:clientQuotes.noSupplierQuote');
     return supplierQuoteItemLabelById.get(itemId) ?? t('sales:clientQuotes.noSupplierQuote');
+  };
+
+  // item-id → its CURRENT supplier quote + item, for the bidirectional-sync affordances (#779):
+  // order-locked detection (sourced fields stay frozen) and stale-data detection (the per-line
+  // "old info — update?" refresh button).
+  const supplierQuoteItemIndex = useMemo(() => {
+    const map = new Map<string, { quote: SupplierQuote; item: SupplierQuote['items'][number] }>();
+    for (const quote of supplierQuotes) {
+      for (const item of quote.items) {
+        map.set(item.id, { quote, item });
+      }
+    }
+    return map;
+  }, [supplierQuotes]);
+
+  // Pulls the linked supplier item's current quantity/cost back into the line, mirroring the
+  // linking math: the sale price is recomputed from the refreshed cost and the line's MOL (#779).
+  const refreshLineFromSupplier = (index: number, source: SupplierQuote['items'][number]) => {
+    if (isReadOnly) return;
+    setFormData((prev) => {
+      const items = [...(prev.items || [])];
+      const cur = items[index];
+      if (!cur) return prev;
+      const mol = cur.productMolPercentage ? Number(cur.productMolPercentage) : 0;
+      items[index] = {
+        ...cur,
+        quantity: source.quantity,
+        supplierQuoteUnitPrice: source.unitPrice,
+        unitPrice: convertUnitPrice(
+          calcProductSalePrice(source.unitPrice, mol),
+          'hours',
+          cur.unitType || 'hours',
+        ),
+      };
+      return { ...prev, items };
+    });
   };
 
   const activeProductIds = useMemo(
@@ -1096,7 +1135,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           return { ...prev, items };
         }
 
-        const selectedQuote = acceptedSupplierQuotes.find((quote) =>
+        const selectedQuote = sourceableSupplierQuotes.find((quote) =>
           quote.items.some((item) => item.id === value),
         );
         const selectedQuoteItem = selectedQuote?.items.find((item) => item.id === value);
@@ -1482,6 +1521,23 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         const lineMargin = lineSalePrice - lineCost;
 
                         const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
+                        const linkedSupplierRef = item.supplierQuoteItemId
+                          ? supplierQuoteItemIndex.get(item.supplierQuoteItemId)
+                          : undefined;
+                        // Order-locked supplier quotes are final procurement: their sourced
+                        // fields stay frozen and no retro-sync happens (#779). Otherwise the
+                        // quantity/cost of a sourced line are editable and write back.
+                        const supplierLineLocked =
+                          isLinkedToSupplierQuote &&
+                          Boolean(linkedSupplierRef?.quote.linkedOrderId);
+                        const supplierDataStale = Boolean(
+                          !isReadOnly &&
+                            !supplierLineLocked &&
+                            linkedSupplierRef &&
+                            (Number(item.supplierQuoteUnitPrice ?? 0) !==
+                              linkedSupplierRef.item.unitPrice ||
+                              Number(item.quantity) !== linkedSupplierRef.item.quantity),
+                        );
                         const supplierQuoteHref = buildSupplierQuoteQuickViewHref(
                           resolveLinkedSupplierQuoteId(item, quoteIdBySupplierQuoteItemId),
                           allSupplierQuoteIds,
@@ -1526,6 +1582,21 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                       status={readOnlyStatus}
                                       statusLabel={statusLabel}
                                     />
+                                    {supplierDataStale && linkedSupplierRef && (
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                          refreshLineFromSupplier(index, linkedSupplierRef.item)
+                                        }
+                                        className="ml-auto h-5 px-1.5 text-[9px] font-bold uppercase tracking-wide text-amber-700 border-amber-400/60 bg-amber-50 hover:bg-amber-100 hover:text-amber-800"
+                                      >
+                                        {t('sales:clientQuotes.staleSupplierData', {
+                                          defaultValue: 'Old info — update?',
+                                        })}
+                                      </Button>
+                                    )}
                                   </div>
                                   <div className="flex items-center gap-1">
                                     <SelectControl
@@ -1636,7 +1707,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     onValueChange={(value) =>
                                       updateItem(index, 'quantity', parseNumberInputValue(value))
                                     }
-                                    disabled={isReadOnly || isLinkedToSupplierQuote}
+                                    disabled={isReadOnly || supplierLineLocked}
                                     className="w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
                                   />
                                   <span className="text-xs font-semibold text-zinc-400 shrink-0">
@@ -1705,7 +1776,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     value={cost}
                                     formatDecimals={2}
                                     onValueChange={handleCostChange}
-                                    disabled={isReadOnly || isLinkedToSupplierQuote}
+                                    disabled={isReadOnly || supplierLineLocked}
                                     className="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                   />
                                   <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
@@ -1768,6 +1839,23 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                             <div className="hidden lg:flex gap-2 items-center pt-5">
                               <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center">
                                 <div className="relative col-span-3 min-w-0">
+                                  {supplierDataStale && linkedSupplierRef && (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() =>
+                                        refreshLineFromSupplier(index, linkedSupplierRef.item)
+                                      }
+                                      // Floats in the same gutter band as the quick-view button,
+                                      // left-aligned (#779 reverse sync affordance).
+                                      className="lg:absolute lg:left-0 lg:-top-1 lg:z-10 lg:-translate-y-full h-6 px-2 text-[10px] font-bold uppercase tracking-wide text-amber-700 border-amber-400/60 bg-amber-50 hover:bg-amber-100 hover:text-amber-800"
+                                    >
+                                      {t('sales:clientQuotes.staleSupplierData', {
+                                        defaultValue: 'Old info — update?',
+                                      })}
+                                    </Button>
+                                  )}
                                   {canViewSupplierQuotes && (
                                     <QuickViewLinkButton
                                       href={supplierQuoteHref}
@@ -1840,7 +1928,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                       onValueChange={(value) =>
                                         updateItem(index, 'quantity', parseNumberInputValue(value))
                                       }
-                                      disabled={isReadOnly || isLinkedToSupplierQuote}
+                                      disabled={isReadOnly || supplierLineLocked}
                                       className="w-full max-w-[5rem] text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                     />
                                     <span className="text-xs font-semibold text-zinc-400 shrink-0">
@@ -1890,7 +1978,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                       value={cost}
                                       formatDecimals={2}
                                       onValueChange={handleCostChange}
-                                      disabled={isReadOnly || isLinkedToSupplierQuote}
+                                      disabled={isReadOnly || supplierLineLocked}
                                       className="w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                     />
                                     <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
