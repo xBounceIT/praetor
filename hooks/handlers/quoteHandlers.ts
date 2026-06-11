@@ -205,17 +205,20 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
   const deleteClientOffer = async (id: string) => {
     try {
       // Read before the await — after the delete the linkage is gone from state. Removing an offer
-      // collapses a sourced supplier quote's derived status back onto the quote chain. The offer's
-      // sourcing mirrors its source quote's, so check that quote's lines.
+      // collapses a sourced supplier quote's derived status back onto the quote chain. Check BOTH
+      // the source quote's lines AND the offer's own: an offer can carry sourced lines that exist
+      // only on the offer (added while editing the draft), and the backend counts those as
+      // sourcing candidates too — deleting them un-sources the supplier quote just the same.
       const linkedQuote = getQuotes().find((q) => q.linkedOfferId === id);
+      const offer = getClientOffers().find((o) => o.id === id);
       await api.clientOffers.delete(id);
-      setClientOffers((prev) => prev.filter((offer) => offer.id !== id));
+      setClientOffers((prev) => prev.filter((entry) => entry.id !== id));
       setQuotes((prev) =>
         prev.map((quote) =>
           quote.linkedOfferId === id ? { ...quote, linkedOfferId: undefined } : quote,
         ),
       );
-      if (sourcesSupplierQuote(linkedQuote)) {
+      if (sourcesSupplierQuote(linkedQuote) || sourcesSupplierQuote(offer)) {
         await refreshLinkedSupplierQuotes();
       }
     } catch (err) {

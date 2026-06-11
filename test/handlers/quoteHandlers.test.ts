@@ -472,6 +472,35 @@ describe('makeQuoteHandlers', () => {
     expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
   });
 
+  test('deleteClientOffer refreshes supplier quotes when only the OFFER carried the sourced line (#812 round 32)', async () => {
+    // The sourced line exists only on the offer (added while editing the draft) — the linked
+    // quote sources nothing. The backend counts offer lines as sourcing candidates, so deleting
+    // the offer still un-sources the supplier quote and the cache must refresh.
+    apiMocks.clientOffersDelete.mockImplementation(() => Promise.resolve());
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', linkedOfferId: 'of-1', items: [] }],
+      clientOffers: [{ id: 'of-1', items: [{ supplierQuoteItemId: 'sqi-9' }] }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.deleteClientOffer('of-1');
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
+
+  test('deleteClientOffer does NOT refresh supplier quotes when neither the quote nor the offer sources one', async () => {
+    apiMocks.clientOffersDelete.mockImplementation(() => Promise.resolve());
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', linkedOfferId: 'of-1', items: [] }],
+      clientOffers: [{ id: 'of-1', items: [] }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.deleteClientOffer('of-1');
+    expect(refreshSupplierQuoteFlow).not.toHaveBeenCalled();
+  });
+
   test('createClientOfferFromQuote refreshes supplier quotes when the source quote sources one', async () => {
     apiMocks.clientOffersCreate.mockImplementation((data: unknown) =>
       Promise.resolve({ ...(data as object), id: 'of-new' }),
