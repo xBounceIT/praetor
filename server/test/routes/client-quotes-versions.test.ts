@@ -43,6 +43,7 @@ const cqFindAnyLinkedSaleMock = mock();
 const cqDeleteDraftSalesForQuoteMock = mock();
 const cqFindFullForSnapshotMock = mock();
 const cqFindItemsForQuoteMock = mock();
+const cqFindItemSnapshotsForQuoteMock = mock();
 const cqFindIdConflictMock = mock();
 const cqUpdateMock = mock();
 const cqRenameMock = mock();
@@ -96,6 +97,7 @@ beforeAll(async () => {
     deleteDraftSalesForQuote: cqDeleteDraftSalesForQuoteMock,
     findFullForSnapshot: cqFindFullForSnapshotMock,
     findItemsForQuote: cqFindItemsForQuoteMock,
+    findItemSnapshotsForQuote: cqFindItemSnapshotsForQuoteMock,
     findIdConflict: cqFindIdConflictMock,
     update: cqUpdateMock,
     rename: cqRenameMock,
@@ -227,6 +229,7 @@ const allMocks = [
   cqDeleteDraftSalesForQuoteMock,
   cqFindFullForSnapshotMock,
   cqFindItemsForQuoteMock,
+  cqFindItemSnapshotsForQuoteMock,
   cqFindIdConflictMock,
   cqUpdateMock,
   cqRenameMock,
@@ -269,6 +272,9 @@ beforeEach(async () => {
   // Restore's progression guard reads the SNAPSHOT's earliest sourced supplier-quote expiration;
   // default to "nothing sourced is expired" (far-future) so most tests don't trip it.
   sqFindEarliestExpirationByIdsMock.mockResolvedValue('2999-12-31');
+  // Status-only advances resolve the CURRENT lines' sourced supplier quotes (#812 round 10);
+  // default to no lines so unrelated tests don't trip the expired-supplier guard.
+  cqFindItemSnapshotsForQuoteMock.mockResolvedValue([]);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/sales/client-quotes');
 });

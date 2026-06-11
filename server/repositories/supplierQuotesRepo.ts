@@ -8,6 +8,10 @@ import { supplierSales } from '../db/schema/supplierSales.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
+import {
+  effectiveSupplierQuoteStatusFromDate,
+  isTerminalQuoteStatus,
+} from '../utils/quote-status.ts';
 
 export type SupplierQuote = {
   id: string;
@@ -250,10 +254,16 @@ export const findById = async (
   return rows[0] ? mapQuote(rows[0]) : null;
 };
 
-// Earliest expiration among the given supplier quotes (the ones a client quote sources via its
-// lines). The client-quotes progression guard reads it to block advancing a quote backed by a
-// stale supplier quote (issue #779 follow-up; replaces the single header-linked expiration).
-// Null when the id list is empty or none have an expiration.
+// Earliest BLOCKING expiration among the given supplier quotes (the ones a client quote sources
+// via its lines). The client-quotes progression guard reads it to block advancing a quote backed
+// by a stale supplier quote (issue #779 follow-up; replaces the single header-linked expiration).
+// NOT a raw MIN over dates (#812 round 10): a supplier quote whose chained EFFECTIVE status is
+// terminal (accepted/denied) is frozen and never shows as Expired — e.g. it derives `accepted`
+// through another accepted client document — so its past date must not block progressing a quote
+// that reuses it. Each row's effective status is computed with the same chain columns findById
+// materializes and the canonical effectiveSupplierQuoteStatusFromDate (no SQL re-implementation
+// that could drift); terminal rows are excluded from the MIN. Null when the id list is empty or
+// no non-terminal sourced quote has an expiration.
 export const findEarliestExpirationByIds = async (
   ids: string[],
   exec: DbExecutor = db,
@@ -261,10 +271,35 @@ export const findEarliestExpirationByIds = async (
   const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
   if (uniqueIds.length === 0) return null;
   const rows = await exec
-    .select({ expiration: sql<string | null>`MIN(${supplierQuotes.expirationDate})::text` })
+    .select({
+      expirationDate: supplierQuotes.expirationDate,
+      linkedClientQuoteStatus: linkedClientQuoteStatusSubquery,
+      linkedClientQuoteExpiration: linkedClientQuoteExpirationSubquery,
+      linkedOfferStatus: linkedOfferStatusSubquery,
+      linkedOfferExpiration: linkedOfferExpirationSubquery,
+    })
     .from(supplierQuotes)
     .where(inArray(supplierQuotes.id, uniqueIds));
-  return normalizeNullableDateOnly(rows[0]?.expiration ?? null, 'supplierQuote.expirationDate');
+  let earliest: string | null = null;
+  for (const row of rows) {
+    const expirationDate = normalizeNullableDateOnly(
+      row.expirationDate,
+      'supplierQuote.expirationDate',
+    );
+    if (!expirationDate) continue;
+    const effective = effectiveSupplierQuoteStatusFromDate({
+      expirationDate,
+      linkedClientStatus: row.linkedClientQuoteStatus,
+      linkedClientQuoteExpiration: row.linkedClientQuoteExpiration,
+      linkedOfferStatus: row.linkedOfferStatus,
+      linkedOfferExpiration: row.linkedOfferExpiration,
+    });
+    // Terminal-effective (accepted/denied) is frozen — never expired, never blocks. The derived
+    // `expired` itself is NOT terminal (isTerminalQuoteStatus floors it), so it stays counted.
+    if (isTerminalQuoteStatus(effective)) continue;
+    if (!earliest || expirationDate < earliest) earliest = expirationDate;
+  }
+  return earliest;
 };
 
 export const existsById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {

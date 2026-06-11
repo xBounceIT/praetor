@@ -353,17 +353,38 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
   });
 
   test('409 blocks progression to sent while a SOURCED supplier quote is expired', async () => {
-    // The progression guard is line-sourced now (issue #779 follow-up): the gate's
-    // linkedSupplierQuoteExpiration is the earliest expiration among the supplier quotes the
-    // quote's lines source. A status-only advance reads that current sourced state.
-    cqFindCurrentMock.mockResolvedValue(
-      gate({ status: 'draft', linkedSupplierQuoteExpiration: '2000-01-01' }),
-    );
+    // The progression guard is line-sourced now (issue #779 follow-up). A status-only advance
+    // resolves the CURRENT lines' sourced supplier quotes through the status-aware
+    // findEarliestExpirationByIds (#812 round 10) — not the gate's raw-MIN
+    // linkedSupplierQuoteExpiration, which would wrongly block on a terminal-frozen sourced quote.
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      { id: 'qi-1', supplierQuoteId: 'sq-9', supplierQuoteItemId: 'sqi-9' },
+    ]);
+    sqFindEarliestExpirationByIdsMock.mockResolvedValue('2000-01-01');
 
     const res = await putStatus({ status: 'sent' });
     expect(res.statusCode).toBe(409);
     expect(JSON.parse(res.body).error).toContain('expired');
+    expect(sqFindEarliestExpirationByIdsMock).toHaveBeenCalledWith(['sq-9']);
     expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 allows a status-only advance when the helper reports no blocking expiration', async () => {
+    // Terminal-frozen sourced supplier quotes are excluded inside the helper, so a null/future
+    // result must let the advance through even if the raw gate value would have been past.
+    cqFindCurrentMock.mockResolvedValue(
+      gate({ status: 'draft', linkedSupplierQuoteExpiration: '2000-01-01' }),
+    );
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      { id: 'qi-1', supplierQuoteId: 'sq-9', supplierQuoteItemId: 'sqi-9' },
+    ]);
+    sqFindEarliestExpirationByIdsMock.mockResolvedValue(null);
+    cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'sent' }));
+
+    const res = await putStatus({ status: 'sent' });
+    expect(res.statusCode).toBe(200);
+    expect(sqFindEarliestExpirationByIdsMock).toHaveBeenCalledWith(['sq-9']);
   });
 
   test('409 blocks progression when the REWRITTEN lines source an expired supplier quote', async () => {

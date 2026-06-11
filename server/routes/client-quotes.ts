@@ -1128,15 +1128,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       // A quote can't progress to sent/offer/accepted while a supplier quote it SOURCES via its
-      // lines is expired (issue #779 follow-up — line-sourced, no header link). Use the rewritten
-      // lines' sourced supplier quotes when items change, else the current sourced state (the gate
-      // value, which is the earliest sourced-supplier-quote expiration). Fire on a status advance
-      // OR a line re-sourcing; a plain no-op resend (no status/items change) is tolerated.
+      // lines is EFFECTIVELY expired (issue #779 follow-up — line-sourced, no header link). Use the
+      // rewritten lines' sourced supplier quotes when items change; on a status-only advance,
+      // resolve the CURRENT lines through the same status-aware helper — the gate's
+      // linkedSupplierQuoteExpiration is a raw MIN over dates, which would wrongly block on a
+      // terminal-frozen (never-expired) sourced supplier quote (#812 round 10). A plain no-op
+      // resend (no status/items change) never reaches the guard, so it keeps the cheap gate value.
       const sourcedExpiration = normalizedItems
         ? await supplierQuotesRepo.findEarliestExpirationByIds(
             sourcedSupplierQuoteIds(normalizedItems),
           )
-        : current.linkedSupplierQuoteExpiration;
+        : statusChanged
+          ? await supplierQuotesRepo.findEarliestExpirationByIds(
+              sourcedSupplierQuoteIds(
+                await clientQuotesRepo.findItemSnapshotsForQuote(idResult.value),
+              ),
+            )
+          : current.linkedSupplierQuoteExpiration;
       if (statusChanged || normalizedItems) {
         const effectiveTarget = statusChanged ? targetStatus : current.status;
         if (
