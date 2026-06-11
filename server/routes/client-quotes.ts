@@ -574,13 +574,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   };
 
   // Distinct supplier quotes a set of lines sources (issue #779 follow-up). Structurally typed so
-  // it serves resolved/normalized request lines AND restored version-snapshot items alike.
-  const sourcedSupplierQuoteIds = (
-    lines: ReadonlyArray<{ supplierQuoteId?: string | null }>,
-  ): string[] =>
-    Array.from(
-      new Set(lines.map((line) => line.supplierQuoteId).filter((id): id is string => !!id)),
-    );
+  // it serves resolved/normalized request lines AND stored/version-snapshot items alike. LEGACY
+  // rows can carry only supplierQuoteItemId (null denormalized supplierQuoteId) — the repo's
+  // candidate predicate treats them as real sourcing (#812 round 18), so the expired guards and
+  // the response flag must too (#812 round 20): resolve those through the live supplier items.
+  // Resolver-stamped request lines always carry supplierQuoteId, so the extra lookup only runs
+  // for stored/snapshot rows that actually have item-only links.
+  const sourcedSupplierQuoteIds = async (
+    lines: ReadonlyArray<{ supplierQuoteId?: string | null; supplierQuoteItemId?: string | null }>,
+    exec?: DbExecutor,
+  ): Promise<string[]> => {
+    const ids = new Set<string>();
+    const itemOnlyIds: string[] = [];
+    for (const line of lines) {
+      if (line.supplierQuoteId) ids.add(line.supplierQuoteId);
+      else if (line.supplierQuoteItemId) itemOnlyIds.push(line.supplierQuoteItemId);
+    }
+    if (itemOnlyIds.length > 0) {
+      const snapshots = await supplierQuotesRepo.getQuoteItemSnapshots(itemOnlyIds, exec);
+      for (const snapshot of snapshots.values()) ids.add(snapshot.supplierQuoteId);
+    }
+    return Array.from(ids);
+  };
 
   const snapshotPreState = async (
     quoteId: string,
@@ -658,7 +673,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // 11): the per-quote flag below must exclude terminal-frozen sourced quotes exactly like the
       // progression guard, so it cannot come from the row's raw-MIN linkedSupplierQuoteExpiration.
       const blockingExpirations = await supplierQuotesRepo.findBlockingExpirationsByIds(
-        sourcedSupplierQuoteIds(items),
+        await sourcedSupplierQuoteIds(items),
       );
       return quotes.map((quote) => {
         const quoteItems = itemsByQuote.get(quote.id) ?? [];
@@ -754,7 +769,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // The supplier quotes this quote sources via its lines (issue #779 follow-up): the earliest
       // of their expirations drives the progression guard and the response's expired indicator.
       const sourcedExpiration = await supplierQuotesRepo.findEarliestExpirationByIds(
-        sourcedSupplierQuoteIds(resolvedItems),
+        await sourcedSupplierQuoteIds(resolvedItems),
       );
 
       // Strict write-path status parse (issue #779): canonical + known legacy spellings pass (the
@@ -1161,11 +1176,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // after the write from the stored lines (see buildQuoteResponse below).
       const sourcedExpiration = normalizedItems
         ? await supplierQuotesRepo.findEarliestExpirationByIds(
-            sourcedSupplierQuoteIds(normalizedItems),
+            await sourcedSupplierQuoteIds(normalizedItems),
           )
         : statusChanged
           ? await supplierQuotesRepo.findEarliestExpirationByIds(
-              sourcedSupplierQuoteIds(
+              await sourcedSupplierQuoteIds(
                 await clientQuotesRepo.findItemSnapshotsForQuote(idResult.value),
               ),
             )
@@ -1307,7 +1322,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         normalizedItems || statusChanged
           ? sourcedExpiration
           : await supplierQuotesRepo.findEarliestExpirationByIds(
-              sourcedSupplierQuoteIds(updatedItems),
+              await sourcedSupplierQuoteIds(updatedItems),
             );
       return buildQuoteResponse(updatedQuote, updatedItems, responseSourcedExpiration);
     },
@@ -1566,7 +1581,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           // expiration lazily (avoids a supplier_quotes read inside the lock for draft/denied
           // restores). Reuses the same line→sourced-ids extraction as the create/update guards.
           const restoredSourcedExpiration = await supplierQuotesRepo.findEarliestExpirationByIds(
-            sourcedSupplierQuoteIds(version.snapshot.items),
+            await sourcedSupplierQuoteIds(version.snapshot.items, tx),
             tx,
           );
           if (restoredSourcedExpiration && isPastLocalDate(restoredSourcedExpiration)) {
@@ -1655,7 +1670,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         restored.quote,
         restored.items,
         await supplierQuotesRepo.findEarliestExpirationByIds(
-          sourcedSupplierQuoteIds(restored.items),
+          await sourcedSupplierQuoteIds(restored.items),
         ),
       );
     },

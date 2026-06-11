@@ -884,3 +884,38 @@ describe('PUT /api/sales/client-quotes/:id fresh-link sourceable guard (#812 rou
     expect(res.statusCode).toBe(200);
   });
 });
+
+describe('sourced-id resolution for legacy item-only lines (#812 round 20)', () => {
+  test('409 blocks a status-only advance when an item-only line sources an expired quote', async () => {
+    // The stored line carries only supplierQuoteItemId (null denormalized supplierQuoteId) —
+    // the guard must resolve the supplier quote through the live item, like the repo's
+    // candidate predicate does, instead of silently skipping the line.
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      { id: 'qi-1', supplierQuoteId: null, supplierQuoteItemId: 'sqi-9' },
+    ]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-9',
+          {
+            supplierQuoteId: 'sq-9',
+            supplierName: 'Acme',
+            productId: null,
+            unitPrice: 50,
+            netCost: 50,
+            sourceable: true,
+          },
+        ],
+      ]),
+    );
+    sqFindEarliestExpirationByIdsMock.mockResolvedValue('2000-01-01');
+
+    const res = await putStatus({ status: 'sent' });
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('expired');
+    expect(sqGetQuoteItemSnapshotsMock).toHaveBeenCalledWith(['sqi-9'], undefined);
+    expect(sqFindEarliestExpirationByIdsMock).toHaveBeenCalledWith(['sq-9']);
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+});
