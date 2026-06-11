@@ -1339,15 +1339,17 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               });
 
         const canRestore = !hasOffer || offerStatus === 'draft';
+        const canRollbackDraftOffer =
+          row.status === 'offer' && Boolean(row.linkedOfferId) && offerStatus === 'draft';
         // Back-to-draft is rejected by the server from accepted/denied/expired, and history rows are
         // immutable — so a sent/offer row whose EFFECTIVE status is expired must not show an enabled
         // restore button (it would 409). `history` already folds in the expired check.
-        const restoreDisabled = !canRestore || history;
+        const restoreDisabled = !canRestore || (history && (!canRollbackDraftOffer || expired));
         const restoreTitle = !canRestore
           ? t('sales:clientQuotes.restoreDisabledOfferStatus', {
               defaultValue: 'Restore is only possible when the linked offer is in draft status.',
             })
-          : history
+          : history && (!canRollbackDraftOffer || expired)
             ? t('sales:clientQuotes.historyActionsDisabled', {
                 defaultValue: 'History entries cannot be modified.',
               })
@@ -1572,30 +1574,31 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                 <TooltipContent>{deleteTitle}</TooltipContent>
               </Tooltip>
             )}
-            {!row.linkedOfferId && canTransitionClientQuote(row.status, 'draft') && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="inline-flex">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (restoreDisabled) return;
-                        // Back-to-draft is allowed only from sent/offer (#779); the server
-                        // enforces the same rule and rejects it from accepted/denied/expired.
-                        handleStatusUpdate(row.id, { status: 'draft' });
-                      }}
-                      disabled={restoreDisabled}
-                      aria-label={restoreTitle}
-                      className={`p-2 rounded-lg transition-all ${restoreDisabled ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'}`}
-                    >
-                      <i className="fa-solid fa-rotate-left"></i>
-                    </button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>{restoreTitle}</TooltipContent>
-              </Tooltip>
-            )}
+            {(!hasOffer || row.status === 'offer') &&
+              canTransitionClientQuote(row.status, 'draft') && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (restoreDisabled) return;
+                          // Back-to-draft is allowed only from sent/offer (#779); the server
+                          // enforces the same rule and rejects it from accepted/denied/expired.
+                          handleStatusUpdate(row.id, { status: 'draft' });
+                        }}
+                        disabled={restoreDisabled}
+                        aria-label={restoreTitle}
+                        className={`p-2 rounded-lg transition-all ${restoreDisabled ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'}`}
+                      >
+                        <i className="fa-solid fa-rotate-left"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{restoreTitle}</TooltipContent>
+                </Tooltip>
+              )}
           </div>
         );
       },

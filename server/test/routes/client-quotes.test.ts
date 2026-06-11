@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
+import * as realClientOffersRepo from '../../repositories/clientOffersRepo.ts';
 import * as realClientQuotesRepo from '../../repositories/clientQuotesRepo.ts';
 import * as realQuoteVersionsRepo from '../../repositories/quoteVersionsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
@@ -24,6 +25,7 @@ import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
+const clientOffersRepoSnap = { ...realClientOffersRepo };
 const clientQuotesRepoSnap = { ...realClientQuotesRepo };
 const quoteVersionsRepoSnap = { ...realQuoteVersionsRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
@@ -50,6 +52,12 @@ const cqListAllMock = mock();
 const cqListAllItemsMock = mock();
 const cqCreateMock = mock();
 const cqInsertItemsMock = mock();
+
+const coCreateMock = mock();
+const coInsertItemsMock = mock();
+const coLockExistingByIdMock = mock();
+const coFindLinkedSaleIdMock = mock();
+const coDeleteByIdMock = mock();
 
 const sqFindEarliestExpirationByIdsMock = mock();
 const sqFindBlockingExpirationsByIdsMock = mock();
@@ -103,6 +111,14 @@ beforeAll(async () => {
     create: cqCreateMock,
     insertItems: cqInsertItemsMock,
   }));
+  mock.module('../../repositories/clientOffersRepo.ts', () => ({
+    ...clientOffersRepoSnap,
+    create: coCreateMock,
+    insertItems: coInsertItemsMock,
+    lockExistingById: coLockExistingByIdMock,
+    findLinkedSaleId: coFindLinkedSaleIdMock,
+    deleteById: coDeleteByIdMock,
+  }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
     findItemsByIds: sqFindItemsByIdsMock,
@@ -139,6 +155,7 @@ afterAll(() => {
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../repositories/clientQuotesRepo.ts', () => clientQuotesRepoSnap);
+  mock.module('../../repositories/clientOffersRepo.ts', () => clientOffersRepoSnap);
   mock.module('../../repositories/supplierQuotesRepo.ts', () => supplierQuotesRepoSnap);
   mock.module(
     '../../repositories/supplierQuoteVersionsRepo.ts',
@@ -200,6 +217,27 @@ const updatedQuote = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+const storedQuoteItem = (over: Record<string, unknown> = {}) => ({
+  id: 'qi-1',
+  quoteId: 'q-1',
+  productId: 'p1',
+  productName: 'Service',
+  quantity: 2,
+  unitPrice: 100,
+  productCost: 50,
+  productMolPercentage: 50,
+  supplierQuoteId: 'sq-1',
+  supplierQuoteItemId: 'sqi-1',
+  supplierQuoteSupplierName: 'Supplier',
+  supplierQuoteUnitPrice: 50,
+  discount: 10,
+  note: 'line note',
+  unitType: 'hours',
+  durationMonths: 12,
+  durationUnit: 'months',
+  ...over,
+});
+
 const allMocks = [
   findAuthUserByIdMock,
   userHasRoleMock,
@@ -217,6 +255,11 @@ const allMocks = [
   cqListAllItemsMock,
   cqCreateMock,
   cqInsertItemsMock,
+  coCreateMock,
+  coInsertItemsMock,
+  coLockExistingByIdMock,
+  coFindLinkedSaleIdMock,
+  coDeleteByIdMock,
   cqFindStatusAndClientNameMock,
   cqDeleteByIdMock,
   sqFindEarliestExpirationByIdsMock,
@@ -258,6 +301,37 @@ beforeEach(async () => {
   // Forward-sync defaults: no supplier-sourced lines touched unless a test sets them up.
   cqReplaceItemsMock.mockResolvedValue([]);
   cqFindItemSnapshotsForQuoteMock.mockResolvedValue([]);
+  cqCreateMock.mockResolvedValue(updatedQuote({ status: 'draft' }));
+  cqInsertItemsMock.mockResolvedValue([]);
+  coCreateMock.mockImplementation((input: Record<string, unknown>) =>
+    Promise.resolve({
+      id: input.id,
+      linkedQuoteId: input.linkedQuoteId,
+      clientId: input.clientId,
+      clientName: input.clientName,
+      paymentTerms: input.paymentTerms,
+      discount: input.discount,
+      discountType: input.discountType,
+      status: input.status,
+      deliveryDate: null,
+      expirationDate: input.expirationDate,
+      notes: input.notes,
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+    }),
+  );
+  coInsertItemsMock.mockResolvedValue([]);
+  coLockExistingByIdMock.mockResolvedValue({
+    id: 'q-1-OF',
+    linkedQuoteId: 'q-1',
+    clientId: 'c1',
+    clientName: 'Client',
+    status: 'draft',
+    deliveryDate: null,
+    expirationDate: '2999-12-31',
+  });
+  coFindLinkedSaleIdMock.mockResolvedValue(null);
+  coDeleteByIdMock.mockResolvedValue(true);
   sqFindItemsByIdsMock.mockResolvedValue([]);
   sqFindLinkedOrderIdMock.mockResolvedValue(null);
   sqFindFullForSnapshotMock.mockResolvedValue(null);
@@ -313,6 +387,96 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
 
     const res = await putStatus({ status: 'draft', notes: 'edited' });
     expect(res.statusCode).toBe(200);
+  });
+
+  test('200 sent → offer creates a linked draft offer with copied quote items', async () => {
+    const item = storedQuoteItem();
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent' }));
+    cqFindItemsForQuoteMock.mockResolvedValue([item]);
+    cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'offer' }));
+
+    const res = await putStatus({ status: 'offer' });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.status).toBe('offer');
+    expect(body.linkedOfferId).toBe('q-1-OF');
+    expect(coCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'q-1-OF',
+        linkedQuoteId: 'q-1',
+        status: 'draft',
+        expirationDate: '2999-12-31',
+      }),
+      expect.anything(),
+    );
+    const insertedOfferItems = coInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(insertedOfferItems[0]).toMatchObject({
+      productId: 'p1',
+      productName: 'Service',
+      quantity: 2,
+      unitPrice: 100,
+      productCost: 50,
+      productMolPercentage: 50,
+      supplierQuoteId: 'sq-1',
+      supplierQuoteItemId: 'sqi-1',
+      supplierQuoteSupplierName: 'Supplier',
+      supplierQuoteUnitPrice: 50,
+      discount: 10,
+      note: 'line note',
+      unitType: 'hours',
+      durationMonths: 12,
+      durationUnit: 'months',
+    });
+    expect(insertedOfferItems[0].id).not.toBe(item.id);
+  });
+
+  test('409 blocks a real offer conversion when an offer already exists', async () => {
+    cqFindLinkedOfferIdMock.mockResolvedValue('existing-offer');
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent' }));
+
+    const res = await putStatus({ status: 'offer' });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toBe('Quotes become read-only once an offer exists');
+    expect(coCreateMock).not.toHaveBeenCalled();
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 offer → draft deletes the linked draft offer and clears the response link', async () => {
+    cqFindLinkedOfferIdMock.mockResolvedValue('q-1-OF');
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'offer' }));
+    cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'draft' }));
+
+    const res = await putStatus({ status: 'draft' });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).linkedOfferId).toBeNull();
+    expect(coLockExistingByIdMock).toHaveBeenCalledWith('q-1-OF', expect.anything());
+    expect(coDeleteByIdMock).toHaveBeenCalledWith('q-1-OF', expect.anything());
+  });
+
+  test('409 rejects offer → draft when the linked offer is no longer draft', async () => {
+    cqFindLinkedOfferIdMock.mockResolvedValue('q-1-OF');
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'offer' }));
+    cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'draft' }));
+    coLockExistingByIdMock.mockResolvedValue({
+      id: 'q-1-OF',
+      linkedQuoteId: 'q-1',
+      clientId: 'c1',
+      clientName: 'Client',
+      status: 'sent',
+      deliveryDate: null,
+      expirationDate: '2999-12-31',
+    });
+
+    const res = await putStatus({ status: 'draft' });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toBe(
+      'Cannot revert quote while the linked offer is no longer draft',
+    );
+    expect(coDeleteByIdMock).not.toHaveBeenCalled();
   });
 
   test('409 rejects accepted → draft (invalid_transition)', async () => {
@@ -819,7 +983,7 @@ describe('POST /api/sales/client-quotes supplier sync on create (user report aft
     durationUnit: 'months',
     ...over,
   });
-  const postQuote = (items: Array<Record<string, unknown>>) =>
+  const postQuote = (items: Array<Record<string, unknown>>, over: Record<string, unknown> = {}) =>
     testApp.inject({
       method: 'POST',
       url: '/api/sales/client-quotes',
@@ -830,6 +994,7 @@ describe('POST /api/sales/client-quotes supplier sync on create (user report aft
         clientName: 'Client',
         items,
         expirationDate: '2999-12-31',
+        ...over,
       },
     });
 
@@ -885,6 +1050,35 @@ describe('POST /api/sales/client-quotes supplier sync on create (user report aft
       (c) => c[0]?.action,
     );
     expect(auditActions).toContain('supplier_quote.updated');
+  });
+
+  test('creating a quote directly in offer status creates the linked draft offer', async () => {
+    setupCreate();
+    const item = storedQuoteItem({ quoteId: 'q-new' });
+    cqCreateMock.mockResolvedValue(updatedQuote({ id: 'q-new', status: 'offer' }));
+    cqInsertItemsMock.mockResolvedValue([item]);
+
+    const res = await postQuote([freshLine()], { status: 'offer' });
+
+    expect(res.statusCode).toBe(201);
+    const body = JSON.parse(res.body);
+    expect(body.status).toBe('offer');
+    expect(body.linkedOfferId).toBe('q-new-OF');
+    expect(coCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'q-new-OF',
+        linkedQuoteId: 'q-new',
+        status: 'draft',
+      }),
+      expect.anything(),
+    );
+    const insertedOfferItems = coInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(insertedOfferItems[0]).toMatchObject({
+      supplierQuoteId: 'sq-1',
+      supplierQuoteItemId: 'sqi-1',
+      durationMonths: 12,
+      durationUnit: 'months',
+    });
   });
 
   test('an untouched line (cost == baseline) takes the live supplier value and pushes nothing', async () => {

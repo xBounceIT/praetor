@@ -90,7 +90,12 @@ type QuoteLike = {
   items?: Array<{ supplierQuoteItemId?: string | null }>;
   clientId?: string;
 };
-type ClientOfferLike = { id: string; clientId?: string; linkedQuoteId?: string };
+type ClientOfferLike = {
+  id: string;
+  clientId?: string;
+  linkedQuoteId?: string;
+  items?: Array<{ supplierQuoteItemId?: string | null }>;
+};
 type ClientsOrderLike = { id: string; clientId?: string };
 type InvoiceLike = { id: string };
 
@@ -329,6 +334,29 @@ describe('makeQuoteHandlers', () => {
 
     await ctx.handlers.updateQuote('q1', { items: [{ supplierQuoteItemId: null }] } as never);
     expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
+
+  test('updateQuote refreshes supplier quotes when rollback removes offer-only sourcing', async () => {
+    stubQuoteUpdateFlow({ status: 'draft', linkedOfferId: null, items: [] });
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'offer', linkedOfferId: 'of-1', items: [] }],
+      clientOffers: [{ id: 'of-1', items: sourced }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.updateQuote('q1', { status: 'draft' } as never);
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
+
+  test('updateQuote refetches offers after marking a quote as offer', async () => {
+    stubQuoteUpdateFlow({ status: 'offer', linkedOfferId: 'q1-OF', items: [] });
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'sent', items: [] }],
+    });
+
+    await ctx.handlers.updateQuote('q1', { status: 'offer' } as never);
+    expect(apiMocks.clientOffersList).toHaveBeenCalledTimes(1);
   });
 
   test('deleteQuote refreshes supplier quotes when the deleted quote sourced one', async () => {

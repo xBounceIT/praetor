@@ -107,7 +107,12 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       // Captured before the await: the response reflects the post-save lines, but a quote that
       // STOPPED sourcing a supplier quote also needs a refresh (the now-unsourced supplier quote
       // falls back to draft), so consider the pre-save lines too.
-      const wasSourcing = sourcesSupplierQuote(getQuotes().find((q) => q.id === id));
+      const previousQuote = getQuotes().find((q) => q.id === id);
+      const previousLinkedOffer = previousQuote?.linkedOfferId
+        ? getClientOffers().find((offer) => offer.id === previousQuote.linkedOfferId)
+        : undefined;
+      const wasSourcing =
+        sourcesSupplierQuote(previousQuote) || sourcesSupplierQuote(previousLinkedOffer);
       const updated = await api.quotes.update(id, updates);
       // Re-read the filter via the getter so we observe the latest value, not
       // the one captured when this handler was created. Navigation effects in

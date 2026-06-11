@@ -495,6 +495,86 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     const edit = await screen.findByRole('button', { name: 'sales:clientQuotes.editQuote' });
     expect(edit).toBeDisabled();
   });
+
+  test('enables back-to-draft for an offer quote whose linked offer is still draft', async () => {
+    const user = userEvent.setup();
+    const onUpdateQuote = mock(() => Promise.resolve());
+    render(
+      <ClientQuotesView
+        quotes={[{ ...quotes[0], id: 'Q-OFFERED', status: 'offer', linkedOfferId: 'off-1' }]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={onUpdateQuote}
+        onDeleteQuote={mock(() => Promise.resolve())}
+        quoteOfferStatuses={{ 'Q-OFFERED': 'draft' }}
+      />,
+    );
+
+    await openRowActions(user);
+    const restore = await screen.findByRole('button', { name: 'sales:clientQuotes.restoreQuote' });
+    expect(restore).not.toBeDisabled();
+    await user.click(restore);
+    await waitFor(() => {
+      expect(onUpdateQuote).toHaveBeenCalledWith('Q-OFFERED', { status: 'draft' });
+    });
+  });
+
+  test('keeps back-to-draft disabled once the linked offer is no longer draft', async () => {
+    const user = userEvent.setup();
+    render(
+      <ClientQuotesView
+        quotes={[{ ...quotes[0], id: 'Q-OFFERED', status: 'offer', linkedOfferId: 'off-1' }]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+        quoteOfferStatuses={{ 'Q-OFFERED': 'sent' }}
+      />,
+    );
+
+    await openRowActions(user);
+    const restore = await screen.findByRole('button', {
+      name: 'sales:clientQuotes.restoreDisabledOfferStatus',
+    });
+    expect(restore).toBeDisabled();
+  });
+
+  test('keeps back-to-draft disabled for an expired offer quote even with a draft linked offer', async () => {
+    const user = userEvent.setup();
+    render(
+      <ClientQuotesView
+        quotes={[
+          {
+            ...quotes[0],
+            id: 'Q-OFFERED',
+            status: 'offer',
+            effectiveStatus: 'expired',
+            linkedOfferId: 'off-1',
+          },
+        ]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+        quoteOfferStatuses={{ 'Q-OFFERED': 'draft' }}
+      />,
+    );
+
+    await openRowActions(user);
+    const restore = await screen.findByRole('button', {
+      name: 'sales:clientQuotes.historyActionsDisabled',
+    });
+    expect(restore).toBeDisabled();
+  });
 });
 
 describe('<ClientQuotesView /> line-item delete confirmation', () => {

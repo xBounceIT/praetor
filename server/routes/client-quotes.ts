@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { type DbExecutor, withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as clientOffersRepo from '../repositories/clientOffersRepo.ts';
 import * as clientQuotesRepo from '../repositories/clientQuotesRepo.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
 import * as productsRepo from '../repositories/productsRepo.ts';
@@ -80,6 +81,51 @@ type QuoteItemSnapshot = {
 };
 
 type ResolvedQuoteItem = IncomingQuoteItem & QuoteItemSnapshot;
+
+class LinkedOfferRollbackError extends Error {
+  constructor(
+    message: string,
+    readonly secondaryLabel: string,
+  ) {
+    super(message);
+  }
+}
+
+const replyAutoOfferUniqueViolation = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  dup: ReturnType<typeof getUniqueViolation>,
+  args: {
+    action: string;
+    quoteId: string;
+    offerId: string;
+  },
+): Promise<FastifyReply | null> => {
+  if (!dup) return null;
+  if (dup.constraint === 'customer_offers_pkey' || dup.detail?.includes(`(${args.offerId})`)) {
+    return replyError(request, reply, {
+      statusCode: 409,
+      message: 'Offer ID already exists',
+      action: args.action,
+      entityType: 'client_offer',
+      details: { secondaryLabel: 'duplicate_offer_id' },
+    });
+  }
+  if (
+    dup.constraint === 'idx_customer_offers_linked_quote_id' ||
+    dup.detail?.includes('(linked_quote_id)')
+  ) {
+    return replyError(request, reply, {
+      statusCode: 409,
+      message: 'An offer already exists for this quote',
+      action: args.action,
+      entityType: 'client_quote',
+      entityId: args.quoteId,
+      details: { secondaryLabel: 'duplicate_offer_for_quote' },
+    });
+  }
+  return null;
+};
 
 const normalizeQuoteItems = (
   items: unknown[],
@@ -550,6 +596,28 @@ const buildItemsForInsert = (items: ResolvedQuoteItem[]): clientQuotesRepo.NewCl
     durationUnit: item.durationUnit ?? 'months',
   }));
 
+const buildOfferItemsFromQuoteItems = (
+  items: clientQuotesRepo.ClientQuoteItem[],
+): clientOffersRepo.NewClientOfferItem[] =>
+  items.map((item) => ({
+    id: generatePrefixedId(ITEM_ID_PREFIXES.clientOfferItem),
+    productId: item.productId || null,
+    productName: item.productName,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    productCost: item.productCost,
+    productMolPercentage: item.productMolPercentage,
+    discount: item.discount,
+    note: item.note,
+    supplierQuoteId: item.supplierQuoteId,
+    supplierQuoteItemId: item.supplierQuoteItemId,
+    supplierQuoteSupplierName: item.supplierQuoteSupplierName,
+    supplierQuoteUnitPrice: item.supplierQuoteUnitPrice,
+    unitType: item.unitType,
+    durationMonths: item.durationMonths,
+    durationUnit: item.durationUnit,
+  }));
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
@@ -583,6 +651,56 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         !!sourcedExpiration &&
         isPastLocalDate(sourcedExpiration),
     };
+  };
+
+  const createDraftOfferFromQuote = async (
+    quote: clientQuotesRepo.ClientQuote,
+    items: clientQuotesRepo.ClientQuoteItem[],
+    tx: DbExecutor,
+  ): Promise<string> => {
+    if (!quote.expirationDate) {
+      throw new Error('Cannot create an offer from a quote without an expiration date');
+    }
+    const offer = await clientOffersRepo.create(
+      {
+        id: `${quote.id}-OF`,
+        linkedQuoteId: quote.id,
+        clientId: quote.clientId,
+        clientName: quote.clientName,
+        paymentTerms: quote.paymentTerms ?? 'immediate',
+        discount: quote.discount,
+        discountType: quote.discountType,
+        status: 'draft',
+        expirationDate: quote.expirationDate,
+        notes: quote.notes,
+      },
+      tx,
+    );
+    await clientOffersRepo.insertItems(offer.id, buildOfferItemsFromQuoteItems(items), tx);
+    return offer.id;
+  };
+
+  const deleteDraftLinkedOfferForRollback = async (
+    offerId: string,
+    tx: DbExecutor,
+  ): Promise<void> => {
+    const offer = await clientOffersRepo.lockExistingById(offerId, tx);
+    if (!offer) {
+      throw new LinkedOfferRollbackError('Linked offer not found', 'linked_offer_missing');
+    }
+    if (normalizeQuoteStatus(offer.status) !== 'draft') {
+      throw new LinkedOfferRollbackError(
+        'Cannot revert quote while the linked offer is no longer draft',
+        'linked_offer_not_draft',
+      );
+    }
+    if (await clientOffersRepo.findLinkedSaleId(offerId, tx)) {
+      throw new LinkedOfferRollbackError(
+        'Cannot revert quote while the linked offer already has a sale order',
+        'linked_offer_has_sale_order',
+      );
+    }
+    await clientOffersRepo.deleteById(offerId, tx);
   };
 
   // Guard: a client quote cannot progress to sent/offer/accepted while any supplier quote it
@@ -873,6 +991,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             buildItemsForInsert(resolvedItems),
             tx,
           );
+          const linkedOfferId =
+            initialStatus === 'offer' ? await createDraftOfferFromQuote(created, items, tx) : null;
           // Bidirectional sync on CREATE too (user report after #812): a sourced line whose
           // quantity/cost was edited away from its pick-time baseline pushes the edit onto the
           // supplier item, atomically with the quote write. With no stored previous lines the
@@ -885,7 +1005,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             [],
             tx,
           );
-          return { quote: created, createdItems: items, syncAudits: audits };
+          return {
+            quote: linkedOfferId ? { ...created, linkedOfferId } : created,
+            createdItems: items,
+            syncAudits: audits,
+          };
         });
 
         await logSupplierItemSyncAudits(request, syncAudits);
@@ -921,6 +1045,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             details: { secondaryLabel: 'duplicate_id' },
           });
         }
+        const autoOfferConflict = await replyAutoOfferUniqueViolation(request, reply, dup, {
+          action: 'client_quote.create.conflict',
+          quoteId: nextIdResult.value,
+          offerId: `${nextIdResult.value}-OF`,
+        });
+        if (autoOfferConflict) return autoOfferConflict;
         request.log.error({ err }, 'CRITICAL ERROR creating quote');
         return reply.code(500).send({ error: `Internal Server Error: ${(err as Error).message}` });
       }
@@ -993,17 +1123,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         clientQuotesRepo.findLinkedOfferId(idResult.value),
         clientQuotesRepo.findCurrent(idResult.value),
       ]);
-      if (linkedOfferId && !isIdOnlyUpdate) {
-        return replyError(request, reply, {
-          statusCode: 409,
-          message: 'Quotes become read-only once an offer exists',
-          action: 'client_quote.update.conflict',
-          entityType: 'client_quote',
-          entityId: idResult.value,
-          details: { secondaryLabel: 'offer_exists' },
-        });
-      }
-
       if (!current) {
         return replyError(request, reply, {
           statusCode: 404,
@@ -1116,6 +1235,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // quote while extending its date) must not trip the transition/expired/guard checks (#779).
       const statusChanged =
         targetStatus !== null && targetStatus !== normalizeQuoteStatus(current.status);
+      const isLinkedOfferRollback =
+        Boolean(linkedOfferId) &&
+        statusChanged &&
+        normalizeQuoteStatus(current.status) === 'offer' &&
+        targetStatus === 'draft' &&
+        nextIdValue === undefined &&
+        !hasNonStatusOrIdUpdates;
+      const isLinkedOfferStatusNoOp =
+        Boolean(linkedOfferId) &&
+        targetStatus !== null &&
+        !statusChanged &&
+        nextIdValue === undefined &&
+        !hasNonStatusOrIdUpdates;
+      if (linkedOfferId && !isIdOnlyUpdate && !isLinkedOfferRollback && !isLinkedOfferStatusNoOp) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Quotes become read-only once an offer exists',
+          action: 'client_quote.update.conflict',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'offer_exists' },
+        });
+      }
       if (statusChanged) {
         // Scaduto freezes manual status changes — a quote leaves `expired` only by extending its
         // expiration date (a plain expirationDate write, no status change).
@@ -1320,6 +1462,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 tx,
               )
             : await clientQuotesRepo.findItemsForQuote(quote.id, tx);
+          let linkedOfferIdForResponse: string | null | undefined;
+          if (statusChanged && targetStatus === 'offer') {
+            linkedOfferIdForResponse = await createDraftOfferFromQuote(quote, items, tx);
+          } else if (isLinkedOfferRollback && linkedOfferId) {
+            await deleteDraftLinkedOfferForRollback(linkedOfferId, tx);
+            linkedOfferIdForResponse = null;
+          }
           // Bidirectional sync (issue #779): push GENUINE client-side edits of supplier-sourced
           // line fields (quantity, unit cost) onto the referenced supplier quote items,
           // atomically with the quote write. The audit entries are logged after commit.
@@ -1332,7 +1481,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 tx,
               )
             : [];
-          return { quote, items, syncAudits };
+          return {
+            quote:
+              linkedOfferIdForResponse !== undefined
+                ? { ...quote, linkedOfferId: linkedOfferIdForResponse }
+                : quote,
+            items,
+            syncAudits,
+          };
         });
       } catch (err) {
         // The client→supplier item sync refuses to write frozen/order-locked supplier quotes or
@@ -1353,6 +1509,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             entityType: 'client_quote',
             entityId: idResult.value,
             details: { secondaryLabel: 'duplicate_id' },
+          });
+        }
+        const autoOfferConflict = await replyAutoOfferUniqueViolation(request, reply, dup, {
+          action: 'client_quote.update.conflict',
+          quoteId: idResult.value,
+          offerId: `${idResult.value}-OF`,
+        });
+        if (autoOfferConflict) return autoOfferConflict;
+        if (err instanceof LinkedOfferRollbackError) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: err.message,
+            action: 'client_quote.update.conflict',
+            entityType: 'client_quote',
+            entityId: idResult.value,
+            details: { secondaryLabel: err.secondaryLabel },
           });
         }
         throw err;
@@ -1553,167 +1725,207 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Run all gate reads inside the tx and lock the quote row up front. The lock serializes
       // against concurrent offer-create / sale-create paths that also lock this row, closing
       // the TOCTOU window between the linked-offer / linked-sale checks and the restore write.
-      const result: RestoreOutcome = await withDbTransaction(async (tx) => {
-        const current = await clientQuotesRepo.lockCurrentById(idResult.value, tx);
-        if (!current) {
-          return {
-            ok: false,
-            statusCode: 404,
-            message: 'Quote not found',
-            action: 'client_quote.restore.not_found',
-          };
-        }
-        if (isTerminalQuoteStatus(current.status)) {
-          return {
-            ok: false,
-            statusCode: 409,
-            message: 'Accepted or rejected quotes are read-only',
-            action: 'client_quote.restore.conflict',
-            secondaryLabel: 'terminal_read_only',
-          };
-        }
-        // Expired quotes are content-read-only and the ONLY exit is extending the expiration date
-        // (the PUT enforces both, issue #779) — a restore would rewrite content, status AND the
-        // date in one shot, so it is blocked symmetrically.
-        if (effectiveQuoteStatusFromDate(current.status, current.expirationDate) === 'expired') {
-          return {
-            ok: false,
-            statusCode: 409,
-            message: 'Expired quotes are read-only; extend the expiration date instead',
-            action: 'client_quote.restore.conflict',
-            secondaryLabel: 'expired_read_only',
-          };
-        }
-
-        const linkedOfferId = await clientQuotesRepo.findLinkedOfferId(idResult.value, tx);
-        const nonDraftLinkedSale = await clientQuotesRepo.findNonDraftLinkedSale(
-          idResult.value,
-          tx,
-        );
-        const version = await quoteVersionsRepo.findById(idResult.value, versionIdResult.value, tx);
-
-        if (linkedOfferId) {
-          return {
-            ok: false,
-            statusCode: 409,
-            message: 'Quotes become read-only once an offer exists',
-            action: 'client_quote.restore.conflict',
-            secondaryLabel: 'offer_exists',
-          };
-        }
-        if (nonDraftLinkedSale) {
-          return {
-            ok: false,
-            statusCode: 409,
-            message: 'Restore is only possible when linked sale orders are in draft status',
-            action: 'client_quote.restore.conflict',
-            secondaryLabel: 'non_draft_linked_sale',
-          };
-        }
-        if (!version) {
-          return {
-            ok: false,
-            statusCode: 404,
-            message: 'Version not found',
-            action: 'client_quote.restore.not_found',
-            secondaryLabel: versionIdResult.value,
-          };
-        }
-        const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot, tx);
-        if (missingSnapshotReference) {
-          return {
-            ok: false,
-            statusCode: 409,
-            message: missingSnapshotReference,
-            action: 'client_quote.restore.conflict',
-            secondaryLabel: 'snapshot_reference_missing',
-          };
-        }
-        const snapshotExpirationDate = version.snapshot.quote.expirationDate;
-        if (!snapshotExpirationDate) {
-          return {
-            ok: false,
-            statusCode: 409,
-            message: 'Snapshot expiration date is missing',
-            action: 'client_quote.restore.conflict',
-            secondaryLabel: 'snapshot_expiration_missing',
-          };
-        }
-        // Legacy snapshots may hold quoted/confirmed/received/etc.; fold to the canonical set so
-        // the tightened CHECK (migration 0083) doesn't reject the restore write (issue #779).
-        const restoredStatus = normalizeQuoteStatus(version.snapshot.quote.status);
-        // Restoring a snapshot whose status is sent/offer/accepted would park the quote in a
-        // progressed state alongside an expired sourced supplier quote — the same transition the
-        // PUT guard blocks (issue #779 follow-up). The restore REPLACES the lines with the
-        // snapshot's (which carry the supplier sourcing), so the guard must read the SNAPSHOT's
-        // earliest sourced expiration, not the pre-restore lines'.
-        if (
-          restoredStatus === 'sent' ||
-          restoredStatus === 'offer' ||
-          restoredStatus === 'accepted'
-        ) {
-          // Only a progressed target can be blocked, so resolve the snapshot's earliest sourced
-          // expiration lazily (avoids a supplier_quotes read inside the lock for draft/denied
-          // restores). Reuses the same line→sourced-ids extraction as the create/update guards.
-          const restoredSourcedExpiration = await supplierQuotesRepo.findEarliestExpirationByIds(
-            await sourcedSupplierQuoteIds(version.snapshot.items, tx),
-            tx,
-          );
-          if (restoredSourcedExpiration && isPastLocalDate(restoredSourcedExpiration)) {
+      let result: RestoreOutcome;
+      try {
+        result = await withDbTransaction(async (tx) => {
+          const current = await clientQuotesRepo.lockCurrentById(idResult.value, tx);
+          if (!current) {
+            return {
+              ok: false,
+              statusCode: 404,
+              message: 'Quote not found',
+              action: 'client_quote.restore.not_found',
+            };
+          }
+          if (isTerminalQuoteStatus(current.status)) {
             return {
               ok: false,
               statusCode: 409,
-              message:
-                'A supplier quote sourced by this quote has expired; extend its validity before progressing this quote',
+              message: 'Accepted or rejected quotes are read-only',
               action: 'client_quote.restore.conflict',
-              secondaryLabel: 'linked_supplier_quote_expired',
+              secondaryLabel: 'terminal_read_only',
             };
           }
-        }
+          // Expired quotes are content-read-only and the ONLY exit is extending the expiration date
+          // (the PUT enforces both, issue #779) — a restore would rewrite content, status AND the
+          // date in one shot, so it is blocked symmetrically.
+          if (effectiveQuoteStatusFromDate(current.status, current.expirationDate) === 'expired') {
+            return {
+              ok: false,
+              statusCode: 409,
+              message: 'Expired quotes are read-only; extend the expiration date instead',
+              action: 'client_quote.restore.conflict',
+              secondaryLabel: 'expired_read_only',
+            };
+          }
 
-        const snapshotItems: clientQuotesRepo.NewClientQuoteItem[] = version.snapshot.items.map(
-          ({ quoteId: _q, ...rest }) => ({
-            ...rest,
-            id: generatePrefixedId(ITEM_ID_PREFIXES.clientQuoteItem),
-            // `productId: ''` slips through the snapshot when sourced from a supplier quote;
-            // the `quote_items` row needs NULL there.
-            productId: rest.productId || null,
-          }),
-        );
+          const linkedOfferId = await clientQuotesRepo.findLinkedOfferId(idResult.value, tx);
+          const nonDraftLinkedSale = await clientQuotesRepo.findNonDraftLinkedSale(
+            idResult.value,
+            tx,
+          );
+          const version = await quoteVersionsRepo.findById(
+            idResult.value,
+            versionIdResult.value,
+            tx,
+          );
 
-        // Drop draft sales inside the tx - historical line items may not line up with the
-        // current draft sale's row references, but if the snapshot/update later fails the
-        // rollback must take the deletes with it (otherwise users lose draft orders for
-        // an unchanged quote).
-        await clientQuotesRepo.deleteDraftSalesForQuote(idResult.value, tx);
-        // Snapshot current with reason='restore' so the just-replaced data stays recoverable.
-        await snapshotPreState(idResult.value, 'restore', request, tx);
+          if (nonDraftLinkedSale) {
+            return {
+              ok: false,
+              statusCode: 409,
+              message: 'Restore is only possible when linked sale orders are in draft status',
+              action: 'client_quote.restore.conflict',
+              secondaryLabel: 'non_draft_linked_sale',
+            };
+          }
+          if (!version) {
+            return {
+              ok: false,
+              statusCode: 404,
+              message: 'Version not found',
+              action: 'client_quote.restore.not_found',
+              secondaryLabel: versionIdResult.value,
+            };
+          }
+          const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot, tx);
+          if (missingSnapshotReference) {
+            return {
+              ok: false,
+              statusCode: 409,
+              message: missingSnapshotReference,
+              action: 'client_quote.restore.conflict',
+              secondaryLabel: 'snapshot_reference_missing',
+            };
+          }
+          const snapshotExpirationDate = version.snapshot.quote.expirationDate;
+          if (!snapshotExpirationDate) {
+            return {
+              ok: false,
+              statusCode: 409,
+              message: 'Snapshot expiration date is missing',
+              action: 'client_quote.restore.conflict',
+              secondaryLabel: 'snapshot_expiration_missing',
+            };
+          }
+          // Legacy snapshots may hold quoted/confirmed/received/etc.; fold to the canonical set so
+          // the tightened CHECK (migration 0083) doesn't reject the restore write (issue #779).
+          const restoredStatus = normalizeQuoteStatus(version.snapshot.quote.status);
+          if (linkedOfferId && restoredStatus !== 'draft') {
+            return {
+              ok: false,
+              statusCode: 409,
+              message: 'Quotes become read-only once an offer exists',
+              action: 'client_quote.restore.conflict',
+              secondaryLabel: 'offer_exists',
+            };
+          }
+          // Restoring a snapshot whose status is sent/offer/accepted would park the quote in a
+          // progressed state alongside an expired sourced supplier quote — the same transition the
+          // PUT guard blocks (issue #779 follow-up). The restore REPLACES the lines with the
+          // snapshot's (which carry the supplier sourcing), so the guard must read the SNAPSHOT's
+          // earliest sourced expiration, not the pre-restore lines'.
+          if (
+            restoredStatus === 'sent' ||
+            restoredStatus === 'offer' ||
+            restoredStatus === 'accepted'
+          ) {
+            // Only a progressed target can be blocked, so resolve the snapshot's earliest sourced
+            // expiration lazily (avoids a supplier_quotes read inside the lock for draft/denied
+            // restores). Reuses the same line→sourced-ids extraction as the create/update guards.
+            const restoredSourcedExpiration = await supplierQuotesRepo.findEarliestExpirationByIds(
+              await sourcedSupplierQuoteIds(version.snapshot.items, tx),
+              tx,
+            );
+            if (restoredSourcedExpiration && isPastLocalDate(restoredSourcedExpiration)) {
+              return {
+                ok: false,
+                statusCode: 409,
+                message:
+                  'A supplier quote sourced by this quote has expired; extend its validity before progressing this quote',
+                action: 'client_quote.restore.conflict',
+                secondaryLabel: 'linked_supplier_quote_expired',
+              };
+            }
+          }
 
-        const quote = await clientQuotesRepo.restoreSnapshotQuote(
-          idResult.value,
-          {
-            clientId: version.snapshot.quote.clientId,
-            clientName: version.snapshot.quote.clientName,
-            paymentTerms: version.snapshot.quote.paymentTerms ?? 'immediate',
-            discount: version.snapshot.quote.discount,
-            discountType: version.snapshot.quote.discountType,
-            status: restoredStatus,
-            expirationDate: snapshotExpirationDate,
-            notes: version.snapshot.quote.notes,
-          },
-          tx,
-        );
-        if (!quote) {
+          const snapshotItems: clientQuotesRepo.NewClientQuoteItem[] = version.snapshot.items.map(
+            ({ quoteId: _q, ...rest }) => ({
+              ...rest,
+              id: generatePrefixedId(ITEM_ID_PREFIXES.clientQuoteItem),
+              // `productId: ''` slips through the snapshot when sourced from a supplier quote;
+              // the `quote_items` row needs NULL there.
+              productId: rest.productId || null,
+            }),
+          );
+
+          // Drop draft sales inside the tx - historical line items may not line up with the
+          // current draft sale's row references, but if the snapshot/update later fails the
+          // rollback must take the deletes with it (otherwise users lose draft orders for
+          // an unchanged quote).
+          await clientQuotesRepo.deleteDraftSalesForQuote(idResult.value, tx);
+          // Snapshot current with reason='restore' so the just-replaced data stays recoverable.
+          await snapshotPreState(idResult.value, 'restore', request, tx);
+
+          const quote = await clientQuotesRepo.restoreSnapshotQuote(
+            idResult.value,
+            {
+              clientId: version.snapshot.quote.clientId,
+              clientName: version.snapshot.quote.clientName,
+              paymentTerms: version.snapshot.quote.paymentTerms ?? 'immediate',
+              discount: version.snapshot.quote.discount,
+              discountType: version.snapshot.quote.discountType,
+              status: restoredStatus,
+              expirationDate: snapshotExpirationDate,
+              notes: version.snapshot.quote.notes,
+            },
+            tx,
+          );
+          if (!quote) {
+            return {
+              ok: false,
+              statusCode: 404,
+              message: 'Quote not found',
+              action: 'client_quote.restore.not_found',
+            };
+          }
+          const items = await clientQuotesRepo.replaceItems(quote.id, snapshotItems, tx);
+          let linkedOfferIdForResponse: string | null | undefined;
+          if (restoredStatus === 'offer') {
+            linkedOfferIdForResponse = await createDraftOfferFromQuote(quote, items, tx);
+          } else if (linkedOfferId && restoredStatus === 'draft') {
+            await deleteDraftLinkedOfferForRollback(linkedOfferId, tx);
+            linkedOfferIdForResponse = null;
+          }
           return {
-            ok: false,
-            statusCode: 404,
-            message: 'Quote not found',
-            action: 'client_quote.restore.not_found',
+            ok: true,
+            quote:
+              linkedOfferIdForResponse !== undefined
+                ? { ...quote, linkedOfferId: linkedOfferIdForResponse }
+                : quote,
+            items,
           };
+        });
+      } catch (err) {
+        const dup = getUniqueViolation(err);
+        const autoOfferConflict = await replyAutoOfferUniqueViolation(request, reply, dup, {
+          action: 'client_quote.restore.conflict',
+          quoteId: idResult.value,
+          offerId: `${idResult.value}-OF`,
+        });
+        if (autoOfferConflict) return autoOfferConflict;
+        if (err instanceof LinkedOfferRollbackError) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: err.message,
+            action: 'client_quote.restore.conflict',
+            entityType: 'client_quote',
+            entityId: idResult.value,
+            details: { secondaryLabel: err.secondaryLabel },
+          });
         }
-        const items = await clientQuotesRepo.replaceItems(quote.id, snapshotItems, tx);
-        return { ok: true, quote, items };
-      });
+        throw err;
+      }
 
       if (!result.ok) {
         return replyError(request, reply, {

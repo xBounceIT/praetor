@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
+import * as realClientOffersRepo from '../../repositories/clientOffersRepo.ts';
 import * as realClientQuotesRepo from '../../repositories/clientQuotesRepo.ts';
 import * as realClientsRepo from '../../repositories/clientsRepo.ts';
 import * as realProductsRepo from '../../repositories/productsRepo.ts';
@@ -23,6 +24,7 @@ const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
 const clientsRepoSnap = { ...realClientsRepo };
+const clientOffersRepoSnap = { ...realClientOffersRepo };
 const clientQuotesRepoSnap = { ...realClientQuotesRepo };
 const productsRepoSnap = { ...realProductsRepo };
 const quoteVersionsRepoSnap = { ...realQuoteVersionsRepo };
@@ -51,6 +53,12 @@ const cqRestoreSnapshotQuoteMock = mock();
 const cqReplaceItemsMock = mock();
 const cqCreateMock = mock();
 const cqInsertItemsMock = mock();
+
+const coCreateMock = mock();
+const coInsertItemsMock = mock();
+const coLockExistingByIdMock = mock();
+const coFindLinkedSaleIdMock = mock();
+const coDeleteByIdMock = mock();
 
 const clientsExistsByIdMock = mock();
 const productsGetSnapshotsMock = mock();
@@ -106,6 +114,14 @@ beforeAll(async () => {
     create: cqCreateMock,
     insertItems: cqInsertItemsMock,
   }));
+  mock.module('../../repositories/clientOffersRepo.ts', () => ({
+    ...clientOffersRepoSnap,
+    create: coCreateMock,
+    insertItems: coInsertItemsMock,
+    lockExistingById: coLockExistingByIdMock,
+    findLinkedSaleId: coFindLinkedSaleIdMock,
+    deleteById: coDeleteByIdMock,
+  }));
   mock.module('../../repositories/productsRepo.ts', () => ({
     ...productsRepoSnap,
     getSnapshots: productsGetSnapshotsMock,
@@ -140,6 +156,7 @@ afterAll(() => {
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
+  mock.module('../../repositories/clientOffersRepo.ts', () => clientOffersRepoSnap);
   mock.module('../../repositories/clientQuotesRepo.ts', () => clientQuotesRepoSnap);
   mock.module('../../repositories/productsRepo.ts', () => productsRepoSnap);
   mock.module('../../repositories/quoteVersionsRepo.ts', () => quoteVersionsRepoSnap);
@@ -237,6 +254,11 @@ const allMocks = [
   cqReplaceItemsMock,
   cqCreateMock,
   cqInsertItemsMock,
+  coCreateMock,
+  coInsertItemsMock,
+  coLockExistingByIdMock,
+  coFindLinkedSaleIdMock,
+  coDeleteByIdMock,
   clientsExistsByIdMock,
   productsGetSnapshotsMock,
   sqGetQuoteItemSnapshotsMock,
@@ -275,6 +297,35 @@ beforeEach(async () => {
   // Status-only advances resolve the CURRENT lines' sourced supplier quotes (#812 round 10);
   // default to no lines so unrelated tests don't trip the expired-supplier guard.
   cqFindItemSnapshotsForQuoteMock.mockResolvedValue([]);
+  coCreateMock.mockImplementation((input: Record<string, unknown>) =>
+    Promise.resolve({
+      id: input.id,
+      linkedQuoteId: input.linkedQuoteId,
+      clientId: input.clientId,
+      clientName: input.clientName,
+      paymentTerms: input.paymentTerms,
+      discount: input.discount,
+      discountType: input.discountType,
+      status: input.status,
+      deliveryDate: null,
+      expirationDate: input.expirationDate,
+      notes: input.notes,
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+    }),
+  );
+  coInsertItemsMock.mockResolvedValue([]);
+  coLockExistingByIdMock.mockResolvedValue({
+    id: 'off-1',
+    linkedQuoteId: 'q-1',
+    clientId: 'c1',
+    clientName: 'Client',
+    status: 'draft',
+    deliveryDate: null,
+    expirationDate: '2999-12-31',
+  });
+  coFindLinkedSaleIdMock.mockResolvedValue(null);
+  coDeleteByIdMock.mockResolvedValue(true);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/sales/client-quotes');
 });
@@ -424,13 +475,29 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     );
   });
 
-  test('409 when linked offer exists', async () => {
-    cqLockCurrentByIdMock.mockResolvedValue({
-      status: 'draft',
-      discount: 0,
-      discountType: 'percentage',
-    });
+  test('200 restores a draft snapshot by deleting a linked draft offer', async () => {
+    setupHappyPath();
     cqFindLinkedOfferIdMock.mockResolvedValue('off-1');
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes/q-1/versions/qv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).linkedOfferId).toBeNull();
+    expect(coLockExistingByIdMock).toHaveBeenCalledWith('off-1', TX_SENTINEL);
+    expect(coDeleteByIdMock).toHaveBeenCalledWith('off-1', TX_SENTINEL);
+  });
+
+  test('409 when linked offer exists and snapshot is not draft', async () => {
+    setupHappyPath();
+    cqFindLinkedOfferIdMock.mockResolvedValue('off-1');
+    qvFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: { ...SAMPLE_SNAPSHOT, quote: { ...SAMPLE_QUOTE, status: 'sent' } },
+    });
 
     const res = await testApp.inject({
       method: 'POST',
@@ -441,6 +508,57 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     expect(res.statusCode).toBe(409);
     expect(cqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
     expect(qvInsertMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when linked offer rollback finds a downstream offer', async () => {
+    setupHappyPath();
+    cqFindLinkedOfferIdMock.mockResolvedValue('off-1');
+    coLockExistingByIdMock.mockResolvedValue({
+      id: 'off-1',
+      linkedQuoteId: 'q-1',
+      clientId: 'c1',
+      clientName: 'Client',
+      status: 'accepted',
+      deliveryDate: null,
+      expirationDate: '2999-12-31',
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes/q-1/versions/qv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('linked offer is no longer draft');
+    expect(coDeleteByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('200 restoring an offer snapshot creates a linked draft offer', async () => {
+    setupHappyPath();
+    qvFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: { ...SAMPLE_SNAPSHOT, quote: { ...SAMPLE_QUOTE, status: 'offer' } },
+    });
+    cqRestoreSnapshotQuoteMock.mockResolvedValue({ ...SAMPLE_QUOTE, status: 'offer' });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes/q-1/versions/qv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).linkedOfferId).toBe('q-1-OF');
+    expect(coCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'q-1-OF',
+        linkedQuoteId: 'q-1',
+        status: 'draft',
+      }),
+      TX_SENTINEL,
+    );
+    expect(coInsertItemsMock).toHaveBeenCalledWith('q-1-OF', expect.any(Array), TX_SENTINEL);
   });
 
   test('409 when the quote is effectively expired (restore would rewrite frozen content)', async () => {
