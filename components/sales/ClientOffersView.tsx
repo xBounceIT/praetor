@@ -1138,26 +1138,22 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           current.supplierQuoteId = selectedQuote.id;
           current.supplierQuoteItemId = selectedQuoteItem.id;
           current.supplierQuoteSupplierName = selectedQuote.supplierName;
-          current.supplierQuoteUnitPrice = netCost;
           current.unitType = selectedQuoteItem.unitType || 'hours';
-          current.quantity = selectedQuoteItem.quantity;
-
-          let salePrice: number;
           if (product) {
-            const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-            salePrice = calcProductSalePrice(netCost, mol);
             current.productCost = Number(product.costo);
             current.productMolPercentage = product.molPercentage;
           } else {
-            salePrice = netCost;
             current.productCost = netCost;
             current.productMolPercentage = null;
           }
-          // Costs are stored on the canonical hourly basis: copy the supplier item's unit and
-          // convert the sale price into it, mirroring ClientQuotesView's pick path and the
-          // refresh chip — without this a 'days' line would store an hourly-basis price that the
-          // next refresh then multiplies by 8 (#779).
-          current.unitPrice = convertUnitPrice(salePrice, 'hours', current.unitType || 'hours');
+          // Same math as the refresh chip: refreshedSupplierLineFields recomputes the sale price
+          // from the picked cost and the line MOL, converting FROM the supplier item's own unit
+          // (#812 round 14) — the picked cost is priced in that unit, so converting from a
+          // hardcoded 'hours' multiplied a days-priced item by 8 on initial selection.
+          const refreshed = refreshedSupplierLineFields(current, selectedQuoteItem);
+          current.quantity = refreshed.quantity;
+          current.supplierQuoteUnitPrice = refreshed.supplierQuoteUnitPrice;
+          current.unitPrice = refreshed.unitPrice;
         }
       }
 

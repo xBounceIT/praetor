@@ -869,27 +869,22 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         newItems[index].supplierQuoteId = selectedQuote.id;
         newItems[index].supplierQuoteItemId = selectedQuoteItem.id;
         newItems[index].supplierQuoteSupplierName = selectedQuote.supplierName;
-        newItems[index].supplierQuoteUnitPrice = netCost;
-
         newItems[index].unitType = selectedQuoteItem.unitType || 'hours';
-        newItems[index].quantity = selectedQuoteItem.quantity;
-
-        let salePrice: number;
         if (product) {
-          const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-          salePrice = calcProductSalePrice(netCost, mol);
           newItems[index].productCost = Number(product.costo);
           newItems[index].productMolPercentage = product.molPercentage;
         } else {
-          salePrice = netCost;
           newItems[index].productCost = netCost;
           newItems[index].productMolPercentage = null;
         }
-        newItems[index].unitPrice = convertUnitPrice(
-          salePrice,
-          'hours',
-          newItems[index].unitType || 'hours',
-        );
+        // Same math as the refresh chip: refreshedSupplierLineFields recomputes the sale price
+        // from the picked cost and the line MOL, converting FROM the supplier item's own unit
+        // (#812 round 14) — the picked cost is priced in that unit, so converting from a
+        // hardcoded 'hours' multiplied a days-priced item by 8 on initial selection.
+        const refreshed = refreshedSupplierLineFields(newItems[index], selectedQuoteItem);
+        newItems[index].quantity = refreshed.quantity;
+        newItems[index].supplierQuoteUnitPrice = refreshed.supplierQuoteUnitPrice;
+        newItems[index].unitPrice = refreshed.unitPrice;
       } else {
         // Supplier quote item not found - clear supplier quote and revert
         newItems[index].supplierQuoteItemId = null;
