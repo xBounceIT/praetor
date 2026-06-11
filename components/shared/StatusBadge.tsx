@@ -9,6 +9,7 @@ export type StatusType =
   | 'pending'
   | 'draft'
   | 'sent'
+  | 'offer'
   | 'accepted'
   | 'denied'
   | 'confirmed'
@@ -84,6 +85,11 @@ const STATUS_BADGE_STYLES: Record<
     container:
       'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900',
     icon: 'fa-paper-plane',
+  },
+  offer: {
+    container:
+      'bg-indigo-50 text-indigo-700 border-indigo-100 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900',
+    icon: 'fa-file-signature',
   },
   accepted: {
     container:

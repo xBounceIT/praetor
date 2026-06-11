@@ -120,6 +120,8 @@ export type ExistingOffer = {
   clientName: string;
   status: string;
   deliveryDate: string | null;
+  // Needed by the #779 expired guards: the derived `expired` status comes from this date.
+  expirationDate: string;
 };
 
 // Reads the minimal set of fields needed to gate updates / restores. Does not acquire a row
@@ -137,6 +139,7 @@ export const findExisting = async (
       clientName: customerOffers.clientName,
       status: customerOffers.status,
       deliveryDate: customerOffers.deliveryDate,
+      expirationDate: customerOffers.expirationDate,
     })
     .from(customerOffers)
     .where(eq(customerOffers.id, id));
@@ -156,6 +159,7 @@ export const lockExistingById = async (
       clientName: customerOffers.clientName,
       status: customerOffers.status,
       deliveryDate: customerOffers.deliveryDate,
+      expirationDate: customerOffers.expirationDate,
     })
     .from(customerOffers)
     .where(eq(customerOffers.id, id))
@@ -166,12 +170,23 @@ export const lockExistingById = async (
 export const findStatusAndClientName = async (
   id: string,
   exec: DbExecutor = db,
-): Promise<{ status: string; clientName: string } | null> => {
+): Promise<{ status: string; clientName: string; expirationDate: string | null } | null> => {
   const rows = await exec
-    .select({ status: customerOffers.status, clientName: customerOffers.clientName })
+    .select({
+      status: customerOffers.status,
+      clientName: customerOffers.clientName,
+      // The DELETE guard derives the effective status (#812 round 25): an effectively-expired
+      // offer is read-only and must not be deletable through the API either.
+      expirationDate: customerOffers.expirationDate,
+    })
     .from(customerOffers)
     .where(eq(customerOffers.id, id));
-  return rows[0] ?? null;
+  if (!rows[0]) return null;
+  return {
+    status: rows[0].status,
+    clientName: rows[0].clientName,
+    expirationDate: normalizeNullableDateOnly(rows[0].expirationDate, 'offer.expirationDate'),
+  };
 };
 
 export const findClientIdById = async (

@@ -1,0 +1,1 @@
+CREATE INDEX "idx_quote_items_supplier_quote_id" ON "quote_items" USING btree ("supplier_quote_id") WHERE "quote_items"."supplier_quote_id" IS NOT NULL;

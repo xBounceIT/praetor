@@ -409,6 +409,24 @@ describe('calculatePricingTotals', () => {
     expect(calculatePricingTotals(items, 0).totalCost).toBe(400); // 50/h × 8 = 400/day
   });
 
+  test('does NOT convert a supplier-sourced days cost (already in the line unit, #812 round 19)', () => {
+    // supplierQuoteUnitPrice mirrors the supplier item, whose unit the line copies on
+    // pick/refresh — only product costs are hourly-canonical. The old hours→days conversion
+    // inflated a days-priced sourced cost by 8 in totals and margins.
+    const items: PricingItem[] = [
+      {
+        unitPrice: 1000,
+        quantity: 1,
+        supplierQuoteItemId: 'q1',
+        supplierQuoteUnitPrice: 400,
+        unitType: 'days',
+      },
+    ];
+    const t = calculatePricingTotals(items, 0);
+    expect(t.totalCost).toBe(400); // NOT 3200
+    expect(t.margin).toBe(600);
+  });
+
   test('handles an empty item list', () => {
     const t = calculatePricingTotals([], 0);
     expect(t.subtotal).toBe(0);

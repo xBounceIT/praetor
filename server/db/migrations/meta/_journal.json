@@ -589,6 +589,20 @@
       "when": 1780999692884,
       "tag": "0083_add_duration_to_supplier_line_items",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1781040575554,
+      "tag": "0084_quote_status_model_and_supplier_link",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1781105336595,
+      "tag": "0085_wild_quentin_quire",
+      "breakpoints": true
     }
   ]
 }

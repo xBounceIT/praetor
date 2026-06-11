@@ -574,6 +574,129 @@ describe('<ClientOffersView /> dark-mode banners (issue #768)', () => {
   });
 });
 
+describe('<ClientOffersView /> supplier-quote item labels', () => {
+  test('an existing line keeps its label when the accepted supplier quote is past-dated', () => {
+    // The picker hides past-dated accepted quotes from NEW sourcing (intentional, #154), but an
+    // existing line's display label must resolve across ALL supplier quotes — the link is intact
+    // and the server-side sourcing gate still accepts the item.
+    const pastDatedAccepted: SupplierQuote = {
+      id: 'SQ-OLD',
+      supplierId: 'sup-1',
+      supplierName: 'Acme Supplies',
+      items: [
+        {
+          id: 'sqi-old',
+          quoteId: 'SQ-OLD',
+          productId: 'p-1',
+          productName: 'Widget',
+          quantity: 1,
+          listPrice: 60,
+          discountPercent: 0,
+          unitPrice: 60,
+          unitType: 'unit',
+        },
+      ],
+      paymentTerms: 'immediate',
+      status: 'accepted',
+      expirationDate: '2000-01-01',
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+    };
+    const offer = buildOffer({
+      id: 'O-OLD-SOURCE',
+      items: [
+        {
+          id: 'item-old',
+          offerId: 'O-OLD-SOURCE',
+          productId: 'p-1',
+          productName: 'Widget',
+          quantity: 1,
+          unitPrice: 100,
+          productCost: 50,
+          productMolPercentage: 50,
+          unitType: 'unit',
+          supplierQuoteId: 'SQ-OLD',
+          supplierQuoteItemId: 'sqi-old',
+        },
+      ],
+    });
+
+    render(
+      <ClientOffersView {...baseProps} offers={[offer]} supplierQuotes={[pastDatedAccepted]} />,
+    );
+    fireEvent.click(screen.getByText('O-OLD-SOURCE'));
+
+    expect(screen.getAllByText('Acme Supplies · Widget (60.00)').length).toBeGreaterThan(0);
+  });
+});
+
+describe('<ClientOffersView /> supplier-data sync affordances (#779)', () => {
+  test('shows the stale-data button and pulls the latest supplier values on click', async () => {
+    const supplierQuote: SupplierQuote = {
+      id: 'SQ-LIVE',
+      supplierId: 'sup-1',
+      supplierName: 'Acme Supplies',
+      items: [
+        {
+          id: 'sqi-live',
+          quoteId: 'SQ-LIVE',
+          productId: 'p-1',
+          productName: 'Widget',
+          // Current supplier values differ from the line's snapshot below → stale.
+          quantity: 4,
+          listPrice: 80,
+          discountPercent: 0,
+          unitPrice: 80,
+          unitType: 'hours',
+        },
+      ],
+      paymentTerms: 'immediate',
+      status: 'draft',
+      expirationDate: '2999-12-31',
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+    };
+    const staleOffer = buildOffer({
+      id: 'O-STALE',
+      items: [
+        {
+          id: 'item-stale',
+          offerId: 'O-STALE',
+          productId: 'p-1',
+          productName: 'Widget',
+          quantity: 2,
+          unitPrice: 100,
+          productCost: 60,
+          productMolPercentage: null,
+          unitType: 'hours',
+          supplierQuoteId: 'SQ-LIVE',
+          supplierQuoteItemId: 'sqi-live',
+          supplierQuoteUnitPrice: 60,
+        },
+      ],
+    });
+
+    render(
+      <ClientOffersView {...baseProps} offers={[staleOffer]} supplierQuotes={[supplierQuote]} />,
+    );
+    fireEvent.click(screen.getByText('O-STALE'));
+
+    // Rendered once per layout (mobile + desktop) — both share the same line state.
+    const refreshButtons = await screen.findAllByRole('button', {
+      name: 'sales:clientQuotes.staleSupplierData',
+    });
+    expect(refreshButtons.length).toBeGreaterThan(0);
+    fireEvent.click(refreshButtons[0]);
+
+    // Quantity + cost pulled from the supplier item; the affordance disappears once in sync.
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('button', { name: 'sales:clientQuotes.staleSupplierData' }),
+      ).toBeNull();
+    });
+  });
+});
+
 describe('<ClientOffersView /> MOL precision (issue #780)', () => {
   test('MOL line input keeps two decimals instead of rounding to one', async () => {
     const twoDecimalMolOffer = buildOffer({
@@ -640,5 +763,150 @@ describe('<ClientOffersView /> line-item delete confirmation', () => {
       expect(screen.queryByTestId('line-delete-confirm')).not.toBeInTheDocument();
     });
     expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
+  });
+});
+
+describe('<ClientOffersView /> expired-offer handling (issue #779)', () => {
+  const expiredOffer = (over: Partial<ClientOffer> = {}): ClientOffer =>
+    buildOffer({
+      id: 'O-EXPIRED',
+      status: 'sent',
+      // The server marks an expired offer via effectiveStatus; the view trusts it (it
+      // short-circuits the date math) so the row/modal go into the expired
+      // read-only-except-date mode. The default prefilled date is FUTURE so the extend-submit
+      // passes its past-date validation.
+      effectiveStatus: 'expired',
+      expirationDate: '2999-12-31',
+      ...over,
+    });
+
+  test('the status badge renders the translated expired label', () => {
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[buildOffer({ id: 'O-PAST', status: 'sent', expirationDate: '2000-01-01' })]}
+      />,
+    );
+    // No effectiveStatus on the fixture → exercises the shared-model fallback derivation too.
+    expect(screen.getAllByText('sales:clientOffers.statusExpired').length).toBeGreaterThan(0);
+  });
+
+  test('status action buttons are disabled on an expired sent offer', async () => {
+    // Row actions live behind the StandardTable overflow menu ("table.rowActions").
+    const user = userEvent.setup();
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[buildOffer({ id: 'O-PAST', status: 'sent', expirationDate: '2000-01-01' })]}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'table.rowActions' }));
+
+    // Scaduto freezes transitions; the server would 409 — the UI must not offer a dead end.
+    const acceptIcon = document.querySelector('.fa-check');
+    expect(acceptIcon).not.toBeNull();
+    expect(acceptIcon?.closest('button')).toBeDisabled();
+    const denyIcon = document.querySelector('.fa-xmark');
+    expect(denyIcon).not.toBeNull();
+    expect(denyIcon?.closest('button')).toBeDisabled();
+  });
+
+  test('submitting an expired offer extends ONLY the expiration date', async () => {
+    const onUpdateOffer = mock((_id: string, _updates: Partial<ClientOffer>) => Promise.resolve());
+    render(
+      <ClientOffersView {...baseProps} offers={[expiredOffer()]} onUpdateOffer={onUpdateOffer} />,
+    );
+
+    // Expired rows stay openable — the modal is where the expiration gets extended (#779).
+    fireEvent.click(screen.getByText('O-EXPIRED'));
+    const submit = await screen.findByRole('button', { name: 'common:buttons.update' });
+    expect(submit).toBeEnabled();
+    const form = submit.closest('form');
+    expect(form).not.toBeNull();
+    fireEvent.submit(form as HTMLFormElement);
+
+    await waitFor(() => expect(onUpdateOffer).toHaveBeenCalledTimes(1));
+    const [id, payload] = onUpdateOffer.mock.calls[0];
+    expect(id).toBe('O-EXPIRED');
+    // Only the expiration date is sent — the form is otherwise read-only and the server
+    // rejects content edits on an expired offer.
+    expect(Object.keys(payload as object)).toEqual(['expirationDate']);
+  });
+
+  test('submitting with a still-past expiration date is rejected client-side', async () => {
+    const onUpdateOffer = mock((_id: string, _updates: Partial<ClientOffer>) => Promise.resolve());
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[expiredOffer({ expirationDate: '2000-01-01' })]}
+        onUpdateOffer={onUpdateOffer}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('O-EXPIRED'));
+    const submit = await screen.findByRole('button', { name: 'common:buttons.update' });
+    const form = submit.closest('form');
+    expect(form).not.toBeNull();
+    fireEvent.submit(form as HTMLFormElement);
+
+    // The still-past date cannot revalidate the offer — rejected with a toast, no API call.
+    expect(onUpdateOffer).not.toHaveBeenCalled();
+  });
+
+  test('the delete action is disabled on an expired draft offer', async () => {
+    const user = userEvent.setup();
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[buildOffer({ id: 'O-PAST', status: 'draft', expirationDate: '2000-01-01' })]}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'table.rowActions' }));
+
+    // Mirrors the quotes view: expired documents cannot be deleted, only revalidated.
+    const trashIcon = document.querySelector('.fa-trash-can');
+    expect(trashIcon).not.toBeNull();
+    expect(trashIcon?.closest('button')).toBeDisabled();
+  });
+
+  test('the status filter offers an Expired option that isolates expired rows', async () => {
+    const user = userEvent.setup();
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[
+          buildOffer({ id: 'O-PAST', status: 'sent', expirationDate: '2000-01-01' }),
+          buildOffer({ id: 'O-VALID', status: 'sent', expirationDate: '2999-12-31' }),
+        ]}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'table.filters sales:clientOffers.statusColumn' }),
+    );
+    // The filter is built from the DERIVED status, so expired rows get their own option
+    // instead of hiding under the stored Sent value (#779).
+    await user.click(
+      await screen.findByRole('menuitemcheckbox', { name: 'sales:clientOffers.statusExpired' }),
+    );
+
+    expect(screen.getByText('O-PAST')).toBeInTheDocument();
+    expect(screen.queryByText('O-VALID')).toBeNull();
+  });
+
+  test('a valid sent offer stays fully read-only — no submit button, date field disabled', async () => {
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[buildOffer({ id: 'O-SENT', status: 'sent', expirationDate: '2999-12-31' })]}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('O-SENT'));
+    await screen.findByRole('button', { name: 'common:buttons.cancel' });
+    // The extend-only submit path is for EXPIRED offers; exposing it on valid sent offers let a
+    // no-op "Update" click write needless version snapshots and audit rows.
+    expect(screen.queryByRole('button', { name: 'common:buttons.update' })).toBeNull();
+    expect(document.getElementById('client-offer-expiration-date')).toBeDisabled();
   });
 });

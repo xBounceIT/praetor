@@ -24,6 +24,7 @@ import {
   formatInsertDate,
   formatInsertDateTime,
   getLocalDateString,
+  isDateOnlyBeforeToday,
   normalizeDateOnlyString,
 } from '../../utils/date';
 import {
@@ -37,6 +38,7 @@ import {
   roundCurrency,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
+import { isTerminalQuoteStatus } from '../../utils/quoteStatus';
 import { uploadStagedAttachments } from '../../utils/supplierQuoteAttachments';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
@@ -318,6 +320,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     () => [
       { id: 'draft', name: t('sales:supplierQuotes.statusDraft', { defaultValue: 'Draft' }) },
       { id: 'sent', name: t('sales:supplierQuotes.statusSent', { defaultValue: 'Sent' }) },
+      { id: 'offer', name: t('sales:supplierQuotes.statusOffer', { defaultValue: 'Offer' }) },
       {
         id: 'accepted',
         name: t('sales:supplierQuotes.statusAccepted', { defaultValue: 'Accepted' }),
@@ -360,8 +363,16 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     stagedAttachments,
   } = state;
 
+  // `status` is the EFFECTIVE status (synced from the linked client quote + the `expired` overlay,
+  // issue #779), so a linked supplier quote mirroring a non-draft client quote is correctly
+  // read-only here even when its own stored status is still draft.
   const baseReadOnly = Boolean(editingQuote && editingQuote.status !== 'draft');
   const isReadOnly = baseReadOnly || previewVersion !== null;
+  // The expiration date stays editable while read-only due to status/sync/expiry (so the quote can
+  // be revalidated) — but not once an order locks the quote, and not in version preview.
+  const expirationEditableWhileReadOnly = Boolean(
+    editingQuote && baseReadOnly && !editingQuote.linkedOrderId && previewVersion === null,
+  );
 
   const readOnlyLinkedReason = t('sales:supplierQuotes.readOnlyLinked', {
     defaultValue: 'This quote is read-only because an order was created from it.',
@@ -382,6 +393,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       return quote.status === 'denied' || hasOrder;
     },
     [hasOrderForQuote],
+  );
+
+  // History rows (denied / order-linked) are not editable, but terminal accepted/denied still OPEN
+  // in read-only mode for viewing — one predicate keeps onRowClick and rowClassName in sync.
+  const canOpenQuoteModal = useCallback(
+    (quote: SupplierQuote) => !isHistoryRow(quote) || isTerminalQuoteStatus(quote.status),
+    [isHistoryRow],
   );
 
   const totalsBreakdown = calculateTotals(formData.items || []);
@@ -447,10 +465,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
   const getStatusLabel = useCallback(
     (status: string) => {
+      if (status === 'expired') {
+        return t('sales:supplierQuotes.statusExpired', { defaultValue: 'Expired' });
+      }
       const option = statusOptions.find((item) => item.id === status);
       return option ? option.name : status;
     },
-    [statusOptions],
+    [statusOptions, t],
   );
 
   const handleSupplierChange = useCallback(
@@ -585,17 +606,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     });
   };
 
-  const handleStatusUpdate = useCallback(
-    async (id: string, updates: Partial<SupplierQuote>) => {
-      try {
-        await onUpdateQuote(id, updates);
-      } catch (err) {
-        toastError((err as Error).message || t('sales:supplierQuotes.failedToUpdateStatus'));
-      }
-    },
-    [onUpdateQuote, t],
-  );
-
   const columns = useMemo<Column<SupplierQuote>[]>(
     () => [
       {
@@ -711,8 +721,20 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         cell: ({ row }) => {
           const history = isHistoryRow(row);
           return (
-            <div className={history ? 'opacity-60' : ''}>
+            <div className={`flex items-center gap-1.5 ${history ? 'opacity-60' : ''}`}>
               <StatusBadge type={row.status as StatusType} label={getStatusLabel(row.status)} />
+              {row.isStatusSynced && (
+                <i
+                  role="img"
+                  className="fa-solid fa-link text-zinc-400 text-xs"
+                  title={t('sales:supplierQuotes.syncedFromClientQuote', {
+                    defaultValue: 'Status synced from the linked client quote',
+                  })}
+                  aria-label={t('sales:supplierQuotes.syncedFromClientQuote', {
+                    defaultValue: 'Status synced from the linked client quote',
+                  })}
+                ></i>
+              )}
             </div>
           );
         },
@@ -794,82 +816,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                 </TooltipTrigger>
                 <TooltipContent>{editTitle}</TooltipContent>
               </Tooltip>
-              {row.status === 'draft' && !hasOrder && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex">
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleStatusUpdate(row.id, { status: 'sent' });
-                        }}
-                        aria-label={t('sales:supplierQuotes.markSent', {
-                          defaultValue: 'Mark as sent',
-                        })}
-                        className="p-2 rounded-lg transition-all text-blue-700 hover:text-blue-600 hover:bg-blue-50"
-                      >
-                        <i className="fa-solid fa-paper-plane"></i>
-                      </button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {t('sales:supplierQuotes.markSent', { defaultValue: 'Mark as sent' })}
-                  </TooltipContent>
-                </Tooltip>
-              )}
-              {row.status === 'sent' && !hasOrder && (
-                <>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="inline-flex">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleStatusUpdate(row.id, { status: 'accepted' });
-                          }}
-                          aria-label={t('sales:supplierQuotes.markAccepted', {
-                            defaultValue: 'Mark as accepted',
-                          })}
-                          className="p-2 rounded-lg transition-all text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50"
-                        >
-                          <i className="fa-solid fa-check"></i>
-                        </button>
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {t('sales:supplierQuotes.markAccepted', {
-                        defaultValue: 'Mark as accepted',
-                      })}
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="inline-flex">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleStatusUpdate(row.id, { status: 'denied' });
-                          }}
-                          aria-label={t('sales:supplierQuotes.markDenied', {
-                            defaultValue: 'Mark as denied',
-                          })}
-                          className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
-                        >
-                          <i className="fa-solid fa-xmark"></i>
-                        </button>
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {t('sales:supplierQuotes.markDenied', {
-                        defaultValue: 'Mark as denied',
-                      })}
-                    </TooltipContent>
-                  </Tooltip>
-                </>
-              )}
               {row.status === 'accepted' && onCreateOrder && (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -915,42 +861,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                   </TooltipContent>
                 </Tooltip>
               )}
-              {history && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex">
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          if (hasOrder) return;
-                          handleStatusUpdate(row.id, { status: 'draft' });
-                        }}
-                        disabled={hasOrder}
-                        aria-label={
-                          hasOrder
-                            ? t('sales:supplierQuotes.orderAlreadyExists', {
-                                defaultValue: 'An order for this quote already exists.',
-                              })
-                            : t('sales:supplierQuotes.restoreQuote', {
-                                defaultValue: 'Restore quote',
-                              })
-                        }
-                        className={`p-2 rounded-lg transition-all ${hasOrder ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'}`}
-                      >
-                        <i className="fa-solid fa-rotate-left"></i>
-                      </button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {hasOrder
-                      ? t('sales:supplierQuotes.orderAlreadyExists', {
-                          defaultValue: 'An order for this quote already exists.',
-                        })
-                      : t('sales:supplierQuotes.restoreQuote', { defaultValue: 'Restore quote' })}
-                  </TooltipContent>
-                </Tooltip>
-              )}
             </div>
           );
         },
@@ -960,7 +870,6 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
       currency,
       getStatusLabel,
       onCreateOrder,
-      handleStatusUpdate,
       onViewOrders,
       openEditModal,
       t,
@@ -1016,6 +925,12 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         durationUnit: normalizeDurationUnit(item.durationUnit),
       })),
     };
+    if (editingQuote) {
+      // Status is fully derived server-side (issue #779) and the PUT ignores a client-sent
+      // value; never carry the formData copy (the derived `expired`/`offer` projection) through
+      // the content form.
+      delete payload.status;
+    }
 
     dispatch({ type: 'setIsSubmitting', value: true });
     try {
@@ -1240,10 +1155,48 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       <DateField
                         id="supplier-quote-expiration-date"
                         value={formData.expirationDate || ''}
-                        disabled={isReadOnly}
-                        onChange={(value) =>
-                          dispatch({ type: 'patchFormData', value: { expirationDate: value } })
-                        }
+                        // Editable while synced/expired so the supplier quote can be revalidated
+                        // (and the linked client quote unblocked) — issue #779.
+                        disabled={isReadOnly && !expirationEditableWhileReadOnly}
+                        onChange={(value) => {
+                          dispatch({ type: 'patchFormData', value: { expirationDate: value } });
+                          // When the form is read-only except the expiration (synced/expired/
+                          // non-draft, #779), the quote has no submit button — so picking a date
+                          // saves immediately as an "extend validity" action that re-syncs the
+                          // linked client quote and clears its expired-supplier block.
+                          if (expirationEditableWhileReadOnly && editingQuote) {
+                            // Revalidation needs a date from today onward; a cleared or past date
+                            // would leave the quote expired — say so instead of silently saving.
+                            if (!value || isDateOnlyBeforeToday(value)) {
+                              toastError(
+                                t('sales:supplierQuotes.errors.expirationExtendInvalid', {
+                                  defaultValue:
+                                    'Set an expiration date of today or later to revalidate the supplier quote',
+                                }),
+                              );
+                              return;
+                            }
+                            // onUpdateQuote may return void or a promise; normalize so a rejection
+                            // is surfaced rather than swallowed.
+                            Promise.resolve(
+                              onUpdateQuote(editingQuote.id, { expirationDate: value }),
+                            ).catch((err: unknown) => {
+                              // Surface the failure and resync the field — the optimistic patch
+                              // above already painted the new date into the form.
+                              toastError(
+                                (err as Error).message ||
+                                  t('sales:supplierQuotes.failedToSave', {
+                                    defaultValue:
+                                      'Failed to save the supplier quote. Please retry.',
+                                  }),
+                              );
+                              dispatch({
+                                type: 'patchFormData',
+                                value: { expirationDate: editingQuote.expirationDate || '' },
+                              });
+                            });
+                          }
+                        }}
                       />
                     </Field>
                   </div>
@@ -1787,16 +1740,13 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         columns={columns}
         defaultRowsPerPage={5}
         onRowClick={(row) => {
-          const canOpenModal =
-            !isHistoryRow(row) || row.status === 'accepted' || row.status === 'denied';
-          if (canOpenModal) {
+          if (canOpenQuoteModal(row)) {
             openEditModal(row);
           }
         }}
         rowClassName={(row) => {
           const history = isHistoryRow(row);
-          const canOpenModal = !history || row.status === 'accepted' || row.status === 'denied';
-          const cursorClass = canOpenModal ? 'cursor-pointer' : 'cursor-not-allowed';
+          const cursorClass = canOpenQuoteModal(row) ? 'cursor-pointer' : 'cursor-not-allowed';
           return history
             ? `bg-zinc-50 text-zinc-400 hover:bg-zinc-100 ${cursorClass}`
             : `hover:bg-zinc-50/50 ${cursorClass}`;

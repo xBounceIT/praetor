@@ -8,10 +8,12 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
 import { clients } from './clients.ts';
 import { products } from './products.ts';
+import { supplierQuotes } from './supplierQuotes.ts';
 
 export const quotes = pgTable(
   'quotes',
@@ -31,6 +33,15 @@ export const quotes = pgTable(
       .default('percentage'),
     status: varchar('status', { length: 20 }).notNull().default('draft'),
     expirationDate: date('expiration_date', { mode: 'string' }).notNull(),
+    // 1-to-1 link to a supplier quote (issue #779). Nullable: a client quote with no supplier
+    // quote is a valid state. The supplier quote's status mirrors this client quote's status
+    // while linked (computed at read time via the reverse lookup). SET NULL on delete so removing
+    // the supplier quote just clears the link; CASCADE on update so a supplier-quote id rename
+    // keeps the link valid. The partial-unique index below enforces the "1-to-1" guarantee.
+    linkedSupplierQuoteId: varchar('linked_supplier_quote_id', { length: 100 }).references(
+      () => supplierQuotes.id,
+      { onDelete: 'set null', onUpdate: 'cascade' },
+    ),
     notes: text('notes'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
     updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
@@ -39,9 +50,15 @@ export const quotes = pgTable(
     index('idx_quotes_client_id').on(table.clientId),
     index('idx_quotes_status').on(table.status),
     index('idx_quotes_created_at').on(table.createdAt),
+    // At most one client quote may point at a given supplier quote (the other half of the 1-to-1
+    // link). Partial (IS NOT NULL) so many quotes can stay unlinked — Postgres allows multiple
+    // NULLs but the predicate makes the intent explicit (mirrors the clients.ts unique indexes).
+    uniqueIndex('idx_quotes_linked_supplier_quote_id_unique')
+      .on(table.linkedSupplierQuoteId)
+      .where(sql`${table.linkedSupplierQuoteId} IS NOT NULL`),
     check(
       'quotes_status_check',
-      sql`${table.status} IN ('quoted', 'confirmed', 'draft', 'sent', 'accepted', 'denied')`,
+      sql`${table.status} IN ('draft', 'sent', 'offer', 'accepted', 'denied')`,
     ),
     check('chk_quotes_discount_type', sql`${table.discountType} IN ('percentage', 'currency')`),
   ],
@@ -84,6 +101,13 @@ export const quoteItems = pgTable(
   },
   (table) => [
     index('idx_quote_items_quote_id').on(table.quoteId),
+    // Partial index for the #779 line-sourcing reverse lookups: supplierQuotesRepo's
+    // chosenClientQuoteId EXISTS probe and clientQuotesRepo's earliest-sourced-expiration JOIN both
+    // correlate on supplier_quote_id, which was otherwise unindexed (sequential scan per probe).
+    // Partial (IS NOT NULL) because only supplier-sourced lines carry it — the rest are NULL.
+    index('idx_quote_items_supplier_quote_id')
+      .on(table.supplierQuoteId)
+      .where(sql`${table.supplierQuoteId} IS NOT NULL`),
     check('chk_quote_items_unit_type', sql`${table.unitType} IN ('hours', 'days', 'unit')`),
     check('chk_quote_items_duration_months', sql`${table.durationMonths} >= 1`),
     check('chk_quote_items_duration_unit', sql`${table.durationUnit} IN ('months', 'years', 'na')`),
