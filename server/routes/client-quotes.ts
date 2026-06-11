@@ -506,17 +506,18 @@ const buildItemsForInsert = (items: ResolvedQuoteItem[]): clientQuotesRepo.NewCl
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
-  // Builds the response payload with the derived #779 fields. `linkedSupplierQuoteExpiration` here
-  // is the earliest expiration among the supplier quotes the quote SOURCES via its lines (issue
-  // #779 follow-up — the 1:1 header link was removed). The list projection computes it; on write
-  // paths (BASE projection) it's null, so we use the value the handler already holds
-  // (`knownSourcedExpiration`).
+  // Builds the response payload with the derived #779 fields. `sourcedExpiration` must be the
+  // STATUS-AWARE earliest blocking expiration among the supplier quotes the quote SOURCES via its
+  // lines (supplierQuotesRepo.findEarliestExpirationByIds / findBlockingExpirationsByIds —
+  // terminal-frozen sourced quotes excluded). NOT the quote row's raw-MIN
+  // linkedSupplierQuoteExpiration: the UI disables Sent/Offer/Accepted off the flag below, so a
+  // raw past date on a terminal-frozen (never-expired) sourced supplier quote would block
+  // client-side a transition the server allows (#812 round 11).
   const buildQuoteResponse = (
     quote: clientQuotesRepo.ClientQuote,
     items: clientQuotesRepo.ClientQuoteItem[],
-    knownSourcedExpiration?: string | null,
+    sourcedExpiration: string | null,
   ) => {
-    const sourcedExpiration = quote.linkedSupplierQuoteExpiration ?? knownSourcedExpiration ?? null;
     const effectiveStatus = effectiveQuoteStatusFromDate(quote.status, quote.expirationDate);
     return {
       ...quote,
@@ -644,9 +645,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         else itemsByQuote.set(item.quoteId, [item]);
       }
 
-      // The list projection already carries linkedSupplierQuoteExpiration, so buildQuoteResponse
-      // (synchronous) builds each row without any extra per-row query.
-      return quotes.map((quote) => buildQuoteResponse(quote, itemsByQuote.get(quote.id) ?? []));
+      // One batched status-aware read for every sourced supplier quote in the list (#812 round
+      // 11): the per-quote flag below must exclude terminal-frozen sourced quotes exactly like the
+      // progression guard, so it cannot come from the row's raw-MIN linkedSupplierQuoteExpiration.
+      const blockingExpirations = await supplierQuotesRepo.findBlockingExpirationsByIds(
+        sourcedSupplierQuoteIds(items),
+      );
+      return quotes.map((quote) => {
+        const quoteItems = itemsByQuote.get(quote.id) ?? [];
+        let earliest: string | null = null;
+        for (const item of quoteItems) {
+          const date = item.supplierQuoteId
+            ? blockingExpirations.get(item.supplierQuoteId)
+            : undefined;
+          if (date && (!earliest || date < earliest)) earliest = date;
+        }
+        return buildQuoteResponse(quote, quoteItems, earliest);
+      });
     },
   );
 
@@ -1133,7 +1148,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // resolve the CURRENT lines through the same status-aware helper — the gate's
       // linkedSupplierQuoteExpiration is a raw MIN over dates, which would wrongly block on a
       // terminal-frozen (never-expired) sourced supplier quote (#812 round 10). A plain no-op
-      // resend (no status/items change) never reaches the guard, so it keeps the cheap gate value.
+      // resend (no status/items change) never reaches the guard; its response value is resolved
+      // after the write from the stored lines (see buildQuoteResponse below).
       const sourcedExpiration = normalizedItems
         ? await supplierQuotesRepo.findEarliestExpirationByIds(
             sourcedSupplierQuoteIds(normalizedItems),
@@ -1144,7 +1160,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 await clientQuotesRepo.findItemSnapshotsForQuote(idResult.value),
               ),
             )
-          : current.linkedSupplierQuoteExpiration;
+          : null;
       if (statusChanged || normalizedItems) {
         const effectiveTarget = statusChanged ? targetStatus : current.status;
         if (
@@ -1276,7 +1292,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           toValue: didStatusChange ? String(nextStatus) : undefined,
         },
       });
-      return buildQuoteResponse(updatedQuote, updatedItems, sourcedExpiration);
+      // Items/status branches already hold the status-aware value (it fed the guard); a no-op
+      // resend resolves it from the stored lines so the response flag never reads a raw MIN.
+      const responseSourcedExpiration =
+        normalizedItems || statusChanged
+          ? sourcedExpiration
+          : await supplierQuotesRepo.findEarliestExpirationByIds(
+              sourcedSupplierQuoteIds(updatedItems),
+            );
+      return buildQuoteResponse(updatedQuote, updatedItems, responseSourcedExpiration);
     },
   );
 
@@ -1616,7 +1640,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
 
-      return buildQuoteResponse(restored.quote, restored.items);
+      // Status-aware response flag (#812 round 11): resolve the restored lines' blocking
+      // expiration the same way the guards do (terminal-frozen sourced quotes excluded).
+      return buildQuoteResponse(
+        restored.quote,
+        restored.items,
+        await supplierQuotesRepo.findEarliestExpirationByIds(
+          sourcedSupplierQuoteIds(restored.items),
+        ),
+      );
     },
   );
 

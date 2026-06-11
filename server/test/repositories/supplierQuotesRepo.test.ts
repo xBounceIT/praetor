@@ -205,8 +205,8 @@ describe('isSourcedByClientDocuments', () => {
   });
 });
 
-describe('findEarliestExpirationByIds', () => {
-  // Row shape mirrors the select order: [expirationDate, linkedClientQuoteStatus,
+describe('findBlockingExpirationsByIds / findEarliestExpirationByIds', () => {
+  // Row shape mirrors the select order: [id, expirationDate, linkedClientQuoteStatus,
   // linkedClientQuoteExpiration, linkedOfferStatus, linkedOfferExpiration]. The terminal-exclusion
   // runs in JS via the canonical effectiveSupplierQuoteStatusFromDate, so it is behavior-testable.
   test('excludes terminal-effective supplier quotes from the earliest-blocking date (#812)', async () => {
@@ -214,8 +214,8 @@ describe('findEarliestExpirationByIds', () => {
     // past date must NOT block. sq B's chain is live (sent) → its past date blocks.
     exec.enqueue({
       rows: [
-        ['2000-01-02', 'accepted', null, null, null],
-        ['2000-01-05', 'sent', '2999-12-31', null, null],
+        ['sq-a', '2000-01-02', 'accepted', null, null, null],
+        ['sq-b', '2000-01-05', 'sent', '2999-12-31', null, null],
       ],
     });
     expect(await supplierQuotesRepo.findEarliestExpirationByIds(['sq-a', 'sq-b'], testDb)).toBe(
@@ -227,12 +227,27 @@ describe('findEarliestExpirationByIds', () => {
     expect(sqlText).toContain('o.linked_quote_id');
   });
 
+  test('maps only the effectively-expirable ids (the list flag reads this per quote)', async () => {
+    exec.enqueue({
+      rows: [
+        ['sq-a', '2000-01-02', 'accepted', null, null, null],
+        ['sq-b', '2000-01-05', 'sent', '2999-12-31', null, null],
+      ],
+    });
+    const blocking = await supplierQuotesRepo.findBlockingExpirationsByIds(
+      ['sq-a', 'sq-b'],
+      testDb,
+    );
+    expect(blocking.get('sq-a')).toBeUndefined();
+    expect(blocking.get('sq-b')).toBe('2000-01-05');
+  });
+
   test('returns null when every sourced supplier quote is terminal-effective', async () => {
     // Legacy accepted spelling on the quote chain; the other chain ends in a denied offer.
     exec.enqueue({
       rows: [
-        ['2000-01-02', 'confirmed', null, null, null],
-        ['2000-01-03', 'accepted', null, 'denied', null],
+        ['sq-a', '2000-01-02', 'confirmed', null, null, null],
+        ['sq-b', '2000-01-03', 'accepted', null, 'denied', null],
       ],
     });
     expect(
@@ -241,14 +256,14 @@ describe('findEarliestExpirationByIds', () => {
   });
 
   test('a live offer chain stays counted (base is "offer", non-terminal)', async () => {
-    exec.enqueue({ rows: [['2000-01-02', 'accepted', null, 'sent', '2999-12-31']] });
+    exec.enqueue({ rows: [['sq-a', '2000-01-02', 'accepted', null, 'sent', '2999-12-31']] });
     expect(await supplierQuotesRepo.findEarliestExpirationByIds(['sq-a'], testDb)).toBe(
       '2000-01-02',
     );
   });
 
   test('an unsourced supplier quote (draft) stays counted', async () => {
-    exec.enqueue({ rows: [['2000-01-02', null, null, null, null]] });
+    exec.enqueue({ rows: [['sq-a', '2000-01-02', null, null, null, null]] });
     expect(await supplierQuotesRepo.findEarliestExpirationByIds(['sq-a'], testDb)).toBe(
       '2000-01-02',
     );

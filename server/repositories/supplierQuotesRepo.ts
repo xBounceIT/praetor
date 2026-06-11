@@ -254,24 +254,24 @@ export const findById = async (
   return rows[0] ? mapQuote(rows[0]) : null;
 };
 
-// Earliest BLOCKING expiration among the given supplier quotes (the ones a client quote sources
-// via its lines). The client-quotes progression guard reads it to block advancing a quote backed
-// by a stale supplier quote (issue #779 follow-up; replaces the single header-linked expiration).
-// NOT a raw MIN over dates (#812 round 10): a supplier quote whose chained EFFECTIVE status is
-// terminal (accepted/denied) is frozen and never shows as Expired — e.g. it derives `accepted`
-// through another accepted client document — so its past date must not block progressing a quote
-// that reuses it. Each row's effective status is computed with the same chain columns findById
-// materializes and the canonical effectiveSupplierQuoteStatusFromDate (no SQL re-implementation
-// that could drift); terminal rows are excluded from the MIN. Null when the id list is empty or
-// no non-terminal sourced quote has an expiration.
-export const findEarliestExpirationByIds = async (
+// Per-id BLOCKING expirations among the given supplier quotes (the ones client quotes source via
+// their lines): supplier-quote id → its own expiration date, EXCLUDING quotes whose chained
+// EFFECTIVE status is terminal (#812 rounds 10-11). A terminal-effective (accepted/denied) supplier
+// quote is frozen and never shows as Expired — e.g. it derives `accepted` through another accepted
+// client document — so its past date must neither block progression (the guard) nor light the
+// client-side `linkedSupplierQuoteExpired` indicator (the list/response flag); both read this.
+// Each row's effective status is computed with the same chain columns findById materializes and
+// the canonical effectiveSupplierQuoteStatusFromDate (no SQL re-implementation that could drift).
+export const findBlockingExpirationsByIds = async (
   ids: string[],
   exec: DbExecutor = db,
-): Promise<string | null> => {
+): Promise<Map<string, string>> => {
+  const blocking = new Map<string, string>();
   const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
-  if (uniqueIds.length === 0) return null;
+  if (uniqueIds.length === 0) return blocking;
   const rows = await exec
     .select({
+      id: supplierQuotes.id,
       expirationDate: supplierQuotes.expirationDate,
       linkedClientQuoteStatus: linkedClientQuoteStatusSubquery,
       linkedClientQuoteExpiration: linkedClientQuoteExpirationSubquery,
@@ -280,7 +280,6 @@ export const findEarliestExpirationByIds = async (
     })
     .from(supplierQuotes)
     .where(inArray(supplierQuotes.id, uniqueIds));
-  let earliest: string | null = null;
   for (const row of rows) {
     const expirationDate = normalizeNullableDateOnly(
       row.expirationDate,
@@ -297,7 +296,21 @@ export const findEarliestExpirationByIds = async (
     // Terminal-effective (accepted/denied) is frozen — never expired, never blocks. The derived
     // `expired` itself is NOT terminal (isTerminalQuoteStatus floors it), so it stays counted.
     if (isTerminalQuoteStatus(effective)) continue;
-    if (!earliest || expirationDate < earliest) earliest = expirationDate;
+    blocking.set(row.id, expirationDate);
+  }
+  return blocking;
+};
+
+// Earliest of the blocking expirations above — what the client-quotes progression/restore guards
+// and the single-document response flag key on. Null when the id list is empty or every sourced
+// supplier quote is terminal-frozen or has no expiration.
+export const findEarliestExpirationByIds = async (
+  ids: string[],
+  exec: DbExecutor = db,
+): Promise<string | null> => {
+  let earliest: string | null = null;
+  for (const date of (await findBlockingExpirationsByIds(ids, exec)).values()) {
+    if (!earliest || date < earliest) earliest = date;
   }
   return earliest;
 };

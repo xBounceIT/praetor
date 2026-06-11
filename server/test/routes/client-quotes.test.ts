@@ -46,8 +46,11 @@ const cqFindStatusAndClientNameMock = mock();
 const cqDeleteByIdMock = mock();
 const cqReplaceItemsMock = mock();
 const cqFindItemSnapshotsForQuoteMock = mock();
+const cqListAllMock = mock();
+const cqListAllItemsMock = mock();
 
 const sqFindEarliestExpirationByIdsMock = mock();
+const sqFindBlockingExpirationsByIdsMock = mock();
 const sqFindItemsByIdsMock = mock();
 const sqFindLinkedOrderIdMock = mock();
 const sqFindFullForSnapshotMock = mock();
@@ -93,6 +96,8 @@ beforeAll(async () => {
     deleteById: cqDeleteByIdMock,
     replaceItems: cqReplaceItemsMock,
     findItemSnapshotsForQuote: cqFindItemSnapshotsForQuoteMock,
+    listAll: cqListAllMock,
+    listAllItems: cqListAllItemsMock,
   }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
@@ -103,6 +108,7 @@ beforeAll(async () => {
     lockEffectiveStatusById: sqLockEffectiveStatusMock,
     getQuoteItemSnapshots: sqGetQuoteItemSnapshotsMock,
     findEarliestExpirationByIds: sqFindEarliestExpirationByIdsMock,
+    findBlockingExpirationsByIds: sqFindBlockingExpirationsByIdsMock,
   }));
   mock.module('../../repositories/supplierQuoteVersionsRepo.ts', () => ({
     ...supplierQuoteVersionsRepoSnap,
@@ -202,9 +208,12 @@ const allMocks = [
   cqUpdateMock,
   cqReplaceItemsMock,
   cqFindItemSnapshotsForQuoteMock,
+  cqListAllMock,
+  cqListAllItemsMock,
   cqFindStatusAndClientNameMock,
   cqDeleteByIdMock,
   sqFindEarliestExpirationByIdsMock,
+  sqFindBlockingExpirationsByIdsMock,
   sqFindItemsByIdsMock,
   sqFindLinkedOrderIdMock,
   sqFindFullForSnapshotMock,
@@ -238,6 +247,7 @@ beforeEach(async () => {
   qvInsertMock.mockResolvedValue(undefined);
   // Line-sourced expiration guard default: nothing sourced is expired (far-future earliest).
   sqFindEarliestExpirationByIdsMock.mockResolvedValue('2999-12-31');
+  sqFindBlockingExpirationsByIdsMock.mockResolvedValue(new Map());
   // Forward-sync defaults: no supplier-sourced lines touched unless a test sets them up.
   cqReplaceItemsMock.mockResolvedValue([]);
   cqFindItemSnapshotsForQuoteMock.mockResolvedValue([]);
@@ -749,5 +759,56 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     expect(res.statusCode).toBe(409);
     expect(res.json().error).toContain('different quantities or costs');
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/sales/client-quotes list (#812 round 11)', () => {
+  test('linkedSupplierQuoteExpired comes from the status-aware blocking map, not the raw projection', async () => {
+    // q-1 sources a terminal-frozen supplier quote (excluded from the map) — its raw
+    // linkedSupplierQuoteExpiration is past, but the flag must stay false so the UI does not
+    // disable a transition the server-side guard allows. q-2 sources a live expired one → true.
+    getRolePermissionsMock.mockResolvedValue(['sales.client_quotes.view']);
+    cqListAllMock.mockResolvedValue([
+      updatedQuote({ id: 'q-1', status: 'sent', linkedSupplierQuoteExpiration: '2000-01-01' }),
+      updatedQuote({ id: 'q-2', status: 'sent', linkedSupplierQuoteExpiration: '2000-01-01' }),
+    ]);
+    const item = (id: string, quoteId: string, supplierQuoteId: string) => ({
+      id,
+      quoteId,
+      productId: null,
+      productName: 'Service',
+      quantity: 1,
+      unitPrice: 100,
+      productCost: 50,
+      productMolPercentage: null,
+      discount: 0,
+      note: null,
+      supplierQuoteId,
+      supplierQuoteItemId: `${supplierQuoteId}-item`,
+      supplierQuoteSupplierName: 'Acme',
+      supplierQuoteUnitPrice: 50,
+      unitType: 'hours',
+      durationMonths: 1,
+      durationUnit: 'months',
+    });
+    cqListAllItemsMock.mockResolvedValue([
+      item('qi-1', 'q-1', 'sq-frozen'),
+      item('qi-2', 'q-2', 'sq-live'),
+    ]);
+    sqFindBlockingExpirationsByIdsMock.mockResolvedValue(new Map([['sq-live', '2000-01-01']]));
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/sales/client-quotes',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as Array<Record<string, unknown>>;
+    expect(body.find((q) => q.id === 'q-1')?.linkedSupplierQuoteExpired).toBe(false);
+    expect(body.find((q) => q.id === 'q-2')?.linkedSupplierQuoteExpired).toBe(true);
+    const askedIds = sqFindBlockingExpirationsByIdsMock.mock.calls[0]?.[0] as string[];
+    expect(askedIds).toContain('sq-frozen');
+    expect(askedIds).toContain('sq-live');
   });
 });
