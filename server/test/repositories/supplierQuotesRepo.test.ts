@@ -107,7 +107,29 @@ describe('listAll', () => {
     const sql = exec.calls[0].sql.toLowerCase();
     expect(sql).toContain('left join lateral');
     expect(sql).toContain('"chosen_offer"."linked_quote_id" = "chosen"."id"');
-    expect((sql.match(/when 'accepted' then 5/g) ?? []).length).toBe(1);
+    expect(
+      (sql.match(/when co\.status in \('accepted', 'confirmed', 'approved'\) then 6/g) ?? [])
+        .length,
+    ).toBe(1);
+  });
+
+  test('ranks sourcing candidates by the CHAINED effective status, offer included', async () => {
+    // Multi-quote sourcing (PR #812 round 9): the projection follows the chosen quote's OFFER, so
+    // the rank must too — on raw cq.status an accepted quote whose offer is denied/expired (a dead
+    // chain) would outrank a live sent quote and wrongly freeze the supplier quote. The rank joins
+    // each candidate's offer and applies terminal-first / expiration-overlay before the live
+    // pipeline; dead-ends (denied, expired) rank below every live state.
+    exec.enqueue({ rows: [] });
+    await supplierQuotesRepo.listAll(testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    // The candidate's own offer is joined inside the ranked subquery for the rank to read.
+    expect(sql).toContain('left join customer_offers co on co.linked_quote_id = cq.id');
+    // Offer branch: terminal first, then offer expiration, else a live offer chain ranks 5.
+    expect(sql).toContain("when co.status in ('denied', 'rejected') then 1");
+    expect(sql).toContain('when co.expiration_date < current_date then 2');
+    // Quote branch fallback for offer-less candidates still ranks the quote pipeline.
+    expect(sql).toContain("when cq.status in ('sent', 'received') then 4");
+    expect(sql).toContain('when cq.expiration_date < current_date then 2');
   });
 });
 

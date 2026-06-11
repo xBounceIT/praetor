@@ -46,31 +46,48 @@ const outerSupplierQuoteId = sql.raw('"supplier_quotes"."id"');
 // The client quote that most-advances this supplier quote, resolved through PRODUCT-LINE sourcing
 // (quote_items.supplier_quote_id) — issue #779 follow-up: the 1:1 quotes.linked_supplier_quote_id
 // header link was removed as redundant with the per-line sourcing, so a supplier quote now follows
-// the furthest-progressed client document whose lines use it. Rank: accepted > offer > sent >
-// draft > denied (a dead-end denied quote never outranks a live one); tiebreak most-recently-
-// updated. NULL when no client quote sources this supplier quote. The downstream offer is still
-// that chosen quote's offer (customer_offers.linked_quote_id), so the derived-status chain
-// (effectiveSupplierQuoteStatus) is unchanged — only the quote it follows changed.
+// the furthest-progressed client document whose lines use it. NULL when no client quote sources
+// this supplier quote. The downstream offer is still that chosen quote's offer
+// (customer_offers.linked_quote_id), so the derived-status chain (effectiveSupplierQuoteStatus)
+// is unchanged — only the quote it follows changed.
 // "Most-advanced sourcing quote wins" ordering, shared by the scalar subquery (single-row paths)
-// and the list LATERAL below so the CASE lives in one place. Legacy spellings rank with their
-// canonical equivalents (confirmed→accepted, received→sent, rejected→denied); draft (and any
-// unknown value) sits above the dead-end denied. Tiebreak: most-recently-updated, then id.
+// and the list LATERAL below so the CASE lives in one place. Ranked by the CHAINED effective
+// status the row would ultimately project (mirroring effectiveSupplierQuoteStatus), NOT the raw
+// quote status: when a candidate has an offer, the projection follows the OFFER, so ranking on
+// cq.status alone would let an accepted quote whose offer is denied/expired (a dead chain)
+// outrank a live sent/offer quote and wrongly freeze the supplier quote in multi-quote sourcing.
+// Mapping per candidate, terminal-first then expiration overlay (like effectiveQuoteStatus):
+//   accepted 6 > offer 5 > sent 4 > draft/unknown 3 > expired 2 > denied 1
+// (dead-ends — denied, expired — never outrank a live document; expired sits above denied because
+// extending the date can revive it). Legacy spellings rank with their canonical equivalents
+// (confirmed/approved→accepted, received→sent, rejected→denied). Requires the candidate's offer
+// joined as `co` (unique on linked_quote_id ⇒ no row multiplication). Tiebreak:
+// most-recently-updated, then id.
 const sourcingRankOrderBy = sql`
-  CASE COALESCE(cq.status, '')
-    WHEN 'accepted' THEN 5
-    WHEN 'confirmed' THEN 5
-    WHEN 'offer' THEN 4
-    WHEN 'sent' THEN 3
-    WHEN 'received' THEN 3
-    WHEN 'denied' THEN 1
-    WHEN 'rejected' THEN 1
-    ELSE 2
+  CASE
+    WHEN co.id IS NOT NULL THEN
+      CASE
+        WHEN co.status IN ('accepted', 'confirmed', 'approved') THEN 6
+        WHEN co.status IN ('denied', 'rejected') THEN 1
+        WHEN co.expiration_date < CURRENT_DATE THEN 2
+        ELSE 5
+      END
+    ELSE
+      CASE
+        WHEN cq.status IN ('accepted', 'confirmed', 'approved') THEN 6
+        WHEN cq.status IN ('denied', 'rejected') THEN 1
+        WHEN cq.expiration_date < CURRENT_DATE THEN 2
+        WHEN cq.status = 'offer' THEN 5
+        WHEN cq.status IN ('sent', 'received') THEN 4
+        ELSE 3
+      END
   END DESC,
   cq.updated_at DESC,
   cq.id`;
 
 const chosenClientQuoteId = sql<string | null>`(
   SELECT cq.id FROM quotes cq
+  LEFT JOIN customer_offers co ON co.linked_quote_id = cq.id
   WHERE EXISTS (
     SELECT 1 FROM quote_items qi
     WHERE qi.quote_id = cq.id AND qi.supplier_quote_id = ${outerSupplierQuoteId}
@@ -89,6 +106,7 @@ const chosenClientQuoteId = sql<string | null>`(
 const chosenClientQuoteLateral = sql`LATERAL (
   SELECT cq.id, cq.status, cq.expiration_date
   FROM quotes cq
+  LEFT JOIN customer_offers co ON co.linked_quote_id = cq.id
   WHERE EXISTS (
     SELECT 1 FROM quote_items qi
     WHERE qi.quote_id = cq.id AND qi.supplier_quote_id = ${outerSupplierQuoteId}
