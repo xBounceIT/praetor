@@ -276,12 +276,23 @@ export const lockCurrentById = async (
 export const findStatusAndClientName = async (
   id: string,
   exec: DbExecutor = db,
-): Promise<{ status: string; clientName: string } | null> => {
+): Promise<{ status: string; clientName: string; expirationDate: string | null } | null> => {
   const rows = await exec
-    .select({ status: quotes.status, clientName: quotes.clientName })
+    .select({
+      status: quotes.status,
+      clientName: quotes.clientName,
+      // The DELETE guard derives the effective status (#812 round 25): an effectively-expired
+      // quote is read-only and must not be deletable through the API either.
+      expirationDate: quotes.expirationDate,
+    })
     .from(quotes)
     .where(eq(quotes.id, id));
-  return rows[0] ?? null;
+  if (!rows[0]) return null;
+  return {
+    status: rows[0].status,
+    clientName: rows[0].clientName,
+    expirationDate: normalizeNullableDateOnly(rows[0].expirationDate, 'quote.expirationDate'),
+  };
 };
 
 export const findLinkedOfferId = async (

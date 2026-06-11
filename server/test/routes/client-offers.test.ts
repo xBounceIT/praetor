@@ -51,6 +51,9 @@ const coReplaceItemsMock = mock();
 const coCreateMock = mock();
 const coInsertItemsMock = mock();
 const coFindExistingForQuoteMock = mock();
+const coFindStatusAndClientNameMock = mock();
+const coFindLinkedSaleIdMock = mock();
+const coDeleteByIdMock = mock();
 
 const cqFindStatusAndClientNameMock = mock();
 const cqFindItemSnapshotsForQuoteMock = mock();
@@ -101,6 +104,9 @@ beforeAll(async () => {
     create: coCreateMock,
     insertItems: coInsertItemsMock,
     findExistingForQuote: coFindExistingForQuoteMock,
+    findStatusAndClientName: coFindStatusAndClientNameMock,
+    findLinkedSaleId: coFindLinkedSaleIdMock,
+    deleteById: coDeleteByIdMock,
   }));
   mock.module('../../repositories/clientQuotesRepo.ts', () => ({
     ...clientQuotesRepoSnap,
@@ -659,5 +665,41 @@ describe('PUT /api/sales/client-offers/:id fresh-link sourceable guard (#812 rou
     const res = await putOffer({ items: [sourcedLine()] });
     expect(res.statusCode).toBe(200);
     expect(coReplaceItemsMock).toHaveBeenCalled();
+  });
+});
+
+describe('DELETE /api/sales/client-offers/:id expired guard (#812 round 25)', () => {
+  const deleteOffer = () =>
+    testApp.inject({
+      method: 'DELETE',
+      url: '/api/sales/client-offers/off-1',
+      headers: authHeader(),
+    });
+
+  test('409 when a draft offer is effectively expired (read-only model)', async () => {
+    getRolePermissionsMock.mockResolvedValue(['sales.client_offers.delete']);
+    coFindLinkedSaleIdMock.mockResolvedValue(null);
+    coFindStatusAndClientNameMock.mockResolvedValue({
+      status: 'draft',
+      clientName: 'Client',
+      expirationDate: '2000-01-01',
+    });
+
+    const res = await deleteOffer();
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Expired offers are read-only');
+  });
+
+  test('204 deletes a live draft offer', async () => {
+    getRolePermissionsMock.mockResolvedValue(['sales.client_offers.delete']);
+    coFindLinkedSaleIdMock.mockResolvedValue(null);
+    coFindStatusAndClientNameMock.mockResolvedValue({
+      status: 'draft',
+      clientName: 'Client',
+      expirationDate: '2999-12-31',
+    });
+
+    const res = await deleteOffer();
+    expect(res.statusCode).toBe(204);
   });
 });

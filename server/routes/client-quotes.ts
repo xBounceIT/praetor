@@ -1741,6 +1741,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           details: { secondaryLabel: 'accepted_status' },
         });
       }
+      // Expired is read-only EVERYWHERE under #779 — the UI already disables deletion, and the
+      // only exit is extending the expiration date. Derive it here too so a direct API caller
+      // cannot delete what the model freezes (#812 round 25).
+      if (effectiveQuoteStatusFromDate(status.status, status.expirationDate) === 'expired') {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message:
+            'Expired quotes are read-only and cannot be deleted; extend the expiration date instead',
+          action: 'client_quote.delete.conflict',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'expired_read_only' },
+        });
+      }
 
       await clientQuotesRepo.deleteById(idResult.value);
 

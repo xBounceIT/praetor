@@ -423,10 +423,11 @@ describe('replaceItems', () => {
 
 describe('findStatusAndClientName', () => {
   test('returns status and clientName when found', async () => {
-    exec.enqueue({ rows: [['draft', 'Acme']] });
+    exec.enqueue({ rows: [['draft', 'Acme', '2999-12-31']] });
     expect(await clientQuotesRepo.findStatusAndClientName('cq-1', testDb)).toEqual({
       status: 'draft',
       clientName: 'Acme',
+      expirationDate: '2999-12-31',
     });
   });
 

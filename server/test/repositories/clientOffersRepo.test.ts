@@ -162,10 +162,10 @@ describe('findExistingForQuote', () => {
 
 describe('findStatusAndClientName', () => {
   test('returns status + clientName when offer exists', async () => {
-    exec.enqueue({ rows: [['draft', 'Acme']] });
+    exec.enqueue({ rows: [['draft', 'Acme', '2999-12-31']] });
     const result = await clientOffersRepo.findStatusAndClientName('co-1', testDb);
     expect(exec.calls[0].params).toEqual(['co-1']);
-    expect(result).toEqual({ status: 'draft', clientName: 'Acme' });
+    expect(result).toEqual({ status: 'draft', clientName: 'Acme', expirationDate: '2999-12-31' });
   });
 
   test('returns null when not found', async () => {

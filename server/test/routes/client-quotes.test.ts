@@ -993,3 +993,23 @@ describe('sourced-id resolution for legacy item-only lines (#812 round 20)', () 
     expect(cqUpdateMock).not.toHaveBeenCalled();
   });
 });
+
+describe('DELETE /api/sales/client-quotes/:id expired guard (#812 round 25)', () => {
+  test('409 when a draft quote is effectively expired (read-only model)', async () => {
+    cqFindLinkedOfferIdMock.mockResolvedValue(null);
+    cqFindStatusAndClientNameMock.mockResolvedValue({
+      status: 'draft',
+      clientName: 'Client',
+      expirationDate: '2000-01-01',
+    });
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Expired quotes are read-only');
+    expect(cqDeleteByIdMock).not.toHaveBeenCalled();
+  });
+});
