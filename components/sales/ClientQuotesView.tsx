@@ -1348,6 +1348,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
               })
             : t('sales:clientQuotes.restoreQuote', { defaultValue: 'Restore quote' });
 
+        // Gate the edit action on the SAME predicate as the row click (#812 round 13): some
+        // history rows still open — accepted/denied read-only, expired (non-offer-linked) to
+        // extend the date out of `expired` — and the pencil must not block that recovery path.
+        const canOpen = canOpenQuoteModal(row);
         return (
           <div className="flex justify-end gap-2">
             <Tooltip>
@@ -1357,23 +1361,23 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (history) return;
+                      if (!canOpen) return;
                       openEditModal(row);
                     }}
-                    disabled={history}
+                    disabled={!canOpen}
                     aria-label={t('sales:clientQuotes.editQuote')}
-                    className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
+                    className={`p-2 rounded-lg transition-all ${canOpen ? 'text-zinc-400 hover:text-praetor hover:bg-zinc-100' : 'cursor-not-allowed opacity-50 text-zinc-400'}`}
                   >
                     <i className="fa-solid fa-pen-to-square"></i>
                   </button>
                 </span>
               </TooltipTrigger>
               <TooltipContent>
-                {history
-                  ? t('sales:clientQuotes.historyActionsDisabled', {
+                {canOpen
+                  ? t('sales:clientQuotes.editQuote')
+                  : t('sales:clientQuotes.historyActionsDisabled', {
                       defaultValue: 'History entries cannot be modified.',
-                    })
-                  : t('sales:clientQuotes.editQuote')}
+                    })}
               </TooltipContent>
             </Tooltip>
             {row.linkedOfferId && onViewOffer && (

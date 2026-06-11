@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { Client, Quote } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
@@ -450,6 +451,49 @@ describe('<ClientQuotesView />', () => {
       'border border-amber-200 bg-amber-50',
       'border border-amber-300 bg-amber-50',
     ]);
+  });
+});
+
+describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
+  const renderQuote = (quote: Quote) =>
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+  // StandardTable collapses the actions cell into a per-row kebab menu; the edit entry (cloned
+  // from the pencil button, aria-label + disabled preserved) only exists after opening it.
+  const openRowActions = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole('button', { name: 'table.rowActions' }));
+  };
+
+  test('keeps the edit action enabled on an expired quote without an offer (extend-date recovery)', async () => {
+    // The row click opens such quotes read-only-except-expiration so the date can be extended out
+    // of `expired`; the edit action must gate on the same canOpenQuoteModal predicate, not
+    // isHistoryRow.
+    const user = userEvent.setup();
+    renderQuote({ ...quotes[0], id: 'Q-EXPIRED', status: 'sent', expirationDate: '2000-01-01' });
+
+    await openRowActions(user);
+    const edit = await screen.findByRole('button', { name: 'sales:clientQuotes.editQuote' });
+    expect(edit).not.toBeDisabled();
+  });
+
+  test('still disables the edit action on an offer-linked history row', async () => {
+    const user = userEvent.setup();
+    renderQuote({ ...quotes[0], id: 'Q-OFFERED', status: 'offer', linkedOfferId: 'off-1' });
+
+    await openRowActions(user);
+    const edit = await screen.findByRole('button', { name: 'sales:clientQuotes.editQuote' });
+    expect(edit).toBeDisabled();
   });
 });
 
