@@ -996,6 +996,7 @@ const AppContent: React.FC = () => {
   const supplierQuoteFilterIdRef = useRef(supplierQuoteFilterId);
   const projectsRef = useRef(projects);
   const quotesRef = useRef(quotes);
+  const clientOffersRef = useRef(clientOffers);
   // Sync in render rather than a passive effect: an in-flight promise can
   // resume between commit and useEffect (microtask vs effect-task), reading
   // a stale ref. React allows writing to refs during render as long as the
@@ -1005,6 +1006,7 @@ const AppContent: React.FC = () => {
   supplierQuoteFilterIdRef.current = supplierQuoteFilterId;
   projectsRef.current = projects;
   quotesRef.current = quotes;
+  clientOffersRef.current = clientOffers;
 
   const clearAuthScopedAppState = useCallback(() => {
     // Bump cancellation tokens before any setter call so in-flight async
@@ -1167,6 +1169,7 @@ const AppContent: React.FC = () => {
         getClientQuoteFilterId: () => clientQuoteFilterIdRef.current,
         getClientOfferFilterId: () => clientOfferFilterIdRef.current,
         getQuotes: () => quotesRef.current,
+        getClientOffers: () => clientOffersRef.current,
         setQuotes,
         setClientOffers,
         setClientsOrders,

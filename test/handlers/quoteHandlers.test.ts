@@ -113,7 +113,9 @@ const makeStubScalar = <T>(initial: T) => {
 
 const buildHandlers = (overrides: Record<string, unknown> = {}) => {
   const quotes = makeStubSetter<QuoteLike>((overrides.quotes as QuoteLike[] | undefined) ?? []);
-  const clientOffers = makeStubSetter<ClientOfferLike>([]);
+  const clientOffers = makeStubSetter<ClientOfferLike>(
+    (overrides.clientOffers as ClientOfferLike[] | undefined) ?? [],
+  );
   const clientsOrders = makeStubSetter<ClientsOrderLike>([]);
   const invoices = makeStubSetter<InvoiceLike>([]);
   const clientQuoteFilterId = makeStubScalar<string | null>(
@@ -129,6 +131,7 @@ const buildHandlers = (overrides: Record<string, unknown> = {}) => {
     getClientQuoteFilterId: () => clientQuoteFilterId.get(),
     getClientOfferFilterId: () => clientOfferFilterId.get(),
     getQuotes: () => quotes.get() as never,
+    getClientOffers: () => clientOffers.get() as never,
     setQuotes: quotes.setter as never,
     setClientOffers: clientOffers.setter as never,
     setClientsOrders: clientsOrders.setter as never,
@@ -426,6 +429,24 @@ describe('makeQuoteHandlers', () => {
     expect(refreshSupplierQuoteFlow).not.toHaveBeenCalled();
   });
 
+  test('updateClientOffer refreshes supplier quotes when the update REMOVES an offer-only sourced line (#812 round 29)', async () => {
+    // The PREVIOUS offer carried the only link (not present on the linked quote); after the
+    // update neither the response nor the source quote sources anything — but the supplier
+    // quote's derived status just changed, so the cache must still refresh.
+    apiMocks.clientOffersUpdate.mockImplementation((id: string, updates: unknown) =>
+      Promise.resolve({ id, linkedQuoteId: 'q-unlinked', items: [], ...(updates as object) }),
+    );
+    stubFlowListRefetch();
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q-unlinked', status: 'accepted' }],
+      clientOffers: [{ id: 'of-1', items: [{ supplierQuoteItemId: 'sqi-9' }] }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.updateClientOffer('of-1', { items: [] } as never);
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
   test('revertClientOfferToDraft refreshes supplier quotes when the offer sources one', async () => {
     apiMocks.clientOffersRevertToDraft.mockImplementation((id: string) =>
       Promise.resolve({ id, status: 'draft', linkedQuoteId: 'q1', items: sourced }),

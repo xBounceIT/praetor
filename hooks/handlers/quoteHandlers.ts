@@ -29,6 +29,7 @@ export type QuoteHandlersDeps = {
   // Read BEFORE awaited writes: whether a quote carried a supplier link decides if the
   // supplier-quotes cache must refresh after an update/unlink/delete.
   getQuotes: () => Quote[];
+  getClientOffers: () => ClientOffer[];
   setQuotes: React.Dispatch<React.SetStateAction<Quote[]>>;
   setClientOffers: React.Dispatch<React.SetStateAction<ClientOffer[]>>;
   setClientsOrders: React.Dispatch<React.SetStateAction<ClientsOrder[]>>;
@@ -44,6 +45,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     getClientQuoteFilterId,
     getClientOfferFilterId,
     getQuotes,
+    getClientOffers,
     setQuotes,
     setClientOffers,
     setClientsOrders,
@@ -149,6 +151,11 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
 
   const updateClientOffer = async (id: string, updates: Partial<ClientOffer>) => {
     try {
+      // Read BEFORE the await: an update can REMOVE an offer-only sourced line (one not present
+      // on the linked quote), in which case neither `updated` nor the source quote reports the
+      // link anymore — but the supplier quote's derived status/sourceability just changed
+      // (#812 round 29).
+      const wasSourcing = sourcesSupplierQuote(getClientOffers().find((o) => o.id === id));
       const updated = await api.clientOffers.update(id, updates);
       // Same reasoning as in updateQuote: read the filter freshly so a
       // mid-flight navigation/clear is respected.
@@ -162,7 +169,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       // edit also forward-syncs the supplier items, hence checking the offer as well.
       const sourceQuote = getQuotes().find((q) => q.id === updated.linkedQuoteId);
       const supplierRefreshNeeded =
-        sourcesSupplierQuote(updated) || sourcesSupplierQuote(sourceQuote);
+        wasSourcing || sourcesSupplierQuote(updated) || sourcesSupplierQuote(sourceQuote);
       await Promise.all([
         refreshClientQuoteFlow(),
         supplierRefreshNeeded ? refreshLinkedSupplierQuotes() : Promise.resolve(),
