@@ -29,7 +29,7 @@ Nel riepilogo delle offerte, la riga **Sconto** mostra sempre la percentuale equ
 
 Nella lista **Offerte Clienti**, la data visibile è la **Data Invio**: viene valorizzata quando l'offerta passa allo stato inviata e non rappresenta più la data tecnica di creazione del record. La tabella mostra anche subtotale, sconto percentuale, sconto assoluto, totale scontato, margine, MOL e termini di pagamento per confrontare le offerte senza aprire ogni scheda.
 
-Quando un documento viene accettato, prosegui creando l'ordine o il documento collegato invece di reinserire manualmente le stesse righe.
+Quando un'offerta cliente viene accettata, Praetor crea automaticamente l'ordine cliente collegato in stato **Bozza**. Le righe collegate a preventivi fornitore derivati e accettati generano anche i relativi ordini fornitore, come nella conversione manuale.
 
 Le offerte clienti in stato **Accettata** o **Rifiutata** possono essere riportate in **Bozza** dal menu azioni solo da Top Manager o admin. Praetor richiede conferma, permette di indicare un motivo e registra il cambio nello storico/audit; l'azione non è disponibile se dall'offerta è già nato un ordine di vendita.
 
@@ -55,7 +55,7 @@ Puoi allegare i file del fornitore (**xlsx**, **pdf** o **docx**, fino a 10 MB c
 
 Gli ordini clienti e fornitori consolidano le informazioni operative. Prima di confermare, verifica anagrafica, righe, sconti, condizioni di pagamento e collegamenti con documenti precedenti.
 
-Un ordine di vendita creato da un'offerta accettata nasce in stato **Bozza** e resta completamente modificabile (cliente, righe, sconti, note e condizioni di pagamento) finché è in bozza. Passa in sola lettura solo dopo essere stato **Confermato** o **Rifiutato**.
+Un ordine di vendita creato automaticamente da un'offerta accettata nasce in stato **Bozza** e resta completamente modificabile (cliente, righe, sconti, note e condizioni di pagamento) finché è in bozza. Passa in sola lettura solo dopo essere stato **Confermato** o **Rifiutato**.
 
 Le righe che hanno generato automaticamente un **ordine fornitore** (identificabili dalla colonna *Ordine fornitore*) restano bloccate anche in bozza: non possono essere rimosse né modificate nel prodotto o nella quantità, così l'ordine di approvvigionamento collegato non resta disallineato. Puoi comunque aggiornarne il prezzo di vendita, aggiungere altre righe e modificare i campi di testata. La colonna *Ordine fornitore* riporta la stessa icona di scorciatoia della colonna prodotto: è sempre visibile (così le righe restano allineate) e, quando la riga è collegata a un ordine fornitore, lo apre già filtrato in una nuova scheda, così puoi consultarlo senza chiudere l'ordine in lavorazione. Quando non c'è un ordine fornitore collegato l'icona resta visibile ma disabilitata, con un tooltip che lo segnala.
 

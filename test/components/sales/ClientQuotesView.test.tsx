@@ -487,13 +487,14 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     expect(edit).not.toBeDisabled();
   });
 
-  test('still disables the edit action on an offer-linked history row', async () => {
+  test('opens an in-offer quote row in read-only mode', async () => {
     const user = userEvent.setup();
     renderQuote({ ...quotes[0], id: 'Q-OFFERED', status: 'offer', linkedOfferId: 'off-1' });
 
-    await openRowActions(user);
-    const edit = await screen.findByRole('button', { name: 'sales:clientQuotes.editQuote' });
-    expect(edit).toBeDisabled();
+    await user.click(screen.getByText('Q-OFFERED'));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('sales:clientQuotes.readOnlyBecauseOffer')).toBeTruthy();
   });
 
   test('enables back-to-draft for an offer quote whose linked offer is still draft', async () => {

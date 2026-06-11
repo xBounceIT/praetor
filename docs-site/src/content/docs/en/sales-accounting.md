@@ -29,7 +29,7 @@ In offer summaries, the **Discount** row always shows the equivalent percentage 
 
 In the **Customer Offers** list, the visible date is the **Delivery Date**: it is set when an offer moves to sent status and no longer represents the technical record creation date. The table also shows subtotal, discount percent, absolute discount, discounted total, margin, MOL, and payment terms so offers can be compared without opening each record.
 
-When a document is accepted, continue by creating the linked order or next document instead of manually entering the same rows again.
+When a customer offer is accepted, Praetor automatically creates the linked customer order in **Draft**. Lines linked to derived and accepted supplier quotes also generate the related supplier orders, matching the manual conversion path.
 
 Customer offers in **Accepted** or **Denied** status can be moved back to **Draft** from the row actions menu only by Top Manager or admin users. Praetor requires confirmation, lets the user enter a reason, and records the change in history/audit; the action is unavailable once a sale order has already been created from the offer.
 
@@ -55,7 +55,7 @@ You can attach the supplier's files (**xlsx**, **pdf**, or **docx**, up to 10 MB
 
 Customer and supplier orders consolidate operational information. Before confirming, check the record, rows, discounts, payment terms, and links to previous documents.
 
-A sale order created from an accepted offer starts as a **Draft** and stays fully editable (client, rows, discounts, notes, and payment terms) while it is a draft. It becomes read-only only after it is **Confirmed** or **Denied**.
+A sale order created automatically from an accepted offer starts as a **Draft** and stays fully editable (client, rows, discounts, notes, and payment terms) while it is a draft. It becomes read-only only after it is **Confirmed** or **Denied**.
 
 Rows that automatically generated a **supplier order** (identifiable from the *Supplier order* column) stay locked even in draft: they cannot be removed, nor can their product or quantity change, so the linked procurement order never falls out of sync. You can still update their sale price, add other rows, and edit the header fields. The *Supplier order* column carries the same quick-view icon as the product column: it is always shown (so rows stay aligned), and when the row is linked to a supplier order it opens that order — already filtered — in a new tab, so you can review it without leaving the order you are editing. When there is no linked supplier order the icon stays visible but disabled, with a tooltip saying so.
 

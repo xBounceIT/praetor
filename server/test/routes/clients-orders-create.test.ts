@@ -29,8 +29,15 @@ const getRolePermissionsMock = mock();
 
 const coCreateMock = mock();
 const coInsertItemsMock = mock();
+const coFindItemsForOrderMock = mock();
+const coCreateSupplierOrderMock = mock();
+const coBulkInsertSupplierOrderItemsMock = mock();
+const coLinkSaleItemsToSupplierOrderMock = mock();
+const coMapSaleItemsToSupplierItemsMock = mock();
 const sqFindByIdMock = mock();
 const sqFindLinkedOrderIdMock = mock();
+const sqLockEffectiveStatusByIdMock = mock();
+const sqFindItemsForQuoteMock = mock();
 const sqGetQuoteItemSnapshotsMock = mock();
 
 const logAuditMock = mock(async () => undefined);
@@ -57,11 +64,18 @@ beforeAll(async () => {
     ...clientsOrdersRepoSnap,
     create: coCreateMock,
     insertItems: coInsertItemsMock,
+    findItemsForOrder: coFindItemsForOrderMock,
+    createSupplierOrder: coCreateSupplierOrderMock,
+    bulkInsertSupplierOrderItems: coBulkInsertSupplierOrderItemsMock,
+    linkSaleItemsToSupplierOrder: coLinkSaleItemsToSupplierOrderMock,
+    mapSaleItemsToSupplierItems: coMapSaleItemsToSupplierItemsMock,
   }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
     findById: sqFindByIdMock,
     findLinkedOrderId: sqFindLinkedOrderIdMock,
+    lockEffectiveStatusById: sqLockEffectiveStatusByIdMock,
+    findItemsForQuote: sqFindItemsForQuoteMock,
     getQuoteItemSnapshots: sqGetQuoteItemSnapshotsMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
@@ -145,8 +159,15 @@ const allMocks = [
   getRolePermissionsMock,
   coCreateMock,
   coInsertItemsMock,
+  coFindItemsForOrderMock,
+  coCreateSupplierOrderMock,
+  coBulkInsertSupplierOrderItemsMock,
+  coLinkSaleItemsToSupplierOrderMock,
+  coMapSaleItemsToSupplierItemsMock,
   sqFindByIdMock,
   sqFindLinkedOrderIdMock,
+  sqLockEffectiveStatusByIdMock,
+  sqFindItemsForQuoteMock,
   sqGetQuoteItemSnapshotsMock,
   logAuditMock,
   withDbTransactionMock,
@@ -162,9 +183,16 @@ beforeEach(async () => {
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   coCreateMock.mockResolvedValue(CREATED_ORDER);
+  coFindItemsForOrderMock.mockResolvedValue([insertedItem()]);
+  coCreateSupplierOrderMock.mockResolvedValue(undefined);
+  coBulkInsertSupplierOrderItemsMock.mockResolvedValue(undefined);
+  coLinkSaleItemsToSupplierOrderMock.mockResolvedValue(undefined);
+  coMapSaleItemsToSupplierItemsMock.mockResolvedValue(undefined);
   // Default: no supplier quote resolves, so the auto-create-supplier-order branch fast-fails.
   sqFindByIdMock.mockResolvedValue(null);
   sqFindLinkedOrderIdMock.mockResolvedValue(null);
+  sqLockEffectiveStatusByIdMock.mockResolvedValue(null);
+  sqFindItemsForQuoteMock.mockResolvedValue([]);
   // Default: the referenced supplier-quote item belongs to an accepted quote (sq-1), so a
   // product-less line resolves. The dangling/bogus-ref test overrides this to an empty Map.
   sqGetQuoteItemSnapshotsMock.mockResolvedValue(

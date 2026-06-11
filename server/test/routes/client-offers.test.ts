@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
 import * as realClientOffersRepo from '../../repositories/clientOffersRepo.ts';
 import * as realClientQuotesRepo from '../../repositories/clientQuotesRepo.ts';
+import * as realClientsOrdersRepo from '../../repositories/clientsOrdersRepo.ts';
 import * as realClientsRepo from '../../repositories/clientsRepo.ts';
 import * as realOfferVersionsRepo from '../../repositories/offerVersionsRepo.ts';
 import * as realProductsRepo from '../../repositories/productsRepo.ts';
@@ -11,6 +12,7 @@ import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.t
 import * as realSupplierQuoteVersionsRepo from '../../repositories/supplierQuoteVersionsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realAudit from '../../utils/audit.ts';
+import * as realOrderIds from '../../utils/order-ids.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
   installAuthMiddlewareMock,
@@ -30,11 +32,13 @@ const permissionsSnap = { ...realPermissions };
 const clientsRepoSnap = { ...realClientsRepo };
 const clientOffersRepoSnap = { ...realClientOffersRepo };
 const clientQuotesRepoSnap = { ...realClientQuotesRepo };
+const clientsOrdersRepoSnap = { ...realClientsOrdersRepo };
 const productsRepoSnap = { ...realProductsRepo };
 const offerVersionsRepoSnap = { ...realOfferVersionsRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const supplierQuoteVersionsRepoSnap = { ...realSupplierQuoteVersionsRepo };
 const auditSnap = { ...realAudit };
+const orderIdsSnap = { ...realOrderIds };
 const drizzleSnap = { ...realDrizzle };
 
 const findAuthUserByIdMock = mock();
@@ -55,11 +59,24 @@ const coFindStatusAndClientNameMock = mock();
 const coFindLinkedSaleIdMock = mock();
 const coDeleteByIdMock = mock();
 
+const clientOrderFindExistingForOfferMock = mock();
+const clientOrderCreateMock = mock();
+const clientOrderInsertItemsMock = mock();
+const clientOrderFindItemsForOrderMock = mock();
+const clientOrderCreateSupplierOrderMock = mock();
+const clientOrderBulkInsertSupplierOrderItemsMock = mock();
+const clientOrderLinkSaleItemsToSupplierOrderMock = mock();
+const clientOrderMapSaleItemsToSupplierItemsMock = mock();
+const generateClientOrderIdMock = mock();
+const generateSupplierOrderIdMock = mock();
+
 const cqFindStatusAndClientNameMock = mock();
 const cqFindItemSnapshotsForQuoteMock = mock();
 const cqLockCurrentByIdMock = mock();
 
 const sqGetQuoteItemSnapshotsMock = mock();
+const sqFindByIdMock = mock();
+const sqFindItemsForQuoteMock = mock();
 const sqFindItemsByIdsMock = mock();
 const sqFindLinkedOrderIdMock = mock();
 const sqLockEffectiveStatusMock = mock();
@@ -114,14 +131,32 @@ beforeAll(async () => {
     findItemSnapshotsForQuote: cqFindItemSnapshotsForQuoteMock,
     lockCurrentById: cqLockCurrentByIdMock,
   }));
+  mock.module('../../repositories/clientsOrdersRepo.ts', () => ({
+    ...clientsOrdersRepoSnap,
+    findExistingForOffer: clientOrderFindExistingForOfferMock,
+    create: clientOrderCreateMock,
+    insertItems: clientOrderInsertItemsMock,
+    findItemsForOrder: clientOrderFindItemsForOrderMock,
+    createSupplierOrder: clientOrderCreateSupplierOrderMock,
+    bulkInsertSupplierOrderItems: clientOrderBulkInsertSupplierOrderItemsMock,
+    linkSaleItemsToSupplierOrder: clientOrderLinkSaleItemsToSupplierOrderMock,
+    mapSaleItemsToSupplierItems: clientOrderMapSaleItemsToSupplierItemsMock,
+  }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
     getQuoteItemSnapshots: sqGetQuoteItemSnapshotsMock,
+    findById: sqFindByIdMock,
+    findItemsForQuote: sqFindItemsForQuoteMock,
     findItemsByIds: sqFindItemsByIdsMock,
     findLinkedOrderId: sqFindLinkedOrderIdMock,
     lockEffectiveStatusById: sqLockEffectiveStatusMock,
     syncItemPricing: sqSyncItemPricingMock,
     findFullForSnapshot: sqFindFullForSnapshotMock,
+  }));
+  mock.module('../../utils/order-ids.ts', () => ({
+    ...orderIdsSnap,
+    generateClientOrderId: generateClientOrderIdMock,
+    generateSupplierOrderId: generateSupplierOrderIdMock,
   }));
   mock.module('../../repositories/supplierQuoteVersionsRepo.ts', () => ({
     ...supplierQuoteVersionsRepoSnap,
@@ -151,7 +186,9 @@ afterAll(() => {
   mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
   mock.module('../../repositories/clientOffersRepo.ts', () => clientOffersRepoSnap);
   mock.module('../../repositories/clientQuotesRepo.ts', () => clientQuotesRepoSnap);
+  mock.module('../../repositories/clientsOrdersRepo.ts', () => clientsOrdersRepoSnap);
   mock.module('../../repositories/supplierQuotesRepo.ts', () => supplierQuotesRepoSnap);
+  mock.module('../../utils/order-ids.ts', () => orderIdsSnap);
   mock.module(
     '../../repositories/supplierQuoteVersionsRepo.ts',
     () => supplierQuoteVersionsRepoSnap,
@@ -212,6 +249,27 @@ const updatedOffer = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+const storedOfferItem = (over: Record<string, unknown> = {}) => ({
+  id: 'coi-1',
+  offerId: 'off-1',
+  productId: 'p-1',
+  productName: 'Service',
+  quantity: 2,
+  unitPrice: 100,
+  productCost: 50,
+  productMolPercentage: null,
+  supplierQuoteId: null,
+  supplierQuoteItemId: null,
+  supplierQuoteSupplierName: null,
+  supplierQuoteUnitPrice: null,
+  unitType: 'hours' as const,
+  note: null,
+  discount: 0,
+  durationMonths: 1,
+  durationUnit: 'months' as const,
+  ...over,
+});
+
 const allMocks = [
   findAuthUserByIdMock,
   userHasRoleMock,
@@ -226,10 +284,22 @@ const allMocks = [
   coCreateMock,
   coInsertItemsMock,
   coFindExistingForQuoteMock,
+  clientOrderFindExistingForOfferMock,
+  clientOrderCreateMock,
+  clientOrderInsertItemsMock,
+  clientOrderFindItemsForOrderMock,
+  clientOrderCreateSupplierOrderMock,
+  clientOrderBulkInsertSupplierOrderItemsMock,
+  clientOrderLinkSaleItemsToSupplierOrderMock,
+  clientOrderMapSaleItemsToSupplierItemsMock,
+  generateClientOrderIdMock,
+  generateSupplierOrderIdMock,
   cqFindStatusAndClientNameMock,
   cqFindItemSnapshotsForQuoteMock,
   cqLockCurrentByIdMock,
   sqGetQuoteItemSnapshotsMock,
+  sqFindByIdMock,
+  sqFindItemsForQuoteMock,
   sqFindItemsByIdsMock,
   sqFindLinkedOrderIdMock,
   sqLockEffectiveStatusMock,
@@ -260,9 +330,63 @@ beforeEach(async () => {
   ovInsertMock.mockResolvedValue(undefined);
   // Supplier resolution / forward-sync defaults: nothing linked, nothing pushed.
   coReplaceItemsMock.mockResolvedValue([]);
+  clientOrderFindExistingForOfferMock.mockResolvedValue(null);
+  clientOrderCreateMock.mockImplementation((input: Record<string, unknown>) =>
+    Promise.resolve({
+      id: input.id ?? 'ORD-2999-0001',
+      linkedQuoteId: input.linkedQuoteId ?? null,
+      linkedOfferId: input.linkedOfferId ?? null,
+      clientId: input.clientId,
+      clientName: input.clientName,
+      paymentTerms: input.paymentTerms,
+      discount: input.discount,
+      discountType: input.discountType,
+      status: input.status,
+      notes: input.notes,
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+    }),
+  );
+  clientOrderInsertItemsMock.mockImplementation(
+    (orderId: string, items: Array<Record<string, unknown>>) =>
+      Promise.resolve(
+        items.map((item, index) => ({
+          id: item.id,
+          orderId,
+          productId: item.productId,
+          productName: item.productName,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          productCost: item.productCost,
+          productMolPercentage: item.productMolPercentage,
+          supplierQuoteId: item.supplierQuoteId,
+          supplierQuoteItemId: item.supplierQuoteItemId,
+          supplierQuoteSupplierName: item.supplierQuoteSupplierName,
+          supplierQuoteUnitPrice: item.supplierQuoteUnitPrice,
+          supplierSaleId: null,
+          supplierSaleItemId: null,
+          supplierSaleSupplierName: null,
+          unitType: item.unitType,
+          note: item.note,
+          discount: item.discount,
+          durationMonths: item.durationMonths,
+          durationUnit: item.durationUnit,
+          ...(index === 0 ? {} : { id: `${item.id}-${index}` }),
+        })),
+      ),
+  );
+  clientOrderFindItemsForOrderMock.mockResolvedValue([]);
+  clientOrderCreateSupplierOrderMock.mockResolvedValue(undefined);
+  clientOrderBulkInsertSupplierOrderItemsMock.mockResolvedValue(undefined);
+  clientOrderLinkSaleItemsToSupplierOrderMock.mockResolvedValue(undefined);
+  clientOrderMapSaleItemsToSupplierItemsMock.mockResolvedValue(undefined);
+  generateClientOrderIdMock.mockResolvedValue('ORD-2999-0001');
+  generateSupplierOrderIdMock.mockResolvedValue('SORD-2999-0001');
   // Linked-quote sourced lines for the fresh-link inheritance exemption (#812 round 15).
   cqFindItemSnapshotsForQuoteMock.mockResolvedValue([]);
   sqGetQuoteItemSnapshotsMock.mockResolvedValue(new Map());
+  sqFindByIdMock.mockResolvedValue(null);
+  sqFindItemsForQuoteMock.mockResolvedValue([]);
   sqFindItemsByIdsMock.mockResolvedValue([]);
   sqFindLinkedOrderIdMock.mockResolvedValue(null);
   // Unlinked live chain → derived 'draft': the sync's freeze guard stays open by default.
@@ -349,6 +473,123 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
     const res = await putOffer({ expirationDate: '2999-12-31' });
     expect(res.statusCode).toBe(200);
     expect(coUpdateMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('200 accepting an offer auto-creates the linked draft client order', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'sent' }));
+    coUpdateMock.mockResolvedValue(updatedOffer({ status: 'accepted' }));
+    coFindItemsForOfferMock.mockResolvedValue([storedOfferItem()]);
+
+    const res = await putOffer({ status: 'accepted' });
+
+    expect(res.statusCode).toBe(200);
+    expect(clientOrderFindExistingForOfferMock).toHaveBeenCalledWith(
+      'off-1',
+      null,
+      expect.anything(),
+    );
+    expect(clientOrderCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'ORD-2999-0001',
+        linkedQuoteId: 'q-1',
+        linkedOfferId: 'off-1',
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'draft',
+      }),
+      expect.anything(),
+    );
+    const orderItems = clientOrderInsertItemsMock.mock.calls[0][1] as Array<
+      Record<string, unknown>
+    >;
+    expect(orderItems[0]).toMatchObject({
+      productId: 'p-1',
+      productName: 'Service',
+      quantity: 2,
+      unitPrice: 100,
+      productCost: 50,
+      supplierQuoteId: null,
+      durationMonths: 1,
+      durationUnit: 'months',
+    });
+  });
+
+  test('409 accepting an offer with an existing sale order blocks auto-create cleanly', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'sent' }));
+    coUpdateMock.mockResolvedValue(updatedOffer({ status: 'accepted' }));
+    coFindItemsForOfferMock.mockResolvedValue([storedOfferItem()]);
+    clientOrderFindExistingForOfferMock.mockResolvedValue({ id: 'ORD-2999-0001' });
+
+    const res = await putOffer({ status: 'accepted' });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toBe('A sale order already exists for this offer');
+    expect(clientOrderCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 accepting a supplier-sourced offer still auto-creates the supplier order', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'sent' }));
+    coUpdateMock.mockResolvedValue(updatedOffer({ status: 'accepted' }));
+    coFindItemsForOfferMock.mockResolvedValue([
+      storedOfferItem({
+        supplierQuoteId: 'sq-1',
+        supplierQuoteItemId: 'sqi-1',
+        supplierQuoteSupplierName: 'Supplier Co',
+        supplierQuoteUnitPrice: 50,
+      }),
+    ]);
+    sqFindByIdMock.mockResolvedValue({
+      id: 'sq-1',
+      supplierId: 'sup-1',
+      supplierName: 'Supplier Co',
+      paymentTerms: '30 days',
+      expirationDate: '2999-12-31',
+      linkedClientQuoteStatus: 'offer',
+      linkedClientQuoteExpiration: '2999-12-31',
+      linkedOfferStatus: 'accepted',
+      linkedOfferExpiration: '2999-12-31',
+      notes: 'supplier notes',
+    });
+    sqLockEffectiveStatusMock.mockResolvedValue({
+      expirationDate: '2999-12-31',
+      linkedClientStatus: 'offer',
+      linkedClientQuoteExpiration: '2999-12-31',
+      linkedOfferStatus: 'accepted',
+      linkedOfferExpiration: '2999-12-31',
+    });
+    sqFindItemsForQuoteMock.mockResolvedValue([
+      {
+        id: 'sqi-1',
+        productId: 'p-1',
+        productName: 'Service',
+        quantity: 2,
+        unitPrice: 50,
+        note: null,
+        durationMonths: 1,
+        durationUnit: 'months',
+      },
+    ]);
+
+    const res = await putOffer({ status: 'accepted' });
+
+    expect(res.statusCode).toBe(200);
+    expect(clientOrderCreateSupplierOrderMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'SORD-2999-0001',
+        linkedQuoteId: 'sq-1',
+        supplierId: 'sup-1',
+        supplierName: 'Supplier Co',
+      }),
+      expect.anything(),
+    );
+    expect(clientOrderLinkSaleItemsToSupplierOrderMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderId: 'ORD-2999-0001',
+        supplierQuoteId: 'sq-1',
+        supplierOrderId: 'SORD-2999-0001',
+      }),
+      expect.anything(),
+    );
   });
 
   test('409 terminal offers keep the expiration date locked (they never expire)', async () => {

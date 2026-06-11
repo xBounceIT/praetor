@@ -55,6 +55,7 @@ import {
   canTransitionClientQuote,
   effectiveQuoteStatus,
   isTerminalQuoteStatus,
+  normalizeQuoteStatus,
 } from '../../utils/quoteStatus';
 import {
   buildSupplierQuoteItemIndex,
@@ -352,6 +353,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     (quote: Quote) =>
       !isHistoryRow(quote) ||
       isTerminalQuoteStatus(quote.status) ||
+      normalizeQuoteStatus(quote.status) === 'offer' ||
       (isQuoteExpired(quote) && !hasOfferForQuote(quote)),
     [isHistoryRow, isQuoteExpired, hasOfferForQuote],
   );

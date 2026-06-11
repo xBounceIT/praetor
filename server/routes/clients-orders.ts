@@ -8,17 +8,16 @@ import * as orderVersionsRepo from '../repositories/orderVersionsRepo.ts';
 import * as productsRepo from '../repositories/productsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import {
+  autoCreateSupplierOrdersForClientOrder,
+  createClientOrderRows,
+  logClientOrderCreated,
+} from '../services/clientOrderCreation.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
 import type { DurationUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
-import {
-  generateClientOrderId,
-  generatePrefixedId,
-  generateSupplierOrderId,
-  ITEM_ID_PREFIXES,
-} from '../utils/order-ids.ts';
-import { effectiveSupplierQuoteStatusFromDate } from '../utils/quote-status.ts';
+import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
@@ -685,8 +684,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         linkedQuoteIdValue = offer.linkedQuoteId || null;
       }
 
-      const orderId = nextIdResult.value || (await generateClientOrderId());
-
       type CreateOutcome =
         | { ok: false; status: number; body: Record<string, unknown> }
         | {
@@ -730,9 +727,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             }
           }
 
-          const order = await clientsOrdersRepo.create(
+          const { order, items } = await createClientOrderRows(
             {
-              id: orderId,
+              id: nextIdResult.value,
               linkedQuoteId: linkedQuoteIdValue,
               linkedOfferId: linkedOfferIdResult.value || null,
               clientId: clientIdResult.value,
@@ -744,10 +741,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               status: typeof status === 'string' && status ? status : 'draft',
               notes: (notes as string | null | undefined) ?? null,
             },
-            tx,
-          );
-          const items = await clientsOrdersRepo.insertItems(
-            order.id,
             buildItemsForInsert(normalizedItems),
             tx,
           );
@@ -787,168 +780,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw error;
       }
 
-      const supplierQuoteIds = [
-        ...new Set(
-          normalizedItems
-            .map((item) => item.supplierQuoteId)
-            .filter((id): id is string => typeof id === 'string' && id.length > 0),
-        ),
-      ];
-
-      const supplierOrderWarnings: string[] = [];
-      let didAutoCreate = false;
-
-      for (const sqId of supplierQuoteIds) {
-        try {
-          // Cheap fast-fail outside any tx: skip if the quote isn't accepted or already has a
-          // linked order. The authoritative decision is repeated inside the tx below under a
-          // row lock; this read just avoids opening an empty transaction in the common case.
-          const [fastFailQuote, fastFailLinked] = await Promise.all([
-            supplierQuotesRepo.findById(sqId),
-            supplierQuotesRepo.findLinkedOrderId(sqId),
-          ]);
-          if (!fastFailQuote) {
-            supplierOrderWarnings.push(
-              `Supplier order not created: supplier quote ${sqId} no longer exists`,
-            );
-            continue;
-          }
-          const fastFailStatus = effectiveSupplierQuoteStatusFromDate({
-            expirationDate: fastFailQuote.expirationDate,
-            linkedClientStatus: fastFailQuote.linkedClientQuoteStatus,
-            linkedClientQuoteExpiration: fastFailQuote.linkedClientQuoteExpiration,
-            linkedOfferStatus: fastFailQuote.linkedOfferStatus,
-            linkedOfferExpiration: fastFailQuote.linkedOfferExpiration,
-          });
-          if (fastFailStatus !== 'accepted') {
-            // Under the fully-derived model only the 1-to-1 HEADER-linked supplier quote follows
-            // the client document to `accepted`; a supplier quote that is merely line-sourced
-            // stays `draft` and gets no auto order. Surface the skip instead of silently
-            // dropping procurement (issue #779) — the user must link-and-accept it separately.
-            supplierOrderWarnings.push(
-              `Supplier order not created for supplier quote ${sqId}: its status is '${fastFailStatus}', not 'accepted' (only the supplier quote linked to the accepted client document follows its status)`,
-            );
-            continue;
-          }
-          if (fastFailLinked) continue;
-
-          const autoCreated = await withDbTransaction(async (tx) => {
-            // Lock the supplier quote so concurrent client-order POSTs that reference the
-            // same quote serialize here, then re-read the gating state AND the metadata we
-            // copy onto the new supplier order under the lock. `fastFailQuote` from the
-            // pre-tx read isn't reused because a metadata update could have committed
-            // between that read and lock acquisition, landing stale supplier name / payment
-            // terms on the auto-created order.
-            const lockedStatus = await supplierQuotesRepo.lockEffectiveStatusById(sqId, tx);
-            if (
-              !lockedStatus ||
-              effectiveSupplierQuoteStatusFromDate({
-                expirationDate: lockedStatus.expirationDate,
-                linkedClientStatus: lockedStatus.linkedClientStatus,
-                linkedClientQuoteExpiration: lockedStatus.linkedClientQuoteExpiration,
-                linkedOfferStatus: lockedStatus.linkedOfferStatus,
-                linkedOfferExpiration: lockedStatus.linkedOfferExpiration,
-              }) !== 'accepted'
-            )
-              return false;
-            const linkedUnderLock = await supplierQuotesRepo.findLinkedOrderId(sqId, tx);
-            if (linkedUnderLock) return false;
-            const supplierQuote = await supplierQuotesRepo.findById(sqId, tx);
-            if (!supplierQuote) return false;
-            const supplierItems = await supplierQuotesRepo.findItemsForQuote(sqId, tx);
-            const supplierOrderId = await generateSupplierOrderId(tx);
-            await clientsOrdersRepo.createSupplierOrder(
-              {
-                id: supplierOrderId,
-                linkedQuoteId: sqId,
-                supplierId: supplierQuote.supplierId,
-                supplierName: supplierQuote.supplierName,
-                paymentTerms: supplierQuote.paymentTerms || 'immediate',
-                notes: supplierQuote.notes,
-              },
-              tx,
-            );
-
-            const insertedSupplierItemIds: { quoteItemId: string; saleItemId: string }[] = [];
-            const supplierItemRecords = supplierItems.map((item) => {
-              const saleItemId = generatePrefixedId(ITEM_ID_PREFIXES.supplierItem);
-              insertedSupplierItemIds.push({ quoteItemId: item.id, saleItemId });
-              return {
-                id: saleItemId,
-                productId: item.productId,
-                productName: item.productName,
-                quantity: item.quantity,
-                unitPrice: item.unitPrice,
-                note: item.note,
-                // Carry the supplier quote's duration onto the auto-created order line (issue #776)
-                // so the order total matches the quote instead of collapsing to a single month.
-                durationMonths: item.durationMonths,
-                durationUnit: item.durationUnit,
-              };
-            });
-
-            await clientsOrdersRepo.bulkInsertSupplierOrderItems(
-              supplierOrderId,
-              supplierItemRecords,
-              tx,
-            );
-
-            await clientsOrdersRepo.linkSaleItemsToSupplierOrder(
-              {
-                orderId,
-                supplierQuoteId: sqId,
-                supplierOrderId,
-                supplierName: supplierQuote.supplierName,
-              },
-              tx,
-            );
-
-            await clientsOrdersRepo.mapSaleItemsToSupplierItems(
-              {
-                orderId,
-                supplierQuoteId: sqId,
-                mappings: insertedSupplierItemIds,
-              },
-              tx,
-            );
-
-            await logAudit({
-              request,
-              action: 'supplier_order.auto_created',
-              entityType: 'supplier_order',
-              entityId: supplierOrderId,
-              details: {
-                targetLabel: supplierOrderId,
-                secondaryLabel: `${supplierQuote.supplierName} (from client order ${orderId}, supplier quote ${sqId})`,
-              },
-            });
-            return true;
-          });
-          if (autoCreated) didAutoCreate = true;
-        } catch (err) {
-          request.log.error({ err, supplierQuoteId: sqId }, 'Failed to auto-create supplier order');
-          supplierOrderWarnings.push(`Failed to auto-create supplier order for quote ${sqId}`);
-        }
-      }
-
-      const refreshedItems = didAutoCreate
-        ? await clientsOrdersRepo.findItemsForOrder(orderId)
-        : insertedItems;
-
-      await logAudit({
+      const supplierOrderResult = await autoCreateSupplierOrdersForClientOrder(
         request,
-        action: 'client_order.created',
-        entityType: 'client_order',
-        entityId: orderId,
-        details: {
-          targetLabel: orderId,
-          secondaryLabel: clientNameResult.value,
-        },
-      });
+        createdOrder,
+        insertedItems,
+        withDbTransaction,
+      );
+
+      await logClientOrderCreated(request, createdOrder);
       return reply.code(201).send({
         ...createdOrder,
-        items: refreshedItems,
-        ...(supplierOrderWarnings.length > 0 ? { warnings: supplierOrderWarnings } : {}),
+        items: supplierOrderResult.items,
+        ...(supplierOrderResult.warnings.length > 0
+          ? { warnings: supplierOrderResult.warnings }
+          : {}),
       });
     },
   );

@@ -3,11 +3,17 @@ import { type DbExecutor, db, withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.ts';
 import * as clientOffersRepo from '../repositories/clientOffersRepo.ts';
 import * as clientQuotesRepo from '../repositories/clientQuotesRepo.ts';
+import * as clientsOrdersRepo from '../repositories/clientsOrdersRepo.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
 import * as offerVersionsRepo from '../repositories/offerVersionsRepo.ts';
 import * as productsRepo from '../repositories/productsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import {
+  autoCreateSupplierOrdersForClientOrder,
+  createClientOrderRows,
+  logClientOrderCreated,
+} from '../services/clientOrderCreation.ts';
 import { logAudit } from '../utils/audit.ts';
 import { todayLocalDateOnly } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
@@ -68,6 +74,8 @@ const TERMINAL_REVERT_ERROR = 'Terminal offers must be reverted through the reve
 const TERMINAL_REVERT_ROLE_ERROR = 'Only Top Manager or Admin can revert terminal offers to draft';
 const TERMINAL_REVERT_LINKED_SALE_ERROR =
   'Cannot revert an offer once a sale order has been created from it';
+
+class AutoClientOrderConflictError extends Error {}
 
 const canRevertTerminalOfferStatus = (request: FastifyRequest) =>
   request.user?.role === TOP_MANAGER_ROLE_ID || request.user?.role === ADMIN_ROLE_ID;
@@ -472,6 +480,31 @@ const buildItemsForInsert = (items: NormalizedOfferItem[]): clientOffersRepo.New
     supplierQuoteItemId: item.supplierQuoteItemId,
     supplierQuoteSupplierName: item.supplierQuoteSupplierName,
     supplierQuoteUnitPrice: item.supplierQuoteUnitPrice,
+    unitType: item.unitType,
+    durationMonths: item.durationMonths,
+    durationUnit: item.durationUnit,
+  }));
+
+const buildOrderItemsFromOfferItems = (
+  items: clientOffersRepo.ClientOfferItem[],
+): clientsOrdersRepo.NewClientOrderItem[] =>
+  items.map((item) => ({
+    id: generatePrefixedId(ITEM_ID_PREFIXES.saleItem),
+    productId: item.productId || null,
+    productName: item.productName,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    productCost: item.productCost,
+    productMolPercentage: item.productMolPercentage,
+    discount: item.discount,
+    note: item.note,
+    supplierQuoteId: item.supplierQuoteId,
+    supplierQuoteItemId: item.supplierQuoteItemId,
+    supplierQuoteSupplierName: item.supplierQuoteSupplierName,
+    supplierQuoteUnitPrice: item.supplierQuoteUnitPrice,
+    supplierSaleId: null,
+    supplierSaleItemId: null,
+    supplierSaleSupplierName: null,
     unitType: item.unitType,
     durationMonths: item.durationMonths,
     durationUnit: item.durationUnit,
@@ -1154,6 +1187,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         offer: clientOffersRepo.ClientOffer | null;
         items: clientOffersRepo.ClientOfferItem[];
         syncAudits: SupplierItemSyncAudit[];
+        createdOrder?: {
+          order: clientsOrdersRepo.ClientOrder;
+          items: clientsOrdersRepo.ClientOrderItem[];
+        };
       };
       try {
         result = await withDbTransaction(async (tx) => {
@@ -1197,6 +1234,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 tx,
               )
             : await clientOffersRepo.findItemsForOffer(offer.id, tx);
+          let createdOrder:
+            | {
+                order: clientsOrdersRepo.ClientOrder;
+                items: clientsOrdersRepo.ClientOrderItem[];
+              }
+            | undefined;
+          if (statusChanged && targetStatus === 'accepted') {
+            const existingOrder = await clientsOrdersRepo.findExistingForOffer(offer.id, null, tx);
+            if (existingOrder) {
+              throw new AutoClientOrderConflictError('A sale order already exists for this offer');
+            }
+            createdOrder = await createClientOrderRows(
+              {
+                linkedQuoteId: offer.linkedQuoteId || null,
+                linkedOfferId: offer.id,
+                clientId: offer.clientId,
+                clientName: offer.clientName,
+                paymentTerms: offer.paymentTerms || 'immediate',
+                discount: offer.discount,
+                discountType: offer.discountType,
+                status: 'draft',
+                notes: offer.notes,
+              },
+              buildOrderItemsFromOfferItems(updatedItems),
+              tx,
+            );
+          }
           // Bidirectional sync (issue #779): push GENUINE client-side edits of supplier-sourced
           // line fields (quantity, unit cost) onto the referenced supplier quote items,
           // atomically with the offer write. The audit entries are logged after commit.
@@ -1209,7 +1273,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 tx,
               )
             : [];
-          return { offer, items: updatedItems, syncAudits };
+          return { offer, items: updatedItems, syncAudits, createdOrder };
         });
       } catch (err) {
         // The client→supplier item sync refuses to write frozen/order-locked supplier quotes or
@@ -1232,6 +1296,39 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             details: { secondaryLabel: 'duplicate_id' },
           });
         }
+        if (dup && (dup.constraint === 'sales_pkey' || dup.detail?.includes('(id)'))) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Order ID already exists',
+            action: 'client_offer.update.conflict',
+            entityType: 'client_order',
+            details: { secondaryLabel: 'duplicate_order_id' },
+          });
+        }
+        if (
+          dup &&
+          (dup.constraint === 'idx_sales_linked_offer_id_unique' ||
+            dup.detail?.includes('(linked_offer_id)'))
+        ) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'A sale order already exists for this offer',
+            action: 'client_offer.update.conflict',
+            entityType: 'client_offer',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'duplicate_order_for_offer' },
+          });
+        }
+        if (err instanceof AutoClientOrderConflictError) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: err.message,
+            action: 'client_offer.update.conflict',
+            entityType: 'client_offer',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'duplicate_order_for_offer' },
+          });
+        }
         throw err;
       }
 
@@ -1248,6 +1345,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await logSupplierItemSyncAudits(request, result.syncAudits);
+      if (result.createdOrder) {
+        await autoCreateSupplierOrdersForClientOrder(
+          request,
+          result.createdOrder.order,
+          result.createdOrder.items,
+          withDbTransaction,
+        );
+        await logClientOrderCreated(request, result.createdOrder.order);
+      }
 
       const nextStatus = targetStatus ?? updatedOffer.status;
       const didStatusChange = targetStatus !== null && existingOffer.status !== nextStatus;
