@@ -760,6 +760,24 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     expect(res.json().error).toContain('different quantities or costs');
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
   });
+
+  test('a re-save of duplicate sourced lines with differing stored values pushes nothing (#812 round 21)', async () => {
+    // Two lines source the same supplier item with different quantities. Re-sending both
+    // unchanged must NOT look like a genuine edit: diffing each line against only the FIRST
+    // previous row made the second line a phantom edit that pushed its quantity onto the
+    // supplier item (or tripped the permission/read-only guards) on a notes-only save.
+    setupDraftQuote();
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      EXISTING_SNAP,
+      { ...EXISTING_SNAP, id: 'qi-2', quantity: 5 },
+    ]);
+
+    const res = await putStatus({
+      items: [lineItem(2, 50), lineItem(5, 50, { id: 'qi-2' })],
+    });
+    expect(res.statusCode).toBe(200);
+    expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('GET /api/sales/client-quotes list (#812 round 11)', () => {
@@ -810,6 +828,62 @@ describe('GET /api/sales/client-quotes list (#812 round 11)', () => {
     const askedIds = sqFindBlockingExpirationsByIdsMock.mock.calls[0]?.[0] as string[];
     expect(askedIds).toContain('sq-frozen');
     expect(askedIds).toContain('sq-live');
+  });
+
+  test('flags legacy item-only sourced rows too (#812 rounds 20-21)', async () => {
+    // The stored line carries only supplierQuoteItemId — the list must resolve it to its supplier
+    // quote (one batched lookup) so the flag matches what the update guard would block.
+    getRolePermissionsMock.mockResolvedValue(['sales.client_quotes.view']);
+    cqListAllMock.mockResolvedValue([updatedQuote({ id: 'q-3', status: 'sent' })]);
+    cqListAllItemsMock.mockResolvedValue([
+      {
+        id: 'qi-legacy',
+        quoteId: 'q-3',
+        productId: null,
+        productName: 'Service',
+        quantity: 1,
+        unitPrice: 100,
+        productCost: 50,
+        productMolPercentage: null,
+        discount: 0,
+        note: null,
+        supplierQuoteId: null,
+        supplierQuoteItemId: 'sqi-legacy',
+        supplierQuoteSupplierName: 'Acme',
+        supplierQuoteUnitPrice: 50,
+        unitType: 'hours',
+        durationMonths: 1,
+        durationUnit: 'months',
+      },
+    ]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-legacy',
+          {
+            supplierQuoteId: 'sq-legacy',
+            supplierName: 'Acme',
+            productId: null,
+            unitPrice: 50,
+            netCost: 50,
+            sourceable: true,
+          },
+        ],
+      ]),
+    );
+    sqFindBlockingExpirationsByIdsMock.mockResolvedValue(new Map([['sq-legacy', '2000-01-01']]));
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/sales/client-quotes',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as Array<Record<string, unknown>>;
+    expect(body[0]?.linkedSupplierQuoteExpired).toBe(true);
+    expect(sqGetQuoteItemSnapshotsMock).toHaveBeenCalledWith(['sqi-legacy']);
+    expect(sqFindBlockingExpirationsByIdsMock).toHaveBeenCalledWith(['sq-legacy']);
   });
 });
 

@@ -672,16 +672,30 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // One batched status-aware read for every sourced supplier quote in the list (#812 round
       // 11): the per-quote flag below must exclude terminal-frozen sourced quotes exactly like the
       // progression guard, so it cannot come from the row's raw-MIN linkedSupplierQuoteExpiration.
+      // LEGACY rows may carry only supplierQuoteItemId (#812 rounds 18/20/21): resolve those to
+      // their supplier quote ONCE here so the per-quote loop below sees them too — keying the loop
+      // on item.supplierQuoteId alone left such rows flagged false while the update guard blocked.
+      const itemOnlyIds = items.flatMap((item) =>
+        !item.supplierQuoteId && item.supplierQuoteItemId ? [item.supplierQuoteItemId] : [],
+      );
+      const itemOnlySnapshots =
+        itemOnlyIds.length > 0
+          ? await supplierQuotesRepo.getQuoteItemSnapshots(itemOnlyIds)
+          : new Map<string, supplierQuotesRepo.QuoteItemSnapshot>();
+      const resolvedSourcedId = (item: clientQuotesRepo.ClientQuoteItem): string | null =>
+        item.supplierQuoteId ??
+        (item.supplierQuoteItemId
+          ? (itemOnlySnapshots.get(item.supplierQuoteItemId)?.supplierQuoteId ?? null)
+          : null);
       const blockingExpirations = await supplierQuotesRepo.findBlockingExpirationsByIds(
-        await sourcedSupplierQuoteIds(items),
+        items.map(resolvedSourcedId).filter((id): id is string => id !== null),
       );
       return quotes.map((quote) => {
         const quoteItems = itemsByQuote.get(quote.id) ?? [];
         let earliest: string | null = null;
         for (const item of quoteItems) {
-          const date = item.supplierQuoteId
-            ? blockingExpirations.get(item.supplierQuoteId)
-            : undefined;
+          const sourcedId = resolvedSourcedId(item);
+          const date = sourcedId ? blockingExpirations.get(sourcedId) : undefined;
           if (date && (!earliest || date < earliest)) earliest = date;
         }
         return buildQuoteResponse(quote, quoteItems, earliest);

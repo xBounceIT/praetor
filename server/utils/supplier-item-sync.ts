@@ -116,23 +116,36 @@ export const syncSupplierItemsFromClientLines = async (
   previousLines: PreviousClientLine[],
   tx: DbExecutor,
 ): Promise<SupplierItemSyncAudit[]> => {
-  const prevByLink = new Map<string, PreviousClientLine>();
+  // ALL previous lines per link (not just the first): a document can hold several lines sourcing
+  // the same supplier item with different stored quantities/costs, and row ids are regenerated on
+  // every save, so values are the only way to tell "this line is unchanged". Comparing against
+  // just the first previous row turned a notes-only re-save of the second line into a phantom
+  // genuine edit — wrongly pushing its values onto the supplier item or tripping the
+  // permission/read-only guards (#812 round 21).
+  const prevsByLink = new Map<string, PreviousClientLine[]>();
   for (const prev of previousLines) {
-    if (prev.supplierQuoteItemId && !prevByLink.has(prev.supplierQuoteItemId)) {
-      prevByLink.set(prev.supplierQuoteItemId, prev);
-    }
+    if (!prev.supplierQuoteItemId || prev.supplierQuoteUnitPrice === null) continue;
+    const list = prevsByLink.get(prev.supplierQuoteItemId);
+    if (list) list.push(prev);
+    else prevsByLink.set(prev.supplierQuoteItemId, [prev]);
   }
 
   const wanted = new Map<string, { quantity: number; cost: number }>();
   for (const line of lines) {
     if (!line.supplierQuoteItemId || line.supplierQuoteUnitPrice === null) continue;
-    const prev = prevByLink.get(line.supplierQuoteItemId);
-    if (!prev || prev.supplierQuoteUnitPrice === null) continue;
+    const prevs = prevsByLink.get(line.supplierQuoteItemId);
+    if (!prevs) continue;
     const target = {
       quantity: Number(line.quantity) || 0,
       cost: Number(line.supplierQuoteUnitPrice),
     };
-    if (prev.quantity === target.quantity && prev.supplierQuoteUnitPrice === target.cost) continue;
+    // Unchanged if ANY previous line with this link carries exactly these values.
+    if (
+      prevs.some(
+        (prev) => prev.quantity === target.quantity && prev.supplierQuoteUnitPrice === target.cost,
+      )
+    )
+      continue;
     const queued = wanted.get(line.supplierQuoteItemId);
     if (queued) {
       // Two lines sourcing the same supplier item with diverging edits cannot both win; a silent
