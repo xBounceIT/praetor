@@ -13,14 +13,7 @@ CREATE TABLE "overtime_notification_events" (
 	CONSTRAINT "overtime_notification_events_hours_check" CHECK ("overtime_notification_events"."hours" >= 0),
 	CONSTRAINT "overtime_notification_events_reasons_array_check" CHECK (jsonb_typeof("overtime_notification_events"."reasons") = 'array')
 );
-
-ALTER TABLE "overtime_notification_events"
-	ADD CONSTRAINT "overtime_notification_events_user_id_users_id_fk"
-	FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE cascade ON UPDATE no action;
-
-ALTER TABLE "overtime_notification_events"
-	ADD CONSTRAINT "overtime_notification_events_created_by_users_id_fk"
-	FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE set null ON UPDATE no action;
-
-CREATE INDEX "idx_overtime_notification_events_user_date"
-	ON "overtime_notification_events" ("user_id","event_date");
+--> statement-breakpoint
+ALTER TABLE "overtime_notification_events" ADD CONSTRAINT "overtime_notification_events_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "overtime_notification_events" ADD CONSTRAINT "overtime_notification_events_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "idx_overtime_notification_events_user_date" ON "overtime_notification_events" USING btree ("user_id","event_date");

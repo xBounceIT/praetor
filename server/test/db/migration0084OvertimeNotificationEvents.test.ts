@@ -24,7 +24,8 @@ describe('migration 0084: adds overtime notification event dedupe table', () => 
   });
 
   test('links events to users and indexes date lookups', () => {
-    expect(MIGRATION).toContain('REFERENCES "users"');
+    expect(MIGRATION).toContain('FOREIGN KEY ("user_id") REFERENCES "public"."users"("id")');
+    expect(MIGRATION).toContain('FOREIGN KEY ("created_by") REFERENCES "public"."users"("id")');
     expect(MIGRATION).toContain('idx_overtime_notification_events_user_date');
     expect(MIGRATION).toContain('"user_id","event_date"');
   });
