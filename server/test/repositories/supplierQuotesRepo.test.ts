@@ -131,6 +131,18 @@ describe('listAll', () => {
     expect(sql).toContain("when cq.status in ('sent', 'received') then 4");
     expect(sql).toContain('when cq.expiration_date < current_date then 2');
   });
+
+  test('offer-only sourced lines count as sourcing candidates (#812 round 16)', async () => {
+    // An offer can add a fresh sourced line that exists only in customer_offer_items; the
+    // candidate predicate maps it back to the offer's linked quote so the supplier quote stops
+    // projecting unlinked draft (and sourceable) and follows the offer chain.
+    exec.enqueue({ rows: [] });
+    await supplierQuotesRepo.listAll(testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('join customer_offer_items coi on coi.offer_id = co2.id');
+    expect(sql).toContain('co2.linked_quote_id = cq.id');
+    expect(sql).toContain('coi.supplier_quote_id = "supplier_quotes"."id"');
+  });
 });
 
 describe('listAllItems', () => {

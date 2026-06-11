@@ -89,13 +89,26 @@ const sourcingRankOrderBy = sql`
   cq.updated_at DESC,
   cq.id`;
 
+// A quote is a sourcing CANDIDATE when its own lines source this supplier quote OR when its
+// offer's lines do (#812 round 16): an offer can add a fresh sourced line that exists only in
+// customer_offer_items, and offers always hang off a quote (linked_quote_id NOT NULL), so mapping
+// the offer line back to its quote lets the existing quote→offer chain projection apply unchanged.
+const sourcingCandidatePredicate = sql`(
+    EXISTS (
+      SELECT 1 FROM quote_items qi
+      WHERE qi.quote_id = cq.id AND qi.supplier_quote_id = ${outerSupplierQuoteId}
+    )
+    OR EXISTS (
+      SELECT 1 FROM customer_offers co2
+      JOIN customer_offer_items coi ON coi.offer_id = co2.id
+      WHERE co2.linked_quote_id = cq.id AND coi.supplier_quote_id = ${outerSupplierQuoteId}
+    )
+  )`;
+
 const chosenClientQuoteId = sql<string | null>`(
   SELECT cq.id FROM quotes cq
   LEFT JOIN customer_offers co ON co.linked_quote_id = cq.id
-  WHERE EXISTS (
-    SELECT 1 FROM quote_items qi
-    WHERE qi.quote_id = cq.id AND qi.supplier_quote_id = ${outerSupplierQuoteId}
-  )
+  WHERE ${sourcingCandidatePredicate}
   ORDER BY ${sourcingRankOrderBy}
   LIMIT 1
 )`;
@@ -111,10 +124,7 @@ const chosenClientQuoteLateral = sql`LATERAL (
   SELECT cq.id, cq.status, cq.expiration_date
   FROM quotes cq
   LEFT JOIN customer_offers co ON co.linked_quote_id = cq.id
-  WHERE EXISTS (
-    SELECT 1 FROM quote_items qi
-    WHERE qi.quote_id = cq.id AND qi.supplier_quote_id = ${outerSupplierQuoteId}
-  )
+  WHERE ${sourcingCandidatePredicate}
   ORDER BY ${sourcingRankOrderBy}
   LIMIT 1
 ) "chosen"`;
