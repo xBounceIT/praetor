@@ -628,16 +628,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!normalizedItems) return;
       }
 
+      // An id rename strands a sourced quote's client lines too: quote_items.supplier_quote_id is a
+      // soft, FK-less denormalized value that does NOT cascade, so after a rename the derived-status
+      // reverse lookup and the client progression/expiration guards can no longer find them.
+      const isRenaming = nextIdValue !== null && nextIdValue !== idResult.value;
       const [current, linkedOrderId, idConflict, sourcedByClientDocuments] = await Promise.all([
         supplierQuotesRepo.findById(idResult.value),
         supplierQuotesRepo.findLinkedOrderId(idResult.value),
         nextIdValue
           ? supplierQuotesRepo.findIdConflict(nextIdValue, idResult.value)
           : Promise.resolve(false),
-        // Only relevant when replacing items (the lookup is wasted otherwise): replaceItems
-        // recreates supplier_quote_items with fresh ids, which strands client lines that source
-        // them (guard below). Run it in parallel with the other lookups when items are present.
-        normalizedItems
+        // Both replacing items (replaceItems → fresh item ids) and renaming the quote strand a
+        // sourced quote's soft client-line references (guards below). Run the check for either; the
+        // lookup is wasted otherwise. In parallel with the other lookups.
+        normalizedItems || isRenaming
           ? supplierQuotesRepo.isSourcedByClientDocuments(idResult.value)
           : Promise.resolve(false),
       ]);
@@ -673,17 +677,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
       // A draft-DERIVED supplier quote can still be SOURCED by a draft client line: #779 dropped
       // the status filter in getQuoteItemSnapshots, and a quote sourced only by a draft client
-      // quote derives back to `draft`, slipping past the read-only guard above. replaceItems below
-      // recreates supplier_quote_items with fresh ids, stranding those lines' soft
-      // supplierQuoteItemId references (no FK) so refresh/sync can no longer resolve the source
-      // item — exactly why the DELETE route refuses a sourced quote. Block item replacement here
-      // too; header-only edits (notes, terms, expiration, client) stay allowed. The lookup is only
-      // run when items are being replaced (see the Promise.all above), so this can't trip otherwise.
-      if (sourcedByClientDocuments) {
+      // quote derives back to `draft`, slipping past the read-only guard above. Both replacing its
+      // items (replaceItems → fresh item ids) and renaming it (the client lines' soft, FK-less
+      // supplier_quote_id/supplier_quote_item_id references don't cascade) would strand those
+      // references — exactly why the DELETE route refuses a sourced quote. Block both here;
+      // header-only edits (notes, terms, expiration, client) stay allowed. The lookup only ran for
+      // these two cases (see the Promise.all above).
+      if (normalizedItems && sourcedByClientDocuments) {
         return replyError(request, reply, {
           statusCode: 409,
           message:
             'Cannot replace items on a supplier quote whose items are used by client quotes, offers or orders',
+          action: 'supplier_quote.update.conflict',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'sourced_by_client_documents' },
+        });
+      }
+      if (isRenaming && sourcedByClientDocuments) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message:
+            'Cannot change the id of a supplier quote whose items are used by client quotes, offers or orders',
           action: 'supplier_quote.update.conflict',
           entityType: 'supplier_quote',
           entityId: idResult.value,

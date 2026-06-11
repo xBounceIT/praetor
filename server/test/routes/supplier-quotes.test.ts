@@ -316,6 +316,31 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     expect(sqUpdateMock).toHaveBeenCalledTimes(1);
   });
 
+  test('409 blocks an id rename of a sourced quote (#812)', async () => {
+    // A pure id rename (no items) must also be refused on a sourced quote: quote_items'
+    // supplier_quote_id is a soft, FK-less reference that would not follow the rename, stranding
+    // the client lines from the derived-status and progression/expiration guards.
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqFindIdConflictMock.mockResolvedValue(false);
+    sqIsSourcedByClientDocumentsMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { id: 'sq-renamed' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toBe(
+      'Cannot change the id of a supplier quote whose items are used by client quotes, offers or orders',
+    );
+    expect(sqIsSourcedByClientDocumentsMock).toHaveBeenCalledWith('sq-1');
+    expect(sqRenameMock).not.toHaveBeenCalled();
+    expect(sqUpdateMock).not.toHaveBeenCalled();
+  });
+
   test('409 rejects supplier reassignment when the derived status is accepted', async () => {
     sqFindByIdMock.mockResolvedValue({
       ...DRAFT_QUOTE,
