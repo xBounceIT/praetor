@@ -343,9 +343,14 @@ const normalizeItems = (
 // supplierQuoteItemId: offer items get fresh row ids on every save, so the link itself is the
 // only stable correlation. Throws on a NEW link whose id doesn't resolve; a retained link
 // tolerates a vanished supplier item (legacy dangle) by keeping the stored metadata.
+// `inheritedItemIds` are the LINKED QUOTE's sourced supplier item ids: offers are created by
+// converting a quote, which copies its sourced lines verbatim while the supplier quote already
+// derives offer/accepted — those links are exempt from the fresh-link sourceable check (#812
+// round 15); any other fresh link must reference a quote the picker would offer.
 const resolveOfferItemSupplierLinks = async (
   items: NormalizedOfferItem[],
   existingItems: clientOffersRepo.ClientOfferItem[] | null,
+  inheritedItemIds: ReadonlySet<string>,
 ): Promise<NormalizedOfferItem[]> => {
   const linkedIds = items
     .map((item) => item.supplierQuoteItemId)
@@ -377,6 +382,18 @@ const resolveOfferItemSupplierLinks = async (
         `supplierQuoteItemId "${item.supplierQuoteItemId}" does not reference an existing supplier quote item`,
       );
     }
+    // Fresh link (not retained, not inherited from the linked quote): a stale tab or raw API
+    // client could otherwise newly source a frozen/order-locked supplier quote, persisting a
+    // line the editor immediately locks and the sync rejects (#812 round 15).
+    if (
+      !existing &&
+      !inheritedItemIds.has(item.supplierQuoteItemId) &&
+      snapshot.sourceable === false
+    ) {
+      throw new Error(
+        `supplierQuoteItemId "${item.supplierQuoteItemId}" references a supplier quote that is no longer available for new sourcing`,
+      );
+    }
     return {
       ...item,
       supplierQuoteId: snapshot.supplierQuoteId,
@@ -386,6 +403,19 @@ const resolveOfferItemSupplierLinks = async (
         : snapshot.netCost,
     };
   });
+};
+
+// The linked quote's sourced supplier item ids (the conversion-inheritance exemption above).
+const linkedQuoteSourcedItemIds = async (
+  linkedQuoteId: string | null | undefined,
+): Promise<ReadonlySet<string>> => {
+  if (!linkedQuoteId) return new Set<string>();
+  const snapshots = await clientQuotesRepo.findItemSnapshotsForQuote(linkedQuoteId);
+  return new Set(
+    snapshots
+      .map((snapshot) => snapshot.supplierQuoteItemId)
+      .filter((id): id is string => id != null),
+  );
 };
 
 const buildItemsForInsert = (items: NormalizedOfferItem[]): clientOffersRepo.NewClientOfferItem[] =>
@@ -600,9 +630,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let normalizedItems = normalizeItems(items as OfferItemInput[], reply);
       if (!normalizedItems) return;
-      // All links are fresh on create — every sourced line takes the live supplier values.
+      // All links are fresh on create — every sourced line takes the live supplier values. Links
+      // copied from the quote being converted are exempt from the sourceable check (the supplier
+      // quote legitimately derives offer/accepted by now); any OTHER fresh link must still
+      // reference a pickable quote (#812 round 15).
       try {
-        normalizedItems = await resolveOfferItemSupplierLinks(normalizedItems, null);
+        normalizedItems = await resolveOfferItemSupplierLinks(
+          normalizedItems,
+          null,
+          await linkedQuoteSourcedItemIds(linkedQuoteIdResult.value),
+        );
       } catch (err) {
         return badRequest(reply, (err as Error).message);
       }
@@ -1032,6 +1069,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           normalizedItemsForUpdate = await resolveOfferItemSupplierLinks(
             normalizedItemsForUpdate,
             existingOfferItems,
+            // Re-adding a line the linked quote sources stays allowed (it was inherited via the
+            // conversion); only genuinely new picks must be sourceable (#812 round 15).
+            await linkedQuoteSourcedItemIds(existingOffer.linkedQuoteId),
           );
         } catch (err) {
           return badRequest(reply, (err as Error).message);

@@ -623,13 +623,20 @@ export type QuoteItemSnapshot = {
   productId: string | null;
   unitPrice: number;
   netCost: number;
+  // Whether the parent supplier quote is currently offered for NEW sourcing (the same rule the
+  // UI pickers apply): derived effective status `draft` and no linked supplier order. Routes use
+  // this to reject FRESHLY-picked links from a stale tab / raw API client (#812 round 15) while
+  // retained links — and conversion-inherited ones — keep re-saving regardless.
+  sourceable: boolean;
 };
 
 /**
  * Resolves per-item snapshots used by the client-quotes/offers/orders routes to lock in
  * supplier-quote pricing at the moment a client document is created/updated. Deliberately NOT
  * status-filtered (issue #779 derived model — see the inline comment on the query): the only
- * way an id misses is that the supplier quote item no longer exists.
+ * way an id misses is that the supplier quote item no longer exists. Eligibility for NEW
+ * sourcing is surfaced separately via `sourceable` so routes can gate fresh links without
+ * breaking retained or conversion-inherited ones.
  */
 export const getQuoteItemSnapshots = async (
   itemIds: string[],
@@ -646,23 +653,41 @@ export const getQuoteItemSnapshots = async (
       supplierName: supplierQuotes.supplierName,
       productId: supplierQuoteItems.productId,
       unitPrice: supplierQuoteItems.unitPrice,
+      expirationDate: supplierQuotes.expirationDate,
+      linkedOrderId: sql<string | null>`(
+        SELECT ss.id FROM supplier_sales ss
+        WHERE ss.linked_quote_id = ${outerSupplierQuoteId} LIMIT 1
+      )`,
+      linkedClientQuoteStatus: linkedClientQuoteStatusSubquery,
+      linkedClientQuoteExpiration: linkedClientQuoteExpirationSubquery,
+      linkedOfferStatus: linkedOfferStatusSubquery,
+      linkedOfferExpiration: linkedOfferExpirationSubquery,
     })
     .from(supplierQuoteItems)
     .innerJoin(supplierQuotes, eq(supplierQuotes.id, supplierQuoteItems.quoteId))
     // No status filter (issue #779 derived model): supplier quotes start as draft and progress
     // only with the client document that uses them, so sourcing must work from draft quotes —
     // and re-saving a client quote whose supplier quote has since progressed must not 400. The
-    // views gate which quotes are offered for NEW sourcing.
+    // views gate which quotes are offered for NEW sourcing; `sourceable` mirrors that gate for
+    // the routes' fresh-link checks.
     .where(inArray(supplierQuoteItems.id, uniqueIds));
 
   for (const row of rows) {
     const unitPrice = parseDbNumber(row.unitPrice, 0);
+    const effective = effectiveSupplierQuoteStatusFromDate({
+      expirationDate: normalizeNullableDateOnly(row.expirationDate, 'supplierQuote.expirationDate'),
+      linkedClientStatus: row.linkedClientQuoteStatus,
+      linkedClientQuoteExpiration: row.linkedClientQuoteExpiration,
+      linkedOfferStatus: row.linkedOfferStatus,
+      linkedOfferExpiration: row.linkedOfferExpiration,
+    });
     snapshots.set(row.itemId, {
       supplierQuoteId: row.quoteId,
       supplierName: row.supplierName,
       productId: row.productId,
       unitPrice,
       netCost: unitPrice,
+      sourceable: effective === 'draft' && row.linkedOrderId === null,
     });
   }
   return snapshots;

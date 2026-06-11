@@ -812,3 +812,75 @@ describe('GET /api/sales/client-quotes list (#812 round 11)', () => {
     expect(askedIds).toContain('sq-live');
   });
 });
+
+describe('PUT /api/sales/client-quotes/:id fresh-link sourceable guard (#812 round 15)', () => {
+  const sourcedLine = (over: Record<string, unknown> = {}) => ({
+    id: 'qi-9',
+    productId: null,
+    productName: 'Service',
+    supplierQuoteItemId: 'sqi-9',
+    quantity: 1,
+    unitPrice: 100,
+    productCost: 50,
+    supplierQuoteUnitPrice: 50,
+    discount: 0,
+    unitType: 'hours',
+    durationMonths: 1,
+    durationUnit: 'months',
+    ...over,
+  });
+  const snapshot = (sourceable: boolean) =>
+    new Map([
+      [
+        'sqi-9',
+        {
+          supplierQuoteId: 'sq-9',
+          supplierName: 'Acme',
+          productId: null,
+          unitPrice: 50,
+          netCost: 50,
+          sourceable,
+        },
+      ],
+    ]);
+
+  test('400 when a FRESH link references a quote no longer offered for sourcing', async () => {
+    // The picker only offers draft-derived, order-free supplier quotes; a stale tab or raw API
+    // client must not newly source a frozen/order-locked one.
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(snapshot(false));
+
+    const res = await putStatus({ items: [sourcedLine()] });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain('no longer available for new sourcing');
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 keeps a RETAINED link re-saving even when the quote left the pickable set', async () => {
+    // The supplier quote legitimately progresses after sourcing; only NEW picks are gated.
+    // A changed productCost forces the recalc path so the guard is actually evaluated.
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      {
+        id: 'qi-9',
+        productId: null,
+        quantity: 1,
+        productCost: 40,
+        productMolPercentage: null,
+        supplierQuoteId: 'sq-9',
+        supplierQuoteItemId: 'sqi-9',
+        supplierQuoteSupplierName: 'Acme',
+        supplierQuoteUnitPrice: 50,
+        unitType: 'hours',
+      },
+    ]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(snapshot(false));
+    cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'draft' }));
+    cqReplaceItemsMock.mockResolvedValue([]);
+    sqFindItemsByIdsMock.mockResolvedValue([]);
+
+    const res = await putStatus({ items: [sourcedLine()] });
+    expect(res.statusCode).toBe(200);
+  });
+});

@@ -37,6 +37,7 @@ const getRolePermissionsMock = mock();
 
 const coExistsByIdMock = mock();
 const coFindExistingMock = mock();
+const cqFindItemSnapshotsForQuoteMock = mock();
 const coLockExistingByIdMock = mock();
 const coFindLinkedSaleIdMock = mock();
 const coFindFullForSnapshotMock = mock();
@@ -95,6 +96,7 @@ beforeAll(async () => {
   }));
   mock.module('../../repositories/clientQuotesRepo.ts', () => ({
     ...clientQuotesRepoSnap,
+    findItemSnapshotsForQuote: cqFindItemSnapshotsForQuoteMock,
   }));
   mock.module('../../repositories/productsRepo.ts', () => ({
     ...productsRepoSnap,
@@ -242,6 +244,8 @@ beforeEach(async () => {
   }));
   coFindItemsForOfferMock.mockResolvedValue([SAMPLE_ITEM]);
   coFindIdConflictMock.mockResolvedValue(false);
+  // Linked-quote sourced lines for the fresh-link inheritance exemption (#812 round 15).
+  cqFindItemSnapshotsForQuoteMock.mockResolvedValue([]);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/sales/client-offers');
 });

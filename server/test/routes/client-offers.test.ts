@@ -53,6 +53,7 @@ const coInsertItemsMock = mock();
 const coFindExistingForQuoteMock = mock();
 
 const cqFindStatusAndClientNameMock = mock();
+const cqFindItemSnapshotsForQuoteMock = mock();
 const cqLockCurrentByIdMock = mock();
 
 const sqGetQuoteItemSnapshotsMock = mock();
@@ -104,6 +105,7 @@ beforeAll(async () => {
   mock.module('../../repositories/clientQuotesRepo.ts', () => ({
     ...clientQuotesRepoSnap,
     findStatusAndClientName: cqFindStatusAndClientNameMock,
+    findItemSnapshotsForQuote: cqFindItemSnapshotsForQuoteMock,
     lockCurrentById: cqLockCurrentByIdMock,
   }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
@@ -219,6 +221,7 @@ const allMocks = [
   coInsertItemsMock,
   coFindExistingForQuoteMock,
   cqFindStatusAndClientNameMock,
+  cqFindItemSnapshotsForQuoteMock,
   cqLockCurrentByIdMock,
   sqGetQuoteItemSnapshotsMock,
   sqFindItemsByIdsMock,
@@ -251,6 +254,8 @@ beforeEach(async () => {
   ovInsertMock.mockResolvedValue(undefined);
   // Supplier resolution / forward-sync defaults: nothing linked, nothing pushed.
   coReplaceItemsMock.mockResolvedValue([]);
+  // Linked-quote sourced lines for the fresh-link inheritance exemption (#812 round 15).
+  cqFindItemSnapshotsForQuoteMock.mockResolvedValue([]);
   sqGetQuoteItemSnapshotsMock.mockResolvedValue(new Map());
   sqFindItemsByIdsMock.mockResolvedValue([]);
   sqFindLinkedOrderIdMock.mockResolvedValue(null);
@@ -597,5 +602,62 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
     expect(inserted[0].supplierQuoteId).toBe('sq-9');
     expect(inserted[0].supplierQuoteSupplierName).toBe('Snapshot Co');
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('PUT /api/sales/client-offers/:id fresh-link sourceable guard (#812 round 15)', () => {
+  const FROZEN_SNAPSHOT = new Map([
+    [
+      'sqi-9',
+      {
+        supplierQuoteId: 'sq-9',
+        supplierName: 'Snapshot Co',
+        productId: null,
+        unitPrice: 50,
+        netCost: 50,
+        sourceable: false,
+      },
+    ],
+  ]);
+  const sourcedLine = () => ({
+    productName: 'Service',
+    quantity: 1,
+    unitPrice: 100,
+    productCost: 50,
+    supplierQuoteItemId: 'sqi-9',
+    supplierQuoteUnitPrice: 50,
+    discount: 0,
+    unitType: 'hours',
+    durationMonths: 1,
+    durationUnit: 'months',
+  });
+
+  test('400 when a FRESH link references a quote no longer offered for sourcing', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'draft' }));
+    coFindItemsForOfferMock.mockResolvedValue([]);
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(FROZEN_SNAPSHOT);
+
+    const res = await putOffer({ items: [sourcedLine()] });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain('no longer available for new sourcing');
+    expect(coReplaceItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('200 when the link is INHERITED from the linked quote (conversion copy)', async () => {
+    // Offers are created by converting a quote whose supplier quote already derives
+    // offer/accepted; re-adding a line the linked quote sources must keep working.
+    coFindExistingMock.mockResolvedValue(gate({ status: 'draft' }));
+    coFindItemsForOfferMock.mockResolvedValue([]);
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      { id: 'qi-1', supplierQuoteId: 'sq-9', supplierQuoteItemId: 'sqi-9' },
+    ]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(FROZEN_SNAPSHOT);
+    coUpdateMock.mockResolvedValue(updatedOffer());
+    coReplaceItemsMock.mockResolvedValue([]);
+
+    const res = await putOffer({ items: [sourcedLine()] });
+    expect(res.statusCode).toBe(200);
+    expect(coReplaceItemsMock).toHaveBeenCalled();
   });
 });

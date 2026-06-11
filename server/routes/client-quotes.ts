@@ -294,18 +294,27 @@ const resolveQuoteItemSnapshots = async (
           `supplierQuoteItemId "${normalizedSupplierQuoteItemId}" does not match productId "${resolvedProductId}"`,
         );
       }
+      const isRetainedLink =
+        existingItem &&
+        normalizeNullableString(existingItem.supplierQuoteItemId) === normalizedSupplierQuoteItemId;
+      // A FRESHLY-picked link must reference a quote the picker would offer (derived draft, no
+      // linked supplier order) — a stale tab or raw API client could otherwise newly source a
+      // frozen/order-locked quote, persisting a line the editor immediately locks and the sync
+      // rejects (#812 round 15). Retained links re-save regardless: the quote legitimately
+      // progresses after sourcing. (Quotes have no conversion-inherited links — offers do, and
+      // their resolver exempts them via the linked quote.)
+      if (!isRetainedLink && supplierQuoteSnapshot.sourceable === false) {
+        throw new Error(
+          `supplierQuoteItemId "${normalizedSupplierQuoteItemId}" references a supplier quote that is no longer available for new sourcing`,
+        );
+      }
       supplierQuoteId = supplierQuoteSnapshot.supplierQuoteId;
       supplierQuoteSupplierName = supplierQuoteSnapshot.supplierName;
       supplierQuoteUnitPrice = supplierQuoteSnapshot.netCost;
       // Same link RETAINED but other snapshot inputs changed (e.g. product/cost/MOL): the
       // client's live cost still wins (#779 bidirectional sync — it is pushed back onto the
       // supplier item after the write). A freshly-picked link starts from the supplier value.
-      if (
-        existingItem &&
-        normalizeNullableString(existingItem.supplierQuoteItemId) ===
-          normalizedSupplierQuoteItemId &&
-        item.supplierQuoteUnitPrice != null
-      ) {
+      if (isRetainedLink && item.supplierQuoteUnitPrice != null) {
         supplierQuoteUnitPrice = item.supplierQuoteUnitPrice;
       }
     }

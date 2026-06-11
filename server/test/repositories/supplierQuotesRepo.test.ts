@@ -447,8 +447,13 @@ describe('getQuoteItemSnapshots', () => {
     expect(exec.calls[0].params).toEqual(['a']);
   });
 
+  // Row shape mirrors the select order: [itemId, quoteId, supplierName, productId, unitPrice,
+  // expirationDate, linkedOrderId, linkedClientQuoteStatus, linkedClientQuoteExpiration,
+  // linkedOfferStatus, linkedOfferExpiration].
   test('maps row fields into snapshot shape with netCost mirroring unitPrice', async () => {
-    exec.enqueue({ rows: [['sqi-1', 'sq-1', 'Acme', 'p-1', '12.5']] });
+    exec.enqueue({
+      rows: [['sqi-1', 'sq-1', 'Acme', 'p-1', '12.5', '2999-12-31', null, null, null, null, null]],
+    });
     const result = await supplierQuotesRepo.getQuoteItemSnapshots(['sqi-1'], testDb);
     expect(result.get('sqi-1')).toEqual({
       supplierQuoteId: 'sq-1',
@@ -456,7 +461,44 @@ describe('getQuoteItemSnapshots', () => {
       productId: 'p-1',
       unitPrice: 12.5,
       netCost: 12.5,
+      // Unsourced live quote → derived draft, no linked order → offered for NEW sourcing.
+      sourceable: true,
     });
+  });
+
+  test('marks frozen/order-locked/expired quotes as NOT sourceable (#812 round 15)', async () => {
+    exec.enqueue({
+      rows: [
+        // Accepted chain → derived accepted (frozen).
+        ['sqi-a', 'sq-a', 'Acme', null, '10', '2999-12-31', null, 'accepted', null, null, null],
+        // Order-locked, even though the chain is live.
+        [
+          'sqi-b',
+          'sq-b',
+          'Acme',
+          null,
+          '10',
+          '2999-12-31',
+          'so-1',
+          'sent',
+          '2999-12-31',
+          null,
+          null,
+        ],
+        // Own expiration past on a live chain → derived expired.
+        ['sqi-c', 'sq-c', 'Acme', null, '10', '2000-01-01', null, null, null, null, null],
+        // Draft-derived, unlocked, live → sourceable.
+        ['sqi-d', 'sq-d', 'Acme', null, '10', '2999-12-31', null, null, null, null, null],
+      ],
+    });
+    const result = await supplierQuotesRepo.getQuoteItemSnapshots(
+      ['sqi-a', 'sqi-b', 'sqi-c', 'sqi-d'],
+      testDb,
+    );
+    expect(result.get('sqi-a')?.sourceable).toBe(false);
+    expect(result.get('sqi-b')?.sourceable).toBe(false);
+    expect(result.get('sqi-c')?.sourceable).toBe(false);
+    expect(result.get('sqi-d')?.sourceable).toBe(true);
   });
 });
 
