@@ -642,6 +642,21 @@ export interface ClientOffer {
   updatedAt: number;
 }
 
+export interface AutoCreatedSupplierOrder {
+  id: string;
+  supplierQuoteId: string;
+  supplierName: string;
+}
+
+export interface ClientOfferAutoCreated {
+  clientOrder: { id: string };
+  supplierOrders: AutoCreatedSupplierOrder[];
+}
+
+export type ClientOfferUpdateResult = ClientOffer & {
+  autoCreated?: ClientOfferAutoCreated;
+};
+
 export type OfferVersionReason = 'update' | 'restore';
 
 export interface OfferVersionSnapshot {
@@ -713,6 +728,7 @@ export interface ClientsOrder {
   notes?: string;
   createdAt: number;
   updatedAt: number;
+  supplierOrders?: AutoCreatedSupplierOrder[];
   warnings?: string[];
 }
 

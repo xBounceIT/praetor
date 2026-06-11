@@ -83,6 +83,18 @@ const clientOrderSchema = {
     createdAt: { type: 'number' },
     updatedAt: { type: 'number' },
     items: { type: 'array', items: clientOrderItemSchema },
+    supplierOrders: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          supplierQuoteId: { type: 'string' },
+          supplierName: { type: 'string' },
+        },
+        required: ['id', 'supplierQuoteId', 'supplierName'],
+      },
+    },
     warnings: { type: 'array', items: { type: 'string' } },
   },
   required: [
@@ -791,6 +803,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       return reply.code(201).send({
         ...createdOrder,
         items: supplierOrderResult.items,
+        ...(supplierOrderResult.supplierOrders.length > 0
+          ? { supplierOrders: supplierOrderResult.supplierOrders }
+          : {}),
         ...(supplierOrderResult.warnings.length > 0
           ? { warnings: supplierOrderResult.warnings }
           : {}),

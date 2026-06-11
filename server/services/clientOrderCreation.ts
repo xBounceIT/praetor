@@ -24,6 +24,12 @@ export type ClientOrderCreateFields = {
   notes: string | null;
 };
 
+export type CreatedSupplierOrderSummary = {
+  id: string;
+  supplierQuoteId: string;
+  supplierName: string;
+};
+
 export const createClientOrderRows = async (
   fields: ClientOrderCreateFields,
   items: clientsOrdersRepo.NewClientOrderItem[],
@@ -56,7 +62,11 @@ export const autoCreateSupplierOrdersForClientOrder = async (
   order: clientsOrdersRepo.ClientOrder,
   items: clientsOrdersRepo.ClientOrderItem[],
   runInTransaction: <T>(cb: (tx: DbExecutor) => Promise<T>) => Promise<T>,
-): Promise<{ items: clientsOrdersRepo.ClientOrderItem[]; warnings: string[] }> => {
+): Promise<{
+  items: clientsOrdersRepo.ClientOrderItem[];
+  supplierOrders: CreatedSupplierOrderSummary[];
+  warnings: string[];
+}> => {
   const supplierQuoteIds = [
     ...new Set(
       items
@@ -66,6 +76,7 @@ export const autoCreateSupplierOrdersForClientOrder = async (
   ];
 
   const warnings: string[] = [];
+  const supplierOrders: CreatedSupplierOrderSummary[] = [];
   let didAutoCreate = false;
 
   for (const sqId of supplierQuoteIds) {
@@ -106,12 +117,13 @@ export const autoCreateSupplierOrdersForClientOrder = async (
             linkedOfferStatus: lockedStatus.linkedOfferStatus,
             linkedOfferExpiration: lockedStatus.linkedOfferExpiration,
           }) !== 'accepted'
-        )
-          return false;
+        ) {
+          return null;
+        }
         const linkedUnderLock = await supplierQuotesRepo.findLinkedOrderId(sqId, tx);
-        if (linkedUnderLock) return false;
+        if (linkedUnderLock) return null;
         const supplierQuote = await supplierQuotesRepo.findById(sqId, tx);
-        if (!supplierQuote) return false;
+        if (!supplierQuote) return null;
         const supplierItems = await supplierQuotesRepo.findItemsForQuote(sqId, tx);
         const supplierOrderId = await generateSupplierOrderId(tx);
         await clientsOrdersRepo.createSupplierOrder(
@@ -177,9 +189,16 @@ export const autoCreateSupplierOrdersForClientOrder = async (
             secondaryLabel: `${supplierQuote.supplierName} (from client order ${order.id}, supplier quote ${sqId})`,
           },
         });
-        return true;
+        return {
+          id: supplierOrderId,
+          supplierQuoteId: sqId,
+          supplierName: supplierQuote.supplierName,
+        };
       });
-      if (autoCreated) didAutoCreate = true;
+      if (autoCreated) {
+        didAutoCreate = true;
+        supplierOrders.push(autoCreated);
+      }
     } catch (err) {
       request.log.error({ err, supplierQuoteId: sqId }, 'Failed to auto-create supplier order');
       warnings.push(`Failed to auto-create supplier order for quote ${sqId}`);
@@ -188,6 +207,7 @@ export const autoCreateSupplierOrdersForClientOrder = async (
 
   return {
     items: didAutoCreate ? await clientsOrdersRepo.findItemsForOrder(order.id) : items,
+    supplierOrders,
     warnings,
   };
 };

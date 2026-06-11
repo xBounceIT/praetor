@@ -56,6 +56,7 @@
     "noQuotes": "No quotes found",
     "createFirst": "Create your first quote",
     "quoteSaved": "Quote saved successfully",
+    "offerCreatedToast": "Client offer created",
     "quoteDeleted": "Quote deleted",
     "convertToSale": "Convert to Sale",
     "convertToOffer": "Convert to Offer",

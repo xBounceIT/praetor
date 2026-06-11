@@ -1,6 +1,13 @@
 import type React from 'react';
 import api from '../../services/api';
-import type { ClientOffer, ClientsOrder, Invoice, Quote, View } from '../../types';
+import type {
+  AutoCreatedSupplierOrder,
+  ClientOffer,
+  ClientsOrder,
+  Invoice,
+  Quote,
+  View,
+} from '../../types';
 import { addMonthsToDateOnly, getLocalDateString, isDateOnlyBeforeToday } from '../../utils/date';
 import { sourcesSupplierQuote } from '../../utils/supplierLineSync';
 import { makeTempId } from '../../utils/tempId';
@@ -38,6 +45,9 @@ export type QuoteHandlersDeps = {
   setClientOfferFilterId: React.Dispatch<React.SetStateAction<string | null>>;
   setActiveView: React.Dispatch<React.SetStateAction<View | '404'>>;
   refreshSupplierQuoteFlow: () => Promise<void>;
+  notifyClientOfferCreated?: (offerId: string) => void;
+  notifyClientOrderCreated?: (orderId: string) => void;
+  notifySupplierOrderCreated?: (order: AutoCreatedSupplierOrder) => void;
 };
 
 export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
@@ -54,6 +64,9 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     setClientOfferFilterId,
     setActiveView,
     refreshSupplierQuoteFlow,
+    notifyClientOfferCreated,
+    notifyClientOrderCreated,
+    notifySupplierOrderCreated,
   } = deps;
 
   const refreshClientQuoteFlow = async () => {
@@ -131,6 +144,13 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
         refreshClientQuoteFlow(),
         supplierRefreshNeeded ? refreshLinkedSupplierQuotes() : Promise.resolve(),
       ]);
+      if (
+        updated.status === 'offer' &&
+        previousQuote?.status !== 'offer' &&
+        updated.linkedOfferId
+      ) {
+        notifyClientOfferCreated?.(updated.linkedOfferId);
+      }
     } catch (err) {
       console.error('Failed to update quote:', err);
       throw err;
@@ -179,6 +199,12 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
         refreshClientQuoteFlow(),
         supplierRefreshNeeded ? refreshLinkedSupplierQuotes() : Promise.resolve(),
       ]);
+      if (updated.autoCreated) {
+        notifyClientOrderCreated?.(updated.autoCreated.clientOrder.id);
+        for (const supplierOrder of updated.autoCreated.supplierOrders) {
+          notifySupplierOrderCreated?.(supplierOrder);
+        }
+      }
     } catch (err) {
       console.error('Failed to update client offer:', err);
       throw err;
@@ -264,6 +290,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
         ),
       );
       setActiveView('sales/client-offers');
+      notifyClientOfferCreated?.(offer.id);
       // The new offer takes over a sourced supplier quote's derived status (accepted → 'offer',
       // #779 offer chain) — without a refresh the supplier table keeps the stale badge.
       if (sourcesSupplierQuote(quote)) {
@@ -316,6 +343,10 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       const order = await api.clientsOrders.create(orderData);
       setClientsOrders((prev) => [...prev, order]);
       setActiveView('accounting/clients-orders');
+      notifyClientOrderCreated?.(order.id);
+      for (const supplierOrder of order.supplierOrders ?? []) {
+        notifySupplierOrderCreated?.(supplierOrder);
+      }
       // Order creation can auto-create supplier orders and consume supplier quotes.
       await refreshLinkedSupplierQuotes();
     } catch (err) {

@@ -483,6 +483,10 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
     const res = await putOffer({ status: 'accepted' });
 
     expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).autoCreated).toEqual({
+      clientOrder: { id: 'ORD-2999-0001' },
+      supplierOrders: [],
+    });
     expect(clientOrderFindExistingForOfferMock).toHaveBeenCalledWith(
       'off-1',
       null,
@@ -573,6 +577,12 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
     const res = await putOffer({ status: 'accepted' });
 
     expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).autoCreated).toEqual({
+      clientOrder: { id: 'ORD-2999-0001' },
+      supplierOrders: [
+        { id: 'SORD-2999-0001', supplierQuoteId: 'sq-1', supplierName: 'Supplier Co' },
+      ],
+    });
     expect(clientOrderCreateSupplierOrderMock).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'SORD-2999-0001',

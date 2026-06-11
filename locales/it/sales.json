@@ -56,6 +56,7 @@
     "noQuotes": "Nessun preventivo trovato",
     "createFirst": "Crea il tuo primo preventivo",
     "quoteSaved": "Preventivo salvato con successo",
+    "offerCreatedToast": "Offerta cliente creata",
     "quoteDeleted": "Preventivo eliminato",
     "convertToSale": "Converti in Vendita",
     "convertToOffer": "Converti in Offerta",

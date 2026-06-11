@@ -11,6 +11,7 @@ import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
   autoCreateSupplierOrdersForClientOrder,
+  type CreatedSupplierOrderSummary,
   createClientOrderRows,
   logClientOrderCreated,
 } from '../services/clientOrderCreation.ts';
@@ -135,6 +136,31 @@ const offerSchema = {
     createdAt: { type: 'number' },
     updatedAt: { type: 'number' },
     items: { type: 'array', items: offerItemSchema },
+    autoCreated: {
+      type: 'object',
+      properties: {
+        clientOrder: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+          },
+          required: ['id'],
+        },
+        supplierOrders: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              supplierQuoteId: { type: 'string' },
+              supplierName: { type: 'string' },
+            },
+            required: ['id', 'supplierQuoteId', 'supplierName'],
+          },
+        },
+      },
+      required: ['clientOrder', 'supplierOrders'],
+    },
   },
   required: [
     'id',
@@ -1345,13 +1371,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await logSupplierItemSyncAudits(request, result.syncAudits);
+      let autoCreated:
+        | {
+            clientOrder: { id: string };
+            supplierOrders: CreatedSupplierOrderSummary[];
+          }
+        | undefined;
       if (result.createdOrder) {
-        await autoCreateSupplierOrdersForClientOrder(
+        const supplierOrderResult = await autoCreateSupplierOrdersForClientOrder(
           request,
           result.createdOrder.order,
           result.createdOrder.items,
           withDbTransaction,
         );
+        autoCreated = {
+          clientOrder: { id: result.createdOrder.order.id },
+          supplierOrders: supplierOrderResult.supplierOrders,
+        };
         await logClientOrderCreated(request, result.createdOrder.order);
       }
 
@@ -1370,7 +1406,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
 
-      return projectOffer({ ...updatedOffer, items: updatedItems });
+      return projectOffer({
+        ...updatedOffer,
+        items: updatedItems,
+        ...(autoCreated ? { autoCreated } : {}),
+      });
     },
   );
 

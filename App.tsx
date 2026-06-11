@@ -10,6 +10,7 @@ import React, {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { FieldLabel } from '@/components/ui/field';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -745,7 +746,7 @@ const TrackerView: React.FC<{
 };
 
 const AppContent: React.FC = () => {
-  const { t: tApp } = useTranslation(['common', 'reports']);
+  const { t: tApp } = useTranslation(['common', 'reports', 'sales', 'accounting']);
 
   const [users, setUsers] = useState<User[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -1146,6 +1147,55 @@ const AppContent: React.FC = () => {
     [switchRole],
   );
 
+  const notifyClientOfferCreated = useCallback(
+    (offerId: string) => {
+      toast.success(tApp('sales:clientQuotes.offerCreatedToast'), {
+        description: offerId,
+        action: {
+          label: tApp('sales:clientQuotes.viewOffer'),
+          onClick: () => {
+            setClientQuoteFilterId(null);
+            setClientOfferFilterId(offerId);
+            setActiveView('sales/client-offers');
+          },
+        },
+      });
+    },
+    [setActiveView, tApp],
+  );
+
+  const notifyClientOrderCreated = useCallback(
+    (orderId: string) => {
+      toast.success(tApp('accounting:clientsOrders.orderCreatedToast'), {
+        description: orderId,
+        action: {
+          label: tApp('accounting:clientsOrders.viewOrder'),
+          onClick: () => {
+            setClientsOrderFilterId(orderId);
+            setActiveView('accounting/clients-orders');
+          },
+        },
+      });
+    },
+    [setActiveView, tApp],
+  );
+
+  const notifySupplierOrderCreated = useCallback(
+    (order: { id: string; supplierName: string }) => {
+      toast.success(tApp('accounting:supplierOrders.orderCreatedToast'), {
+        description: `${order.id} - ${order.supplierName}`,
+        action: {
+          label: tApp('accounting:supplierOrders.viewOrder'),
+          onClick: () => {
+            setSupplierOrderFilterId(order.id);
+            setActiveView('accounting/supplier-orders');
+          },
+        },
+      });
+    },
+    [setActiveView, tApp],
+  );
+
   const supplierQuoteHandlers = useMemo(
     () =>
       makeSupplierQuoteHandlers({
@@ -1178,8 +1228,17 @@ const AppContent: React.FC = () => {
         setClientOfferFilterId,
         setActiveView,
         refreshSupplierQuoteFlow: supplierQuoteHandlers.refreshSupplierQuoteFlow,
+        notifyClientOfferCreated,
+        notifyClientOrderCreated,
+        notifySupplierOrderCreated,
       }),
-    [supplierQuoteHandlers.refreshSupplierQuoteFlow, setActiveView],
+    [
+      supplierQuoteHandlers.refreshSupplierQuoteFlow,
+      setActiveView,
+      notifyClientOfferCreated,
+      notifyClientOrderCreated,
+      notifySupplierOrderCreated,
+    ],
   );
 
   const clientHandlers = useMemo(

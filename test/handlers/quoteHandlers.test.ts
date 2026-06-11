@@ -95,6 +95,10 @@ type ClientOfferLike = {
   clientId?: string;
   linkedQuoteId?: string;
   items?: Array<{ supplierQuoteItemId?: string | null }>;
+  autoCreated?: {
+    clientOrder: { id: string };
+    supplierOrders: Array<{ id: string; supplierQuoteId: string; supplierName: string }>;
+  };
 };
 type ClientsOrderLike = { id: string; clientId?: string };
 type InvoiceLike = { id: string };
@@ -131,6 +135,9 @@ const buildHandlers = (overrides: Record<string, unknown> = {}) => {
   );
   const setActiveView = mock(() => {});
   const refreshSupplierQuoteFlow = mock(() => Promise.resolve()) as unknown as () => Promise<void>;
+  const notifyClientOfferCreated = mock((_offerId: string) => {});
+  const notifyClientOrderCreated = mock((_orderId: string) => {});
+  const notifySupplierOrderCreated = mock((_order: unknown) => {});
 
   const handlers = makeQuoteHandlers({
     getClientQuoteFilterId: () => clientQuoteFilterId.get(),
@@ -147,6 +154,9 @@ const buildHandlers = (overrides: Record<string, unknown> = {}) => {
     refreshSupplierQuoteFlow:
       (overrides.refreshSupplierQuoteFlow as (() => Promise<void>) | undefined) ??
       refreshSupplierQuoteFlow,
+    notifyClientOfferCreated,
+    notifyClientOrderCreated,
+    notifySupplierOrderCreated,
   });
 
   return {
@@ -159,6 +169,9 @@ const buildHandlers = (overrides: Record<string, unknown> = {}) => {
     clientOfferFilterId,
     setActiveView,
     refreshSupplierQuoteFlow,
+    notifyClientOfferCreated,
+    notifyClientOrderCreated,
+    notifySupplierOrderCreated,
   };
 };
 
@@ -357,6 +370,7 @@ describe('makeQuoteHandlers', () => {
 
     await ctx.handlers.updateQuote('q1', { status: 'offer' } as never);
     expect(apiMocks.clientOffersList).toHaveBeenCalledTimes(1);
+    expect(ctx.notifyClientOfferCreated).toHaveBeenCalledWith('q1-OF');
   });
 
   test('deleteQuote refreshes supplier quotes when the deleted quote sourced one', async () => {
@@ -572,7 +586,14 @@ describe('makeQuoteHandlers', () => {
 
   test('updateClientOffer refreshes flow and updates filter when matched', async () => {
     apiMocks.clientOffersUpdate.mockImplementation((id: string, updates: unknown) =>
-      Promise.resolve({ id, ...(updates as object) }),
+      Promise.resolve({
+        id,
+        ...(updates as object),
+        autoCreated: {
+          clientOrder: { id: 'ORD-1' },
+          supplierOrders: [{ id: 'SORD-1', supplierQuoteId: 'SQ-1', supplierName: 'Supplier' }],
+        },
+      }),
     );
     apiMocks.quotesList.mockImplementation(() => Promise.resolve([]));
     apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([]));
@@ -581,6 +602,12 @@ describe('makeQuoteHandlers', () => {
 
     await ctx.handlers.updateClientOffer('of-1', { status: 'sent' } as never);
     expect(ctx.clientOfferFilterId.get()).toBe('of-1');
+    expect(ctx.notifyClientOrderCreated).toHaveBeenCalledWith('ORD-1');
+    expect(ctx.notifySupplierOrderCreated).toHaveBeenCalledWith({
+      id: 'SORD-1',
+      supplierQuoteId: 'SQ-1',
+      supplierName: 'Supplier',
+    });
   });
 
   test('updateClientOffer rethrows api error', async () => {
@@ -670,6 +697,7 @@ describe('makeQuoteHandlers', () => {
     expect(ctx.clientOffers.get()[0].id).toBe('of-new');
     expect(ctx.quotes.get()[0].linkedOfferId).toBe('of-new');
     expect(ctx.setActiveView).toHaveBeenCalledWith('sales/client-offers');
+    expect(ctx.notifyClientOfferCreated).toHaveBeenCalledWith('of-new');
     // A still-valid source date is copied verbatim.
     const payload = apiMocks.clientOffersCreate.mock.calls[0][0] as Record<string, unknown>;
     expect(payload.expirationDate).toBe('2999-12-31');
@@ -766,7 +794,11 @@ describe('makeQuoteHandlers', () => {
 
   test('createClientsOrderFromOffer creates order, switches view, refreshes supplier flow', async () => {
     apiMocks.clientsOrdersCreate.mockImplementation((data: unknown) =>
-      Promise.resolve({ id: 'or-new', ...(data as object) }),
+      Promise.resolve({
+        id: 'or-new',
+        ...(data as object),
+        supplierOrders: [{ id: 'SORD-2', supplierQuoteId: 'SQ-2', supplierName: 'Supplier 2' }],
+      }),
     );
     const refreshSupplierQuoteFlow = mock(() =>
       Promise.resolve(),
@@ -794,6 +826,12 @@ describe('makeQuoteHandlers', () => {
 
     expect(ctx.clientsOrders.get()[0].id).toBe('or-new');
     expect(ctx.setActiveView).toHaveBeenCalledWith('accounting/clients-orders');
+    expect(ctx.notifyClientOrderCreated).toHaveBeenCalledWith('or-new');
+    expect(ctx.notifySupplierOrderCreated).toHaveBeenCalledWith({
+      id: 'SORD-2',
+      supplierQuoteId: 'SQ-2',
+      supplierName: 'Supplier 2',
+    });
     expect(refreshSupplierQuoteFlow).toHaveBeenCalled();
   });
 
