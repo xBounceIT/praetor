@@ -13,6 +13,14 @@ export type ClientLineSyncInput = {
   quantity: number;
   // The line's live unit cost for supplier-sourced lines — what the supplier item must become.
   supplierQuoteUnitPrice: number | null;
+  // Pick-time supplier values (request-only, never persisted): the genuine-edit baseline for a
+  // line whose link has no previous stored row — a fresh pick in a POST, or a line added during
+  // a PUT edit session. The editor stamps them when the link is picked or refreshed; if the user
+  // then changes quantity/cost, the values diverge from the baseline and the edit is pushed onto
+  // the supplier item like any retained-link edit. Absent (older clients, raw API), a fresh link
+  // keeps the historical behavior: server values win, nothing is written back.
+  supplierQuoteBaseQuantity?: number | null;
+  supplierQuoteBaseUnitPrice?: number | null;
 };
 
 // The document's PREVIOUS stored lines. Keyed by supplierQuoteItemId below: offer items get
@@ -93,12 +101,14 @@ export const logSupplierItemSyncAudits = async (
 // Bidirectional sync, client → supplier direction (issue #779): when an editable client quote or
 // offer saves lines that reference supplier quote items, GENUINE edits to quantity and unit cost
 // are retroactively pushed onto those supplier items. "Genuine" means BOTH of:
-//   - the link existed before this save (a freshly picked link starts from server-resolved
-//     supplier values and never writes back — pushing the client's copy would let a stale
-//     browser cache revert newer supplier pricing), and
-//   - quantity/cost differ from the line's own previous stored values (a re-save of a stale
-//     snapshot — e.g. a notes-only edit while the "old info" chip is showing — must not revert
-//     direct supplier-side edits).
+//   - quantity/cost can be diffed against what the user was shown: the line's previous stored
+//     values for a link that existed before this save, or the pick-time baseline the editor
+//     stamps on a fresh link (see ClientLineSyncInput). A fresh link WITHOUT a baseline never
+//     writes back — pushing the client's copy blind would let a stale browser cache revert newer
+//     supplier pricing; and
+//   - quantity/cost differ from those previous values (a re-save of a stale snapshot — e.g. a
+//     notes-only edit while the drift chip is showing — must not revert direct supplier-side
+//     edits).
 // The cost write keeps the item's stored "discount to us" meaningful by recomputing the list
 // price so that listPrice × (1 − discount/100) equals the new cost. Guards mirror the
 // supplier-quotes PUT freeze: order-locked and frozen (accepted/denied/expired) supplier quotes
@@ -133,7 +143,22 @@ export const syncSupplierItemsFromClientLines = async (
   const wanted = new Map<string, { quantity: number; cost: number }>();
   for (const line of lines) {
     if (!line.supplierQuoteItemId || line.supplierQuoteUnitPrice === null) continue;
-    const prevs = prevsByLink.get(line.supplierQuoteItemId);
+    // A link with no previous stored row (fresh pick in a POST, or a line added during a PUT)
+    // falls back to the line's pick-time baseline as its "previous" values, so a create-form
+    // quantity/cost edit is a genuine edit too (user report after #812). Without a baseline the
+    // fresh link is skipped — pushing the client's copy blind would let a stale browser cache
+    // revert newer supplier pricing.
+    const prevs =
+      prevsByLink.get(line.supplierQuoteItemId) ??
+      (line.supplierQuoteBaseQuantity != null && line.supplierQuoteBaseUnitPrice != null
+        ? [
+            {
+              supplierQuoteItemId: line.supplierQuoteItemId,
+              quantity: Number(line.supplierQuoteBaseQuantity),
+              supplierQuoteUnitPrice: Number(line.supplierQuoteBaseUnitPrice),
+            },
+          ]
+        : undefined);
     if (!prevs) continue;
     const target = {
       quantity: Number(line.quantity) || 0,
@@ -169,7 +194,7 @@ export const syncSupplierItemsFromClientLines = async (
   for (const item of items) {
     const target = wanted.get(item.id);
     if (!target) continue;
-    // Already current (e.g. the save follows an "old info" refresh-pull) — no write needed, so
+    // Already current (e.g. the save follows a drift-chip refresh-pull) — no write needed, so
     // the freeze guards below must not fire either.
     if (item.quantity === target.quantity && item.unitPrice === target.cost) continue;
     const patches = changedByQuote.get(item.quoteId) ?? [];

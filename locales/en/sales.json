@@ -144,7 +144,7 @@
     "unit": "Unit",
     "units": "Units",
     "supplierQuoteCostTooltip": "Cost linked to the supplier quote — edits update the supplier quote too",
-    "staleSupplierData": "Old info — update?",
+    "staleSupplierData": "Data drifted — sync?",
     "createYourFirstQuote": "Create your first quote",
     "quotesTitle": "Quotes",
     "quotesSubtitle": "Manage client quotes and proposals",

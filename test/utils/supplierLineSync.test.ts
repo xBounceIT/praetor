@@ -107,6 +107,20 @@ describe('refreshedSupplierLineFields', () => {
     expect(fields.unitPrice).toBe(100);
   });
 
+  test('stamps the pick-time baseline alongside the live values (genuine-edit anchor)', () => {
+    // The supplierQuoteBase* pair records what the user was shown at pick/refresh time; the
+    // server diffs the saved quantity/cost against it to recognize a deliberate pre-save edit on
+    // a fresh link (pushed onto the supplier item) versus an untouched stale snapshot.
+    const fields = refreshedSupplierLineFields(
+      { productMolPercentage: 20, unitType: 'hours' },
+      supplierItem(),
+    );
+    expect(fields.supplierQuoteBaseQuantity).toBe(4);
+    expect(fields.supplierQuoteBaseUnitPrice).toBe(80);
+    expect(fields.supplierQuoteBaseQuantity).toBe(fields.quantity);
+    expect(fields.supplierQuoteBaseUnitPrice).toBe(fields.supplierQuoteUnitPrice);
+  });
+
   test("converts the sale price into the line's unit (hours→days = ×8)", () => {
     const fields = refreshedSupplierLineFields(
       { productMolPercentage: null, unitType: 'days' },

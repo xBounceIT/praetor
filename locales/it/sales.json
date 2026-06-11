@@ -144,7 +144,7 @@
     "unit": "Unità",
     "units": "Unità",
     "supplierQuoteCostTooltip": "Costo collegato al preventivo fornitore — le modifiche aggiornano anche il preventivo fornitore",
-    "staleSupplierData": "Dati vecchi — aggiornare?",
+    "staleSupplierData": "Dati variati — sincronizzare?",
     "createYourFirstQuote": "Crea il tuo primo preventivo",
     "quotesTitle": "Preventivi",
     "quotesSubtitle": "Gestisci i preventivi e le proposte cliente",

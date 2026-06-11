@@ -48,6 +48,8 @@ const cqReplaceItemsMock = mock();
 const cqFindItemSnapshotsForQuoteMock = mock();
 const cqListAllMock = mock();
 const cqListAllItemsMock = mock();
+const cqCreateMock = mock();
+const cqInsertItemsMock = mock();
 
 const sqFindEarliestExpirationByIdsMock = mock();
 const sqFindBlockingExpirationsByIdsMock = mock();
@@ -98,6 +100,8 @@ beforeAll(async () => {
     findItemSnapshotsForQuote: cqFindItemSnapshotsForQuoteMock,
     listAll: cqListAllMock,
     listAllItems: cqListAllItemsMock,
+    create: cqCreateMock,
+    insertItems: cqInsertItemsMock,
   }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
@@ -158,6 +162,7 @@ const HAPPY_USER = {
 // supplier_quotes.update rides along: the #779 forward sync requires it whenever a save pushes
 // sourced-line edits onto a supplier quote.
 const FULL_PERMS = [
+  'sales.client_quotes.create',
   'sales.client_quotes.update',
   'sales.client_quotes.delete',
   'sales.supplier_quotes.update',
@@ -210,6 +215,8 @@ const allMocks = [
   cqFindItemSnapshotsForQuoteMock,
   cqListAllMock,
   cqListAllItemsMock,
+  cqCreateMock,
+  cqInsertItemsMock,
   cqFindStatusAndClientNameMock,
   cqDeleteByIdMock,
   sqFindEarliestExpirationByIdsMock,
@@ -777,6 +784,153 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     });
     expect(res.statusCode).toBe(200);
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/sales/client-quotes supplier sync on create (user report after #812)', () => {
+  // Live supplier item the fresh pick references: quantity 2, cost 50, discount-to-us 20%.
+  const SUPPLIER_ITEM = {
+    id: 'sqi-9',
+    quoteId: 'sq-9',
+    productId: null,
+    productName: 'Service',
+    quantity: 2,
+    listPrice: 62.5,
+    discountPercent: 20,
+    unitPrice: 50,
+    note: null,
+    unitType: 'hours',
+    durationMonths: 1,
+    durationUnit: 'months',
+  };
+  // Product-less on both sides so the resolver skips the (unmocked) products repo.
+  const freshLine = (over: Record<string, unknown> = {}) => ({
+    productId: null,
+    productName: 'Service',
+    supplierQuoteItemId: 'sqi-9',
+    quantity: 2,
+    unitPrice: 100,
+    productCost: 50,
+    productMolPercentage: null,
+    supplierQuoteUnitPrice: 50,
+    discount: 0,
+    unitType: 'hours',
+    durationMonths: 1,
+    durationUnit: 'months',
+    ...over,
+  });
+  const postQuote = (items: Array<Record<string, unknown>>) =>
+    testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes',
+      headers: authHeader(),
+      payload: {
+        id: 'q-new',
+        clientId: 'c1',
+        clientName: 'Client',
+        items,
+        expirationDate: '2999-12-31',
+      },
+    });
+
+  const setupCreate = (netCost = 50) => {
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-9',
+          {
+            supplierQuoteId: 'sq-9',
+            supplierName: 'Acme',
+            productId: null,
+            unitPrice: netCost,
+            netCost,
+            sourceable: true,
+          },
+        ],
+      ]),
+    );
+    cqCreateMock.mockResolvedValue(updatedQuote({ id: 'q-new', status: 'draft' }));
+    cqInsertItemsMock.mockResolvedValue([]);
+    sqFindItemsByIdsMock.mockResolvedValue([SUPPLIER_ITEM]);
+    sqFindFullForSnapshotMock.mockResolvedValue({
+      quote: { id: 'sq-9' },
+      items: [SUPPLIER_ITEM],
+    });
+  };
+
+  test('a create-form cost/quantity edit away from the pick-time baseline is kept and pushed', async () => {
+    setupCreate();
+
+    const res = await postQuote([
+      freshLine({
+        quantity: 5,
+        supplierQuoteUnitPrice: 80,
+        supplierQuoteBaseQuantity: 2,
+        supplierQuoteBaseUnitPrice: 50,
+      }),
+    ]);
+
+    expect(res.statusCode).toBe(201);
+    // The deliberately edited cost survives onto the stored line…
+    const inserted = cqInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(inserted[0].supplierQuoteUnitPrice).toBe(80);
+    // …and is pushed onto the supplier item, atomically, with the discount-to-us preserved.
+    expect(sqSyncItemPricingMock).toHaveBeenCalledTimes(1);
+    expect(sqSyncItemPricingMock.mock.calls[0][0]).toBe('sq-9');
+    expect(sqSyncItemPricingMock.mock.calls[0][1]).toEqual([
+      { itemId: 'sqi-9', quantity: 5, unitCost: 80, discountPercent: 20 },
+    ]);
+    expect(sqvInsertMock).toHaveBeenCalledTimes(1);
+    const auditActions = (logAuditMock.mock.calls as unknown as Array<[{ action?: string }]>).map(
+      (c) => c[0]?.action,
+    );
+    expect(auditActions).toContain('supplier_quote.updated');
+  });
+
+  test('an untouched line (cost == baseline) takes the live supplier value and pushes nothing', async () => {
+    // The supplier item moved to 60 after the user picked at 50 — a stale, untouched line must
+    // not revert it: server values win, exactly like the PUT fresh-link rule.
+    setupCreate(60);
+    sqFindItemsByIdsMock.mockResolvedValue([{ ...SUPPLIER_ITEM, unitPrice: 60 }]);
+
+    const res = await postQuote([
+      freshLine({ supplierQuoteBaseQuantity: 2, supplierQuoteBaseUnitPrice: 50 }),
+    ]);
+
+    expect(res.statusCode).toBe(201);
+    const inserted = cqInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(inserted[0].supplierQuoteUnitPrice).toBe(60);
+    expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+    expect(sqvInsertMock).not.toHaveBeenCalled();
+  });
+
+  test('without a baseline the legacy rule holds: server value stored, nothing pushed', async () => {
+    setupCreate();
+
+    const res = await postQuote([freshLine({ supplierQuoteUnitPrice: 80 })]);
+
+    expect(res.statusCode).toBe(201);
+    const inserted = cqInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(inserted[0].supplierQuoteUnitPrice).toBe(50);
+    expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+  });
+
+  test('403 when the create-form edit needs the supplier-quote update permission', async () => {
+    setupCreate();
+    getRolePermissionsMock.mockResolvedValue(['sales.client_quotes.create']);
+
+    const res = await postQuote([
+      freshLine({
+        supplierQuoteUnitPrice: 80,
+        supplierQuoteBaseQuantity: 2,
+        supplierQuoteBaseUnitPrice: 50,
+      }),
+    ]);
+
+    expect(res.statusCode).toBe(403);
+    expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+    // The quote write rolled back together with the refused supplier write.
+    expect(res.json().error).toContain('supplier quote update permission');
   });
 });
 

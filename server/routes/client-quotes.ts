@@ -57,6 +57,12 @@ type IncomingQuoteItem = {
   // The line's live unit cost for supplier-sourced lines — client-authoritative on edits of an
   // existing link (issue #779 bidirectional sync); server-resolved on new links.
   supplierQuoteUnitPrice?: number | null;
+  // Pick-time supplier values (request-only, never persisted): the genuine-edit baseline for a
+  // FRESH link — the editor stamps them when the link is picked/refreshed, so a quantity/cost
+  // edited before the first save is recognized as a deliberate edit (kept on the line and pushed
+  // onto the supplier item) instead of being overwritten by the server snapshot.
+  supplierQuoteBaseQuantity?: number | null;
+  supplierQuoteBaseUnitPrice?: number | null;
   discount: number;
   note?: string | null;
   unitType?: UnitType;
@@ -123,6 +129,20 @@ const normalizeQuoteItems = (
     if (!supplierQuoteUnitPriceResult.ok) {
       return { ok: false, message: supplierQuoteUnitPriceResult.message };
     }
+    const supplierQuoteBaseQuantityResult = optionalLocalizedNonNegativeNumber(
+      item.supplierQuoteBaseQuantity,
+      `items[${i}].supplierQuoteBaseQuantity`,
+    );
+    if (!supplierQuoteBaseQuantityResult.ok) {
+      return { ok: false, message: supplierQuoteBaseQuantityResult.message };
+    }
+    const supplierQuoteBaseUnitPriceResult = optionalLocalizedNonNegativeNumber(
+      item.supplierQuoteBaseUnitPrice,
+      `items[${i}].supplierQuoteBaseUnitPrice`,
+    );
+    if (!supplierQuoteBaseUnitPriceResult.ok) {
+      return { ok: false, message: supplierQuoteBaseUnitPriceResult.message };
+    }
     // Duration in months: a positive whole number, defaulting to 1 (one-off line item).
     const durationMonthsResult = optionalDurationMonths(
       item.durationMonths,
@@ -144,6 +164,8 @@ const normalizeQuoteItems = (
       productCost: productCostResult.value,
       productMolPercentage: productMolPercentageResult.value,
       supplierQuoteUnitPrice: supplierQuoteUnitPriceResult.value,
+      supplierQuoteBaseQuantity: supplierQuoteBaseQuantityResult.value,
+      supplierQuoteBaseUnitPrice: supplierQuoteBaseUnitPriceResult.value,
       discount: itemDiscountResult.value || 0,
       note: normalizeNullableString(item.note),
       unitType,
@@ -313,8 +335,20 @@ const resolveQuoteItemSnapshots = async (
       supplierQuoteUnitPrice = supplierQuoteSnapshot.netCost;
       // Same link RETAINED but other snapshot inputs changed (e.g. product/cost/MOL): the
       // client's live cost still wins (#779 bidirectional sync — it is pushed back onto the
-      // supplier item after the write). A freshly-picked link starts from the supplier value.
+      // supplier item after the write).
       if (isRetainedLink && item.supplierQuoteUnitPrice != null) {
+        supplierQuoteUnitPrice = item.supplierQuoteUnitPrice;
+      } else if (
+        !isRetainedLink &&
+        item.supplierQuoteUnitPrice != null &&
+        item.supplierQuoteBaseUnitPrice != null &&
+        item.supplierQuoteUnitPrice !== item.supplierQuoteBaseUnitPrice
+      ) {
+        // A FRESHLY-picked link whose cost was deliberately edited away from the pick-time
+        // baseline (user report after #812): keep the edit on the line — the sync pushes it onto
+        // the supplier item in the same transaction. An untouched cost (== baseline) keeps the
+        // server snapshot instead, so a stale browser can't revert newer supplier pricing it
+        // never saw.
         supplierQuoteUnitPrice = item.supplierQuoteUnitPrice;
       }
     }
@@ -447,6 +481,10 @@ const quoteItemBodySchema = {
     // The line's live unit cost for supplier-sourced lines — client-authoritative on edits of an
     // existing link (issue #779 bidirectional sync).
     supplierQuoteUnitPrice: { type: ['number', 'null'] },
+    // Pick-time supplier values (never persisted): the genuine-edit baseline that lets a FRESH
+    // link's quantity/cost edits survive the save and push onto the supplier item.
+    supplierQuoteBaseQuantity: { type: ['number', 'null'] },
+    supplierQuoteBaseUnitPrice: { type: ['number', 'null'] },
     discount: { type: 'number' },
     note: { type: 'string' },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
@@ -811,7 +849,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       try {
-        const { quote, createdItems } = await withDbTransaction(async (tx) => {
+        const { quote, createdItems, syncAudits } = await withDbTransaction(async (tx) => {
           const created = await clientQuotesRepo.create(
             {
               id: nextIdResult.value,
@@ -835,8 +873,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             buildItemsForInsert(resolvedItems),
             tx,
           );
-          return { quote: created, createdItems: items };
+          // Bidirectional sync on CREATE too (user report after #812): a sourced line whose
+          // quantity/cost was edited away from its pick-time baseline pushes the edit onto the
+          // supplier item, atomically with the quote write. With no stored previous lines the
+          // baseline is the only diff anchor — lines without one are skipped (see
+          // syncSupplierItemsFromClientLines). Audit entries are logged after commit.
+          const audits = await syncSupplierItemsFromClientLines(
+            request,
+            'client_quote.create',
+            resolvedItems,
+            [],
+            tx,
+          );
+          return { quote: created, createdItems: items, syncAudits: audits };
         });
+
+        await logSupplierItemSyncAudits(request, syncAudits);
 
         await logAudit({
           request,
@@ -850,6 +902,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return reply.code(201).send(buildQuoteResponse(quote, createdItems, sourcedExpiration));
       } catch (err) {
+        // The client→supplier item sync refuses to write frozen/order-locked supplier quotes or
+        // to run without the supplier-quote update grant; the tx rolled back, so the quote was
+        // rejected together with the supplier write (issue #779).
+        if (err instanceof SupplierItemSyncError) {
+          return replySupplierItemSyncError(request, reply, err, {
+            entityType: 'client_quote',
+            entityId: nextIdResult.value,
+          });
+        }
         const dup = getUniqueViolation(err);
         if (dup && (dup.constraint === 'quotes_pkey' || dup.detail?.includes('(id)'))) {
           return replyError(request, reply, {

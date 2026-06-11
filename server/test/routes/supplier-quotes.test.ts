@@ -39,7 +39,9 @@ const sqFindItemsForQuoteMock = mock();
 const sqUpdateMock = mock();
 const sqRenameMock = mock();
 const sqReplaceItemsMock = mock();
+const sqUpsertItemsMock = mock();
 const sqIsSourcedByClientDocumentsMock = mock();
+const sqFindSourcedItemIdsMock = mock();
 
 const sqvInsertMock = mock();
 const sqvBuildSnapshotMock = mock();
@@ -74,7 +76,9 @@ beforeAll(async () => {
     update: sqUpdateMock,
     rename: sqRenameMock,
     replaceItems: sqReplaceItemsMock,
+    upsertItems: sqUpsertItemsMock,
     isSourcedByClientDocuments: sqIsSourcedByClientDocumentsMock,
+    findSourcedItemIds: sqFindSourcedItemIdsMock,
   }));
   mock.module('../../repositories/supplierQuoteVersionsRepo.ts', () => ({
     ...supplierQuoteVersionsRepoSnap,
@@ -177,7 +181,9 @@ const allMocks = [
   sqUpdateMock,
   sqRenameMock,
   sqReplaceItemsMock,
+  sqUpsertItemsMock,
   sqIsSourcedByClientDocumentsMock,
+  sqFindSourcedItemIdsMock,
   sqvInsertMock,
   sqvBuildSnapshotMock,
   logAuditMock,
@@ -202,6 +208,8 @@ beforeEach(async () => {
   sqFindIdConflictMock.mockResolvedValue(false);
   // Default: the quote is not sourced by any client line, so item edits on a draft are allowed.
   sqIsSourcedByClientDocumentsMock.mockResolvedValue(false);
+  sqFindSourcedItemIdsMock.mockResolvedValue(new Set<string>());
+  sqUpsertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
   // snapshotPreState calls findFullForSnapshot; default to the current draft so the
   // pre-save snapshot path doesn't crash on tests that update content.
   sqFindFullForSnapshotMock.mockResolvedValue({ quote: DRAFT_QUOTE, items: [SAMPLE_ITEM] });
@@ -267,17 +275,74 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
       error: 'Non-draft supplier quotes are read-only',
     });
     expect(sqUpdateMock).not.toHaveBeenCalled();
+    expect(sqUpsertItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('200 allows an in-place pricing edit of a sourced item — the id is preserved (user report after #812)', async () => {
+    // The original #812 guard refused ANY items payload on a sourced quote, which also blocked a
+    // plain cost edit. Identity-preserving updates keep the persisted item id (the client lines'
+    // soft references stay attached), so the edit goes through upsertItems instead.
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqFindSourcedItemIdsMock.mockResolvedValue(new Set(['sqi-1']));
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqUpsertItemsMock.mockResolvedValue([{ ...SAMPLE_ITEM, unitPrice: 120, listPrice: 120 }]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          { id: 'sqi-1', productId: 'p-1', productName: 'Service', quantity: 2, unitPrice: 120 },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sqUpsertItemsMock).toHaveBeenCalledTimes(1);
+    const upserted = sqUpsertItemsMock.mock.calls[0]?.[1];
+    expect(upserted).toHaveLength(1);
+    expect(upserted[0]).toEqual(
+      expect.objectContaining({ id: 'sqi-1', unitPrice: 120, productId: 'p-1' }),
+    );
     expect(sqReplaceItemsMock).not.toHaveBeenCalled();
   });
 
-  test('409 blocks item replacement when a draft quote is sourced by client lines (#779)', async () => {
-    // A supplier quote sourced only by a DRAFT client quote derives back to `draft`, so it slips
-    // past the non-draft read-only guard above. replaceItems would recreate supplier_quote_items
-    // with fresh ids and strand those client lines' soft supplierQuoteItemId references — refuse,
-    // mirroring the DELETE route's isSourcedByClientDocuments guard.
+  test('re-mints a foreign or placeholder incoming item id instead of trusting it', async () => {
+    // tmp-* form placeholders (and ids belonging to other quotes) must not be persisted verbatim:
+    // only ids matching one of THIS quote's items keep their identity.
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
-    sqIsSourcedByClientDocumentsMock.mockResolvedValue(true);
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqUpsertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          { id: 'sqi-1', productId: 'p-1', productName: 'Service', quantity: 2, unitPrice: 100 },
+          { id: 'tmp-1749600000000', productName: 'New line', quantity: 1, unitPrice: 10 },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const upserted = sqUpsertItemsMock.mock.calls[0]?.[1];
+    expect(upserted[0].id).toBe('sqi-1');
+    expect(upserted[1].id).not.toBe('tmp-1749600000000');
+    expect(upserted[1].id).toBeTruthy();
+  });
+
+  test('409 blocks removing an item that client lines reference (#779)', async () => {
+    // Deleting a referenced supplier_quote_items row would strand the client lines' soft
+    // supplierQuoteItemId references — the one items shape (besides a product repoint) that is
+    // still refused, mirroring the DELETE route's guard.
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqFindSourcedItemIdsMock.mockResolvedValue(new Set(['sqi-1']));
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -288,11 +353,70 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
 
     expect(res.statusCode).toBe(409);
     expect(JSON.parse(res.body)).toEqual({
-      error:
-        'Cannot replace items on a supplier quote whose items are used by client quotes, offers or orders',
+      error: 'Cannot remove supplier quote items that are used by client quotes, offers or orders',
     });
-    expect(sqIsSourcedByClientDocumentsMock).toHaveBeenCalledWith('sq-1');
+    expect(sqFindSourcedItemIdsMock).toHaveBeenCalledWith('sq-1');
+    expect(sqUpsertItemsMock).not.toHaveBeenCalled();
     expect(sqReplaceItemsMock).not.toHaveBeenCalled();
+    expect(sqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 allows removing an UNREFERENCED item while a referenced one is kept', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqFindItemsForQuoteMock.mockResolvedValue([
+      SAMPLE_ITEM,
+      { ...SAMPLE_ITEM, id: 'sqi-2', productName: 'Extra' },
+    ]);
+    sqFindSourcedItemIdsMock.mockResolvedValue(new Set(['sqi-1']));
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqUpsertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          { id: 'sqi-1', productId: 'p-1', productName: 'Service', quantity: 2, unitPrice: 100 },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sqUpsertItemsMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('409 blocks repointing a referenced item to a different product', async () => {
+    // The client-line snapshot resolver hard-fails on a product mismatch, so changing the product
+    // of a referenced item would poison the next edit of every client document using it.
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqFindSourcedItemIdsMock.mockResolvedValue(new Set(['sqi-1']));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: 'sqi-1',
+            productId: 'p-OTHER',
+            productName: 'Service',
+            quantity: 2,
+            unitPrice: 100,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error:
+        'Cannot change the product of supplier quote items that are used by client quotes, offers or orders',
+    });
+    expect(sqUpsertItemsMock).not.toHaveBeenCalled();
     expect(sqUpdateMock).not.toHaveBeenCalled();
   });
 
@@ -483,7 +607,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
     sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
-    sqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+    sqUpsertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -495,8 +619,8 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(sqReplaceItemsMock).toHaveBeenCalledTimes(1);
-    const itemsArg = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    expect(sqUpsertItemsMock).toHaveBeenCalledTimes(1);
+    const itemsArg = sqUpsertItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
     expect(itemsArg[0]).toEqual(
       expect.objectContaining({ listPrice: 200, discountPercent: 10, unitPrice: 180 }),
     );
@@ -506,7 +630,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
     sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
-    sqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+    sqUpsertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
 
     // listPrice 10.005 would persist as 10.01 in NUMERIC(_, 2); deriving the net cost from the raw
     // 10.005 (→ 9.00) would leave the stored row violating unitPrice = listPrice × (1 − discount/100).
@@ -520,7 +644,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const itemsArg = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    const itemsArg = sqUpsertItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
     const item = itemsArg[0] as { listPrice: number; discountPercent: number; unitPrice: number };
     // Inputs are rounded to the persisted scale, and the net cost is derived from those rounded
     // values: 10.01 × (1 − 10/100) = 9.009 → 9.01.
@@ -536,7 +660,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
     sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
-    sqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+    sqUpsertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -546,7 +670,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const itemsArg = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    const itemsArg = sqUpsertItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
     expect(itemsArg[0]).toEqual(
       expect.objectContaining({ listPrice: 42, discountPercent: 0, unitPrice: 42 }),
     );
@@ -556,7 +680,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
     sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
-    sqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+    sqUpsertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -578,7 +702,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const itemsArg = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    const itemsArg = sqUpsertItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
     expect(itemsArg[0]).toEqual(
       expect.objectContaining({ durationMonths: 3, durationUnit: 'months' }),
     );
@@ -588,7 +712,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
     sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
-    sqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+    sqUpsertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -609,7 +733,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const itemsArg = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    const itemsArg = sqUpsertItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
     expect(itemsArg[0]).toEqual(
       expect.objectContaining({ durationMonths: 24, durationUnit: 'years' }),
     );
@@ -619,7 +743,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
     sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
-    sqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+    sqUpsertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
 
     // Duration applies to every line type now (issue #775); the route no longer forces a unit line
     // to a single month — it persists exactly what the client submitted.
@@ -642,7 +766,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const itemsArg = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    const itemsArg = sqUpsertItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
     expect(itemsArg[0]).toEqual(
       expect.objectContaining({ durationMonths: 5, durationUnit: 'years' }),
     );
@@ -652,7 +776,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
     sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
-    sqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+    sqUpsertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -673,7 +797,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const itemsArg = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    const itemsArg = sqUpsertItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
     expect(itemsArg[0]).toEqual(expect.objectContaining({ durationUnit: 'na' }));
   });
 
@@ -681,7 +805,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
     sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
-    sqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+    sqUpsertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -693,7 +817,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const itemsArg = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    const itemsArg = sqUpsertItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
     expect(itemsArg[0]).toEqual(
       expect.objectContaining({ durationMonths: 1, durationUnit: 'months' }),
     );
@@ -721,7 +845,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(sqReplaceItemsMock).not.toHaveBeenCalled();
+    expect(sqUpsertItemsMock).not.toHaveBeenCalled();
   });
 
   test('400 rejects a durationMonths below 1 (issue #776)', async () => {
@@ -746,7 +870,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(sqReplaceItemsMock).not.toHaveBeenCalled();
+    expect(sqUpsertItemsMock).not.toHaveBeenCalled();
   });
 
   test('400 rejects an unknown durationUnit (issue #776)', async () => {
@@ -771,7 +895,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(sqReplaceItemsMock).not.toHaveBeenCalled();
+    expect(sqUpsertItemsMock).not.toHaveBeenCalled();
   });
 
   test('400 rejects an item discount above 100', async () => {
@@ -788,7 +912,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(sqReplaceItemsMock).not.toHaveBeenCalled();
+    expect(sqUpsertItemsMock).not.toHaveBeenCalled();
   });
 
   test('400 rejects a list price that would overflow NUMERIC(15,2) (clean 400, not a DB 500)', async () => {
@@ -806,14 +930,14 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(sqReplaceItemsMock).not.toHaveBeenCalled();
+    expect(sqUpsertItemsMock).not.toHaveBeenCalled();
   });
 
   test('200 accepts a list price at the NUMERIC(15,2) maximum (boundary is inclusive)', async () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
     sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
-    sqReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+    sqUpsertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -825,7 +949,7 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const itemsArg = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    const itemsArg = sqUpsertItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
     expect(itemsArg[0]).toEqual(
       expect.objectContaining({
         listPrice: 9_999_999_999_999.99,

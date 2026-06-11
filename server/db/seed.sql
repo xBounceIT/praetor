@@ -870,7 +870,7 @@ UPDATE quotes SET linked_supplier_quote_id = NULL WHERE id LIKE 'dm_cq_%';
 -- One representative line of each demo client quote sources its supplier quote. The stored
 -- supplier_quote_unit_price is the supplier item's net cost and stays BELOW the line's sale
 -- price, so every sourced line shows a healthy margin. Accepted/denied client quotes are
--- read-only, so their lines never surface the "Old info - update?" chip even though the seeded
+-- read-only, so their lines never surface the "Data drifted - sync?" chip even though the seeded
 -- snapshot is a point-in-time copy; the one editable exception is dm_cq_02 below.
 UPDATE quote_items AS qi SET
     supplier_quote_id = v.sq_id,
@@ -893,7 +893,7 @@ FROM (VALUES
 WHERE qi.id = v.cqi_id;
 
 -- Editable stale-data demo (#779 reverse sync): dm_cq_02 is sent (still editable), so its
--- sourced line surfaces the "Old info - update?" chip because the stored snapshot price (940)
+-- sourced line surfaces the "Data drifted - sync?" chip because the stored snapshot price (940)
 -- sits behind dm_sqi_02's current net cost (960). Refreshing pulls the live supplier values.
 UPDATE quote_items SET
     supplier_quote_id = 'dm_sq_02',

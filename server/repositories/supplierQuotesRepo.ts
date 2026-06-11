@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, getTableColumns, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, inArray, ne, notInArray, or, sql } from 'drizzle-orm';
 import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { customerOfferItems } from '../db/schema/customerOfferItems.ts';
 import { quoteItems } from '../db/schema/quotes.ts';
@@ -475,6 +475,41 @@ export const isSourcedByClientDocuments = async (
   return quoteRefs.length > 0 || offerRefs.length > 0 || orderRefs.length > 0;
 };
 
+// The subset of this quote's item ids that client document lines (quote, offer, or client-order
+// items) reference via supplier_quote_item_id. Finer-grained companion to
+// isSourcedByClientDocuments for the PUT items path (user report after #812): an in-place item
+// UPDATE keeps the id and strands nothing, so only deleting — or repointing the product of — one
+// of THESE items needs to be refused. Quote-level-only references (supplier_quote_id with a null
+// item id) never break on item edits, so they are deliberately out of scope here.
+export const findSourcedItemIds = async (
+  quoteId: string,
+  exec: DbExecutor = db,
+): Promise<Set<string>> => {
+  const itemIdsSubquery = exec
+    .select({ id: supplierQuoteItems.id })
+    .from(supplierQuoteItems)
+    .where(eq(supplierQuoteItems.quoteId, quoteId));
+  const [quoteRefs, offerRefs, orderRefs] = await Promise.all([
+    exec
+      .selectDistinct({ itemId: quoteItems.supplierQuoteItemId })
+      .from(quoteItems)
+      .where(inArray(quoteItems.supplierQuoteItemId, itemIdsSubquery)),
+    exec
+      .selectDistinct({ itemId: customerOfferItems.supplierQuoteItemId })
+      .from(customerOfferItems)
+      .where(inArray(customerOfferItems.supplierQuoteItemId, itemIdsSubquery)),
+    exec
+      .selectDistinct({ itemId: saleItems.supplierQuoteItemId })
+      .from(saleItems)
+      .where(inArray(saleItems.supplierQuoteItemId, itemIdsSubquery)),
+  ]);
+  const ids = new Set<string>();
+  for (const row of [...quoteRefs, ...offerRefs, ...orderRefs]) {
+    if (row.itemId) ids.add(row.itemId);
+  }
+  return ids;
+};
+
 export const findIdConflict = async (
   newId: string,
   currentId: string,
@@ -804,4 +839,58 @@ export const replaceItems = async (
   runAtomically(exec, async (tx) => {
     await tx.delete(supplierQuoteItems).where(eq(supplierQuoteItems.quoteId, quoteId));
     return insertItems(quoteId, items, tx);
+  });
+
+// Identity-preserving counterpart of replaceItems for the PUT route (user report after #812):
+// items whose id already belongs to this quote are UPDATED in place — keeping the id intact for
+// the client lines' soft supplier_quote_item_id references AND keeping created_at, which drives
+// the items' display order — while the rest of the payload is inserted fresh and persisted rows
+// absent from the payload are deleted. The route refuses the delete for referenced ids before
+// calling this; ids from other quotes (or duplicates) must be re-minted by the caller.
+export const upsertItems = async (
+  quoteId: string,
+  items: NewSupplierQuoteItem[],
+  exec: DbExecutor = db,
+): Promise<SupplierQuoteItem[]> =>
+  runAtomically(exec, async (tx) => {
+    const existingRows = await tx
+      .select({ id: supplierQuoteItems.id })
+      .from(supplierQuoteItems)
+      .where(eq(supplierQuoteItems.quoteId, quoteId));
+    const existingIds = new Set(existingRows.map((row) => row.id));
+    const incomingIds = items.map((item) => item.id);
+    if (incomingIds.length > 0) {
+      await tx
+        .delete(supplierQuoteItems)
+        .where(
+          and(
+            eq(supplierQuoteItems.quoteId, quoteId),
+            notInArray(supplierQuoteItems.id, incomingIds),
+          ),
+        );
+    }
+    const inserts: NewSupplierQuoteItem[] = [];
+    for (const item of items) {
+      if (!existingIds.has(item.id)) {
+        inserts.push(item);
+        continue;
+      }
+      await tx
+        .update(supplierQuoteItems)
+        .set({
+          productId: item.productId,
+          productName: item.productName,
+          quantity: numericForDb(item.quantity),
+          listPrice: numericForDb(item.listPrice),
+          discountPercent: numericForDb(item.discountPercent),
+          unitPrice: numericForDb(item.unitPrice),
+          note: item.note,
+          unitType: item.unitType,
+          durationMonths: item.durationMonths ?? 1,
+          durationUnit: item.durationUnit ?? 'months',
+        })
+        .where(and(eq(supplierQuoteItems.id, item.id), eq(supplierQuoteItems.quoteId, quoteId)));
+    }
+    if (inserts.length > 0) await insertItems(quoteId, inserts, tx);
+    return findItemsForQuote(quoteId, tx);
   });

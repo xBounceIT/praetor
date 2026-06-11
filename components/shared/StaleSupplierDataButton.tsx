@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 /**
- * The per-line "Old info — update?" chip (#779 reverse sync): shown on a supplier-sourced line
+ * The per-line "Data drifted — sync?" chip (#779 reverse sync): shown on a supplier-sourced line
  * whose stored quantity/cost lag the live supplier item; clicking pulls the current values back
  * into the line. One component for the four render sites (quotes/offers × mobile/desktop) so the
  * affordance can't drift between them — positioning stays with the caller via className.
@@ -25,7 +25,7 @@ const StaleSupplierDataButton: React.FC<{
         className,
       )}
     >
-      {t('sales:clientQuotes.staleSupplierData', { defaultValue: 'Old info — update?' })}
+      {t('sales:clientQuotes.staleSupplierData', { defaultValue: 'Data drifted — sync?' })}
     </Button>
   );
 };

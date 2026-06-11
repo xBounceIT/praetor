@@ -511,6 +511,11 @@ export interface QuoteItem {
   supplierQuoteItemId?: string | null;
   supplierQuoteSupplierName?: string | null;
   supplierQuoteUnitPrice?: number | null;
+  // Pick-time supplier values (request-only; the server never persists or returns them): the
+  // genuine-edit baseline for a fresh link, stamped by refreshedSupplierLineFields at
+  // pick/refresh time so a pre-save quantity/cost edit pushes onto the supplier item.
+  supplierQuoteBaseQuantity?: number | null;
+  supplierQuoteBaseUnitPrice?: number | null;
   discount?: number; // item-level discount percentage
   note?: string;
   unitType?: SupplierUnitType;
@@ -595,6 +600,10 @@ export interface ClientOfferItem {
   supplierQuoteItemId?: string | null;
   supplierQuoteSupplierName?: string | null;
   supplierQuoteUnitPrice?: number | null;
+  // Pick-time supplier values (request-only; the server never persists or returns them) — the
+  // fresh-link genuine-edit baseline, mirroring QuoteItem.
+  supplierQuoteBaseQuantity?: number | null;
+  supplierQuoteBaseUnitPrice?: number | null;
   discount?: number;
   note?: string;
   unitType?: SupplierUnitType;

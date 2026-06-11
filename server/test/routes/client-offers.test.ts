@@ -609,6 +609,42 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
     expect(inserted[0].supplierQuoteSupplierName).toBe('Snapshot Co');
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
   });
+
+  test('POST: a create-form edit away from the pick-time baseline is kept and pushed (user report after #812)', async () => {
+    cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'accepted', clientName: 'Client' });
+    cqLockCurrentByIdMock.mockResolvedValue({ status: 'accepted' });
+    coFindExistingForQuoteMock.mockResolvedValue(null);
+    coCreateMock.mockResolvedValue(updatedOffer());
+    coInsertItemsMock.mockResolvedValue([]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(SUPPLIER_SNAPSHOT);
+    sqFindItemsByIdsMock.mockResolvedValue([SUPPLIER_ITEM]);
+    sqFindFullForSnapshotMock.mockResolvedValue({ quote: { id: 'sq-9' }, items: [SUPPLIER_ITEM] });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers',
+      headers: authHeader(),
+      payload: {
+        id: 'off-1',
+        linkedQuoteId: 'q-1',
+        clientId: 'c1',
+        clientName: 'Client',
+        expirationDate: '2999-12-31',
+        items: [lineItem(5, 80, { supplierQuoteBaseQuantity: 2, supplierQuoteBaseUnitPrice: 50 })],
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    // The deliberately edited cost survives onto the stored line and pushes onto the supplier
+    // item atomically, mirroring the client-quotes create path.
+    const inserted = coInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(inserted[0].supplierQuoteUnitPrice).toBe(80);
+    expect(sqSyncItemPricingMock).toHaveBeenCalledTimes(1);
+    expect(sqSyncItemPricingMock.mock.calls[0][0]).toBe('sq-9');
+    expect(sqSyncItemPricingMock.mock.calls[0][1]).toEqual([
+      { itemId: 'sqi-9', quantity: 5, unitCost: 80, discountPercent: 20 },
+    ]);
+    expect(sqvInsertMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('PUT /api/sales/client-offers/:id fresh-link sourceable guard (#812 round 15)', () => {

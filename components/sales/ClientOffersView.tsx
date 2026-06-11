@@ -353,7 +353,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   // item-id → its CURRENT supplier quote + item, across ALL supplier quotes (not just the
   // selectable ones), for the bidirectional-sync affordances (#779): lock detection
   // (order-locked/frozen sourced fields) and stale-data detection (the per-line
-  // "old info — update?" refresh button). Quick-view ids and display labels derive from it,
+  // "data drifted — sync?" refresh button). Quick-view ids and display labels derive from it,
   // so an existing line referencing a no-longer-selectable but extant quote still resolves.
   const supplierQuoteItemIndex = useMemo(
     () => buildSupplierQuoteItemIndex(supplierQuotes),
@@ -1100,6 +1100,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           current.supplierQuoteItemId = null;
           current.supplierQuoteSupplierName = null;
           current.supplierQuoteUnitPrice = null;
+          current.supplierQuoteBaseQuantity = null;
+          current.supplierQuoteBaseUnitPrice = null;
         }
       }
 
@@ -1109,6 +1111,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           current.supplierQuoteItemId = null;
           current.supplierQuoteSupplierName = null;
           current.supplierQuoteUnitPrice = null;
+          current.supplierQuoteBaseQuantity = null;
+          current.supplierQuoteBaseUnitPrice = null;
 
           const product = products.find((p) => p.id === current.productId);
           if (product) {
@@ -1153,6 +1157,10 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           const refreshed = refreshedSupplierLineFields(current, selectedQuoteItem);
           current.quantity = refreshed.quantity;
           current.supplierQuoteUnitPrice = refreshed.supplierQuoteUnitPrice;
+          // Pick-time baseline: lets the server tell a deliberate pre-save edit (pushed onto the
+          // supplier item) from an untouched stale snapshot (server values win).
+          current.supplierQuoteBaseQuantity = refreshed.supplierQuoteBaseQuantity;
+          current.supplierQuoteBaseUnitPrice = refreshed.supplierQuoteBaseUnitPrice;
           current.unitPrice = refreshed.unitPrice;
         }
       }

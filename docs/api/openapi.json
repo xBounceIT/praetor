@@ -25136,6 +25136,18 @@
                             "null"
                           ]
                         },
+                        "supplierQuoteBaseQuantity": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "supplierQuoteBaseUnitPrice": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
                         "discount": {
                           "type": "number"
                         },
@@ -25590,6 +25602,18 @@
                           ]
                         },
                         "supplierQuoteUnitPrice": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "supplierQuoteBaseQuantity": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "supplierQuoteBaseUnitPrice": {
                           "type": [
                             "number",
                             "null"
@@ -27351,6 +27375,18 @@
                             "null"
                           ]
                         },
+                        "supplierQuoteBaseQuantity": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "supplierQuoteBaseUnitPrice": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
                         "unitType": {
                           "type": "string",
                           "enum": [
@@ -27819,6 +27855,18 @@
                           ]
                         },
                         "supplierQuoteUnitPrice": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "supplierQuoteBaseQuantity": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "supplierQuoteBaseUnitPrice": {
                           "type": [
                             "number",
                             "null"
@@ -35548,6 +35596,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },
@@ -35936,6 +35987,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },

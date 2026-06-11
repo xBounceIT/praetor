@@ -117,7 +117,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       }
       // Only a quote that sources (or sourced) a supplier quote can stale the supplier-quotes
       // cache: line sourcing drives the derived status and forward-syncs the supplier items, so a
-      // stale cache would show a false "old info" chip whose refresh writes pre-edit values back.
+      // stale cache would show a false drift chip whose refresh writes pre-edit values back.
       // Gating on sourcing rather than the request fields matters: the edit form spreads formData,
       // so a plain edit of an unsourced quote would otherwise refetch needlessly. The two flows
       // set disjoint state, so they run in parallel.

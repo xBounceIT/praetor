@@ -446,6 +446,96 @@ describe('replaceItems', () => {
   });
 });
 
+describe('findSourcedItemIds', () => {
+  // Three parallel DISTINCT probes in call order: quote_items, customer_offer_items, sale_items —
+  // each restricted to supplier_quote_item_id values belonging to this quote's items.
+  test('unions the referenced item ids across the three client tables', async () => {
+    exec.enqueue({ rows: [['sqi-1']] });
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [['sqi-2'], [null]] });
+    const result = await supplierQuotesRepo.findSourcedItemIds('q-1', testDb);
+    expect(result).toEqual(new Set(['sqi-1', 'sqi-2']));
+    const sqlTexts = exec.calls.map((c) => c.sql.toLowerCase());
+    expect(sqlTexts[0]).toContain('"quote_items"');
+    expect(sqlTexts[1]).toContain('"customer_offer_items"');
+    expect(sqlTexts[2]).toContain('"sale_items"');
+    for (const sqlText of sqlTexts) {
+      expect(sqlText).toContain('distinct');
+      expect(sqlText).toContain('"supplier_quote_item_id" in (select');
+    }
+    expect(exec.calls[0].params).toContain('q-1');
+  });
+
+  test('empty set when nothing references the items', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    expect(await supplierQuotesRepo.findSourcedItemIds('q-1', testDb)).toEqual(new Set());
+  });
+});
+
+describe('upsertItems', () => {
+  const baseItem = {
+    productId: null,
+    productName: 'A',
+    quantity: 1,
+    listPrice: 5,
+    discountPercent: 0,
+    unitPrice: 5,
+    note: null,
+    unitType: 'unit',
+    durationMonths: 1,
+    durationUnit: 'months' as const,
+  };
+
+  test('updates kept rows in place, deletes absent rows, inserts new ones (user report after #812)', async () => {
+    exec.enqueue({ rows: [['sqi-a'], ['sqi-b']] }); // existing ids
+    exec.enqueue({ rows: [] }); // DELETE id NOT IN (kept)
+    exec.enqueue({ rows: [] }); // UPDATE sqi-a in place
+    exec.enqueue({ rows: [itemRow({ 0: 'sqi-new' })] }); // INSERT new ... RETURNING
+    exec.enqueue({ rows: [itemRow({ 0: 'sqi-a' }), itemRow({ 0: 'sqi-new' })] }); // re-read
+    const result = await supplierQuotesRepo.upsertItems(
+      'q-1',
+      [
+        { ...baseItem, id: 'sqi-a', unitPrice: 9, listPrice: 9 },
+        { ...baseItem, id: 'sqi-new', productName: 'B' },
+      ],
+      testDb,
+    );
+    expect(exec.calls).toHaveLength(5);
+    const sqlTexts = exec.calls.map((c) => c.sql.toLowerCase());
+    expect(sqlTexts[0]).toContain('select');
+    expect(exec.calls[0].params).toEqual(['q-1']);
+    expect(sqlTexts[1]).toContain('delete from "supplier_quote_items"');
+    expect(sqlTexts[1]).toContain('not in');
+    expect(exec.calls[1].params).toEqual(expect.arrayContaining(['q-1', 'sqi-a', 'sqi-new']));
+    expect(sqlTexts[2]).toContain('update "supplier_quote_items" set');
+    // The in-place UPDATE must not touch created_at: it drives the items' display order, and
+    // identity preservation is the whole point of the upsert.
+    expect(sqlTexts[2]).not.toContain('created_at');
+    expect(exec.calls[2].params).toEqual(expect.arrayContaining(['sqi-a', 'q-1']));
+    expect(sqlTexts[3]).toContain('insert into "supplier_quote_items"');
+    expect(exec.calls[3].params[0]).toBe('sqi-new');
+    expect(result.map((i) => i.id)).toEqual(['sqi-a', 'sqi-new']);
+  });
+
+  test('skips the INSERT when every incoming item already exists', async () => {
+    exec.enqueue({ rows: [['sqi-a']] }); // existing ids
+    exec.enqueue({ rows: [] }); // DELETE id NOT IN (kept)
+    exec.enqueue({ rows: [] }); // UPDATE sqi-a
+    exec.enqueue({ rows: [itemRow({ 0: 'sqi-a' })] }); // re-read
+    const result = await supplierQuotesRepo.upsertItems(
+      'q-1',
+      [{ ...baseItem, id: 'sqi-a' }],
+      testDb,
+    );
+    expect(exec.calls).toHaveLength(4);
+    const sqlTexts = exec.calls.map((c) => c.sql.toLowerCase());
+    expect(sqlTexts.some((s) => s.includes('insert into'))).toBe(false);
+    expect(result.map((i) => i.id)).toEqual(['sqi-a']);
+  });
+});
+
 describe('getQuoteItemSnapshots', () => {
   test('returns empty Map when given no ids without issuing a query', async () => {
     const result = await supplierQuotesRepo.getQuoteItemSnapshots([], testDb);

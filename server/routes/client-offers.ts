@@ -159,6 +159,10 @@ const offerItemBodySchema = {
     supplierQuoteItemId: { type: ['string', 'null'] },
     supplierQuoteSupplierName: { type: ['string', 'null'] },
     supplierQuoteUnitPrice: { type: ['number', 'null'] },
+    // Pick-time supplier values (never persisted): the genuine-edit baseline that lets a FRESH
+    // link's quantity/cost edits survive the save and push onto the supplier item.
+    supplierQuoteBaseQuantity: { type: ['number', 'null'] },
+    supplierQuoteBaseUnitPrice: { type: ['number', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     discount: { type: 'number' },
     note: { type: 'string' },
@@ -227,6 +231,8 @@ type OfferItemInput = {
   supplierQuoteItemId?: string | null;
   supplierQuoteSupplierName?: string | null;
   supplierQuoteUnitPrice?: string | number | null;
+  supplierQuoteBaseQuantity?: string | number | null;
+  supplierQuoteBaseUnitPrice?: string | number | null;
   unitType?: UnitType;
   discount?: string | number;
   note?: string;
@@ -245,6 +251,10 @@ type NormalizedOfferItem = {
   supplierQuoteItemId: string | null;
   supplierQuoteSupplierName: string | null;
   supplierQuoteUnitPrice: number | null;
+  // Pick-time supplier values (request-only, never persisted) — the fresh-link genuine-edit
+  // baseline; see ClientLineSyncInput in utils/supplier-item-sync.ts.
+  supplierQuoteBaseQuantity: number | null;
+  supplierQuoteBaseUnitPrice: number | null;
   unitType: UnitType;
   discount: number;
   note: string | null;
@@ -289,6 +299,22 @@ const normalizeItems = (
       badRequest(reply, supplierQuoteUnitPriceResult.message);
       return null;
     }
+    const supplierQuoteBaseQuantityResult = optionalLocalizedNonNegativeNumber(
+      item.supplierQuoteBaseQuantity,
+      `items[${i}].supplierQuoteBaseQuantity`,
+    );
+    if (!supplierQuoteBaseQuantityResult.ok) {
+      badRequest(reply, supplierQuoteBaseQuantityResult.message);
+      return null;
+    }
+    const supplierQuoteBaseUnitPriceResult = optionalLocalizedNonNegativeNumber(
+      item.supplierQuoteBaseUnitPrice,
+      `items[${i}].supplierQuoteBaseUnitPrice`,
+    );
+    if (!supplierQuoteBaseUnitPriceResult.ok) {
+      badRequest(reply, supplierQuoteBaseUnitPriceResult.message);
+      return null;
+    }
     const itemDiscountResult = optionalLocalizedNonNegativeNumber(
       item.discount,
       `items[${i}].discount`,
@@ -324,6 +350,8 @@ const normalizeItems = (
       supplierQuoteItemId: normalizeNullableString(item.supplierQuoteItemId),
       supplierQuoteSupplierName: normalizeNullableString(item.supplierQuoteSupplierName),
       supplierQuoteUnitPrice: supplierQuoteUnitPriceResult.value,
+      supplierQuoteBaseQuantity: supplierQuoteBaseQuantityResult.value,
+      supplierQuoteBaseUnitPrice: supplierQuoteBaseUnitPriceResult.value,
       unitType,
       discount: itemDiscountResult.value || 0,
       note: normalizeNullableString(item.note),
@@ -394,13 +422,24 @@ const resolveOfferItemSupplierLinks = async (
         `supplierQuoteItemId "${item.supplierQuoteItemId}" references a supplier quote that is no longer available for new sourcing`,
       );
     }
+    // A FRESH link whose cost was deliberately edited away from the pick-time baseline (user
+    // report after #812) keeps the edit — the sync pushes it onto the supplier item in the same
+    // transaction. An untouched cost (== baseline, or no baseline at all) takes the live
+    // supplier value, so a stale browser can't revert newer supplier pricing it never saw.
+    const freshEditedCost =
+      !existing &&
+      item.supplierQuoteUnitPrice != null &&
+      item.supplierQuoteBaseUnitPrice != null &&
+      item.supplierQuoteUnitPrice !== item.supplierQuoteBaseUnitPrice
+        ? item.supplierQuoteUnitPrice
+        : null;
     return {
       ...item,
       supplierQuoteId: snapshot.supplierQuoteId,
       supplierQuoteSupplierName: snapshot.supplierName,
       supplierQuoteUnitPrice: existing
         ? (item.supplierQuoteUnitPrice ?? existing.supplierQuoteUnitPrice ?? snapshot.netCost)
-        : snapshot.netCost,
+        : (freshEditedCost ?? snapshot.netCost),
     };
   });
 };
@@ -656,6 +695,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             ok: true;
             offer: clientOffersRepo.ClientOffer;
             items: clientOffersRepo.ClientOfferItem[];
+            syncAudits: SupplierItemSyncAudit[];
           };
 
       let result: CreateOutcome;
@@ -717,9 +757,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             buildItemsForInsert(normalizedItems),
             tx,
           );
-          return { ok: true, offer, items: createdItems };
+          // Bidirectional sync on CREATE too (user report after #812): a sourced line whose
+          // quantity/cost was edited away from its pick-time baseline pushes the edit onto the
+          // supplier item, atomically with the offer write. Conversion-inherited and
+          // baseline-less lines are skipped (no diff anchor); audits are logged after commit.
+          const syncAudits = await syncSupplierItemsFromClientLines(
+            request,
+            'client_offer.create',
+            normalizedItems,
+            [],
+            tx,
+          );
+          return { ok: true, offer, items: createdItems, syncAudits };
         });
       } catch (err) {
+        // The client→supplier item sync refuses to write frozen/order-locked supplier quotes or
+        // to run without the supplier-quote update grant; the tx rolled back, so the offer was
+        // rejected together with the supplier write (issue #779).
+        if (err instanceof SupplierItemSyncError) {
+          return replySupplierItemSyncError(request, reply, err, {
+            entityType: 'client_offer',
+            entityId: nextIdResult.value,
+          });
+        }
         const dup = getUniqueViolation(err);
         if (dup && (dup.constraint === 'customer_offers_pkey' || dup.detail?.includes('(id)'))) {
           return replyError(request, reply, {
@@ -759,6 +819,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
       const createdOffer = result.offer;
       const createdItems = result.items;
+
+      await logSupplierItemSyncAudits(request, result.syncAudits);
 
       await logAudit({
         request,

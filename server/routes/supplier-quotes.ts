@@ -135,6 +135,10 @@ const supplierQuoteSchema = {
 const supplierQuoteItemBodySchema = {
   type: 'object',
   properties: {
+    // On update, an id matching one of the quote's persisted items keeps that row's identity
+    // (in-place edit); anything else — including the form's tmp-* placeholders — is re-minted
+    // server-side. Ignored on create.
+    id: { type: 'string' },
     productId: { type: 'string' },
     productName: { type: 'string' },
     quantity: { type: 'number' },
@@ -183,6 +187,7 @@ const supplierQuoteUpdateBodySchema = {
 } as const;
 
 type ItemBody = {
+  id?: string;
   productId?: string;
   productName?: string;
   quantity?: string | number;
@@ -632,18 +637,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // soft, FK-less denormalized value that does NOT cascade, so after a rename the derived-status
       // reverse lookup and the client progression/expiration guards can no longer find them.
       const isRenaming = nextIdValue !== null && nextIdValue !== idResult.value;
-      const [current, linkedOrderId, idConflict, sourcedByClientDocuments] = await Promise.all([
+      const [
+        current,
+        linkedOrderId,
+        idConflict,
+        sourcedByClientDocuments,
+        existingItems,
+        sourcedItemIds,
+      ] = await Promise.all([
         supplierQuotesRepo.findById(idResult.value),
         supplierQuotesRepo.findLinkedOrderId(idResult.value),
         nextIdValue
           ? supplierQuotesRepo.findIdConflict(nextIdValue, idResult.value)
           : Promise.resolve(false),
-        // Both replacing items (replaceItems → fresh item ids) and renaming the quote strand a
-        // sourced quote's soft client-line references (guards below). Run the check for either; the
-        // lookup is wasted otherwise. In parallel with the other lookups.
-        normalizedItems || isRenaming
+        // Renaming strands ALL soft client-line references, including quote-level
+        // supplier_quote_id ones the item-level set below can't see — keep the coarse check
+        // for the rename guard only. The lookup is wasted otherwise.
+        isRenaming
           ? supplierQuotesRepo.isSourcedByClientDocuments(idResult.value)
           : Promise.resolve(false),
+        // The items guards below need the persisted rows (to keep incoming ids) and the subset
+        // of item ids client lines reference (to refuse the genuinely stranding shapes).
+        normalizedItems
+          ? supplierQuotesRepo.findItemsForQuote(idResult.value)
+          : Promise.resolve(null),
+        normalizedItems
+          ? supplierQuotesRepo.findSourcedItemIds(idResult.value)
+          : Promise.resolve(new Set<string>()),
       ]);
       if (!current) {
         return replyError(request, reply, {
@@ -677,22 +697,59 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
       // A draft-DERIVED supplier quote can still be SOURCED by a draft client line: #779 dropped
       // the status filter in getQuoteItemSnapshots, and a quote sourced only by a draft client
-      // quote derives back to `draft`, slipping past the read-only guard above. Both replacing its
-      // items (replaceItems → fresh item ids) and renaming it (the client lines' soft, FK-less
-      // supplier_quote_id/supplier_quote_item_id references don't cascade) would strand those
-      // references — exactly why the DELETE route refuses a sourced quote. Block both here;
-      // header-only edits (notes, terms, expiration, client) stay allowed. The lookup only ran for
-      // these two cases (see the Promise.all above).
-      if (normalizedItems && sourcedByClientDocuments) {
-        return replyError(request, reply, {
-          statusCode: 409,
-          message:
-            'Cannot replace items on a supplier quote whose items are used by client quotes, offers or orders',
-          action: 'supplier_quote.update.conflict',
-          entityType: 'supplier_quote',
-          entityId: idResult.value,
-          details: { secondaryLabel: 'sourced_by_client_documents' },
+      // quote derives back to `draft`, slipping past the read-only guard above. The original #812
+      // guard refused ANY items payload on a sourced quote because the PUT re-minted every item id
+      // (replaceItems), stranding the client lines' soft, FK-less supplier_quote_item_id
+      // references — which also blocked plain pricing edits (user report). Identity is preserved
+      // instead: an incoming item carrying its persisted id is updated IN PLACE via upsertItems
+      // (client lines keep resolving and surface the new pricing through the per-line drift
+      // chip), so only the two shapes that still strand or poison references are refused —
+      // deleting a referenced item, and repointing a referenced item to a different product (the
+      // client-line snapshot resolver hard-fails its next edit on a product mismatch).
+      if (normalizedItems && existingItems) {
+        const existingIds = new Set(existingItems.map((item) => item.id));
+        // Keep each persisted id claimed by the payload (first occurrence wins — a duplicate or
+        // foreign id keeps its freshly minted one and inserts as a new row).
+        const claimedIds = new Set<string>();
+        normalizedItems.forEach((normalized, index) => {
+          const incomingId = items?.[index]?.id;
+          if (incomingId && existingIds.has(incomingId) && !claimedIds.has(incomingId)) {
+            normalized.id = incomingId;
+            claimedIds.add(incomingId);
+          }
         });
+        const existingProductById = new Map(
+          existingItems.map((item) => [item.id, item.productId] as const),
+        );
+        const repointsSourcedItem = normalizedItems.some(
+          (item) =>
+            sourcedItemIds.has(item.id) && existingProductById.get(item.id) !== item.productId,
+        );
+        if (repointsSourcedItem) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message:
+              'Cannot change the product of supplier quote items that are used by client quotes, offers or orders',
+            action: 'supplier_quote.update.conflict',
+            entityType: 'supplier_quote',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'sourced_item_product_changed' },
+          });
+        }
+        const removesSourcedItem = [...sourcedItemIds].some(
+          (sourcedId) => existingIds.has(sourcedId) && !claimedIds.has(sourcedId),
+        );
+        if (removesSourcedItem) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message:
+              'Cannot remove supplier quote items that are used by client quotes, offers or orders',
+            action: 'supplier_quote.update.conflict',
+            entityType: 'supplier_quote',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'sourced_item_removed' },
+          });
+        }
       }
       if (isRenaming && sourcedByClientDocuments) {
         return replyError(request, reply, {
@@ -756,8 +813,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               ? renamedQuote
               : await supplierQuotesRepo.update(renamedQuote?.id ?? idResult.value, patch, tx);
           if (!quote) return { quote: null, items: [] as supplierQuotesRepo.SupplierQuoteItem[] };
+          // upsertItems (not replaceItems): rows whose id survived the claim pass above keep
+          // their identity, so client lines sourcing them stay attached across the edit.
           const finalItems = normalizedItems
-            ? await supplierQuotesRepo.replaceItems(quote.id, normalizedItems, tx)
+            ? await supplierQuotesRepo.upsertItems(quote.id, normalizedItems, tx)
             : await supplierQuotesRepo.findItemsForQuote(quote.id, tx);
           return { quote, items: finalItems };
         });

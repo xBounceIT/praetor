@@ -809,6 +809,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         newItems[index].supplierQuoteItemId = null;
         newItems[index].supplierQuoteSupplierName = null;
         newItems[index].supplierQuoteUnitPrice = null;
+        newItems[index].supplierQuoteBaseQuantity = null;
+        newItems[index].supplierQuoteBaseUnitPrice = null;
 
         // Use standard product cost with unit type handling
         if (product.type === 'supply') {
@@ -832,6 +834,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         newItems[index].supplierQuoteItemId = null;
         newItems[index].supplierQuoteSupplierName = null;
         newItems[index].supplierQuoteUnitPrice = null;
+        newItems[index].supplierQuoteBaseQuantity = null;
+        newItems[index].supplierQuoteBaseUnitPrice = null;
 
         const product = products.find((p) => p.id === newItems[index].productId);
         if (product) {
@@ -884,6 +888,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         const refreshed = refreshedSupplierLineFields(newItems[index], selectedQuoteItem);
         newItems[index].quantity = refreshed.quantity;
         newItems[index].supplierQuoteUnitPrice = refreshed.supplierQuoteUnitPrice;
+        // Pick-time baseline: lets the server tell a deliberate pre-save edit (pushed onto the
+        // supplier item) from an untouched stale snapshot (server values win).
+        newItems[index].supplierQuoteBaseQuantity = refreshed.supplierQuoteBaseQuantity;
+        newItems[index].supplierQuoteBaseUnitPrice = refreshed.supplierQuoteBaseUnitPrice;
         newItems[index].unitPrice = refreshed.unitPrice;
       } else {
         // Supplier quote item not found - clear supplier quote and revert
@@ -891,6 +899,8 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
         newItems[index].supplierQuoteId = null;
         newItems[index].supplierQuoteSupplierName = null;
         newItems[index].supplierQuoteUnitPrice = null;
+        newItems[index].supplierQuoteBaseQuantity = null;
+        newItems[index].supplierQuoteBaseUnitPrice = null;
 
         const existingProduct = products.find((p) => p.id === newItems[index].productId);
         if (existingProduct) {
@@ -971,7 +981,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   // item-id → its CURRENT supplier quote + item, across ALL supplier quotes (not just the
   // selectable ones), for the bidirectional-sync affordances (#779): lock detection
   // (order-locked/frozen sourced fields) and stale-data detection (the per-line
-  // "old info — update?" refresh button). Quick-view ids and display labels derive from it,
+  // "data drifted — sync?" refresh button). Quick-view ids and display labels derive from it,
   // so an existing line referencing a no-longer-selectable but extant quote still resolves.
   const supplierQuoteItemIndex = useMemo(
     () => buildSupplierQuoteItemIndex(supplierQuotes),
