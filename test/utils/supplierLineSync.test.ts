@@ -93,6 +93,39 @@ describe('isSupplierLineStale', () => {
   test('false when the source item cannot be resolved', () => {
     expect(isSupplierLineStale({ quantity: 2, supplierQuoteUnitPrice: 60 }, undefined)).toBe(false);
   });
+
+  test('a deliberate in-session edit is NOT drift when the baseline matches the live item', () => {
+    // The line was picked at the current supplier values (baseline 4/80) and the user then edited
+    // the cost to 95: that edit is pushed on save — the chip must not invite a click that would
+    // revert it.
+    expect(
+      isSupplierLineStale(
+        {
+          quantity: 4,
+          supplierQuoteUnitPrice: 95,
+          supplierQuoteBaseQuantity: 4,
+          supplierQuoteBaseUnitPrice: 80,
+        },
+        source,
+      ),
+    ).toBe(false);
+  });
+
+  test('true when the supplier moved away from the pick-time baseline', () => {
+    // Picked when the item cost 60; the supplier item now reads 80 → genuine upstream drift,
+    // regardless of what the user typed into the line afterwards.
+    expect(
+      isSupplierLineStale(
+        {
+          quantity: 4,
+          supplierQuoteUnitPrice: 60,
+          supplierQuoteBaseQuantity: 4,
+          supplierQuoteBaseUnitPrice: 60,
+        },
+        source,
+      ),
+    ).toBe(true);
+  });
 });
 
 describe('refreshedSupplierLineFields', () => {

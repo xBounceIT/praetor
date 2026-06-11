@@ -49,13 +49,29 @@ export const isSupplierLineLocked = (
   return Boolean(ref.quote.linkedOrderId) || isFrozenEffectiveStatus(ref.quote.status);
 };
 
-// Whether the line's stored quantity/cost lag the live supplier item — drives the per-line
+// Whether the line's quantity/cost lag the live supplier item — drives the per-line
 // "Data drifted — sync?" refresh chip.
 export const isSupplierLineStale = (
-  line: { quantity: number; supplierQuoteUnitPrice?: number | null },
+  line: {
+    quantity: number;
+    supplierQuoteUnitPrice?: number | null;
+    supplierQuoteBaseQuantity?: number | null;
+    supplierQuoteBaseUnitPrice?: number | null;
+  },
   source: SupplierQuote['items'][number] | undefined,
 ): boolean => {
   if (!source) return false;
+  // A line picked/refreshed in THIS editing session carries the pick-time baseline: drift means
+  // the SUPPLIER moved away from what the user was shown — not that the user deliberately edited
+  // the line's quantity/cost (that edit is pushed onto the supplier item on save; flagging it
+  // would invite a chip click that reverts it). Lines loaded from a saved document have no
+  // baseline and keep the stored-vs-live comparison.
+  if (line.supplierQuoteBaseQuantity != null && line.supplierQuoteBaseUnitPrice != null) {
+    return (
+      Number(line.supplierQuoteBaseUnitPrice) !== source.unitPrice ||
+      Number(line.supplierQuoteBaseQuantity) !== source.quantity
+    );
+  }
   return (
     Number(line.supplierQuoteUnitPrice ?? 0) !== source.unitPrice ||
     Number(line.quantity) !== source.quantity
