@@ -143,6 +143,20 @@ describe('listAll', () => {
     expect(sql).toContain('co2.linked_quote_id = cq.id');
     expect(sql).toContain('coi.supplier_quote_id = "supplier_quotes"."id"');
   });
+
+  test('legacy item-only sourced lines count as candidates too (#812 round 18)', async () => {
+    // Mirrors isSourcedByClientDocuments: rows that carry only supplier_quote_item_id (null
+    // denormalized supplier_quote_id) still source the quote via item membership.
+    exec.enqueue({ rows: [] });
+    await supplierQuotesRepo.listAll(testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain(
+      'qi.supplier_quote_item_id in (\n          select sqi.id from supplier_quote_items sqi where sqi.quote_id = "supplier_quotes"."id"',
+    );
+    expect(sql).toContain(
+      'coi.supplier_quote_item_id in (\n          select sqi.id from supplier_quote_items sqi where sqi.quote_id = "supplier_quotes"."id"',
+    );
+  });
 });
 
 describe('listAllItems', () => {

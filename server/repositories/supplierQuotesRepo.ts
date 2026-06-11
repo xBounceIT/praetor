@@ -93,15 +93,28 @@ const sourcingRankOrderBy = sql`
 // offer's lines do (#812 round 16): an offer can add a fresh sourced line that exists only in
 // customer_offer_items, and offers always hang off a quote (linked_quote_id NOT NULL), so mapping
 // the offer line back to its quote lets the existing quote→offer chain projection apply unchanged.
+// Like isSourcedByClientDocuments, each branch also accepts LEGACY rows that carry only the
+// supplier_quote_item_id (null denormalized supplier_quote_id) via item membership (#812 round
+// 18) — otherwise those sourced quotes would keep displaying as unlinked draft.
 const sourcingCandidatePredicate = sql`(
     EXISTS (
       SELECT 1 FROM quote_items qi
-      WHERE qi.quote_id = cq.id AND qi.supplier_quote_id = ${outerSupplierQuoteId}
+      WHERE qi.quote_id = cq.id AND (
+        qi.supplier_quote_id = ${outerSupplierQuoteId}
+        OR qi.supplier_quote_item_id IN (
+          SELECT sqi.id FROM supplier_quote_items sqi WHERE sqi.quote_id = ${outerSupplierQuoteId}
+        )
+      )
     )
     OR EXISTS (
       SELECT 1 FROM customer_offers co2
       JOIN customer_offer_items coi ON coi.offer_id = co2.id
-      WHERE co2.linked_quote_id = cq.id AND coi.supplier_quote_id = ${outerSupplierQuoteId}
+      WHERE co2.linked_quote_id = cq.id AND (
+        coi.supplier_quote_id = ${outerSupplierQuoteId}
+        OR coi.supplier_quote_item_id IN (
+          SELECT sqi.id FROM supplier_quote_items sqi WHERE sqi.quote_id = ${outerSupplierQuoteId}
+        )
+      )
     )
   )`;
 
