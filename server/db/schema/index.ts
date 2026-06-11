@@ -12,6 +12,7 @@ export * from './mcpTokens.ts';
 export * from './notifications.ts';
 export * from './offerVersions.ts';
 export * from './orderVersions.ts';
+export * from './overtimeNotificationEvents.ts';
 export * from './personalAccessTokens.ts';
 export * from './productCategories.ts';
 export * from './productSubcategories.ts';

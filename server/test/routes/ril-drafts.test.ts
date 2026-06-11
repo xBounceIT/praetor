@@ -1,9 +1,12 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import * as realDrizzle from '../../db/drizzle.ts';
+import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
 import * as realRilDraftsRepo from '../../repositories/rilDraftsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realWorkUnitsRepo from '../../repositories/workUnitsRepo.ts';
+import * as realOvertimeNotifications from '../../services/overtimeNotifications.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
   installAuthMiddlewareMock,
@@ -11,12 +14,17 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
 const rilDraftsRepoSnap = { ...realRilDraftsRepo };
 const workUnitsRepoSnap = { ...realWorkUnitsRepo };
+const drizzleSnap = { ...realDrizzle };
+const generalSettingsRepoSnap = { ...realGeneralSettingsRepo };
+const overtimeNotificationsSnap = { ...realOvertimeNotifications };
 
 // Auth-middleware deps (the real authenticateToken runs under the wrapped mock and reads these).
 const findAuthUserByIdMock = mock();
@@ -28,6 +36,9 @@ const getForUserMonthMock = mock();
 const upsertForUserMonthMock = mock();
 const deleteForUserMonthMock = mock();
 const isUserManagedByMock = mock();
+const generalSettingsGetMock = mock();
+const notifyRilManualOvertimeForRowsMock = mock();
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 let routePlugin: FastifyPluginAsync;
 
@@ -56,6 +67,18 @@ beforeAll(async () => {
     ...workUnitsRepoSnap,
     isUserManagedBy: isUserManagedByMock,
   }));
+  mock.module('../../db/drizzle.ts', () => ({
+    ...drizzleSnap,
+    withDbTransaction: withDbTransactionMock,
+  }));
+  mock.module('../../repositories/generalSettingsRepo.ts', () => ({
+    ...generalSettingsRepoSnap,
+    get: generalSettingsGetMock,
+  }));
+  mock.module('../../services/overtimeNotifications.ts', () => ({
+    ...overtimeNotificationsSnap,
+    notifyRilManualOvertimeForRows: notifyRilManualOvertimeForRowsMock,
+  }));
 
   routePlugin = (await import('../../routes/ril-drafts.ts')).default as FastifyPluginAsync;
 });
@@ -67,6 +90,9 @@ afterAll(() => {
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../repositories/rilDraftsRepo.ts', () => rilDraftsRepoSnap);
   mock.module('../../repositories/workUnitsRepo.ts', () => workUnitsRepoSnap);
+  mock.module('../../db/drizzle.ts', () => drizzleSnap);
+  mock.module('../../repositories/generalSettingsRepo.ts', () => generalSettingsRepoSnap);
+  mock.module('../../services/overtimeNotifications.ts', () => overtimeNotificationsSnap);
 });
 
 const HAPPY_USER = {
@@ -108,6 +134,9 @@ const allMocks = [
   upsertForUserMonthMock,
   deleteForUserMonthMock,
   isUserManagedByMock,
+  generalSettingsGetMock,
+  notifyRilManualOvertimeForRowsMock,
+  withDbTransactionMock,
 ];
 
 let testApp: FastifyInstance;
@@ -117,6 +146,9 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(RIL_PERMS);
+  resetWithDbTransactionMock();
+  generalSettingsGetMock.mockResolvedValue({ rilLunchBreakMinutes: 60 });
+  notifyRilManualOvertimeForRowsMock.mockResolvedValue({ checked: 0, created: 0, notified: 0 });
   // Default: no manager link. Cross-user-allowed tests opt in explicitly.
   isUserManagedByMock.mockResolvedValue(false);
 
@@ -256,8 +288,37 @@ describe('PUT /api/ril-drafts/:monthKey', () => {
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual(draft);
-    expect(upsertForUserMonthMock).toHaveBeenCalledWith('u1', '2026-05', SAMPLE_ROWS);
+    expect(upsertForUserMonthMock).toHaveBeenCalledWith('u1', '2026-05', SAMPLE_ROWS, TX_SENTINEL);
+    expect(generalSettingsGetMock).not.toHaveBeenCalled();
+    expect(notifyRilManualOvertimeForRowsMock).not.toHaveBeenCalled();
     expect(isUserManagedByMock).not.toHaveBeenCalled();
+  });
+
+  test('200 self: notifies manual overtime only for changed days', async () => {
+    const draft = sampleDraft();
+    upsertForUserMonthMock.mockResolvedValue(draft);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/ril-drafts/2026-05',
+      headers: authHeader(),
+      payload: { rows: SAMPLE_ROWS, changedDays: [1] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(upsertForUserMonthMock).toHaveBeenCalledWith('u1', '2026-05', SAMPLE_ROWS, TX_SENTINEL);
+    expect(generalSettingsGetMock).toHaveBeenCalledWith(TX_SENTINEL);
+    expect(notifyRilManualOvertimeForRowsMock).toHaveBeenCalledWith(
+      {
+        userId: 'u1',
+        monthKey: '2026-05',
+        rows: SAMPLE_ROWS,
+        changedDays: [1],
+        createdBy: 'u1',
+        lunchBreakMinutes: 60,
+      },
+      TX_SENTINEL,
+    );
   });
 
   // rows must be an object keyed by day. An array is rejected — Fastify's schema may reject before
@@ -309,7 +370,12 @@ describe('PUT /api/ril-drafts/:monthKey', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(upsertForUserMonthMock).toHaveBeenCalledWith('u2', '2026-05', SAMPLE_ROWS);
+      expect(upsertForUserMonthMock).toHaveBeenCalledWith(
+        'u2',
+        '2026-05',
+        SAMPLE_ROWS,
+        TX_SENTINEL,
+      );
       expect(isUserManagedByMock).not.toHaveBeenCalled();
     });
 
@@ -343,7 +409,12 @@ describe('PUT /api/ril-drafts/:monthKey', () => {
 
       expect(res.statusCode).toBe(200);
       expect(isUserManagedByMock).toHaveBeenCalledWith('u1', 'u2');
-      expect(upsertForUserMonthMock).toHaveBeenCalledWith('u2', '2026-05', SAMPLE_ROWS);
+      expect(upsertForUserMonthMock).toHaveBeenCalledWith(
+        'u2',
+        '2026-05',
+        SAMPLE_ROWS,
+        TX_SENTINEL,
+      );
     });
 
     test('403 forbidden without view-all and no manager link', async () => {

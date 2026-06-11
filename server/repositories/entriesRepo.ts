@@ -309,6 +309,18 @@ export const existsForEntryKey = async (
   return rows.length > 0;
 };
 
+export const sumDurationForUserDate = async (
+  userId: string,
+  date: string,
+  exec: DbExecutor = db,
+): Promise<number> => {
+  const [row] = await exec
+    .select({ total: sql<string | number | null>`COALESCE(SUM(${timeEntries.duration}), 0)` })
+    .from(timeEntries)
+    .where(and(eq(timeEntries.userId, userId), eq(timeEntries.date, date)));
+  return parseDbNumber(row?.total, 0);
+};
+
 export const findOwner = async (id: string, exec: DbExecutor = db): Promise<string | null> => {
   const rows = await exec
     .select({ userId: timeEntries.userId })

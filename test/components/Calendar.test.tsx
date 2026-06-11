@@ -87,6 +87,23 @@ describe('<Calendar />', () => {
     expect(onDateSelect).toHaveBeenCalledWith('2024-03-10');
   });
 
+  test('allowWeekendSelection=true permits Italian holiday clicks', () => {
+    const onDateSelect = mock((_d: string) => {});
+    render(
+      <Calendar
+        selectedDate="2026-05-01"
+        onDateSelect={onDateSelect}
+        startOfWeek="Monday"
+        allowWeekendSelection
+      />,
+    );
+    const day1Buttons = screen.getAllByText('1').map((el) => el.closest('button'));
+    const may1Button = day1Buttons.find((button) => button?.textContent === '1');
+    expect(may1Button).not.toBeDisabled();
+    fireEvent.click(may1Button as HTMLButtonElement);
+    expect(onDateSelect).toHaveBeenCalledWith('2026-05-01');
+  });
+
   test('range mode: two clicks emit (start, end)', () => {
     const onRangeSelect = mock((_s: string, _e: string | null) => {});
     const { rerender } = render(

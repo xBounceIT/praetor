@@ -7,6 +7,7 @@ import {
 } from '../middleware/auth.ts';
 import type { TimeEntry } from '../repositories/entriesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { evaluateOvertime } from '../services/overtimeNotifications.ts';
 import {
   bulkDeleteTimeEntries,
   createTimeEntry,
@@ -199,16 +200,24 @@ const sanitizeRilListResult = (result: {
   entries: TimeEntry[];
   nextCursor: string | null;
 }): { entries: SanitizedEntry[]; nextCursor: string | null } => ({
-  entries: result.entries.map((entry) => {
-    const sanitized = sanitizeEntry(entry, false);
-    return {
-      ...sanitized,
-      task: '',
-      taskId: null,
-      notes: null,
-      duration: 0,
-    };
-  }),
+  entries: (() => {
+    const totalsByDate = new Map<string, number>();
+    for (const entry of result.entries) {
+      totalsByDate.set(entry.date, (totalsByDate.get(entry.date) ?? 0) + entry.duration);
+    }
+    return result.entries.map((entry) => {
+      const sanitized = sanitizeEntry(entry, false);
+      const dayTotal = totalsByDate.get(entry.date) ?? 0;
+      const exposesOvertimeTotal = evaluateOvertime(entry.date, dayTotal).isOvertime;
+      return {
+        ...sanitized,
+        task: '',
+        taskId: null,
+        notes: null,
+        duration: exposesOvertimeTotal ? entry.duration : 0,
+      };
+    });
+  })(),
   nextCursor: result.nextCursor,
 });
 

@@ -144,6 +144,43 @@ describe('RIL helpers', () => {
     });
   });
 
+  test('uses tracker totals only for generated overtime days', () => {
+    const rows = generateRilRows({
+      year: 2026,
+      month: 5,
+      entries: [
+        entry({ date: '2026-05-02', duration: 4, location: 'remote' }),
+        entry({ date: '2026-05-04', duration: 4, location: 'remote' }),
+        entry({ date: '2026-05-05', duration: 9, location: 'office' }),
+      ],
+    });
+
+    expect(rows.find((row) => row.day === 2)).toMatchObject({
+      entrance: '09:00',
+      exit: '13:00',
+      hours: '4:00',
+      hoursDecimal: 4,
+      transfer: 'Remote working',
+      worked: true,
+    });
+    expect(rows.find((row) => row.day === 4)).toMatchObject({
+      entrance: '09:00',
+      exit: '18:00',
+      hours: '8:00',
+      hoursDecimal: 8,
+      transfer: 'Remote working',
+      worked: true,
+    });
+    expect(rows.find((row) => row.day === 5)).toMatchObject({
+      entrance: '09:00',
+      exit: '19:00',
+      hours: '9:00',
+      hoursDecimal: 9,
+      transfer: 'In office',
+      worked: true,
+    });
+  });
+
   test('calculates worked time from entrance and exit values minus lunch pause', () => {
     const rows = generateRilRows({
       year: 2026,
@@ -411,18 +448,26 @@ describe('applyRilDraftToRows / extractRilDraftRows', () => {
     expect(day5After).toEqual(day5Before);
   });
 
-  test('skips holiday / non-editable rows even when a draft key exists', () => {
+  test('applies saved fields to dated holiday rows', () => {
     const rows = baseRows();
-    const day1Before = rows.find((row) => row.day === 1);
-    expect(day1Before?.isHoliday).toBe(true);
     const draft = {
-      // May 1 is a Friday holiday -> not draftable; should be ignored.
       '1': { entrance: '08:00', exit: '17:00', notes: '', transfer: 'Remote working', code: 'Z' },
     };
 
     const applied = applyRilDraftToRows(rows, draft, 60);
 
-    expect(applied.find((row) => row.day === 1)).toEqual(day1Before);
+    expect(applied.find((row) => row.day === 1)).toMatchObject({
+      isHoliday: true,
+      entrance: '08:00',
+      exit: '17:00',
+      hours: '8:00',
+      hoursDecimal: 8,
+      picap: 8,
+      notes: '',
+      transfer: 'Remote working',
+      code: 'Z',
+      worked: true,
+    });
   });
 
   test('returns rows unchanged when the draft is null or empty', () => {
@@ -437,8 +482,14 @@ describe('applyRilDraftToRows / extractRilDraftRows', () => {
     const rows = baseRows();
     const draft = extractRilDraftRows(rows);
 
-    // Holiday (May 1) is excluded; editable workday May 4 is present.
-    expect(draft['1']).toBeUndefined();
+    // Dated holidays are editable/draftable; non-month placeholder rows are excluded.
+    expect(draft['1']).toEqual({
+      entrance: '',
+      exit: '',
+      notes: 'F',
+      transfer: '',
+      code: '',
+    });
     expect(draft['4']).toEqual({
       entrance: rows.find((row) => row.day === 4)?.entrance ?? '',
       exit: rows.find((row) => row.day === 4)?.exit ?? '',
@@ -446,6 +497,10 @@ describe('applyRilDraftToRows / extractRilDraftRows', () => {
       transfer: '',
       code: '',
     });
+    const februaryDraft = extractRilDraftRows(
+      generateRilRows({ year: 2026, month: 2, locale: 'en', entries: [] }),
+    );
+    expect(februaryDraft['30']).toBeUndefined();
     // Each captured entry exposes exactly the five editable fields, nothing else.
     for (const fields of Object.values(draft)) {
       expect(Object.keys(fields).sort()).toEqual(['code', 'entrance', 'exit', 'notes', 'transfer']);

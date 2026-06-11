@@ -16257,6 +16257,16 @@
                       ],
                       "additionalProperties": false
                     }
+                  },
+                  "changedDays": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 31
+                    },
+                    "maxItems": 31,
+                    "description": "Days manually changed by the caller; used for RIL overtime notifications."
                   }
                 },
                 "required": [

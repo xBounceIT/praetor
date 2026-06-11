@@ -2652,7 +2652,7 @@ const AppContent: React.FC = () => {
                 onUpdateEntry={handleUpdateEntry}
                 startOfWeek={generalSettings.startOfWeek}
                 treatSaturdayAsHoliday={generalSettings.treatSaturdayAsHoliday}
-                allowWeekendSelection={generalSettings.allowWeekendSelection}
+                allowWeekendSelection={true}
                 onMakeRecurring={handleMakeRecurring}
                 permissions={currentUser.permissions || []}
                 viewingUserId={viewingUserId}

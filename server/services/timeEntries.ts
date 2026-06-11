@@ -13,7 +13,6 @@ import { isItalianHoliday } from '../utils/holidays.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { hasScopedActionPermission } from '../utils/permissions.ts';
 import {
-  isWeekendDate,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   parseBooleanField,
@@ -22,6 +21,7 @@ import {
   parseQueryBoolean,
   requireNonEmptyString,
 } from '../utils/validation.ts';
+import { notifyTrackerOvertimeForDate } from './overtimeNotifications.ts';
 
 // Cap matches the UI maxLength on the notes inputs (EntryEditDialog,
 // WeeklyEntryForm). Bounded server-side so the API rejects oversize
@@ -254,13 +254,6 @@ export const createTimeEntry = async (
 
   const date = requireValid(parseDateString(input.date, 'date'));
 
-  if (isWeekendDate(date)) {
-    const settings = await generalSettingsRepo.get();
-    if (!(settings?.allowWeekendSelection ?? true)) {
-      badRequest('Time entries on weekends are not allowed');
-    }
-  }
-
   const clientId = requireValid(requireNonEmptyString(input.clientId, 'clientId'));
   const clientName = requireValid(requireNonEmptyString(input.clientName, 'clientName'));
   const projectId = requireValid(requireNonEmptyString(input.projectId, 'projectId'));
@@ -306,7 +299,7 @@ export const createTimeEntry = async (
   const location = parseOptionalLocation(input.location, fail) ?? 'remote';
   const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
 
-  return withSerializableWriteTransaction(async (tx) => {
+  const created = await withSerializableWriteTransaction(async (tx) => {
     const duplicateExists = await entriesRepo.existsForEntryKey(
       { userId: targetUserId, date, projectId, task },
       tx,
@@ -335,6 +328,8 @@ export const createTimeEntry = async (
       tx,
     );
   });
+  await notifyTrackerOvertimeForDate(created.userId, created.date, actor.id);
+  return created;
 };
 
 export const updateTimeEntry = async (
@@ -395,13 +390,6 @@ export const updateTimeEntry = async (
     badRequest('clientId, projectId, and task must be updated together');
   }
   const catalogChanging = catalogFieldsSet === 3;
-
-  if (date !== undefined && isWeekendDate(date)) {
-    const settings = await generalSettingsRepo.get();
-    if (!(settings?.allowWeekendSelection ?? true)) {
-      badRequest('Time entries on weekends are not allowed');
-    }
-  }
 
   const dateChanging = date !== undefined && date !== context.date;
   let resolvedTaskId: string | null | undefined;
@@ -487,6 +475,7 @@ export const updateTimeEntry = async (
       ? fail(409, 'Entry has changed since it was loaded; reload and retry')
       : fail(404, 'Entry not found');
   }
+  await notifyTrackerOvertimeForDate(updated.userId, updated.date, actor.id);
   return updated;
 };
 
