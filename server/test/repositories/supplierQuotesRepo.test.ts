@@ -12,8 +12,8 @@ beforeEach(() => {
 
 // Builder fixtures match the column order in db/schema/supplierQuotes.ts:
 //   [id, supplierId, supplierName, clientId, clientName, paymentTerms, status,
-//    expirationDate, notes, createdAt, updatedAt]
-// `listAll` adds the linkedOrderId correlated subquery as a 12th projection column.
+//    expirationDate, communicationChannelId, notes, createdAt, updatedAt, communicationChannelName]
+// `listAll` adds the linkedOrderId correlated subquery after communicationChannelName.
 const QUOTE_BASE: readonly unknown[] = [
   'q-1',
   's-1',
@@ -23,16 +23,18 @@ const QUOTE_BASE: readonly unknown[] = [
   'net30',
   'draft',
   '2026-06-01',
+  'qcc_email',
   null,
   new Date(1735689600000),
   new Date(1735689700000),
+  'Email',
 ];
 
 const quoteRow = (overrides: Record<number, unknown> = {}) => makeRow(QUOTE_BASE, overrides);
 
-// listAll's projection appends linkedOrderId (11), then the reverse-lookup linkedClientQuoteId
-// (12) and linkedClientQuoteStatus (13) for the linking client quote (issue #779).
-const QUOTE_LIST_BASE: readonly unknown[] = [...QUOTE_BASE, null, null, null];
+// listAll's projection appends linkedOrderId (13), then the reverse-lookup
+// linkedClientQuoteId/status/expiration and linked offer status/expiration (14-18).
+const QUOTE_LIST_BASE: readonly unknown[] = [...QUOTE_BASE, null, null, null, null, null, null];
 
 const quoteListRow = (overrides: Record<number, unknown> = {}) =>
   makeRow(QUOTE_LIST_BASE, overrides);
@@ -60,7 +62,7 @@ const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, 
 
 describe('listAll', () => {
   test('issues a query with linkedOrderId correlated subquery', async () => {
-    exec.enqueue({ rows: [quoteListRow({ 11: 'so-1' })] });
+    exec.enqueue({ rows: [quoteListRow({ 13: 'so-1' })] });
     const result = await supplierQuotesRepo.listAll(testDb);
     const sql = exec.calls[0].sql;
     expect(sql).toContain('FROM supplier_sales');
@@ -71,7 +73,7 @@ describe('listAll', () => {
   });
 
   test('resolves the linking client quote id and status via line-sourcing reverse lookup', async () => {
-    exec.enqueue({ rows: [quoteListRow({ 12: 'cq-7', 13: 'sent' })] });
+    exec.enqueue({ rows: [quoteListRow({ 14: 'cq-7', 15: 'sent' })] });
     const result = await supplierQuotesRepo.listAll(testDb);
     // The link is now resolved through product-line sourcing, not a header column (issue #779
     // follow-up): the supplier quote follows the client quote whose quote_items source it.
@@ -319,6 +321,7 @@ describe('findIdConflict', () => {
 describe('update', () => {
   test('binds patch values via COALESCE, WHERE id last - no id in SET (issue #621)', async () => {
     exec.enqueue({ rows: [quoteRow()] });
+    exec.enqueue({ rows: [quoteRow()] });
     await supplierQuotesRepo.update('q-1', { notes: 'hi' }, testDb);
     const sql = exec.calls[0].sql;
     expect(sql).toContain('update "supplier_quotes"');
@@ -329,10 +332,10 @@ describe('update', () => {
     // Nor the vestigial status column (it still appears in RETURNING): it is fully derived
     // (issue #779) and update() must not offer a path to desync it.
     expect(sql).not.toContain('"status" =');
-    expect(sql).toContain('"id" = $6');
-    expect(exec.calls[0].params).toHaveLength(6);
-    expect(exec.calls[0].params[4]).toBe('hi'); // notes
-    expect(exec.calls[0].params[5]).toBe('q-1'); // where id
+    expect(sql).toContain('"id" = $7');
+    expect(exec.calls[0].params).toHaveLength(7);
+    expect(exec.calls[0].params[5]).toBe('hi'); // notes
+    expect(exec.calls[0].params[6]).toBe('q-1'); // where id
   });
 
   test('returns null when no row updated', async () => {
@@ -352,6 +355,7 @@ describe('update', () => {
 
 describe('rename', () => {
   test('issues a dedicated UPDATE that sets the id column and returns the mapped quote', async () => {
+    exec.enqueue({ rows: [quoteRow({ 0: 'q-2' })] });
     exec.enqueue({ rows: [quoteRow({ 0: 'q-2' })] });
     const result = await supplierQuotesRepo.rename('q-1', 'q-2', testDb);
     const sql = exec.calls[0].sql.toLowerCase();
@@ -753,6 +757,7 @@ describe('findFullForSnapshot', () => {
 describe('create', () => {
   test('inserts and returns mapped quote', async () => {
     exec.enqueue({ rows: [quoteRow()] });
+    exec.enqueue({ rows: [quoteRow()] });
     const result = await supplierQuotesRepo.create(
       {
         id: 'q-1',
@@ -763,6 +768,7 @@ describe('create', () => {
         paymentTerms: 'net30',
         status: 'draft',
         expirationDate: '2026-06-01',
+        communicationChannelId: 'qcc_email',
         notes: null,
       },
       testDb,
@@ -776,6 +782,7 @@ describe('create', () => {
 
   test('persists the optional client link when provided', async () => {
     exec.enqueue({ rows: [quoteRow({ 3: 'c-1', 4: 'Globex' })] });
+    exec.enqueue({ rows: [quoteRow({ 3: 'c-1', 4: 'Globex' })] });
     const result = await supplierQuotesRepo.create(
       {
         id: 'q-1',
@@ -786,6 +793,7 @@ describe('create', () => {
         paymentTerms: 'net30',
         status: 'draft',
         expirationDate: '2026-06-01',
+        communicationChannelId: 'qcc_email',
         notes: null,
       },
       testDb,
@@ -800,6 +808,7 @@ describe('create', () => {
 describe('restoreSnapshotQuote', () => {
   test('updates with snapshot fields and returns mapped quote', async () => {
     exec.enqueue({ rows: [quoteRow()] });
+    exec.enqueue({ rows: [quoteRow()] });
     const result = await supplierQuotesRepo.restoreSnapshotQuote(
       'q-1',
       {
@@ -810,6 +819,7 @@ describe('restoreSnapshotQuote', () => {
         paymentTerms: 'net30',
         status: 'sent',
         expirationDate: '2026-06-01',
+        communicationChannelId: 'qcc_email',
         notes: 'restored',
       },
       testDb,
@@ -834,6 +844,7 @@ describe('restoreSnapshotQuote', () => {
         paymentTerms: 'net30',
         status: 'draft',
         expirationDate: '2026-06-01',
+        communicationChannelId: 'qcc_email',
         notes: null,
       },
       testDb,

@@ -46,6 +46,8 @@ const buildQuote = (overrides: Partial<SupplierQuote>): SupplierQuote => ({
     },
   ],
   paymentTerms: 'immediate',
+  communicationChannelId: 'qcc_email',
+  communicationChannelName: 'Email',
   status: 'draft',
   expirationDate: '2026-12-31',
   createdAt: 1_700_000_000_000,
@@ -77,6 +79,25 @@ const baseProps = {
 afterEach(() => {
   // Modal sets body.style.overflow='hidden'; reset defensively even though we mock it.
   document.body.style.overflow = '';
+});
+
+describe('<SupplierQuotesView /> list columns', () => {
+  test('renders the communication channel column between payment terms and expiration', () => {
+    const { container } = render(<SupplierQuotesView {...baseProps} />);
+
+    const headerLabels = Array.from(container.querySelectorAll('[data-column-header-label]')).map(
+      (header) => header.textContent?.trim(),
+    );
+
+    expect(headerLabels).toContain('sales:communicationChannels.fieldLabel');
+    expect(headerLabels.indexOf('sales:supplierQuotes.paymentTerms')).toBeLessThan(
+      headerLabels.indexOf('sales:communicationChannels.fieldLabel'),
+    );
+    expect(headerLabels.indexOf('sales:communicationChannels.fieldLabel')).toBeLessThan(
+      headerLabels.indexOf('sales:supplierQuotes.expirationDate'),
+    );
+    expect(screen.getAllByText('Email').length).toBeGreaterThan(0);
+  });
 });
 
 describe('<SupplierQuotesView /> read-only gating', () => {

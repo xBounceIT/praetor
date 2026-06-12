@@ -24747,6 +24747,749 @@
         }
       }
     },
+    "/api/sales/quote-communication-channels/": {
+      "get": {
+        "summary": "List quote communication channels",
+        "tags": [
+          "quote-communication-channels"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "createdAt": {
+                        "type": "number"
+                      },
+                      "updatedAt": {
+                        "type": "number"
+                      },
+                      "clientQuoteCount": {
+                        "type": "number"
+                      },
+                      "supplierQuoteCount": {
+                        "type": "number"
+                      },
+                      "totalQuoteCount": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "clientQuoteCount",
+                      "supplierQuoteCount",
+                      "totalQuoteCount"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create quote communication channel",
+        "tags": [
+          "quote-communication-channels"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "clientQuoteCount": {
+                      "type": "number"
+                    },
+                    "supplierQuoteCount": {
+                      "type": "number"
+                    },
+                    "totalQuoteCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "clientQuoteCount",
+                    "supplierQuoteCount",
+                    "totalQuoteCount"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sales/quote-communication-channels/{id}": {
+      "put": {
+        "summary": "Update quote communication channel",
+        "tags": [
+          "quote-communication-channels"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "clientQuoteCount": {
+                      "type": "number"
+                    },
+                    "supplierQuoteCount": {
+                      "type": "number"
+                    },
+                    "totalQuoteCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "clientQuoteCount",
+                    "supplierQuoteCount",
+                    "totalQuoteCount"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete quote communication channel",
+        "tags": [
+          "quote-communication-channels"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Default Response"
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sales/client-quotes/": {
       "get": {
         "summary": "List client quotes",
@@ -24803,6 +25546,12 @@
                           "string"
                         ],
                         "format": "date"
+                      },
+                      "communicationChannelId": {
+                        "type": "string"
+                      },
+                      "communicationChannelName": {
+                        "type": "string"
                       },
                       "notes": {
                         "type": [
@@ -24944,6 +25693,8 @@
                       "discount",
                       "discountType",
                       "status",
+                      "communicationChannelId",
+                      "communicationChannelName",
                       "createdAt",
                       "updatedAt",
                       "items",
@@ -25231,6 +25982,9 @@
                     "type": "string",
                     "format": "date"
                   },
+                  "communicationChannelId": {
+                    "type": "string"
+                  },
                   "notes": {
                     "type": "string"
                   }
@@ -25240,7 +25994,8 @@
                   "clientId",
                   "clientName",
                   "items",
-                  "expirationDate"
+                  "expirationDate",
+                  "communicationChannelId"
                 ]
               }
             }
@@ -25294,6 +26049,12 @@
                         "string"
                       ],
                       "format": "date"
+                    },
+                    "communicationChannelId": {
+                      "type": "string"
+                    },
+                    "communicationChannelName": {
+                      "type": "string"
                     },
                     "notes": {
                       "type": [
@@ -25435,6 +26196,8 @@
                     "discount",
                     "discountType",
                     "status",
+                    "communicationChannelId",
+                    "communicationChannelName",
                     "createdAt",
                     "updatedAt",
                     "items",
@@ -25702,6 +26465,9 @@
                     "type": "string",
                     "format": "date"
                   },
+                  "communicationChannelId": {
+                    "type": "string"
+                  },
                   "notes": {
                     "type": "string"
                   }
@@ -25768,6 +26534,12 @@
                         "string"
                       ],
                       "format": "date"
+                    },
+                    "communicationChannelId": {
+                      "type": "string"
+                    },
+                    "communicationChannelName": {
+                      "type": "string"
                     },
                     "notes": {
                       "type": [
@@ -25909,6 +26681,8 @@
                     "discount",
                     "discountType",
                     "status",
+                    "communicationChannelId",
+                    "communicationChannelName",
                     "createdAt",
                     "updatedAt",
                     "items",
@@ -26696,6 +27470,12 @@
                       ],
                       "format": "date"
                     },
+                    "communicationChannelId": {
+                      "type": "string"
+                    },
+                    "communicationChannelName": {
+                      "type": "string"
+                    },
                     "notes": {
                       "type": [
                         "null",
@@ -26836,6 +27616,8 @@
                     "discount",
                     "discountType",
                     "status",
+                    "communicationChannelId",
+                    "communicationChannelName",
                     "createdAt",
                     "updatedAt",
                     "items",
@@ -35640,6 +36422,12 @@
                         ],
                         "format": "date"
                       },
+                      "communicationChannelId": {
+                        "type": "string"
+                      },
+                      "communicationChannelName": {
+                        "type": "string"
+                      },
                       "linkedOrderId": {
                         "type": [
                           "null",
@@ -35731,6 +36519,8 @@
                       "supplierId",
                       "supplierName",
                       "status",
+                      "communicationChannelId",
+                      "communicationChannelName",
                       "isStatusSynced",
                       "createdAt",
                       "updatedAt",
@@ -35982,6 +36772,9 @@
                     "type": "string",
                     "format": "date"
                   },
+                  "communicationChannelId": {
+                    "type": "string"
+                  },
                   "notes": {
                     "type": "string"
                   }
@@ -35991,7 +36784,8 @@
                   "supplierId",
                   "supplierName",
                   "items",
-                  "expirationDate"
+                  "expirationDate",
+                  "communicationChannelId"
                 ]
               }
             }
@@ -36050,6 +36844,12 @@
                         "string"
                       ],
                       "format": "date"
+                    },
+                    "communicationChannelId": {
+                      "type": "string"
+                    },
+                    "communicationChannelName": {
+                      "type": "string"
                     },
                     "linkedOrderId": {
                       "type": [
@@ -36142,6 +36942,8 @@
                     "supplierId",
                     "supplierName",
                     "status",
+                    "communicationChannelId",
+                    "communicationChannelName",
                     "isStatusSynced",
                     "createdAt",
                     "updatedAt",
@@ -36373,6 +37175,9 @@
                     "type": "string",
                     "format": "date"
                   },
+                  "communicationChannelId": {
+                    "type": "string"
+                  },
                   "notes": {
                     "type": "string"
                   }
@@ -36444,6 +37249,12 @@
                         "string"
                       ],
                       "format": "date"
+                    },
+                    "communicationChannelId": {
+                      "type": "string"
+                    },
+                    "communicationChannelName": {
+                      "type": "string"
                     },
                     "linkedOrderId": {
                       "type": [
@@ -36536,6 +37347,8 @@
                     "supplierId",
                     "supplierName",
                     "status",
+                    "communicationChannelId",
+                    "communicationChannelName",
                     "isStatusSynced",
                     "createdAt",
                     "updatedAt",
@@ -37326,6 +38139,12 @@
                       ],
                       "format": "date"
                     },
+                    "communicationChannelId": {
+                      "type": "string"
+                    },
+                    "communicationChannelName": {
+                      "type": "string"
+                    },
                     "linkedOrderId": {
                       "type": [
                         "null",
@@ -37417,6 +38236,8 @@
                     "supplierId",
                     "supplierName",
                     "status",
+                    "communicationChannelId",
+                    "communicationChannelName",
                     "isStatusSynced",
                     "createdAt",
                     "updatedAt",

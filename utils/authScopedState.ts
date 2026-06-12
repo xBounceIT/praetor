@@ -24,6 +24,7 @@ export type AuthScopedStateKey =
   | 'projects'
   | 'projectTasks'
   | 'products'
+  | 'quoteCommunicationChannels'
   | 'quotes'
   | 'clientOffers'
   | 'clientsOrders'
@@ -52,6 +53,7 @@ export const ALL_AUTH_SCOPED_KEYS: readonly AuthScopedStateKey[] = [
   'projects',
   'projectTasks',
   'products',
+  'quoteCommunicationChannels',
   'quotes',
   'clientOffers',
   'clientsOrders',

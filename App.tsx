@@ -84,6 +84,7 @@ import { useAuth } from './hooks/useAuth';
 import { listRequest, useModuleLoader } from './hooks/useModuleLoader';
 import api, { type McpTokenScope, type PersonalAccessToken, type Settings } from './services/api';
 import { decodeEntriesCursor } from './services/api/entries';
+import type { QuoteCommunicationChannel } from './services/api/quoteCommunicationChannels';
 import type {
   AppBranding,
   Client,
@@ -754,6 +755,9 @@ const AppContent: React.FC = () => {
   const [projectTasks, setProjectTasks] = useState<ProjectTask[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [quoteCommunicationChannels, setQuoteCommunicationChannels] = useState<
+    QuoteCommunicationChannel[]
+  >([]);
   const [clientOffers, setClientOffers] = useState<ClientOffer[]>([]);
   const [clientsOrders, setClientsOrders] = useState<ClientsOrder[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -1044,6 +1048,7 @@ const AppContent: React.FC = () => {
       projectTasks: () => setProjectTasks([]),
       products: () => setProducts([]),
       quotes: () => setQuotes([]),
+      quoteCommunicationChannels: () => setQuoteCommunicationChannels([]),
       clientOffers: () => setClientOffers([]),
       clientsOrders: () => setClientsOrders([]),
       invoices: () => setInvoices([]),
@@ -1473,6 +1478,7 @@ const AppContent: React.FC = () => {
       projectTasks: () => setProjectTasks([]),
       products: () => setProducts([]),
       quotes: () => setQuotes([]),
+      quoteCommunicationChannels: () => setQuoteCommunicationChannels([]),
       clientOffers: () => setClientOffers([]),
       clientsOrders: () => setClientsOrders([]),
       invoices: () => setInvoices([]),
@@ -2003,6 +2009,12 @@ const AppContent: React.FC = () => {
               [
                 listRequest('quotes', canListQuotes, () => api.quotes.list(), setQuotes),
                 listRequest(
+                  'quote communication channels',
+                  canListQuotes || canListSupplierQuotes,
+                  () => api.quoteCommunicationChannels.list(),
+                  setQuoteCommunicationChannels,
+                ),
+                listRequest(
                   'client offers',
                   canListClientOffers,
                   () => api.clientOffers.list(),
@@ -2446,6 +2458,44 @@ const AppContent: React.FC = () => {
   const handleUpdateProductType = productHandlers.updateProductType;
   const handleDeleteProductType = productHandlers.deleteProductType;
 
+  const refreshQuoteCommunicationChannels = useCallback(async () => {
+    const channels = await api.quoteCommunicationChannels.list();
+    setQuoteCommunicationChannels(channels);
+    return channels;
+  }, []);
+
+  const handleCreateQuoteCommunicationChannel = useCallback(
+    async (data: { name: string }) => {
+      await api.quoteCommunicationChannels.create(data);
+      await refreshQuoteCommunicationChannels();
+    },
+    [refreshQuoteCommunicationChannels],
+  );
+
+  const handleUpdateQuoteCommunicationChannel = useCallback(
+    async (id: string, updates: { name: string }) => {
+      await api.quoteCommunicationChannels.update(id, updates);
+      await refreshQuoteCommunicationChannels();
+    },
+    [refreshQuoteCommunicationChannels],
+  );
+
+  const handleDeleteQuoteCommunicationChannel = useCallback(
+    async (id: string) => {
+      await api.quoteCommunicationChannels.delete(id);
+      await refreshQuoteCommunicationChannels();
+    },
+    [refreshQuoteCommunicationChannels],
+  );
+  const canManageQuoteCommunicationChannels = hasAnyPermission(currentUser?.permissions || [], [
+    'sales.client_quotes.create',
+    'sales.client_quotes.update',
+    'sales.client_quotes.delete',
+    'sales.supplier_quotes.create',
+    'sales.supplier_quotes.update',
+    'sales.supplier_quotes.delete',
+  ]);
+
   const addQuote = quoteHandlers.addQuote;
   const handleUpdateQuote = quoteHandlers.updateQuote;
   const handleDeleteQuote = quoteHandlers.deleteQuote;
@@ -2786,6 +2836,11 @@ const AppContent: React.FC = () => {
                   clients={clients}
                   products={products}
                   supplierQuotes={supplierQuotes}
+                  communicationChannels={quoteCommunicationChannels}
+                  canManageCommunicationChannels={canManageQuoteCommunicationChannels}
+                  onCreateCommunicationChannel={handleCreateQuoteCommunicationChannel}
+                  onUpdateCommunicationChannel={handleUpdateQuoteCommunicationChannel}
+                  onDeleteCommunicationChannel={handleDeleteQuoteCommunicationChannel}
                   onAddQuote={addQuote}
                   onUpdateQuote={handleUpdateQuote}
                   onQuoteRestored={async (restored) => {
@@ -2891,6 +2946,11 @@ const AppContent: React.FC = () => {
                   suppliers={suppliers}
                   clients={clients}
                   products={products}
+                  communicationChannels={quoteCommunicationChannels}
+                  canManageCommunicationChannels={canManageQuoteCommunicationChannels}
+                  onCreateCommunicationChannel={handleCreateQuoteCommunicationChannel}
+                  onUpdateCommunicationChannel={handleUpdateQuoteCommunicationChannel}
+                  onDeleteCommunicationChannel={handleDeleteQuoteCommunicationChannel}
                   onAddQuote={addSupplierQuote}
                   onUpdateQuote={handleUpdateSupplierQuote}
                   onQuoteRestored={(restored) => {

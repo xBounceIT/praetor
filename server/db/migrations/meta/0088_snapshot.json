@@ -1,6 +1,6 @@
 {
-  "id": "fb8bb07c-ffaf-4394-a8f4-f411b5450c97",
-  "prevId": "3640523e-5189-4653-beea-885df845ed71",
+  "id": "b4d2c3fc-6409-443e-bc70-aab44c893a39",
+  "prevId": "fb8bb07c-ffaf-4394-a8f4-f411b5450c97",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -7031,6 +7031,13 @@
           "notNull": false,
           "default": "'0'"
         },
+        "duration": {
+          "name": "duration",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'1'"
+        },
         "notes": {
           "name": "notes",
           "type": "text",
@@ -7116,6 +7123,10 @@
         "tasks_recurrence_duration_max_check": {
           "name": "tasks_recurrence_duration_max_check",
           "value": "\"tasks\".\"recurrence_duration\" IS NULL OR (\"tasks\".\"recurrence_duration\" >= 0 AND \"tasks\".\"recurrence_duration\" <= 24)"
+        },
+        "tasks_duration_non_negative_check": {
+          "name": "tasks_duration_non_negative_check",
+          "value": "\"tasks\".\"duration\" >= 0"
         }
       },
       "isRLSEnabled": false
