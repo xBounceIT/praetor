@@ -11,6 +11,13 @@ describe('task duration migration', () => {
     expect(sql).toContain('AND COALESCE("monthly_effort", 0) > 0');
   });
 
+  test('normalizes legacy total revenue after deriving duration', async () => {
+    const sql = await readTaskDurationMigration();
+
+    expect(sql).toContain('SET "revenue" = ROUND("revenue" / "duration", 2)');
+    expect(sql).toContain('AND "duration" <> 1');
+  });
+
   test('falls back to expected effort as monthly effort when monthly effort is missing', async () => {
     const sql = await readTaskDurationMigration();
 
