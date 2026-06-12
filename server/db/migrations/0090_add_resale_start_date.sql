@@ -1,0 +1,1 @@
+ALTER TABLE "resales" ADD COLUMN "start_date" date;

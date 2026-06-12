@@ -51,6 +51,7 @@ const billingFrequencyValues: ResaleBillingFrequency[] = [
 type ResaleFormState = {
   clientOrderId: string;
   supplierOrderId: string;
+  startDate: string;
   dueDate: string;
   notes: string;
   activities: DraftResaleActivity[];
@@ -85,6 +86,7 @@ type ActivityFormState = {
 const initialResaleForm: ResaleFormState = {
   clientOrderId: '',
   supplierOrderId: '',
+  startDate: '',
   dueDate: '',
   notes: '',
   activities: [],
@@ -125,6 +127,10 @@ export interface ResalesViewProps {
 }
 
 const parseMoney = (value: string) => (value ? Number.parseFloat(value) : 0);
+const parseDisplayMoney = (value: string) => {
+  const parsed = parseMoney(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 const ResalesView: React.FC<ResalesViewProps> = ({
   resales,
@@ -194,6 +200,18 @@ const ResalesView: React.FC<ResalesViewProps> = ({
       id: order.id,
       name: `${order.supplierName} - ${order.id} (${formatMoney(order.total)})`,
     })) ?? [];
+  const selectedSupplierOrder = selectedOrderOption?.supplierOrders.find(
+    (order) => order.id === resaleForm.supplierOrderId,
+  );
+  const draftResaleRevenue = resaleForm.activities.reduce(
+    (sum, activity) => sum + parseDisplayMoney(activity.revenue),
+    0,
+  );
+  const draftResaleCost = selectedSupplierOrder?.total ?? 0;
+  const releasedOptions = [
+    { id: 'true', name: t('resales.boolean.yes') },
+    { id: 'false', name: t('resales.boolean.no') },
+  ];
 
   const createDraftResaleActivity = useCallback(
     (): DraftResaleActivity => ({
@@ -315,6 +333,7 @@ const ResalesView: React.FC<ResalesViewProps> = ({
     const created = await onAddResale({
       clientOrderId: resaleForm.clientOrderId,
       supplierOrderId: resaleForm.supplierOrderId,
+      startDate: resaleForm.startDate || null,
       dueDate: resaleForm.dueDate || null,
       notes: resaleForm.notes.trim() || null,
       activities: activityInputs,
@@ -714,33 +733,15 @@ const ResalesView: React.FC<ResalesViewProps> = ({
       accessorKey: 'categoryId',
       disableFiltering: true,
       cell: ({ row }) => (
-        <div className="min-w-[170px] space-y-1.5">
-          <div className="flex min-h-5 items-center justify-between gap-2">
-            <FieldLabel className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              {t('resales.columns.category')}
-            </FieldLabel>
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              onClick={openCategoryModal}
-              disabled={!canCreate && !canUpdate && !canDelete}
-              className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-            >
-              <i className="fa-solid fa-gear" aria-hidden="true"></i>
-              {t('common:buttons.manage')}
-            </Button>
-          </div>
-          <SelectControl
-            options={categoryOptions}
-            value={row.categoryId}
-            onChange={(value) => updateDraftActivity(row._id, 'categoryId', value as string)}
-            className="min-w-[170px]"
-            buttonClassName="h-8 text-xs"
-            searchable
-            placeholder={t('resales.placeholders.category')}
-          />
-        </div>
+        <SelectControl
+          options={categoryOptions}
+          value={row.categoryId}
+          onChange={(value) => updateDraftActivity(row._id, 'categoryId', value as string)}
+          className="min-w-[170px]"
+          buttonClassName="h-8 text-xs"
+          searchable
+          placeholder={t('resales.placeholders.category')}
+        />
       ),
     },
     {
@@ -785,15 +786,14 @@ const ResalesView: React.FC<ResalesViewProps> = ({
       accessorKey: 'released',
       disableFiltering: true,
       cell: ({ row }) => (
-        <div className="flex h-8 min-w-[90px] items-center justify-center">
-          <Checkbox
-            checked={row.released}
-            onCheckedChange={(checked) =>
-              updateDraftActivity(row._id, 'released', checked === true)
-            }
-            aria-label={t('resales.columns.released')}
-          />
-        </div>
+        <SelectControl
+          options={releasedOptions}
+          value={row.released ? 'true' : 'false'}
+          onChange={(value) => updateDraftActivity(row._id, 'released', value === 'true')}
+          className="min-w-[90px]"
+          buttonClassName="h-8 text-xs"
+          searchable={false}
+        />
       ),
     },
     {
@@ -802,10 +802,9 @@ const ResalesView: React.FC<ResalesViewProps> = ({
       accessorKey: 'dueDate',
       disableFiltering: true,
       cell: ({ row }) => (
-        <Input
-          type="date"
+        <DateField
           value={row.dueDate}
-          onChange={(event) => updateDraftActivity(row._id, 'dueDate', event.target.value)}
+          onChange={(value) => updateDraftActivity(row._id, 'dueDate', value)}
           className="h-8 min-w-[130px] text-xs"
         />
       ),
@@ -1037,6 +1036,18 @@ const ResalesView: React.FC<ResalesViewProps> = ({
                       </FieldError>
                     </div>
                     <Field>
+                      <FieldLabel htmlFor="resale-start-date">
+                        {t('resales.fields.startDate')}
+                      </FieldLabel>
+                      <DateField
+                        id="resale-start-date"
+                        value={resaleForm.startDate}
+                        onChange={(value) =>
+                          setResaleForm((prev) => ({ ...prev, startDate: value }))
+                        }
+                      />
+                    </Field>
+                    <Field>
                       <FieldLabel htmlFor="resale-due-date">
                         {t('resales.fields.dueDate')}
                       </FieldLabel>
@@ -1047,6 +1058,28 @@ const ResalesView: React.FC<ResalesViewProps> = ({
                       />
                     </Field>
                     <Field>
+                      <FieldLabel htmlFor="resale-revenue">
+                        {t('resales.fields.resaleRevenue')}
+                      </FieldLabel>
+                      <Input
+                        id="resale-revenue"
+                        value={formatMoney(draftResaleRevenue)}
+                        readOnly
+                        aria-readonly="true"
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="resale-cost">
+                        {t('resales.fields.resaleCost')}
+                      </FieldLabel>
+                      <Input
+                        id="resale-cost"
+                        value={formatMoney(draftResaleCost)}
+                        readOnly
+                        aria-readonly="true"
+                      />
+                    </Field>
+                    <Field className="md:col-span-2">
                       <FieldLabel htmlFor="resale-notes">{t('resales.fields.notes')}</FieldLabel>
                       <Textarea
                         id="resale-notes"
@@ -1079,7 +1112,7 @@ const ResalesView: React.FC<ResalesViewProps> = ({
                           className={TABLE_CONTROL_BUTTON_CLASSNAME}
                         >
                           <Plus className="size-4" />
-                          {t('resales.addActivityRow')}
+                          {t('resales.addActivity')}
                         </Button>
                       }
                     />

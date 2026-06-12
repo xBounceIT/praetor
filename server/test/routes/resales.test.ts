@@ -81,6 +81,7 @@ const SAMPLE_RESALE = {
   activityCostTotal: 100,
   resaleRevenue: 150,
   costVariance: -20,
+  startDate: '2026-06-01',
   dueDate: null,
   notes: null,
   createdAt: 1700000000000,
@@ -239,6 +240,7 @@ describe('resale routes', () => {
       payload: {
         clientOrderId: 'ord-1',
         supplierOrderId: 'so-1',
+        startDate: '2026-06-01',
         notes: 'Manual lines',
         activities: [SAMPLE_ACTIVITY_INPUT],
       },
@@ -249,6 +251,7 @@ describe('resale routes', () => {
       expect.objectContaining({
         clientOrderId: 'ord-1',
         supplierOrderId: 'so-1',
+        startDate: '2026-06-01',
         notes: 'Manual lines',
       }),
     );
@@ -267,6 +270,7 @@ describe('resale routes', () => {
       activityCostTotal: 100,
       resaleRevenue: 150,
       costVariance: -20,
+      startDate: '2026-06-01',
       activities: [expect.objectContaining({ name: 'Setup rivendita' })],
     });
   });

@@ -313,6 +313,7 @@ export const normalizeResale = (resale: Resale): Resale => ({
   activityCostTotal: Number(resale.activityCostTotal || 0),
   resaleRevenue: Number(resale.resaleRevenue || 0),
   costVariance: Number(resale.costVariance || 0),
+  startDate: resale.startDate ? normalizeDateOnlyString(resale.startDate) : null,
   dueDate: resale.dueDate ? normalizeDateOnlyString(resale.dueDate) : null,
   notes: resale.notes ?? null,
   activities: (resale.activities || []).map(normalizeResaleActivity),

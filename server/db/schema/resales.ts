@@ -38,6 +38,7 @@ export const resales = pgTable(
     supplierOrderId: varchar('supplier_order_id', { length: 100 })
       .notNull()
       .references(() => supplierSales.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+    startDate: date('start_date', { mode: 'string' }),
     dueDate: date('due_date', { mode: 'string' }),
     notes: text('notes'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),

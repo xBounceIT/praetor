@@ -986,6 +986,7 @@ describe('normalizeResale', () => {
     activityCostTotal: 0,
     resaleRevenue: 0,
     costVariance: 0,
+    startDate: null,
     dueDate: null,
     notes: null,
     createdAt: 0,
@@ -1000,6 +1001,7 @@ describe('normalizeResale', () => {
         activityCostTotal: '100',
         resaleRevenue: '180',
         costVariance: '20.5',
+        startDate: '2026-04-01T12:00:00.000Z',
         dueDate: '2026-04-15T12:00:00.000Z',
         notes: undefined,
         activities: [
@@ -1025,6 +1027,7 @@ describe('normalizeResale', () => {
       activityCostTotal: 100,
       resaleRevenue: 180,
       costVariance: 20.5,
+      startDate: '2026-04-01',
       dueDate: '2026-04-15',
       notes: null,
     });

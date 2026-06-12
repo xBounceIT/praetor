@@ -54,6 +54,7 @@ export type Resale = {
   activityCostTotal: number;
   resaleRevenue: number;
   costVariance: number;
+  startDate: string | null;
   dueDate: string | null;
   notes: string | null;
   createdAt: number;
@@ -77,6 +78,7 @@ type ResaleBaseRow = {
   supplierOrderId: string;
   clientName: string;
   supplierName: string;
+  startDate: string | null;
   dueDate: string | null;
   notes: string | null;
   createdAt: Date | string | null;
@@ -187,6 +189,7 @@ const hydrateResales = async (rows: ResaleBaseRow[], exec: DbExecutor = db): Pro
       activityCostTotal,
       resaleRevenue,
       costVariance: roundCurrency(activityCostTotal - supplierOrderCost),
+      startDate: row.startDate,
       dueDate: row.dueDate,
       notes: row.notes,
       createdAt: epochMs(row.createdAt),
@@ -202,6 +205,7 @@ const baseResaleSelect = {
   supplierOrderId: resales.supplierOrderId,
   clientName: sales.clientName,
   supplierName: supplierSales.supplierName,
+  startDate: resales.startDate,
   dueDate: resales.dueDate,
   notes: resales.notes,
   createdAt: resales.createdAt,
@@ -293,6 +297,7 @@ export type NewResale = {
   id: string;
   clientOrderId: string;
   supplierOrderId: string;
+  startDate: string | null;
   dueDate: string | null;
   notes: string | null;
 };
@@ -302,6 +307,7 @@ export const create = async (input: NewResale, exec: DbExecutor = db): Promise<R
     id: input.id,
     clientOrderId: input.clientOrderId,
     supplierOrderId: input.supplierOrderId,
+    startDate: input.startDate,
     dueDate: input.dueDate,
     notes: input.notes,
   });
@@ -313,6 +319,7 @@ export const create = async (input: NewResale, exec: DbExecutor = db): Promise<R
 export type ResaleUpdate = {
   clientOrderId?: string;
   supplierOrderId?: string;
+  startDate?: string | null;
   dueDate?: string | null;
   notes?: string | null;
 };
@@ -325,6 +332,7 @@ export const update = async (
   const set: Record<string, unknown> = {};
   if (patch.clientOrderId !== undefined) set.clientOrderId = patch.clientOrderId;
   if (patch.supplierOrderId !== undefined) set.supplierOrderId = patch.supplierOrderId;
+  if (patch.startDate !== undefined) set.startDate = patch.startDate;
   if (patch.dueDate !== undefined) set.dueDate = patch.dueDate;
   if (patch.notes !== undefined) set.notes = patch.notes;
   if (Object.keys(set).length > 0) {

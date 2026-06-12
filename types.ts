@@ -316,6 +316,7 @@ export interface Resale {
   activityCostTotal: number;
   resaleRevenue: number;
   costVariance: number;
+  startDate: string | null;
   dueDate: string | null;
   notes: string | null;
   createdAt: number;

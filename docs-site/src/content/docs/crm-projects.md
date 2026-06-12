@@ -53,9 +53,9 @@ Quando un progetto termina, verifica che le attività siano coerenti e che non r
 
 ### Rivendite
 
-La voce **Rivendite** nel modulo Progetti gestisce operazioni economiche separate da attività operative, timesheet e assegnazioni utenti. In creazione devi selezionare un **ordine cliente**, un solo **ordine fornitore** collegato a quell'ordine cliente e aggiungere almeno una **attività rivendita** nella tabella iniziale: il sistema accetta l'ordine fornitore solo se almeno una riga dell'ordine cliente lo referenzia.
+La voce **Rivendite** nel modulo Progetti gestisce operazioni economiche separate da attività operative, timesheet e assegnazioni utenti. In creazione devi selezionare un **ordine cliente**, un solo **ordine fornitore** collegato a quell'ordine cliente, indicare opzionalmente data inizio e scadenza e aggiungere almeno una **attività rivendita** nella tabella iniziale: il sistema accetta l'ordine fornitore solo se almeno una riga dell'ordine cliente lo referenzia.
 
-Ogni rivendita mostra il **Ricavo Rivendita** come somma dei ricavi inseriti nelle sue attività. Il **Costo Rivendita** ufficiale è invece importato dal totale dell'ordine fornitore e non viene modificato manualmente. Le attività rivendita restano compilate a mano e includono nome attività, fatturazione (mensile, trimestrale, annuale o una tantum), categoria, costo, ricavo, stato rilasciato, scadenza indipendente e note.
+Ogni rivendita mostra il **Ricavo Rivendita** come somma dei ricavi inseriti nelle sue attività. Il **Costo Rivendita** ufficiale è invece importato dal totale dell'ordine fornitore e non viene modificato manualmente. Nel form di creazione entrambi i valori sono mostrati in sola lettura mentre compili le attività. Le attività rivendita restano compilate a mano e includono nome attività, fatturazione (mensile, trimestrale, annuale o una tantum), categoria, costo, ricavo, stato rilasciato, scadenza indipendente e note.
 
 Il costo delle attività è modificabile: se la somma dei costi attività non coincide con il totale dell'ordine fornitore, la vista mostra una **varianza**. La varianza è un avviso operativo e non blocca il salvataggio, così puoi completare l'allineamento progressivamente.
 

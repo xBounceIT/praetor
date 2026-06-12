@@ -631,6 +631,13 @@
       "when": 1781300000001,
       "tag": "0089_add_resales",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1781297227512,
+      "tag": "0090_add_resale_start_date",
+      "breakpoints": true
     }
   ]
 }

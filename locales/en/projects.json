@@ -350,7 +350,10 @@
     "fields": {
       "clientOrder": "Client order",
       "supplierOrder": "Supplier order",
+      "startDate": "Start date",
       "dueDate": "Resale due date",
+      "resaleRevenue": "Resale Revenue",
+      "resaleCost": "Resale Cost",
       "notes": "Notes",
       "categoryName": "Category name"
     },
@@ -358,6 +361,10 @@
       "clientOrder": "Select client order...",
       "supplierOrder": "Select supplier order...",
       "category": "Select category..."
+    },
+    "boolean": {
+      "yes": "YES",
+      "no": "NO"
     },
     "validation": {
       "clientOrder": "Client order is required",

@@ -43,13 +43,25 @@ describe('ResalesView wiring', () => {
     expect(source).toContain('activities: activityInputs');
   });
 
-  test('manages resale categories from the header and create activity category control', async () => {
+  test('manages resale categories from the header action', async () => {
     const source = await readSource();
     expect(source).toContain('Settings2');
     expect(source).toContain('resales.manageCategories');
     expect(source).toContain('onClick={openCategoryModal}');
-    expect(source).toContain("t('common:buttons.manage')");
     expect(source).toContain('rounded-md border border-border bg-muted/30 p-4');
+  });
+
+  test('keeps create activity rows compact and uses shared date controls', async () => {
+    const source = await readSource();
+    expect(source).toContain('resales.fields.startDate');
+    expect(source).toContain('resales.fields.resaleRevenue');
+    expect(source).toContain('resales.fields.resaleCost');
+    expect(source).toContain("t('resales." + "addActivity')");
+    expect(source).toContain("t('resales." + "boolean.yes')");
+    expect(source).toContain("t('resales." + "boolean.no')");
+    expect(source).toContain("updateDraftActivity(row._id, 'dueDate', value)");
+    expect(source).not.toContain('type="date"');
+    expect(source).not.toContain("t('common:buttons.manage')");
   });
 
   test('renders all requested resale activity columns', async () => {

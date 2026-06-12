@@ -92,6 +92,7 @@ const resaleSchema = {
     activityCostTotal: { type: 'number' },
     resaleRevenue: { type: 'number' },
     costVariance: { type: 'number' },
+    startDate: { type: ['string', 'null'] },
     dueDate: { type: ['string', 'null'] },
     notes: { type: ['string', 'null'] },
     createdAt: { type: 'number' },
@@ -108,6 +109,7 @@ const resaleSchema = {
     'activityCostTotal',
     'resaleRevenue',
     'costVariance',
+    'startDate',
     'createdAt',
     'updatedAt',
     'activities',
@@ -140,6 +142,7 @@ const resaleUpdateBodySchema = {
   properties: {
     clientOrderId: { type: 'string' },
     supplierOrderId: { type: 'string' },
+    startDate: { type: ['string', 'null'] },
     dueDate: { type: ['string', 'null'] },
     notes: { type: ['string', 'null'] },
   },
@@ -165,6 +168,7 @@ const resaleCreateBodySchema = {
   properties: {
     clientOrderId: { type: 'string' },
     supplierOrderId: { type: 'string' },
+    startDate: { type: ['string', 'null'] },
     dueDate: { type: ['string', 'null'] },
     notes: { type: ['string', 'null'] },
     activities: {
@@ -478,6 +482,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const body = request.body as {
         clientOrderId: unknown;
         supplierOrderId: unknown;
+        startDate?: unknown;
         dueDate?: unknown;
         notes?: unknown;
         activities?: unknown;
@@ -486,6 +491,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!clientOrderIdResult.ok) return badRequest(reply, clientOrderIdResult.message);
       const supplierOrderIdResult = requireNonEmptyString(body.supplierOrderId, 'supplierOrderId');
       if (!supplierOrderIdResult.ok) return badRequest(reply, supplierOrderIdResult.message);
+      const startDateResult = optionalDateString(body.startDate, 'startDate');
+      if (!startDateResult.ok) return badRequest(reply, startDateResult.message);
       const dueDateResult = optionalDateString(body.dueDate, 'dueDate');
       if (!dueDateResult.ok) return badRequest(reply, dueDateResult.message);
       const notesResult = optionalNonEmptyString(body.notes, 'notes');
@@ -534,6 +541,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             id,
             clientOrderId: clientOrderIdResult.value,
             supplierOrderId: supplierOrderIdResult.value,
+            startDate: startDateResult.value,
             dueDate: dueDateResult.value,
             notes: notesResult.value,
           },
@@ -613,6 +621,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const result = requireNonEmptyString(body.supplierOrderId, 'supplierOrderId');
         if (!result.ok) return badRequest(reply, result.message);
         patch.supplierOrderId = result.value;
+      }
+      if (Object.hasOwn(body, 'startDate')) {
+        const result = optionalDateString(body.startDate, 'startDate');
+        if (!result.ok) return badRequest(reply, result.message);
+        patch.startDate = result.value;
       }
       if (Object.hasOwn(body, 'dueDate')) {
         const result = optionalDateString(body.dueDate, 'dueDate');

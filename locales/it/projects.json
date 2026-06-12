@@ -350,7 +350,10 @@
     "fields": {
       "clientOrder": "Ordine cliente",
       "supplierOrder": "Ordine fornitore",
+      "startDate": "Data inizio",
       "dueDate": "Scadenza rivendita",
+      "resaleRevenue": "Ricavo Rivendita",
+      "resaleCost": "Costo Rivendita",
       "notes": "Note",
       "categoryName": "Nome categoria"
     },
@@ -358,6 +361,10 @@
       "clientOrder": "Seleziona ordine cliente...",
       "supplierOrder": "Seleziona ordine fornitore...",
       "category": "Seleziona categoria..."
+    },
+    "boolean": {
+      "yes": "SI",
+      "no": "NO"
     },
     "validation": {
       "clientOrder": "L'ordine cliente è obbligatorio",

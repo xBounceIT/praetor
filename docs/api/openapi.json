@@ -13754,6 +13754,12 @@
                       "costVariance": {
                         "type": "number"
                       },
+                      "startDate": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
                       "dueDate": {
                         "type": [
                           "null",
@@ -13855,6 +13861,7 @@
                       "activityCostTotal",
                       "resaleRevenue",
                       "costVariance",
+                      "startDate",
                       "createdAt",
                       "updatedAt",
                       "activities"
@@ -14031,6 +14038,12 @@
                   "supplierOrderId": {
                     "type": "string"
                   },
+                  "startDate": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "dueDate": {
                     "type": [
                       "string",
@@ -14154,6 +14167,12 @@
                     "costVariance": {
                       "type": "number"
                     },
+                    "startDate": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "dueDate": {
                       "type": [
                         "null",
@@ -14255,6 +14274,7 @@
                     "activityCostTotal",
                     "resaleRevenue",
                     "costVariance",
+                    "startDate",
                     "createdAt",
                     "updatedAt",
                     "activities"
@@ -14411,6 +14431,12 @@
                   "supplierOrderId": {
                     "type": "string"
                   },
+                  "startDate": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "dueDate": {
                     "type": [
                       "string",
@@ -14472,6 +14498,12 @@
                     },
                     "costVariance": {
                       "type": "number"
+                    },
+                    "startDate": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "dueDate": {
                       "type": [
@@ -14574,6 +14606,7 @@
                     "activityCostTotal",
                     "resaleRevenue",
                     "costVariance",
+                    "startDate",
                     "createdAt",
                     "updatedAt",
                     "activities"
@@ -14978,6 +15011,12 @@
                     "costVariance": {
                       "type": "number"
                     },
+                    "startDate": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "dueDate": {
                       "type": [
                         "null",
@@ -15079,6 +15118,7 @@
                     "activityCostTotal",
                     "resaleRevenue",
                     "costVariance",
+                    "startDate",
                     "createdAt",
                     "updatedAt",
                     "activities"
@@ -15337,6 +15377,12 @@
                     "costVariance": {
                       "type": "number"
                     },
+                    "startDate": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "dueDate": {
                       "type": [
                         "null",
@@ -15438,6 +15484,7 @@
                     "activityCostTotal",
                     "resaleRevenue",
                     "costVariance",
+                    "startDate",
                     "createdAt",
                     "updatedAt",
                     "activities"
@@ -15632,6 +15679,12 @@
                     "costVariance": {
                       "type": "number"
                     },
+                    "startDate": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "dueDate": {
                       "type": [
                         "null",
@@ -15733,6 +15786,7 @@
                     "activityCostTotal",
                     "resaleRevenue",
                     "costVariance",
+                    "startDate",
                     "createdAt",
                     "updatedAt",
                     "activities"
