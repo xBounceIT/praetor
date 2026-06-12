@@ -1,4 +1,4 @@
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { GlobalRegistrator } from '@happy-dom/global-registrator/lib/index.js';
 
 GlobalRegistrator.register();
 

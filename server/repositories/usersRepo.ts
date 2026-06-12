@@ -897,6 +897,19 @@ export const listDirectory = async (exec: DbExecutor = db): Promise<DirectoryUse
   }));
 };
 
+export const listTopManagerIds = async (exec: DbExecutor = db): Promise<string[]> => {
+  const rows = await executeRows<{ id: string }>(
+    exec,
+    sql`SELECT DISTINCT u.id
+          FROM users u
+          LEFT JOIN user_roles ur ON ur.user_id = u.id
+         WHERE COALESCE(u.is_disabled, false) = false
+           AND (u.role = ${TOP_MANAGER_ROLE_ID} OR ur.role_id = ${TOP_MANAGER_ROLE_ID})
+         ORDER BY u.id`,
+  );
+  return rows.map((row) => row.id);
+};
+
 export const existsByUsername = async (
   username: string,
   exec: DbExecutor = db,

@@ -49,7 +49,7 @@ export const installApiMock = () => {
       generateRecurring: noop,
     },
     rilDrafts: {
-      // Parameters are typed so `.mock.calls[i]` is a real tuple in tests (monthKey, rows, userId).
+      // Parameters are typed so `.mock.calls[i]` is a real tuple in tests.
       get: mock((_monthKey: string, _userId?: string) =>
         Promise.resolve({
           monthKey: '',
@@ -57,12 +57,18 @@ export const installApiMock = () => {
           updatedAt: null as string | null,
         }),
       ),
-      save: mock((_monthKey: string, _rows: Record<string, unknown>, _userId?: string) =>
-        Promise.resolve({
-          monthKey: '',
-          rows: {} as Record<string, unknown>,
-          updatedAt: null as string | null,
-        }),
+      save: mock(
+        (
+          _monthKey: string,
+          _rows: Record<string, unknown>,
+          _userId?: string,
+          _changedDays?: number[],
+        ) =>
+          Promise.resolve({
+            monthKey: '',
+            rows: {} as Record<string, unknown>,
+            updatedAt: null as string | null,
+          }),
       ),
       // Dedicated mock (not the shared `noop`): RilView.handleReset awaits `remove(...).catch(...)`,
       // and tests that `mockReset()` the shared `noop` would otherwise make this return undefined.

@@ -13,7 +13,6 @@ import { isItalianHoliday } from '../utils/holidays.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { hasScopedActionPermission } from '../utils/permissions.ts';
 import {
-  isWeekendDate,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   parseBooleanField,
@@ -22,6 +21,7 @@ import {
   parseQueryBoolean,
   requireNonEmptyString,
 } from '../utils/validation.ts';
+import { notifyTrackerOvertimeForDate } from './overtimeNotifications.ts';
 
 // Cap matches the UI maxLength on the notes inputs (EntryEditDialog,
 // WeeklyEntryForm). Bounded server-side so the API rejects oversize
@@ -64,6 +64,12 @@ export class TimeEntryServiceError extends Error {
     this.name = 'TimeEntryServiceError';
   }
 }
+
+export type ListTimeEntriesResult = {
+  entries: TimeEntry[];
+  nextCursor: string | null;
+  dailyDurationByOwnerDate?: Map<string, number>;
+};
 
 const hasPermission = (actor: AuthenticatedActor, permission: string) =>
   actor.permissions.includes(permission);
@@ -180,7 +186,7 @@ export const listTimeEntries = async (
     toDate?: unknown;
     purpose?: unknown;
   },
-): Promise<{ entries: TimeEntry[]; nextCursor: string | null }> => {
+): Promise<ListTimeEntriesResult> => {
   const purpose = input.purpose === 'ril' ? 'ril' : 'tracker';
   const hasTrackerRead = canReadTrackerEntries(actor);
   const hasRilRead = hasPermission(actor, 'timesheets.ril.view');
@@ -222,15 +228,29 @@ export const listTimeEntries = async (
     fromDate: fromDate ?? undefined,
     toDate: toDate ?? undefined,
   };
+  const dailyTotalOptions = {
+    projectId,
+    fromDate: fromDate ?? undefined,
+    toDate: toDate ?? undefined,
+  };
   const result = userId
     ? await entriesRepo.listForUser(userId, options)
     : canViewAll
       ? await entriesRepo.listAll(options)
       : await entriesRepo.listForManagerView(actor.id, options);
+  const dailyDurationByOwnerDate =
+    purpose === 'ril'
+      ? userId
+        ? await entriesRepo.sumDurationsByOwnerDateForUser(userId, dailyTotalOptions)
+        : canViewAll
+          ? await entriesRepo.sumDurationsByOwnerDateAll(dailyTotalOptions)
+          : await entriesRepo.sumDurationsByOwnerDateForManagerView(actor.id, dailyTotalOptions)
+      : undefined;
 
   return {
     entries: result.entries,
     nextCursor: result.nextCursor ? entriesRepo.encodeCursor(result.nextCursor) : null,
+    dailyDurationByOwnerDate,
   };
 };
 
@@ -253,13 +273,6 @@ export const createTimeEntry = async (
   if (!hasTrackerPermission(actor, 'create')) fail(403, 'Insufficient permissions');
 
   const date = requireValid(parseDateString(input.date, 'date'));
-
-  if (isWeekendDate(date)) {
-    const settings = await generalSettingsRepo.get();
-    if (!(settings?.allowWeekendSelection ?? true)) {
-      badRequest('Time entries on weekends are not allowed');
-    }
-  }
 
   const clientId = requireValid(requireNonEmptyString(input.clientId, 'clientId'));
   const clientName = requireValid(requireNonEmptyString(input.clientName, 'clientName'));
@@ -306,7 +319,7 @@ export const createTimeEntry = async (
   const location = parseOptionalLocation(input.location, fail) ?? 'remote';
   const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
 
-  return withSerializableWriteTransaction(async (tx) => {
+  const created = await withSerializableWriteTransaction(async (tx) => {
     const duplicateExists = await entriesRepo.existsForEntryKey(
       { userId: targetUserId, date, projectId, task },
       tx,
@@ -335,6 +348,8 @@ export const createTimeEntry = async (
       tx,
     );
   });
+  await notifyTrackerOvertimeForDate(created.userId, created.date, actor.id);
+  return created;
 };
 
 export const updateTimeEntry = async (
@@ -395,13 +410,6 @@ export const updateTimeEntry = async (
     badRequest('clientId, projectId, and task must be updated together');
   }
   const catalogChanging = catalogFieldsSet === 3;
-
-  if (date !== undefined && isWeekendDate(date)) {
-    const settings = await generalSettingsRepo.get();
-    if (!(settings?.allowWeekendSelection ?? true)) {
-      badRequest('Time entries on weekends are not allowed');
-    }
-  }
 
   const dateChanging = date !== undefined && date !== context.date;
   let resolvedTaskId: string | null | undefined;
@@ -487,6 +495,7 @@ export const updateTimeEntry = async (
       ? fail(409, 'Entry has changed since it was loaded; reload and retry')
       : fail(404, 'Entry not found');
   }
+  await notifyTrackerOvertimeForDate(updated.userId, updated.date, actor.id);
   return updated;
 };
 
@@ -758,6 +767,11 @@ export const generateRecurringEntries = async (
       skippedExistingCount: candidates.length - pending.length,
     };
   });
+  await Promise.all(
+    Array.from(new Set(inserted.map((entry) => entry.date))).map((date) =>
+      notifyTrackerOvertimeForDate(targetUserId, date, actor.id),
+    ),
+  );
   return {
     generated: inserted,
     generatedCount: inserted.length,

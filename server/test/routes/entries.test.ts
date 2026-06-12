@@ -10,6 +10,7 @@ import * as realTasksRepo from '../../repositories/tasksRepo.ts';
 import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realWorkUnitsRepo from '../../repositories/workUnitsRepo.ts';
+import * as realOvertimeNotifications from '../../services/overtimeNotifications.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../../utils/rate-limit.ts';
 import {
@@ -32,6 +33,7 @@ const clientsRepoSnap = { ...realClientsRepo };
 const userAssignmentsRepoSnap = { ...realUserAssignmentsRepo };
 const workUnitsRepoSnap = { ...realWorkUnitsRepo };
 const drizzleSnap = { ...realDrizzle };
+const overtimeNotificationsSnap = { ...realOvertimeNotifications };
 
 // Auth-middleware deps (real authenticateToken runs)
 const findAuthUserByIdMock = mock();
@@ -47,6 +49,9 @@ const generalSettingsGetMock = mock();
 const entriesListAllMock = mock();
 const entriesListForUserMock = mock();
 const entriesListForManagerViewMock = mock();
+const entriesSumDurationsByOwnerDateAllMock = mock();
+const entriesSumDurationsByOwnerDateForUserMock = mock();
+const entriesSumDurationsByOwnerDateForManagerViewMock = mock();
 const entriesCreateMock = mock();
 const entriesCreateManyMock = mock();
 const entriesUpdateMock = mock();
@@ -58,6 +63,7 @@ const entriesFindExistingRecurringKeysMock = mock();
 const entriesExistsForEntryKeyMock = mock();
 const entriesDecodeCursorMock = mock();
 const entriesEncodeCursorMock = mock((c: unknown) => `enc:${JSON.stringify(c)}`);
+const notifyTrackerOvertimeForDateMock = mock();
 const projectsFindClientIdMock = mock();
 const projectsFindClientIdAndEndDateMock = mock();
 const projectsFindClientIdAndNameMock = mock();
@@ -94,6 +100,9 @@ beforeAll(async () => {
     listAll: entriesListAllMock,
     listForUser: entriesListForUserMock,
     listForManagerView: entriesListForManagerViewMock,
+    sumDurationsByOwnerDateAll: entriesSumDurationsByOwnerDateAllMock,
+    sumDurationsByOwnerDateForUser: entriesSumDurationsByOwnerDateForUserMock,
+    sumDurationsByOwnerDateForManagerView: entriesSumDurationsByOwnerDateForManagerViewMock,
     create: entriesCreateMock,
     createMany: entriesCreateManyMock,
     update: entriesUpdateMock,
@@ -144,6 +153,10 @@ beforeAll(async () => {
     ...workUnitsRepoSnap,
     isUserManagedBy: isUserManagedByMock,
   }));
+  mock.module('../../services/overtimeNotifications.ts', () => ({
+    ...overtimeNotificationsSnap,
+    notifyTrackerOvertimeForDate: notifyTrackerOvertimeForDateMock,
+  }));
 
   entriesRoutePlugin = (await import('../../routes/entries.ts')).default as FastifyPluginAsync;
 });
@@ -161,6 +174,7 @@ afterAll(() => {
   mock.module('../../repositories/userAssignmentsRepo.ts', () => userAssignmentsRepoSnap);
   mock.module('../../repositories/workUnitsRepo.ts', () => workUnitsRepoSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
+  mock.module('../../services/overtimeNotifications.ts', () => overtimeNotificationsSnap);
 });
 
 const HAPPY_USER = {
@@ -242,6 +256,9 @@ const allMocks = [
   entriesListAllMock,
   entriesListForUserMock,
   entriesListForManagerViewMock,
+  entriesSumDurationsByOwnerDateAllMock,
+  entriesSumDurationsByOwnerDateForUserMock,
+  entriesSumDurationsByOwnerDateForManagerViewMock,
   entriesCreateMock,
   entriesCreateManyMock,
   entriesUpdateMock,
@@ -252,6 +269,7 @@ const allMocks = [
   entriesFindExistingRecurringKeysMock,
   entriesExistsForEntryKeyMock,
   entriesDecodeCursorMock,
+  notifyTrackerOvertimeForDateMock,
   projectsFindClientIdMock,
   projectsFindClientIdAndEndDateMock,
   projectsFindClientIdAndNameMock,
@@ -305,6 +323,7 @@ beforeEach(async () => {
   filterAssignedTaskIdsMock.mockImplementation(
     async (_userId: string, ids: string[]) => new Set(ids),
   );
+  notifyTrackerOvertimeForDateMock.mockResolvedValue({ notified: 0, created: false });
 
   testApp = await buildRouteTestApp(entriesRoutePlugin, '/api/entries');
 });
@@ -384,13 +403,73 @@ describe('GET /api/entries', () => {
       task: '',
       taskId: null,
       notes: null,
-      duration: 0,
+      duration: 4,
       location: 'remote',
     });
     expect(entriesListForManagerViewMock).toHaveBeenCalledWith(
       'u1',
       expect.objectContaining({ fromDate: '2026-05-01', toDate: '2026-05-31' }),
     );
+  });
+
+  test('200: RIL source feed computes overtime totals across all pages', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
+    entriesListForManagerViewMock.mockResolvedValue({
+      entries: [{ ...SAMPLE_ENTRY, date: '2026-05-04', duration: 4 }],
+      nextCursor: { createdAt: '2026-05-04 12:00:00.000000', id: 'older-page' },
+    });
+    entriesSumDurationsByOwnerDateForManagerViewMock.mockResolvedValue(
+      new Map([[realEntriesRepo.dailyDurationOwnerDateKey('u1', '2026-05-04'), 9]]),
+    );
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/entries?purpose=ril&fromDate=2026-05-01&toDate=2026-05-31&limit=1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.entries[0]).toMatchObject({
+      date: '2026-05-04',
+      duration: 4,
+      task: '',
+      taskId: null,
+      notes: null,
+    });
+    expect(body.nextCursor).toContain('older-page');
+    expect(entriesSumDurationsByOwnerDateForManagerViewMock).toHaveBeenCalledWith('u1', {
+      projectId: undefined,
+      fromDate: '2026-05-01',
+      toDate: '2026-05-31',
+    });
+  });
+
+  test('200: RIL source feed scopes overtime totals to each entry owner', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
+    entriesListForManagerViewMock.mockResolvedValue({
+      entries: [{ ...SAMPLE_ENTRY, userId: 'u1', date: '2026-05-04', duration: 4 }],
+      nextCursor: null,
+    });
+    entriesSumDurationsByOwnerDateForManagerViewMock.mockResolvedValue(
+      new Map([
+        [realEntriesRepo.dailyDurationOwnerDateKey('u1', '2026-05-04'), 4],
+        [realEntriesRepo.dailyDurationOwnerDateKey('u2', '2026-05-04'), 9],
+      ]),
+    );
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/entries?purpose=ril&fromDate=2026-05-01&toDate=2026-05-31',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).entries[0]).toMatchObject({
+      userId: 'u1',
+      date: '2026-05-04',
+      duration: 0,
+    });
   });
 
   test('200: viewer with RIL view can read an explicitly selected managed user', async () => {
@@ -601,6 +680,7 @@ describe('POST /api/entries', () => {
       { userId: 'u1', date: '2025-06-02', projectId: 'p1', task: 'Dev' },
       TX_SENTINEL,
     );
+    expect(notifyTrackerOvertimeForDateMock).toHaveBeenCalledWith('u1', '2025-06-02', 'u1');
   });
 
   test('201: duration defaults to 0 when omitted', async () => {
@@ -661,8 +741,15 @@ describe('POST /api/entries', () => {
     expect(entriesCreateMock).not.toHaveBeenCalled();
   });
 
-  test('400 weekend date when allowWeekendSelection=false', async () => {
+  test('201 weekend date even when allowWeekendSelection=false', async () => {
     generalSettingsGetMock.mockResolvedValue({ allowWeekendSelection: false });
+    findCostPerHourMock.mockResolvedValue(50);
+    findIdByProjectAndNameMock.mockResolvedValue(null);
+    entriesCreateMock.mockImplementation(async (entry: Record<string, unknown>) => ({
+      ...entry,
+      createdAt: 1_700_000_000_000,
+      version: 1,
+    }));
 
     const res = await testApp.inject({
       method: 'POST',
@@ -671,11 +758,9 @@ describe('POST /api/entries', () => {
       payload: { ...validBody, date: '2025-06-07' }, // Saturday
     });
 
-    expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body)).toEqual({
-      error: 'Time entries on weekends are not allowed',
-    });
-    expect(entriesCreateMock).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(201);
+    expect(entriesCreateMock).toHaveBeenCalledTimes(1);
+    expect(notifyTrackerOvertimeForDateMock).toHaveBeenCalledWith('u1', '2025-06-07', 'u1');
   });
 
   test('201 weekend date when allowWeekendSelection=true', async () => {
@@ -1652,11 +1737,13 @@ describe('PUT /api/entries/:id', () => {
     expect(projectsFindClientIdAndNameMock).not.toHaveBeenCalled();
     const patch = entriesUpdateMock.mock.calls[0][1] as Record<string, unknown>;
     expect(patch.date).toBe('2025-06-03');
+    expect(notifyTrackerOvertimeForDateMock).toHaveBeenCalledWith('u1', '2025-06-03', 'u1');
   });
 
-  test('400 updating date to a weekend when allowWeekendSelection is false', async () => {
+  test('200 updating date to a weekend when allowWeekendSelection is false', async () => {
     entriesFindContextMock.mockResolvedValue(sampleContext());
     generalSettingsGetMock.mockResolvedValue({ allowWeekendSelection: false } as never);
+    entriesUpdateMock.mockResolvedValue({ ...SAMPLE_ENTRY, date: '2025-06-07' });
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -1666,9 +1753,9 @@ describe('PUT /api/entries/:id', () => {
       payload: versionedPatch({ date: '2025-06-07' }),
     });
 
-    expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body).error).toMatch(/weekend/i);
-    expect(entriesUpdateMock).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(entriesUpdateMock).toHaveBeenCalledTimes(1);
+    expect(notifyTrackerOvertimeForDateMock).toHaveBeenCalledWith('u1', '2025-06-07', 'u1');
   });
 });
 
@@ -1848,6 +1935,26 @@ describe('POST /api/entries/recurring/generate', () => {
         location: 'remote',
       });
     }
+  });
+
+  test('200: notifies tracker overtime once per generated date', async () => {
+    setupHappyPath();
+    listRecurringForUserMock.mockResolvedValue([
+      { ...dailyTask, name: 'Morning block', recurrenceDuration: 5 },
+      { ...dailyTask, id: 't-extra', name: 'Afternoon block', recurrenceDuration: 5 },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-09', toDate: '2025-06-09' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).generatedCount).toBe(2);
+    expect(notifyTrackerOvertimeForDateMock).toHaveBeenCalledTimes(1);
+    expect(notifyTrackerOvertimeForDateMock).toHaveBeenCalledWith('u1', '2025-06-09', 'u1');
   });
 
   test('200: skips Saturdays/Sundays and Italian holidays', async () => {
