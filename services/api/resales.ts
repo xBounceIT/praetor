@@ -14,8 +14,8 @@ export type UpsertResaleActivityBody = Omit<
 export type CreateResaleBody = {
   clientOrderId: string;
   supplierOrderId: string;
-  startDate?: string | null;
-  dueDate?: string | null;
+  startDate: string;
+  dueDate: string;
   notes?: string | null;
   activities: UpsertResaleActivityBody[];
 };

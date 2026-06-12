@@ -14,6 +14,7 @@ import {
   optionalEnum,
   optionalNonEmptyString,
   parseBooleanField,
+  parseDateString,
   parseLocalizedNonNegativeNumber,
   requireNonEmptyString,
 } from '../utils/validation.ts';
@@ -168,8 +169,8 @@ const resaleCreateBodySchema = {
   properties: {
     clientOrderId: { type: 'string' },
     supplierOrderId: { type: 'string' },
-    startDate: { type: ['string', 'null'] },
-    dueDate: { type: ['string', 'null'] },
+    startDate: { type: 'string' },
+    dueDate: { type: 'string' },
     notes: { type: ['string', 'null'] },
     activities: {
       type: 'array',
@@ -177,7 +178,7 @@ const resaleCreateBodySchema = {
       items: activityCreateBodySchema,
     },
   },
-  required: ['clientOrderId', 'supplierOrderId', 'activities'],
+  required: ['clientOrderId', 'supplierOrderId', 'startDate', 'dueDate', 'activities'],
 } as const;
 
 const activityUpdateBodySchema = {
@@ -491,9 +492,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!clientOrderIdResult.ok) return badRequest(reply, clientOrderIdResult.message);
       const supplierOrderIdResult = requireNonEmptyString(body.supplierOrderId, 'supplierOrderId');
       if (!supplierOrderIdResult.ok) return badRequest(reply, supplierOrderIdResult.message);
-      const startDateResult = optionalDateString(body.startDate, 'startDate');
+      const startDateResult = parseDateString(body.startDate, 'startDate');
       if (!startDateResult.ok) return badRequest(reply, startDateResult.message);
-      const dueDateResult = optionalDateString(body.dueDate, 'dueDate');
+      const dueDateResult = parseDateString(body.dueDate, 'dueDate');
       if (!dueDateResult.ok) return badRequest(reply, dueDateResult.message);
       const notesResult = optionalNonEmptyString(body.notes, 'notes');
       if (!notesResult.ok) return badRequest(reply, notesResult.message);

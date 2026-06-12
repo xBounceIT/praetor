@@ -82,7 +82,7 @@ const SAMPLE_RESALE = {
   resaleRevenue: 150,
   costVariance: -20,
   startDate: '2026-06-01',
-  dueDate: null,
+  dueDate: '2026-06-30',
   notes: null,
   createdAt: 1700000000000,
   updatedAt: 1700000000000,
@@ -209,6 +209,8 @@ describe('resale routes', () => {
       payload: {
         clientOrderId: 'ord-1',
         supplierOrderId: 'so-1',
+        startDate: '2026-06-01',
+        dueDate: '2026-06-30',
         activities: [SAMPLE_ACTIVITY_INPUT],
       },
     });
@@ -220,12 +222,34 @@ describe('resale routes', () => {
     expect(createMock).not.toHaveBeenCalled();
   });
 
+  test('POST requires startDate and dueDate', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/projects/resales',
+      headers: authHeaders(),
+      payload: {
+        clientOrderId: 'ord-1',
+        supplierOrderId: 'so-1',
+        activities: [SAMPLE_ACTIVITY_INPUT],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
   test('POST requires at least one initial activity', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/projects/resales',
       headers: authHeaders(),
-      payload: { clientOrderId: 'ord-1', supplierOrderId: 'so-1', activities: [] },
+      payload: {
+        clientOrderId: 'ord-1',
+        supplierOrderId: 'so-1',
+        startDate: '2026-06-01',
+        dueDate: '2026-06-30',
+        activities: [],
+      },
     });
 
     expect(res.statusCode).toBe(400);
@@ -241,6 +265,7 @@ describe('resale routes', () => {
         clientOrderId: 'ord-1',
         supplierOrderId: 'so-1',
         startDate: '2026-06-01',
+        dueDate: '2026-06-30',
         notes: 'Manual lines',
         activities: [SAMPLE_ACTIVITY_INPUT],
       },
@@ -252,6 +277,7 @@ describe('resale routes', () => {
         clientOrderId: 'ord-1',
         supplierOrderId: 'so-1',
         startDate: '2026-06-01',
+        dueDate: '2026-06-30',
         notes: 'Manual lines',
       }),
     );
@@ -271,6 +297,7 @@ describe('resale routes', () => {
       resaleRevenue: 150,
       costVariance: -20,
       startDate: '2026-06-01',
+      dueDate: '2026-06-30',
       activities: [expect.objectContaining({ name: 'Setup rivendita' })],
     });
   });

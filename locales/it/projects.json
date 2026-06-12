@@ -369,6 +369,8 @@
     "validation": {
       "clientOrder": "L'ordine cliente è obbligatorio",
       "supplierOrder": "L'ordine fornitore è obbligatorio",
+      "startDate": "La data inizio è obbligatoria",
+      "dueDate": "La scadenza rivendita è obbligatoria",
       "activityName": "Il nome attività è obbligatorio",
       "activitiesRequired": "Aggiungi almeno un'attività alla rivendita",
       "activityRows": "Completa nome, categoria, costo e ricavo di ogni attività",

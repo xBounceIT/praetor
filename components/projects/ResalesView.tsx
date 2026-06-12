@@ -295,6 +295,8 @@ const ResalesView: React.FC<ResalesViewProps> = ({
     if (!resaleForm.supplierOrderId) {
       errors.supplierOrderId = t('resales.validation.supplierOrder');
     }
+    if (!resaleForm.startDate) errors.startDate = t('resales.validation.startDate');
+    if (!resaleForm.dueDate) errors.dueDate = t('resales.validation.dueDate');
     const activityInputs: UpsertResaleActivityBody[] = [];
     for (const activity of resaleForm.activities) {
       const cost = parseMoney(activity.cost);
@@ -333,8 +335,8 @@ const ResalesView: React.FC<ResalesViewProps> = ({
     const created = await onAddResale({
       clientOrderId: resaleForm.clientOrderId,
       supplierOrderId: resaleForm.supplierOrderId,
-      startDate: resaleForm.startDate || null,
-      dueDate: resaleForm.dueDate || null,
+      startDate: resaleForm.startDate,
+      dueDate: resaleForm.dueDate,
       notes: resaleForm.notes.trim() || null,
       activities: activityInputs,
     });
@@ -737,7 +739,7 @@ const ResalesView: React.FC<ResalesViewProps> = ({
           options={categoryOptions}
           value={row.categoryId}
           onChange={(value) => updateDraftActivity(row._id, 'categoryId', value as string)}
-          className="min-w-[170px]"
+          className="min-w-[130px]"
           buttonClassName="h-8 text-xs"
           searchable={false}
           placeholder={t('resales.placeholders.category')}
@@ -1037,25 +1039,41 @@ const ResalesView: React.FC<ResalesViewProps> = ({
                     </div>
                     <Field>
                       <FieldLabel htmlFor="resale-start-date">
-                        {t('resales.fields.startDate')}
+                        {t('resales.fields.startDate')} <RequiredMark />
                       </FieldLabel>
                       <DateField
                         id="resale-start-date"
                         value={resaleForm.startDate}
                         onChange={(value) =>
-                          setResaleForm((prev) => ({ ...prev, startDate: value }))
+                          setResaleForm((prev) => ({
+                            ...prev,
+                            startDate: value,
+                            errors: { ...prev.errors, startDate: '' },
+                          }))
                         }
+                        required
+                        aria-invalid={Boolean(resaleForm.errors.startDate)}
                       />
+                      <FieldError className="text-xs">{resaleForm.errors.startDate}</FieldError>
                     </Field>
                     <Field>
                       <FieldLabel htmlFor="resale-due-date">
-                        {t('resales.fields.dueDate')}
+                        {t('resales.fields.dueDate')} <RequiredMark />
                       </FieldLabel>
                       <DateField
                         id="resale-due-date"
                         value={resaleForm.dueDate}
-                        onChange={(value) => setResaleForm((prev) => ({ ...prev, dueDate: value }))}
+                        onChange={(value) =>
+                          setResaleForm((prev) => ({
+                            ...prev,
+                            dueDate: value,
+                            errors: { ...prev.errors, dueDate: '' },
+                          }))
+                        }
+                        required
+                        aria-invalid={Boolean(resaleForm.errors.dueDate)}
                       />
+                      <FieldError className="text-xs">{resaleForm.errors.dueDate}</FieldError>
                     </Field>
                     <Field>
                       <FieldLabel htmlFor="resale-revenue">

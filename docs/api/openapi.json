@@ -14039,16 +14039,10 @@
                     "type": "string"
                   },
                   "startDate": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": "string"
                   },
                   "dueDate": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "type": "string"
                   },
                   "notes": {
                     "type": [
@@ -14126,6 +14120,8 @@
                 "required": [
                   "clientOrderId",
                   "supplierOrderId",
+                  "startDate",
+                  "dueDate",
                   "activities"
                 ]
               }

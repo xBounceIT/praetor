@@ -369,6 +369,8 @@
     "validation": {
       "clientOrder": "Client order is required",
       "supplierOrder": "Supplier order is required",
+      "startDate": "Start date is required",
+      "dueDate": "Resale due date is required",
       "activityName": "Activity name is required",
       "activitiesRequired": "Add at least one activity to the resale",
       "activityRows": "Complete name, category, cost, and revenue for every activity",
