@@ -97,6 +97,19 @@ const projectSchema = {
   ],
 } as const;
 
+const projectOrderOptionSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    clientId: { type: 'string' },
+    clientName: { type: 'string' },
+    status: { type: 'string' },
+    createdAt: { type: 'number' },
+    updatedAt: { type: 'number' },
+  },
+  required: ['id', 'clientId', 'clientName', 'status', 'createdAt', 'updatedAt'],
+} as const;
+
 const projectCreateBodySchema = {
   type: 'object',
   properties: {
@@ -200,6 +213,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       return canViewAll ? projectsRepo.listAll() : projectsRepo.listForUser(request.user.id);
     },
+  );
+
+  fastify.get(
+    '/order-options',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        authenticateToken,
+        requireAnyPermission(
+          'projects.manage.view',
+          'projects.manage_all.view',
+          'projects.manage.create',
+          'projects.manage_all.create',
+          'projects.manage.update',
+          'projects.manage_all.update',
+        ),
+      ],
+      schema: {
+        tags: ['projects'],
+        summary: 'List confirmed client orders available for project links',
+        response: {
+          200: { type: 'array', items: projectOrderOptionSchema },
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async () => clientsOrdersRepo.listConfirmedProjectOptions(),
   );
 
   // POST / - Create project (manager only)

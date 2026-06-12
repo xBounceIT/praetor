@@ -56,6 +56,9 @@ const removeClientCascadeForUsersIfUnusedMock = mock();
 
 // clientsOrdersRepo mocks
 const findOrderClientIdByIdMock = mock();
+const listConfirmedProjectOptionsMock = mock(
+  async (): Promise<realClientsOrdersRepo.ClientOrderProjectOption[]> => [],
+);
 
 // clientOffersRepo mocks
 const findOfferClientIdByIdMock = mock();
@@ -112,6 +115,7 @@ beforeAll(async () => {
   mock.module('../../repositories/clientsOrdersRepo.ts', () => ({
     ...clientsOrdersRepoSnap,
     findClientIdById: findOrderClientIdByIdMock,
+    listConfirmedProjectOptions: listConfirmedProjectOptionsMock,
   }));
   mock.module('../../repositories/clientOffersRepo.ts', () => ({
     ...clientOffersRepoSnap,
@@ -227,6 +231,7 @@ const allMocks = [
   ensureClientCascadeAssignmentsMock,
   removeClientCascadeForUsersIfUnusedMock,
   findOrderClientIdByIdMock,
+  listConfirmedProjectOptionsMock,
   findOfferClientIdByIdMock,
   assignClientToUserMock,
   assignProjectToUserMock,
@@ -361,6 +366,54 @@ describe('GET /api/projects', () => {
     });
 
     expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('GET /api/projects/order-options', () => {
+  test('200: projects.manage.create can list confirmed order options without accounting permission', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.manage.create']);
+    listConfirmedProjectOptionsMock.mockResolvedValue([
+      {
+        id: 'co-1',
+        clientId: 'c-1',
+        clientName: 'Acme',
+        status: 'confirmed',
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects/order-options',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json() as unknown).toEqual([
+      {
+        id: 'co-1',
+        clientId: 'c-1',
+        clientName: 'Acme',
+        status: 'confirmed',
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    ]);
+    expect(listConfirmedProjectOptionsMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('403: users without project manage permissions cannot list project order options', async () => {
+    getRolePermissionsMock.mockResolvedValue(['accounting.clients_orders.view']);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects/order-options',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(listConfirmedProjectOptionsMock).not.toHaveBeenCalled();
   });
 });
 

@@ -94,6 +94,37 @@ export const listAllItems = async (exec: DbExecutor = db): Promise<ClientOrderIt
   return rows.map(mapItem);
 };
 
+export type ClientOrderProjectOption = Pick<
+  ClientOrder,
+  'id' | 'clientId' | 'clientName' | 'status' | 'createdAt' | 'updatedAt'
+>;
+
+export const listConfirmedProjectOptions = async (
+  exec: DbExecutor = db,
+): Promise<ClientOrderProjectOption[]> => {
+  const rows = await exec
+    .select({
+      id: sales.id,
+      clientId: sales.clientId,
+      clientName: sales.clientName,
+      status: sales.status,
+      createdAt: sales.createdAt,
+      updatedAt: sales.updatedAt,
+    })
+    .from(sales)
+    .where(eq(sales.status, 'confirmed'))
+    .orderBy(desc(sales.createdAt));
+
+  return rows.map((row) => ({
+    id: row.id,
+    clientId: row.clientId,
+    clientName: row.clientName,
+    status: row.status,
+    createdAt: row.createdAt?.getTime() ?? 0,
+    updatedAt: row.updatedAt?.getTime() ?? 0,
+  }));
+};
+
 export const existsById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
   const rows = await exec.select({ id: sales.id }).from(sales).where(eq(sales.id, id));
   return rows.length > 0;
