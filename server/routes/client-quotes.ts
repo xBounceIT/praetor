@@ -5,6 +5,7 @@ import * as clientOffersRepo from '../repositories/clientOffersRepo.ts';
 import * as clientQuotesRepo from '../repositories/clientQuotesRepo.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
 import * as productsRepo from '../repositories/productsRepo.ts';
+import * as quoteCommunicationChannelsRepo from '../repositories/quoteCommunicationChannelsRepo.ts';
 import * as quoteVersionsRepo from '../repositories/quoteVersionsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
@@ -479,6 +480,8 @@ const quoteSchema = {
     discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string' },
     expirationDate: { type: ['string', 'null'], format: 'date' },
+    communicationChannelId: { type: 'string' },
+    communicationChannelName: { type: 'string' },
     notes: { type: ['string', 'null'] },
     createdAt: { type: 'number' },
     updatedAt: { type: 'number' },
@@ -502,6 +505,8 @@ const quoteSchema = {
     'discount',
     'discountType',
     'status',
+    'communicationChannelId',
+    'communicationChannelName',
     'createdAt',
     'updatedAt',
     'items',
@@ -555,9 +560,10 @@ const quoteCreateBodySchema = {
     discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string' },
     expirationDate: { type: 'string', format: 'date' },
+    communicationChannelId: { type: 'string' },
     notes: { type: 'string' },
   },
-  required: ['id', 'clientId', 'clientName', 'items', 'expirationDate'],
+  required: ['id', 'clientId', 'clientName', 'items', 'expirationDate', 'communicationChannelId'],
 } as const;
 
 const quoteUpdateBodySchema = {
@@ -572,6 +578,7 @@ const quoteUpdateBodySchema = {
     discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string' },
     expirationDate: { type: 'string', format: 'date' },
+    communicationChannelId: { type: 'string' },
     notes: { type: 'string' },
   },
 } as const;
@@ -595,6 +602,27 @@ const buildItemsForInsert = (items: ResolvedQuoteItem[]): clientQuotesRepo.NewCl
     durationMonths: item.durationMonths ?? 1,
     durationUnit: item.durationUnit ?? 'months',
   }));
+
+const resolveCommunicationChannel = async (
+  rawChannelId: unknown,
+  reply: FastifyReply,
+  options: { required: boolean },
+): Promise<{ id: string; name: string } | null> => {
+  if (!options.required && rawChannelId === undefined) return null;
+
+  const channelIdResult = requireNonEmptyString(rawChannelId, 'communicationChannelId');
+  if (!channelIdResult.ok) {
+    badRequest(reply, channelIdResult.message);
+    return null;
+  }
+
+  const channel = await quoteCommunicationChannelsRepo.findById(channelIdResult.value);
+  if (!channel) {
+    badRequest(reply, 'communicationChannelId does not reference an existing channel');
+    return null;
+  }
+  return channel;
+};
 
 const buildOfferItemsFromQuoteItems = (
   items: clientQuotesRepo.ClientQuoteItem[],
@@ -885,6 +913,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discountType,
         status,
         expirationDate,
+        communicationChannelId,
         notes,
       } = request.body as {
         id: unknown;
@@ -896,6 +925,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discountType: unknown;
         status: unknown;
         expirationDate: unknown;
+        communicationChannelId: unknown;
         notes: unknown;
       };
 
@@ -918,6 +948,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const expirationDateResult = parseDateString(expirationDate, 'expirationDate');
       if (!expirationDateResult.ok) return badRequest(reply, expirationDateResult.message);
+
+      const communicationChannel = await resolveCommunicationChannel(
+        communicationChannelId,
+        reply,
+        {
+          required: true,
+        },
+      );
+      if (!communicationChannel) return;
 
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
@@ -979,6 +1018,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               discountType: discountTypeValue,
               status: initialStatus,
               expirationDate: expirationDateResult.value,
+              communicationChannelId: communicationChannel.id,
               notes: (notes as string | null | undefined) ?? null,
               // The supplier↔client link is line-sourced now (issue #779 follow-up); the vestigial
               // header column is never populated.
@@ -1022,6 +1062,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           details: {
             targetLabel: nextIdResult.value,
             secondaryLabel: clientNameResult.value,
+            changedFields: ['communicationChannelId'],
+            toValue: communicationChannel.name,
           },
         });
         return reply.code(201).send(buildQuoteResponse(quote, createdItems, sourcedExpiration));
@@ -1085,6 +1127,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discountType,
         status,
         expirationDate,
+        communicationChannelId,
         notes,
       } = request.body as {
         id: unknown;
@@ -1096,6 +1139,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discountType: unknown;
         status: unknown;
         expirationDate: unknown;
+        communicationChannelId: unknown;
         notes: unknown;
       };
       const idResult = requireNonEmptyString(id, 'id');
@@ -1113,6 +1157,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         paymentTerms !== undefined ||
         discount !== undefined ||
         discountType !== undefined ||
+        communicationChannelId !== undefined ||
         notes !== undefined;
       const hasNonStatusOrIdUpdates = hasNonExpirationContentUpdate || expirationDate !== undefined;
       const isIdOnlyUpdate =
@@ -1215,6 +1260,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           : discountType === 'currency'
             ? 'currency'
             : 'percentage';
+
+      const communicationChannel = await resolveCommunicationChannel(
+        communicationChannelId,
+        reply,
+        {
+          required: false,
+        },
+      );
+      if (communicationChannelId !== undefined && !communicationChannel) return;
 
       const effectiveDiscount = discountValue ?? existingDiscount;
 
@@ -1448,6 +1502,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     discountType: discountTypeValue ?? null,
                     status: targetStatus,
                     expirationDate: (expirationDateValue as string | null | undefined) ?? null,
+                    communicationChannelId: communicationChannel?.id ?? null,
                     notes: (notes as string | null | undefined) ?? null,
                     // The supplier↔client link is line-sourced now (issue #779 follow-up); leave
                     // the vestigial header column untouched (undefined ⇒ no write).
@@ -1848,6 +1903,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               };
             }
           }
+          const snapshotCommunicationChannelId =
+            typeof version.snapshot.quote.communicationChannelId === 'string' &&
+            version.snapshot.quote.communicationChannelId.length > 0
+              ? version.snapshot.quote.communicationChannelId
+              : null;
+          const restoreCommunicationChannel = snapshotCommunicationChannelId
+            ? await quoteCommunicationChannelsRepo.findById(snapshotCommunicationChannelId, tx)
+            : await quoteCommunicationChannelsRepo.findDefault(tx);
+          if (!restoreCommunicationChannel) {
+            return {
+              ok: false,
+              statusCode: 409,
+              message: 'No communication channel is available for restore',
+              action: 'client_quote.restore.conflict',
+              secondaryLabel: 'communication_channel_missing',
+            };
+          }
 
           const snapshotItems: clientQuotesRepo.NewClientQuoteItem[] = version.snapshot.items.map(
             ({ quoteId: _q, ...rest }) => ({
@@ -1877,6 +1949,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               discountType: version.snapshot.quote.discountType,
               status: restoredStatus,
               expirationDate: snapshotExpirationDate,
+              communicationChannelId: restoreCommunicationChannel.id,
               notes: version.snapshot.quote.notes,
             },
             tx,

@@ -11,6 +11,8 @@ Le anagrafiche CRM raccolgono i dati usati nei flussi commerciali e contabili. M
 
 Evita duplicati: prima di creare una nuova anagrafica, cerca se il cliente o fornitore esiste già.
 
+Nei preventivi clienti e fornitori il campo **Canale di Comunicazione** è obbligatorio e indica il canale usato per comunicare o negoziare il preventivo. Lo stesso canale è visibile nelle tabelle dei preventivi. Le opzioni sono condivise tra i due moduli: chi ha permessi di gestione sui preventivi può usare il pulsante **Gestisci** con icona a ingranaggio sopra il campo per aggiungere, rinominare o rimuovere i canali disponibili. I canali già usati da preventivi esistenti non possono essere eliminati.
+
 ### Eliminazione protetta
 
 Non è possibile eliminare un cliente o un fornitore se sono presenti documenti commerciali collegati (preventivi, offerte, ordini, fatture). La richiesta di eliminazione viene respinta e il documento non viene perso: prima rimuovi o annulla i documenti collegati, poi elimina l'anagrafica. Questa protezione esiste perché un documento contabile emesso deve rimanere tracciabile, anche se l'anagrafica della controparte non serve più.
@@ -27,7 +29,7 @@ I progetti collegano clienti, attività e registrazioni di tempo. Crea attività
 
 Per ogni progetto e attività puoi indicare il tipo di consuntivazione (canone o a misura) e la frequenza (mensile o una tantum) in modo indipendente: entrambi i tipi di consuntivazione supportano entrambe le frequenze. Se le attività usano un tipo diverso da quello del progetto, il progetto viene mostrato come misto.
 
-Usa la stima di impegno mensile per pianificare il carico ricorrente e l'impegno totale per monitorare l'avanzamento rispetto alle ore complessive previste.
+Usa la stima di impegno mensile per pianificare il carico ricorrente e la durata dell'attività come moltiplicatore generico. L'impegno totale è calcolato automaticamente come impegno mensile × durata e viene usato per monitorare l'avanzamento rispetto alle ore complessive previste. Il ricavo totale dell'attività è calcolato allo stesso modo: ricavo × durata.
 
 L'azione **Aggiungi Progetto** apre una finestra dedicata alla sola creazione: ordine cliente, cliente, nome, date, offerta facoltativa, tipo, consuntivazione, ricavo facoltativo e una tabella di attività iniziali. Al salvataggio sei portato direttamente alla pagina di dettaglio del nuovo progetto.
 
@@ -46,9 +48,21 @@ Quando crei o modifichi un progetto puoi compilare anche:
 - **Ordine cliente** — collega il progetto a un ordine cliente confermato. Il campo è obbligatorio alla creazione e al salvataggio dalla pagina di dettaglio; quando scegli un ordine, il cliente del progetto viene impostato dall'ordine e resta bloccato.
 - **Riferimento offerta** — collega il progetto a un'offerta accettata quando serve tracciarne l'origine commerciale. Il campo è facoltativo e può restare vuoto.
 - **Tipo** — classifica il progetto come **Attivo** o **Passivo**. È un campo obbligatorio (con lo stesso indicatore `*` di Cliente e Nome Progetto): il progetto non può essere creato finché non scegli un valore, e il tipo selezionato è mostrato nell'elenco progetti e nella pagina di dettaglio. I progetti già esistenti prima dell'introduzione del campo sono impostati su **Attivo** in modo predefinito, ma alla **prima modifica** dalla pagina di dettaglio devi confermare esplicitamente il tipo: il selettore parte vuoto e il salvataggio è bloccato finché non scegli un valore, così la scelta non resta quella predefinita per inerzia.
-- **Ricavo progetto** — segue questa precedenza: (1) se le attività hanno un valore di ricavo, il ricavo del progetto è la somma di quei valori in sola lettura; (2) altrimenti puoi inserirlo manualmente. Il totale dell'ordine collegato non viene importato automaticamente come ricavo del progetto.
+- **Ricavo progetto** — segue questa precedenza: (1) se le attività hanno un valore di ricavo, il ricavo del progetto è la somma dei ricavi totali delle attività (`ricavo × durata`) in sola lettura; (2) altrimenti puoi inserirlo manualmente. Il totale dell'ordine collegato non viene importato automaticamente come ricavo del progetto.
 
 Quando un progetto termina, verifica che le attività siano coerenti e che non rimangano registrazioni pendenti.
+
+### Rivendite
+
+La voce **Rivendite** nel modulo Progetti gestisce operazioni economiche separate da attività operative, timesheet e assegnazioni utenti. In creazione devi selezionare un **ordine cliente**, un solo **ordine fornitore** collegato a quell'ordine cliente, indicare **data inizio** e **scadenza rivendita** obbligatorie e aggiungere almeno una **attività rivendita** nella tabella iniziale: il sistema accetta l'ordine fornitore solo se almeno una riga dell'ordine cliente lo referenzia.
+
+Ogni rivendita mostra il **Ricavo Rivendita** come somma dei ricavi inseriti nelle sue attività. Il **Costo Rivendita** ufficiale è invece importato dal totale dell'ordine fornitore e non viene modificato manualmente. Nel form di creazione entrambi i valori sono mostrati in sola lettura mentre compili le attività. Le attività rivendita restano compilate a mano e includono nome attività, fatturazione (mensile, trimestrale, annuale o una tantum), categoria, costo, ricavo, stato rilasciato, scadenza indipendente e note.
+
+Il costo delle attività è modificabile: se la somma dei costi attività non coincide con il totale dell'ordine fornitore, la vista mostra una **varianza**. La varianza è un avviso operativo e non blocca il salvataggio, così puoi completare l'allineamento progressivamente.
+
+Le categorie Rivendite sono un catalogo dedicato, inizializzato con **Hardware**, **Sottoscrizione** e **Licenza**. Puoi gestirle dal pulsante **Categorie Rivendite** nella vista Rivendite oppure dal controllo **Categoria** dentro il form di creazione rivendita, con lo stesso comportamento delle categorie prodotto del listino interno; una categoria usata da attività non può essere eliminata.
+
+L'accesso è governato dai permessi separati **Rivendite** (`projects.resales.view/create/update/delete`), assegnati per impostazione predefinita ai profili Manager e Top Manager.
 
 ### Regole progetto
 

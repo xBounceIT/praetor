@@ -175,10 +175,15 @@ describe('makeProjectHandlers', () => {
       orderId: 'order-1',
       offerId: 'of-1',
       tipo: 'attivo',
-      draftTasks: [{ name: 'task-A' }, { name: 'task-B' }] as never,
+      draftTasks: [
+        { name: 'task-A', duration: 3 },
+        { name: 'task-B', duration: 1 },
+      ] as never,
     });
 
     expect(apiMocks.tasksCreate).toHaveBeenCalledTimes(2);
+    expect(apiMocks.tasksCreate.mock.calls[0]?.[10]).toBe(3);
+    expect(apiMocks.tasksCreate.mock.calls[1]?.[10]).toBe(1);
     expect(tasks.get()).toHaveLength(2);
   });
 
@@ -268,7 +273,8 @@ describe('makeProjectHandlers', () => {
       setEntries: makeStubSetter<EntryLike>([]).setter,
     });
 
-    await handlers.addTask('New', 'p1');
+    await handlers.addTask('New', 'p1', undefined, undefined, { duration: 2 } as never);
+    expect(apiMocks.tasksCreate.mock.calls[0]?.[10]).toBe(2);
     expect(tasks.get()).toHaveLength(2);
   });
 

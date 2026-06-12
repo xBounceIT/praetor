@@ -49,6 +49,7 @@ import NotFound from './components/NotFound';
 const ProjectDetailView = lazy(() => import('./components/projects/ProjectDetailView'));
 
 import ProjectsView from './components/projects/ProjectsView';
+import ResalesView from './components/projects/ResalesView';
 import TasksView from './components/projects/TasksView';
 import AiReportingView from './components/reports/AiReportingView';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
@@ -75,15 +76,21 @@ import { makeLdapHandlers } from './hooks/handlers/ldapHandlers';
 import { makeProductHandlers } from './hooks/handlers/productHandlers';
 import { makeProjectHandlers } from './hooks/handlers/projectHandlers';
 import { makeQuoteHandlers } from './hooks/handlers/quoteHandlers';
+import { makeResaleHandlers } from './hooks/handlers/resaleHandlers';
 import { makeSupplierHandlers } from './hooks/handlers/supplierHandlers';
 import { makeSupplierInvoiceHandlers } from './hooks/handlers/supplierInvoiceHandlers';
 import { makeSupplierQuoteHandlers } from './hooks/handlers/supplierQuoteHandlers';
-import { makeTaskHandlers } from './hooks/handlers/taskHandlers';
+import {
+  createTaskUpdateQueueState,
+  makeTaskHandlers,
+  type TaskUpdateQueueState,
+} from './hooks/handlers/taskHandlers';
 import { makeUserHandlers } from './hooks/handlers/userHandlers';
 import { useAuth } from './hooks/useAuth';
 import { listRequest, useModuleLoader } from './hooks/useModuleLoader';
 import api, { type McpTokenScope, type PersonalAccessToken, type Settings } from './services/api';
 import { decodeEntriesCursor } from './services/api/entries';
+import type { QuoteCommunicationChannel } from './services/api/quoteCommunicationChannels';
 import type {
   AppBranding,
   Client,
@@ -98,6 +105,9 @@ import type {
   Project,
   ProjectTask,
   Quote,
+  Resale,
+  ResaleCategory,
+  ResaleOrderOption,
   Role,
   SsoProvider,
   Supplier,
@@ -264,7 +274,7 @@ const TrackerView: React.FC<{
     description?: string,
     details?: Pick<
       ProjectTask,
-      'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
+      'monthlyEffort' | 'duration' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
     >,
   ) => Promise<ProjectTask>;
   currency: string;
@@ -752,8 +762,14 @@ const AppContent: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectTasks, setProjectTasks] = useState<ProjectTask[]>([]);
+  const [resales, setResales] = useState<Resale[]>([]);
+  const [resaleCategories, setResaleCategories] = useState<ResaleCategory[]>([]);
+  const [resaleOrderOptions, setResaleOrderOptions] = useState<ResaleOrderOption[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [quoteCommunicationChannels, setQuoteCommunicationChannels] = useState<
+    QuoteCommunicationChannel[]
+  >([]);
   const [clientOffers, setClientOffers] = useState<ClientOffer[]>([]);
   const [clientsOrders, setClientsOrders] = useState<ClientsOrder[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -762,6 +778,11 @@ const AppContent: React.FC = () => {
   const [supplierOrders, setSupplierOrders] = useState<SupplierSaleOrder[]>([]);
   const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoice[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const taskUpdateQueueStateRef = useRef<TaskUpdateQueueState | null>(null);
+  if (taskUpdateQueueStateRef.current === null) {
+    taskUpdateQueueStateRef.current = createTaskUpdateQueueState();
+  }
+  const taskUpdateQueueState = taskUpdateQueueStateRef.current;
   // Bumped on logout/role-switch so in-flight cursor streams stop appending stale rows.
   const entriesStreamTokenRef = useRef(0);
   // Bumped on navigation/auth reset so stale module-load completions cannot commit state.
@@ -841,6 +862,7 @@ const AppContent: React.FC = () => {
       'catalog/internal-listing',
       'projects/manage',
       'projects/detail',
+      'projects/resales',
       'projects/tasks',
       'hr/internal',
       'hr/external',
@@ -896,6 +918,7 @@ const AppContent: React.FC = () => {
       'catalog/internal-listing',
       'projects/manage',
       'projects/detail',
+      'projects/resales',
       'projects/tasks',
       'hr/internal',
       'hr/external',
@@ -1042,8 +1065,12 @@ const AppContent: React.FC = () => {
       clients: () => setClients([]),
       projects: () => setProjects([]),
       projectTasks: () => setProjectTasks([]),
+      resales: () => setResales([]),
+      resaleCategories: () => setResaleCategories([]),
+      resaleOrderOptions: () => setResaleOrderOptions([]),
       products: () => setProducts([]),
       quotes: () => setQuotes([]),
+      quoteCommunicationChannels: () => setQuoteCommunicationChannels([]),
       clientOffers: () => setClientOffers([]),
       clientsOrders: () => setClientsOrders([]),
       invoices: () => setInvoices([]),
@@ -1266,6 +1293,15 @@ const AppContent: React.FC = () => {
     [],
   );
 
+  const resaleHandlers = useMemo(
+    () =>
+      makeResaleHandlers({
+        setResales,
+        setResaleCategories,
+      }),
+    [],
+  );
+
   const entryHandlers = useMemo(
     () =>
       makeEntryHandlers({
@@ -1471,8 +1507,12 @@ const AppContent: React.FC = () => {
       suppliers: () => setSuppliers([]),
       projects: () => setProjects([]),
       projectTasks: () => setProjectTasks([]),
+      resales: () => setResales([]),
+      resaleCategories: () => setResaleCategories([]),
+      resaleOrderOptions: () => setResaleOrderOptions([]),
       products: () => setProducts([]),
       quotes: () => setQuotes([]),
+      quoteCommunicationChannels: () => setQuoteCommunicationChannels([]),
       clientOffers: () => setClientOffers([]),
       clientsOrders: () => setClientsOrders([]),
       invoices: () => setInvoices([]),
@@ -1628,6 +1668,7 @@ const AppContent: React.FC = () => {
         const canViewProjects = hasAnyPermission(permissions, [
           ...equivalentPermissionsFor('projects.manage', 'view'),
           ...equivalentPermissionsFor('projects.tasks', 'view'),
+          buildPermission('projects.resales', 'view'),
         ]);
         const canViewSuppliersModule = hasPermission(
           permissions,
@@ -1641,6 +1682,7 @@ const AppContent: React.FC = () => {
           buildPermission('timesheets.recurring', 'view'),
           ...equivalentPermissionsFor('projects.manage', 'view'),
           ...equivalentPermissionsFor('projects.tasks', 'view'),
+          buildPermission('projects.resales', 'view'),
           buildPermission('sales.client_quotes', 'view'),
           buildPermission('sales.client_offers', 'view'),
           // Supplier quotes carry an optional Cliente link (#759), so this view needs the client
@@ -1655,6 +1697,7 @@ const AppContent: React.FC = () => {
         const canListProjects = hasAnyPermission(permissions, [
           ...equivalentPermissionsFor('projects.manage', 'view'),
           ...equivalentPermissionsFor('projects.tasks', 'view'),
+          buildPermission('projects.resales', 'view'),
           ...equivalentPermissionsFor('timesheets.tracker', 'view'),
           buildPermission('timesheets.ril', 'view'),
           buildPermission('timesheets.recurring', 'view'),
@@ -1675,6 +1718,7 @@ const AppContent: React.FC = () => {
           buildPermission('timesheets.ril', 'view'),
           ...equivalentPermissionsFor('projects.manage', 'view'),
           ...equivalentPermissionsFor('projects.tasks', 'view'),
+          buildPermission('projects.resales', 'view'),
           ...equivalentPermissionsFor('hr.work_units', 'view'),
         ]);
         const canListQuotes = hasPermission(
@@ -1746,6 +1790,10 @@ const AppContent: React.FC = () => {
         const canViewCatalogInternal = hasPermission(
           permissions,
           buildPermission('catalog.internal_listing', 'view'),
+        );
+        const canListResales = hasPermission(
+          permissions,
+          buildPermission('projects.resales', 'view'),
         );
 
         switch (module) {
@@ -2003,6 +2051,12 @@ const AppContent: React.FC = () => {
               [
                 listRequest('quotes', canListQuotes, () => api.quotes.list(), setQuotes),
                 listRequest(
+                  'quote communication channels',
+                  canListQuotes || canListSupplierQuotes,
+                  () => api.quoteCommunicationChannels.list(),
+                  setQuoteCommunicationChannels,
+                ),
+                listRequest(
                   'client offers',
                   canListClientOffers,
                   () => api.clientOffers.list(),
@@ -2105,6 +2159,19 @@ const AppContent: React.FC = () => {
               [
                 listRequest('projects', canListProjects, () => api.projects.list(), setProjects),
                 listRequest('tasks', canListTasks, () => api.tasks.list(), setProjectTasks),
+                listRequest('resales', canListResales, () => api.resales.list(), setResales),
+                listRequest(
+                  'resale categories',
+                  canListResales,
+                  () => api.resales.listCategories(),
+                  setResaleCategories,
+                ),
+                listRequest(
+                  'resale order options',
+                  canListResales,
+                  () => api.resales.listOrderOptions(),
+                  setResaleOrderOptions,
+                ),
                 listRequest('clients', canListClients, () => api.clients.list(), setClients),
                 listRequest('users', canListUsers, () => api.users.list(), setUsers),
                 listRequest(
@@ -2396,8 +2463,9 @@ const AppContent: React.FC = () => {
         setProjectTasks,
         setEntries,
         generateRecurringEntries,
+        taskUpdateQueueState,
       }),
-    [projectTasks, generateRecurringEntries],
+    [projectTasks, generateRecurringEntries, taskUpdateQueueState],
   );
 
   const handleAddEntry = entryHandlers.add;
@@ -2446,6 +2514,44 @@ const AppContent: React.FC = () => {
   const handleUpdateProductType = productHandlers.updateProductType;
   const handleDeleteProductType = productHandlers.deleteProductType;
 
+  const refreshQuoteCommunicationChannels = useCallback(async () => {
+    const channels = await api.quoteCommunicationChannels.list();
+    setQuoteCommunicationChannels(channels);
+    return channels;
+  }, []);
+
+  const handleCreateQuoteCommunicationChannel = useCallback(
+    async (data: { name: string }) => {
+      await api.quoteCommunicationChannels.create(data);
+      await refreshQuoteCommunicationChannels();
+    },
+    [refreshQuoteCommunicationChannels],
+  );
+
+  const handleUpdateQuoteCommunicationChannel = useCallback(
+    async (id: string, updates: { name: string }) => {
+      await api.quoteCommunicationChannels.update(id, updates);
+      await refreshQuoteCommunicationChannels();
+    },
+    [refreshQuoteCommunicationChannels],
+  );
+
+  const handleDeleteQuoteCommunicationChannel = useCallback(
+    async (id: string) => {
+      await api.quoteCommunicationChannels.delete(id);
+      await refreshQuoteCommunicationChannels();
+    },
+    [refreshQuoteCommunicationChannels],
+  );
+  const canManageQuoteCommunicationChannels = hasAnyPermission(currentUser?.permissions || [], [
+    'sales.client_quotes.create',
+    'sales.client_quotes.update',
+    'sales.client_quotes.delete',
+    'sales.supplier_quotes.create',
+    'sales.supplier_quotes.update',
+    'sales.supplier_quotes.delete',
+  ]);
+
   const addQuote = quoteHandlers.addQuote;
   const handleUpdateQuote = quoteHandlers.updateQuote;
   const handleDeleteQuote = quoteHandlers.deleteQuote;
@@ -2486,6 +2592,15 @@ const AppContent: React.FC = () => {
   const addProjectTask = projectHandlers.addTask;
   const handleUpdateProject = projectHandlers.update;
   const handleDeleteProject = projectHandlers.delete;
+
+  const addResale = resaleHandlers.create;
+  const handleDeleteResale = resaleHandlers.delete;
+  const handleAddResaleActivity = resaleHandlers.createActivity;
+  const handleUpdateResaleActivity = resaleHandlers.updateActivity;
+  const handleDeleteResaleActivity = resaleHandlers.deleteActivity;
+  const handleCreateResaleCategory = resaleHandlers.createCategory;
+  const handleUpdateResaleCategory = resaleHandlers.updateCategory;
+  const handleDeleteResaleCategory = resaleHandlers.deleteCategory;
 
   const handleUpdateUser = userHandlers.updateUser;
   const handleUpdateUserRoles = userHandlers.updateUserRoles;
@@ -2786,6 +2901,11 @@ const AppContent: React.FC = () => {
                   clients={clients}
                   products={products}
                   supplierQuotes={supplierQuotes}
+                  communicationChannels={quoteCommunicationChannels}
+                  canManageCommunicationChannels={canManageQuoteCommunicationChannels}
+                  onCreateCommunicationChannel={handleCreateQuoteCommunicationChannel}
+                  onUpdateCommunicationChannel={handleUpdateQuoteCommunicationChannel}
+                  onDeleteCommunicationChannel={handleDeleteQuoteCommunicationChannel}
                   onAddQuote={addQuote}
                   onUpdateQuote={handleUpdateQuote}
                   onQuoteRestored={async (restored) => {
@@ -2891,6 +3011,11 @@ const AppContent: React.FC = () => {
                   suppliers={suppliers}
                   clients={clients}
                   products={products}
+                  communicationChannels={quoteCommunicationChannels}
+                  canManageCommunicationChannels={canManageQuoteCommunicationChannels}
+                  onCreateCommunicationChannel={handleCreateQuoteCommunicationChannel}
+                  onUpdateCommunicationChannel={handleUpdateQuoteCommunicationChannel}
+                  onDeleteCommunicationChannel={handleDeleteQuoteCommunicationChannel}
                   onAddQuote={addSupplierQuote}
                   onUpdateQuote={handleUpdateSupplierQuote}
                   onQuoteRestored={(restored) => {
@@ -3164,6 +3289,25 @@ const AppContent: React.FC = () => {
                     setClientsOrderFilterId(orderId);
                     setActiveView('accounting/clients-orders');
                   }}
+                />
+              )}
+
+            {hasViewAccess(currentUser.permissions, 'projects/resales') &&
+              activeView === 'projects/resales' && (
+                <ResalesView
+                  resales={resales}
+                  categories={resaleCategories}
+                  orderOptions={resaleOrderOptions}
+                  permissions={currentUser.permissions || EMPTY_PERMISSIONS}
+                  currency={generalSettings.currency}
+                  onAddResale={addResale}
+                  onDeleteResale={handleDeleteResale}
+                  onAddActivity={handleAddResaleActivity}
+                  onUpdateActivity={handleUpdateResaleActivity}
+                  onDeleteActivity={handleDeleteResaleActivity}
+                  onCreateCategory={handleCreateResaleCategory}
+                  onUpdateCategory={handleUpdateResaleCategory}
+                  onDeleteCategory={handleDeleteResaleCategory}
                 />
               )}
 

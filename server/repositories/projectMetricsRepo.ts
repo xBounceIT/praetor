@@ -81,7 +81,7 @@ export const listForProjects = async (
       WITH task_metrics AS (
         SELECT
           t.project_id,
-          COALESCE(SUM(COALESCE(t.revenue, 0)), 0) AS task_revenue
+          COALESCE(SUM(COALESCE(t.revenue, 0) * COALESCE(t.duration, 1)), 0) AS task_revenue
         FROM tasks t
         WHERE t.project_id = ANY(${sql.param(uniqueProjectIds)}::text[])
         GROUP BY t.project_id

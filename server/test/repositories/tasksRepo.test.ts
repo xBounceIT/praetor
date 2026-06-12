@@ -16,8 +16,8 @@ beforeEach(() => {
 
 // `tasks` columns in schema declaration order:
 // id, name, project_id, description, is_recurring, recurrence_pattern, recurrence_start,
-// recurrence_end, recurrence_duration, expected_effort, revenue, notes, is_disabled, created_at,
-// billing_type, billing_frequency, monthly_effort
+// recurrence_end, recurrence_duration, expected_effort, revenue, duration, notes, is_disabled,
+// created_at, billing_type, billing_frequency, monthly_effort
 const TASK_BASE: readonly unknown[] = [
   't-1',
   'Build feature',
@@ -30,6 +30,7 @@ const TASK_BASE: readonly unknown[] = [
   '0',
   '5',
   '120.5',
+  '3',
   'n',
   false,
   new Date('2026-04-30T12:00:00Z'),
@@ -50,33 +51,37 @@ describe('listAll', () => {
       projectId: 'p-1',
       isRecurring: false,
       recurrenceDuration: 0,
-      expectedEffort: 5,
+      expectedEffort: 6,
       monthlyEffort: 2,
+      duration: 3,
       revenue: 120.5,
+      totalRevenue: 361.5,
       isDisabled: false,
       billingType: 'retainer',
       billingFrequency: 'one_time',
     });
   });
 
-  test('expectedEffort/revenue are undefined when DB value is null', async () => {
-    exec.enqueue({ rows: [taskRow({ 9: null, 10: null })] });
+  test('derived totals fall back to zero/one when source DB values are null', async () => {
+    exec.enqueue({ rows: [taskRow({ 9: null, 10: null, 11: null, 17: null })] });
     const result = await tasksRepo.listAll(testDb);
-    expect(result[0].expectedEffort).toBeUndefined();
+    expect(result[0].expectedEffort).toBe(0);
+    expect(result[0].duration).toBe(1);
     expect(result[0].revenue).toBeUndefined();
+    expect(result[0].totalRevenue).toBe(0);
   });
 
   test('notes maps null to undefined', async () => {
-    exec.enqueue({ rows: [taskRow({ 11: null })] });
+    exec.enqueue({ rows: [taskRow({ 12: null })] });
     const result = await tasksRepo.listAll(testDb);
     expect(result[0].notes).toBeUndefined();
   });
 
   test('numeric values pass through as numbers when received as numbers', async () => {
-    exec.enqueue({ rows: [taskRow({ 8: 1.5, 9: 8 })] });
+    exec.enqueue({ rows: [taskRow({ 8: 1.5, 11: 4, 17: 8 })] });
     const result = await tasksRepo.listAll(testDb);
     expect(result[0].recurrenceDuration).toBe(1.5);
-    expect(result[0].expectedEffort).toBe(8);
+    expect(result[0].expectedEffort).toBe(32);
   });
 });
 
@@ -117,8 +122,8 @@ describe('create', () => {
         recurrencePattern: 'WEEKLY',
         recurrenceStart: '2026-04-30',
         recurrenceDuration: 1,
-        expectedEffort: 5,
         monthlyEffort: 2,
+        duration: 3,
         revenue: 100,
         notes: null,
         isDisabled: false,

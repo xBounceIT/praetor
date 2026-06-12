@@ -109,7 +109,7 @@ export interface TasksViewProps {
     description?: string,
     details?: Pick<
       ProjectTask,
-      'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
+      'monthlyEffort' | 'duration' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
     >,
   ) => Promise<ProjectTask>;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
@@ -347,6 +347,18 @@ const TasksView: React.FC<TasksViewProps> = ({
         },
       },
       {
+        header: t('projects:projects.duration'),
+        id: 'duration',
+        accessorFn: (task) => task.duration ?? 1,
+        cell: ({ row }) => (
+          <span className="text-xs font-bold text-zinc-600 tabular-nums">
+            {(row.duration ?? 1).toLocaleString(undefined, {
+              maximumFractionDigits: 2,
+            })}
+          </span>
+        ),
+      },
+      {
         header: t('projects:projects.expectedEffort'),
         id: 'expectedEffort',
         accessorFn: (task) => task.expectedEffort ?? 0,
@@ -367,6 +379,24 @@ const TasksView: React.FC<TasksViewProps> = ({
             <span className="text-xs font-bold text-zinc-600 tabular-nums">
               {currency}
               {rev.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </span>
+          );
+        },
+      },
+      {
+        header: `${t('projects:projects.taskTotalRevenue')} (${currency})`,
+        id: 'totalRevenue',
+        accessorFn: (task) => task.totalRevenue ?? (task.revenue ?? 0) * (task.duration ?? 1),
+        cell: ({ row }) => {
+          const totalRevenue = row.totalRevenue ?? (row.revenue ?? 0) * (row.duration ?? 1);
+          if (!totalRevenue) return <span className="text-xs text-zinc-400">-</span>;
+          return (
+            <span className="text-xs font-bold text-zinc-600 tabular-nums">
+              {currency}
+              {totalRevenue.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}

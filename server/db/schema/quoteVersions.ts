@@ -14,7 +14,14 @@ import { users } from './users.ts';
 // and may have it as `undefined`; readers must tolerate both `undefined` and `string | null`.
 export interface QuoteVersionSnapshot {
   schemaVersion: 1;
-  quote: Omit<ClientQuote, 'linkedOfferId'> & { linkedOfferId?: string | null };
+  quote: Omit<
+    ClientQuote,
+    'linkedOfferId' | 'communicationChannelId' | 'communicationChannelName'
+  > & {
+    linkedOfferId?: string | null;
+    communicationChannelId?: string;
+    communicationChannelName?: string;
+  };
   items: ClientQuoteItem[];
 }
 

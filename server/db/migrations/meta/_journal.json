@@ -610,6 +610,34 @@
       "when": 1781252744169,
       "tag": "0086_add_overtime_notification_events",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1781300000000,
+      "tag": "0087_add_quote_communication_channels",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1781287317277,
+      "tag": "0088_add_task_duration",
+      "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1781300000001,
+      "tag": "0089_add_resales",
+      "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1781297227512,
+      "tag": "0090_add_resale_start_date",
+      "breakpoints": true
     }
   ]
 }

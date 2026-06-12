@@ -166,6 +166,8 @@ const SAMPLE_TASK = {
   recurrenceDuration: 0,
   expectedEffort: 0,
   revenue: 0,
+  duration: 1,
+  totalRevenue: 0,
   notes: null,
   isDisabled: false,
   createdAt: 1_700_000_000_000,
@@ -309,8 +311,8 @@ describe('POST /api/tasks', () => {
         recurrencePattern: null,
         recurrenceStart: null,
         recurrenceDuration: 0,
-        expectedEffort: 0,
         monthlyEffort: 0,
+        duration: 1,
         revenue: 0,
         billingType: 'time_and_materials',
         billingFrequency: 'monthly',
@@ -343,8 +345,8 @@ describe('POST /api/tasks', () => {
         recurrencePattern: 'daily',
         recurrenceStart: '2025-06-01',
         recurrenceDuration: 1,
-        expectedEffort: 10,
         monthlyEffort: 4,
+        duration: 3,
         revenue: 100,
         billingType: 'retainer',
         billingFrequency: 'one_time',
@@ -358,8 +360,8 @@ describe('POST /api/tasks', () => {
         recurrencePattern: 'daily',
         recurrenceStart: '2025-06-01',
         recurrenceDuration: 1,
-        expectedEffort: 10,
         monthlyEffort: 4,
+        duration: 3,
         revenue: 100,
         billingType: 'retainer',
         billingFrequency: 'one_time',
@@ -511,6 +513,19 @@ describe('POST /api/tasks', () => {
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/monthlyEffort must be zero or positive/);
+  });
+
+  test('400: negative duration', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers: authHeader(),
+      payload: { name: 'X', projectId: 'p-1', duration: -1 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/duration must be zero or positive/);
+    expect(createMock).not.toHaveBeenCalled();
   });
 
   test('400: recurrenceDuration above 24 hours does not create task', async () => {
@@ -745,8 +760,8 @@ describe('PUT /api/tasks/:id', () => {
       headers: authHeader(),
       payload: {
         name: 'Renamed',
-        expectedEffort: 5,
         monthlyEffort: 2,
+        duration: 4,
         revenue: 10,
         billingType: 'retainer',
         billingFrequency: 'one_time',
@@ -758,8 +773,8 @@ describe('PUT /api/tasks/:id', () => {
       't-1',
       expect.objectContaining({
         name: 'Renamed',
-        expectedEffort: 5,
         monthlyEffort: 2,
+        duration: 4,
         revenue: 10,
         billingType: 'retainer',
         billingFrequency: 'one_time',
@@ -873,6 +888,19 @@ describe('PUT /api/tasks/:id', () => {
     });
 
     expect(res.statusCode).toBe(400);
+  });
+
+  test('400: negative duration does not update task', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/tasks/t-1',
+      headers: authHeader(),
+      payload: { duration: -1 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/duration must be zero or positive/);
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   test('400: recurrenceDuration above 24 hours does not update task', async () => {

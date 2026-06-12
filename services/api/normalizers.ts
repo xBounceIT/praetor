@@ -14,6 +14,10 @@ import type {
   ProjectTask,
   Quote,
   QuoteItem,
+  Resale,
+  ResaleActivity,
+  ResaleCategory,
+  ResaleOrderOption,
   RoleSummary,
   SupplierInvoice,
   SupplierInvoiceItem,
@@ -288,6 +292,47 @@ export const normalizeProject = (p: Project): Project => ({
   tipoConfirmed: p.tipoConfirmed === true,
 });
 
+const normalizeResaleBillingFrequency = (value: unknown): ResaleActivity['billingFrequency'] => {
+  if (value === 'monthly' || value === 'quarterly' || value === 'annual') return value;
+  return 'one_time';
+};
+
+export const normalizeResaleActivity = (activity: ResaleActivity): ResaleActivity => ({
+  ...activity,
+  billingFrequency: normalizeResaleBillingFrequency(activity.billingFrequency),
+  cost: Number(activity.cost || 0),
+  revenue: Number(activity.revenue || 0),
+  released: activity.released === true,
+  dueDate: activity.dueDate ? normalizeDateOnlyString(activity.dueDate) : null,
+  notes: activity.notes ?? null,
+});
+
+export const normalizeResale = (resale: Resale): Resale => ({
+  ...resale,
+  supplierOrderCost: Number(resale.supplierOrderCost || 0),
+  activityCostTotal: Number(resale.activityCostTotal || 0),
+  resaleRevenue: Number(resale.resaleRevenue || 0),
+  costVariance: Number(resale.costVariance || 0),
+  startDate: resale.startDate ? normalizeDateOnlyString(resale.startDate) : null,
+  dueDate: resale.dueDate ? normalizeDateOnlyString(resale.dueDate) : null,
+  notes: resale.notes ?? null,
+  activities: (resale.activities || []).map(normalizeResaleActivity),
+});
+
+export const normalizeResaleCategory = (category: ResaleCategory): ResaleCategory => ({
+  ...category,
+  activityCount: Number(category.activityCount || 0),
+  hasLinkedActivities: category.hasLinkedActivities === true,
+});
+
+export const normalizeResaleOrderOption = (option: ResaleOrderOption): ResaleOrderOption => ({
+  ...option,
+  supplierOrders: (option.supplierOrders || []).map((supplierOrder) => ({
+    ...supplierOrder,
+    total: Number(supplierOrder.total || 0),
+  })),
+});
+
 export const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({
   ...normalizePricingItemFields(item),
   durationMonths: Number(item.durationMonths ?? 1) || 1,
@@ -298,6 +343,8 @@ export const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({
 export const normalizeQuote = (q: Quote): Quote => ({
   ...q,
   discount: Number(q.discount || 0),
+  communicationChannelId: q.communicationChannelId ?? '',
+  communicationChannelName: q.communicationChannelName ?? '',
   items: (q.items || []).map(normalizeQuoteItem),
 });
 
@@ -349,14 +396,23 @@ export const normalizeTimeEntry = (e: TimeEntry): TimeEntry => {
   return normalized;
 };
 
-export const normalizeTask = (t: ProjectTask): ProjectTask => ({
-  ...t,
-  recurrenceDuration: t.recurrenceDuration ? Number(t.recurrenceDuration) : 0,
-  expectedEffort: t.expectedEffort !== undefined ? Number(t.expectedEffort) : undefined,
-  monthlyEffort: t.monthlyEffort !== undefined ? Number(t.monthlyEffort) : undefined,
-  revenue: t.revenue !== undefined ? Number(t.revenue) : undefined,
-  ...normalizeTaskBilling(t.billingType, t.billingFrequency),
-});
+export const normalizeTask = (t: ProjectTask): ProjectTask => {
+  const monthlyEffort = t.monthlyEffort !== undefined ? Number(t.monthlyEffort) : undefined;
+  const duration = t.duration !== undefined ? Number(t.duration) : 1;
+  const revenue = t.revenue !== undefined ? Number(t.revenue) : undefined;
+  return {
+    ...t,
+    recurrenceDuration: t.recurrenceDuration ? Number(t.recurrenceDuration) : 0,
+    expectedEffort:
+      t.expectedEffort !== undefined ? Number(t.expectedEffort) : (monthlyEffort ?? 0) * duration,
+    monthlyEffort,
+    duration,
+    revenue,
+    totalRevenue:
+      t.totalRevenue !== undefined ? Number(t.totalRevenue) : Number(revenue ?? 0) * duration,
+    ...normalizeTaskBilling(t.billingType, t.billingFrequency),
+  };
+};
 
 const normalizeProjectBilling = (
   billingType: Project['billingType'] | undefined,
@@ -445,6 +501,8 @@ export const normalizeSupplierQuote = (q: SupplierQuote): SupplierQuote => ({
   ...q,
   clientId: q.clientId ?? null,
   clientName: q.clientName ?? null,
+  communicationChannelId: q.communicationChannelId ?? '',
+  communicationChannelName: q.communicationChannelName ?? '',
   items: (q.items || []).map(normalizeSupplierQuoteItem),
 });
 

@@ -11,6 +11,8 @@ CRM records store the data used in commercial and accounting workflows. Keep nam
 
 Avoid duplicates: before creating a new record, search for the customer or supplier first.
 
+Client and supplier quotes require the **Communication Channel** field to record how the quote was communicated or negotiated. The same channel is visible in the quote tables. The options are shared by both quote modules: users with quote-management permissions can use the gear **Manage** button above the field to add, rename, or remove available channels. Channels already used by existing quotes cannot be deleted.
+
 ### Protected deletion
 
 A customer or supplier cannot be deleted while any related financial document (quote, offer, order, invoice) still references it. The delete request is rejected and the document is not lost: remove or cancel the linked documents first, then delete the record. This guardrail exists because an issued accounting document must remain traceable even if the counterparty record is no longer needed.
@@ -27,7 +29,7 @@ Projects connect customers, tasks, and time entries. Create clear reusable tasks
 
 For each project and task, you can set the billing type (retainer or time and materials) and the billing frequency (monthly or one-time) independently — both billing types support either frequency. If tasks use a billing type that differs from the project, the project is shown as mixed.
 
-Use estimated monthly effort to plan recurring load and total effort to track progress against the overall expected hours.
+Use estimated monthly effort to plan recurring load and task duration as a generic multiplier. Total effort is calculated automatically as monthly effort × duration and is used to track progress against the overall expected hours. Task total revenue is calculated the same way: revenue × duration.
 
 The **Add Project** action opens a focused dialog with only what's needed to create a project: client order, client, name, dates, optional offer, type, billing, optional revenue, and a draft tasks table. Submitting the dialog takes you straight to the new project's dedicated detail page.
 
@@ -46,9 +48,21 @@ When creating or editing a project you can fill in:
 - **Client order** — links the project to a confirmed customer order. This field is required at creation and when saving from the detail page; choosing an order sets the project's client from that order and locks it.
 - **Offer reference** — links the project to an accepted offer when you need to track its commercial origin. This field is optional and can stay empty.
 - **Type** — classifies the project as **Active** (Attivo) or **Passive** (Passivo). It is a required field (with the same `*` marker as Client and Project Name): the project can't be created until you pick a value, and the selected type is shown in the projects list and on the detail page. Projects that already existed before this field was introduced default to **Active**, but the **first time** one is edited from the detail page you must explicitly confirm the type: the selector starts empty and the save is blocked until you choose a value, so the choice isn't silently left at the default.
-- **Project revenue** — resolved with this precedence: (1) if the activities have a per-row revenue, the project revenue is the sum of those values shown read-only; (2) otherwise you can enter it manually. The linked order total is not imported automatically as project revenue.
+- **Project revenue** — resolved with this precedence: (1) if the activities have a per-row revenue, the project revenue is the read-only sum of activity total revenues (`revenue × duration`); (2) otherwise you can enter it manually. The linked order total is not imported automatically as project revenue.
 
 When a project ends, check that tasks are consistent and that no pending entries remain.
+
+### Resales
+
+The **Resales** entry in the Projects module manages economic resale operations separately from operational tasks, timesheets, and user assignments. When creating a resale, you must select a **client order**, exactly one **supplier order** linked to that client order, set the required **start date** and **resale due date**, and add at least one **resale activity** in the initial activities table: the system accepts the supplier order only when at least one client-order line references it.
+
+Each resale shows **Resale revenue** as the sum of the revenues entered on its activities. The official **Resale cost** is imported from the supplier order total and is not edited manually. The create form shows both values as read-only fields while you fill in the activities. Resale activities are entered manually and include activity name, billing frequency (monthly, quarterly, annual, or one-time), category, cost, revenue, released status, independent due date, and notes.
+
+Activity costs remain editable: when the sum of activity costs does not match the supplier order total, the view shows a **variance**. The variance is an operational warning and does not block saving, so you can reconcile the activity costs progressively.
+
+Resale categories are a dedicated catalog seeded with **Hardware**, **Sottoscrizione**, and **Licenza**. You manage them from the **Resale Categories** button in the Resales view or from the **Category** control inside the create-resale form, matching the internal-listing product category flow; a category used by activities cannot be deleted.
+
+Access is controlled by separate **Resales** permissions (`projects.resales.view/create/update/delete`), granted to the Manager and Top Manager profiles by default.
 
 ### Project rules
 
