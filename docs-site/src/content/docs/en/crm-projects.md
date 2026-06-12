@@ -49,6 +49,18 @@ When creating or editing a project you can fill in:
 
 When a project ends, check that tasks are consistent and that no pending entries remain.
 
+### Resales
+
+The **Resales** entry in the Projects module manages economic resale operations separately from operational tasks, timesheets, and user assignments. When creating a resale, you must select a **client order** and exactly one **supplier order** linked to that client order: the system accepts the supplier order only when at least one client-order line references it.
+
+Each resale shows **Resale revenue** as the sum of the revenues entered on its activities. The official **Resale cost** is imported from the supplier order total and is not edited manually. Resale activities are entered manually and include activity name, billing frequency (monthly, quarterly, annual, or one-time), category, cost, revenue, released status, independent due date, and notes.
+
+Activity costs remain editable: when the sum of activity costs does not match the supplier order total, the view shows a **variance**. The variance is an operational warning and does not block saving, so you can reconcile the activity costs progressively.
+
+Resale categories are a dedicated catalog seeded with **Hardware**, **Sottoscrizione**, and **Licenza**. You can manage them from the Resales view; a category used by activities cannot be deleted.
+
+Access is controlled by separate **Resales** permissions (`projects.resales.view/create/update/delete`), granted to the Manager and Top Manager profiles by default.
+
 ### Project rules
 
 The **Project rules** section on the detail page lets you create automatic controls for a project. A rule compares one or more project fields (revenue, logged hours, days until deadline, billing, or status; cost fields require the **Cost reports** permission) against thresholds, values, or compatible fields and can combine conditions with **AND** or **OR**. When the rule becomes true, it sends a notification to selected assigned users or to users with selected roles. The section is shown and edited through the **Project Rules** permission (`projects.rules`), granted to Managers and Top Managers by default. Notifications fire only on the transition from not met to met, so they are not duplicated while the rule remains true. Re-enabling a rule or changing its condition prepares it to notify again on the next scheduled check.

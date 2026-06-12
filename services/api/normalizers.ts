@@ -14,6 +14,10 @@ import type {
   ProjectTask,
   Quote,
   QuoteItem,
+  Resale,
+  ResaleActivity,
+  ResaleCategory,
+  ResaleOrderOption,
   RoleSummary,
   SupplierInvoice,
   SupplierInvoiceItem,
@@ -286,6 +290,46 @@ export const normalizeProject = (p: Project): Project => ({
   // payload missing the flag is treated as "needs confirmation" rather than confirmed.
   tipo: p.tipo === 'passivo' ? 'passivo' : 'attivo',
   tipoConfirmed: p.tipoConfirmed === true,
+});
+
+const normalizeResaleBillingFrequency = (value: unknown): ResaleActivity['billingFrequency'] => {
+  if (value === 'monthly' || value === 'quarterly' || value === 'annual') return value;
+  return 'one_time';
+};
+
+export const normalizeResaleActivity = (activity: ResaleActivity): ResaleActivity => ({
+  ...activity,
+  billingFrequency: normalizeResaleBillingFrequency(activity.billingFrequency),
+  cost: Number(activity.cost || 0),
+  revenue: Number(activity.revenue || 0),
+  released: activity.released === true,
+  dueDate: activity.dueDate ? normalizeDateOnlyString(activity.dueDate) : null,
+  notes: activity.notes ?? null,
+});
+
+export const normalizeResale = (resale: Resale): Resale => ({
+  ...resale,
+  supplierOrderCost: Number(resale.supplierOrderCost || 0),
+  activityCostTotal: Number(resale.activityCostTotal || 0),
+  resaleRevenue: Number(resale.resaleRevenue || 0),
+  costVariance: Number(resale.costVariance || 0),
+  dueDate: resale.dueDate ? normalizeDateOnlyString(resale.dueDate) : null,
+  notes: resale.notes ?? null,
+  activities: (resale.activities || []).map(normalizeResaleActivity),
+});
+
+export const normalizeResaleCategory = (category: ResaleCategory): ResaleCategory => ({
+  ...category,
+  activityCount: Number(category.activityCount || 0),
+  hasLinkedActivities: category.hasLinkedActivities === true,
+});
+
+export const normalizeResaleOrderOption = (option: ResaleOrderOption): ResaleOrderOption => ({
+  ...option,
+  supplierOrders: (option.supplierOrders || []).map((supplierOrder) => ({
+    ...supplierOrder,
+    total: Number(supplierOrder.total || 0),
+  })),
 });
 
 export const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({

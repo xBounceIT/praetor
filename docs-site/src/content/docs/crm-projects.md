@@ -49,6 +49,18 @@ Quando crei o modifichi un progetto puoi compilare anche:
 
 Quando un progetto termina, verifica che le attività siano coerenti e che non rimangano registrazioni pendenti.
 
+### Rivendite
+
+La voce **Rivendite** nel modulo Progetti gestisce operazioni economiche separate da attività operative, timesheet e assegnazioni utenti. In creazione devi selezionare un **ordine cliente** e un solo **ordine fornitore** collegato a quell'ordine cliente: il sistema accetta l'ordine fornitore solo se almeno una riga dell'ordine cliente lo referenzia.
+
+Ogni rivendita mostra il **Ricavo Rivendita** come somma dei ricavi inseriti nelle sue attività. Il **Costo Rivendita** ufficiale è invece importato dal totale dell'ordine fornitore e non viene modificato manualmente. Le attività rivendita restano compilate a mano e includono nome attività, fatturazione (mensile, trimestrale, annuale o una tantum), categoria, costo, ricavo, stato rilasciato, scadenza indipendente e note.
+
+Il costo delle attività è modificabile: se la somma dei costi attività non coincide con il totale dell'ordine fornitore, la vista mostra una **varianza**. La varianza è un avviso operativo e non blocca il salvataggio, così puoi completare l'allineamento progressivamente.
+
+Le categorie Rivendite sono un catalogo dedicato, inizializzato con **Hardware**, **Sottoscrizione** e **Licenza**. Puoi gestirle dalla vista Rivendite; una categoria usata da attività non può essere eliminata.
+
+L'accesso è governato dai permessi separati **Rivendite** (`projects.resales.view/create/update/delete`), assegnati per impostazione predefinita ai profili Manager e Top Manager.
+
 ### Regole progetto
 
 La sezione **Regole del progetto** nella pagina di dettaglio permette di creare controlli automatici sul progetto. Una regola confronta uno o più campi del progetto (ricavo, ore consuntive, giorni alla scadenza, consuntivazione o stato; i campi di costo richiedono il permesso **Report costi**) con soglie, valori o altri campi compatibili e può combinare le condizioni con **AND** oppure **OR**. Quando la regola diventa vera, invia una notifica agli utenti assegnati selezionati o agli utenti che hanno uno dei ruoli scelti. La sezione è visibile e modificabile tramite il permesso **Regole Progetto** (`projects.rules`), assegnato per impostazione predefinita a Manager e Top Manager. Le notifiche sono inviate solo sul passaggio da condizione non verificata a verificata, quindi non vengono duplicate mentre la regola resta vera. Riabilitare una regola o modificarne la condizione la prepara a generare una nuova notifica al prossimo controllo pianificato.

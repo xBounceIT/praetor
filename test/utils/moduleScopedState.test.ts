@@ -50,6 +50,9 @@ describe('moduleScopedState', () => {
       expect(stale).not.toContain('users');
       expect(stale).not.toContain('workUnits');
       expect(stale).not.toContain('clientsOrders');
+      expect(stale).not.toContain('resales');
+      expect(stale).not.toContain('resaleCategories');
+      expect(stale).not.toContain('resaleOrderOptions');
       // Projects doesn't touch sales/accounting data — must be cleared.
       expect(stale).toContain('quotes');
       expect(stale).toContain('clientOffers');
@@ -67,7 +70,7 @@ describe('moduleScopedState', () => {
     test('catalog (smallest module) stales nearly everything', () => {
       const stale = getStaleModuleScopedKeys('catalog');
       expect(stale).not.toContain('products');
-      // Catalog only owns products, so 14 of 15 known keys are stale.
+      // Catalog only owns products, so every other known key is stale.
       expect(stale).toHaveLength(ALL_MODULE_SCOPED_KEYS.length - 1);
     });
 

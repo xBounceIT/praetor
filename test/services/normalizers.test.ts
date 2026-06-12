@@ -12,6 +12,9 @@ import {
   normalizeProject,
   normalizeQuote,
   normalizeQuoteItem,
+  normalizeResale,
+  normalizeResaleCategory,
+  normalizeResaleOrderOption,
   normalizeSupplierInvoice,
   normalizeSupplierInvoiceItem,
   normalizeSupplierQuote,
@@ -36,6 +39,9 @@ import type {
   ProjectTask,
   Quote,
   QuoteItem,
+  Resale,
+  ResaleCategory,
+  ResaleOrderOption,
   SupplierInvoice,
   SupplierInvoiceItem,
   SupplierQuote,
@@ -926,6 +932,107 @@ describe('normalizeProject', () => {
       billingType: 'mixed',
       billingFrequency: 'one_time',
     });
+  });
+});
+
+describe('normalizeResale', () => {
+  const baseResale: Resale = {
+    id: 'rv-1',
+    clientOrderId: 'ord-1',
+    supplierOrderId: 'so-1',
+    clientName: 'Acme',
+    supplierName: 'Supplier',
+    supplierOrderCost: 0,
+    activityCostTotal: 0,
+    resaleRevenue: 0,
+    costVariance: 0,
+    dueDate: null,
+    notes: null,
+    createdAt: 0,
+    updatedAt: 0,
+    activities: [],
+  };
+
+  test('normalizes totals, activity billing frequency, dates, and nullable notes', () => {
+    const result = normalizeResale(
+      make<Resale>(baseResale, {
+        supplierOrderCost: '120.50',
+        activityCostTotal: '100',
+        resaleRevenue: '180',
+        costVariance: '20.5',
+        dueDate: '2026-04-15T12:00:00.000Z',
+        notes: undefined,
+        activities: [
+          {
+            id: 'rva-1',
+            resaleId: 'rv-1',
+            name: 'Licenza',
+            billingFrequency: 'legacy-value',
+            categoryId: 'rvc-licenza',
+            categoryName: 'Licenza',
+            cost: '100',
+            revenue: '180',
+            released: 'yes',
+            dueDate: '2026-05-01T12:00:00.000Z',
+            notes: undefined,
+          },
+        ],
+      }),
+    );
+
+    expect(result).toMatchObject({
+      supplierOrderCost: 120.5,
+      activityCostTotal: 100,
+      resaleRevenue: 180,
+      costVariance: 20.5,
+      dueDate: '2026-04-15',
+      notes: null,
+    });
+    expect(result.activities[0]).toMatchObject({
+      billingFrequency: 'one_time',
+      cost: 100,
+      revenue: 180,
+      released: false,
+      dueDate: '2026-05-01',
+      notes: null,
+    });
+  });
+});
+
+describe('normalizeResaleCategory', () => {
+  test('normalizes activity counters and linked state', () => {
+    const category = make<ResaleCategory>(
+      { id: 'rvc-1', name: 'Hardware' },
+      { activityCount: '2', hasLinkedActivities: 'true' },
+    );
+
+    expect(normalizeResaleCategory(category)).toMatchObject({
+      activityCount: 2,
+      hasLinkedActivities: false,
+    });
+  });
+});
+
+describe('normalizeResaleOrderOption', () => {
+  test('normalizes supplier order totals and missing supplier order arrays', () => {
+    const option = make<ResaleOrderOption>(
+      { clientOrderId: 'ord-1', clientName: 'Acme', supplierOrders: [] },
+      { supplierOrders: [{ id: 'so-1', supplierName: 'Supplier', total: '42.5' }] },
+    );
+
+    expect(normalizeResaleOrderOption(option).supplierOrders).toEqual([
+      { id: 'so-1', supplierName: 'Supplier', total: 42.5 },
+    ]);
+    expect(
+      normalizeResaleOrderOption(
+        make<ResaleOrderOption>(
+          { clientOrderId: 'ord-2', clientName: 'Beta', supplierOrders: [] },
+          {
+            supplierOrders: undefined,
+          },
+        ),
+      ).supplierOrders,
+    ).toEqual([]);
   });
 });
 
