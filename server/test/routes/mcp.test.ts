@@ -17,6 +17,7 @@ import * as realTasksRepo from '../../repositories/tasksRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realWorkUnitsRepo from '../../repositories/workUnitsRepo.ts';
 import * as realTimeEntriesService from '../../services/timeEntries.ts';
+import { APP_VERSION } from '../../utils/app-version.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 
 const mcpAuthSnap = { ...realMcpAuth };
@@ -359,7 +360,7 @@ describe('/api/mcp', () => {
 
     expect(res.statusCode).toBe(200);
     const body = parseMcpBody(res.body);
-    expect(body.result.serverInfo).toEqual({ name: 'praetor', version: '0.7.0' });
+    expect(body.result.serverInfo).toEqual({ name: 'praetor', version: APP_VERSION });
   });
 
   test('lists tools and calls permission-scoped list tools', async () => {
