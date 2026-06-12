@@ -26,12 +26,15 @@ mock.module('../../services/api', () => ({
 
 clearSpyStateAfterAll();
 
-const { makeTaskHandlers } = await import('../../hooks/handlers/taskHandlers');
+const { createTaskUpdateQueueState, makeTaskHandlers } = await import(
+  '../../hooks/handlers/taskHandlers'
+);
 
 type TaskLike = {
   id: string;
   name: string;
   projectId: string;
+  revenue?: number;
   isRecurring?: boolean;
   recurrencePattern?: string;
   recurrenceStart?: string;
@@ -56,19 +59,119 @@ const makeStubSetter = <T>(initial: T[]) => {
   };
 };
 
+const deferValue = <T>() => {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+};
+
+beforeEach(() => {
+  Object.values(apiMocks).forEach((m) => {
+    m.mockClear();
+  });
+});
+
+afterEach(() => {
+  Object.values(apiMocks).forEach((m) => {
+    m.mockReset();
+  });
+});
+
+describe('makeTaskHandlers.update', () => {
+  test('serializes same-task revenue edits so the latest value wins locally and on the server', async () => {
+    const requests: Array<{
+      id: string;
+      updates: Partial<TaskLike>;
+      deferred: ReturnType<typeof deferValue<TaskLike>>;
+    }> = [];
+    apiMocks.tasksUpdate.mockImplementation((id: string, updates: unknown) => {
+      const deferred = deferValue<TaskLike>();
+      requests.push({ id, updates: updates as Partial<TaskLike>, deferred });
+      return deferred.promise;
+    });
+    const tasks = makeStubSetter<TaskLike>([
+      { id: 't1', name: 'task-A', projectId: 'p1', revenue: 10 },
+    ]);
+    const handlers = makeTaskHandlers({
+      projectTasks: tasks.get() as never,
+      setProjectTasks: tasks.setter,
+      setEntries: makeStubSetter<EntryLike>([]).setter,
+      generateRecurringEntries: mock(() => Promise.resolve()),
+      taskUpdateQueueState: createTaskUpdateQueueState(),
+    });
+
+    const firstUpdate = handlers.update('t1', { revenue: 100 });
+    const secondUpdate = handlers.update('t1', { revenue: 250 });
+    await Promise.resolve();
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0].updates).toEqual({ revenue: 100 });
+
+    requests[0].deferred.resolve({ id: 't1', name: 'task-A', projectId: 'p1', revenue: 100 });
+    await firstUpdate;
+    await Promise.resolve();
+
+    expect(tasks.get()[0].revenue).toBe(100);
+    expect(requests).toHaveLength(2);
+    expect(requests[1].updates).toEqual({ revenue: 250 });
+
+    requests[1].deferred.resolve({ id: 't1', name: 'task-A', projectId: 'p1', revenue: 250 });
+    await secondUpdate;
+
+    expect(tasks.get()[0].revenue).toBe(250);
+  });
+
+  test('keeps the last committed task value when a newer queued edit fails', async () => {
+    const requests: Array<{
+      updates: Partial<TaskLike>;
+      deferred: ReturnType<typeof deferValue<TaskLike>>;
+    }> = [];
+    apiMocks.tasksUpdate.mockImplementation((_id: string, updates: unknown) => {
+      const deferred = deferValue<TaskLike>();
+      requests.push({ updates: updates as Partial<TaskLike>, deferred });
+      return deferred.promise;
+    });
+    const tasks = makeStubSetter<TaskLike>([
+      { id: 't1', name: 'task-A', projectId: 'p1', revenue: 10 },
+    ]);
+    const handlers = makeTaskHandlers({
+      projectTasks: tasks.get() as never,
+      setProjectTasks: tasks.setter,
+      setEntries: makeStubSetter<EntryLike>([]).setter,
+      generateRecurringEntries: mock(() => Promise.resolve()),
+      taskUpdateQueueState: createTaskUpdateQueueState(),
+    });
+
+    const originalError = console.error;
+    console.error = mock(() => {}) as unknown as typeof console.error;
+    try {
+      const firstUpdate = handlers.update('t1', { revenue: 100 });
+      const secondUpdate = handlers.update('t1', { revenue: 250 });
+      await Promise.resolve();
+
+      requests[0].deferred.resolve({ id: 't1', name: 'task-A', projectId: 'p1', revenue: 100 });
+      await firstUpdate;
+      await Promise.resolve();
+
+      expect(tasks.get()[0].revenue).toBe(100);
+      expect(requests).toHaveLength(2);
+      expect(requests[1].updates).toEqual({ revenue: 250 });
+
+      requests[1].deferred.reject(new Error('validation failed'));
+      await secondUpdate;
+
+      expect(tasks.get()[0].revenue).toBe(100);
+    } finally {
+      console.error = originalError;
+    }
+  });
+});
+
 describe('makeTaskHandlers.makeRecurring', () => {
-  beforeEach(() => {
-    Object.values(apiMocks).forEach((m) => {
-      m.mockClear();
-    });
-  });
-
-  afterEach(() => {
-    Object.values(apiMocks).forEach((m) => {
-      m.mockReset();
-    });
-  });
-
   test('first-time recurring: skips placeholder cleanup, updates task, regenerates', async () => {
     apiMocks.tasksUpdate.mockImplementation((id: string, updates: unknown) =>
       Promise.resolve({ id, name: 'task-A', projectId: 'p1', ...(updates as object) }),
@@ -83,6 +186,7 @@ describe('makeTaskHandlers.makeRecurring', () => {
       setProjectTasks: tasks.setter,
       setEntries: entries.setter,
       generateRecurringEntries: generateSpy as never,
+      taskUpdateQueueState: createTaskUpdateQueueState(),
     });
 
     await handlers.makeRecurring('t1', 'weekly', '2026-05-01', '2026-12-01', 8);
@@ -114,6 +218,7 @@ describe('makeTaskHandlers.makeRecurring', () => {
       setProjectTasks: tasks.setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
       generateRecurringEntries: generateSpy as never,
+      taskUpdateQueueState: createTaskUpdateQueueState(),
     });
 
     await handlers.makeRecurring('t1', 'daily', '2026-05-01');
@@ -145,6 +250,7 @@ describe('makeTaskHandlers.makeRecurring', () => {
       setProjectTasks: tasks.setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
       generateRecurringEntries: generateSpy as never,
+      taskUpdateQueueState: createTaskUpdateQueueState(),
     });
 
     const makeRecurringPromise = handlers.makeRecurring('t1', 'weekly', '2026-05-01');
@@ -200,6 +306,7 @@ describe('makeTaskHandlers.makeRecurring', () => {
       setProjectTasks: tasks.setter,
       setEntries: entries.setter,
       generateRecurringEntries: mock(() => Promise.resolve()),
+      taskUpdateQueueState: createTaskUpdateQueueState(),
     });
 
     await handlers.makeRecurring('t1', 'monthly', '2026-05-01', undefined, 4);
@@ -232,6 +339,7 @@ describe('makeTaskHandlers.makeRecurring', () => {
       setProjectTasks: tasks.setter,
       setEntries: makeStubSetter<EntryLike>([]).setter,
       generateRecurringEntries: mock(() => Promise.resolve()),
+      taskUpdateQueueState: createTaskUpdateQueueState(),
     });
 
     await handlers.makeRecurring('t1', 'daily');

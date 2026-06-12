@@ -8,17 +8,55 @@ export type TaskHandlersDeps = {
   setProjectTasks: React.Dispatch<React.SetStateAction<ProjectTask[]>>;
   setEntries: React.Dispatch<React.SetStateAction<TimeEntry[]>>;
   generateRecurringEntries: () => Promise<void> | void;
+  taskUpdateQueueState: TaskUpdateQueueState;
 };
 
+export type TaskUpdateQueueState = {
+  queuedTaskUpdates: Map<string, Promise<void>>;
+  latestTaskUpdateSeqById: Map<string, number>;
+  nextTaskUpdateSeq: number;
+};
+
+export const createTaskUpdateQueueState = (): TaskUpdateQueueState => ({
+  queuedTaskUpdates: new Map(),
+  latestTaskUpdateSeqById: new Map(),
+  nextTaskUpdateSeq: 0,
+});
+
 export const makeTaskHandlers = (deps: TaskHandlersDeps) => {
-  const { projectTasks, setProjectTasks, setEntries, generateRecurringEntries } = deps;
+  const {
+    projectTasks,
+    setProjectTasks,
+    setEntries,
+    generateRecurringEntries,
+    taskUpdateQueueState,
+  } = deps;
 
   const update = async (id: string, updates: Partial<ProjectTask>) => {
-    try {
+    const { queuedTaskUpdates, latestTaskUpdateSeqById } = taskUpdateQueueState;
+    const updateSeq = ++taskUpdateQueueState.nextTaskUpdateSeq;
+    latestTaskUpdateSeqById.set(id, updateSeq);
+    const priorUpdate = queuedTaskUpdates.get(id) ?? Promise.resolve();
+    const runUpdate = async () => {
+      if (latestTaskUpdateSeqById.get(id) !== updateSeq) return;
       const updated = await api.tasks.update(id, updates);
       setProjectTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+    };
+    const updateRequest = queuedTaskUpdates.has(id)
+      ? priorUpdate.catch(() => undefined).then(runUpdate)
+      : runUpdate();
+    queuedTaskUpdates.set(id, updateRequest);
+    try {
+      await updateRequest;
     } catch (err) {
       console.error('Failed to update task:', err);
+    } finally {
+      if (queuedTaskUpdates.get(id) === updateRequest) {
+        queuedTaskUpdates.delete(id);
+      }
+      if (latestTaskUpdateSeqById.get(id) === updateSeq) {
+        latestTaskUpdateSeqById.delete(id);
+      }
     }
   };
 
