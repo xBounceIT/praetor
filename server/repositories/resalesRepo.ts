@@ -531,8 +531,7 @@ export const listOrderOptions = async (exec: DbExecutor = db): Promise<ResaleOrd
          FROM sales s
          JOIN sale_items si ON si.sale_id = s.id
          JOIN supplier_sales ss ON ss.id = si.supplier_sale_id
-        WHERE s.status = 'confirmed'
-          AND si.supplier_sale_id IS NOT NULL
+        WHERE si.supplier_sale_id IS NOT NULL
         GROUP BY s.id, s.client_name, s.created_at, ss.id, ss.supplier_name, ss.created_at
         ORDER BY s.created_at DESC, ss.created_at DESC`,
   );

@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { computeSupplierOrderTotal } from '../../repositories/resalesRepo.ts';
+import type { DbExecutor } from '../../db/drizzle.ts';
+import { computeSupplierOrderTotal, listOrderOptions } from '../../repositories/resalesRepo.ts';
 import type { SupplierOrder, SupplierOrderItem } from '../../repositories/supplierOrdersRepo.ts';
+import { type FakeExecutor, makeRow, setupTestDb } from '../helpers/fakeExecutor.ts';
+
+let exec: FakeExecutor;
+let testDb: DbExecutor;
 
 const makeOrder = (overrides: Partial<Pick<SupplierOrder, 'discount' | 'discountType'>>) =>
   ({
@@ -24,6 +29,34 @@ const makeItem = (overrides: Partial<SupplierOrderItem>) =>
     ...overrides,
   }) as SupplierOrderItem;
 
+const SUPPLIER_ORDER_BASE: readonly unknown[] = [
+  'so-1',
+  'q-1',
+  'sup-1',
+  'CloudSeat Licensing',
+  'immediate',
+  '0',
+  'percentage',
+  'draft',
+  null,
+  new Date('2026-06-12T00:00:00Z'),
+  new Date('2026-06-12T00:01:00Z'),
+];
+
+const SUPPLIER_ORDER_ITEM_BASE: readonly unknown[] = [
+  'soi-1',
+  'so-1',
+  null,
+  'License',
+  '1',
+  '9',
+  '0',
+  null,
+  new Date('2026-06-12T00:00:00Z'),
+  1,
+  'months',
+];
+
 describe('computeSupplierOrderTotal', () => {
   test('uses line duration and line discounts before order discount', () => {
     const total = computeSupplierOrderTotal(
@@ -44,5 +77,34 @@ describe('computeSupplierOrderTotal', () => {
     );
 
     expect(total).toBe(0);
+  });
+});
+
+describe('listOrderOptions', () => {
+  test('includes draft client orders when they have linked supplier orders', async () => {
+    ({ exec, testDb } = setupTestDb());
+    exec.enqueue({
+      rows: [
+        {
+          clientOrderId: 'ORD-2026-0001',
+          clientName: 'Acme Corp',
+          supplierOrderId: 'so-1',
+          supplierName: 'CloudSeat Licensing',
+        },
+      ],
+    });
+    exec.enqueue({ rows: [makeRow(SUPPLIER_ORDER_BASE)] });
+    exec.enqueue({ rows: [makeRow(SUPPLIER_ORDER_ITEM_BASE)] });
+
+    const options = await listOrderOptions(testDb);
+
+    expect(exec.calls[0].sql.toLowerCase()).not.toContain("s.status = 'confirmed'");
+    expect(options).toEqual([
+      {
+        clientOrderId: 'ORD-2026-0001',
+        clientName: 'Acme Corp',
+        supplierOrders: [{ id: 'so-1', supplierName: 'CloudSeat Licensing', total: 9 }],
+      },
+    ]);
   });
 });
