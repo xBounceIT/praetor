@@ -1,10 +1,17 @@
-import { and, asc, desc, eq, getTableColumns, inArray, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, inArray, ne, notInArray, or, sql } from 'drizzle-orm';
 import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
+import { customerOfferItems } from '../db/schema/customerOfferItems.ts';
+import { quoteItems } from '../db/schema/quotes.ts';
+import { saleItems } from '../db/schema/sales.ts';
 import { supplierQuoteItems, supplierQuotes } from '../db/schema/supplierQuotes.ts';
 import { supplierSales } from '../db/schema/supplierSales.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
+import {
+  effectiveSupplierQuoteStatusFromDate,
+  isTerminalQuoteStatus,
+} from '../utils/quote-status.ts';
 
 export type SupplierQuote = {
   id: string;
@@ -21,7 +28,157 @@ export type SupplierQuote = {
   notes: string | null;
   createdAt: number;
   updatedAt: number;
+  // The client quote (if any) that links to this supplier quote via the 1-to-1
+  // quotes.linked_supplier_quote_id FK (issue #779). The supplier quote's visible status is
+  // FULLY DERIVED from this chain: the linked quote's status/expiration, and — when an offer was
+  // created from that quote — the offer's status/expiration. All fields are null when unlinked.
+  linkedClientQuoteId: string | null;
+  linkedClientQuoteStatus: string | null;
+  linkedClientQuoteExpiration: string | null;
+  linkedOfferStatus: string | null;
+  linkedOfferExpiration: string | null;
 };
+
+// The outer supplier_quotes.id, qualified to the OUTER table for use inside the correlated
+// subqueries below. Hand-qualified on purpose: `${supplierQuotes.id}` renders as a BARE "id"
+// because the outer query is join-less (Drizzle omits the table prefix), which then (a) shadows
+// to the subquery's own inner table id — a silently wrong correlation — and (b) is AMBIGUOUS in
+// the offer subqueries that join two id-bearing tables (customer_offers + quotes), aborting the
+// whole list query with "column reference \"id\" is ambiguous". The outer table is always
+// selected unaliased as "supplier_quotes" (see listAll/findById/lockEffectiveStatusById), so the
+// explicit reference is stable. Do NOT replace with ${supplierQuotes.id}.
+const outerSupplierQuoteId = sql.raw('"supplier_quotes"."id"');
+
+// The client quote that most-advances this supplier quote, resolved through PRODUCT-LINE sourcing
+// (quote_items.supplier_quote_id) — issue #779 follow-up: the 1:1 quotes.linked_supplier_quote_id
+// header link was removed as redundant with the per-line sourcing, so a supplier quote now follows
+// the furthest-progressed client document whose lines use it. NULL when no client quote sources
+// this supplier quote. The downstream offer is still that chosen quote's offer
+// (customer_offers.linked_quote_id), so the derived-status chain (effectiveSupplierQuoteStatus)
+// is unchanged — only the quote it follows changed.
+// "Most-advanced sourcing quote wins" ordering, shared by the scalar subquery (single-row paths)
+// and the list LATERAL below so the CASE lives in one place. Ranked by the CHAINED effective
+// status the row would ultimately project (mirroring effectiveSupplierQuoteStatus), NOT the raw
+// quote status: when a candidate has an offer, the projection follows the OFFER, so ranking on
+// cq.status alone would let an accepted quote whose offer is denied/expired (a dead chain)
+// outrank a live sent/offer quote and wrongly freeze the supplier quote in multi-quote sourcing.
+// Mapping per candidate, terminal-first then expiration overlay (like effectiveQuoteStatus):
+//   accepted 6 > offer 5 > sent 4 > draft/unknown 3 > expired 2 > denied 1
+// (dead-ends — denied, expired — never outrank a live document; expired sits above denied because
+// extending the date can revive it). Legacy spellings rank with their canonical equivalents
+// (confirmed/approved→accepted, received→sent, rejected→denied). Requires the candidate's offer
+// joined as `co` (unique on linked_quote_id ⇒ no row multiplication). Tiebreak:
+// most-recently-updated, then id.
+const sourcingRankOrderBy = sql`
+  CASE
+    WHEN co.id IS NOT NULL THEN
+      CASE
+        WHEN co.status IN ('accepted', 'confirmed', 'approved') THEN 6
+        WHEN co.status IN ('denied', 'rejected') THEN 1
+        WHEN co.expiration_date < CURRENT_DATE THEN 2
+        ELSE 5
+      END
+    ELSE
+      CASE
+        WHEN cq.status IN ('accepted', 'confirmed', 'approved') THEN 6
+        WHEN cq.status IN ('denied', 'rejected') THEN 1
+        WHEN cq.expiration_date < CURRENT_DATE THEN 2
+        WHEN cq.status = 'offer' THEN 5
+        WHEN cq.status IN ('sent', 'received') THEN 4
+        ELSE 3
+      END
+  END DESC,
+  cq.updated_at DESC,
+  cq.id`;
+
+// A quote is a sourcing CANDIDATE when its own lines source this supplier quote OR when its
+// offer's lines do (#812 round 16): an offer can add a fresh sourced line that exists only in
+// customer_offer_items, and offers always hang off a quote (linked_quote_id NOT NULL), so mapping
+// the offer line back to its quote lets the existing quote→offer chain projection apply unchanged.
+// Like isSourcedByClientDocuments, each branch also accepts LEGACY rows that carry only the
+// supplier_quote_item_id (null denormalized supplier_quote_id) via item membership (#812 round
+// 18) — otherwise those sourced quotes would keep displaying as unlinked draft.
+const sourcingCandidatePredicate = sql`(
+    EXISTS (
+      SELECT 1 FROM quote_items qi
+      WHERE qi.quote_id = cq.id AND (
+        qi.supplier_quote_id = ${outerSupplierQuoteId}
+        OR qi.supplier_quote_item_id IN (
+          SELECT sqi.id FROM supplier_quote_items sqi WHERE sqi.quote_id = ${outerSupplierQuoteId}
+        )
+      )
+    )
+    OR EXISTS (
+      SELECT 1 FROM customer_offers co2
+      JOIN customer_offer_items coi ON coi.offer_id = co2.id
+      WHERE co2.linked_quote_id = cq.id AND (
+        coi.supplier_quote_id = ${outerSupplierQuoteId}
+        OR coi.supplier_quote_item_id IN (
+          SELECT sqi.id FROM supplier_quote_items sqi WHERE sqi.quote_id = ${outerSupplierQuoteId}
+        )
+      )
+    )
+  )`;
+
+const chosenClientQuoteId = sql<string | null>`(
+  SELECT cq.id FROM quotes cq
+  LEFT JOIN customer_offers co ON co.linked_quote_id = cq.id
+  WHERE ${sourcingCandidatePredicate}
+  ORDER BY ${sourcingRankOrderBy}
+  LIMIT 1
+)`;
+
+// Same chosen-quote resolution as `chosenClientQuoteId`, but as a LEFT JOIN LATERAL that the list
+// query (listAll) joins ONCE per supplier-quote row — then reads id/status/expiration off "chosen"
+// and the downstream offer off "chosen_offer". This replaces inlining the scalar subquery 5× in
+// the SELECT (Drizzle interpolates the `sql` fragment textually, so Postgres would otherwise
+// re-run the ranked quote_items scan once per derived column, per row). The single-row paths
+// (findById, lockEffectiveStatusById) keep the scalar subqueries: the 5× cost is negligible for
+// one row, and lockEffectiveStatusById's `FOR UPDATE` must not lock the joined quotes/offers rows.
+const chosenClientQuoteLateral = sql`LATERAL (
+  SELECT cq.id, cq.status, cq.expiration_date
+  FROM quotes cq
+  LEFT JOIN customer_offers co ON co.linked_quote_id = cq.id
+  WHERE ${sourcingCandidatePredicate}
+  ORDER BY ${sourcingRankOrderBy}
+  LIMIT 1
+) "chosen"`;
+
+// Derived-status columns for the list projection, read straight off the LATERAL join above
+// (customer_offers is unique on linked_quote_id, so the join yields ≤1 offer — equivalent to the
+// scalar subqueries' LIMIT 1). ::text so the driver returns 'YYYY-MM-DD' strings, not Date objects.
+const lateralDerivedColumns = {
+  linkedClientQuoteId: sql<string | null>`"chosen"."id"`,
+  linkedClientQuoteStatus: sql<string | null>`"chosen"."status"`,
+  linkedClientQuoteExpiration: sql<string | null>`"chosen"."expiration_date"::text`,
+  linkedOfferStatus: sql<string | null>`"chosen_offer"."status"`,
+  linkedOfferExpiration: sql<string | null>`"chosen_offer"."expiration_date"::text`,
+};
+const chosenOfferJoin = sql`"customer_offers" "chosen_offer"`;
+const chosenOfferJoinOn = sql`"chosen_offer"."linked_quote_id" = "chosen"."id"`;
+
+const linkedClientQuoteIdSubquery = chosenClientQuoteId;
+const linkedClientQuoteStatusSubquery = sql<string | null>`(
+  SELECT q.status FROM quotes q WHERE q.id = ${chosenClientQuoteId} LIMIT 1
+)`;
+// ::text so the driver returns the plain 'YYYY-MM-DD' string instead of a Date object.
+const linkedClientQuoteExpirationSubquery = sql<string | null>`(
+  SELECT q.expiration_date::text FROM quotes q WHERE q.id = ${chosenClientQuoteId} LIMIT 1
+)`;
+const linkedOfferStatusSubquery = sql<string | null>`(
+  SELECT o.status FROM customer_offers o WHERE o.linked_quote_id = ${chosenClientQuoteId} LIMIT 1
+)`;
+const linkedOfferExpirationSubquery = sql<string | null>`(
+  SELECT o.expiration_date::text FROM customer_offers o
+  WHERE o.linked_quote_id = ${chosenClientQuoteId} LIMIT 1
+)`;
+
+const communicationChannelNameSubquery = sql<string>`(
+  SELECT qcc.name
+  FROM quote_communication_channels qcc
+  WHERE qcc.id = "supplier_quotes"."communication_channel_id"
+  LIMIT 1
+)`;
 
 export type SupplierQuoteItem = {
   id: string;
@@ -38,16 +195,14 @@ export type SupplierQuoteItem = {
   durationUnit: DurationUnit;
 };
 
-const communicationChannelNameSubquery = sql<string>`(
-  SELECT qcc.name
-  FROM quote_communication_channels qcc
-  WHERE qcc.id = ${supplierQuotes.communicationChannelId}
-  LIMIT 1
-)`;
-
 type QuoteRow = typeof supplierQuotes.$inferSelect & {
   linkedOrderId?: string | null;
   communicationChannelName: string;
+  linkedClientQuoteId?: string | null;
+  linkedClientQuoteStatus?: string | null;
+  linkedClientQuoteExpiration?: string | null;
+  linkedOfferStatus?: string | null;
+  linkedOfferExpiration?: string | null;
 };
 
 const mapQuote = (row: QuoteRow): SupplierQuote => ({
@@ -65,6 +220,11 @@ const mapQuote = (row: QuoteRow): SupplierQuote => ({
   notes: row.notes,
   createdAt: row.createdAt?.getTime() ?? 0,
   updatedAt: row.updatedAt?.getTime() ?? 0,
+  linkedClientQuoteId: row.linkedClientQuoteId ?? null,
+  linkedClientQuoteStatus: row.linkedClientQuoteStatus ?? null,
+  linkedClientQuoteExpiration: row.linkedClientQuoteExpiration ?? null,
+  linkedOfferStatus: row.linkedOfferStatus ?? null,
+  linkedOfferExpiration: row.linkedOfferExpiration ?? null,
 });
 
 const mapItem = (row: typeof supplierQuoteItems.$inferSelect): SupplierQuoteItem => ({
@@ -89,11 +249,17 @@ export const listAll = async (exec: DbExecutor = db): Promise<SupplierQuote[]> =
       communicationChannelName: communicationChannelNameSubquery,
       linkedOrderId: sql<string | null>`(
         SELECT ss.id FROM supplier_sales ss
-        WHERE ss.linked_quote_id = ${supplierQuotes.id}
+        WHERE ss.linked_quote_id = ${outerSupplierQuoteId}
         LIMIT 1
       )`,
+      // Appended after linkedOrderId so positional row fixtures keep their indices (repo tests).
+      // Resolved via the LATERAL join below — the chosen-quote ranking runs ONCE per row, not once
+      // per derived column.
+      ...lateralDerivedColumns,
     })
     .from(supplierQuotes)
+    .leftJoin(chosenClientQuoteLateral, sql`true`)
+    .leftJoin(chosenOfferJoin, chosenOfferJoinOn)
     .orderBy(desc(supplierQuotes.createdAt));
   return rows.map(mapQuote);
 };
@@ -114,10 +280,76 @@ export const findById = async (
     .select({
       ...getTableColumns(supplierQuotes),
       communicationChannelName: communicationChannelNameSubquery,
+      linkedClientQuoteId: linkedClientQuoteIdSubquery,
+      linkedClientQuoteStatus: linkedClientQuoteStatusSubquery,
+      linkedClientQuoteExpiration: linkedClientQuoteExpirationSubquery,
+      linkedOfferStatus: linkedOfferStatusSubquery,
+      linkedOfferExpiration: linkedOfferExpirationSubquery,
     })
     .from(supplierQuotes)
     .where(eq(supplierQuotes.id, id));
   return rows[0] ? mapQuote(rows[0]) : null;
+};
+
+// Per-id BLOCKING expirations among the given supplier quotes (the ones client quotes source via
+// their lines): supplier-quote id → its own expiration date, EXCLUDING quotes whose chained
+// EFFECTIVE status is terminal (#812 rounds 10-11). A terminal-effective (accepted/denied) supplier
+// quote is frozen and never shows as Expired — e.g. it derives `accepted` through another accepted
+// client document — so its past date must neither block progression (the guard) nor light the
+// client-side `linkedSupplierQuoteExpired` indicator (the list/response flag); both read this.
+// Each row's effective status is computed with the same chain columns findById materializes and
+// the canonical effectiveSupplierQuoteStatusFromDate (no SQL re-implementation that could drift).
+export const findBlockingExpirationsByIds = async (
+  ids: string[],
+  exec: DbExecutor = db,
+): Promise<Map<string, string>> => {
+  const blocking = new Map<string, string>();
+  const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+  if (uniqueIds.length === 0) return blocking;
+  const rows = await exec
+    .select({
+      id: supplierQuotes.id,
+      expirationDate: supplierQuotes.expirationDate,
+      linkedClientQuoteStatus: linkedClientQuoteStatusSubquery,
+      linkedClientQuoteExpiration: linkedClientQuoteExpirationSubquery,
+      linkedOfferStatus: linkedOfferStatusSubquery,
+      linkedOfferExpiration: linkedOfferExpirationSubquery,
+    })
+    .from(supplierQuotes)
+    .where(inArray(supplierQuotes.id, uniqueIds));
+  for (const row of rows) {
+    const expirationDate = normalizeNullableDateOnly(
+      row.expirationDate,
+      'supplierQuote.expirationDate',
+    );
+    if (!expirationDate) continue;
+    const effective = effectiveSupplierQuoteStatusFromDate({
+      expirationDate,
+      linkedClientStatus: row.linkedClientQuoteStatus,
+      linkedClientQuoteExpiration: row.linkedClientQuoteExpiration,
+      linkedOfferStatus: row.linkedOfferStatus,
+      linkedOfferExpiration: row.linkedOfferExpiration,
+    });
+    // Terminal-effective (accepted/denied) is frozen — never expired, never blocks. The derived
+    // `expired` itself is NOT terminal (isTerminalQuoteStatus floors it), so it stays counted.
+    if (isTerminalQuoteStatus(effective)) continue;
+    blocking.set(row.id, expirationDate);
+  }
+  return blocking;
+};
+
+// Earliest of the blocking expirations above — what the client-quotes progression/restore guards
+// and the single-document response flag key on. Null when the id list is empty or every sourced
+// supplier quote is terminal-frozen or has no expiration.
+export const findEarliestExpirationByIds = async (
+  ids: string[],
+  exec: DbExecutor = db,
+): Promise<string | null> => {
+  let earliest: string | null = null;
+  for (const date of (await findBlockingExpirationsByIds(ids, exec)).values()) {
+    if (!earliest || date < earliest) earliest = date;
+  }
+  return earliest;
 };
 
 export const existsById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
@@ -128,19 +360,44 @@ export const existsById = async (id: string, exec: DbExecutor = db): Promise<boo
   return rows.length > 0;
 };
 
-// SELECT status ... FOR UPDATE. Must be called inside a transaction. Use when a write that
-// references this quote (creating a supplier order linked to it) needs to serialize against
-// concurrent inserts/updates of the same quote.
-export const lockStatusById = async (
+// SELECT ... FOR UPDATE (must be called inside a transaction) that also resolves the linked
+// client quote's status, so callers
+// (supplier-order create / clients-order supplier auto-create) can decide "is this supplier quote
+// effectively accepted?" — mirror the linked client status, override with `expired` from the
+// supplier quote's OWN expiration — atomically under the row lock (issue #779). The scalar
+// subquery on `quotes` is unaffected by FOR UPDATE (only the supplier_quotes row is locked).
+export const lockEffectiveStatusById = async (
   id: string,
   exec: DbExecutor = db,
-): Promise<{ status: string } | null> => {
+): Promise<{
+  expirationDate: string | null;
+  linkedClientStatus: string | null;
+  linkedClientQuoteExpiration: string | null;
+  linkedOfferStatus: string | null;
+  linkedOfferExpiration: string | null;
+} | null> => {
   const rows = await exec
-    .select({ status: supplierQuotes.status })
+    .select({
+      expirationDate: supplierQuotes.expirationDate,
+      linkedClientStatus: linkedClientQuoteStatusSubquery,
+      linkedClientQuoteExpiration: linkedClientQuoteExpirationSubquery,
+      linkedOfferStatus: linkedOfferStatusSubquery,
+      linkedOfferExpiration: linkedOfferExpirationSubquery,
+    })
     .from(supplierQuotes)
     .where(eq(supplierQuotes.id, id))
     .for('update');
-  return rows[0] ?? null;
+  if (!rows[0]) return null;
+  return {
+    expirationDate: normalizeNullableDateOnly(
+      rows[0].expirationDate,
+      'supplierQuote.expirationDate',
+    ),
+    linkedClientStatus: rows[0].linkedClientStatus ?? null,
+    linkedClientQuoteExpiration: rows[0].linkedClientQuoteExpiration ?? null,
+    linkedOfferStatus: rows[0].linkedOfferStatus ?? null,
+    linkedOfferExpiration: rows[0].linkedOfferExpiration ?? null,
+  };
 };
 
 export const findItemsForQuote = async (
@@ -184,6 +441,90 @@ export const findLinkedOrderId = async (
     .where(eq(supplierSales.linkedQuoteId, quoteId))
     .limit(1);
   return rows[0]?.id ?? null;
+};
+
+// Whether any client document line (quote, offer, or client-order item) still sources this
+// supplier quote. There is deliberately NO FK behind these columns — the link is a soft
+// snapshot reference — so the DELETE route must enforce referential safety itself (issue #779):
+// deleting a sourced quote would strand the client lines with dead supplierQuoteItemIds and
+// 400 their next edit. Checks both the denormalized supplier_quote_id and (for legacy rows
+// that only carry the item id) membership in the quote's items.
+export const isSourcedByClientDocuments = async (
+  quoteId: string,
+  exec: DbExecutor = db,
+): Promise<boolean> => {
+  const itemIdsSubquery = exec
+    .select({ id: supplierQuoteItems.id })
+    .from(supplierQuoteItems)
+    .where(eq(supplierQuoteItems.quoteId, quoteId));
+  const [quoteRefs, offerRefs, orderRefs] = await Promise.all([
+    exec
+      .select({ id: quoteItems.id })
+      .from(quoteItems)
+      .where(
+        or(
+          eq(quoteItems.supplierQuoteId, quoteId),
+          inArray(quoteItems.supplierQuoteItemId, itemIdsSubquery),
+        ),
+      )
+      .limit(1),
+    exec
+      .select({ id: customerOfferItems.id })
+      .from(customerOfferItems)
+      .where(
+        or(
+          eq(customerOfferItems.supplierQuoteId, quoteId),
+          inArray(customerOfferItems.supplierQuoteItemId, itemIdsSubquery),
+        ),
+      )
+      .limit(1),
+    exec
+      .select({ id: saleItems.id })
+      .from(saleItems)
+      .where(
+        or(
+          eq(saleItems.supplierQuoteId, quoteId),
+          inArray(saleItems.supplierQuoteItemId, itemIdsSubquery),
+        ),
+      )
+      .limit(1),
+  ]);
+  return quoteRefs.length > 0 || offerRefs.length > 0 || orderRefs.length > 0;
+};
+
+// The subset of this quote's item ids that client document lines (quote, offer, or client-order
+// items) reference via supplier_quote_item_id. Finer-grained companion to
+// isSourcedByClientDocuments for the PUT items path (user report after #812): an in-place item
+// UPDATE keeps the id and strands nothing, so only deleting — or repointing the product of — one
+// of THESE items needs to be refused. Quote-level-only references (supplier_quote_id with a null
+// item id) never break on item edits, so they are deliberately out of scope here.
+export const findSourcedItemIds = async (
+  quoteId: string,
+  exec: DbExecutor = db,
+): Promise<Set<string>> => {
+  const itemIdsSubquery = exec
+    .select({ id: supplierQuoteItems.id })
+    .from(supplierQuoteItems)
+    .where(eq(supplierQuoteItems.quoteId, quoteId));
+  const [quoteRefs, offerRefs, orderRefs] = await Promise.all([
+    exec
+      .selectDistinct({ itemId: quoteItems.supplierQuoteItemId })
+      .from(quoteItems)
+      .where(inArray(quoteItems.supplierQuoteItemId, itemIdsSubquery)),
+    exec
+      .selectDistinct({ itemId: customerOfferItems.supplierQuoteItemId })
+      .from(customerOfferItems)
+      .where(inArray(customerOfferItems.supplierQuoteItemId, itemIdsSubquery)),
+    exec
+      .selectDistinct({ itemId: saleItems.supplierQuoteItemId })
+      .from(saleItems)
+      .where(inArray(saleItems.supplierQuoteItemId, itemIdsSubquery)),
+  ]);
+  const ids = new Set<string>();
+  for (const row of [...quoteRefs, ...offerRefs, ...orderRefs]) {
+    if (row.itemId) ids.add(row.itemId);
+  }
+  return ids;
 };
 
 export const findIdConflict = async (
@@ -242,7 +583,8 @@ export type SupplierQuoteUpdate = {
   clientId?: string | null;
   clientName?: string | null;
   paymentTerms?: string;
-  status?: string;
+  // No `status`: the stored column is vestigial under the fully-derived model (issue #779) — the
+  // routes never patch it, and a writable field here would invite a caller to desync it.
   expirationDate?: string | null;
   communicationChannelId?: string | null;
   notes?: string | null;
@@ -269,7 +611,6 @@ export const update = async (
       clientName:
         patch.clientName === undefined ? sql`${supplierQuotes.clientName}` : patch.clientName,
       paymentTerms: sql`COALESCE(${patch.paymentTerms ?? null}, ${supplierQuotes.paymentTerms})`,
-      status: sql`COALESCE(${patch.status ?? null}, ${supplierQuotes.status})`,
       expirationDate: sql`COALESCE(${patch.expirationDate ?? null}::date, ${supplierQuotes.expirationDate})`,
       communicationChannelId: sql`COALESCE(${patch.communicationChannelId ?? null}, ${supplierQuotes.communicationChannelId})`,
       notes: sql`COALESCE(${patch.notes ?? null}, ${supplierQuotes.notes})`,
@@ -363,12 +704,20 @@ export type QuoteItemSnapshot = {
   productId: string | null;
   unitPrice: number;
   netCost: number;
+  // Whether the parent supplier quote is currently offered for NEW sourcing (the same rule the
+  // UI pickers apply): derived effective status `draft` and no linked supplier order. Routes use
+  // this to reject FRESHLY-picked links from a stale tab / raw API client (#812 round 15) while
+  // retained links — and conversion-inherited ones — keep re-saving regardless.
+  sourceable: boolean;
 };
 
 /**
- * Resolves per-item snapshots used by the client-quotes route to lock in supplier-quote pricing
- * at the moment a client quote is created/updated. Only items belonging to *accepted* supplier
- * quotes are returned.
+ * Resolves per-item snapshots used by the client-quotes/offers/orders routes to lock in
+ * supplier-quote pricing at the moment a client document is created/updated. Deliberately NOT
+ * status-filtered (issue #779 derived model — see the inline comment on the query): the only
+ * way an id misses is that the supplier quote item no longer exists. Eligibility for NEW
+ * sourcing is surfaced separately via `sourceable` so routes can gate fresh links without
+ * breaking retained or conversion-inherited ones.
  */
 export const getQuoteItemSnapshots = async (
   itemIds: string[],
@@ -385,22 +734,94 @@ export const getQuoteItemSnapshots = async (
       supplierName: supplierQuotes.supplierName,
       productId: supplierQuoteItems.productId,
       unitPrice: supplierQuoteItems.unitPrice,
+      expirationDate: supplierQuotes.expirationDate,
+      linkedOrderId: sql<string | null>`(
+        SELECT ss.id FROM supplier_sales ss
+        WHERE ss.linked_quote_id = ${outerSupplierQuoteId} LIMIT 1
+      )`,
+      linkedClientQuoteStatus: linkedClientQuoteStatusSubquery,
+      linkedClientQuoteExpiration: linkedClientQuoteExpirationSubquery,
+      linkedOfferStatus: linkedOfferStatusSubquery,
+      linkedOfferExpiration: linkedOfferExpirationSubquery,
     })
     .from(supplierQuoteItems)
     .innerJoin(supplierQuotes, eq(supplierQuotes.id, supplierQuoteItems.quoteId))
-    .where(and(inArray(supplierQuoteItems.id, uniqueIds), eq(supplierQuotes.status, 'accepted')));
+    // No status filter (issue #779 derived model): supplier quotes start as draft and progress
+    // only with the client document that uses them, so sourcing must work from draft quotes —
+    // and re-saving a client quote whose supplier quote has since progressed must not 400. The
+    // views gate which quotes are offered for NEW sourcing; `sourceable` mirrors that gate for
+    // the routes' fresh-link checks.
+    .where(inArray(supplierQuoteItems.id, uniqueIds));
 
   for (const row of rows) {
     const unitPrice = parseDbNumber(row.unitPrice, 0);
+    const effective = effectiveSupplierQuoteStatusFromDate({
+      expirationDate: normalizeNullableDateOnly(row.expirationDate, 'supplierQuote.expirationDate'),
+      linkedClientStatus: row.linkedClientQuoteStatus,
+      linkedClientQuoteExpiration: row.linkedClientQuoteExpiration,
+      linkedOfferStatus: row.linkedOfferStatus,
+      linkedOfferExpiration: row.linkedOfferExpiration,
+    });
     snapshots.set(row.itemId, {
       supplierQuoteId: row.quoteId,
       supplierName: row.supplierName,
       productId: row.productId,
       unitPrice,
       netCost: unitPrice,
+      sourceable: effective === 'draft' && row.linkedOrderId === null,
     });
   }
   return snapshots;
+};
+
+export const findItemsByIds = async (
+  ids: string[],
+  exec: DbExecutor = db,
+): Promise<SupplierQuoteItem[]> => {
+  if (ids.length === 0) return [];
+  const rows = await exec
+    .select()
+    .from(supplierQuoteItems)
+    .where(inArray(supplierQuoteItems.id, ids));
+  return rows.map(mapItem);
+};
+
+export type SupplierItemSyncPatch = {
+  itemId: string;
+  quantity: number;
+  unitCost: number;
+  discountPercent: number;
+};
+
+// Client-driven pricing sync (issue #779, client → supplier direction): writes the new quantity
+// and unit cost, recomputing the list price so the stored "discount to us" stays meaningful
+// (listPrice × (1 − discount/100) = cost). A 100% discount cannot express a non-zero cost, so it
+// resets to 0 with listPrice = cost. Bumps the parent quote's updated_at like any content edit.
+export const syncItemPricing = async (
+  quoteId: string,
+  patches: SupplierItemSyncPatch[],
+  exec: DbExecutor = db,
+): Promise<void> => {
+  for (const patch of patches) {
+    const keepDiscount = patch.discountPercent < 100;
+    const discountPercent = keepDiscount ? patch.discountPercent : 0;
+    const listPrice = keepDiscount
+      ? patch.unitCost / (1 - patch.discountPercent / 100)
+      : patch.unitCost;
+    await exec
+      .update(supplierQuoteItems)
+      .set({
+        quantity: numericForDb(patch.quantity),
+        unitPrice: numericForDb(patch.unitCost),
+        listPrice: numericForDb(listPrice),
+        discountPercent: numericForDb(discountPercent),
+      })
+      .where(eq(supplierQuoteItems.id, patch.itemId));
+  }
+  await exec
+    .update(supplierQuotes)
+    .set({ updatedAt: sql`CURRENT_TIMESTAMP` })
+    .where(eq(supplierQuotes.id, quoteId));
 };
 
 export const insertItems = async (
@@ -441,4 +862,58 @@ export const replaceItems = async (
   runAtomically(exec, async (tx) => {
     await tx.delete(supplierQuoteItems).where(eq(supplierQuoteItems.quoteId, quoteId));
     return insertItems(quoteId, items, tx);
+  });
+
+// Identity-preserving counterpart of replaceItems for the PUT route (user report after #812):
+// items whose id already belongs to this quote are UPDATED in place — keeping the id intact for
+// the client lines' soft supplier_quote_item_id references AND keeping created_at, which drives
+// the items' display order — while the rest of the payload is inserted fresh and persisted rows
+// absent from the payload are deleted. The route refuses the delete for referenced ids before
+// calling this; ids from other quotes (or duplicates) must be re-minted by the caller.
+export const upsertItems = async (
+  quoteId: string,
+  items: NewSupplierQuoteItem[],
+  exec: DbExecutor = db,
+): Promise<SupplierQuoteItem[]> =>
+  runAtomically(exec, async (tx) => {
+    const existingRows = await tx
+      .select({ id: supplierQuoteItems.id })
+      .from(supplierQuoteItems)
+      .where(eq(supplierQuoteItems.quoteId, quoteId));
+    const existingIds = new Set(existingRows.map((row) => row.id));
+    const incomingIds = items.map((item) => item.id);
+    if (incomingIds.length > 0) {
+      await tx
+        .delete(supplierQuoteItems)
+        .where(
+          and(
+            eq(supplierQuoteItems.quoteId, quoteId),
+            notInArray(supplierQuoteItems.id, incomingIds),
+          ),
+        );
+    }
+    const inserts: NewSupplierQuoteItem[] = [];
+    for (const item of items) {
+      if (!existingIds.has(item.id)) {
+        inserts.push(item);
+        continue;
+      }
+      await tx
+        .update(supplierQuoteItems)
+        .set({
+          productId: item.productId,
+          productName: item.productName,
+          quantity: numericForDb(item.quantity),
+          listPrice: numericForDb(item.listPrice),
+          discountPercent: numericForDb(item.discountPercent),
+          unitPrice: numericForDb(item.unitPrice),
+          note: item.note,
+          unitType: item.unitType,
+          durationMonths: item.durationMonths ?? 1,
+          durationUnit: item.durationUnit ?? 'months',
+        })
+        .where(and(eq(supplierQuoteItems.id, item.id), eq(supplierQuoteItems.quoteId, quoteId)));
+    }
+    if (inserts.length > 0) await insertItems(quoteId, inserts, tx);
+    return findItemsForQuote(quoteId, tx);
   });

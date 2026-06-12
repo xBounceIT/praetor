@@ -206,6 +206,51 @@ describe('listForManagerView', () => {
   });
 });
 
+describe('sumDurationsByOwnerDate helpers', () => {
+  test('sumDurationsByOwnerDateForUser groups full-range durations without pagination', async () => {
+    exec.enqueue({
+      rows: [
+        { user_id: 'u-1', date: '2026-05-04', duration: '9.00' },
+        { user_id: 'u-1', date: '2026-05-05', duration: '4.50' },
+      ],
+    });
+
+    const result = await entriesRepo.sumDurationsByOwnerDateForUser(
+      'u-1',
+      { fromDate: '2026-05-01', toDate: '2026-05-31', projectId: 'p-1' },
+      testDb,
+    );
+
+    expect(result).toEqual(
+      new Map([
+        [entriesRepo.dailyDurationOwnerDateKey('u-1', '2026-05-04'), 9],
+        [entriesRepo.dailyDurationOwnerDateKey('u-1', '2026-05-05'), 4.5],
+      ]),
+    );
+    expect(exec.calls[0].params).toEqual(['u-1', '2026-05-01', '2026-05-31', 'p-1']);
+    expect(exec.calls[0].sql).toContain('SELECT user_id, date');
+    expect(exec.calls[0].sql).toContain('COALESCE(SUM(duration), 0) AS duration');
+    expect(exec.calls[0].sql).toContain('GROUP BY user_id, date');
+    expect(exec.calls[0].sql).not.toContain('LIMIT');
+    expect(exec.calls[0].sql).not.toContain('created_at');
+  });
+
+  test('sumDurationsByOwnerDateForManagerView preserves manager scoping', async () => {
+    exec.enqueue({ rows: [] });
+
+    await entriesRepo.sumDurationsByOwnerDateForManagerView(
+      'mgr',
+      { fromDate: '2026-05-01', toDate: '2026-05-31' },
+      testDb,
+    );
+
+    expect(exec.calls[0].params).toEqual(['mgr', 'mgr', '2026-05-01', '2026-05-31']);
+    expect(exec.calls[0].sql).toContain('user_id = $1');
+    expect(exec.calls[0].sql).toContain('wum.user_id = $2');
+    expect(exec.calls[0].sql).toContain('GROUP BY user_id, date');
+  });
+});
+
 describe('encodeCursor / decodeCursor', () => {
   test('round-trips a µs-precision Postgres timestamp cursor', () => {
     const encoded = entriesRepo.encodeCursor({

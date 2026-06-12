@@ -29,8 +29,15 @@ const getRolePermissionsMock = mock();
 
 const coCreateMock = mock();
 const coInsertItemsMock = mock();
+const coFindItemsForOrderMock = mock();
+const coCreateSupplierOrderMock = mock();
+const coBulkInsertSupplierOrderItemsMock = mock();
+const coLinkSaleItemsToSupplierOrderMock = mock();
+const coMapSaleItemsToSupplierItemsMock = mock();
 const sqFindByIdMock = mock();
 const sqFindLinkedOrderIdMock = mock();
+const sqLockEffectiveStatusByIdMock = mock();
+const sqFindItemsForQuoteMock = mock();
 const sqGetQuoteItemSnapshotsMock = mock();
 
 const logAuditMock = mock(async () => undefined);
@@ -57,11 +64,18 @@ beforeAll(async () => {
     ...clientsOrdersRepoSnap,
     create: coCreateMock,
     insertItems: coInsertItemsMock,
+    findItemsForOrder: coFindItemsForOrderMock,
+    createSupplierOrder: coCreateSupplierOrderMock,
+    bulkInsertSupplierOrderItems: coBulkInsertSupplierOrderItemsMock,
+    linkSaleItemsToSupplierOrder: coLinkSaleItemsToSupplierOrderMock,
+    mapSaleItemsToSupplierItems: coMapSaleItemsToSupplierItemsMock,
   }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
     findById: sqFindByIdMock,
     findLinkedOrderId: sqFindLinkedOrderIdMock,
+    lockEffectiveStatusById: sqLockEffectiveStatusByIdMock,
+    findItemsForQuote: sqFindItemsForQuoteMock,
     getQuoteItemSnapshots: sqGetQuoteItemSnapshotsMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
@@ -145,8 +159,15 @@ const allMocks = [
   getRolePermissionsMock,
   coCreateMock,
   coInsertItemsMock,
+  coFindItemsForOrderMock,
+  coCreateSupplierOrderMock,
+  coBulkInsertSupplierOrderItemsMock,
+  coLinkSaleItemsToSupplierOrderMock,
+  coMapSaleItemsToSupplierItemsMock,
   sqFindByIdMock,
   sqFindLinkedOrderIdMock,
+  sqLockEffectiveStatusByIdMock,
+  sqFindItemsForQuoteMock,
   sqGetQuoteItemSnapshotsMock,
   logAuditMock,
   withDbTransactionMock,
@@ -162,9 +183,16 @@ beforeEach(async () => {
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   coCreateMock.mockResolvedValue(CREATED_ORDER);
+  coFindItemsForOrderMock.mockResolvedValue([insertedItem()]);
+  coCreateSupplierOrderMock.mockResolvedValue(undefined);
+  coBulkInsertSupplierOrderItemsMock.mockResolvedValue(undefined);
+  coLinkSaleItemsToSupplierOrderMock.mockResolvedValue(undefined);
+  coMapSaleItemsToSupplierItemsMock.mockResolvedValue(undefined);
   // Default: no supplier quote resolves, so the auto-create-supplier-order branch fast-fails.
   sqFindByIdMock.mockResolvedValue(null);
   sqFindLinkedOrderIdMock.mockResolvedValue(null);
+  sqLockEffectiveStatusByIdMock.mockResolvedValue(null);
+  sqFindItemsForQuoteMock.mockResolvedValue([]);
   // Default: the referenced supplier-quote item belongs to an accepted quote (sq-1), so a
   // product-less line resolves. The dangling/bogus-ref test overrides this to an empty Map.
   sqGetQuoteItemSnapshotsMock.mockResolvedValue(
@@ -338,6 +366,68 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     }>;
     expect(insertedItems[0].productId).toBeNull();
     expect(insertedItems[0].supplierQuoteId).toBe('sq-1');
+    // The vanished supplier quote is surfaced, not silently skipped (#779).
+    expect(JSON.parse(res.body).warnings).toEqual([
+      expect.stringContaining('supplier quote sq-1 no longer exists'),
+    ]);
+  });
+
+  test('201 with a warning when a sourced supplier quote is not derived-accepted (#779)', async () => {
+    // Line-sourced only — no header link — so the quote derives 'draft' forever and the
+    // auto-create must skip it LOUDLY: silent skips left multi-supplier procurement undone.
+    coInsertItemsMock.mockResolvedValue([
+      insertedItem({
+        productId: null,
+        productName: 'Sourced line',
+        supplierQuoteId: 'sq-1',
+        supplierQuoteItemId: 'sqi-1',
+      }),
+    ]);
+    sqFindByIdMock.mockResolvedValue({
+      id: 'sq-1',
+      supplierId: 's-1',
+      supplierName: 'Supplier Co',
+      clientId: null,
+      clientName: null,
+      paymentTerms: 'net30',
+      status: 'draft',
+      expirationDate: '2999-12-31',
+      linkedOrderId: null,
+      notes: null,
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+      linkedClientQuoteId: null,
+      linkedClientQuoteStatus: null,
+      linkedClientQuoteExpiration: null,
+      linkedOfferStatus: null,
+      linkedOfferExpiration: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: 'co-1',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            productId: null,
+            productName: 'Sourced line',
+            quantity: 1,
+            unitPrice: 100,
+            supplierQuoteId: 'sq-1',
+            supplierQuoteItemId: 'sqi-1',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(JSON.parse(res.body).warnings).toEqual([
+      expect.stringContaining("its status is 'draft', not 'accepted'"),
+    ]);
   });
 
   test('201 still creates a normal catalog-product line', async () => {
@@ -444,7 +534,7 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toContain(
-      'is invalid or its supplier quote is not accepted',
+      'does not reference an existing supplier quote item',
     );
     expect(coCreateMock).not.toHaveBeenCalled();
     expect(coInsertItemsMock).not.toHaveBeenCalled();

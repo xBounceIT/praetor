@@ -35,7 +35,9 @@ describe('supplier-quote cost hint', () => {
 
     expectSourceContainsAll(source, [
       "import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';",
-      '{item.supplierQuoteItemId && <SupplierQuoteCostHint />}',
+      // Orders have no #779 forward sync, so they carry their own neutral copy instead of the
+      // default "edits update the supplier quote too" promise.
+      '<SupplierQuoteCostHint descriptionKey="clientsOrders.supplierQuoteCostTooltip" />',
     ]);
     // The blue "Ordine fornitore" pill above the cost was redundant with the
     // dedicated supplier-order column and the cost hint, so it was removed.

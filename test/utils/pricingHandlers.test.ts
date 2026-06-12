@@ -56,7 +56,7 @@ describe('makeCostUpdater', () => {
     expect(next.items?.[0].productCost).toBe(10);
   });
 
-  test('writes supplierQuoteUnitPrice (in hours) when item is linked to a quote', () => {
+  test("writes supplierQuoteUnitPrice in the LINE's unit when item is linked to a quote", () => {
     const state: FormState = {
       items: [
         baseItem({
@@ -70,6 +70,26 @@ describe('makeCostUpdater', () => {
     expect(next.items?.[0].supplierQuoteUnitPrice).toBe(8);
     // productCost should be untouched on quote-linked items
     expect(next.items?.[0].productCost).toBeUndefined();
+  });
+
+  test('does NOT convert a supplier-sourced days cost to hours on edit (#812 round 19)', () => {
+    // supplierQuoteUnitPrice mirrors the supplier item, whose unit the line copies — the server
+    // snapshot, the #779 forward sync and the staleness compare all read it in that unit. The old
+    // hourly conversion stored 10 and pushed a ÷8 cost onto a days-priced supplier item.
+    const state: FormState = {
+      items: [
+        baseItem({
+          supplierQuoteItemId: 'q1',
+          supplierQuoteUnitPrice: 70,
+          unitType: 'days',
+          productCost: undefined,
+        }),
+      ],
+    };
+    const next = makeCostUpdater<FormState>(0, '80')(state);
+    expect(next.items?.[0].supplierQuoteUnitPrice).toBe(80);
+    // The sale price is recomputed from the entered per-day cost (MOL 0 → equal).
+    expect(next.items?.[0].unitPrice).toBe(80);
   });
 });
 

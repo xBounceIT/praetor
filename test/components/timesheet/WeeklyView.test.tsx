@@ -96,6 +96,29 @@ const sharedProps = {
 };
 
 describe('<WeeklyView /> RBAC catalog scoping', () => {
+  test('keeps holiday and weekend duration cells editable when weekend selection is allowed', async () => {
+    render(
+      <WeeklyView
+        entries={[]}
+        {...alphaCatalog}
+        {...sharedProps}
+        selectedDate="2026-05-01"
+        allowWeekendSelection
+        treatSaturdayAsHoliday
+      />,
+    );
+
+    await waitFor(() => {
+      const durationInputs = Array.from(
+        document.body.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"]'),
+      );
+      expect(durationInputs.length).toBeGreaterThanOrEqual(7);
+      expect(durationInputs[4]).not.toBeDisabled();
+      expect(durationInputs[5]).not.toBeDisabled();
+      expect(durationInputs[6]).not.toBeDisabled();
+    });
+  });
+
   test('drops an entry whose client/project/task is out of the scoped catalogs', async () => {
     // The viewing user has an entry referencing alpha catalog items, but only
     // the beta catalog is currently in scope. The alpha entry must NOT render

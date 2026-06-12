@@ -115,45 +115,7 @@ describe('makeQuoteHandlers', () => {
     });
   });
 
-  test('updateQuote sees fresh quotes via getter (post-creation push)', async () => {
-    // Snapshot at handler creation: empty.
-    let quotesState: QuoteLike[] = [];
-    const handlers = makeQuoteHandlers({
-      getQuotes: (() => quotesState) as never,
-      getClientQuoteFilterId: () => null,
-      getClientOfferFilterId: () => null,
-      setQuotes: ((updater: unknown) => {
-        quotesState =
-          typeof updater === 'function'
-            ? (updater as (prev: QuoteLike[]) => QuoteLike[])(quotesState)
-            : (updater as QuoteLike[]);
-      }) as never,
-      setClientOffers: makeStubSetter<OfferLike>([]).setter,
-      setClientsOrders: makeStubSetter<OrderLike>([]).setter,
-      setInvoices: makeStubSetter<InvoiceLike>([]).setter,
-      setClientQuoteFilterId: makeStubScalarSetter<string | null>(null).setter,
-      setClientOfferFilterId: makeStubScalarSetter<string | null>(null).setter,
-      setActiveView: makeStubScalarSetter<string>('').setter,
-      refreshSupplierQuoteFlow: () => Promise.resolve(),
-    });
-
-    // After factory creation, a fresh quote shows up (e.g. another async load
-    // finished). The getter must see this on the next call.
-    quotesState = [{ id: 'q1', status: 'sent', isExpired: true }];
-    apiMocks.quotesUpdate.mockImplementation((id, updates) =>
-      Promise.resolve({ id, status: 'draft', isExpired: false, ...(updates as object) }),
-    );
-
-    await handlers.updateQuote('q1', { status: 'draft', isExpired: false });
-
-    // updateQuote should have computed isRestore=true and added expirationDate.
-    const callArg = apiMocks.quotesUpdate.mock.calls[0][1] as Record<string, unknown>;
-    expect(callArg.expirationDate).toBeDefined();
-    expect(callArg.status).toBe('draft');
-  });
-
   test('updateQuote does NOT re-apply filter that was cleared during await', async () => {
-    const quotesState: QuoteLike[] = [{ id: 'q1', status: 'draft' }];
     const filterIdHolder = makeStubScalarSetter<string | null>('q1');
     // Mock the API to never auto-resolve so we can simulate a navigation.
     let resolver: () => void = () => {};
@@ -165,10 +127,11 @@ describe('makeQuoteHandlers', () => {
     );
 
     const handlers = makeQuoteHandlers({
-      getQuotes: (() => quotesState) as never,
       // Getter reads the LATEST holder value — this is the invariant we want.
       getClientQuoteFilterId: () => filterIdHolder.get(),
       getClientOfferFilterId: () => null,
+      getQuotes: () => [],
+      getClientOffers: () => [],
       setQuotes: makeStubSetter<QuoteLike>([]).setter,
       setClientOffers: makeStubSetter<OfferLike>([]).setter,
       setClientsOrders: makeStubSetter<OrderLike>([]).setter,
@@ -195,16 +158,16 @@ describe('makeQuoteHandlers', () => {
   });
 
   test('updateQuote moves filter to new id when filter still points at the old id', async () => {
-    const quotesState: QuoteLike[] = [{ id: 'q1', status: 'draft' }];
     const filterIdHolder = makeStubScalarSetter<string | null>('q1');
     apiMocks.quotesUpdate.mockImplementation((_id: string, updates: unknown) =>
       Promise.resolve({ id: 'q1-v2', status: 'draft', ...(updates as object) }),
     );
 
     const handlers = makeQuoteHandlers({
-      getQuotes: (() => quotesState) as never,
       getClientQuoteFilterId: () => filterIdHolder.get(),
       getClientOfferFilterId: () => null,
+      getQuotes: () => [],
+      getClientOffers: () => [],
       setQuotes: makeStubSetter<QuoteLike>([]).setter,
       setClientOffers: makeStubSetter<OfferLike>([]).setter,
       setClientsOrders: makeStubSetter<OrderLike>([]).setter,
@@ -231,9 +194,10 @@ describe('makeQuoteHandlers', () => {
     );
 
     const handlers = makeQuoteHandlers({
-      getQuotes: (() => []) as never,
       getClientQuoteFilterId: () => null,
       getClientOfferFilterId: () => filterIdHolder.get(),
+      getQuotes: () => [],
+      getClientOffers: () => [],
       setQuotes: makeStubSetter<QuoteLike>([]).setter,
       setClientOffers: makeStubSetter<OfferLike>([]).setter,
       setClientsOrders: makeStubSetter<OrderLike>([]).setter,
@@ -259,9 +223,10 @@ describe('makeQuoteHandlers', () => {
     );
 
     const handlers = makeQuoteHandlers({
-      getQuotes: (() => []) as never,
       getClientQuoteFilterId: () => null,
       getClientOfferFilterId: () => filterIdHolder.get(),
+      getQuotes: () => [],
+      getClientOffers: () => [],
       setQuotes: makeStubSetter<QuoteLike>([]).setter,
       setClientOffers: makeStubSetter<OfferLike>([]).setter,
       setClientsOrders: makeStubSetter<OrderLike>([]).setter,
@@ -284,9 +249,10 @@ describe('makeQuoteHandlers', () => {
     );
 
     const handlers = makeQuoteHandlers({
-      getQuotes: (() => []) as never,
       getClientQuoteFilterId: () => null,
       getClientOfferFilterId: () => filterIdHolder.get(),
+      getQuotes: () => [],
+      getClientOffers: () => [],
       setQuotes: makeStubSetter<QuoteLike>([]).setter,
       setClientOffers: makeStubSetter<OfferLike>([]).setter,
       setClientsOrders: makeStubSetter<OrderLike>([]).setter,
@@ -309,9 +275,10 @@ describe('makeQuoteHandlers', () => {
       Promise.resolve({ id: 'q-new', status: 'draft', ...(data as object) }),
     );
     const handlers = makeQuoteHandlers({
-      getQuotes: (() => setter.get()) as never,
       getClientQuoteFilterId: () => null,
       getClientOfferFilterId: () => null,
+      getQuotes: () => [],
+      getClientOffers: () => [],
       setQuotes: setter.setter,
       setClientOffers: makeStubSetter<OfferLike>([]).setter,
       setClientsOrders: makeStubSetter<OrderLike>([]).setter,
@@ -335,9 +302,10 @@ describe('makeQuoteHandlers', () => {
       { id: 'q2', status: 'draft' },
     ]);
     const handlers = makeQuoteHandlers({
-      getQuotes: (() => setter.get()) as never,
       getClientQuoteFilterId: () => null,
       getClientOfferFilterId: () => null,
+      getQuotes: () => [],
+      getClientOffers: () => [],
       setQuotes: setter.setter,
       setClientOffers: makeStubSetter<OfferLike>([]).setter,
       setClientsOrders: makeStubSetter<OrderLike>([]).setter,

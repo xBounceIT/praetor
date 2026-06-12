@@ -46,6 +46,7 @@ const sqUpdateMock = mock();
 const sqRenameMock = mock();
 const sqRestoreSnapshotQuoteMock = mock();
 const sqReplaceItemsMock = mock();
+const sqIsSourcedByClientDocumentsMock = mock();
 
 const qccFindByIdMock = mock();
 const qccFindDefaultMock = mock();
@@ -95,6 +96,7 @@ beforeAll(async () => {
     rename: sqRenameMock,
     restoreSnapshotQuote: sqRestoreSnapshotQuoteMock,
     replaceItems: sqReplaceItemsMock,
+    isSourcedByClientDocuments: sqIsSourcedByClientDocumentsMock,
   }));
   mock.module('../../repositories/productsRepo.ts', () => ({
     ...productsRepoSnap,
@@ -172,13 +174,18 @@ const SAMPLE_QUOTE = {
   supplierName: 'Acme',
   paymentTerms: 'immediate',
   status: 'draft',
-  expirationDate: '2026-12-31',
+  // Far future: effective-status guards compare against the real clock, so a near date would flip
+  // this fixture to `expired` one day and break the suite (#779 second-pass review).
+  expirationDate: '2999-12-31',
   communicationChannelId: 'qcc_email',
   communicationChannelName: 'Email',
   linkedOrderId: null,
   notes: null,
   createdAt: 1_700_000_000_000,
   updatedAt: 1_700_000_000_000,
+  // The real findById always materializes the reverse-lookup link fields (null when unlinked).
+  linkedClientQuoteId: null as string | null,
+  linkedClientQuoteStatus: null as string | null,
 };
 
 const SAMPLE_ITEM = {
@@ -224,6 +231,7 @@ const allMocks = [
   sqReplaceItemsMock,
   qccFindByIdMock,
   qccFindDefaultMock,
+  sqIsSourcedByClientDocumentsMock,
   suppliersFindByIdMock,
   productsGetSnapshotsMock,
   clientsExistsByIdMock,
@@ -255,6 +263,8 @@ beforeEach(async () => {
   sqFindIdConflictMock.mockResolvedValue(false);
   qccFindByIdMock.mockResolvedValue({ id: 'qcc_email', name: 'Email' });
   qccFindDefaultMock.mockResolvedValue({ id: 'qcc_email', name: 'Email' });
+  // Default: not sourced by any client document, so the restore stranding guard stays open.
+  sqIsSourcedByClientDocumentsMock.mockResolvedValue(false);
   // Snapshots without a client link never call existsById; default true keeps the rest happy.
   clientsExistsByIdMock.mockResolvedValue(true);
 
@@ -412,7 +422,8 @@ describe('POST /api/sales/supplier-quotes/:id/versions/:versionId/restore', () =
 
   test('404 when current quote does not exist', async () => {
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
-    sqExistsByIdMock.mockResolvedValue(false);
+    // The restore pre-check reads the full row (findById) so it can also see the link fields.
+    sqFindByIdMock.mockResolvedValue(null);
     sqvFindByIdMock.mockResolvedValue(SAMPLE_VERSION);
 
     const res = await testApp.inject({
@@ -423,6 +434,53 @@ describe('POST /api/sales/supplier-quotes/:id/versions/:versionId/restore', () =
 
     expect(res.statusCode).toBe(404);
     expect(sqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when the supplier quote is linked to a client quote (synced read-only)', async () => {
+    // A linked quote's content and stored status are driven by the client quote (issue #779); a
+    // restore would rewrite the stored lifecycle underneath the sync.
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqFindByIdMock.mockResolvedValue({
+      ...SAMPLE_QUOTE,
+      linkedClientQuoteId: 'cq-1',
+      linkedClientQuoteStatus: 'sent',
+    });
+    sqvFindByIdMock.mockResolvedValue(SAMPLE_VERSION);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes/sq-1/versions/sqv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('synced');
+    expect(sqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
+    expect(sqvInsertMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when the supplier quote is sourced by client documents but not a client quote (#812)', async () => {
+    // Sourced only via an order/offer line: linkedClientQuoteId is null so the status-sync guard
+    // above passes, but restore would replaceItems with fresh ids and strand those soft refs.
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqFindByIdMock.mockResolvedValue({ ...SAMPLE_QUOTE, linkedClientQuoteId: null });
+    sqvFindByIdMock.mockResolvedValue(SAMPLE_VERSION);
+    sqIsSourcedByClientDocumentsMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes/sq-1/versions/sqv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toBe(
+      'Cannot restore a supplier quote whose items are used by client quotes, offers or orders',
+    );
+    expect(sqIsSourcedByClientDocumentsMock).toHaveBeenCalledWith('sq-1');
+    expect(sqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
+    expect(sqReplaceItemsMock).not.toHaveBeenCalled();
+    expect(sqvInsertMock).not.toHaveBeenCalled();
   });
 
   test('409 when snapshot supplier no longer exists', async () => {
@@ -537,13 +595,14 @@ describe('PUT /api/sales/supplier-quotes/:id snapshots pre-update state', () => 
       quote: SAMPLE_QUOTE,
       items: [SAMPLE_ITEM],
     });
-    sqUpdateMock.mockResolvedValue({ ...SAMPLE_QUOTE, status: 'sent' });
+    sqUpdateMock.mockResolvedValue({ ...SAMPLE_QUOTE, notes: 'updated' });
 
     const res = await testApp.inject({
       method: 'PUT',
       url: '/api/sales/supplier-quotes/sq-1',
       headers: authHeader(),
-      payload: { status: 'sent' },
+      // `status` is no longer a content field (fully derived, #779) — notes is.
+      payload: { notes: 'updated' },
     });
 
     expect(res.statusCode).toBe(200);

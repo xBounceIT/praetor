@@ -539,7 +539,7 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
 
     expect(res.statusCode).toBe(409);
     expect(JSON.parse(res.body).error).toContain(
-      'references a supplier quote that no longer exists or is not accepted',
+      'references a supplier quote item that no longer exists',
     );
     expect(sqGetQuoteItemSnapshotsMock).toHaveBeenCalledWith(['sqi-gone']);
     expect(coRestoreSnapshotOrderMock).not.toHaveBeenCalled();

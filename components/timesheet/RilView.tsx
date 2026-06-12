@@ -83,7 +83,7 @@ interface RilViewProps {
 
 type EditableRilField = 'entrance' | 'exit' | 'notes' | 'transfer' | 'code';
 
-const canEditRilRow = (row: RilRow) => Boolean(row.date && !row.isHoliday);
+const canEditRilRow = (row: RilRow) => Boolean(row.date);
 
 const RilEditableInput: React.FC<{
   row: RilRow;
@@ -249,6 +249,8 @@ const RilView: React.FC<RilViewProps> = ({
   // after the current context's save so a late PUT can't resurrect a just-discarded draft. Lazily
   // created (initializer stays null) so it isn't reallocated on every render.
   const pendingSavesRef = useRef<Map<string, Promise<unknown>> | null>(null);
+  const changedDaysRef = useRef<Map<number, number>>(new Map());
+  const changedDayRevisionRef = useRef(0);
   // Gates autosave: stays false until a draft GET succeeds for the active (user, month) so a
   // failed load can't overwrite a draft we never saw, and hydration itself can't trigger a save.
   const draftSyncReadyRef = useRef(false);
@@ -369,6 +371,7 @@ const RilView: React.FC<RilViewProps> = ({
       userId: string,
       monthKey: string,
       rows: ReturnType<typeof extractRilDraftRows>,
+      changedDays: number[],
     ): Promise<{ ok: boolean }> => {
       const prior = pendingSavesRef.current?.get(draftSaveKey(userId, monthKey));
       const run = (async (): Promise<{ ok: boolean }> => {
@@ -380,7 +383,7 @@ const RilView: React.FC<RilViewProps> = ({
           }
         }
         try {
-          await api.rilDrafts.save(monthKey, rows, userId);
+          await api.rilDrafts.save(monthKey, rows, userId, changedDays);
           return { ok: true };
         } catch {
           return { ok: false };
@@ -408,10 +411,12 @@ const RilView: React.FC<RilViewProps> = ({
           leaving.userId,
           leaving.monthKey,
           extractRilDraftRows(rowsRef.current),
+          Array.from(changedDaysRef.current.keys()),
         );
       }
     }
     draftContextRef.current = { userId: effectiveUserId, monthKey: draftMonthKey };
+    changedDaysRef.current = new Map();
     const token = ++loadTokenRef.current;
     // Block autosave until this load's draft GET resolves (hydration must not trigger a save, and a
     // failed GET must not let us clobber a draft we never read).
@@ -519,16 +524,27 @@ const RilView: React.FC<RilViewProps> = ({
     saveTimerRef.current = null;
     const rowsToSave = rowsRef.current;
     if (!rowsToSave.length) return;
+    const changedDayEntries = Array.from(changedDaysRef.current.entries());
+    const changedDays = changedDayEntries.map(([day]) => day);
     // Enqueue a serialized save (chained after any in-flight PUT for this sheet) so overlapping
     // saves can't land out of order; the later edit always wins on the server.
     const { ok } = await enqueueDraftSave(
       effectiveUserId,
       draftMonthKey,
       extractRilDraftRows(rowsToSave),
+      changedDays,
     );
     if (!ok) {
       setDraftStatus('error');
       return;
+    }
+    if (
+      draftContextRef.current?.userId === effectiveUserId &&
+      draftContextRef.current.monthKey === draftMonthKey
+    ) {
+      for (const [day, revision] of changedDayEntries) {
+        if (changedDaysRef.current.get(day) === revision) changedDaysRef.current.delete(day);
+      }
     }
     // A newer edit re-armed the timer while we were saving — let that save own the final status.
     if (saveTimerRef.current === null) setDraftStatus('saved');
@@ -548,6 +564,7 @@ const RilView: React.FC<RilViewProps> = ({
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
+    changedDaysRef.current = new Map();
     dispatch({
       type: 'setRows',
       rows: generateRows(sourceEntriesRef.current, projectCatalogRef.current),
@@ -604,6 +621,9 @@ const RilView: React.FC<RilViewProps> = ({
             };
           }),
       });
+      if (field === 'entrance' || field === 'exit') {
+        changedDaysRef.current.set(day, ++changedDayRevisionRef.current);
+      }
       scheduleDraftSave();
     },
     [lunchBreakMinutes, scheduleDraftSave],

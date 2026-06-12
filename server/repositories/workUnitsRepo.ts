@@ -247,3 +247,20 @@ export const listManagedUserIds = async (
   );
   return rows.map((r) => String(r.user_id));
 };
+
+export const listManagerIdsForUser = async (
+  userId: string,
+  exec: DbExecutor = db,
+): Promise<string[]> => {
+  const rows = await executeRows<{ id: string }>(
+    exec,
+    sql`SELECT DISTINCT wum.user_id AS id
+          FROM user_work_units uwu
+          JOIN work_unit_managers wum ON uwu.work_unit_id = wum.work_unit_id
+          JOIN users u ON u.id = wum.user_id
+         WHERE uwu.user_id = ${userId}
+           AND COALESCE(u.is_disabled, false) = false
+         ORDER BY wum.user_id`,
+  );
+  return rows.map((row) => row.id);
+};

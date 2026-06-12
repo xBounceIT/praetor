@@ -1,9 +1,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { withDbTransaction } from '../db/drizzle.ts';
 import type { StoredRilDraftRows } from '../db/schema/rilDrafts.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import * as rilDraftsRepo from '../repositories/rilDraftsRepo.ts';
 import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { notifyRilManualOvertimeForRows } from '../services/overtimeNotifications.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { requestHasPermission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -62,7 +65,15 @@ const ownerQuerySchema = {
 
 const draftSaveBodySchema = {
   type: 'object',
-  properties: { rows: rilDraftRowsBodySchema },
+  properties: {
+    rows: rilDraftRowsBodySchema,
+    changedDays: {
+      type: 'array',
+      items: { type: 'integer', minimum: 1, maximum: 31 },
+      maxItems: 31,
+      description: 'Days manually changed by the caller; used for RIL overtime notifications.',
+    },
+  },
   required: ['rows'],
 } as const;
 
@@ -154,7 +165,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!assertAuthenticated(request, reply)) return;
       const { monthKey } = request.params as { monthKey: string };
       const { userId } = request.query as { userId?: string };
-      const { rows } = request.body as { rows?: unknown };
+      const { rows, changedDays } = request.body as { rows?: unknown; changedDays?: unknown };
       if (rows === null || typeof rows !== 'object' || Array.isArray(rows)) {
         return badRequest(reply, 'rows must be an object keyed by day');
       }
@@ -168,7 +179,30 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
       if (ownerId === null) return;
 
-      return rilDraftsRepo.upsertForUserMonth(ownerId, monthKey, rows as StoredRilDraftRows);
+      return withDbTransaction(async (tx) => {
+        const saved = await rilDraftsRepo.upsertForUserMonth(
+          ownerId,
+          monthKey,
+          rows as StoredRilDraftRows,
+          tx,
+        );
+        const manualChangedDays = Array.isArray(changedDays) ? changedDays : [];
+        if (manualChangedDays.length > 0) {
+          const settings = await generalSettingsRepo.get(tx);
+          await notifyRilManualOvertimeForRows(
+            {
+              userId: ownerId,
+              monthKey,
+              rows: rows as StoredRilDraftRows,
+              changedDays: manualChangedDays,
+              createdBy: request.user.id,
+              lunchBreakMinutes: settings?.rilLunchBreakMinutes ?? undefined,
+            },
+            tx,
+          );
+        }
+        return saved;
+      });
     },
   );
 

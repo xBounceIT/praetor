@@ -15,8 +15,10 @@ import { products } from './products.ts';
 import { quoteCommunicationChannels } from './quoteCommunicationChannels.ts';
 import { suppliers } from './suppliers.ts';
 
-// The route layer normalizes legacy status values ('received' → 'sent', 'approved' → 'accepted',
-// 'rejected' → 'denied') on the way out, but the DB still accepts both forms.
+// Status uses the canonical six-state model shared with client quotes (issue #779):
+// draft/sent/offer/accepted/denied are stored; `expired` is derived from the expiration date and
+// never stored. Legacy values ('received'/'approved'/'rejected') were migrated to the canonical
+// set in migration 0083, so the CHECK now only admits the canonical spellings.
 export const supplierQuotes = pgTable(
   'supplier_quotes',
   {
@@ -56,7 +58,7 @@ export const supplierQuotes = pgTable(
     index('idx_supplier_quotes_communication_channel_id').on(table.communicationChannelId),
     check(
       'supplier_quotes_status_check',
-      sql`${table.status} IN ('received', 'approved', 'rejected', 'draft', 'sent', 'accepted', 'denied')`,
+      sql`${table.status} IN ('draft', 'sent', 'offer', 'accepted', 'denied')`,
     ),
   ],
 );

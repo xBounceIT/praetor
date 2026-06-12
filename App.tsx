@@ -10,6 +10,7 @@ import React, {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { FieldLabel } from '@/components/ui/field';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -147,6 +148,7 @@ import {
   normalizeRilNoteOptions,
   normalizeRilTransferOptions,
 } from './utils/ril';
+import { sourcesSupplierQuote } from './utils/supplierLineSync';
 import { applyBrowserTheme, applyTheme, getTheme } from './utils/theme';
 import { toastError } from './utils/toast';
 import {
@@ -745,7 +747,7 @@ const TrackerView: React.FC<{
 };
 
 const AppContent: React.FC = () => {
-  const { t: tApp } = useTranslation(['common', 'reports']);
+  const { t: tApp } = useTranslation(['common', 'reports', 'sales', 'accounting']);
 
   const [users, setUsers] = useState<User[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -994,20 +996,22 @@ const AppContent: React.FC = () => {
   // factories observe up-to-date state once promises resolve (a navigation can
   // clear `clientQuoteFilterId` mid-await, or a new project can land between
   // factory creation and a `clients.remove()` call, for example).
-  const quotesRef = useRef(quotes);
   const clientQuoteFilterIdRef = useRef(clientQuoteFilterId);
   const clientOfferFilterIdRef = useRef(clientOfferFilterId);
   const supplierQuoteFilterIdRef = useRef(supplierQuoteFilterId);
   const projectsRef = useRef(projects);
+  const quotesRef = useRef(quotes);
+  const clientOffersRef = useRef(clientOffers);
   // Sync in render rather than a passive effect: an in-flight promise can
   // resume between commit and useEffect (microtask vs effect-task), reading
   // a stale ref. React allows writing to refs during render as long as the
   // value is deterministic in the state.
-  quotesRef.current = quotes;
   clientQuoteFilterIdRef.current = clientQuoteFilterId;
   clientOfferFilterIdRef.current = clientOfferFilterId;
   supplierQuoteFilterIdRef.current = supplierQuoteFilterId;
   projectsRef.current = projects;
+  quotesRef.current = quotes;
+  clientOffersRef.current = clientOffers;
 
   const clearAuthScopedAppState = useCallback(() => {
     // Bump cancellation tokens before any setter call so in-flight async
@@ -1148,6 +1152,55 @@ const AppContent: React.FC = () => {
     [switchRole],
   );
 
+  const notifyClientOfferCreated = useCallback(
+    (offerId: string) => {
+      toast.success(tApp('sales:clientQuotes.offerCreatedToast'), {
+        description: offerId,
+        action: {
+          label: tApp('sales:clientQuotes.viewOffer'),
+          onClick: () => {
+            setClientQuoteFilterId(null);
+            setClientOfferFilterId(offerId);
+            setActiveView('sales/client-offers');
+          },
+        },
+      });
+    },
+    [setActiveView, tApp],
+  );
+
+  const notifyClientOrderCreated = useCallback(
+    (orderId: string) => {
+      toast.success(tApp('accounting:clientsOrders.orderCreatedToast'), {
+        description: orderId,
+        action: {
+          label: tApp('accounting:clientsOrders.viewOrder'),
+          onClick: () => {
+            setClientsOrderFilterId(orderId);
+            setActiveView('accounting/clients-orders');
+          },
+        },
+      });
+    },
+    [setActiveView, tApp],
+  );
+
+  const notifySupplierOrderCreated = useCallback(
+    (order: { id: string; supplierName: string }) => {
+      toast.success(tApp('accounting:supplierOrders.orderCreatedToast'), {
+        description: `${order.id} - ${order.supplierName}`,
+        action: {
+          label: tApp('accounting:supplierOrders.viewOrder'),
+          onClick: () => {
+            setSupplierOrderFilterId(order.id);
+            setActiveView('accounting/supplier-orders');
+          },
+        },
+      });
+    },
+    [setActiveView, tApp],
+  );
+
   const supplierQuoteHandlers = useMemo(
     () =>
       makeSupplierQuoteHandlers({
@@ -1168,9 +1221,10 @@ const AppContent: React.FC = () => {
       makeQuoteHandlers({
         // Getters back onto refs so reads after awaited API calls see the
         // latest value instead of the snapshot captured at factory creation.
-        getQuotes: () => quotesRef.current,
         getClientQuoteFilterId: () => clientQuoteFilterIdRef.current,
         getClientOfferFilterId: () => clientOfferFilterIdRef.current,
+        getQuotes: () => quotesRef.current,
+        getClientOffers: () => clientOffersRef.current,
         setQuotes,
         setClientOffers,
         setClientsOrders,
@@ -1179,8 +1233,17 @@ const AppContent: React.FC = () => {
         setClientOfferFilterId,
         setActiveView,
         refreshSupplierQuoteFlow: supplierQuoteHandlers.refreshSupplierQuoteFlow,
+        notifyClientOfferCreated,
+        notifyClientOrderCreated,
+        notifySupplierOrderCreated,
       }),
-    [supplierQuoteHandlers.refreshSupplierQuoteFlow, setActiveView],
+    [
+      supplierQuoteHandlers.refreshSupplierQuoteFlow,
+      setActiveView,
+      notifyClientOfferCreated,
+      notifyClientOrderCreated,
+      notifySupplierOrderCreated,
+    ],
   );
 
   const clientHandlers = useMemo(
@@ -2702,7 +2765,7 @@ const AppContent: React.FC = () => {
                 onUpdateEntry={handleUpdateEntry}
                 startOfWeek={generalSettings.startOfWeek}
                 treatSaturdayAsHoliday={generalSettings.treatSaturdayAsHoliday}
-                allowWeekendSelection={generalSettings.allowWeekendSelection}
+                allowWeekendSelection={true}
                 onMakeRecurring={handleMakeRecurring}
                 permissions={currentUser.permissions || []}
                 viewingUserId={viewingUserId}
@@ -2781,6 +2844,12 @@ const AppContent: React.FC = () => {
                   onAddQuote={addQuote}
                   onUpdateQuote={handleUpdateQuote}
                   onQuoteRestored={async (restored) => {
+                    // Captured before the patch: a restore that REMOVES the last sourced line drops
+                    // the now-unsourced supplier quote back to draft server-side, so the pre-restore
+                    // sourcing also matters — not just the restored snapshot's lines (#779 follow-up).
+                    const wasSourcing = sourcesSupplierQuote(
+                      quotes.find((q) => q.id === restored.id),
+                    );
                     // Patch the restored quote eagerly so the modal reflects it instantly,
                     // then refetch the whole flow because restore can also delete draft
                     // linked sales server-side.
@@ -2793,6 +2862,17 @@ const AppContent: React.FC = () => {
                     setQuotes(quotesData);
                     setClientOffers(offersData);
                     setClientsOrders(ordersData);
+                    // A restore rewrites the snapshot's lines/status, so a supplier quote those
+                    // lines source (or USED to source) has a mirrored derived status that can change
+                    // too (#779 follow-up: linkage is line-sourced). Best-effort: a refresh failure
+                    // must not fail the completed restore.
+                    if (wasSourcing || sourcesSupplierQuote(restored)) {
+                      try {
+                        await supplierQuoteHandlers.refreshSupplierQuoteFlow();
+                      } catch (refreshErr) {
+                        console.error('Failed to refresh supplier data:', refreshErr);
+                      }
+                    }
                   }}
                   onDeleteQuote={handleDeleteQuote}
                   onCreateOffer={handleCreateClientOfferFromQuote}

@@ -51,6 +51,12 @@ export interface SelectControlProps {
    * with muted placeholder styling instead of the full-contrast selected style.
    */
   displayValueIsPlaceholder?: boolean;
+  /**
+   * Extra classes for the selected-value label inside the trigger. Use to soften
+   * the default `font-semibold` (e.g. `font-normal`) where a heavier weight would
+   * over-emphasize the value relative to neighboring fields.
+   */
+  valueClassName?: string;
 }
 
 const EMPTY_VALUE_SENTINEL = '__praetor_empty_select_value__';
@@ -112,7 +118,15 @@ const SelectLabel = ({
   );
 };
 
-const TriggerLabel = ({ isPlaceholder, label }: { isPlaceholder: boolean; label: string }) => {
+const TriggerLabel = ({
+  isPlaceholder,
+  label,
+  valueClassName,
+}: {
+  isPlaceholder: boolean;
+  label: string;
+  valueClassName?: string;
+}) => {
   const tooltipLabel = label.trim() === '' ? null : label;
 
   return (
@@ -123,6 +137,7 @@ const TriggerLabel = ({ isPlaceholder, label }: { isPlaceholder: boolean; label:
             className={cn(
               'w-full truncate',
               isPlaceholder ? 'text-muted-foreground' : 'font-semibold text-foreground',
+              valueClassName,
             )}
           >
             {label}
@@ -173,6 +188,7 @@ const PlainSelectControl = ({
   options,
   placeholder,
   value,
+  valueClassName,
 }: SelectControlProps) => {
   const { t } = useTranslation('common');
   const stringValue = Array.isArray(value) ? '' : value;
@@ -191,7 +207,11 @@ const PlainSelectControl = ({
       >
         <SelectTrigger id={id} className={cn(baseTriggerClassName, buttonClassName)}>
           {displayValue ? (
-            <TriggerLabel isPlaceholder={!hasSelection} label={labelText} />
+            <TriggerLabel
+              isPlaceholder={!hasSelection}
+              label={labelText}
+              valueClassName={valueClassName}
+            />
           ) : (
             <SelectValue placeholder={placeholder || t('select.placeholder')} />
           )}
@@ -231,6 +251,7 @@ const SearchableSelectControl = ({
   options,
   placeholder,
   value,
+  valueClassName,
 }: SelectControlProps) => {
   const { t } = useTranslation('common');
   const [state, dispatch] = useReducer(searchableSelectReducer, {
@@ -343,7 +364,11 @@ const SearchableSelectControl = ({
                 ))}
               </span>
             ) : (
-              <TriggerLabel isPlaceholder={isPlaceholder} label={buttonLabel} />
+              <TriggerLabel
+                isPlaceholder={isPlaceholder}
+                label={buttonLabel}
+                valueClassName={valueClassName}
+              />
             )}
             <ChevronsUpDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
           </Button>

@@ -38,6 +38,7 @@ const getRolePermissionsMock = mock();
 const sqFindByIdMock = mock();
 const sqExistsByIdMock = mock();
 const sqFindLinkedOrderIdMock = mock();
+const sqIsSourcedByClientDocumentsMock = mock();
 const sqDeleteByIdMock = mock();
 
 const sqaListForQuoteMock = mock();
@@ -75,6 +76,7 @@ beforeAll(async () => {
     findById: sqFindByIdMock,
     existsById: sqExistsByIdMock,
     findLinkedOrderId: sqFindLinkedOrderIdMock,
+    isSourcedByClientDocuments: sqIsSourcedByClientDocumentsMock,
     deleteById: sqDeleteByIdMock,
   }));
   mock.module(
@@ -150,7 +152,8 @@ const DRAFT_QUOTE = {
   supplierName: 'Acme',
   paymentTerms: 'immediate',
   status: 'draft',
-  expirationDate: '2026-12-31',
+  // Far future so the effective-status gate never flips this fixture to `expired` with the clock.
+  expirationDate: '2999-12-31',
   linkedOrderId: null,
   notes: null,
   createdAt: 1_700_000_000_000,
@@ -172,6 +175,7 @@ const allMocks = [
   findAuthUserByIdMock,
   userHasRoleMock,
   getRolePermissionsMock,
+  sqIsSourcedByClientDocumentsMock,
   sqFindByIdMock,
   sqExistsByIdMock,
   sqFindLinkedOrderIdMock,
@@ -211,6 +215,7 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
+  sqIsSourcedByClientDocumentsMock.mockResolvedValue(false);
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   // Defaults to a resolved promise so the route's `.catch(...)` chain has something callable
@@ -350,7 +355,12 @@ describe('POST /api/sales/supplier-quotes/:id/attachments', () => {
   });
 
   test('409 when quote status is not draft', async () => {
-    sqFindByIdMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'sent' });
+    // Status is fully derived (#779): only a LINKED quote can be non-draft.
+    sqFindByIdMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      linkedClientQuoteId: 'q-1',
+      linkedClientQuoteStatus: 'sent',
+    });
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
 
     const { payload, contentType } = buildMultipartBody(
@@ -622,7 +632,12 @@ describe('DELETE /api/sales/supplier-quotes/:id/attachments/:attachmentId', () =
   });
 
   test('409 when quote is not draft', async () => {
-    sqFindByIdMock.mockResolvedValue({ ...DRAFT_QUOTE, status: 'sent' });
+    // Status is fully derived (#779): only a LINKED quote can be non-draft.
+    sqFindByIdMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      linkedClientQuoteId: 'q-1',
+      linkedClientQuoteStatus: 'sent',
+    });
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
 
     const res = await testApp.inject({
@@ -671,5 +686,21 @@ describe('DELETE /api/sales/supplier-quotes/:id cleans up attachment files', () 
     expect(deleteAttachmentMock).toHaveBeenCalledTimes(2);
     expect(deleteAttachmentMock).toHaveBeenCalledWith('abc-123.xlsx');
     expect(deleteAttachmentMock).toHaveBeenCalledWith('def-456.pdf');
+  });
+
+  test('409 when client documents still source the quote (no dangling lines, #779)', async () => {
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqIsSourcedByClientDocumentsMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('used by client quotes, offers or orders');
+    expect(sqDeleteByIdMock).not.toHaveBeenCalled();
+    expect(deleteAttachmentMock).not.toHaveBeenCalled();
   });
 });

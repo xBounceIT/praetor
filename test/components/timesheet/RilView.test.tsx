@@ -270,18 +270,34 @@ describe('<RilView />', () => {
     expect(api.entries.create).not.toHaveBeenCalled();
   });
 
-  test('highlights holiday rows and keeps them read-only', async () => {
+  test('highlights holiday rows while keeping dated holiday cells editable', async () => {
     api.entries.listPage.mockResolvedValue({ entries: [], nextCursor: null });
 
     renderRilView();
 
     const holidayNotesSelect = await screen.findByLabelText('ril.columns.notes 1');
-    expect(holidayNotesSelect).toBeDisabled();
+    expect(holidayNotesSelect).not.toBeDisabled();
     expect(holidayNotesSelect).toHaveTextContent('F - Festivita');
+    expect(screen.getByLabelText('ril.columns.entrance 1')).not.toBeDisabled();
+    expect(screen.getByLabelText('ril.columns.exit 1')).not.toBeDisabled();
     expect(holidayNotesSelect.closest('tr')?.className).toContain('bg-amber-50');
     const holidayDayCells = holidayNotesSelect.closest('tr')?.querySelectorAll('td');
     expect(holidayDayCells?.[0]).toHaveTextContent('ven');
     expect(holidayDayCells?.[1]).toHaveTextContent('1');
+  });
+
+  test('shows tracker overtime on weekend rows', async () => {
+    api.entries.listPage.mockResolvedValue({
+      entries: [entry({ date: '2026-05-02', duration: 4, location: 'remote' })],
+      nextCursor: null,
+    });
+
+    renderRilView();
+
+    expect(await screen.findByLabelText('ril.columns.entrance 2')).toHaveValue('09:00');
+    expect(screen.getByLabelText('ril.columns.exit 2')).toHaveValue('13:00');
+    expect(screen.getByLabelText('ril.columns.hours 2')).toHaveTextContent('4:00');
+    expect(screen.getByLabelText('ril.columns.transfer 2')).toHaveTextContent('Remote working');
   });
 
   test('highlights weekend rows in muted grey without disabling editing', async () => {
@@ -528,10 +544,11 @@ describe('<RilView />', () => {
       );
       const mayCall = api.rilDrafts.save.mock.calls.find((call) => call[0] === '2026-05');
       expect(mayCall?.[2]).toBe('u1');
+      expect(mayCall?.[3]).toEqual([4]);
       expect(mayCall?.[1]['4']).toMatchObject({ exit: '17:00' });
     });
 
-    test('autosaves the draft edit after the debounce window elapses', async () => {
+    test('autosaves manual overtime edits with changedDays after the debounce window elapses', async () => {
       api.entries.listPage.mockResolvedValue({
         entries: [entry({ date: '2026-05-04', duration: 8 })],
         nextCursor: null,
@@ -542,10 +559,49 @@ describe('<RilView />', () => {
       const exitInput = await screen.findByLabelText('ril.columns.exit 4');
       await waitFor(() => expect(api.rilDrafts.get).toHaveBeenCalled());
 
-      fireEvent.change(exitInput, { target: { value: '16:00' } });
+      fireEvent.change(exitInput, { target: { value: '18:30' } });
 
       await waitFor(() => expect(api.rilDrafts.save).toHaveBeenCalled(), { timeout: 3000 });
+      expect(api.rilDrafts.save.mock.calls.at(-1)?.[3]).toEqual([4]);
       await waitFor(() => expect(screen.getByText('ril.draft.saved')).toBeInTheDocument());
+    });
+
+    test('autosaves editable holiday rows with changedDays', async () => {
+      api.entries.listPage.mockResolvedValue({ entries: [], nextCursor: null });
+
+      renderRilView();
+
+      const entranceInput = await screen.findByLabelText('ril.columns.entrance 1');
+      await waitFor(() => expect(api.rilDrafts.get).toHaveBeenCalled());
+
+      fireEvent.change(entranceInput, { target: { value: '09:00' } });
+
+      await waitFor(() => expect(api.rilDrafts.save).toHaveBeenCalled(), { timeout: 3000 });
+      expect(api.rilDrafts.save.mock.calls.at(-1)?.[3]).toEqual([1]);
+      expect(api.rilDrafts.save.mock.calls.at(-1)?.[1]['1']).toMatchObject({
+        entrance: '09:00',
+      });
+    });
+
+    test('autosaves generated tracker overtime metadata without changedDays', async () => {
+      api.entries.listPage.mockResolvedValue({
+        entries: [entry({ date: '2026-05-02', duration: 4, location: 'remote' })],
+        nextCursor: null,
+      });
+
+      renderRilView();
+
+      const transferSelect = await screen.findByLabelText('ril.columns.transfer 2');
+      await waitFor(() => expect(api.rilDrafts.get).toHaveBeenCalled());
+
+      fireEvent.click(transferSelect);
+      fireEvent.click(screen.getByRole('option', { name: 'In office' }));
+
+      await waitFor(() => expect(api.rilDrafts.save).toHaveBeenCalled(), { timeout: 3000 });
+      expect(api.rilDrafts.save.mock.calls.at(-1)?.[3]).toEqual([]);
+      expect(api.rilDrafts.save.mock.calls.at(-1)?.[1]['2']).toMatchObject({
+        transfer: 'In office',
+      });
     });
 
     test('deletes the persisted draft on reset', async () => {
@@ -692,6 +748,34 @@ describe('<RilView />', () => {
       // Resolving the first PUT lets the serialized second PUT run — never overlapping.
       resolvers[0]();
       await waitFor(() => expect(api.rilDrafts.save).toHaveBeenCalledTimes(2), { timeout: 3000 });
+    }, 10000);
+
+    test('keeps changedDays when the same day is edited again before debounce fires', async () => {
+      api.entries.listPage.mockResolvedValue({
+        entries: [entry({ date: '2026-05-04', duration: 8 })],
+        nextCursor: null,
+      });
+      const resolvers: Array<() => void> = [];
+      api.rilDrafts.save.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolvers.push(() => resolve(emptyDraft));
+          }),
+      );
+
+      renderRilView();
+      const exitInput = await screen.findByLabelText('ril.columns.exit 4');
+      await waitFor(() => expect(api.rilDrafts.get).toHaveBeenCalled());
+
+      fireEvent.change(exitInput, { target: { value: '17:00' } });
+      await waitFor(() => expect(api.rilDrafts.save).toHaveBeenCalledTimes(1), { timeout: 3000 });
+      expect(api.rilDrafts.save.mock.calls[0]?.[3]).toEqual([4]);
+
+      fireEvent.change(exitInput, { target: { value: '18:30' } });
+      resolvers[0]();
+
+      await waitFor(() => expect(api.rilDrafts.save).toHaveBeenCalledTimes(2), { timeout: 3000 });
+      expect(api.rilDrafts.save.mock.calls[1]?.[3]).toEqual([4]);
     }, 10000);
 
     test('a reload waits for an in-flight reset delete before re-reading the draft', async () => {

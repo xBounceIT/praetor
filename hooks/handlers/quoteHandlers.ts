@@ -1,14 +1,22 @@
 import type React from 'react';
 import api from '../../services/api';
-import type { ClientOffer, ClientsOrder, Invoice, Quote, View } from '../../types';
-import { getLocalDateString } from '../../utils/date';
+import type {
+  AutoCreatedSupplierOrder,
+  ClientOffer,
+  ClientsOrder,
+  Invoice,
+  Quote,
+  View,
+} from '../../types';
+import { addMonthsToDateOnly, getLocalDateString, isDateOnlyBeforeToday } from '../../utils/date';
+import { sourcesSupplierQuote } from '../../utils/supplierLineSync';
 import { makeTempId } from '../../utils/tempId';
 import { toastError } from '../../utils/toast';
 
 /**
- * Quote handlers read three pieces of shared state — `quotes`,
- * `clientQuoteFilterId`, and `clientOfferFilterId` — both before and AFTER
- * awaited network calls. Capturing those values from the deps closure would
+ * Quote handlers read two pieces of shared state — `clientQuoteFilterId` and
+ * `clientOfferFilterId` — both before and AFTER awaited network calls.
+ * Capturing those values from the deps closure would
  * surface a stale-closure bug: the handler factory is created with the values
  * at the time of the surrounding `useMemo` render, but an awaited API call can
  * outlive that render. While the await is pending the user can navigate or
@@ -23,9 +31,12 @@ import { toastError } from '../../utils/toast';
  * always see the current value — even across awaits.
  */
 export type QuoteHandlersDeps = {
-  getQuotes: () => Quote[];
   getClientQuoteFilterId: () => string | null;
   getClientOfferFilterId: () => string | null;
+  // Read BEFORE awaited writes: whether a quote carried a supplier link decides if the
+  // supplier-quotes cache must refresh after an update/unlink/delete.
+  getQuotes: () => Quote[];
+  getClientOffers: () => ClientOffer[];
   setQuotes: React.Dispatch<React.SetStateAction<Quote[]>>;
   setClientOffers: React.Dispatch<React.SetStateAction<ClientOffer[]>>;
   setClientsOrders: React.Dispatch<React.SetStateAction<ClientsOrder[]>>;
@@ -34,13 +45,17 @@ export type QuoteHandlersDeps = {
   setClientOfferFilterId: React.Dispatch<React.SetStateAction<string | null>>;
   setActiveView: React.Dispatch<React.SetStateAction<View | '404'>>;
   refreshSupplierQuoteFlow: () => Promise<void>;
+  notifyClientOfferCreated?: (offerId: string) => void;
+  notifyClientOrderCreated?: (orderId: string) => void;
+  notifySupplierOrderCreated?: (order: AutoCreatedSupplierOrder) => void;
 };
 
 export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
   const {
-    getQuotes,
     getClientQuoteFilterId,
     getClientOfferFilterId,
+    getQuotes,
+    getClientOffers,
     setQuotes,
     setClientOffers,
     setClientsOrders,
@@ -49,6 +64,9 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     setClientOfferFilterId,
     setActiveView,
     refreshSupplierQuoteFlow,
+    notifyClientOfferCreated,
+    notifyClientOrderCreated,
+    notifySupplierOrderCreated,
   } = deps;
 
   const refreshClientQuoteFlow = async () => {
@@ -71,10 +89,26 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     setInvoices(invoicesData);
   };
 
+  // A linked supplier quote derives its visible status / isStatusSynced from its client quote at
+  // read time (#779), so creating, changing, or severing that link — or changing the client
+  // quote's status — can leave the separately-cached supplier quotes table showing stale
+  // unsynced/draft state until a full module reload. Refresh it too, best-effort: a refresh
+  // failure must not fail the primary write.
+  const refreshLinkedSupplierQuotes = async () => {
+    try {
+      await refreshSupplierQuoteFlow();
+    } catch (refreshErr) {
+      console.error('Failed to refresh supplier data:', refreshErr);
+    }
+  };
+
   const addQuote = async (quoteData: Partial<Quote>) => {
     try {
       const quote = await api.quotes.create(quoteData);
       setQuotes((prev) => [quote, ...prev]);
+      if (sourcesSupplierQuote(quote)) {
+        await refreshLinkedSupplierQuotes();
+      }
     } catch (err) {
       console.error('Failed to add quote:', err);
       throw err;
@@ -83,25 +117,40 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
 
   const updateQuote = async (id: string, updates: Partial<Quote>) => {
     try {
-      const currentQuote = getQuotes().find((quote) => quote.id === id);
-      const isRestore = Boolean(
-        updates.status === 'draft' &&
-          updates.isExpired === false &&
-          currentQuote &&
-          (currentQuote.status !== 'draft' || currentQuote.isExpired),
-      );
-      const updatesWithRestore = isRestore
-        ? { ...updates, expirationDate: getLocalDateString() }
-        : updates;
-
-      const updated = await api.quotes.update(id, updatesWithRestore);
+      // Captured before the await: the response reflects the post-save lines, but a quote that
+      // STOPPED sourcing a supplier quote also needs a refresh (the now-unsourced supplier quote
+      // falls back to draft), so consider the pre-save lines too.
+      const previousQuote = getQuotes().find((q) => q.id === id);
+      const previousLinkedOffer = previousQuote?.linkedOfferId
+        ? getClientOffers().find((offer) => offer.id === previousQuote.linkedOfferId)
+        : undefined;
+      const wasSourcing =
+        sourcesSupplierQuote(previousQuote) || sourcesSupplierQuote(previousLinkedOffer);
+      const updated = await api.quotes.update(id, updates);
       // Re-read the filter via the getter so we observe the latest value, not
       // the one captured when this handler was created. Navigation effects in
       // App.tsx can clear the filter while the API call is in flight.
       if (getClientQuoteFilterId() === id) {
         setClientQuoteFilterId(updated.id);
       }
-      await refreshClientQuoteFlow();
+      // Only a quote that sources (or sourced) a supplier quote can stale the supplier-quotes
+      // cache: line sourcing drives the derived status and forward-syncs the supplier items, so a
+      // stale cache would show a false drift chip whose refresh writes pre-edit values back.
+      // Gating on sourcing rather than the request fields matters: the edit form spreads formData,
+      // so a plain edit of an unsourced quote would otherwise refetch needlessly. The two flows
+      // set disjoint state, so they run in parallel.
+      const supplierRefreshNeeded = wasSourcing || sourcesSupplierQuote(updated);
+      await Promise.all([
+        refreshClientQuoteFlow(),
+        supplierRefreshNeeded ? refreshLinkedSupplierQuotes() : Promise.resolve(),
+      ]);
+      if (
+        updated.status === 'offer' &&
+        previousQuote?.status !== 'offer' &&
+        updated.linkedOfferId
+      ) {
+        notifyClientOfferCreated?.(updated.linkedOfferId);
+      }
     } catch (err) {
       console.error('Failed to update quote:', err);
       throw err;
@@ -110,8 +159,15 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
 
   const deleteQuote = async (id: string) => {
     try {
+      // Read before the awaits — after the delete the quote is gone from state. Deleting a quote
+      // that sourced a supplier quote drops that supplier quote back to draft server-side, the
+      // same staleness class the update path refreshes for.
+      const wasSourcing = sourcesSupplierQuote(getQuotes().find((q) => q.id === id));
       await api.quotes.delete(id);
       setQuotes((prev) => prev.filter((q) => q.id !== id));
+      if (wasSourcing) {
+        await refreshLinkedSupplierQuotes();
+      }
     } catch (err) {
       console.error('Failed to delete quote:', err);
       throw err;
@@ -120,13 +176,35 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
 
   const updateClientOffer = async (id: string, updates: Partial<ClientOffer>) => {
     try {
+      // Read BEFORE the await: an update can REMOVE an offer-only sourced line (one not present
+      // on the linked quote), in which case neither `updated` nor the source quote reports the
+      // link anymore — but the supplier quote's derived status/sourceability just changed
+      // (#812 round 29).
+      const wasSourcing = sourcesSupplierQuote(getClientOffers().find((o) => o.id === id));
       const updated = await api.clientOffers.update(id, updates);
       // Same reasoning as in updateQuote: read the filter freshly so a
       // mid-flight navigation/clear is respected.
       if (getClientOfferFilterId() === id) {
         setClientOfferFilterId(updated.id);
       }
-      await refreshClientQuoteFlow();
+      // An offer's status drives a supplier quote's derived status through the offer chain (#779:
+      // sent/accepted/denied flow through). That chain hangs off the SOURCE quote's lines
+      // (customer_offers.linked_quote_id → quote_items), so the offer's own items may not carry the
+      // sourcing — check the source quote too (consistent with deleteClientOffer). An offer item
+      // edit also forward-syncs the supplier items, hence checking the offer as well.
+      const sourceQuote = getQuotes().find((q) => q.id === updated.linkedQuoteId);
+      const supplierRefreshNeeded =
+        wasSourcing || sourcesSupplierQuote(updated) || sourcesSupplierQuote(sourceQuote);
+      await Promise.all([
+        refreshClientQuoteFlow(),
+        supplierRefreshNeeded ? refreshLinkedSupplierQuotes() : Promise.resolve(),
+      ]);
+      if (updated.autoCreated) {
+        notifyClientOrderCreated?.(updated.autoCreated.clientOrder.id);
+        for (const supplierOrder of updated.autoCreated.supplierOrders) {
+          notifySupplierOrderCreated?.(supplierOrder);
+        }
+      }
     } catch (err) {
       console.error('Failed to update client offer:', err);
       throw err;
@@ -139,7 +217,16 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       if (getClientOfferFilterId() === id) {
         setClientOfferFilterId(updated.id);
       }
-      await refreshClientQuoteFlow();
+      // accepted/denied → draft flips a sourced supplier quote's derived status back to 'offer'
+      // (#779 offer chain). The chain follows the SOURCE quote's lines, not the offer's own items,
+      // so check the source quote too (consistent with deleteClientOffer).
+      const sourceQuote = getQuotes().find((q) => q.id === updated.linkedQuoteId);
+      const supplierRefreshNeeded =
+        sourcesSupplierQuote(updated) || sourcesSupplierQuote(sourceQuote);
+      await Promise.all([
+        refreshClientQuoteFlow(),
+        supplierRefreshNeeded ? refreshLinkedSupplierQuotes() : Promise.resolve(),
+      ]);
     } catch (err) {
       console.error('Failed to revert client offer to draft:', err);
       throw err;
@@ -148,13 +235,23 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
 
   const deleteClientOffer = async (id: string) => {
     try {
+      // Read before the await — after the delete the linkage is gone from state. Removing an offer
+      // collapses a sourced supplier quote's derived status back onto the quote chain. Check BOTH
+      // the source quote's lines AND the offer's own: an offer can carry sourced lines that exist
+      // only on the offer (added while editing the draft), and the backend counts those as
+      // sourcing candidates too — deleting them un-sources the supplier quote just the same.
+      const linkedQuote = getQuotes().find((q) => q.linkedOfferId === id);
+      const offer = getClientOffers().find((o) => o.id === id);
       await api.clientOffers.delete(id);
-      setClientOffers((prev) => prev.filter((offer) => offer.id !== id));
+      setClientOffers((prev) => prev.filter((entry) => entry.id !== id));
       setQuotes((prev) =>
         prev.map((quote) =>
           quote.linkedOfferId === id ? { ...quote, linkedOfferId: undefined } : quote,
         ),
       );
+      if (sourcesSupplierQuote(linkedQuote) || sourcesSupplierQuote(offer)) {
+        await refreshLinkedSupplierQuotes();
+      }
     } catch (err) {
       console.error('Failed to delete client offer:', err);
       throw err;
@@ -163,6 +260,13 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
 
   const createClientOfferFromQuote = async (quote: Quote) => {
     try {
+      // A stale source-quote date would mint a born-expired, immediately read-only offer
+      // (accepted quotes never expire, so their date can be long past — #779). A new offer is a
+      // fresh commercial document: give it the standard one-month validity window instead.
+      const expirationDate =
+        !quote.expirationDate || isDateOnlyBeforeToday(quote.expirationDate)
+          ? addMonthsToDateOnly(getLocalDateString(), 1)
+          : quote.expirationDate;
       const offer = await api.clientOffers.create({
         id: `${quote.id}-OF`,
         linkedQuoteId: quote.id,
@@ -171,7 +275,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
         paymentTerms: quote.paymentTerms,
         discount: quote.discount,
         status: 'draft',
-        expirationDate: quote.expirationDate,
+        expirationDate,
         notes: quote.notes,
         items: quote.items.map((item) => ({
           ...item,
@@ -186,6 +290,12 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
         ),
       );
       setActiveView('sales/client-offers');
+      notifyClientOfferCreated?.(offer.id);
+      // The new offer takes over a sourced supplier quote's derived status (accepted → 'offer',
+      // #779 offer chain) — without a refresh the supplier table keeps the stale badge.
+      if (sourcesSupplierQuote(quote)) {
+        await refreshLinkedSupplierQuotes();
+      }
     } catch (err) {
       console.error('Failed to create offer from quote:', err);
       toastError((err as Error).message || 'Failed to create offer from quote');
@@ -233,11 +343,12 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       const order = await api.clientsOrders.create(orderData);
       setClientsOrders((prev) => [...prev, order]);
       setActiveView('accounting/clients-orders');
-      try {
-        await refreshSupplierQuoteFlow();
-      } catch (refreshErr) {
-        console.error('Failed to refresh supplier data:', refreshErr);
+      notifyClientOrderCreated?.(order.id);
+      for (const supplierOrder of order.supplierOrders ?? []) {
+        notifySupplierOrderCreated?.(supplierOrder);
       }
+      // Order creation can auto-create supplier orders and consume supplier quotes.
+      await refreshLinkedSupplierQuotes();
     } catch (err) {
       console.error('Failed to create order from offer:', err);
       toastError((err as Error).message || 'Failed to create order from offer');

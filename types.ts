@@ -511,6 +511,11 @@ export interface QuoteItem {
   supplierQuoteItemId?: string | null;
   supplierQuoteSupplierName?: string | null;
   supplierQuoteUnitPrice?: number | null;
+  // Pick-time supplier values (request-only; the server never persists or returns them): the
+  // genuine-edit baseline for a fresh link, stamped by refreshedSupplierLineFields at
+  // pick/refresh time so a pre-save quantity/cost edit pushes onto the supplier item.
+  supplierQuoteBaseQuantity?: number | null;
+  supplierQuoteBaseUnitPrice?: number | null;
   discount?: number; // item-level discount percentage
   note?: string;
   unitType?: SupplierUnitType;
@@ -537,12 +542,19 @@ export interface Quote {
     | '365gg';
   discount: number;
   discountType: DiscountType;
-  status: 'draft' | 'sent' | 'accepted' | 'denied';
+  // Stored pipeline status. `offer` (Offerta) is a manual status between sent and accepted (#779).
+  status: 'draft' | 'sent' | 'offer' | 'accepted' | 'denied';
+  // Effective status from the server: the stored status with the derived `expired` overlay (#779).
+  effectiveStatus?: 'draft' | 'sent' | 'offer' | 'accepted' | 'denied' | 'expired';
   expirationDate: string; // YYYY-MM-DD date-only string
   communicationChannelId?: string;
   communicationChannelName?: string;
   isExpired?: boolean;
   linkedOfferId?: string;
+  // 1-to-1 link to a supplier quote, set from the client-quote form (#779). `null`/absent = unlinked.
+  linkedSupplierQuoteId?: string | null;
+  // True when the linked supplier quote has expired — blocks progression to sent/offer/accepted.
+  linkedSupplierQuoteExpired?: boolean;
   notes?: string;
   createdAt: number;
   updatedAt: number;
@@ -554,7 +566,14 @@ export interface QuoteVersionSnapshot {
   schemaVersion: 1;
   quote: Omit<
     Quote,
-    'items' | 'isExpired' | 'linkedOfferId' | 'communicationChannelId' | 'communicationChannelName'
+    | 'items'
+    | 'isExpired'
+    | 'linkedOfferId'
+    | 'effectiveStatus'
+    | 'linkedSupplierQuoteId'
+    | 'linkedSupplierQuoteExpired'
+    | 'communicationChannelId'
+    | 'communicationChannelName'
   > & {
     communicationChannelId?: string;
     communicationChannelName?: string;
@@ -588,6 +607,10 @@ export interface ClientOfferItem {
   supplierQuoteItemId?: string | null;
   supplierQuoteSupplierName?: string | null;
   supplierQuoteUnitPrice?: number | null;
+  // Pick-time supplier values (request-only; the server never persists or returns them) — the
+  // fresh-link genuine-edit baseline, mirroring QuoteItem.
+  supplierQuoteBaseQuantity?: number | null;
+  supplierQuoteBaseUnitPrice?: number | null;
   discount?: number;
   note?: string;
   unitType?: SupplierUnitType;
@@ -616,12 +639,30 @@ export interface ClientOffer {
   discount: number;
   discountType: DiscountType;
   status: 'draft' | 'sent' | 'accepted' | 'denied';
+  // Derived (issue #779): `expired` overrides a non-terminal stored status once the offer's own
+  // expiration date has passed; accepted/denied are frozen and never expire. Server-computed.
+  effectiveStatus?: ClientOffer['status'] | 'expired';
   deliveryDate: string | null;
   expirationDate: string;
   notes?: string;
   createdAt: number;
   updatedAt: number;
 }
+
+export interface AutoCreatedSupplierOrder {
+  id: string;
+  supplierQuoteId: string;
+  supplierName: string;
+}
+
+export interface ClientOfferAutoCreated {
+  clientOrder: { id: string };
+  supplierOrders: AutoCreatedSupplierOrder[];
+}
+
+export type ClientOfferUpdateResult = ClientOffer & {
+  autoCreated?: ClientOfferAutoCreated;
+};
 
 export type OfferVersionReason = 'update' | 'restore';
 
@@ -694,6 +735,7 @@ export interface ClientsOrder {
   notes?: string;
   createdAt: number;
   updatedAt: number;
+  supplierOrders?: AutoCreatedSupplierOrder[];
   warnings?: string[];
 }
 
@@ -953,7 +995,12 @@ export interface SupplierQuote {
     | '180gg'
     | '240gg'
     | '365gg';
-  status: 'draft' | 'sent' | 'accepted' | 'denied';
+  // FULLY DERIVED status (issue #779): unlinked → draft; linked → follows the client quote and,
+  // once one exists, the client offer — with the `expired` overlays. Never manually set.
+  status: 'draft' | 'sent' | 'offer' | 'accepted' | 'denied' | 'expired';
+  // When linked to a client quote, the status is driven by it (#779).
+  isStatusSynced?: boolean;
+  linkedClientQuoteId?: string | null;
   expirationDate: string;
   communicationChannelId?: string;
   communicationChannelName?: string;
@@ -969,7 +1016,12 @@ export interface SupplierQuoteVersionSnapshot {
   schemaVersion: 1;
   quote: Omit<
     SupplierQuote,
-    'items' | 'linkedOrderId' | 'communicationChannelId' | 'communicationChannelName'
+    | 'items'
+    | 'linkedOrderId'
+    | 'isStatusSynced'
+    | 'linkedClientQuoteId'
+    | 'communicationChannelId'
+    | 'communicationChannelName'
   > & {
     communicationChannelId?: string;
     communicationChannelName?: string;

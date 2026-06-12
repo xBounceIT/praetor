@@ -1,4 +1,9 @@
-import type { ClientOffer, OfferVersion, OfferVersionRow } from '../../types';
+import type {
+  ClientOffer,
+  ClientOfferUpdateResult,
+  OfferVersion,
+  OfferVersionRow,
+} from '../../types';
 import { fetchApi } from './client';
 import { normalizeClientOffer } from './normalizers';
 
@@ -14,8 +19,8 @@ export const clientOffersApi = {
       body: JSON.stringify(offerData),
     }).then(normalizeClientOffer),
 
-  update: (id: string, updates: Partial<ClientOffer>): Promise<ClientOffer> =>
-    fetchApi<ClientOffer>(`/sales/client-offers/${id}`, {
+  update: (id: string, updates: Partial<ClientOffer>): Promise<ClientOfferUpdateResult> =>
+    fetchApi<ClientOfferUpdateResult>(`/sales/client-offers/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     }).then(normalizeClientOffer),

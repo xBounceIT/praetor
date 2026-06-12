@@ -13,10 +13,15 @@ export const rilDraftsApi = {
   get: (monthKey: string, userId?: string): Promise<RilDraft> =>
     fetchApi(draftPath(monthKey, userId)),
 
-  save: (monthKey: string, rows: Record<string, RilDraftRow>, userId?: string): Promise<RilDraft> =>
+  save: (
+    monthKey: string,
+    rows: Record<string, RilDraftRow>,
+    userId?: string,
+    changedDays?: number[],
+  ): Promise<RilDraft> =>
     fetchApi(draftPath(monthKey, userId), {
       method: 'PUT',
-      body: JSON.stringify({ rows }),
+      body: JSON.stringify({ rows, changedDays }),
     }),
 
   remove: (monthKey: string, userId?: string): Promise<void> =>

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { generateRilRows } from '../../utils/ril';
+import { applyRilDraftToRows, generateRilRows } from '../../utils/ril';
 import { buildRilWorkbook } from '../../utils/rilExport';
 
 describe('RIL Excel export', () => {
@@ -179,5 +179,46 @@ describe('RIL Excel export', () => {
     expect(worksheet?.getCell('H39').value).toBe(19);
     expect(worksheet?.getCell('H41').value).toBe('152:00');
     expect(worksheet?.getCell('H42').value).toBe('152,00');
+  });
+
+  test('exports worked holidays even when the holiday note remains selected', () => {
+    const rows = applyRilDraftToRows(
+      generateRilRows({
+        year: 2026,
+        month: 5,
+        entries: [],
+      }),
+      {
+        '1': {
+          entrance: '08:00',
+          exit: '17:00',
+          notes: 'F',
+          transfer: 'Remote working',
+          code: 'Z',
+        },
+      },
+      60,
+    );
+
+    const workbook = buildRilWorkbook({
+      rows,
+      employeeName: 'User Name',
+      companyName: 'ACME',
+      year: 2026,
+      month: 5,
+      lunchBreakMinutes: 60,
+    });
+    const worksheet = workbook.getWorksheet('Prospetto Presenze');
+
+    expect(worksheet?.getCell('B7').value).toBe('08:00');
+    expect(worksheet?.getCell('C7').value).toBe('17:00');
+    expect(worksheet?.getCell('D7').value).toBe('8:00');
+    expect(worksheet?.getCell('E7').value).toBe(8);
+    expect(worksheet?.getCell('G7').value).toBe('F');
+    expect(worksheet?.getCell('H7').value).toBe('Remote working');
+    expect(worksheet?.getCell('I7').value).toBe('Z');
+    expect(worksheet?.getCell('H39').value).toBe(21);
+    expect(worksheet?.getCell('H41').value).toBe('168:00');
+    expect(worksheet?.getCell('H42').value).toBe('168,00');
   });
 });

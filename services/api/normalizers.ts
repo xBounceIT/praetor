@@ -310,7 +310,7 @@ export const normalizeClientOfferItem = (item: ClientOfferItem): ClientOfferItem
   note: item.note || '',
 });
 
-export const normalizeClientOffer = (offer: ClientOffer): ClientOffer => ({
+export const normalizeClientOffer = <T extends ClientOffer>(offer: T): T => ({
   ...offer,
   discount: Number(offer.discount || 0),
   deliveryDate: offer.deliveryDate ? normalizeDateOnlyString(offer.deliveryDate) : null,

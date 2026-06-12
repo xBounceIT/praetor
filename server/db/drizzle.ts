@@ -15,6 +15,7 @@ import * as mcpTokensSchema from './schema/mcpTokens.ts';
 import * as notificationsSchema from './schema/notifications.ts';
 import * as offerVersionsSchema from './schema/offerVersions.ts';
 import * as orderVersionsSchema from './schema/orderVersions.ts';
+import * as overtimeNotificationEventsSchema from './schema/overtimeNotificationEvents.ts';
 import * as personalAccessTokensSchema from './schema/personalAccessTokens.ts';
 import * as productCategoriesSchema from './schema/productCategories.ts';
 import * as productSubcategoriesSchema from './schema/productSubcategories.ts';
@@ -60,6 +61,7 @@ export const schema = {
   ...ldapConfigSchema,
   ...mcpTokensSchema,
   ...notificationsSchema,
+  ...overtimeNotificationEventsSchema,
   ...offerVersionsSchema,
   ...orderVersionsSchema,
   ...personalAccessTokensSchema,

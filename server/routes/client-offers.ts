@@ -3,10 +3,18 @@ import { type DbExecutor, db, withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.ts';
 import * as clientOffersRepo from '../repositories/clientOffersRepo.ts';
 import * as clientQuotesRepo from '../repositories/clientQuotesRepo.ts';
+import * as clientsOrdersRepo from '../repositories/clientsOrdersRepo.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
 import * as offerVersionsRepo from '../repositories/offerVersionsRepo.ts';
 import * as productsRepo from '../repositories/productsRepo.ts';
+import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import {
+  autoCreateSupplierOrdersForClientOrder,
+  type CreatedSupplierOrderSummary,
+  createClientOrderRows,
+  logClientOrderCreated,
+} from '../services/clientOrderCreation.ts';
 import { logAudit } from '../utils/audit.ts';
 import { todayLocalDateOnly } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
@@ -14,8 +22,21 @@ import type { DurationUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
+import {
+  effectiveQuoteStatusFromDate,
+  normalizeQuoteStatus,
+  parseQuoteStatusInput,
+} from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
+import {
+  logSupplierItemSyncAudits,
+  type PreviousClientLine,
+  replySupplierItemSyncError,
+  type SupplierItemSyncAudit,
+  SupplierItemSyncError,
+  syncSupplierItemsFromClientLines,
+} from '../utils/supplier-item-sync.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
@@ -34,10 +55,28 @@ import {
 // violation; keep them identical so the error doesn't drift between paths.
 const LINKED_OFFER_CONFLICT = 'An offer already exists for this quote';
 const TERMINAL_OFFER_STATUSES = new Set(['accepted', 'denied']);
+
+// Shared guard texts — the PUT and restore paths both raise these; keep them identical so the
+// error doesn't drift between paths (issue #779).
+const NON_DRAFT_READ_ONLY_ERROR = 'Non-draft offers are read-only';
+const EXPIRED_READ_ONLY_ERROR = 'Expired offers are read-only; extend the expiration date instead';
+// `offer` is canonical for the QUOTE pipeline but not a customer-offer status, so the strict
+// parse below rejects it alongside unknown spellings.
+const OFFER_STATUS_INPUT_ERROR = 'status must be one of draft, sent, accepted, denied';
+
+// Derived #779 status for responses: `expired` overrides a non-terminal stored status once the
+// offer's own expiration date has passed; accepted/denied are frozen and never expire. Mirrors
+// the client-quote `effectiveStatus` field.
+const projectOffer = <T extends { status: string; expirationDate: string | null }>(offer: T) => ({
+  ...offer,
+  effectiveStatus: effectiveQuoteStatusFromDate(offer.status, offer.expirationDate),
+});
 const TERMINAL_REVERT_ERROR = 'Terminal offers must be reverted through the revert-to-draft action';
 const TERMINAL_REVERT_ROLE_ERROR = 'Only Top Manager or Admin can revert terminal offers to draft';
 const TERMINAL_REVERT_LINKED_SALE_ERROR =
   'Cannot revert an offer once a sale order has been created from it';
+
+class AutoClientOrderConflictError extends Error {}
 
 const canRevertTerminalOfferStatus = (request: FastifyRequest) =>
   request.user?.role === TOP_MANAGER_ROLE_ID || request.user?.role === ADMIN_ROLE_ID;
@@ -85,12 +124,43 @@ const offerSchema = {
     discount: { type: 'number' },
     discountType: { type: 'string', enum: ['percentage', 'currency'] },
     status: { type: 'string' },
+    // Derived (issue #779): `expired` overrides draft/sent once the expiration date has passed;
+    // accepted/denied are frozen and never expire.
+    effectiveStatus: {
+      type: 'string',
+      enum: ['draft', 'sent', 'accepted', 'denied', 'expired'],
+    },
     deliveryDate: { type: ['string', 'null'], format: 'date' },
     expirationDate: { type: ['string', 'null'], format: 'date' },
     notes: { type: ['string', 'null'] },
     createdAt: { type: 'number' },
     updatedAt: { type: 'number' },
     items: { type: 'array', items: offerItemSchema },
+    autoCreated: {
+      type: 'object',
+      properties: {
+        clientOrder: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+          },
+          required: ['id'],
+        },
+        supplierOrders: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              supplierQuoteId: { type: 'string' },
+              supplierName: { type: 'string' },
+            },
+            required: ['id', 'supplierQuoteId', 'supplierName'],
+          },
+        },
+      },
+      required: ['clientOrder', 'supplierOrders'],
+    },
   },
   required: [
     'id',
@@ -100,6 +170,7 @@ const offerSchema = {
     'discount',
     'discountType',
     'status',
+    'effectiveStatus',
     'createdAt',
     'updatedAt',
     'items',
@@ -115,11 +186,17 @@ const offerItemBodySchema = {
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     productCost: { type: 'number' },
-    productMolPercentage: { type: 'number' },
-    supplierQuoteId: { type: 'string' },
-    supplierQuoteItemId: { type: 'string' },
-    supplierQuoteSupplierName: { type: 'string' },
-    supplierQuoteUnitPrice: { type: 'number' },
+    // Nullable: Ajv's coerceTypes would otherwise fold a null into 0 — lying about the value and,
+    // for supplierQuoteUnitPrice, feeding a phantom 0-cost into the #779 supplier-item sync.
+    productMolPercentage: { type: ['number', 'null'] },
+    supplierQuoteId: { type: ['string', 'null'] },
+    supplierQuoteItemId: { type: ['string', 'null'] },
+    supplierQuoteSupplierName: { type: ['string', 'null'] },
+    supplierQuoteUnitPrice: { type: ['number', 'null'] },
+    // Pick-time supplier values (never persisted): the genuine-edit baseline that lets a FRESH
+    // link's quantity/cost edits survive the save and push onto the supplier item.
+    supplierQuoteBaseQuantity: { type: ['number', 'null'] },
+    supplierQuoteBaseUnitPrice: { type: ['number', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     discount: { type: 'number' },
     note: { type: 'string' },
@@ -188,6 +265,8 @@ type OfferItemInput = {
   supplierQuoteItemId?: string | null;
   supplierQuoteSupplierName?: string | null;
   supplierQuoteUnitPrice?: string | number | null;
+  supplierQuoteBaseQuantity?: string | number | null;
+  supplierQuoteBaseUnitPrice?: string | number | null;
   unitType?: UnitType;
   discount?: string | number;
   note?: string;
@@ -206,6 +285,10 @@ type NormalizedOfferItem = {
   supplierQuoteItemId: string | null;
   supplierQuoteSupplierName: string | null;
   supplierQuoteUnitPrice: number | null;
+  // Pick-time supplier values (request-only, never persisted) — the fresh-link genuine-edit
+  // baseline; see ClientLineSyncInput in utils/supplier-item-sync.ts.
+  supplierQuoteBaseQuantity: number | null;
+  supplierQuoteBaseUnitPrice: number | null;
   unitType: UnitType;
   discount: number;
   note: string | null;
@@ -236,6 +319,34 @@ const normalizeItems = (
     );
     if (!unitPriceResult.ok) {
       badRequest(reply, unitPriceResult.message);
+      return null;
+    }
+    // Mirror the client-quote path: a retained supplier-sourced line can carry an edited
+    // supplierQuoteUnitPrice that the #779 forward sync writes back onto the supplier quote item,
+    // so it must be validated non-negative here. normalizeNullableNumber alone let a direct PUT
+    // push a negative supplier cost (negative supplier unit/list prices) through the sync.
+    const supplierQuoteUnitPriceResult = optionalLocalizedNonNegativeNumber(
+      item.supplierQuoteUnitPrice,
+      `items[${i}].supplierQuoteUnitPrice`,
+    );
+    if (!supplierQuoteUnitPriceResult.ok) {
+      badRequest(reply, supplierQuoteUnitPriceResult.message);
+      return null;
+    }
+    const supplierQuoteBaseQuantityResult = optionalLocalizedNonNegativeNumber(
+      item.supplierQuoteBaseQuantity,
+      `items[${i}].supplierQuoteBaseQuantity`,
+    );
+    if (!supplierQuoteBaseQuantityResult.ok) {
+      badRequest(reply, supplierQuoteBaseQuantityResult.message);
+      return null;
+    }
+    const supplierQuoteBaseUnitPriceResult = optionalLocalizedNonNegativeNumber(
+      item.supplierQuoteBaseUnitPrice,
+      `items[${i}].supplierQuoteBaseUnitPrice`,
+    );
+    if (!supplierQuoteBaseUnitPriceResult.ok) {
+      badRequest(reply, supplierQuoteBaseUnitPriceResult.message);
       return null;
     }
     const itemDiscountResult = optionalLocalizedNonNegativeNumber(
@@ -272,7 +383,9 @@ const normalizeItems = (
       supplierQuoteId: normalizeNullableString(item.supplierQuoteId),
       supplierQuoteItemId: normalizeNullableString(item.supplierQuoteItemId),
       supplierQuoteSupplierName: normalizeNullableString(item.supplierQuoteSupplierName),
-      supplierQuoteUnitPrice: normalizeNullableNumber(item.supplierQuoteUnitPrice),
+      supplierQuoteUnitPrice: supplierQuoteUnitPriceResult.value,
+      supplierQuoteBaseQuantity: supplierQuoteBaseQuantityResult.value,
+      supplierQuoteBaseUnitPrice: supplierQuoteBaseUnitPriceResult.value,
       unitType,
       discount: itemDiscountResult.value || 0,
       note: normalizeNullableString(item.note),
@@ -282,6 +395,100 @@ const normalizeItems = (
   }
 
   return normalizedItems;
+};
+
+// Server-side supplier-link resolution (issue #779), mirroring the client-quotes route: a
+// FRESHLY picked link takes its cost and metadata from the live supplier item — the client's
+// cached copy may be stale, and storing/pushing it verbatim would let an outdated browser revert
+// newer supplier pricing. A RETAINED link stays client-authoritative for the cost (that edit is
+// pushed back onto the supplier item by the forward sync). "Retained" is keyed on
+// supplierQuoteItemId: offer items get fresh row ids on every save, so the link itself is the
+// only stable correlation. Throws on a NEW link whose id doesn't resolve; a retained link
+// tolerates a vanished supplier item (legacy dangle) by keeping the stored metadata.
+// `inheritedItemIds` are the LINKED QUOTE's sourced supplier item ids: offers are created by
+// converting a quote, which copies its sourced lines verbatim while the supplier quote already
+// derives offer/accepted — those links are exempt from the fresh-link sourceable check (#812
+// round 15); any other fresh link must reference a quote the picker would offer.
+const resolveOfferItemSupplierLinks = async (
+  items: NormalizedOfferItem[],
+  existingItems: clientOffersRepo.ClientOfferItem[] | null,
+  inheritedItemIds: ReadonlySet<string>,
+): Promise<NormalizedOfferItem[]> => {
+  const linkedIds = items
+    .map((item) => item.supplierQuoteItemId)
+    .filter((id): id is string => id !== null);
+  if (linkedIds.length === 0) return items;
+  const snapshots = await supplierQuotesRepo.getQuoteItemSnapshots(linkedIds);
+  const existingByLink = new Map<string, clientOffersRepo.ClientOfferItem>();
+  for (const existing of existingItems ?? []) {
+    if (existing.supplierQuoteItemId && !existingByLink.has(existing.supplierQuoteItemId)) {
+      existingByLink.set(existing.supplierQuoteItemId, existing);
+    }
+  }
+  return items.map((item) => {
+    if (!item.supplierQuoteItemId) return item;
+    const snapshot = snapshots.get(item.supplierQuoteItemId);
+    const existing = existingByLink.get(item.supplierQuoteItemId);
+    if (!snapshot) {
+      if (existing) {
+        return {
+          ...item,
+          supplierQuoteId: existing.supplierQuoteId ?? item.supplierQuoteId,
+          supplierQuoteSupplierName:
+            existing.supplierQuoteSupplierName ?? item.supplierQuoteSupplierName,
+          supplierQuoteUnitPrice:
+            item.supplierQuoteUnitPrice ?? existing.supplierQuoteUnitPrice ?? null,
+        };
+      }
+      throw new Error(
+        `supplierQuoteItemId "${item.supplierQuoteItemId}" does not reference an existing supplier quote item`,
+      );
+    }
+    // Fresh link (not retained, not inherited from the linked quote): a stale tab or raw API
+    // client could otherwise newly source a frozen/order-locked supplier quote, persisting a
+    // line the editor immediately locks and the sync rejects (#812 round 15).
+    if (
+      !existing &&
+      !inheritedItemIds.has(item.supplierQuoteItemId) &&
+      snapshot.sourceable === false
+    ) {
+      throw new Error(
+        `supplierQuoteItemId "${item.supplierQuoteItemId}" references a supplier quote that is no longer available for new sourcing`,
+      );
+    }
+    // A FRESH link whose cost was deliberately edited away from the pick-time baseline (user
+    // report after #812) keeps the edit — the sync pushes it onto the supplier item in the same
+    // transaction. An untouched cost (== baseline, or no baseline at all) takes the live
+    // supplier value, so a stale browser can't revert newer supplier pricing it never saw.
+    const freshEditedCost =
+      !existing &&
+      item.supplierQuoteUnitPrice != null &&
+      item.supplierQuoteBaseUnitPrice != null &&
+      item.supplierQuoteUnitPrice !== item.supplierQuoteBaseUnitPrice
+        ? item.supplierQuoteUnitPrice
+        : null;
+    return {
+      ...item,
+      supplierQuoteId: snapshot.supplierQuoteId,
+      supplierQuoteSupplierName: snapshot.supplierName,
+      supplierQuoteUnitPrice: existing
+        ? (item.supplierQuoteUnitPrice ?? existing.supplierQuoteUnitPrice ?? snapshot.netCost)
+        : (freshEditedCost ?? snapshot.netCost),
+    };
+  });
+};
+
+// The linked quote's sourced supplier item ids (the conversion-inheritance exemption above).
+const linkedQuoteSourcedItemIds = async (
+  linkedQuoteId: string | null | undefined,
+): Promise<ReadonlySet<string>> => {
+  if (!linkedQuoteId) return new Set<string>();
+  const snapshots = await clientQuotesRepo.findItemSnapshotsForQuote(linkedQuoteId);
+  return new Set(
+    snapshots
+      .map((snapshot) => snapshot.supplierQuoteItemId)
+      .filter((id): id is string => id != null),
+  );
 };
 
 const buildItemsForInsert = (items: NormalizedOfferItem[]): clientOffersRepo.NewClientOfferItem[] =>
@@ -299,6 +506,31 @@ const buildItemsForInsert = (items: NormalizedOfferItem[]): clientOffersRepo.New
     supplierQuoteItemId: item.supplierQuoteItemId,
     supplierQuoteSupplierName: item.supplierQuoteSupplierName,
     supplierQuoteUnitPrice: item.supplierQuoteUnitPrice,
+    unitType: item.unitType,
+    durationMonths: item.durationMonths,
+    durationUnit: item.durationUnit,
+  }));
+
+const buildOrderItemsFromOfferItems = (
+  items: clientOffersRepo.ClientOfferItem[],
+): clientsOrdersRepo.NewClientOrderItem[] =>
+  items.map((item) => ({
+    id: generatePrefixedId(ITEM_ID_PREFIXES.saleItem),
+    productId: item.productId || null,
+    productName: item.productName,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    productCost: item.productCost,
+    productMolPercentage: item.productMolPercentage,
+    discount: item.discount,
+    note: item.note,
+    supplierQuoteId: item.supplierQuoteId,
+    supplierQuoteItemId: item.supplierQuoteItemId,
+    supplierQuoteSupplierName: item.supplierQuoteSupplierName,
+    supplierQuoteUnitPrice: item.supplierQuoteUnitPrice,
+    supplierSaleId: null,
+    supplierSaleItemId: null,
+    supplierSaleSupplierName: null,
     unitType: item.unitType,
     durationMonths: item.durationMonths,
     durationUnit: item.durationUnit,
@@ -378,10 +610,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         else itemsByOffer.set(item.offerId, [item]);
       }
 
-      return offers.map((offer) => ({
-        ...offer,
-        items: itemsByOffer.get(offer.id) ?? [],
-      }));
+      return offers.map((offer) =>
+        projectOffer({
+          ...offer,
+          items: itemsByOffer.get(offer.id) ?? [],
+        }),
+      );
     },
   );
 
@@ -450,7 +684,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: linkedQuoteIdResult.value,
         });
       }
-      if (sourceQuote.status !== 'accepted') {
+      // Effective accepted: `accepted` is terminal/frozen, so this equals the normalized stored
+      // status and also folds the legacy `confirmed` spelling (issue #779).
+      if (normalizeQuoteStatus(sourceQuote.status) !== 'accepted') {
         return replyError(request, reply, {
           statusCode: 409,
           message: 'Offers can only be created from accepted quotes',
@@ -479,12 +715,32 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
       const discountTypeValue = discountType === 'currency' ? 'currency' : 'percentage';
-      const statusValue = typeof status === 'string' && status ? status : 'draft';
+      // Strict write-path parse (issue #779), mirroring the quote routes: unknown spellings 400
+      // instead of 500ing on the DB CHECK constraint; legacy spellings fold to canonical.
+      const statusValue = parseQuoteStatusInput(
+        typeof status === 'string' && status ? status : 'draft',
+      );
+      if (statusValue === null || statusValue === 'offer') {
+        return badRequest(reply, OFFER_STATUS_INPUT_ERROR);
+      }
       const deliveryDateValue =
         deliveryDateResult.value ?? (statusValue === 'sent' ? todayLocalDateOnly() : null);
 
-      const normalizedItems = normalizeItems(items as OfferItemInput[], reply);
+      let normalizedItems = normalizeItems(items as OfferItemInput[], reply);
       if (!normalizedItems) return;
+      // All links are fresh on create — every sourced line takes the live supplier values. Links
+      // copied from the quote being converted are exempt from the sourceable check (the supplier
+      // quote legitimately derives offer/accepted by now); any OTHER fresh link must still
+      // reference a pickable quote (#812 round 15).
+      try {
+        normalizedItems = await resolveOfferItemSupplierLinks(
+          normalizedItems,
+          null,
+          await linkedQuoteSourcedItemIds(linkedQuoteIdResult.value),
+        );
+      } catch (err) {
+        return badRequest(reply, (err as Error).message);
+      }
 
       type CreateOutcome =
         | {
@@ -498,6 +754,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             ok: true;
             offer: clientOffersRepo.ClientOffer;
             items: clientOffersRepo.ClientOfferItem[];
+            syncAudits: SupplierItemSyncAudit[];
           };
 
       let result: CreateOutcome;
@@ -514,7 +771,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               action: 'client_offer.create.not_found',
             };
           }
-          if (lockedQuote.status !== 'accepted') {
+          if (normalizeQuoteStatus(lockedQuote.status) !== 'accepted') {
             return {
               ok: false,
               statusCode: 409,
@@ -559,9 +816,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             buildItemsForInsert(normalizedItems),
             tx,
           );
-          return { ok: true, offer, items: createdItems };
+          // Bidirectional sync on CREATE too (user report after #812): a sourced line whose
+          // quantity/cost was edited away from its pick-time baseline pushes the edit onto the
+          // supplier item, atomically with the offer write. Conversion-inherited and
+          // baseline-less lines are skipped (no diff anchor); audits are logged after commit.
+          const syncAudits = await syncSupplierItemsFromClientLines(
+            request,
+            'client_offer.create',
+            normalizedItems,
+            [],
+            tx,
+          );
+          return { ok: true, offer, items: createdItems, syncAudits };
         });
       } catch (err) {
+        // The client→supplier item sync refuses to write frozen/order-locked supplier quotes or
+        // to run without the supplier-quote update grant; the tx rolled back, so the offer was
+        // rejected together with the supplier write (issue #779).
+        if (err instanceof SupplierItemSyncError) {
+          return replySupplierItemSyncError(request, reply, err, {
+            entityType: 'client_offer',
+            entityId: nextIdResult.value,
+          });
+        }
         const dup = getUniqueViolation(err);
         if (dup && (dup.constraint === 'customer_offers_pkey' || dup.detail?.includes('(id)'))) {
           return replyError(request, reply, {
@@ -602,6 +879,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const createdOffer = result.offer;
       const createdItems = result.items;
 
+      await logSupplierItemSyncAudits(request, result.syncAudits);
+
       await logAudit({
         request,
         action: 'client_offer.created',
@@ -612,7 +891,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           secondaryLabel: clientNameResult.value,
         },
       });
-      return reply.code(201).send({ ...createdOffer, items: createdItems });
+      return reply.code(201).send(projectOffer({ ...createdOffer, items: createdItems }));
     },
   );
 
@@ -673,18 +952,57 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
+      // Strict write-path parse (issue #779), mirroring the client/supplier quote routes: unknown
+      // or derived-only spellings (e.g. the round-tripped 'expired') 400 instead of 500ing on the
+      // DB CHECK constraint, and legacy spellings fold to canonical before the guards compare.
+      const targetStatus =
+        status === undefined
+          ? null
+          : parseQuoteStatusInput(typeof status === 'string' ? status : '');
+      if (status !== undefined && (targetStatus === null || targetStatus === 'offer')) {
+        return badRequest(reply, OFFER_STATUS_INPUT_ERROR);
+      }
+      const statusChanged =
+        targetStatus !== null && targetStatus !== normalizeQuoteStatus(existingOffer.status);
+
       const isTerminalToDraftRevert =
-        typeof status === 'string' &&
-        status === 'draft' &&
-        TERMINAL_OFFER_STATUSES.has(existingOffer.status);
+        targetStatus === 'draft' && TERMINAL_OFFER_STATUSES.has(existingOffer.status);
       if (isTerminalToDraftRevert) {
         if (!canRevertTerminalOfferStatus(request)) {
           return reply.code(403).send({ error: TERMINAL_REVERT_ROLE_ERROR });
         }
         return reply.code(409).send({ error: TERMINAL_REVERT_ERROR });
       }
+      // Any other transition off a terminal status is frozen: without this, a plain status PUT
+      // could flip accepted→denied — or walk accepted→sent→draft, voiding the role gate and the
+      // linked-sale check of the revert flow above. No-op resends stay tolerated.
+      if (statusChanged && TERMINAL_OFFER_STATUSES.has(existingOffer.status)) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Accepted or denied offers cannot change status; use the revert-to-draft action',
+          action: 'client_offer.update.conflict',
+          entityType: 'client_offer',
+          entityId: idResult.value,
+          details: {
+            targetLabel: idResult.value,
+            secondaryLabel: 'terminal_read_only',
+            fromValue: existingOffer.status,
+            toValue: targetStatus ?? undefined,
+          },
+          extraBody: { currentStatus: existingOffer.status },
+        });
+      }
 
-      const hasLockedFieldUpdates =
+      // Derived #779 status: `expired` overrides draft/sent once the offer's own expiration date
+      // has passed; accepted/denied are frozen and never expire.
+      const currentEffective = effectiveQuoteStatusFromDate(
+        existingOffer.status,
+        existingOffer.expirationDate,
+      );
+      // One declared field set, several derived guards (issue #779). The expiration date is NOT
+      // in the set: it stays editable on non-draft and expired offers — extending it is the only
+      // exit from `expired` — and is locked again only on terminal accepted/denied offers below.
+      const hasNonExpirationContentUpdate =
         clientId !== undefined ||
         clientName !== undefined ||
         items !== undefined ||
@@ -692,12 +1010,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discount !== undefined ||
         discountType !== undefined ||
         deliveryDate !== undefined ||
-        expirationDate !== undefined ||
         notes !== undefined;
-      if (existingOffer.status !== 'draft' && hasLockedFieldUpdates) {
+      // The non-draft lock outranks the expired one: for a SENT offer "extend the date" would not
+      // make its content editable, so it gets the accurate non-draft message; the expired guard
+      // below then only ever fires for an expired DRAFT offer.
+      if (existingOffer.status !== 'draft' && hasNonExpirationContentUpdate) {
         return replyError(request, reply, {
           statusCode: 409,
-          message: 'Non-draft offers are read-only',
+          message: NON_DRAFT_READ_ONLY_ERROR,
           action: 'client_offer.update.conflict',
           entityType: 'client_offer',
           entityId: idResult.value,
@@ -707,6 +1027,52 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             fromValue: existingOffer.status,
           },
           extraBody: { currentStatus: existingOffer.status },
+        });
+      }
+      // Expired offers are content-read-only EXCEPT their expiration date — a plain
+      // expirationDate write is how an offer leaves `expired` (issue #779). Mirrors the
+      // client-quote rule; status changes are handled by the freeze below.
+      if (currentEffective === 'expired' && hasNonExpirationContentUpdate) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: EXPIRED_READ_ONLY_ERROR,
+          action: 'client_offer.update.conflict',
+          entityType: 'client_offer',
+          entityId: idResult.value,
+          details: {
+            targetLabel: idResult.value,
+            secondaryLabel: 'expired_read_only',
+            fromValue: 'expired',
+          },
+        });
+      }
+      // Terminal accepted/denied offers are frozen entirely — including the expiration date
+      // (they can never expire, so there is no validity to renew).
+      if (TERMINAL_OFFER_STATUSES.has(existingOffer.status) && expirationDate !== undefined) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: NON_DRAFT_READ_ONLY_ERROR,
+          action: 'client_offer.update.conflict',
+          entityType: 'client_offer',
+          entityId: idResult.value,
+          details: {
+            targetLabel: idResult.value,
+            secondaryLabel: 'non_draft_read_only',
+            fromValue: existingOffer.status,
+          },
+          extraBody: { currentStatus: existingOffer.status },
+        });
+      }
+      // Scaduto freezes manual status changes — an offer leaves `expired` only by extending its
+      // expiration date. A no-op resend of the stored status stays tolerated (issue #779).
+      if (currentEffective === 'expired' && statusChanged) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Expired offers cannot change status; extend the expiration date instead',
+          action: 'client_offer.update.conflict',
+          entityType: 'client_offer',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'expired_read_only', fromValue: 'expired' },
         });
       }
 
@@ -804,39 +1170,53 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         deliveryDateValue = deliveryDateResult.value;
       }
 
-      const nextStatusValue = typeof status === 'string' ? status : undefined;
       const shouldStampDeliveryDate =
-        nextStatusValue === 'sent' &&
+        targetStatus === 'sent' &&
         existingOffer.status !== 'sent' &&
         !existingOffer.deliveryDate &&
         !deliveryDateValue;
       const automaticDeliveryDate = shouldStampDeliveryDate ? todayLocalDateOnly() : undefined;
 
       let normalizedItemsForUpdate: NormalizedOfferItem[] | null = null;
+      let previousSyncLines: PreviousClientLine[] = [];
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
         }
         normalizedItemsForUpdate = normalizeItems(items as OfferItemInput[], reply);
         if (!normalizedItemsForUpdate) return;
+        const existingOfferItems = await clientOffersRepo.findItemsForOffer(idResult.value);
+        try {
+          normalizedItemsForUpdate = await resolveOfferItemSupplierLinks(
+            normalizedItemsForUpdate,
+            existingOfferItems,
+            // Re-adding a line the linked quote sources stays allowed (it was inherited via the
+            // conversion); only genuinely new picks must be sourceable (#812 round 15).
+            await linkedQuoteSourcedItemIds(existingOffer.linkedQuoteId),
+          );
+        } catch (err) {
+          return badRequest(reply, (err as Error).message);
+        }
+        // Previous stored lines for the supplier-item sync's genuine-edit diff (issue #779) —
+        // the stored item shape structurally satisfies PreviousClientLine.
+        previousSyncLines = existingOfferItems;
       }
 
+      // Derived from the declared field set above so the two lists can't drift (issue #779).
       const isIdOnlyUpdate =
         nextId !== undefined &&
-        clientId === undefined &&
-        clientName === undefined &&
-        items === undefined &&
-        paymentTerms === undefined &&
-        discount === undefined &&
-        discountType === undefined &&
         status === undefined &&
-        deliveryDate === undefined &&
         expirationDate === undefined &&
-        notes === undefined;
+        !hasNonExpirationContentUpdate;
 
       let result: {
         offer: clientOffersRepo.ClientOffer | null;
         items: clientOffersRepo.ClientOfferItem[];
+        syncAudits: SupplierItemSyncAudit[];
+        createdOrder?: {
+          order: clientsOrdersRepo.ClientOrder;
+          items: clientsOrdersRepo.ClientOrderItem[];
+        };
       };
       try {
         result = await withDbTransaction(async (tx) => {
@@ -848,7 +1228,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           let renamedOffer: clientOffersRepo.ClientOffer | null = null;
           if (nextIdValue && nextIdValue !== idResult.value) {
             renamedOffer = await clientOffersRepo.rename(idResult.value, nextIdValue, tx);
-            if (!renamedOffer) return { offer: null, items: [] };
+            if (!renamedOffer) return { offer: null, items: [], syncAudits: [] };
           }
           // id-only renames have nothing left to write — reuse the row returned by rename().
           const offer =
@@ -862,7 +1242,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     paymentTerms: (paymentTerms as string | null | undefined) ?? null,
                     discount: (discountValue as number | null | undefined) ?? null,
                     discountType: discountTypeValue ?? null,
-                    status: (status as string | null | undefined) ?? null,
+                    status: targetStatus,
                     deliveryDate:
                       (deliveryDateValue as string | null | undefined) ??
                       automaticDeliveryDate ??
@@ -872,7 +1252,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   },
                   tx,
                 );
-          if (!offer) return { offer: null, items: [] };
+          if (!offer) return { offer: null, items: [], syncAudits: [] };
           const updatedItems = normalizedItemsForUpdate
             ? await clientOffersRepo.replaceItems(
                 offer.id,
@@ -880,9 +1260,57 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 tx,
               )
             : await clientOffersRepo.findItemsForOffer(offer.id, tx);
-          return { offer, items: updatedItems };
+          let createdOrder:
+            | {
+                order: clientsOrdersRepo.ClientOrder;
+                items: clientsOrdersRepo.ClientOrderItem[];
+              }
+            | undefined;
+          if (statusChanged && targetStatus === 'accepted') {
+            const existingOrder = await clientsOrdersRepo.findExistingForOffer(offer.id, null, tx);
+            if (existingOrder) {
+              throw new AutoClientOrderConflictError('A sale order already exists for this offer');
+            }
+            createdOrder = await createClientOrderRows(
+              {
+                linkedQuoteId: offer.linkedQuoteId || null,
+                linkedOfferId: offer.id,
+                clientId: offer.clientId,
+                clientName: offer.clientName,
+                paymentTerms: offer.paymentTerms || 'immediate',
+                discount: offer.discount,
+                discountType: offer.discountType,
+                status: 'draft',
+                notes: offer.notes,
+              },
+              buildOrderItemsFromOfferItems(updatedItems),
+              tx,
+            );
+          }
+          // Bidirectional sync (issue #779): push GENUINE client-side edits of supplier-sourced
+          // line fields (quantity, unit cost) onto the referenced supplier quote items,
+          // atomically with the offer write. The audit entries are logged after commit.
+          const syncAudits = normalizedItemsForUpdate
+            ? await syncSupplierItemsFromClientLines(
+                request,
+                'client_offer.update',
+                normalizedItemsForUpdate,
+                previousSyncLines,
+                tx,
+              )
+            : [];
+          return { offer, items: updatedItems, syncAudits, createdOrder };
         });
       } catch (err) {
+        // The client→supplier item sync refuses to write frozen/order-locked supplier quotes or
+        // to run without the supplier-quote update grant; the tx rolled back, so the offer write
+        // was rejected together with the supplier write (issue #779).
+        if (err instanceof SupplierItemSyncError) {
+          return replySupplierItemSyncError(request, reply, err, {
+            entityType: 'client_offer',
+            entityId: idResult.value,
+          });
+        }
         const dup = getUniqueViolation(err);
         if (dup && (dup.constraint === 'customer_offers_pkey' || dup.detail?.includes('(id)'))) {
           return replyError(request, reply, {
@@ -892,6 +1320,39 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             entityType: 'client_offer',
             entityId: idResult.value,
             details: { secondaryLabel: 'duplicate_id' },
+          });
+        }
+        if (dup && (dup.constraint === 'sales_pkey' || dup.detail?.includes('(id)'))) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Order ID already exists',
+            action: 'client_offer.update.conflict',
+            entityType: 'client_order',
+            details: { secondaryLabel: 'duplicate_order_id' },
+          });
+        }
+        if (
+          dup &&
+          (dup.constraint === 'idx_sales_linked_offer_id_unique' ||
+            dup.detail?.includes('(linked_offer_id)'))
+        ) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'A sale order already exists for this offer',
+            action: 'client_offer.update.conflict',
+            entityType: 'client_offer',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'duplicate_order_for_offer' },
+          });
+        }
+        if (err instanceof AutoClientOrderConflictError) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: err.message,
+            action: 'client_offer.update.conflict',
+            entityType: 'client_offer',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'duplicate_order_for_offer' },
           });
         }
         throw err;
@@ -909,8 +1370,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const nextStatus = typeof status === 'string' ? status : updatedOffer.status;
-      const didStatusChange = status !== undefined && existingOffer.status !== nextStatus;
+      await logSupplierItemSyncAudits(request, result.syncAudits);
+      let autoCreated:
+        | {
+            clientOrder: { id: string };
+            supplierOrders: CreatedSupplierOrderSummary[];
+          }
+        | undefined;
+      if (result.createdOrder) {
+        const supplierOrderResult = await autoCreateSupplierOrdersForClientOrder(
+          request,
+          result.createdOrder.order,
+          result.createdOrder.items,
+          withDbTransaction,
+        );
+        autoCreated = {
+          clientOrder: { id: result.createdOrder.order.id },
+          supplierOrders: supplierOrderResult.supplierOrders,
+        };
+        await logClientOrderCreated(request, result.createdOrder.order);
+      }
+
+      const nextStatus = targetStatus ?? updatedOffer.status;
+      const didStatusChange = targetStatus !== null && existingOffer.status !== nextStatus;
       await logAudit({
         request,
         action: 'client_offer.updated',
@@ -924,7 +1406,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
 
-      return { ...updatedOffer, items: updatedItems };
+      return projectOffer({
+        ...updatedOffer,
+        items: updatedItems,
+        ...(autoCreated ? { autoCreated } : {}),
+      });
     },
   );
 
@@ -1017,7 +1503,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
 
-      return { ...result.offer, items: result.items };
+      return projectOffer({ ...result.offer, items: result.items });
     },
   );
 
@@ -1072,6 +1558,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             targetLabel: idResult.value,
             secondaryLabel: 'non_draft_status',
             fromValue: offer.status,
+          },
+        });
+      }
+      // An expired DRAFT offer is read-only under #779 (the UI disables deletion and the only
+      // exit is extending the expiration date) — derive the effective status here too so a
+      // direct API caller cannot delete what the model freezes (#812 round 25).
+      if (effectiveQuoteStatusFromDate(offer.status, offer.expirationDate) === 'expired') {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message:
+            'Expired offers are read-only and cannot be deleted; extend the expiration date instead',
+          action: 'client_offer.delete.conflict',
+          entityType: 'client_offer',
+          entityId: idResult.value,
+          details: {
+            targetLabel: idResult.value,
+            secondaryLabel: 'expired_read_only',
           },
         });
       }
@@ -1250,10 +1753,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return {
             ok: false,
             statusCode: 409,
-            message: 'Non-draft offers are read-only',
+            message: NON_DRAFT_READ_ONLY_ERROR,
             action: 'client_offer.restore.conflict',
             secondaryLabel: 'non_draft_read_only',
             extraBody: { currentStatus: current.status },
+          };
+        }
+        // Expired offers are content-read-only and exit only via a date extension (issue #779);
+        // a restore would rewrite content, status AND the date in one shot, so block it like the
+        // PUT does.
+        if (effectiveQuoteStatusFromDate(current.status, current.expirationDate) === 'expired') {
+          return {
+            ok: false,
+            statusCode: 409,
+            message: EXPIRED_READ_ONLY_ERROR,
+            action: 'client_offer.restore.conflict',
+            secondaryLabel: 'expired_read_only',
           };
         }
 
@@ -1317,7 +1832,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             paymentTerms: version.snapshot.offer.paymentTerms ?? 'immediate',
             discount: version.snapshot.offer.discount,
             discountType: version.snapshot.offer.discountType,
-            status: version.snapshot.offer.status,
+            // Fold to the canonical set like the quote routes' restores do, so a non-canonical
+            // snapshot value can never hit the CHECK constraint (issue #779).
+            status: normalizeQuoteStatus(version.snapshot.offer.status),
             deliveryDate: snapshotDeliveryDate,
             expirationDate: snapshotExpirationDate,
             notes: version.snapshot.offer.notes,
@@ -1362,7 +1879,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
 
-      return { ...result.offer, items: result.items };
+      return projectOffer({ ...result.offer, items: result.items });
     },
   );
 }

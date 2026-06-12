@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { addMonthsToDateOnly, getLocalDateString } from '../../utils/date';
 import { ApiErrorStub } from '../helpers/apiErrorStub';
 import { clearSpyStateAfterAll } from '../helpers/mockCleanup.ts';
 
@@ -85,9 +86,20 @@ type QuoteLike = {
   isExpired?: boolean;
   expirationDate?: string;
   linkedOfferId?: string;
+  linkedSupplierQuoteId?: string | null;
+  items?: Array<{ supplierQuoteItemId?: string | null }>;
   clientId?: string;
 };
-type ClientOfferLike = { id: string; clientId?: string; linkedQuoteId?: string };
+type ClientOfferLike = {
+  id: string;
+  clientId?: string;
+  linkedQuoteId?: string;
+  items?: Array<{ supplierQuoteItemId?: string | null }>;
+  autoCreated?: {
+    clientOrder: { id: string };
+    supplierOrders: Array<{ id: string; supplierQuoteId: string; supplierName: string }>;
+  };
+};
 type ClientsOrderLike = { id: string; clientId?: string };
 type InvoiceLike = { id: string };
 
@@ -110,7 +122,9 @@ const makeStubScalar = <T>(initial: T) => {
 
 const buildHandlers = (overrides: Record<string, unknown> = {}) => {
   const quotes = makeStubSetter<QuoteLike>((overrides.quotes as QuoteLike[] | undefined) ?? []);
-  const clientOffers = makeStubSetter<ClientOfferLike>([]);
+  const clientOffers = makeStubSetter<ClientOfferLike>(
+    (overrides.clientOffers as ClientOfferLike[] | undefined) ?? [],
+  );
   const clientsOrders = makeStubSetter<ClientsOrderLike>([]);
   const invoices = makeStubSetter<InvoiceLike>([]);
   const clientQuoteFilterId = makeStubScalar<string | null>(
@@ -121,11 +135,15 @@ const buildHandlers = (overrides: Record<string, unknown> = {}) => {
   );
   const setActiveView = mock(() => {});
   const refreshSupplierQuoteFlow = mock(() => Promise.resolve()) as unknown as () => Promise<void>;
+  const notifyClientOfferCreated = mock((_offerId: string) => {});
+  const notifyClientOrderCreated = mock((_orderId: string) => {});
+  const notifySupplierOrderCreated = mock((_order: unknown) => {});
 
   const handlers = makeQuoteHandlers({
-    getQuotes: (() => quotes.get()) as never,
     getClientQuoteFilterId: () => clientQuoteFilterId.get(),
     getClientOfferFilterId: () => clientOfferFilterId.get(),
+    getQuotes: () => quotes.get() as never,
+    getClientOffers: () => clientOffers.get() as never,
     setQuotes: quotes.setter as never,
     setClientOffers: clientOffers.setter as never,
     setClientsOrders: clientsOrders.setter as never,
@@ -136,6 +154,9 @@ const buildHandlers = (overrides: Record<string, unknown> = {}) => {
     refreshSupplierQuoteFlow:
       (overrides.refreshSupplierQuoteFlow as (() => Promise<void>) | undefined) ??
       refreshSupplierQuoteFlow,
+    notifyClientOfferCreated,
+    notifyClientOrderCreated,
+    notifySupplierOrderCreated,
   });
 
   return {
@@ -148,6 +169,9 @@ const buildHandlers = (overrides: Record<string, unknown> = {}) => {
     clientOfferFilterId,
     setActiveView,
     refreshSupplierQuoteFlow,
+    notifyClientOfferCreated,
+    notifyClientOrderCreated,
+    notifySupplierOrderCreated,
   };
 };
 
@@ -214,27 +238,7 @@ describe('makeQuoteHandlers', () => {
     }
   });
 
-  test('updateQuote restores expirationDate when status flips back to draft', async () => {
-    apiMocks.quotesUpdate.mockImplementation((id: string, updates: unknown) =>
-      Promise.resolve({ id, ...(updates as object) }),
-    );
-    apiMocks.quotesList.mockImplementation(() => Promise.resolve([]));
-    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([]));
-    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
-    const ctx = buildHandlers({
-      quotes: [{ id: 'q1', status: 'rejected', isExpired: true, expirationDate: '2020-01-01' }],
-    });
-
-    await ctx.handlers.updateQuote('q1', { status: 'draft', isExpired: false } as never);
-
-    const callArgs = apiMocks.quotesUpdate.mock.calls[0] as [string, Record<string, unknown>];
-    expect(callArgs[0]).toBe('q1');
-    expect(callArgs[1].status).toBe('draft');
-    expect(callArgs[1].isExpired).toBe(false);
-    expect(callArgs[1].expirationDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-  });
-
-  test('updateQuote does not inject expirationDate when not a restore', async () => {
+  test('updateQuote passes the payload through to the API untouched', async () => {
     apiMocks.quotesUpdate.mockImplementation((id: string, updates: unknown) =>
       Promise.resolve({ id, ...(updates as object) }),
     );
@@ -277,6 +281,289 @@ describe('makeQuoteHandlers', () => {
     }
   });
 
+  // The three list refetches behind refreshClientQuoteFlow, stubbed empty.
+  const stubFlowListRefetch = () => {
+    apiMocks.quotesList.mockImplementation(() => Promise.resolve([]));
+    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([]));
+    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
+  };
+
+  // A supplier quote's visible status is derived from the client quote/offer whose lines SOURCE it
+  // (#779 follow-up: line-sourced, no header link), so a save of such a document must refresh the
+  // separately-cached supplier quotes table. `sourced` returns the line-sourcing marker.
+  const sourced = [{ supplierQuoteItemId: 'sqi-9' }];
+  const stubQuoteUpdateFlow = (updatedFields: object = {}) => {
+    apiMocks.quotesUpdate.mockImplementation((id: string, updates: unknown) =>
+      Promise.resolve({ id, ...(updates as object), ...updatedFields }),
+    );
+    stubFlowListRefetch();
+  };
+
+  test('updateQuote refreshes supplier quotes when a sourcing quote changes status', async () => {
+    stubQuoteUpdateFlow({ items: sourced });
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'offer', items: sourced }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.updateQuote('q1', { status: 'accepted' } as never);
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
+
+  test('updateQuote refreshes supplier quotes when a save adds line sourcing', async () => {
+    stubQuoteUpdateFlow({ items: sourced });
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'draft' }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.updateQuote('q1', { items: sourced } as never);
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
+
+  test('updateQuote does NOT refresh supplier quotes for a plain content edit', async () => {
+    stubQuoteUpdateFlow();
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'draft' }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.updateQuote('q1', { notes: 'just a note' } as never);
+    expect(refreshSupplierQuoteFlow).not.toHaveBeenCalled();
+  });
+
+  test('updateQuote refreshes supplier quotes when a save REMOVES line sourcing', async () => {
+    // The previously-sourced supplier quote drops back to draft, so a refresh is still needed even
+    // though the post-save quote no longer sources anything (the pre-save snapshot knows it did).
+    stubQuoteUpdateFlow({ items: [{ supplierQuoteItemId: null }] });
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'draft', items: sourced }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.updateQuote('q1', { items: [{ supplierQuoteItemId: null }] } as never);
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
+
+  test('updateQuote refreshes supplier quotes when rollback removes offer-only sourcing', async () => {
+    stubQuoteUpdateFlow({ status: 'draft', linkedOfferId: null, items: [] });
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'offer', linkedOfferId: 'of-1', items: [] }],
+      clientOffers: [{ id: 'of-1', items: sourced }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.updateQuote('q1', { status: 'draft' } as never);
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
+
+  test('updateQuote refetches offers after marking a quote as offer', async () => {
+    stubQuoteUpdateFlow({ status: 'offer', linkedOfferId: 'q1-OF', items: [] });
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'sent', items: [] }],
+    });
+
+    await ctx.handlers.updateQuote('q1', { status: 'offer' } as never);
+    expect(apiMocks.clientOffersList).toHaveBeenCalledTimes(1);
+    expect(ctx.notifyClientOfferCreated).toHaveBeenCalledWith('q1-OF');
+  });
+
+  test('deleteQuote refreshes supplier quotes when the deleted quote sourced one', async () => {
+    apiMocks.quotesDelete.mockImplementation(() => Promise.resolve());
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'sent', items: sourced }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.deleteQuote('q1');
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+    expect(ctx.quotes.get()).toHaveLength(0);
+  });
+
+  test('deleteQuote does NOT refresh supplier quotes for a quote with no sourcing', async () => {
+    apiMocks.quotesDelete.mockImplementation(() => Promise.resolve());
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'draft' }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.deleteQuote('q1');
+    expect(refreshSupplierQuoteFlow).not.toHaveBeenCalled();
+  });
+
+  test('updateQuote still resolves when the supplier-quote refresh fails (best-effort)', async () => {
+    stubQuoteUpdateFlow({ items: sourced });
+    const refreshSupplierQuoteFlow = mock(() => Promise.reject(new Error('supplier boom')));
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'offer', items: sourced }],
+      refreshSupplierQuoteFlow,
+    });
+    const restore = silenceConsole();
+    try {
+      await ctx.handlers.updateQuote('q1', { status: 'accepted' } as never);
+      expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+    } finally {
+      restore();
+    }
+  });
+
+  test('addQuote refreshes supplier quotes when the created quote sources one', async () => {
+    apiMocks.quotesCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({ id: 'q-new', items: sourced, ...(data as object) }),
+    );
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({ refreshSupplierQuoteFlow });
+
+    await ctx.handlers.addQuote({ status: 'draft', items: sourced } as never);
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
+
+  test('addQuote does NOT refresh supplier quotes for a create with no sourcing', async () => {
+    apiMocks.quotesCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({ id: 'q-new', ...(data as object) }),
+    );
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({ refreshSupplierQuoteFlow });
+
+    await ctx.handlers.addQuote({ status: 'draft' } as never);
+    expect(refreshSupplierQuoteFlow).not.toHaveBeenCalled();
+  });
+
+  test('updateClientOffer refreshes supplier quotes when the offer sources one', async () => {
+    apiMocks.clientOffersUpdate.mockImplementation((id: string, updates: unknown) =>
+      Promise.resolve({
+        id,
+        linkedQuoteId: 'q-unlinked',
+        items: [{ supplierQuoteItemId: 'sqi-9' }],
+        ...(updates as object),
+      }),
+    );
+    stubFlowListRefetch();
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q-unlinked', status: 'accepted' }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.updateClientOffer('of-1', { notes: 'edited' } as never);
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
+
+  test('updateClientOffer does NOT refresh supplier quotes when nothing supplier-related is involved', async () => {
+    apiMocks.clientOffersUpdate.mockImplementation((id: string, updates: unknown) =>
+      Promise.resolve({ id, linkedQuoteId: 'q-unlinked', items: [], ...(updates as object) }),
+    );
+    stubFlowListRefetch();
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q-unlinked', status: 'accepted' }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.updateClientOffer('of-1', { notes: 'edited' } as never);
+    expect(refreshSupplierQuoteFlow).not.toHaveBeenCalled();
+  });
+
+  test('updateClientOffer refreshes supplier quotes when the update REMOVES an offer-only sourced line (#812 round 29)', async () => {
+    // The PREVIOUS offer carried the only link (not present on the linked quote); after the
+    // update neither the response nor the source quote sources anything — but the supplier
+    // quote's derived status just changed, so the cache must still refresh.
+    apiMocks.clientOffersUpdate.mockImplementation((id: string, updates: unknown) =>
+      Promise.resolve({ id, linkedQuoteId: 'q-unlinked', items: [], ...(updates as object) }),
+    );
+    stubFlowListRefetch();
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q-unlinked', status: 'accepted' }],
+      clientOffers: [{ id: 'of-1', items: [{ supplierQuoteItemId: 'sqi-9' }] }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.updateClientOffer('of-1', { items: [] } as never);
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
+  test('revertClientOfferToDraft refreshes supplier quotes when the offer sources one', async () => {
+    apiMocks.clientOffersRevertToDraft.mockImplementation((id: string) =>
+      Promise.resolve({ id, status: 'draft', linkedQuoteId: 'q1', items: sourced }),
+    );
+    stubFlowListRefetch();
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({ refreshSupplierQuoteFlow });
+
+    await ctx.handlers.revertClientOfferToDraft('of-1', 'mistake');
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
+
+  test('deleteClientOffer refreshes supplier quotes when the source quote sourced one', async () => {
+    apiMocks.clientOffersDelete.mockImplementation(() => Promise.resolve());
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      // The offer's sourcing mirrors its source quote's lines; the linked quote is found by id.
+      quotes: [{ id: 'q1', linkedOfferId: 'of-1', items: sourced }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.deleteClientOffer('of-1');
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
+
+  test('deleteClientOffer refreshes supplier quotes when only the OFFER carried the sourced line (#812 round 32)', async () => {
+    // The sourced line exists only on the offer (added while editing the draft) — the linked
+    // quote sources nothing. The backend counts offer lines as sourcing candidates, so deleting
+    // the offer still un-sources the supplier quote and the cache must refresh.
+    apiMocks.clientOffersDelete.mockImplementation(() => Promise.resolve());
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', linkedOfferId: 'of-1', items: [] }],
+      clientOffers: [{ id: 'of-1', items: [{ supplierQuoteItemId: 'sqi-9' }] }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.deleteClientOffer('of-1');
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
+
+  test('deleteClientOffer does NOT refresh supplier quotes when neither the quote nor the offer sources one', async () => {
+    apiMocks.clientOffersDelete.mockImplementation(() => Promise.resolve());
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', linkedOfferId: 'of-1', items: [] }],
+      clientOffers: [{ id: 'of-1', items: [] }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.deleteClientOffer('of-1');
+    expect(refreshSupplierQuoteFlow).not.toHaveBeenCalled();
+  });
+
+  test('createClientOfferFromQuote refreshes supplier quotes when the source quote sources one', async () => {
+    apiMocks.clientOffersCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({ ...(data as object), id: 'of-new' }),
+    );
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({ refreshSupplierQuoteFlow });
+    ctx.quotes.setter([{ id: 'q1', clientId: 'c1' }] as never);
+
+    await ctx.handlers.createClientOfferFromQuote({
+      id: 'q1',
+      clientId: 'c1',
+      clientName: 'Acme',
+      paymentTerms: '30',
+      discount: 0,
+      expirationDate: '2999-12-31',
+      notes: '',
+      items: sourced,
+    } as never);
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
+
   test('deleteQuote removes from list', async () => {
     apiMocks.quotesDelete.mockImplementation(() => Promise.resolve());
     const ctx = buildHandlers();
@@ -299,7 +586,14 @@ describe('makeQuoteHandlers', () => {
 
   test('updateClientOffer refreshes flow and updates filter when matched', async () => {
     apiMocks.clientOffersUpdate.mockImplementation((id: string, updates: unknown) =>
-      Promise.resolve({ id, ...(updates as object) }),
+      Promise.resolve({
+        id,
+        ...(updates as object),
+        autoCreated: {
+          clientOrder: { id: 'ORD-1' },
+          supplierOrders: [{ id: 'SORD-1', supplierQuoteId: 'SQ-1', supplierName: 'Supplier' }],
+        },
+      }),
     );
     apiMocks.quotesList.mockImplementation(() => Promise.resolve([]));
     apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([]));
@@ -308,6 +602,12 @@ describe('makeQuoteHandlers', () => {
 
     await ctx.handlers.updateClientOffer('of-1', { status: 'sent' } as never);
     expect(ctx.clientOfferFilterId.get()).toBe('of-1');
+    expect(ctx.notifyClientOrderCreated).toHaveBeenCalledWith('ORD-1');
+    expect(ctx.notifySupplierOrderCreated).toHaveBeenCalledWith({
+      id: 'SORD-1',
+      supplierQuoteId: 'SQ-1',
+      supplierName: 'Supplier',
+    });
   });
 
   test('updateClientOffer rethrows api error', async () => {
@@ -376,7 +676,8 @@ describe('makeQuoteHandlers', () => {
       clientName: 'Acme',
       paymentTerms: '30',
       discount: 5,
-      expirationDate: '2026-12-31',
+      // Far future: a past date would trigger the fresh-validity-window branch instead.
+      expirationDate: '2999-12-31',
       notes: 'note',
       items: [{ id: 'orig-1', productId: 'p1', quantity: 1, unitPrice: 10 }],
     };
@@ -396,6 +697,35 @@ describe('makeQuoteHandlers', () => {
     expect(ctx.clientOffers.get()[0].id).toBe('of-new');
     expect(ctx.quotes.get()[0].linkedOfferId).toBe('of-new');
     expect(ctx.setActiveView).toHaveBeenCalledWith('sales/client-offers');
+    expect(ctx.notifyClientOfferCreated).toHaveBeenCalledWith('of-new');
+    // A still-valid source date is copied verbatim.
+    const payload = apiMocks.clientOffersCreate.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.expirationDate).toBe('2999-12-31');
+  });
+
+  test('createClientOfferFromQuote refreshes a dead validity window instead of copying it', async () => {
+    apiMocks.clientOffersCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({ ...(data as object), id: 'of-new' }),
+    );
+    const ctx = buildHandlers();
+    ctx.quotes.setter([{ id: 'q1', clientId: 'c1' }] as never);
+
+    await ctx.handlers.createClientOfferFromQuote({
+      id: 'q1',
+      clientId: 'c1',
+      clientName: 'Acme',
+      paymentTerms: '30',
+      discount: 0,
+      // Long past — e.g. an accepted quote converted months later (terminal quotes never expire).
+      expirationDate: '2000-01-01',
+      notes: '',
+      items: [],
+    } as never);
+
+    const payload = apiMocks.clientOffersCreate.mock.calls[0][0] as Record<string, unknown>;
+    // Copying the dead date would mint a born-expired, immediately read-only offer (#779);
+    // the conversion mints the standard one-month window instead.
+    expect(payload.expirationDate).toBe(addMonthsToDateOnly(getLocalDateString(), 1));
   });
 
   test('createClientOfferFromQuote toasts on api error', async () => {
@@ -409,7 +739,7 @@ describe('makeQuoteHandlers', () => {
         clientName: 'Acme',
         paymentTerms: '30',
         discount: 0,
-        expirationDate: '2026-12-31',
+        expirationDate: '2999-12-31',
         notes: '',
         items: [],
       } as never);
@@ -464,7 +794,11 @@ describe('makeQuoteHandlers', () => {
 
   test('createClientsOrderFromOffer creates order, switches view, refreshes supplier flow', async () => {
     apiMocks.clientsOrdersCreate.mockImplementation((data: unknown) =>
-      Promise.resolve({ id: 'or-new', ...(data as object) }),
+      Promise.resolve({
+        id: 'or-new',
+        ...(data as object),
+        supplierOrders: [{ id: 'SORD-2', supplierQuoteId: 'SQ-2', supplierName: 'Supplier 2' }],
+      }),
     );
     const refreshSupplierQuoteFlow = mock(() =>
       Promise.resolve(),
@@ -492,6 +826,12 @@ describe('makeQuoteHandlers', () => {
 
     expect(ctx.clientsOrders.get()[0].id).toBe('or-new');
     expect(ctx.setActiveView).toHaveBeenCalledWith('accounting/clients-orders');
+    expect(ctx.notifyClientOrderCreated).toHaveBeenCalledWith('or-new');
+    expect(ctx.notifySupplierOrderCreated).toHaveBeenCalledWith({
+      id: 'SORD-2',
+      supplierQuoteId: 'SQ-2',
+      supplierName: 'Supplier 2',
+    });
     expect(refreshSupplierQuoteFlow).toHaveBeenCalled();
   });
 

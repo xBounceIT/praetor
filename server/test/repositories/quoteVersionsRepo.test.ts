@@ -37,6 +37,8 @@ describe('buildSnapshot', () => {
     const quote = {
       id: 'cq-1',
       linkedOfferId: 'co-1',
+      linkedSupplierQuoteId: null,
+      linkedSupplierQuoteExpiration: null,
       clientId: 'c-1',
       clientName: 'Acme',
       paymentTerms: 'net30',
@@ -64,6 +66,8 @@ describe('buildSnapshot', () => {
     const quote = {
       id: 'cq-2',
       linkedOfferId: null,
+      linkedSupplierQuoteId: null,
+      linkedSupplierQuoteExpiration: null,
       clientId: 'c-1',
       clientName: 'Acme',
       paymentTerms: 'net30',
@@ -144,6 +148,8 @@ describe('insert', () => {
           schemaVersion: 1,
           quote: {
             id: 'cq-1',
+            linkedSupplierQuoteId: null,
+            linkedSupplierQuoteExpiration: null,
             clientId: 'c-1',
             clientName: 'Acme',
             paymentTerms: 'net30',

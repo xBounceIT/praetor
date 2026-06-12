@@ -337,6 +337,12 @@ export const DEMO_QUOTES = [
   { id: 'dm_cq_08' },
   { id: 'dm_cq_09' },
   { id: 'dm_cq_10' },
+  // Accepted "procurement drivers" (#779 derived supplier statuses): their 1-to-1 links keep
+  // the order-backed supplier quotes dm_sq_11..14 in the Accepted state.
+  { id: 'dm_cq_11' },
+  { id: 'dm_cq_12' },
+  { id: 'dm_cq_13' },
+  { id: 'dm_cq_14' },
 ] as const;
 
 export const DEMO_CUSTOMER_OFFERS = [
@@ -447,7 +453,7 @@ export const DEMO_USER_WORK_UNITS = [
 export const DEMO_TIME_ENTRY_IDS = rangeIds('dm_te_', 25);
 
 export const DEMO_ITEM_IDS = {
-  quoteItems: rangeIds('dm_cqi_', 15),
+  quoteItems: rangeIds('dm_cqi_', 19),
   customerOfferItems: rangeIds('dm_coi_', 8),
   saleItems: rangeIds('dm_soi_', 8),
   invoiceItems: rangeIds('dm_inv_item_', 6),

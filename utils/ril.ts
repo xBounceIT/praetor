@@ -230,6 +230,24 @@ const formatRilMinutesAsClock = (minutes: number): string => {
   return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
 };
 
+const inferExitTimeForWorkedHours = (
+  entrance: string,
+  hours: number,
+  lunchBreakMinutes: number | undefined,
+): string => {
+  if (!isValidRilStartTime(entrance) || hours <= 0) return '';
+  const startMinutes = parseRilTimeToMinutes(entrance);
+  const targetMinutes = Math.round(hours * 60);
+  for (let exitMinutes = startMinutes + 1; exitMinutes < 24 * 60; exitMinutes += 1) {
+    const workedMinutes =
+      exitMinutes -
+      startMinutes -
+      calculateRilLunchOverlapMinutes(startMinutes, exitMinutes, lunchBreakMinutes);
+    if (workedMinutes >= targetMinutes) return formatRilMinutesAsClock(exitMinutes);
+  }
+  return '';
+};
+
 export const formatRilLunchWindow = (lunchBreakMinutes = DEFAULT_LUNCH_BREAK_MINUTES): string => {
   const lunchMinutes = normalizeLunchBreakMinutes(lunchBreakMinutes);
   return `${formatRilMinutesAsClock(RIL_LUNCH_BREAK_START_MINUTES)}-${formatRilMinutesAsClock(
@@ -328,10 +346,21 @@ export const generateRilRows = ({
     const isHoliday = isWorkday && isItalianHoliday(dateObj) !== null;
     const isValidWorkday = isWorkday && !isHoliday;
     const dayEntries = entriesByDate.get(date) ?? [];
-    const hoursDecimal = isValidWorkday
-      ? calculateRilWorkedHoursFromTimes(entranceValue, exitValue, lunchBreakMinutes)
-      : 0;
+    const trackerHours = dayEntries.reduce((sum, entry) => sum + (Number(entry.duration) || 0), 0);
+    const hasTrackerOvertime =
+      trackerHours > 8 || (trackerHours > 0 && (!isValidWorkday || isHoliday));
+    const hoursDecimal = hasTrackerOvertime
+      ? trackerHours
+      : isValidWorkday
+        ? calculateRilWorkedHoursFromTimes(entranceValue, exitValue, lunchBreakMinutes)
+        : 0;
     const worked = hoursDecimal > 0;
+    const entrance = worked ? entranceValue : '';
+    const exit = hasTrackerOvertime
+      ? inferExitTimeForWorkedHours(entranceValue, trackerHours, lunchBreakMinutes)
+      : isValidWorkday
+        ? exitValue
+        : '';
     const uniqueProjects = new Set<string>();
     for (const entry of dayEntries) {
       const code = getProjectCode(entry, projectById);
@@ -352,8 +381,8 @@ export const generateRilRows = ({
       day,
       date,
       weekday: WEEKDAY_FORMATTER.format(dateObj),
-      entrance: isValidWorkday ? entranceValue : '',
-      exit: isValidWorkday ? exitValue : '',
+      entrance,
+      exit,
       hours: formatRilHoursAsDuration(hoursDecimal),
       hoursDecimal,
       picap: worked ? roundRilPicapHours(hoursDecimal) : 0,
@@ -370,14 +399,13 @@ export const generateRilRows = ({
 };
 
 export const isRequiredRilWorkday = (row: RilRow): boolean =>
-  Boolean(row.date && row.isWorkday && !row.isHoliday);
+  Boolean(row.date && ((row.isWorkday && !row.isHoliday) || row.worked));
 
 export const isRilAbsenceRow = (row: RilRow): boolean =>
-  isRequiredRilWorkday(row) && row.notes.trim().length > 0;
+  Boolean(row.date && row.isWorkday && !row.isHoliday && row.notes.trim().length > 0);
 
-// Only dated, non-holiday rows are editable (mirrors RilView's canEditRilRow); holiday/weekend
-// placeholder rows are read-only and never carry a draft.
-const isDraftableRilRow = (row: RilRow): boolean => Boolean(row.date && !row.isHoliday);
+// Only dated rows are persisted. Non-month placeholders are read-only and never carry a draft.
+const isDraftableRilRow = (row: RilRow): boolean => Boolean(row.date);
 
 // Re-derive hours/PICAP/worked (and clear time fields for absence rows) after applying stored
 // editable fields. Mirrors the per-field logic in RilView's updateRow so a hydrated draft matches
