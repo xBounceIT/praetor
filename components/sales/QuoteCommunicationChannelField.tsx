@@ -1,4 +1,3 @@
-import { Settings } from 'lucide-react';
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -126,18 +125,19 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
   return (
     <>
       <div className="space-y-1.5">
-        <div className="flex h-4 items-center justify-between gap-2">
-          <FieldLabel htmlFor={id} required>
+        <div className="relative h-4">
+          <FieldLabel htmlFor={id} required className="pr-24">
             {t('sales:communicationChannels.fieldLabel')}
           </FieldLabel>
           {canManage && (
             <Button
               type="button"
               variant="ghost"
+              size="xs"
               onClick={openManage}
-              className="-mr-1 h-4 gap-1 px-1 py-0 text-[10px] leading-none font-semibold uppercase tracking-wide text-muted-foreground hover:bg-transparent hover:text-foreground"
+              className="absolute -top-1 right-0 gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
             >
-              <Settings className="h-3 w-3" aria-hidden="true" />
+              <i className="fa-solid fa-gear" aria-hidden="true"></i>
               {t('common:buttons.manage')}
             </Button>
           )}

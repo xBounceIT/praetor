@@ -46,8 +46,8 @@ describe('<QuoteCommunicationChannelField />', () => {
     renderField({ onCreate });
 
     const manageButton = screen.getByRole('button', { name: 'common:buttons.manage' });
-    expect(manageButton.querySelector('svg')).not.toBeNull();
-    expect(manageButton).toHaveClass('h-4');
+    expect(manageButton.querySelector('.fa-gear')).not.toBeNull();
+    expect(manageButton).toHaveAttribute('data-size', 'xs');
 
     fireEvent.click(manageButton);
     fireEvent.change(screen.getByPlaceholderText('sales:communicationChannels.namePlaceholder'), {
@@ -92,14 +92,17 @@ describe('<QuoteCommunicationChannelField />', () => {
     const source = await readComponentSource('sales/QuoteCommunicationChannelField.tsx');
 
     expectSourceContainsAll(source, [
-      'flex h-4 items-center justify-between gap-2',
-      'className="-mr-1 h-4 gap-1 px-1 py-0 text-[10px] leading-none',
+      'className="relative h-4"',
+      'size="xs"',
+      'className="absolute -top-1 right-0 gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"',
+      'className="fa-solid fa-gear"',
       'zIndex={90}',
     ]);
     expectSourceOmitsAll(source, [
       'flex min-h-6 items-center justify-between gap-2',
       'flex h-5 items-start justify-between gap-2',
-      'size="xs"',
+      'hover:bg-transparent',
+      'leading-none',
     ]);
   });
 });
