@@ -149,6 +149,7 @@ const projectUpdateBodySchema = {
 class PermissionError extends Error {}
 class OrderRequiredError extends Error {}
 class OrderClientMismatchError extends Error {}
+class OrderStatusError extends Error {}
 class OfferClientMismatchError extends Error {}
 class DateRangeError extends Error {}
 
@@ -239,7 +240,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async () => clientsOrdersRepo.listConfirmedProjectOptions(),
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+      const options = await clientsOrdersRepo.listConfirmedProjectOptions();
+      const canViewAllOrderOptions =
+        hasPermission(request, 'accounting.clients_orders.view') ||
+        hasPermission(request, 'crm.clients_all.view') ||
+        hasPermission(request, 'projects.manage_all.view') ||
+        hasPermission(request, 'projects.manage_all.create') ||
+        hasPermission(request, 'projects.manage_all.update');
+      if (canViewAllOrderOptions) return options;
+
+      const assignedClientIds = await userAssignmentsRepo.filterAssignedClientIds(
+        request.user.id,
+        options.map((order) => order.clientId),
+      );
+      return options.filter((order) => assignedClientIds.has(order.clientId));
+    },
   );
 
   // POST / - Create project (manager only)
@@ -331,14 +348,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const id = generatePrefixedId('p');
 
       // The two FK lookups are independent — run them concurrently.
-      const [orderClientId, offerClientId] = await Promise.all([
-        clientsOrdersRepo.findClientIdById(orderIdResult.value),
+      const [orderLink, offerClientId] = await Promise.all([
+        clientsOrdersRepo.findProjectLinkById(orderIdResult.value),
         offerIdResult.value
           ? clientOffersRepo.findClientIdById(offerIdResult.value)
           : Promise.resolve(null),
       ]);
-      if (orderClientId === null || orderClientId !== clientIdResult.value) {
+      if (orderLink === null || orderLink.clientId !== clientIdResult.value) {
         return badRequest(reply, 'orderId does not belong to the specified clientId');
+      }
+      if (orderLink.status !== 'confirmed') {
+        return badRequest(reply, 'orderId must reference a confirmed client order');
       }
       if (offerIdResult.value && offerClientId !== null && offerClientId !== clientIdResult.value) {
         return badRequest(reply, 'offerId does not belong to the specified clientId');
@@ -650,12 +670,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             throw new OrderRequiredError('orderId is required');
           }
 
-          const orderClientId = await clientsOrdersRepo.findClientIdById(finalOrderId, tx);
+          const orderLink = await clientsOrdersRepo.findProjectLinkById(finalOrderId, tx);
           const offerClientId = finalOfferId
             ? await clientOffersRepo.findClientIdById(finalOfferId, tx)
             : null;
-          if (orderClientId === null || orderClientId !== requestedClientId) {
+          if (orderLink === null || orderLink.clientId !== requestedClientId) {
             throw new OrderClientMismatchError('orderId does not belong to the specified clientId');
+          }
+          if (orderLink.status !== 'confirmed') {
+            throw new OrderStatusError('orderId must reference a confirmed client order');
           }
           if (finalOfferId && offerClientId !== null && offerClientId !== requestedClientId) {
             throw new OfferClientMismatchError('offerId does not belong to the specified clientId');
@@ -746,6 +769,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             entityType: 'project',
             entityId: idResult.value,
             details: { secondaryLabel: 'order_client_mismatch' },
+          });
+        }
+        if (err instanceof OrderStatusError) {
+          return replyError(request, reply, {
+            statusCode: 400,
+            message: err.message,
+            action: 'project.update.invalid',
+            entityType: 'project',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'order_not_confirmed' },
           });
         }
         if (err instanceof OfferClientMismatchError) {

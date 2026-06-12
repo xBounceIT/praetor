@@ -138,6 +138,19 @@ export const findClientIdById = async (
   return rows[0]?.clientId ?? null;
 };
 
+export type ClientOrderProjectLink = Pick<ClientOrder, 'clientId' | 'status'>;
+
+export const findProjectLinkById = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<ClientOrderProjectLink | null> => {
+  const rows = await exec
+    .select({ clientId: sales.clientId, status: sales.status })
+    .from(sales)
+    .where(eq(sales.id, id));
+  return rows[0] ?? null;
+};
+
 export const findIdConflict = async (
   newId: string,
   currentId: string,

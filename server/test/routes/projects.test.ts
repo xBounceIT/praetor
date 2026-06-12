@@ -56,6 +56,8 @@ const removeClientCascadeForUsersIfUnusedMock = mock();
 
 // clientsOrdersRepo mocks
 const findOrderClientIdByIdMock = mock();
+const findOrderStatusByIdMock = mock();
+const findOrderProjectLinkByIdMock = mock();
 const listConfirmedProjectOptionsMock = mock(
   async (): Promise<realClientsOrdersRepo.ClientOrderProjectOption[]> => [],
 );
@@ -70,6 +72,9 @@ const assignClientToTopManagersMock = mock(async () => undefined);
 const assignProjectToTopManagersMock = mock(async () => undefined);
 const isClientAssignedToUserMock = mock();
 const isProjectAssignedToUserMock = mock();
+const filterAssignedClientIdsMock = mock(
+  async (_userId: string, clientIds: string[]) => new Set(clientIds),
+);
 const isUserManagedByMock = mock();
 
 // audit + db
@@ -115,6 +120,7 @@ beforeAll(async () => {
   mock.module('../../repositories/clientsOrdersRepo.ts', () => ({
     ...clientsOrdersRepoSnap,
     findClientIdById: findOrderClientIdByIdMock,
+    findProjectLinkById: findOrderProjectLinkByIdMock,
     listConfirmedProjectOptions: listConfirmedProjectOptionsMock,
   }));
   mock.module('../../repositories/clientOffersRepo.ts', () => ({
@@ -129,6 +135,7 @@ beforeAll(async () => {
     assignProjectToTopManagers: assignProjectToTopManagersMock,
     isClientAssignedToUser: isClientAssignedToUserMock,
     isProjectAssignedToUser: isProjectAssignedToUserMock,
+    filterAssignedClientIds: filterAssignedClientIdsMock,
   }));
   mock.module('../../repositories/workUnitsRepo.ts', () => ({
     ...workUnitsRepoSnap,
@@ -231,6 +238,8 @@ const allMocks = [
   ensureClientCascadeAssignmentsMock,
   removeClientCascadeForUsersIfUnusedMock,
   findOrderClientIdByIdMock,
+  findOrderStatusByIdMock,
+  findOrderProjectLinkByIdMock,
   listConfirmedProjectOptionsMock,
   findOfferClientIdByIdMock,
   assignClientToUserMock,
@@ -239,6 +248,7 @@ const allMocks = [
   assignProjectToTopManagersMock,
   isClientAssignedToUserMock,
   isProjectAssignedToUserMock,
+  filterAssignedClientIdsMock,
   isUserManagedByMock,
   logAuditMock,
   withDbTransactionMock,
@@ -263,6 +273,15 @@ beforeEach(async () => {
   // Default: the mandatory order belongs to the request client. Individual tests override this
   // for foreign or missing order cases.
   findOrderClientIdByIdMock.mockResolvedValue('c-1');
+  findOrderStatusByIdMock.mockResolvedValue('confirmed');
+  findOrderProjectLinkByIdMock.mockImplementation(async (id: string, exec?: unknown) => {
+    const clientId = await findOrderClientIdByIdMock(id, exec);
+    if (clientId === null) return null;
+    return { clientId, status: await findOrderStatusByIdMock(id, exec) };
+  });
+  filterAssignedClientIdsMock.mockImplementation(
+    async (_userId: string, clientIds: string[]) => new Set(clientIds),
+  );
   findOfferClientIdByIdMock.mockResolvedValue(null);
   findClientLinksByIdMock.mockResolvedValue({ orderId: 'co-existing', offerId: null });
 
@@ -370,7 +389,7 @@ describe('GET /api/projects', () => {
 });
 
 describe('GET /api/projects/order-options', () => {
-  test('200: projects.manage.create can list confirmed order options without accounting permission', async () => {
+  test('200: scoped project creators only see options for assigned clients', async () => {
     getRolePermissionsMock.mockResolvedValue(['projects.manage.create']);
     listConfirmedProjectOptionsMock.mockResolvedValue([
       {
@@ -381,7 +400,16 @@ describe('GET /api/projects/order-options', () => {
         createdAt: 1,
         updatedAt: 2,
       },
+      {
+        id: 'co-2',
+        clientId: 'c-2',
+        clientName: 'Globex',
+        status: 'confirmed',
+        createdAt: 3,
+        updatedAt: 4,
+      },
     ]);
+    filterAssignedClientIdsMock.mockResolvedValue(new Set(['c-1']));
 
     const res = await testApp.inject({
       method: 'GET',
@@ -401,6 +429,56 @@ describe('GET /api/projects/order-options', () => {
       },
     ]);
     expect(listConfirmedProjectOptionsMock).toHaveBeenCalledTimes(1);
+    expect(filterAssignedClientIdsMock).toHaveBeenCalledWith('u1', ['c-1', 'c-2']);
+  });
+
+  test('200: all-scope project users can list every confirmed order option', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.manage_all.view']);
+    listConfirmedProjectOptionsMock.mockResolvedValue([
+      {
+        id: 'co-1',
+        clientId: 'c-1',
+        clientName: 'Acme',
+        status: 'confirmed',
+        createdAt: 1,
+        updatedAt: 2,
+      },
+      {
+        id: 'co-2',
+        clientId: 'c-2',
+        clientName: 'Globex',
+        status: 'confirmed',
+        createdAt: 3,
+        updatedAt: 4,
+      },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects/order-options',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json() as unknown).toEqual([
+      {
+        id: 'co-1',
+        clientId: 'c-1',
+        clientName: 'Acme',
+        status: 'confirmed',
+        createdAt: 1,
+        updatedAt: 2,
+      },
+      {
+        id: 'co-2',
+        clientId: 'c-2',
+        clientName: 'Globex',
+        status: 'confirmed',
+        createdAt: 3,
+        updatedAt: 4,
+      },
+    ]);
+    expect(filterAssignedClientIdsMock).not.toHaveBeenCalled();
   });
 
   test('403: users without project manage permissions cannot list project order options', async () => {
@@ -618,6 +696,24 @@ describe('POST /api/projects', () => {
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body)).toEqual({
       error: 'orderId does not belong to the specified clientId',
+    });
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  test('400: non-confirmed orderId is rejected on create', async () => {
+    findOrderClientIdByIdMock.mockResolvedValue('c-1');
+    findOrderStatusByIdMock.mockResolvedValue('draft');
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { ...VALID_CREATE_PAYLOAD, orderId: 'co-draft' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'orderId must reference a confirmed client order',
     });
     expect(createMock).not.toHaveBeenCalled();
   });
@@ -1130,6 +1226,25 @@ describe('PUT /api/projects/:id', () => {
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body)).toEqual({
       error: 'orderId does not belong to the specified clientId',
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('400: non-confirmed orderId is rejected on update', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    findOrderClientIdByIdMock.mockResolvedValue('c-1');
+    findOrderStatusByIdMock.mockResolvedValue('draft');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { orderId: 'co-draft' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'orderId must reference a confirmed client order',
     });
     expect(updateMock).not.toHaveBeenCalled();
   });

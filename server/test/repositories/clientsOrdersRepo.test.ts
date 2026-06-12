@@ -438,6 +438,23 @@ describe('existsById', () => {
   });
 });
 
+describe('findProjectLinkById', () => {
+  test('returns the client id and status when found', async () => {
+    exec.enqueue({ rows: [['c-1', 'confirmed']] });
+    const result = await repo.findProjectLinkById('co-1', testDb);
+
+    expect(result).toEqual({ clientId: 'c-1', status: 'confirmed' });
+    expect(exec.calls[0].sql.toLowerCase()).toContain('from "sales"');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('where "sales"."id" = $1');
+    expect(exec.calls[0].params).toEqual(['co-1']);
+  });
+
+  test('returns null when not found', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await repo.findProjectLinkById('co-missing', testDb)).toBeNull();
+  });
+});
+
 describe('findIdConflict', () => {
   test('binds both ids and excludes self', async () => {
     exec.enqueue({ rows: [['co-2']] });
