@@ -1,6 +1,10 @@
 import type React from 'react';
 import api from '../../services/api';
-import type { CreateResaleBody, UpsertResaleActivityBody } from '../../services/api/resales';
+import type {
+  CreateResaleBody,
+  UpdateResaleBody,
+  UpsertResaleActivityBody,
+} from '../../services/api/resales';
 import type { Resale, ResaleActivity, ResaleCategory } from '../../types';
 import { getErrorMessage } from '../../utils/errors';
 import { toastError } from '../../utils/toast';
@@ -41,7 +45,7 @@ export const makeResaleHandlers = (deps: ResaleHandlersDeps) => {
     }
   };
 
-  const update = async (id: string, updates: Partial<CreateResaleBody>) => {
+  const update = async (id: string, updates: Partial<UpdateResaleBody>) => {
     try {
       const updated = await api.resales.update(id, updates);
       setResales((prev) => upsertResale(prev, updated));

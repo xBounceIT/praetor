@@ -53,13 +53,13 @@ When a project ends, check that tasks are consistent and that no pending entries
 
 ### Resales
 
-The **Resales** entry in the Projects module manages economic resale operations separately from operational tasks, timesheets, and user assignments. When creating a resale, you must select a **client order** and exactly one **supplier order** linked to that client order: the system accepts the supplier order only when at least one client-order line references it.
+The **Resales** entry in the Projects module manages economic resale operations separately from operational tasks, timesheets, and user assignments. When creating a resale, you must select a **client order**, exactly one **supplier order** linked to that client order, and add at least one **resale activity** in the initial activities table: the system accepts the supplier order only when at least one client-order line references it.
 
 Each resale shows **Resale revenue** as the sum of the revenues entered on its activities. The official **Resale cost** is imported from the supplier order total and is not edited manually. Resale activities are entered manually and include activity name, billing frequency (monthly, quarterly, annual, or one-time), category, cost, revenue, released status, independent due date, and notes.
 
 Activity costs remain editable: when the sum of activity costs does not match the supplier order total, the view shows a **variance**. The variance is an operational warning and does not block saving, so you can reconcile the activity costs progressively.
 
-Resale categories are a dedicated catalog seeded with **Hardware**, **Sottoscrizione**, and **Licenza**. You can manage them from the Resales view; a category used by activities cannot be deleted.
+Resale categories are a dedicated catalog seeded with **Hardware**, **Sottoscrizione**, and **Licenza**. You manage them from the **Category** control inside the create-resale form, matching the internal-listing product category flow; a category used by activities cannot be deleted.
 
 Access is controlled by separate **Resales** permissions (`projects.resales.view/create/update/delete`), granted to the Manager and Top Manager profiles by default.
 

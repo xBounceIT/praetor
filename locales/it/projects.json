@@ -310,8 +310,11 @@
     "createTitle": "Crea Rivendita",
     "manageCategories": "Categorie Rivendite",
     "activitiesTitle": "Attività Rivendite",
+    "initialActivitiesTitle": "Attività iniziali Rivendita",
     "addActivity": "Aggiungi Attività",
+    "addActivityRow": "Aggiungi riga attività",
     "editActivity": "Modifica Attività",
+    "noActivitiesAdded": "Aggiungi almeno un'attività per creare la rivendita.",
     "categoriesDirectory": "Catalogo Categorie",
     "categoryActivityCount": "Attività collegate",
     "balanced": "Allineato",
@@ -353,12 +356,15 @@
     },
     "placeholders": {
       "clientOrder": "Seleziona ordine cliente...",
-      "supplierOrder": "Seleziona ordine fornitore..."
+      "supplierOrder": "Seleziona ordine fornitore...",
+      "category": "Seleziona categoria..."
     },
     "validation": {
       "clientOrder": "L'ordine cliente è obbligatorio",
       "supplierOrder": "L'ordine fornitore è obbligatorio",
       "activityName": "Il nome attività è obbligatorio",
+      "activitiesRequired": "Aggiungi almeno un'attività alla rivendita",
+      "activityRows": "Completa nome, categoria, costo e ricavo di ogni attività",
       "category": "La categoria è obbligatoria",
       "nonNegative": "Inserisci un valore maggiore o uguale a zero",
       "categoryName": "Il nome categoria è obbligatorio"

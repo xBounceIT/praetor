@@ -1,4 +1,4 @@
-import { ArrowLeft, Pencil, Plus, Settings2, Trash2 } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -53,7 +53,20 @@ type ResaleFormState = {
   supplierOrderId: string;
   dueDate: string;
   notes: string;
+  activities: DraftResaleActivity[];
   errors: Record<string, string>;
+};
+
+type DraftResaleActivity = {
+  _id: string;
+  name: string;
+  billingFrequency: ResaleBillingFrequency;
+  categoryId: string;
+  cost: string;
+  revenue: string;
+  released: boolean;
+  dueDate: string;
+  notes: string;
 };
 
 type ActivityFormState = {
@@ -74,6 +87,7 @@ const initialResaleForm: ResaleFormState = {
   supplierOrderId: '',
   dueDate: '',
   notes: '',
+  activities: [],
   errors: {},
 };
 
@@ -181,15 +195,78 @@ const ResalesView: React.FC<ResalesViewProps> = ({
       name: `${order.supplierName} - ${order.id} (${formatMoney(order.total)})`,
     })) ?? [];
 
+  const createDraftResaleActivity = useCallback(
+    (): DraftResaleActivity => ({
+      _id: `${Date.now()}-${Math.random()}`,
+      name: '',
+      billingFrequency: 'one_time',
+      categoryId: categories[0]?.id ?? '',
+      cost: '',
+      revenue: '',
+      released: false,
+      dueDate: '',
+      notes: '',
+    }),
+    [categories],
+  );
+
   const openCreateResale = () => {
     if (!canCreate) return;
-    setResaleForm(initialResaleForm);
+    setResaleForm({
+      ...initialResaleForm,
+      activities: [createDraftResaleActivity()],
+    });
     setIsResaleModalOpen(true);
   };
 
   const closeResaleModal = () => {
     setIsResaleModalOpen(false);
     setResaleForm(initialResaleForm);
+  };
+
+  const openCategoryModal = () => {
+    if (!canCreate && !canUpdate && !canDelete) return;
+    setEditingCategoryId(null);
+    setCategoryName('');
+    setCategoryError('');
+    setIsCategoryModalOpen(true);
+  };
+
+  const closeCategoryModal = () => {
+    setIsCategoryModalOpen(false);
+    setEditingCategoryId(null);
+    setCategoryName('');
+    setCategoryError('');
+  };
+
+  const addDraftActivity = () => {
+    setResaleForm((prev) => ({
+      ...prev,
+      activities: [...prev.activities, createDraftResaleActivity()],
+      errors: { ...prev.errors, activities: '' },
+    }));
+  };
+
+  function updateDraftActivity<K extends keyof Omit<DraftResaleActivity, '_id'>>(
+    id: string,
+    field: K,
+    value: DraftResaleActivity[K],
+  ) {
+    setResaleForm((prev) => ({
+      ...prev,
+      activities: prev.activities.map((activity) =>
+        activity._id === id ? { ...activity, [field]: value } : activity,
+      ),
+      errors: { ...prev.errors, activities: '' },
+    }));
+  }
+
+  const removeDraftActivity = (id: string) => {
+    setResaleForm((prev) => ({
+      ...prev,
+      activities: prev.activities.filter((activity) => activity._id !== id),
+      errors: { ...prev.errors, activities: '' },
+    }));
   };
 
   const submitResale = async (event: React.FormEvent) => {
@@ -200,6 +277,37 @@ const ResalesView: React.FC<ResalesViewProps> = ({
     if (!resaleForm.supplierOrderId) {
       errors.supplierOrderId = t('resales.validation.supplierOrder');
     }
+    const activityInputs: UpsertResaleActivityBody[] = [];
+    for (const activity of resaleForm.activities) {
+      const cost = parseMoney(activity.cost);
+      const revenue = parseMoney(activity.revenue);
+      if (
+        !activity.name.trim() ||
+        !activity.categoryId ||
+        !activity.cost.trim() ||
+        !activity.revenue.trim() ||
+        Number.isNaN(cost) ||
+        cost < 0 ||
+        Number.isNaN(revenue) ||
+        revenue < 0
+      ) {
+        errors.activities = t('resales.validation.activityRows');
+        break;
+      }
+      activityInputs.push({
+        name: activity.name.trim(),
+        billingFrequency: activity.billingFrequency,
+        categoryId: activity.categoryId,
+        cost,
+        revenue,
+        released: activity.released,
+        dueDate: activity.dueDate || null,
+        notes: activity.notes.trim() || null,
+      });
+    }
+    if (activityInputs.length === 0 && !errors.activities) {
+      errors.activities = t('resales.validation.activitiesRequired');
+    }
     if (Object.keys(errors).length > 0) {
       setResaleForm((prev) => ({ ...prev, errors }));
       return;
@@ -209,6 +317,7 @@ const ResalesView: React.FC<ResalesViewProps> = ({
       supplierOrderId: resaleForm.supplierOrderId,
       dueDate: resaleForm.dueDate || null,
       notes: resaleForm.notes.trim() || null,
+      activities: activityInputs,
     });
     if (created) {
       setSelectedResaleId(created.id);
@@ -293,10 +402,20 @@ const ResalesView: React.FC<ResalesViewProps> = ({
       setCategoryError(t('resales.validation.categoryName'));
       return;
     }
+    const wasEditing = Boolean(editingCategoryId);
     const saved = editingCategoryId
       ? await onUpdateCategory(editingCategoryId, trimmedName)
       : await onCreateCategory(trimmedName);
     if (saved) {
+      if (!wasEditing) {
+        setResaleForm((prev) => ({
+          ...prev,
+          activities: prev.activities.map((activity) =>
+            activity.categoryId ? activity : { ...activity, categoryId: saved.id },
+          ),
+        }));
+        setActivityForm((prev) => (prev.categoryId ? prev : { ...prev, categoryId: saved.id }));
+      }
       setCategoryName('');
       setEditingCategoryId(null);
       setCategoryError('');
@@ -555,6 +674,183 @@ const ResalesView: React.FC<ResalesViewProps> = ({
     [canDelete, canUpdate, onDeleteCategory, t],
   );
 
+  const draftActivityColumns: Column<DraftResaleActivity>[] = [
+    {
+      id: 'name',
+      header: t('resales.columns.activityName'),
+      accessorKey: 'name',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <Input
+          value={row.name}
+          required
+          placeholder={t('resales.columns.activityName')}
+          onChange={(event) => updateDraftActivity(row._id, 'name', event.target.value)}
+          className="h-8 min-w-[140px] text-xs"
+        />
+      ),
+    },
+    {
+      id: 'billingFrequency',
+      header: t('resales.columns.billing'),
+      accessorKey: 'billingFrequency',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <SelectControl
+          options={billingOptions}
+          value={row.billingFrequency}
+          onChange={(value) =>
+            updateDraftActivity(row._id, 'billingFrequency', value as ResaleBillingFrequency)
+          }
+          className="min-w-[130px]"
+          buttonClassName="h-8 text-xs"
+          searchable={false}
+        />
+      ),
+    },
+    {
+      id: 'categoryId',
+      header: t('resales.columns.category'),
+      accessorKey: 'categoryId',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <div className="min-w-[170px] space-y-1.5">
+          <div className="flex min-h-5 items-center justify-between gap-2">
+            <FieldLabel className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {t('resales.columns.category')}
+            </FieldLabel>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={openCategoryModal}
+              disabled={!canCreate && !canUpdate && !canDelete}
+              className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+            >
+              <i className="fa-solid fa-gear" aria-hidden="true"></i>
+              {t('common:buttons.manage')}
+            </Button>
+          </div>
+          <SelectControl
+            options={categoryOptions}
+            value={row.categoryId}
+            onChange={(value) => updateDraftActivity(row._id, 'categoryId', value as string)}
+            className="min-w-[170px]"
+            buttonClassName="h-8 text-xs"
+            searchable
+            placeholder={t('resales.placeholders.category')}
+          />
+        </div>
+      ),
+    },
+    {
+      id: 'cost',
+      header: `${t('resales.columns.cost')} (${currency})`,
+      accessorKey: 'cost',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <Input
+          type="number"
+          min="0"
+          step="0.01"
+          required
+          value={row.cost}
+          placeholder="0.00"
+          onChange={(event) => updateDraftActivity(row._id, 'cost', event.target.value)}
+          className="h-8 min-w-[90px] text-xs"
+        />
+      ),
+    },
+    {
+      id: 'revenue',
+      header: `${t('resales.columns.revenue')} (${currency})`,
+      accessorKey: 'revenue',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <Input
+          type="number"
+          min="0"
+          step="0.01"
+          required
+          value={row.revenue}
+          placeholder="0.00"
+          onChange={(event) => updateDraftActivity(row._id, 'revenue', event.target.value)}
+          className="h-8 min-w-[90px] text-xs"
+        />
+      ),
+    },
+    {
+      id: 'released',
+      header: t('resales.columns.released'),
+      accessorKey: 'released',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <div className="flex h-8 min-w-[90px] items-center justify-center">
+          <Checkbox
+            checked={row.released}
+            onCheckedChange={(checked) =>
+              updateDraftActivity(row._id, 'released', checked === true)
+            }
+            aria-label={t('resales.columns.released')}
+          />
+        </div>
+      ),
+    },
+    {
+      id: 'dueDate',
+      header: t('resales.columns.dueDate'),
+      accessorKey: 'dueDate',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <Input
+          type="date"
+          value={row.dueDate}
+          onChange={(event) => updateDraftActivity(row._id, 'dueDate', event.target.value)}
+          className="h-8 min-w-[130px] text-xs"
+        />
+      ),
+    },
+    {
+      id: 'notes',
+      header: t('resales.columns.notes'),
+      accessorKey: 'notes',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <Input
+          value={row.notes}
+          placeholder="-"
+          onChange={(event) => updateDraftActivity(row._id, 'notes', event.target.value)}
+          className="h-8 min-w-[140px] text-xs"
+        />
+      ),
+    },
+    {
+      id: 'actions',
+      header: t('common:labels.actions'),
+      align: 'right',
+      disableFiltering: true,
+      cell: ({ row }) => (
+        <div className="flex justify-end">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => removeDraftActivity(row._id)}
+                aria-label={t('common:buttons.delete')}
+                className="text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
+          </Tooltip>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -563,15 +859,6 @@ const ResalesView: React.FC<ResalesViewProps> = ({
           <p className="text-sm text-muted-foreground">{t('resales.subtitle')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setIsCategoryModalOpen(true)}
-            disabled={!canCreate && !canUpdate && !canDelete}
-          >
-            <Settings2 className="size-4" />
-            {t('resales.manageCategories')}
-          </Button>
           {canCreate && (
             <HeaderAddButton onClick={openCreateResale}>{t('resales.addResale')}</HeaderAddButton>
           )}
@@ -676,81 +963,122 @@ const ResalesView: React.FC<ResalesViewProps> = ({
 
       <Modal isOpen={isResaleModalOpen} onClose={closeResaleModal}>
         {isResaleModalOpen && (
-          <ModalContent size="lg">
-            <form onSubmit={submitResale}>
+          <ModalContent size="2xl">
+            <form onSubmit={submitResale} className="flex min-h-0 flex-col">
               <ModalHeader>
-                <ModalTitle>{t('resales.createTitle')}</ModalTitle>
+                <ModalTitle className="gap-3">
+                  <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+                    <i className="fa-solid fa-cart-shopping" aria-hidden="true"></i>
+                  </span>
+                  {t('resales.createTitle')}
+                </ModalTitle>
                 <ModalCloseButton onClick={closeResaleModal} />
               </ModalHeader>
-              <ModalBody>
-                <div className="grid gap-4">
-                  <div className="space-y-1.5">
-                    <SelectControl
-                      id="resale-client-order"
-                      options={clientOrderOptions}
-                      value={resaleForm.clientOrderId}
-                      onChange={(value) =>
-                        setResaleForm((prev) => ({
-                          ...prev,
-                          clientOrderId: value as string,
-                          supplierOrderId: '',
-                          errors: { ...prev.errors, clientOrderId: '', supplierOrderId: '' },
-                        }))
-                      }
-                      label={
-                        <>
-                          {t('resales.fields.clientOrder')} <RequiredMark />
-                        </>
-                      }
-                      searchable
-                      placeholder={t('resales.placeholders.clientOrder')}
-                    />
-                    <FieldError className="text-xs">{resaleForm.errors.clientOrderId}</FieldError>
+              <ModalBody className="space-y-6">
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <SelectControl
+                        id="resale-client-order"
+                        options={clientOrderOptions}
+                        value={resaleForm.clientOrderId}
+                        onChange={(value) =>
+                          setResaleForm((prev) => ({
+                            ...prev,
+                            clientOrderId: value as string,
+                            supplierOrderId: '',
+                            errors: { ...prev.errors, clientOrderId: '', supplierOrderId: '' },
+                          }))
+                        }
+                        label={
+                          <>
+                            {t('resales.fields.clientOrder')} <RequiredMark />
+                          </>
+                        }
+                        searchable
+                        placeholder={t('resales.placeholders.clientOrder')}
+                        buttonClassName="h-9"
+                      />
+                      <FieldError className="text-xs">{resaleForm.errors.clientOrderId}</FieldError>
+                    </div>
+                    <div className="space-y-1.5">
+                      <SelectControl
+                        id="resale-supplier-order"
+                        options={supplierOrderOptions}
+                        value={resaleForm.supplierOrderId}
+                        onChange={(value) =>
+                          setResaleForm((prev) => ({
+                            ...prev,
+                            supplierOrderId: value as string,
+                            errors: { ...prev.errors, supplierOrderId: '' },
+                          }))
+                        }
+                        label={
+                          <>
+                            {t('resales.fields.supplierOrder')} <RequiredMark />
+                          </>
+                        }
+                        searchable
+                        disabled={!resaleForm.clientOrderId}
+                        placeholder={t('resales.placeholders.supplierOrder')}
+                        buttonClassName="h-9"
+                      />
+                      <FieldError className="text-xs">
+                        {resaleForm.errors.supplierOrderId}
+                      </FieldError>
+                    </div>
+                    <Field>
+                      <FieldLabel htmlFor="resale-due-date">
+                        {t('resales.fields.dueDate')}
+                      </FieldLabel>
+                      <DateField
+                        id="resale-due-date"
+                        value={resaleForm.dueDate}
+                        onChange={(value) => setResaleForm((prev) => ({ ...prev, dueDate: value }))}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="resale-notes">{t('resales.fields.notes')}</FieldLabel>
+                      <Textarea
+                        id="resale-notes"
+                        value={resaleForm.notes}
+                        onChange={(event) =>
+                          setResaleForm((prev) => ({ ...prev, notes: event.target.value }))
+                        }
+                        rows={3}
+                        className="min-h-20 resize-none"
+                      />
+                    </Field>
                   </div>
-                  <div className="space-y-1.5">
-                    <SelectControl
-                      id="resale-supplier-order"
-                      options={supplierOrderOptions}
-                      value={resaleForm.supplierOrderId}
-                      onChange={(value) =>
-                        setResaleForm((prev) => ({
-                          ...prev,
-                          supplierOrderId: value as string,
-                          errors: { ...prev.errors, supplierOrderId: '' },
-                        }))
+
+                  <div className="space-y-2">
+                    <StandardTable<DraftResaleActivity>
+                      title={t('resales.initialActivitiesTitle')}
+                      data={resaleForm.activities}
+                      columns={draftActivityColumns}
+                      defaultRowsPerPage={5}
+                      emptyState={
+                        <span className="text-xs italic text-muted-foreground">
+                          {t('resales.noActivitiesAdded')}
+                        </span>
                       }
-                      label={
-                        <>
-                          {t('resales.fields.supplierOrder')} <RequiredMark />
-                        </>
+                      headerAction={
+                        <Button
+                          type="button"
+                          onClick={addDraftActivity}
+                          size="sm"
+                          className={TABLE_CONTROL_BUTTON_CLASSNAME}
+                        >
+                          <Plus className="size-4" />
+                          {t('resales.addActivityRow')}
+                        </Button>
                       }
-                      searchable
-                      disabled={!resaleForm.clientOrderId}
-                      placeholder={t('resales.placeholders.supplierOrder')}
                     />
-                    <FieldError className="text-xs">{resaleForm.errors.supplierOrderId}</FieldError>
+                    <FieldError className="text-xs">{resaleForm.errors.activities}</FieldError>
                   </div>
-                  <Field>
-                    <FieldLabel htmlFor="resale-due-date">{t('resales.fields.dueDate')}</FieldLabel>
-                    <DateField
-                      id="resale-due-date"
-                      value={resaleForm.dueDate}
-                      onChange={(value) => setResaleForm((prev) => ({ ...prev, dueDate: value }))}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="resale-notes">{t('resales.fields.notes')}</FieldLabel>
-                    <Textarea
-                      id="resale-notes"
-                      value={resaleForm.notes}
-                      onChange={(event) =>
-                        setResaleForm((prev) => ({ ...prev, notes: event.target.value }))
-                      }
-                    />
-                  </Field>
                 </div>
               </ModalBody>
-              <ModalFooter>
+              <ModalFooter className="sm:justify-between">
                 <Button type="button" variant="outline" onClick={closeResaleModal}>
                   {t('common:buttons.cancel')}
                 </Button>
@@ -906,16 +1234,24 @@ const ResalesView: React.FC<ResalesViewProps> = ({
         )}
       </Modal>
 
-      <Modal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)}>
+      <Modal isOpen={isCategoryModalOpen} onClose={closeCategoryModal}>
         {isCategoryModalOpen && (
-          <ModalContent size="lg">
+          <ModalContent size="2xl">
             <ModalHeader>
-              <ModalTitle>{t('resales.manageCategories')}</ModalTitle>
-              <ModalCloseButton onClick={() => setIsCategoryModalOpen(false)} />
+              <ModalTitle className="gap-3">
+                <span className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
+                  <i className="fa-solid fa-folder-tree" aria-hidden="true"></i>
+                </span>
+                {t('resales.manageCategories')}
+              </ModalTitle>
+              <ModalCloseButton onClick={closeCategoryModal} />
             </ModalHeader>
-            <ModalBody>
-              <form onSubmit={submitCategory} className="mb-4 grid gap-3 sm:grid-cols-[1fr_auto]">
-                <Field>
+            <ModalBody className="max-h-[60vh] space-y-4">
+              <form
+                onSubmit={submitCategory}
+                className="space-y-3 rounded-md border border-border bg-muted/30 p-4"
+              >
+                <Field className="space-y-1.5">
                   <FieldLabel htmlFor="resale-category-name">
                     {t('resales.fields.categoryName')}
                   </FieldLabel>
@@ -929,10 +1265,7 @@ const ResalesView: React.FC<ResalesViewProps> = ({
                   />
                   <FieldError className="text-xs">{categoryError}</FieldError>
                 </Field>
-                <div className="flex items-end gap-2">
-                  <Button type="submit" disabled={!canCreate && !canUpdate}>
-                    {editingCategoryId ? t('common:buttons.save') : t('common:buttons.create')}
-                  </Button>
+                <div className="flex justify-end gap-2">
                   {editingCategoryId && (
                     <Button
                       type="button"
@@ -946,6 +1279,9 @@ const ResalesView: React.FC<ResalesViewProps> = ({
                       {t('common:buttons.cancel')}
                     </Button>
                   )}
+                  <Button type="submit" disabled={!canCreate && !canUpdate}>
+                    {editingCategoryId ? t('common:buttons.save') : t('common:buttons.create')}
+                  </Button>
                 </div>
               </form>
               <StandardTable<ResaleCategory>

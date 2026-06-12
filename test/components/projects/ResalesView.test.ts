@@ -35,6 +35,22 @@ describe('ResalesView wiring', () => {
     expect(source).toMatch(/selectedOrderOption\?\.supplierOrders\.map\(\(order\) =>/);
   });
 
+  test('requires initial resale activities when creating a resale', async () => {
+    const source = await readSource();
+    expect(source).toContain('activities: [createDraftResaleActivity()]');
+    expect(source).toContain('resales.initialActivitiesTitle');
+    expect(source).toContain('resales.validation.activitiesRequired');
+    expect(source).toContain('activities: activityInputs');
+  });
+
+  test('manages resale categories from the create activity category control', async () => {
+    const source = await readSource();
+    expect(source).not.toContain('Settings2');
+    expect(source).toContain('onClick={openCategoryModal}');
+    expect(source).toContain("t('common:buttons.manage')");
+    expect(source).toContain('rounded-md border border-border bg-muted/30 p-4');
+  });
+
   test('renders all requested resale activity columns', async () => {
     const source = await readSource();
     for (const key of [

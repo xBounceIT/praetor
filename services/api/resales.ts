@@ -6,17 +6,20 @@ import {
   normalizeResaleOrderOption,
 } from './normalizers';
 
+export type UpsertResaleActivityBody = Omit<
+  ResaleActivity,
+  'id' | 'resaleId' | 'categoryName' | 'createdAt' | 'updatedAt'
+>;
+
 export type CreateResaleBody = {
   clientOrderId: string;
   supplierOrderId: string;
   dueDate?: string | null;
   notes?: string | null;
+  activities: UpsertResaleActivityBody[];
 };
 
-export type UpsertResaleActivityBody = Omit<
-  ResaleActivity,
-  'id' | 'resaleId' | 'categoryName' | 'createdAt' | 'updatedAt'
->;
+export type UpdateResaleBody = Omit<CreateResaleBody, 'activities'>;
 
 export const resalesApi = {
   list: (): Promise<Resale[]> =>
@@ -38,7 +41,7 @@ export const resalesApi = {
       body: JSON.stringify(data),
     }).then(normalizeResale),
 
-  update: (id: string, updates: Partial<CreateResaleBody>): Promise<Resale> =>
+  update: (id: string, updates: Partial<UpdateResaleBody>): Promise<Resale> =>
     fetchApi<Resale>(`/projects/resales/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),

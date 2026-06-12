@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import * as realDrizzle from '../../db/drizzle.ts';
 import * as realResalesRepo from '../../repositories/resalesRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
@@ -17,6 +18,7 @@ const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
 const resalesRepoSnap = { ...realResalesRepo };
 const auditSnap = { ...realAudit };
+const drizzleSnap = { ...realDrizzle };
 
 const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
@@ -24,6 +26,12 @@ const getRolePermissionsMock = mock();
 const isSupplierOrderLinkedToClientOrderMock = mock();
 const existsByOrderPairMock = mock();
 const createMock = mock();
+const createActivityMock = mock();
+const findByIdMock = mock();
+const txExecutor = {};
+const withDbTransactionMock = mock(async (callback: (tx: unknown) => Promise<unknown>) =>
+  callback(txExecutor),
+);
 const logAuditMock = mock(async () => undefined);
 
 let routePlugin: FastifyPluginAsync;
@@ -43,6 +51,26 @@ const USER = {
 
 const authHeaders = () => ({ authorization: `Bearer ${signToken({ userId: USER.id })}` });
 
+const SAMPLE_ACTIVITY_INPUT = {
+  name: 'Setup rivendita',
+  billingFrequency: 'one_time',
+  categoryId: 'rvc-hardware',
+  cost: 100,
+  revenue: 150,
+  released: false,
+  dueDate: null,
+  notes: null,
+};
+
+const SAMPLE_ACTIVITY = {
+  id: 'rva-1',
+  resaleId: 'rv-1',
+  categoryName: 'Hardware',
+  createdAt: 1700000000000,
+  updatedAt: 1700000000000,
+  ...SAMPLE_ACTIVITY_INPUT,
+};
+
 const SAMPLE_RESALE = {
   id: 'rv-1',
   clientOrderId: 'ord-1',
@@ -57,7 +85,7 @@ const SAMPLE_RESALE = {
   notes: null,
   createdAt: 1700000000000,
   updatedAt: 1700000000000,
-  activities: [],
+  activities: [SAMPLE_ACTIVITY],
 };
 
 beforeAll(async () => {
@@ -75,11 +103,17 @@ beforeAll(async () => {
     ...permissionsSnap,
     getRolePermissions: getRolePermissionsMock,
   }));
+  mock.module('../../db/drizzle.ts', () => ({
+    ...drizzleSnap,
+    withDbTransaction: withDbTransactionMock,
+  }));
   mock.module('../../repositories/resalesRepo.ts', () => ({
     ...resalesRepoSnap,
     isSupplierOrderLinkedToClientOrder: isSupplierOrderLinkedToClientOrderMock,
     existsByOrderPair: existsByOrderPairMock,
     create: createMock,
+    createActivity: createActivityMock,
+    findById: findByIdMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
@@ -94,6 +128,7 @@ afterAll(() => {
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
+  mock.module('../../db/drizzle.ts', () => drizzleSnap);
   mock.module('../../repositories/resalesRepo.ts', () => resalesRepoSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
 });
@@ -106,6 +141,9 @@ beforeEach(async () => {
     isSupplierOrderLinkedToClientOrderMock,
     existsByOrderPairMock,
     createMock,
+    createActivityMock,
+    findByIdMock,
+    withDbTransactionMock,
     logAuditMock,
   ]) {
     fn.mockReset();
@@ -117,6 +155,11 @@ beforeEach(async () => {
   isSupplierOrderLinkedToClientOrderMock.mockResolvedValue(true);
   existsByOrderPairMock.mockResolvedValue(false);
   createMock.mockResolvedValue(SAMPLE_RESALE);
+  createActivityMock.mockResolvedValue(SAMPLE_ACTIVITY);
+  findByIdMock.mockResolvedValue(SAMPLE_RESALE);
+  withDbTransactionMock.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
+    callback(txExecutor),
+  );
   app = await buildRouteTestApp(routePlugin, '/api/projects/resales');
 });
 
@@ -132,7 +175,11 @@ describe('resale routes', () => {
       method: 'POST',
       url: '/api/projects/resales',
       headers: authHeaders(),
-      payload: { clientOrderId: 'ord-1', supplierOrderId: 'so-1' },
+      payload: {
+        clientOrderId: 'ord-1',
+        supplierOrderId: 'so-1',
+        activities: [SAMPLE_ACTIVITY_INPUT],
+      },
     });
 
     expect(res.statusCode).toBe(403);
@@ -158,7 +205,11 @@ describe('resale routes', () => {
       method: 'POST',
       url: '/api/projects/resales',
       headers: authHeaders(),
-      payload: { clientOrderId: 'ord-1', supplierOrderId: 'so-1' },
+      payload: {
+        clientOrderId: 'ord-1',
+        supplierOrderId: 'so-1',
+        activities: [SAMPLE_ACTIVITY_INPUT],
+      },
     });
 
     expect(res.statusCode).toBe(400);
@@ -168,27 +219,55 @@ describe('resale routes', () => {
     expect(createMock).not.toHaveBeenCalled();
   });
 
+  test('POST requires at least one initial activity', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/projects/resales',
+      headers: authHeaders(),
+      payload: { clientOrderId: 'ord-1', supplierOrderId: 'so-1', activities: [] },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
   test('POST creates a resale and returns derived economic totals', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/projects/resales',
       headers: authHeaders(),
-      payload: { clientOrderId: 'ord-1', supplierOrderId: 'so-1', notes: 'Manual lines' },
+      payload: {
+        clientOrderId: 'ord-1',
+        supplierOrderId: 'so-1',
+        notes: 'Manual lines',
+        activities: [SAMPLE_ACTIVITY_INPUT],
+      },
     });
 
     expect(res.statusCode).toBe(201);
-    expect(createMock).toHaveBeenCalledWith(
+    expect(createMock.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         clientOrderId: 'ord-1',
         supplierOrderId: 'so-1',
         notes: 'Manual lines',
       }),
     );
+    expect(createActivityMock.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        resaleId: expect.any(String),
+        name: 'Setup rivendita',
+        categoryId: 'rvc-hardware',
+        cost: 100,
+        revenue: 150,
+      }),
+    );
+    expect(findByIdMock).toHaveBeenCalledWith(expect.any(String), txExecutor);
     expect(JSON.parse(res.body)).toMatchObject({
       supplierOrderCost: 120,
       activityCostTotal: 100,
       resaleRevenue: 150,
       costVariance: -20,
+      activities: [expect.objectContaining({ name: 'Setup rivendita' })],
     });
   });
 });

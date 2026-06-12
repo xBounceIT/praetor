@@ -310,8 +310,11 @@
     "createTitle": "Create Resale",
     "manageCategories": "Resale Categories",
     "activitiesTitle": "Resale Activities",
+    "initialActivitiesTitle": "Initial Resale Activities",
     "addActivity": "Add Activity",
+    "addActivityRow": "Add activity row",
     "editActivity": "Edit Activity",
+    "noActivitiesAdded": "Add at least one activity to create the resale.",
     "categoriesDirectory": "Categories Catalog",
     "categoryActivityCount": "Linked activities",
     "balanced": "Balanced",
@@ -353,12 +356,15 @@
     },
     "placeholders": {
       "clientOrder": "Select client order...",
-      "supplierOrder": "Select supplier order..."
+      "supplierOrder": "Select supplier order...",
+      "category": "Select category..."
     },
     "validation": {
       "clientOrder": "Client order is required",
       "supplierOrder": "Supplier order is required",
       "activityName": "Activity name is required",
+      "activitiesRequired": "Add at least one activity to the resale",
+      "activityRows": "Complete name, category, cost, and revenue for every activity",
       "category": "Category is required",
       "nonNegative": "Enter a value greater than or equal to zero",
       "categoryName": "Category name is required"

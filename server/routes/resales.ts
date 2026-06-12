@@ -135,17 +135,6 @@ const orderOptionSchema = {
   required: ['clientOrderId', 'clientName', 'supplierOrders'],
 } as const;
 
-const resaleCreateBodySchema = {
-  type: 'object',
-  properties: {
-    clientOrderId: { type: 'string' },
-    supplierOrderId: { type: 'string' },
-    dueDate: { type: ['string', 'null'] },
-    notes: { type: ['string', 'null'] },
-  },
-  required: ['clientOrderId', 'supplierOrderId'],
-} as const;
-
 const resaleUpdateBodySchema = {
   type: 'object',
   properties: {
@@ -169,6 +158,22 @@ const activityCreateBodySchema = {
     notes: { type: ['string', 'null'] },
   },
   required: ['name', 'billingFrequency', 'categoryId', 'cost', 'revenue'],
+} as const;
+
+const resaleCreateBodySchema = {
+  type: 'object',
+  properties: {
+    clientOrderId: { type: 'string' },
+    supplierOrderId: { type: 'string' },
+    dueDate: { type: ['string', 'null'] },
+    notes: { type: ['string', 'null'] },
+    activities: {
+      type: 'array',
+      minItems: 1,
+      items: activityCreateBodySchema,
+    },
+  },
+  required: ['clientOrderId', 'supplierOrderId', 'activities'],
 } as const;
 
 const activityUpdateBodySchema = {
@@ -475,6 +480,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         supplierOrderId: unknown;
         dueDate?: unknown;
         notes?: unknown;
+        activities?: unknown;
       };
       const clientOrderIdResult = requireNonEmptyString(body.clientOrderId, 'clientOrderId');
       if (!clientOrderIdResult.ok) return badRequest(reply, clientOrderIdResult.message);
@@ -484,6 +490,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!dueDateResult.ok) return badRequest(reply, dueDateResult.message);
       const notesResult = optionalNonEmptyString(body.notes, 'notes');
       if (!notesResult.ok) return badRequest(reply, notesResult.message);
+      if (!Array.isArray(body.activities) || body.activities.length === 0) {
+        return badRequest(reply, 'activities must contain at least one activity');
+      }
+
+      const activities: Array<Omit<resalesRepo.NewResaleActivity, 'id' | 'resaleId'>> = [];
+      for (const activityBody of body.activities) {
+        if (!activityBody || typeof activityBody !== 'object' || Array.isArray(activityBody)) {
+          return badRequest(reply, 'activities must contain valid activity objects');
+        }
+        const activityInput = validateActivityInput(
+          activityBody as Record<string, unknown>,
+          reply,
+          'create',
+        );
+        if (!activityInput.ok) return activityInput.reply;
+        activities.push(activityInput.value);
+      }
 
       const validOrderPair = await ensureValidOrderPair(
         clientOrderIdResult.value,
@@ -505,13 +528,34 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const id = generatePrefixedId('rv');
-      const created = await resalesRepo.create({
-        id,
-        clientOrderId: clientOrderIdResult.value,
-        supplierOrderId: supplierOrderIdResult.value,
-        dueDate: dueDateResult.value,
-        notes: notesResult.value,
+      const created = await withDbTransaction(async (tx) => {
+        await resalesRepo.create(
+          {
+            id,
+            clientOrderId: clientOrderIdResult.value,
+            supplierOrderId: supplierOrderIdResult.value,
+            dueDate: dueDateResult.value,
+            notes: notesResult.value,
+          },
+          tx,
+        );
+        await Promise.all(
+          activities.map((activity) =>
+            resalesRepo.createActivity(
+              {
+                id: generatePrefixedId('rva'),
+                resaleId: id,
+                ...activity,
+              },
+              tx,
+            ),
+          ),
+        );
+        return resalesRepo.findById(id, tx);
       });
+      if (!created) {
+        return reply.code(500).send({ error: 'Unable to load created resale' });
+      }
       await logAudit({
         request,
         action: 'resale.created',
@@ -520,6 +564,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         details: {
           targetLabel: created.clientOrderId,
           secondaryLabel: created.supplierOrderId,
+          counts: { activities: activities.length },
         },
       });
       return reply.code(201).send(created);
