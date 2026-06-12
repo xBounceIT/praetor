@@ -729,6 +729,24 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         },
       },
       {
+        header: t('sales:communicationChannels.fieldLabel'),
+        id: 'communicationChannelName',
+        accessorFn: (row) => row.communicationChannelName ?? '',
+        className: 'whitespace-nowrap',
+        headerClassName: 'min-w-[10rem]',
+        filterFormat: (value) => (value ? String(value) : '-'),
+        cell: ({ row }) => {
+          const history = isHistoryRow(row);
+          return (
+            <span
+              className={`text-sm font-semibold ${history ? 'text-zinc-400' : 'text-zinc-600'}`}
+            >
+              {row.communicationChannelName || '-'}
+            </span>
+          );
+        },
+      },
+      {
         header: t('sales:supplierQuotes.expirationDate', { defaultValue: 'Expiration Date' }),
         accessorKey: 'expirationDate',
         className: 'whitespace-nowrap',

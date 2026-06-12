@@ -126,7 +126,7 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
   return (
     <>
       <div className="space-y-1.5">
-        <div className="flex min-h-6 items-center justify-between gap-2">
+        <div className="flex h-5 items-start justify-between gap-2">
           <FieldLabel htmlFor={id} required>
             {t('sales:communicationChannels.fieldLabel')}
           </FieldLabel>
@@ -134,9 +134,8 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
             <Button
               type="button"
               variant="ghost"
-              size="xs"
               onClick={openManage}
-              className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+              className="-mr-1 h-4 gap-1 px-1 py-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground hover:bg-transparent hover:text-foreground"
             >
               <Settings className="h-3 w-3" aria-hidden="true" />
               {t('common:buttons.manage')}
@@ -156,7 +155,7 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
         {error && <FieldError className="text-xs">{error}</FieldError>}
       </div>
 
-      <Modal isOpen={isManageOpen} onClose={() => setIsManageOpen(false)}>
+      <Modal isOpen={isManageOpen} onClose={() => setIsManageOpen(false)} zIndex={90}>
         <ModalContent className="max-w-3xl">
           <ModalHeader>
             <ModalTitle>{t('sales:communicationChannels.manageTitle')}</ModalTitle>

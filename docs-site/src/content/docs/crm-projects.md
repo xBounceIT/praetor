@@ -11,7 +11,7 @@ Le anagrafiche CRM raccolgono i dati usati nei flussi commerciali e contabili. M
 
 Evita duplicati: prima di creare una nuova anagrafica, cerca se il cliente o fornitore esiste già.
 
-Nei preventivi clienti e fornitori il campo **Canale di Comunicazione** è obbligatorio e indica il canale usato per comunicare o negoziare il preventivo. Le opzioni sono condivise tra i due moduli: chi ha permessi di gestione sui preventivi può usare il pulsante **Gestisci** con icona a ingranaggio sopra il campo per aggiungere, rinominare o rimuovere i canali disponibili. I canali già usati da preventivi esistenti non possono essere eliminati.
+Nei preventivi clienti e fornitori il campo **Canale di Comunicazione** è obbligatorio e indica il canale usato per comunicare o negoziare il preventivo. Lo stesso canale è visibile nelle tabelle dei preventivi. Le opzioni sono condivise tra i due moduli: chi ha permessi di gestione sui preventivi può usare il pulsante **Gestisci** con icona a ingranaggio sopra il campo per aggiungere, rinominare o rimuovere i canali disponibili. I canali già usati da preventivi esistenti non possono essere eliminati.
 
 ### Eliminazione protetta
 

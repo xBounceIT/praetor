@@ -62,6 +62,8 @@ const quotes: Quote[] = [
       },
     ],
     paymentTerms: '30gg',
+    communicationChannelId: 'qcc_email',
+    communicationChannelName: 'Email',
     discount: 10,
     discountType: 'percentage',
     status: 'draft',
@@ -86,6 +88,8 @@ const quotes: Quote[] = [
       },
     ],
     paymentTerms: '30gg',
+    communicationChannelId: 'qcc_email',
+    communicationChannelName: 'Email',
     discount: 25,
     discountType: 'currency',
     status: 'draft',
@@ -129,10 +133,12 @@ describe('<ClientQuotesView />', () => {
       'sales:clientQuotes.marginLabel',
       'sales:clientQuotes.molLabel',
       'sales:clientQuotes.paymentTermsColumn',
+      'sales:communicationChannels.fieldLabel',
       'sales:clientQuotes.expirationColumn',
       'sales:clientQuotes.statusColumn',
       'sales:clientQuotes.actionsColumn',
     ]);
+    expect(screen.getAllByText('Email').length).toBeGreaterThan(0);
     // MOL column shows the margin percentage with two decimals (issue #780).
     expect(screen.getByText('33.33%')).toBeInTheDocument();
     expect(screen.getByText('12.5%')).toBeInTheDocument();
@@ -183,7 +189,7 @@ describe('<ClientQuotesView />', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
 
-    expect(screen.getByText('sales:communicationChannels.fieldLabel')).toBeInTheDocument();
+    expect(screen.getAllByText('sales:communicationChannels.fieldLabel').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Email').length).toBeGreaterThan(0);
     const manageButton = screen.getByRole('button', { name: 'common:buttons.manage' });
     expect(manageButton.querySelector('svg')).not.toBeNull();

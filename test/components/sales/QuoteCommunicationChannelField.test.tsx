@@ -5,6 +5,11 @@ import QuoteCommunicationChannelField from '../../../components/sales/QuoteCommu
 import type { QuoteCommunicationChannel } from '../../../services/api/quoteCommunicationChannels';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
+import {
+  expectSourceContainsAll,
+  expectSourceOmitsAll,
+  readComponentSource,
+} from '../modalStylingTestUtils';
 
 installI18nMock();
 
@@ -42,6 +47,7 @@ describe('<QuoteCommunicationChannelField />', () => {
 
     const manageButton = screen.getByRole('button', { name: 'common:buttons.manage' });
     expect(manageButton.querySelector('svg')).not.toBeNull();
+    expect(manageButton).toHaveClass('h-4');
 
     fireEvent.click(manageButton);
     fireEvent.change(screen.getByPlaceholderText('sales:communicationChannels.namePlaceholder'), {
@@ -80,5 +86,16 @@ describe('<QuoteCommunicationChannelField />', () => {
     );
 
     expect(screen.getByText('PEC')).toBeInTheDocument();
+  });
+
+  test('keeps the manage control compact and raises its nested modal above quote dialogs', async () => {
+    const source = await readComponentSource('sales/QuoteCommunicationChannelField.tsx');
+
+    expectSourceContainsAll(source, [
+      'flex h-5 items-start justify-between gap-2',
+      'className="-mr-1 h-4 gap-1 px-1 py-0',
+      'zIndex={90}',
+    ]);
+    expectSourceOmitsAll(source, ['flex min-h-6 items-center justify-between gap-2', 'size="xs"']);
   });
 });

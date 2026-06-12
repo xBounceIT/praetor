@@ -11,7 +11,7 @@ CRM records store the data used in commercial and accounting workflows. Keep nam
 
 Avoid duplicates: before creating a new record, search for the customer or supplier first.
 
-Client and supplier quotes require the **Communication Channel** field to record how the quote was communicated or negotiated. The options are shared by both quote modules: users with quote-management permissions can use the gear **Manage** button above the field to add, rename, or remove available channels. Channels already used by existing quotes cannot be deleted.
+Client and supplier quotes require the **Communication Channel** field to record how the quote was communicated or negotiated. The same channel is visible in the quote tables. The options are shared by both quote modules: users with quote-management permissions can use the gear **Manage** button above the field to add, rename, or remove available channels. Channels already used by existing quotes cannot be deleted.
 
 ### Protected deletion
 
