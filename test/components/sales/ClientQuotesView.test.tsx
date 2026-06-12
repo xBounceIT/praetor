@@ -192,7 +192,8 @@ describe('<ClientQuotesView />', () => {
     expect(screen.getAllByText('sales:communicationChannels.fieldLabel').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Email').length).toBeGreaterThan(0);
     const manageButton = screen.getByRole('button', { name: 'common:buttons.manage' });
-    expect(manageButton.querySelector('svg')).not.toBeNull();
+    expect(manageButton.querySelector('.fa-gear')).not.toBeNull();
+    expect(manageButton).toHaveAttribute('data-size', 'xs');
   });
 
   test('requires a communication channel before saving a quote', () => {
