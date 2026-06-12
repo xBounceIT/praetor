@@ -147,6 +147,30 @@ describe('ProjectDetailView wiring', () => {
     expect(source).toContain('tipo !== baselineTipo');
   });
 
+  test('requires a linked client order and keeps offer optional on save', async () => {
+    const source = await readSource();
+    expect(source).toContain("const [orderId, setOrderId] = useState(project.orderId ?? '')");
+    expect(source).toContain('id="detail-order"');
+    expect(source).toContain(
+      "if (!orderId) newErrors.orderId = t('projects:projects.orderRequired')",
+    );
+    expect(source).toContain("orderId !== (project.orderId ?? '')");
+    expect(source).toContain('orderId,');
+    expect(source).toContain('offerId: offerId || null,');
+    expect(source).toContain("label={t('projects:projects.offerOptionalLabel')}");
+    expect(source).toContain("{ id: '', name: t('projects:projects.noOfferLinked') }");
+  });
+
+  test('project revenue no longer falls back to the linked order total', async () => {
+    const source = await readSource();
+    expect(source).toContain('const resolveRevenueSource = (');
+    expect(source).toContain("if (activitiesSum > 0) return 'activities';");
+    expect(source).not.toContain("return 'order';");
+    expect(source).not.toContain('calculatePricingTotals');
+    const removedOrderHint = "order: t('projects:projects.revenueFrom" + "Order')";
+    expect(source).not.toContain(removedOrderHint);
+  });
+
   test('team-size KPI and assignment fetch are gated on canManageAssignments', async () => {
     // GET /projects/:id/users is server-gated on `projects.assignments.update`. Without
     // that permission the fetch 403s and the KPI would show a misleading "0".

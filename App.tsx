@@ -1750,6 +1750,11 @@ const AppContent: React.FC = () => {
           permissions,
           buildPermission('accounting.clients_orders', 'view'),
         );
+        const canListProjectOrderOptions = hasAnyPermission(permissions, [
+          ...equivalentPermissionsFor('projects.manage', 'view'),
+          ...equivalentPermissionsFor('projects.manage', 'create'),
+          ...equivalentPermissionsFor('projects.manage', 'update'),
+        ]);
         const canListInvoices = hasPermission(
           permissions,
           buildPermission('accounting.clients_invoices', 'view'),
@@ -2182,8 +2187,8 @@ const AppContent: React.FC = () => {
                 ),
                 listRequest(
                   'client orders',
-                  canListOrders,
-                  () => api.clientsOrders.list(),
+                  canListProjectOrderOptions,
+                  () => api.projects.listOrderOptions(),
                   setClientsOrders,
                 ),
                 listRequest(

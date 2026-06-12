@@ -33,7 +33,6 @@ import type {
   User,
 } from '../../types';
 import { formatInsertDate } from '../../utils/date';
-import { calculatePricingTotals } from '../../utils/numbers';
 import { buildPermission, hasPermission, hasScopedActionPermission } from '../../utils/permissions';
 import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -82,7 +81,7 @@ const tipoOptions = [
   { id: 'passivo', name: 'projects:projects.tipoValues.passivo' },
 ];
 
-type RevenueSource = 'activities' | 'order' | 'manual';
+type RevenueSource = 'activities' | 'manual';
 type RevenueLike = {
   revenue?: number | string | null;
   duration?: number | string | null;
@@ -98,17 +97,16 @@ const sumActivityRevenue = (tasks: RevenueLike[]): number =>
     return sum + (Number.isFinite(totalRevenue) ? totalRevenue : 0);
   }, 0);
 
-const resolveRevenueSource = (activitiesSum: number, hasOrder: boolean): RevenueSource => {
+const resolveRevenueSource = (activitiesSum: number): RevenueSource => {
   if (activitiesSum > 0) return 'activities';
-  if (hasOrder) return 'order';
   return 'manual';
 };
 
 export type AddProjectFormInput = {
   name: string;
   clientId: string;
-  offerId: string;
-  orderId?: string;
+  orderId: string;
+  offerId?: string | null;
   description?: string;
   draftTasks?: DraftTaskInput[];
   billingType?: StoredBillingType;
@@ -444,7 +442,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     const newErrors: Record<string, string> = {};
     if (!name?.trim()) newErrors.name = t('common:validation.projectNameRequired');
     if (!clientId) newErrors.clientId = t('projects:projects.clientRequired');
-    if (!offerId) newErrors.offerId = t('projects:projects.offerRequired');
+    if (!orderId) newErrors.orderId = t('projects:projects.orderRequired');
     if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');
     if (!endDate) newErrors.endDate = t('projects:projects.endDateRequired');
     if (!tipo) newErrors.tipo = t('projects:projects.tipoRequired');
@@ -473,8 +471,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     const result = await onAddProject({
       name,
       clientId,
-      orderId: orderId || undefined,
-      offerId,
+      orderId,
+      offerId: offerId || null,
       description,
       draftTasks: taskInputs.length > 0 ? taskInputs : undefined,
       billingType,
@@ -590,12 +588,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
   const selectedOrder = orderId ? orders.find((o) => o.id === orderId) : undefined;
 
-  const offerOptions = offers.reduce<Array<{ id: string; name: string }>>((options, offer) => {
-    if (offer.status !== 'sent' && offer.status !== 'accepted') return options;
-    if (clientId && offer.clientId !== clientId) return options;
-    options.push({ id: offer.id, name: `${offer.clientName} - ${offer.id}` });
-    return options;
-  }, []);
+  const offerOptions = offers.reduce<Array<{ id: string; name: string }>>(
+    (options, offer) => {
+      if (offer.status !== 'sent' && offer.status !== 'accepted') return options;
+      if (clientId && offer.clientId !== clientId) return options;
+      options.push({ id: offer.id, name: `${offer.clientName} - ${offer.id}` });
+      return options;
+    },
+    [{ id: '', name: t('projects:projects.noOfferLinked') }],
+  );
   if (offerId && !offerOptions.some((o) => o.id === offerId)) {
     const fallback = offers.find((o) => o.id === offerId);
     if (fallback) {
@@ -604,26 +605,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   }
 
   const activitiesRevenueSum = sumActivityRevenue(draftTasks);
-  const orderRevenue = selectedOrder
-    ? calculatePricingTotals(
-        selectedOrder.items,
-        selectedOrder.discount,
-        'hours',
-        selectedOrder.discountType,
-      ).total
-    : 0;
-
-  const revenueSource = resolveRevenueSource(activitiesRevenueSum, Boolean(selectedOrder));
+  const revenueSource = resolveRevenueSource(activitiesRevenueSum);
   const revenueBySource: Record<RevenueSource, number> = {
     activities: activitiesRevenueSum,
-    order: orderRevenue,
     manual: revenue ? parseFloat(revenue) : 0,
   };
-  // Activities/order hints explain why the field is read-only; the manual source is
+  // The activity hint explains why the field is read-only; the manual source is
   // omitted because the field label already says what to enter.
   const revenueHintBySource: Partial<Record<RevenueSource, string>> = {
     activities: t('projects:projects.revenueFromActivities'),
-    order: t('projects:projects.revenueFromOrder'),
   };
   const displayedRevenue = revenueBySource[revenueSource];
   const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : undefined;
@@ -861,7 +851,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                             dispatch({ type: 'patchErrors', value: { clientId: '' } });
                           clearStaleClientLinks(nextOrder.clientId, 'order');
                         }}
-                        label={t('projects:projects.orderOptionalLabel')}
+                        label={
+                          <>
+                            {t('projects:projects.order')} <RequiredMark />
+                          </>
+                        }
                         placeholder={t('projects:projects.selectOrder')}
                         searchable={true}
                         buttonClassName="h-9"
@@ -1004,11 +998,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                           }
                           clearStaleClientLinks(nextOffer.clientId, 'offer');
                         }}
-                        label={
-                          <>
-                            {t('projects:projects.offerReference')} <RequiredMark />
-                          </>
-                        }
+                        label={t('projects:projects.offerOptionalLabel')}
                         placeholder={t('projects:projects.selectOffer')}
                         searchable={true}
                         buttonClassName="h-9"

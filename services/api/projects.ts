@@ -1,6 +1,25 @@
-import type { BillingFrequency, Project, ProjectTipo, StoredBillingType } from '../../types';
+import type {
+  BillingFrequency,
+  ClientsOrder,
+  Project,
+  ProjectTipo,
+  StoredBillingType,
+} from '../../types';
 import { fetchApi } from './client';
 import { normalizeProject } from './normalizers';
+
+type ProjectOrderOptionResponse = Pick<
+  ClientsOrder,
+  'id' | 'clientId' | 'clientName' | 'status' | 'createdAt' | 'updatedAt'
+>;
+
+const normalizeProjectOrderOption = (order: ProjectOrderOptionResponse): ClientsOrder => ({
+  ...order,
+  items: [],
+  paymentTerms: 'immediate',
+  discount: 0,
+  discountType: 'percentage',
+});
 
 export const projectsApi = {
   list: (filters: { userId?: string } = {}): Promise<Project[]> => {
@@ -12,12 +31,17 @@ export const projectsApi = {
     );
   },
 
+  listOrderOptions: (): Promise<ClientsOrder[]> =>
+    fetchApi<ProjectOrderOptionResponse[]>('/projects/order-options').then((orders) =>
+      orders.map(normalizeProjectOrderOption),
+    ),
+
   create: (data: {
     name: string;
     clientId: string;
     description?: string;
-    orderId?: string;
-    offerId: string;
+    orderId: string;
+    offerId?: string | null;
     startDate?: string | null;
     endDate?: string | null;
     revenue?: number | null;

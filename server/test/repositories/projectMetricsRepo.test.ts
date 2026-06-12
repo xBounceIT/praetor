@@ -23,9 +23,7 @@ describe('projectMetricsRepo.listForProjects', () => {
           clientIsDisabled: false,
           endDate: '2026-06-05',
           manualRevenue: '1000',
-          orderId: 'co-1',
           taskRevenue: '1200',
-          orderTotal: '900',
           costToDate: '300',
           hoursToDate: '12.5',
           billingType: 'mixed',
@@ -37,9 +35,7 @@ describe('projectMetricsRepo.listForProjects', () => {
           clientIsDisabled: true,
           endDate: null,
           manualRevenue: null,
-          orderId: null,
           taskRevenue: '0',
-          orderTotal: null,
           costToDate: '50',
           hoursToDate: '2',
           billingType: 'retainer',
@@ -77,7 +73,7 @@ describe('projectMetricsRepo.listForProjects', () => {
     });
   });
 
-  test('uses linked order total when task revenue is zero and project has an order', async () => {
+  test('uses manual revenue when task revenue is zero even if project has an order', async () => {
     exec.enqueue({
       rows: [
         {
@@ -87,9 +83,7 @@ describe('projectMetricsRepo.listForProjects', () => {
           clientIsDisabled: false,
           endDate: null,
           manualRevenue: '500',
-          orderId: 'co-1',
           taskRevenue: '0',
-          orderTotal: '800',
           costToDate: '200',
           hoursToDate: '1',
           billingType: 'time_and_materials',
@@ -99,17 +93,17 @@ describe('projectMetricsRepo.listForProjects', () => {
 
     const result = await projectMetricsRepo.listForProjects(['p-order'], NOW, testDb);
 
-    expect(result.get('p-order')?.revenue).toBe(800);
-    expect(result.get('p-order')?.budgetUsedPct).toBe(25);
+    expect(result.get('p-order')?.revenue).toBe(500);
+    expect(result.get('p-order')?.budgetUsedPct).toBe(40);
   });
 
-  test('query encodes the UI semantics for duration-scaled task revenue, linked order total, cost, and billing', async () => {
+  test('query encodes the UI semantics for duration-scaled task revenue, manual revenue, cost, and billing', async () => {
     exec.enqueue({ rows: [] });
     await projectMetricsRepo.listForProjects(['p1'], NOW, testDb);
     const sql = exec.calls[0].sql.toLowerCase();
     expect(sql).toContain('from tasks');
+    expect(sql).not.toContain('sale_items');
     expect(sql).toContain('coalesce(t.revenue, 0) * coalesce(t.duration, 1)');
-    expect(sql).toContain('sale_items');
     expect(sql).toContain('round((coalesce(te.duration');
     expect(sql).toContain("then 'mixed'");
     expect(sql).toContain('count(distinct bt2.billing_type)');
