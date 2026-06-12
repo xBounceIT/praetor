@@ -65,6 +65,12 @@ export class TimeEntryServiceError extends Error {
   }
 }
 
+export type ListTimeEntriesResult = {
+  entries: TimeEntry[];
+  nextCursor: string | null;
+  dailyDurationByDate?: Map<string, number>;
+};
+
 const hasPermission = (actor: AuthenticatedActor, permission: string) =>
   actor.permissions.includes(permission);
 
@@ -180,7 +186,7 @@ export const listTimeEntries = async (
     toDate?: unknown;
     purpose?: unknown;
   },
-): Promise<{ entries: TimeEntry[]; nextCursor: string | null }> => {
+): Promise<ListTimeEntriesResult> => {
   const purpose = input.purpose === 'ril' ? 'ril' : 'tracker';
   const hasTrackerRead = canReadTrackerEntries(actor);
   const hasRilRead = hasPermission(actor, 'timesheets.ril.view');
@@ -222,15 +228,29 @@ export const listTimeEntries = async (
     fromDate: fromDate ?? undefined,
     toDate: toDate ?? undefined,
   };
+  const dailyTotalOptions = {
+    projectId,
+    fromDate: fromDate ?? undefined,
+    toDate: toDate ?? undefined,
+  };
   const result = userId
     ? await entriesRepo.listForUser(userId, options)
     : canViewAll
       ? await entriesRepo.listAll(options)
       : await entriesRepo.listForManagerView(actor.id, options);
+  const dailyDurationByDate =
+    purpose === 'ril'
+      ? userId
+        ? await entriesRepo.sumDurationsByDateForUser(userId, dailyTotalOptions)
+        : canViewAll
+          ? await entriesRepo.sumDurationsByDateAll(dailyTotalOptions)
+          : await entriesRepo.sumDurationsByDateForManagerView(actor.id, dailyTotalOptions)
+      : undefined;
 
   return {
     entries: result.entries,
     nextCursor: result.nextCursor ? entriesRepo.encodeCursor(result.nextCursor) : null,
+    dailyDurationByDate,
   };
 };
 

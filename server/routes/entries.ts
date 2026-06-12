@@ -199,12 +199,15 @@ const sanitizeListResult = (
 const sanitizeRilListResult = (result: {
   entries: TimeEntry[];
   nextCursor: string | null;
+  dailyDurationByDate?: ReadonlyMap<string, number>;
 }): { entries: SanitizedEntry[]; nextCursor: string | null } => ({
   entries: (() => {
-    const totalsByDate = new Map<string, number>();
-    for (const entry of result.entries) {
-      totalsByDate.set(entry.date, (totalsByDate.get(entry.date) ?? 0) + entry.duration);
-    }
+    const totalsByDate =
+      result.dailyDurationByDate ??
+      result.entries.reduce((totals, entry) => {
+        totals.set(entry.date, (totals.get(entry.date) ?? 0) + entry.duration);
+        return totals;
+      }, new Map<string, number>());
     return result.entries.map((entry) => {
       const sanitized = sanitizeEntry(entry, false);
       const dayTotal = totalsByDate.get(entry.date) ?? 0;

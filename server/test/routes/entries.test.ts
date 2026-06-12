@@ -49,6 +49,9 @@ const generalSettingsGetMock = mock();
 const entriesListAllMock = mock();
 const entriesListForUserMock = mock();
 const entriesListForManagerViewMock = mock();
+const entriesSumDurationsByDateAllMock = mock();
+const entriesSumDurationsByDateForUserMock = mock();
+const entriesSumDurationsByDateForManagerViewMock = mock();
 const entriesCreateMock = mock();
 const entriesCreateManyMock = mock();
 const entriesUpdateMock = mock();
@@ -97,6 +100,9 @@ beforeAll(async () => {
     listAll: entriesListAllMock,
     listForUser: entriesListForUserMock,
     listForManagerView: entriesListForManagerViewMock,
+    sumDurationsByDateAll: entriesSumDurationsByDateAllMock,
+    sumDurationsByDateForUser: entriesSumDurationsByDateForUserMock,
+    sumDurationsByDateForManagerView: entriesSumDurationsByDateForManagerViewMock,
     create: entriesCreateMock,
     createMany: entriesCreateManyMock,
     update: entriesUpdateMock,
@@ -250,6 +256,9 @@ const allMocks = [
   entriesListAllMock,
   entriesListForUserMock,
   entriesListForManagerViewMock,
+  entriesSumDurationsByDateAllMock,
+  entriesSumDurationsByDateForUserMock,
+  entriesSumDurationsByDateForManagerViewMock,
   entriesCreateMock,
   entriesCreateManyMock,
   entriesUpdateMock,
@@ -401,6 +410,37 @@ describe('GET /api/entries', () => {
       'u1',
       expect.objectContaining({ fromDate: '2026-05-01', toDate: '2026-05-31' }),
     );
+  });
+
+  test('200: RIL source feed computes overtime totals across all pages', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
+    entriesListForManagerViewMock.mockResolvedValue({
+      entries: [{ ...SAMPLE_ENTRY, date: '2026-05-04', duration: 4 }],
+      nextCursor: { createdAt: '2026-05-04 12:00:00.000000', id: 'older-page' },
+    });
+    entriesSumDurationsByDateForManagerViewMock.mockResolvedValue(new Map([['2026-05-04', 9]]));
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/entries?purpose=ril&fromDate=2026-05-01&toDate=2026-05-31&limit=1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.entries[0]).toMatchObject({
+      date: '2026-05-04',
+      duration: 4,
+      task: '',
+      taskId: null,
+      notes: null,
+    });
+    expect(body.nextCursor).toContain('older-page');
+    expect(entriesSumDurationsByDateForManagerViewMock).toHaveBeenCalledWith('u1', {
+      projectId: undefined,
+      fromDate: '2026-05-01',
+      toDate: '2026-05-31',
+    });
   });
 
   test('200: viewer with RIL view can read an explicitly selected managed user', async () => {
