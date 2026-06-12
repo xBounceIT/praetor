@@ -12818,7 +12818,13 @@
                       "monthlyEffort": {
                         "type": "number"
                       },
+                      "duration": {
+                        "type": "number"
+                      },
                       "revenue": {
+                        "type": "number"
+                      },
+                      "totalRevenue": {
                         "type": "number"
                       },
                       "notes": {
@@ -13044,10 +13050,10 @@
                     "type": "number",
                     "maximum": 24
                   },
-                  "expectedEffort": {
+                  "monthlyEffort": {
                     "type": "number"
                   },
-                  "monthlyEffort": {
+                  "duration": {
                     "type": "number"
                   },
                   "revenue": {
@@ -13132,7 +13138,13 @@
                     "monthlyEffort": {
                       "type": "number"
                     },
+                    "duration": {
+                      "type": "number"
+                    },
                     "revenue": {
+                      "type": "number"
+                    },
+                    "totalRevenue": {
                       "type": "number"
                     },
                     "notes": {
@@ -13659,10 +13671,10 @@
                     "type": "number",
                     "maximum": 24
                   },
-                  "expectedEffort": {
+                  "monthlyEffort": {
                     "type": "number"
                   },
-                  "monthlyEffort": {
+                  "duration": {
                     "type": "number"
                   },
                   "revenue": {
@@ -13756,7 +13768,13 @@
                     "monthlyEffort": {
                       "type": "number"
                     },
+                    "duration": {
+                      "type": "number"
+                    },
                     "revenue": {
+                      "type": "number"
+                    },
+                    "totalRevenue": {
                       "type": "number"
                     },
                     "notes": {

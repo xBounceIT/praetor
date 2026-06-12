@@ -29,7 +29,7 @@ Projects connect customers, tasks, and time entries. Create clear reusable tasks
 
 For each project and task, you can set the billing type (retainer or time and materials) and the billing frequency (monthly or one-time) independently — both billing types support either frequency. If tasks use a billing type that differs from the project, the project is shown as mixed.
 
-Use estimated monthly effort to plan recurring load and total effort to track progress against the overall expected hours.
+Use estimated monthly effort to plan recurring load and task duration as a generic multiplier. Total effort is calculated automatically as monthly effort × duration and is used to track progress against the overall expected hours. Task total revenue is calculated the same way: revenue × duration.
 
 The **Add Project** action opens a focused dialog with only what's needed to create a project: client, name, dates, offer, type, billing, optional order, optional revenue, and a draft tasks table. Submitting the dialog takes you straight to the new project's dedicated detail page.
 
@@ -47,7 +47,7 @@ When creating or editing a project you can fill in:
 - **Project start date** and **Project end date** — define the planned window. Both are required (at creation and on every subsequent save from the detail page) so projects always carry a planning window; the end date must not precede the start date.
 - **Offer reference** — links the project to an accepted offer. This field is required.
 - **Type** — classifies the project as **Active** (Attivo) or **Passive** (Passivo). It is a required field (with the same `*` marker as Client and Project Name): the project can't be created until you pick a value, and the selected type is shown in the projects list and on the detail page. Projects that already existed before this field was introduced default to **Active**, but the **first time** one is edited from the detail page you must explicitly confirm the type: the selector starts empty and the save is blocked until you choose a value, so the choice isn't silently left at the default.
-- **Project revenue** — resolved with this precedence: (1) if the activities have a per-row revenue, the project revenue is the sum of those values shown read-only; (2) otherwise, if an order is linked, the revenue is inherited read-only from the order total; (3) otherwise you can enter it manually.
+- **Project revenue** — resolved with this precedence: (1) if the activities have a per-row revenue, the project revenue is the read-only sum of activity total revenues (`revenue × duration`); (2) otherwise, if an order is linked, the revenue is inherited read-only from the order total; (3) otherwise you can enter it manually.
 
 When a project ends, check that tasks are consistent and that no pending entries remain.
 

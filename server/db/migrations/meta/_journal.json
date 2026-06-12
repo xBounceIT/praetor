@@ -617,6 +617,13 @@
       "when": 1781300000000,
       "tag": "0087_add_quote_communication_channels",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1781287317277,
+      "tag": "0088_add_task_duration",
+      "breakpoints": true
     }
   ]
 }
