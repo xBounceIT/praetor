@@ -302,6 +302,83 @@
       }
     }
   },
+  "resales": {
+    "title": "Rivendite",
+    "subtitle": "Gestisci rivendite collegate agli ordini cliente e fornitore",
+    "directory": "Archivio Rivendite",
+    "addResale": "Aggiungi Rivendita",
+    "createTitle": "Crea Rivendita",
+    "manageCategories": "Categorie Rivendite",
+    "activitiesTitle": "Attività Rivendite",
+    "initialActivitiesTitle": "Attività Rivendita",
+    "addActivity": "Aggiungi Attività",
+    "addActivityRow": "Aggiungi riga attività",
+    "editActivity": "Modifica Attività",
+    "noActivitiesAdded": "Aggiungi almeno un'attività per creare la rivendita.",
+    "categoriesDirectory": "Catalogo Categorie",
+    "categoryActivityCount": "Attività collegate",
+    "balanced": "Allineato",
+    "varianceHint": "La varianza confronta il totale ordine fornitore con la somma dei costi attività. Non blocca il salvataggio.",
+    "released": "Rilasciato",
+    "notReleased": "Non rilasciato",
+    "activityDueDateHint": "La scadenza attività è indipendente dalla data della rivendita.",
+    "deleteTitle": "Elimina rivendita",
+    "deleteDescription": "Sei sicuro di voler eliminare la rivendita {{id}} e tutte le sue attività?",
+    "deleteActivityTitle": "Elimina attività",
+    "deleteActivityDescription": "Sei sicuro di voler eliminare l'attività {{name}}?",
+    "billingFrequencies": {
+      "monthly": "Mensile",
+      "quarterly": "Trimestrale",
+      "annual": "Annuale",
+      "one_time": "Una tantum"
+    },
+    "columns": {
+      "clientOrder": "Ordine cliente",
+      "supplierOrder": "Ordine fornitore",
+      "revenue": "Ricavo",
+      "supplierCost": "Costo ordine fornitore",
+      "activityCost": "Costo attività",
+      "variance": "Varianza",
+      "dueDate": "Scadenza",
+      "activityName": "Nome attività",
+      "billing": "Fatturazione",
+      "category": "Categoria",
+      "cost": "Costo",
+      "released": "Rilasciato",
+      "notes": "Note"
+    },
+    "fields": {
+      "clientOrder": "Ordine cliente",
+      "supplierOrder": "Ordine fornitore",
+      "startDate": "Data inizio",
+      "dueDate": "Scadenza rivendita",
+      "resaleRevenue": "Ricavo Rivendita",
+      "resaleCost": "Costo Rivendita",
+      "notes": "Note",
+      "categoryName": "Nome categoria"
+    },
+    "placeholders": {
+      "clientOrder": "Seleziona ordine cliente...",
+      "supplierOrder": "Seleziona ordine fornitore...",
+      "category": "Seleziona categoria..."
+    },
+    "boolean": {
+      "yes": "SI",
+      "no": "NO"
+    },
+    "validation": {
+      "clientOrder": "L'ordine cliente è obbligatorio",
+      "supplierOrder": "L'ordine fornitore è obbligatorio",
+      "startDate": "La data inizio è obbligatoria",
+      "dueDate": "La scadenza rivendita è obbligatoria",
+      "activityName": "Il nome attività è obbligatorio",
+      "activitiesRequired": "Aggiungi almeno un'attività alla rivendita",
+      "activityRows": "Completa nome, categoria, costo e ricavo di ogni attività",
+      "category": "La categoria è obbligatoria",
+      "nonNegative": "Inserisci un valore maggiore o uguale a zero",
+      "categoryName": "Il nome categoria è obbligatorio"
+    }
+  },
   "tasks": {
     "title": "Attività",
     "subtitle": "Gestisci attività e assegnazioni",

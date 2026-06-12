@@ -33,6 +33,7 @@ export { projectRulesApi } from './api/projectRules';
 export { projectsApi } from './api/projects';
 export { quoteCommunicationChannelsApi } from './api/quoteCommunicationChannels';
 export { reportsApi } from './api/reports';
+export { resalesApi } from './api/resales';
 export { rilDraftsApi } from './api/rilDrafts';
 export { rolesApi } from './api/roles';
 export type { CreatedMcpToken, McpToken, McpTokenScope } from './api/settings';
@@ -79,6 +80,7 @@ import { projectRulesApi } from './api/projectRules';
 import { projectsApi } from './api/projects';
 import { quoteCommunicationChannelsApi } from './api/quoteCommunicationChannels';
 import { reportsApi } from './api/reports';
+import { resalesApi } from './api/resales';
 import { rilDraftsApi } from './api/rilDrafts';
 import { rolesApi } from './api/roles';
 import { settingsApi } from './api/settings';
@@ -102,6 +104,7 @@ export default {
   employees: employeesApi,
   clients: clientsApi,
   projects: projectsApi,
+  resales: resalesApi,
   tasks: tasksApi,
   entries: entriesApi,
   rilDrafts: rilDraftsApi,

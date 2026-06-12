@@ -8,6 +8,9 @@ export type ModuleScopedStateKey =
   | 'suppliers'
   | 'projects'
   | 'projectTasks'
+  | 'resales'
+  | 'resaleCategories'
+  | 'resaleOrderOptions'
   | 'products'
   | 'quotes'
   | 'quoteCommunicationChannels'
@@ -29,6 +32,9 @@ export const ALL_MODULE_SCOPED_KEYS: readonly ModuleScopedStateKey[] = [
   'suppliers',
   'projects',
   'projectTasks',
+  'resales',
+  'resaleCategories',
+  'resaleOrderOptions',
   'products',
   'quotes',
   'quoteCommunicationChannels',
@@ -71,7 +77,17 @@ const MODULE_OWNED_KEYS: Record<string, readonly ModuleScopedStateKey[]> = {
     'products',
   ],
   catalog: ['products'],
-  projects: ['projects', 'projectTasks', 'clients', 'users', 'workUnits', 'clientsOrders'],
+  projects: [
+    'projects',
+    'projectTasks',
+    'resales',
+    'resaleCategories',
+    'resaleOrderOptions',
+    'clients',
+    'users',
+    'workUnits',
+    'clientsOrders',
+  ],
   suppliers: ['suppliers', 'supplierQuotes', 'products'],
   reports: [],
   settings: [],

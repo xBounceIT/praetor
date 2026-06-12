@@ -231,6 +231,12 @@ const Layout: React.FC<LayoutProps> = ({
             icon: ListTodo,
             title: t('titles.tasks'),
           },
+          {
+            view: 'projects/resales',
+            label: t('routes.resales'),
+            icon: ShoppingCart,
+            title: t('titles.resales'),
+          },
         ],
       },
       {
