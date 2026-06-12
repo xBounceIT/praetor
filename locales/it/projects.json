@@ -59,7 +59,7 @@
     "selectOffer": "Seleziona Offerta...",
     "offerRequired": "Il riferimento offerta è obbligatorio",
     "projectRevenue": "Ricavo progetto",
-    "revenueFromActivities": "Calcolato dalla somma dei ricavi delle attività.",
+    "revenueFromActivities": "Calcolato dalla somma dei ricavi totali delle attività.",
     "revenueFromOrder": "Ereditato dall'ordine collegato.",
     "revenueManualHint": "Inserisci il ricavo previsto del progetto.",
     "projectTasks": "Attività del Progetto",
@@ -67,6 +67,7 @@
     "taskName": "Nome Attività",
     "expectedEffort": "Impegno totale (h)",
     "monthlyEffort": "Impegno mensile (h)",
+    "duration": "Durata",
     "billingType": "Consuntivazione",
     "billingFrequency": "Frequenza",
     "billingTypes": {
@@ -88,6 +89,7 @@
       "passivo": "Passivo"
     },
     "taskRevenue": "Ricavo",
+    "taskTotalRevenue": "Ricavo totale",
     "taskNotes": "Note",
     "noTasksAdded": "Nessuna attività aggiunta.",
     "progress": "Avanzamento",

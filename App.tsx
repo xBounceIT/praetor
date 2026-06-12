@@ -264,7 +264,7 @@ const TrackerView: React.FC<{
     description?: string,
     details?: Pick<
       ProjectTask,
-      'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
+      'monthlyEffort' | 'duration' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
     >,
   ) => Promise<ProjectTask>;
   currency: string;

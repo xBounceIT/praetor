@@ -27,7 +27,7 @@ I progetti collegano clienti, attività e registrazioni di tempo. Crea attività
 
 Per ogni progetto e attività puoi indicare il tipo di consuntivazione (canone o a misura) e la frequenza (mensile o una tantum) in modo indipendente: entrambi i tipi di consuntivazione supportano entrambe le frequenze. Se le attività usano un tipo diverso da quello del progetto, il progetto viene mostrato come misto.
 
-Usa la stima di impegno mensile per pianificare il carico ricorrente e l'impegno totale per monitorare l'avanzamento rispetto alle ore complessive previste.
+Usa la stima di impegno mensile per pianificare il carico ricorrente e la durata dell'attività come moltiplicatore generico. L'impegno totale è calcolato automaticamente come impegno mensile × durata e viene usato per monitorare l'avanzamento rispetto alle ore complessive previste. Il ricavo totale dell'attività è calcolato allo stesso modo: ricavo × durata.
 
 L'azione **Aggiungi Progetto** apre una finestra dedicata alla sola creazione: cliente, nome, date, offerta, tipo, consuntivazione, ordine facoltativo, ricavo facoltativo e una tabella di attività iniziali. Al salvataggio sei portato direttamente alla pagina di dettaglio del nuovo progetto.
 
@@ -45,7 +45,7 @@ Quando crei o modifichi un progetto puoi compilare anche:
 - **Data inizio progetto** e **Data fine progetto** — definiscono la finestra temporale prevista. Entrambe sono obbligatorie (alla creazione e a ogni salvataggio successivo dalla pagina di dettaglio) così che i progetti abbiano sempre una finestra di pianificazione; la data di fine non può precedere la data di inizio.
 - **Riferimento offerta** — collega il progetto a un'offerta accettata. Il campo è obbligatorio.
 - **Tipo** — classifica il progetto come **Attivo** o **Passivo**. È un campo obbligatorio (con lo stesso indicatore `*` di Cliente e Nome Progetto): il progetto non può essere creato finché non scegli un valore, e il tipo selezionato è mostrato nell'elenco progetti e nella pagina di dettaglio. I progetti già esistenti prima dell'introduzione del campo sono impostati su **Attivo** in modo predefinito, ma alla **prima modifica** dalla pagina di dettaglio devi confermare esplicitamente il tipo: il selettore parte vuoto e il salvataggio è bloccato finché non scegli un valore, così la scelta non resta quella predefinita per inerzia.
-- **Ricavo progetto** — segue questa precedenza: (1) se le attività hanno un valore di ricavo, il ricavo del progetto è la somma di quei valori in sola lettura; (2) altrimenti, se è collegato un ordine, il ricavo è ereditato in sola lettura dal totale dell'ordine; (3) altrimenti puoi inserirlo manualmente.
+- **Ricavo progetto** — segue questa precedenza: (1) se le attività hanno un valore di ricavo, il ricavo del progetto è la somma dei ricavi totali delle attività (`ricavo × durata`) in sola lettura; (2) altrimenti, se è collegato un ordine, il ricavo è ereditato in sola lettura dal totale dell'ordine; (3) altrimenti puoi inserirlo manualmente.
 
 Quando un progetto termina, verifica che le attività siano coerenti e che non rimangano registrazioni pendenti.
 

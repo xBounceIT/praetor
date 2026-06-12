@@ -842,36 +842,61 @@ describe('normalizeTimeEntry', () => {
 describe('normalizeTask', () => {
   const baseTask: ProjectTask = { id: 't-1', name: 'Test task', projectId: 'pr-1' };
 
-  test('parses recurrenceDuration, expectedEffort, monthlyEffort, and revenue', () => {
+  test('parses recurrenceDuration, effort, duration, revenue, and totalRevenue', () => {
     const task = make<ProjectTask>(baseTask, {
       recurrenceDuration: '7',
       expectedEffort: '8',
       monthlyEffort: '3',
+      duration: '4',
       revenue: '100',
+      totalRevenue: '400',
     });
     const result = normalizeTask(task);
     expect(result.recurrenceDuration).toBe(7);
     expect(result.expectedEffort).toBe(8);
     expect(result.monthlyEffort).toBe(3);
+    expect(result.duration).toBe(4);
     expect(result.revenue).toBe(100);
+    expect(result.totalRevenue).toBe(400);
   });
 
-  test('defaults recurrenceDuration to 0 when falsy; keeps undefined for the others', () => {
+  test('defaults recurrenceDuration to 0 and derives missing totals from duration defaults', () => {
     const result = normalizeTask(baseTask);
     expect(result.recurrenceDuration).toBe(0);
-    expect(result.expectedEffort).toBeUndefined();
+    expect(result.expectedEffort).toBe(0);
     expect(result.monthlyEffort).toBeUndefined();
+    expect(result.duration).toBe(1);
     expect(result.revenue).toBeUndefined();
+    expect(result.totalRevenue).toBe(0);
     expect(result.billingType).toBe('time_and_materials');
     expect(result.billingFrequency).toBe('monthly');
   });
 
-  test('coerces 0 effort and revenue fields (defined → Number)', () => {
-    const task = make<ProjectTask>(baseTask, { expectedEffort: 0, monthlyEffort: 0, revenue: 0 });
+  test('coerces 0 effort, duration, and revenue fields (defined → Number)', () => {
+    const task = make<ProjectTask>(baseTask, {
+      expectedEffort: 0,
+      monthlyEffort: 0,
+      duration: 0,
+      revenue: 0,
+      totalRevenue: 0,
+    });
     const result = normalizeTask(task);
     expect(result.expectedEffort).toBe(0);
     expect(result.monthlyEffort).toBe(0);
+    expect(result.duration).toBe(0);
     expect(result.revenue).toBe(0);
+    expect(result.totalRevenue).toBe(0);
+  });
+
+  test('derives missing expectedEffort and totalRevenue from monthly effort, revenue, and duration', () => {
+    const task = make<ProjectTask>(baseTask, {
+      monthlyEffort: '2.5',
+      duration: '3',
+      revenue: '100',
+    });
+    const result = normalizeTask(task);
+    expect(result.expectedEffort).toBe(7.5);
+    expect(result.totalRevenue).toBe(300);
   });
 
   test('preserves one_time frequency for time and materials tasks', () => {

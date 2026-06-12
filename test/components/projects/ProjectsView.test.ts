@@ -125,6 +125,22 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain('<FieldDescription className="text-xs">');
   });
 
+  test('draft task table has editable duration and read-only derived totals', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+    expect(source).toContain("header: t('projects:projects.duration')");
+    expect(source).toContain(
+      "onChange={(e) => updateDraftTask(row._id, 'duration', e.target.value)}",
+    );
+    expect(source).toContain("header: t('projects:projects.expectedEffort')");
+    expect(source).toContain(
+      'parseDraftNumber(row.monthlyEffort) * parseDraftNumber(row.duration, 1)',
+    );
+    expect(source).toContain('projects:projects.taskTotalRevenue');
+    expect(source).toContain('readOnly');
+  });
+
   test('order selector auto-fills the client and disables the client picker while bound', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),

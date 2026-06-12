@@ -43,7 +43,7 @@ export interface WeeklyViewProps {
     description?: string,
     details?: Pick<
       ProjectTask,
-      'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
+      'monthlyEffort' | 'duration' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
     >,
   ) => Promise<ProjectTask>;
   onAddBulkEntries: (entries: TimeEntryDraft[]) => Promise<void>;

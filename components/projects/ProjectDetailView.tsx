@@ -137,9 +137,20 @@ const formatMonthBucket = (date: string, locale: string): string => {
 };
 
 type RevenueSource = 'activities' | 'order' | 'manual';
+type RevenueLike = {
+  revenue?: number | string | null;
+  duration?: number | string | null;
+  totalRevenue?: number | string | null;
+};
 
-const sumActivityRevenue = (tasks: ReadonlyArray<{ revenue?: number | string | null }>): number =>
-  tasks.reduce((sum, t) => sum + (Number(t.revenue) || 0), 0);
+const sumActivityRevenue = (tasks: ReadonlyArray<RevenueLike>): number =>
+  tasks.reduce((sum, t) => {
+    const totalRevenue =
+      t.totalRevenue !== undefined && t.totalRevenue !== null
+        ? Number(t.totalRevenue)
+        : (Number(t.revenue) || 0) * (Number(t.duration ?? 1) || 0);
+    return sum + (Number.isFinite(totalRevenue) ? totalRevenue : 0);
+  }, 0);
 
 const resolveRevenueSource = (activitiesSum: number, hasOrder: boolean): RevenueSource => {
   if (activitiesSum > 0) return 'activities';
@@ -167,7 +178,7 @@ export interface ProjectDetailViewProps {
     description?: string,
     details?: Pick<
       ProjectTask,
-      'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
+      'monthlyEffort' | 'duration' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
     >,
   ) => Promise<ProjectTask>;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;

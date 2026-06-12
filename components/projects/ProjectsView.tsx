@@ -62,7 +62,7 @@ type DraftTask = {
   billingType: StoredBillingType;
   billingFrequency: BillingFrequency;
   monthlyEffort: string;
-  expectedEffort: string;
+  duration: string;
   revenue: string;
   notes: string;
 };
@@ -72,7 +72,7 @@ export type DraftTaskInput = {
   billingType?: StoredBillingType;
   billingFrequency?: BillingFrequency;
   monthlyEffort?: number;
-  expectedEffort?: number;
+  duration?: number;
   revenue?: number;
   notes?: string;
 };
@@ -83,10 +83,20 @@ const tipoOptions = [
 ];
 
 type RevenueSource = 'activities' | 'order' | 'manual';
-type RevenueLike = { revenue?: number | string | null };
+type RevenueLike = {
+  revenue?: number | string | null;
+  duration?: number | string | null;
+  totalRevenue?: number | string | null;
+};
 
 const sumActivityRevenue = (tasks: RevenueLike[]): number =>
-  tasks.reduce((sum, t) => sum + (Number(t.revenue) || 0), 0);
+  tasks.reduce((sum, t) => {
+    const totalRevenue =
+      t.totalRevenue !== undefined && t.totalRevenue !== null
+        ? Number(t.totalRevenue)
+        : (Number(t.revenue) || 0) * (t.duration === '' ? 1 : Number(t.duration ?? 1) || 0);
+    return sum + (Number.isFinite(totalRevenue) ? totalRevenue : 0);
+  }, 0);
 
 const resolveRevenueSource = (activitiesSum: number, hasOrder: boolean): RevenueSource => {
   if (activitiesSum > 0) return 'activities';
@@ -129,7 +139,7 @@ export interface ProjectsViewProps {
     description?: string,
     details?: Pick<
       ProjectTask,
-      'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
+      'monthlyEffort' | 'duration' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
     >,
   ) => Promise<ProjectTask>;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
@@ -455,7 +465,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         billingType: task.billingType,
         billingFrequency: task.billingFrequency,
         monthlyEffort: task.monthlyEffort ? parseFloat(task.monthlyEffort) : undefined,
-        expectedEffort: task.expectedEffort ? parseFloat(task.expectedEffort) : undefined,
+        duration: task.duration ? parseFloat(task.duration) : undefined,
         revenue: task.revenue ? parseFloat(task.revenue) : undefined,
         notes: task.notes.trim() || undefined,
       });
@@ -514,7 +524,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           billingType,
           billingFrequency,
           monthlyEffort: '',
-          expectedEffort: '',
+          duration: '1',
           revenue: '',
           notes: '',
         },
@@ -618,6 +628,17 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const displayedRevenue = revenueBySource[revenueSource];
   const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : undefined;
 
+  const parseDraftNumber = (value: string, fallback = 0) => {
+    if (value.trim() === '') return fallback;
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+  const formatDraftNumber = (value: number, minimumFractionDigits = 0) =>
+    value.toLocaleString(i18n.language, {
+      minimumFractionDigits,
+      maximumFractionDigits: 2,
+    });
+
   const managingProject = projects.find((p) => p.id === managingProjectId);
   const assignableUsers = users.filter(
     (u) => !u.hasTopManagerRole && !u.isAdminOnly && !u.isDisabled,
@@ -693,25 +714,42 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       ),
     },
     {
-      header: t('projects:projects.expectedEffort'),
-      id: 'expectedEffort',
-      accessorKey: 'expectedEffort',
+      header: t('projects:projects.duration'),
+      id: 'duration',
+      accessorKey: 'duration',
       disableFiltering: true,
       cell: ({ row }) => (
         <Input
           type="number"
           min="0"
-          step="1"
+          step="any"
           required
-          value={row.expectedEffort}
-          placeholder="0"
+          value={row.duration}
+          placeholder="1"
           onKeyDown={(e) => {
-            if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
+            if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
           }}
-          onChange={(e) => updateDraftTask(row._id, 'expectedEffort', e.target.value)}
+          onChange={(e) => updateDraftTask(row._id, 'duration', e.target.value)}
           className="h-8 min-w-[80px] text-xs"
         />
       ),
+    },
+    {
+      header: t('projects:projects.expectedEffort'),
+      id: 'expectedEffort',
+      accessorFn: (row) => parseDraftNumber(row.monthlyEffort) * parseDraftNumber(row.duration, 1),
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const totalEffort = parseDraftNumber(row.monthlyEffort) * parseDraftNumber(row.duration, 1);
+        return (
+          <Input
+            readOnly
+            tabIndex={-1}
+            value={`${formatDraftNumber(totalEffort)}h`}
+            className="h-8 min-w-[90px] bg-muted/40 text-xs text-muted-foreground"
+          />
+        );
+      },
     },
     {
       header: `${t('projects:projects.taskRevenue')} (${currency})`,
@@ -730,6 +768,23 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           className="h-8 min-w-[80px] text-xs"
         />
       ),
+    },
+    {
+      header: `${t('projects:projects.taskTotalRevenue')} (${currency})`,
+      id: 'totalRevenue',
+      accessorFn: (row) => parseDraftNumber(row.revenue) * parseDraftNumber(row.duration, 1),
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const totalRevenue = parseDraftNumber(row.revenue) * parseDraftNumber(row.duration, 1);
+        return (
+          <Input
+            readOnly
+            tabIndex={-1}
+            value={`${currency}${formatDraftNumber(totalRevenue, 2)}`}
+            className="h-8 min-w-[110px] bg-muted/40 text-xs text-muted-foreground"
+          />
+        );
+      },
     },
     {
       header: t('projects:projects.taskNotes'),

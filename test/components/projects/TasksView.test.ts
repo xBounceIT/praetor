@@ -20,10 +20,15 @@ describe('TasksView', () => {
       expect(source).toContain('<ModalBody className="space-y-6">');
       expect(source).toContain('<ModalFooter className="sm:justify-between">');
       expect(source).toContain('<div className="grid gap-4 md:grid-cols-2">');
-      expect(source).toContain('<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">');
+      expect(source).toContain('<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">');
       expect(source).toContain('<FieldLabel htmlFor="task-name" required>');
       expect(source).toContain('<FieldLabel htmlFor="task-description">');
+      expect(source).toContain('<FieldLabel htmlFor="task-duration">');
+      expect(source).toContain('<FieldLabel htmlFor="task-total-revenue">');
       expect(source).toContain('<FieldLabel htmlFor="task-notes">');
+      expect(source).toContain("field: 'duration'");
+      expect(source).toContain('formatNumber(totalEffort)');
+      expect(source).toContain('formatNumber(totalRevenue, 2)');
       expect(source).toContain('<Input');
       expect(source).toContain('<Textarea');
       expect(source).toContain('id="task-notes"');
