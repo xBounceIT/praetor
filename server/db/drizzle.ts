@@ -22,6 +22,7 @@ import * as productsSchema from './schema/products.ts';
 import * as productTypesSchema from './schema/productTypes.ts';
 import * as projectRulesSchema from './schema/projectRules.ts';
 import * as projectsSchema from './schema/projects.ts';
+import * as quoteCommunicationChannelsSchema from './schema/quoteCommunicationChannels.ts';
 import * as quotesSchema from './schema/quotes.ts';
 import * as quoteVersionsSchema from './schema/quoteVersions.ts';
 import * as reportChatMessagesSchema from './schema/reportChatMessages.ts';
@@ -66,6 +67,7 @@ export const schema = {
   ...productSubcategoriesSchema,
   ...productsSchema,
   ...productTypesSchema,
+  ...quoteCommunicationChannelsSchema,
   ...projectRulesSchema,
   ...projectsSchema,
   ...quotesSchema,

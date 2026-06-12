@@ -33,6 +33,15 @@ mock.module('../../../components/shared/DeleteConfirmModal', () => ({
 const ClientQuotesView = (await import('../../../components/sales/ClientQuotesView')).default;
 
 const clients: Client[] = [{ id: 'client-1', name: 'Helios Energy Services' }];
+const communicationChannels = [
+  {
+    id: 'qcc_email',
+    name: 'Email',
+    clientQuoteCount: 0,
+    supplierQuoteCount: 0,
+    totalQuoteCount: 0,
+  },
+];
 
 const quotes: Quote[] = [
   {
@@ -153,6 +162,51 @@ describe('<ClientQuotesView />', () => {
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     expect(durationInputs.length).toBeGreaterThan(0);
     expect(durationInputs[0].value).toBe('1');
+  });
+
+  test('defaults a new quote to the first communication channel and shows inline management', () => {
+    render(
+      <ClientQuotesView
+        quotes={[]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        canManageCommunicationChannels={true}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
+
+    expect(screen.getByText('sales:communicationChannels.fieldLabel')).toBeInTheDocument();
+    expect(screen.getAllByText('Email').length).toBeGreaterThan(0);
+    const manageButton = screen.getByRole('button', { name: 'common:buttons.manage' });
+    expect(manageButton.querySelector('svg')).not.toBeNull();
+  });
+
+  test('requires a communication channel before saving a quote', () => {
+    render(
+      <ClientQuotesView
+        quotes={[]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
+    fireEvent.click(screen.getByRole('button', { name: 'sales:clientQuotes.createQuote' }));
+
+    expect(screen.getByText('sales:communicationChannels.errors.required')).toBeInTheDocument();
   });
 
   test('scales line totals by a line item duration in the quote list (issue #757)', () => {

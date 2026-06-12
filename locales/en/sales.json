@@ -17,6 +17,21 @@
     "statusLabel": "Status:",
     "fieldLockedBySupplierQuote": "Locked due to linked supplier quote"
   },
+  "communicationChannels": {
+    "fieldLabel": "Communication Channel",
+    "placeholder": "Select a channel...",
+    "manageTitle": "Manage Communication Channels",
+    "name": "Channel",
+    "namePlaceholder": "e.g. Video call",
+    "usedByQuotes": "Used by quotes",
+    "noChannels": "No communication channels found.",
+    "errors": {
+      "required": "Communication channel is required",
+      "nameRequired": "Channel name is required",
+      "deleteBlocked": "Cannot delete {{name}} because it is used by {{count}} quote(s).",
+      "deleteLast": "At least one communication channel is required."
+    }
+  },
   "clientQuotes": {
     "title": "Quotes",
     "subtitle": "Create and manage client quotes",

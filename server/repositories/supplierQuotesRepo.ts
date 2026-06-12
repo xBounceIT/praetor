@@ -15,6 +15,8 @@ export type SupplierQuote = {
   paymentTerms: string | null;
   status: string;
   expirationDate: string | null;
+  communicationChannelId: string;
+  communicationChannelName: string;
   linkedOrderId: string | null;
   notes: string | null;
   createdAt: number;
@@ -36,7 +38,17 @@ export type SupplierQuoteItem = {
   durationUnit: DurationUnit;
 };
 
-type QuoteRow = typeof supplierQuotes.$inferSelect & { linkedOrderId?: string | null };
+const communicationChannelNameSubquery = sql<string>`(
+  SELECT qcc.name
+  FROM quote_communication_channels qcc
+  WHERE qcc.id = ${supplierQuotes.communicationChannelId}
+  LIMIT 1
+)`;
+
+type QuoteRow = typeof supplierQuotes.$inferSelect & {
+  linkedOrderId?: string | null;
+  communicationChannelName: string;
+};
 
 const mapQuote = (row: QuoteRow): SupplierQuote => ({
   id: row.id,
@@ -47,6 +59,8 @@ const mapQuote = (row: QuoteRow): SupplierQuote => ({
   paymentTerms: row.paymentTerms,
   status: row.status,
   expirationDate: normalizeNullableDateOnly(row.expirationDate, 'supplierQuote.expirationDate'),
+  communicationChannelId: row.communicationChannelId,
+  communicationChannelName: row.communicationChannelName,
   linkedOrderId: row.linkedOrderId ?? null,
   notes: row.notes,
   createdAt: row.createdAt?.getTime() ?? 0,
@@ -72,6 +86,7 @@ export const listAll = async (exec: DbExecutor = db): Promise<SupplierQuote[]> =
   const rows = await exec
     .select({
       ...getTableColumns(supplierQuotes),
+      communicationChannelName: communicationChannelNameSubquery,
       linkedOrderId: sql<string | null>`(
         SELECT ss.id FROM supplier_sales ss
         WHERE ss.linked_quote_id = ${supplierQuotes.id}
@@ -95,7 +110,13 @@ export const findById = async (
   id: string,
   exec: DbExecutor = db,
 ): Promise<SupplierQuote | null> => {
-  const rows = await exec.select().from(supplierQuotes).where(eq(supplierQuotes.id, id));
+  const rows = await exec
+    .select({
+      ...getTableColumns(supplierQuotes),
+      communicationChannelName: communicationChannelNameSubquery,
+    })
+    .from(supplierQuotes)
+    .where(eq(supplierQuotes.id, id));
   return rows[0] ? mapQuote(rows[0]) : null;
 };
 
@@ -141,7 +162,10 @@ export const findFullForSnapshot = async (
   exec: DbExecutor = db,
 ): Promise<{ quote: SupplierQuote; items: SupplierQuoteItem[] } | null> => {
   const quoteRows = await exec
-    .select()
+    .select({
+      ...getTableColumns(supplierQuotes),
+      communicationChannelName: communicationChannelNameSubquery,
+    })
     .from(supplierQuotes)
     .where(eq(supplierQuotes.id, id))
     .limit(1);
@@ -183,6 +207,7 @@ export type NewSupplierQuote = {
   paymentTerms: string;
   status: string;
   expirationDate: string;
+  communicationChannelId: string;
   notes: string | null;
 };
 
@@ -201,10 +226,11 @@ export const create = async (
       paymentTerms: input.paymentTerms,
       status: input.status,
       expirationDate: input.expirationDate,
+      communicationChannelId: input.communicationChannelId,
       notes: input.notes,
     })
     .returning();
-  return mapQuote(row);
+  return (await findById(row.id, exec)) ?? mapQuote({ ...row, communicationChannelName: '' });
 };
 
 export type SupplierQuoteUpdate = {
@@ -218,6 +244,7 @@ export type SupplierQuoteUpdate = {
   paymentTerms?: string;
   status?: string;
   expirationDate?: string | null;
+  communicationChannelId?: string | null;
   notes?: string | null;
 };
 
@@ -244,12 +271,13 @@ export const update = async (
       paymentTerms: sql`COALESCE(${patch.paymentTerms ?? null}, ${supplierQuotes.paymentTerms})`,
       status: sql`COALESCE(${patch.status ?? null}, ${supplierQuotes.status})`,
       expirationDate: sql`COALESCE(${patch.expirationDate ?? null}::date, ${supplierQuotes.expirationDate})`,
+      communicationChannelId: sql`COALESCE(${patch.communicationChannelId ?? null}, ${supplierQuotes.communicationChannelId})`,
       notes: sql`COALESCE(${patch.notes ?? null}, ${supplierQuotes.notes})`,
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })
     .where(eq(supplierQuotes.id, id))
     .returning();
-  return row ? mapQuote(row) : null;
+  return row ? await findById(row.id, exec) : null;
 };
 
 // Separate from update() so generic patches can't mutate the PK (issue #621). Relies on
@@ -264,7 +292,7 @@ export const rename = async (
     .set({ id: newId, updatedAt: sql`CURRENT_TIMESTAMP` })
     .where(eq(supplierQuotes.id, currentId))
     .returning();
-  return row ? mapQuote(row) : null;
+  return row ? await findById(row.id, exec) : null;
 };
 
 export type SupplierQuoteRestoreFields = {
@@ -275,6 +303,7 @@ export type SupplierQuoteRestoreFields = {
   paymentTerms: string;
   status: string;
   expirationDate: string;
+  communicationChannelId: string;
   notes: string | null;
 };
 
@@ -293,12 +322,13 @@ export const restoreSnapshotQuote = async (
       paymentTerms: snapshot.paymentTerms,
       status: snapshot.status,
       expirationDate: snapshot.expirationDate,
+      communicationChannelId: snapshot.communicationChannelId,
       notes: snapshot.notes,
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })
     .where(eq(supplierQuotes.id, id))
     .returning();
-  return row ? mapQuote(row) : null;
+  return row ? await findById(row.id, exec) : null;
 };
 
 export const deleteById = async (

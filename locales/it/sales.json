@@ -17,6 +17,21 @@
     "statusLabel": "Stato:",
     "fieldLockedBySupplierQuote": "Bloccato per preventivo fornitore collegato"
   },
+  "communicationChannels": {
+    "fieldLabel": "Canale di Comunicazione",
+    "placeholder": "Seleziona un canale...",
+    "manageTitle": "Gestisci Canali di Comunicazione",
+    "name": "Canale",
+    "namePlaceholder": "es. Videochiamata",
+    "usedByQuotes": "Usato nei preventivi",
+    "noChannels": "Nessun canale di comunicazione trovato.",
+    "errors": {
+      "required": "Il canale di comunicazione è obbligatorio",
+      "nameRequired": "Il nome del canale è obbligatorio",
+      "deleteBlocked": "Non puoi eliminare {{name}} perché è usato da {{count}} preventivo/i.",
+      "deleteLast": "È richiesto almeno un canale di comunicazione."
+    }
+  },
   "clientQuotes": {
     "title": "Preventivi",
     "subtitle": "Crea e gestisci preventivi clienti",

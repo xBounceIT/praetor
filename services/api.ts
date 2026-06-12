@@ -31,6 +31,7 @@ export { notificationsApi } from './api/notifications';
 export { productsApi } from './api/products';
 export { projectRulesApi } from './api/projectRules';
 export { projectsApi } from './api/projects';
+export { quoteCommunicationChannelsApi } from './api/quoteCommunicationChannels';
 export { reportsApi } from './api/reports';
 export { rilDraftsApi } from './api/rilDrafts';
 export { rolesApi } from './api/roles';
@@ -76,6 +77,7 @@ import { notificationsApi } from './api/notifications';
 import { productsApi } from './api/products';
 import { projectRulesApi } from './api/projectRules';
 import { projectsApi } from './api/projects';
+import { quoteCommunicationChannelsApi } from './api/quoteCommunicationChannels';
 import { reportsApi } from './api/reports';
 import { rilDraftsApi } from './api/rilDrafts';
 import { rolesApi } from './api/roles';
@@ -105,6 +107,7 @@ export default {
   rilDrafts: rilDraftsApi,
   products: productsApi,
   projectRules: projectRulesApi,
+  quoteCommunicationChannels: quoteCommunicationChannelsApi,
   quotes: clientQuotesApi,
   clientOffers: clientOffersApi,
   clientsOrders: clientsOrdersApi,

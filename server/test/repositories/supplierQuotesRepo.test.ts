@@ -12,8 +12,8 @@ beforeEach(() => {
 
 // Builder fixtures match the column order in db/schema/supplierQuotes.ts:
 //   [id, supplierId, supplierName, clientId, clientName, paymentTerms, status,
-//    expirationDate, notes, createdAt, updatedAt]
-// `listAll` adds the linkedOrderId correlated subquery as a 12th projection column.
+//    expirationDate, communicationChannelId, notes, createdAt, updatedAt, communicationChannelName]
+// `listAll` adds the linkedOrderId correlated subquery after communicationChannelName.
 const QUOTE_BASE: readonly unknown[] = [
   'q-1',
   's-1',
@@ -23,14 +23,16 @@ const QUOTE_BASE: readonly unknown[] = [
   'net30',
   'draft',
   '2026-06-01',
+  'qcc_email',
   null,
   new Date(1735689600000),
   new Date(1735689700000),
+  'Email',
 ];
 
 const quoteRow = (overrides: Record<number, unknown> = {}) => makeRow(QUOTE_BASE, overrides);
 
-// listAll's projection appends linkedOrderId at position 11.
+// listAll's projection appends linkedOrderId at position 13.
 const QUOTE_LIST_BASE: readonly unknown[] = [...QUOTE_BASE, null];
 
 const quoteListRow = (overrides: Record<number, unknown> = {}) =>
@@ -59,7 +61,7 @@ const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, 
 
 describe('listAll', () => {
   test('issues a query with linkedOrderId correlated subquery', async () => {
-    exec.enqueue({ rows: [quoteListRow({ 11: 'so-1' })] });
+    exec.enqueue({ rows: [quoteListRow({ 13: 'so-1' })] });
     const result = await supplierQuotesRepo.listAll(testDb);
     const sql = exec.calls[0].sql;
     expect(sql).toContain('FROM supplier_sales');
@@ -137,6 +139,7 @@ describe('findIdConflict', () => {
 describe('update', () => {
   test('binds patch values via COALESCE, WHERE id last - no id in SET (issue #621)', async () => {
     exec.enqueue({ rows: [quoteRow()] });
+    exec.enqueue({ rows: [quoteRow()] });
     await supplierQuotesRepo.update('q-1', { status: 'sent', notes: 'hi' }, testDb);
     const sql = exec.calls[0].sql;
     expect(sql).toContain('update "supplier_quotes"');
@@ -144,11 +147,11 @@ describe('update', () => {
     expect(sql).toContain('CURRENT_TIMESTAMP');
     // The SET clause must NOT touch the primary key column.
     expect(sql).not.toMatch(/set[^"]*"id"\s*=/i);
-    expect(sql).toContain('"id" = $7');
-    expect(exec.calls[0].params).toHaveLength(7);
+    expect(sql).toContain('"id" = $8');
+    expect(exec.calls[0].params).toHaveLength(8);
     expect(exec.calls[0].params[3]).toBe('sent'); // status
-    expect(exec.calls[0].params[5]).toBe('hi'); // notes
-    expect(exec.calls[0].params[6]).toBe('q-1'); // where id
+    expect(exec.calls[0].params[6]).toBe('hi'); // notes
+    expect(exec.calls[0].params[7]).toBe('q-1'); // where id
   });
 
   test('returns null when no row updated', async () => {
@@ -168,6 +171,7 @@ describe('update', () => {
 
 describe('rename', () => {
   test('issues a dedicated UPDATE that sets the id column and returns the mapped quote', async () => {
+    exec.enqueue({ rows: [quoteRow({ 0: 'q-2' })] });
     exec.enqueue({ rows: [quoteRow({ 0: 'q-2' })] });
     const result = await supplierQuotesRepo.rename('q-1', 'q-2', testDb);
     const sql = exec.calls[0].sql.toLowerCase();
@@ -380,6 +384,7 @@ describe('findFullForSnapshot', () => {
 describe('create', () => {
   test('inserts and returns mapped quote', async () => {
     exec.enqueue({ rows: [quoteRow()] });
+    exec.enqueue({ rows: [quoteRow()] });
     const result = await supplierQuotesRepo.create(
       {
         id: 'q-1',
@@ -390,6 +395,7 @@ describe('create', () => {
         paymentTerms: 'net30',
         status: 'draft',
         expirationDate: '2026-06-01',
+        communicationChannelId: 'qcc_email',
         notes: null,
       },
       testDb,
@@ -403,6 +409,7 @@ describe('create', () => {
 
   test('persists the optional client link when provided', async () => {
     exec.enqueue({ rows: [quoteRow({ 3: 'c-1', 4: 'Globex' })] });
+    exec.enqueue({ rows: [quoteRow({ 3: 'c-1', 4: 'Globex' })] });
     const result = await supplierQuotesRepo.create(
       {
         id: 'q-1',
@@ -413,6 +420,7 @@ describe('create', () => {
         paymentTerms: 'net30',
         status: 'draft',
         expirationDate: '2026-06-01',
+        communicationChannelId: 'qcc_email',
         notes: null,
       },
       testDb,
@@ -427,6 +435,7 @@ describe('create', () => {
 describe('restoreSnapshotQuote', () => {
   test('updates with snapshot fields and returns mapped quote', async () => {
     exec.enqueue({ rows: [quoteRow()] });
+    exec.enqueue({ rows: [quoteRow()] });
     const result = await supplierQuotesRepo.restoreSnapshotQuote(
       'q-1',
       {
@@ -437,6 +446,7 @@ describe('restoreSnapshotQuote', () => {
         paymentTerms: 'net30',
         status: 'sent',
         expirationDate: '2026-06-01',
+        communicationChannelId: 'qcc_email',
         notes: 'restored',
       },
       testDb,
@@ -461,6 +471,7 @@ describe('restoreSnapshotQuote', () => {
         paymentTerms: 'net30',
         status: 'draft',
         expirationDate: '2026-06-01',
+        communicationChannelId: 'qcc_email',
         notes: null,
       },
       testDb,

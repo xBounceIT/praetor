@@ -12,6 +12,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { clients } from './clients.ts';
 import { products } from './products.ts';
+import { quoteCommunicationChannels } from './quoteCommunicationChannels.ts';
 
 export const quotes = pgTable(
   'quotes',
@@ -31,6 +32,12 @@ export const quotes = pgTable(
       .default('percentage'),
     status: varchar('status', { length: 20 }).notNull().default('draft'),
     expirationDate: date('expiration_date', { mode: 'string' }).notNull(),
+    communicationChannelId: varchar('communication_channel_id', { length: 50 })
+      .notNull()
+      .references(() => quoteCommunicationChannels.id, {
+        onDelete: 'restrict',
+        onUpdate: 'cascade',
+      }),
     notes: text('notes'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
     updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
@@ -39,6 +46,7 @@ export const quotes = pgTable(
     index('idx_quotes_client_id').on(table.clientId),
     index('idx_quotes_status').on(table.status),
     index('idx_quotes_created_at').on(table.createdAt),
+    index('idx_quotes_communication_channel_id').on(table.communicationChannelId),
     check(
       'quotes_status_check',
       sql`${table.status} IN ('quoted', 'confirmed', 'draft', 'sent', 'accepted', 'denied')`,

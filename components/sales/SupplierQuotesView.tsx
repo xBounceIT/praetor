@@ -7,6 +7,7 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { QuoteCommunicationChannel } from '../../services/api/quoteCommunicationChannels';
 import { supplierQuotesApi } from '../../services/api/supplierQuotes';
 import type {
   Client,
@@ -59,6 +60,11 @@ import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import QuoteCommunicationChannelField from './QuoteCommunicationChannelField';
+import {
+  DEFAULT_QUOTE_COMMUNICATION_CHANNELS,
+  noopQuoteCommunicationChannelMutation,
+} from './quoteCommunicationChannelDefaults';
 import SupplierQuoteAttachmentsSection from './SupplierQuoteAttachmentsSection';
 import SupplierQuoteAttachmentsStaging from './SupplierQuoteAttachmentsStaging';
 import SupplierQuoteVersionsPanel from './SupplierQuoteVersionsPanel';
@@ -111,6 +117,11 @@ export interface SupplierQuotesViewProps {
   suppliers: Supplier[];
   clients: Client[];
   products: Product[];
+  communicationChannels?: QuoteCommunicationChannel[];
+  canManageCommunicationChannels?: boolean;
+  onCreateCommunicationChannel?: (data: { name: string }) => Promise<void>;
+  onUpdateCommunicationChannel?: (id: string, updates: { name: string }) => Promise<void>;
+  onDeleteCommunicationChannel?: (id: string) => Promise<void>;
   // Resolves to the created quote so the modal can upload any files staged during creation.
   onAddQuote: (quoteData: Partial<SupplierQuote>) => Promise<SupplierQuote>;
   onUpdateQuote: (id: string, updates: Partial<SupplierQuote>) => void | Promise<void>;
@@ -132,6 +143,7 @@ const getDefaultFormData = (): Partial<SupplierQuote> => ({
   paymentTerms: 'immediate',
   status: 'draft',
   expirationDate: addMonthsToDateOnly(getLocalDateString(), 1),
+  communicationChannelId: '',
   notes: '',
 });
 
@@ -303,6 +315,11 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   suppliers,
   clients,
   products,
+  communicationChannels = DEFAULT_QUOTE_COMMUNICATION_CHANNELS,
+  canManageCommunicationChannels = false,
+  onCreateCommunicationChannel = noopQuoteCommunicationChannelMutation,
+  onUpdateCommunicationChannel = noopQuoteCommunicationChannelMutation,
+  onDeleteCommunicationChannel = noopQuoteCommunicationChannelMutation,
   onAddQuote,
   onUpdateQuote,
   onDeleteQuote,
@@ -394,14 +411,24 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
   const openAddModal = useCallback(() => {
     dispatch({ type: 'openAddModal' });
-  }, []);
+    dispatch({
+      type: 'patchFormData',
+      value: {
+        communicationChannelId: communicationChannels[0]?.id ?? '',
+        communicationChannelName: communicationChannels[0]?.name ?? '',
+      },
+    });
+  }, [communicationChannels]);
 
   const quoteToFormData = useCallback(
     (quote: SupplierQuote): Partial<SupplierQuote> => ({
       ...quote,
       expirationDate: quote.expirationDate ? normalizeDateOnlyString(quote.expirationDate) : '',
+      communicationChannelId: quote.communicationChannelId ?? communicationChannels[0]?.id ?? '',
+      communicationChannelName:
+        quote.communicationChannelName ?? communicationChannels[0]?.name ?? '',
     }),
-    [],
+    [communicationChannels],
   );
 
   const openEditModal = useCallback(
@@ -424,10 +451,14 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
             ? normalizeDateOnlyString(version.snapshot.quote.expirationDate)
             : '',
           status: version.snapshot.quote.status as SupplierQuote['status'],
+          communicationChannelId:
+            version.snapshot.quote.communicationChannelId ?? communicationChannels[0]?.id ?? '',
+          communicationChannelName:
+            version.snapshot.quote.communicationChannelName ?? communicationChannels[0]?.name ?? '',
         },
       });
     },
-    [editingQuote],
+    [communicationChannels, editingQuote],
   );
 
   const handleClearPreview = useCallback(() => {
@@ -989,6 +1020,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         defaultValue: 'Quote Code is required',
       });
     }
+    if (!formData.communicationChannelId) {
+      nextErrors.communicationChannelId = t('sales:communicationChannels.errors.required');
+    }
     if (!formData.items || formData.items.length === 0) {
       nextErrors.items = t('sales:supplierQuotes.errors.itemsRequired', {
         defaultValue: 'At least one item is required',
@@ -1152,7 +1186,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       statusLabel={statusLabel}
                     />
                   </h4>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                     <Field data-invalid={Boolean(errors.supplierId)}>
                       <SelectControl
                         id="supplier-quote-supplier"
@@ -1229,6 +1263,34 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                           defaultValue: 'Payment Terms',
                         })}
                         buttonClassName="h-9"
+                      />
+                    </Field>
+                    <Field data-invalid={Boolean(errors.communicationChannelId)}>
+                      <QuoteCommunicationChannelField
+                        id="supplier-quote-communication-channel"
+                        channels={communicationChannels}
+                        value={formData.communicationChannelId || ''}
+                        error={errors.communicationChannelId}
+                        disabled={isReadOnly}
+                        canManage={canManageCommunicationChannels}
+                        onChange={(value) => {
+                          const selected = communicationChannels.find(
+                            (channel) => channel.id === value,
+                          );
+                          dispatch({
+                            type: 'patchFormData',
+                            value: {
+                              communicationChannelId: value,
+                              communicationChannelName: selected?.name ?? '',
+                            },
+                          });
+                          if (errors.communicationChannelId) {
+                            dispatch({ type: 'clearError', key: 'communicationChannelId' });
+                          }
+                        }}
+                        onCreate={onCreateCommunicationChannel}
+                        onUpdate={onUpdateCommunicationChannel}
+                        onDelete={onDeleteCommunicationChannel}
                       />
                     </Field>
                     <Field>

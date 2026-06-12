@@ -298,6 +298,8 @@ export const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({
 export const normalizeQuote = (q: Quote): Quote => ({
   ...q,
   discount: Number(q.discount || 0),
+  communicationChannelId: q.communicationChannelId ?? '',
+  communicationChannelName: q.communicationChannelName ?? '',
   items: (q.items || []).map(normalizeQuoteItem),
 });
 
@@ -445,6 +447,8 @@ export const normalizeSupplierQuote = (q: SupplierQuote): SupplierQuote => ({
   ...q,
   clientId: q.clientId ?? null,
   clientName: q.clientName ?? null,
+  communicationChannelId: q.communicationChannelId ?? '',
+  communicationChannelName: q.communicationChannelName ?? '',
   items: (q.items || []).map(normalizeSupplierQuoteItem),
 });
 

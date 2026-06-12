@@ -22,6 +22,7 @@ const EXPECTED_KEYS: readonly AuthScopedStateKey[] = [
   'projects',
   'projectTasks',
   'products',
+  'quoteCommunicationChannels',
   'quotes',
   'clientOffers',
   'clientsOrders',

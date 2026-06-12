@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
 import * as realClientsRepo from '../../repositories/clientsRepo.ts';
 import * as realProductsRepo from '../../repositories/productsRepo.ts';
+import * as realQuoteCommunicationChannelsRepo from '../../repositories/quoteCommunicationChannelsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
 import * as realSupplierQuoteVersionsRepo from '../../repositories/supplierQuoteVersionsRepo.ts';
@@ -25,6 +26,7 @@ const permissionsSnap = { ...realPermissions };
 const suppliersRepoSnap = { ...realSuppliersRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const supplierQuoteVersionsRepoSnap = { ...realSupplierQuoteVersionsRepo };
+const quoteCommunicationChannelsRepoSnap = { ...realQuoteCommunicationChannelsRepo };
 const productsRepoSnap = { ...realProductsRepo };
 const clientsRepoSnap = { ...realClientsRepo };
 const auditSnap = { ...realAudit };
@@ -44,6 +46,9 @@ const sqUpdateMock = mock();
 const sqRenameMock = mock();
 const sqRestoreSnapshotQuoteMock = mock();
 const sqReplaceItemsMock = mock();
+
+const qccFindByIdMock = mock();
+const qccFindDefaultMock = mock();
 
 const suppliersFindByIdMock = mock();
 const productsGetSnapshotsMock = mock();
@@ -95,6 +100,11 @@ beforeAll(async () => {
     ...productsRepoSnap,
     getSnapshots: productsGetSnapshotsMock,
   }));
+  mock.module('../../repositories/quoteCommunicationChannelsRepo.ts', () => ({
+    ...quoteCommunicationChannelsRepoSnap,
+    findById: qccFindByIdMock,
+    findDefault: qccFindDefaultMock,
+  }));
   mock.module('../../repositories/clientsRepo.ts', () => ({
     ...clientsRepoSnap,
     existsById: clientsExistsByIdMock,
@@ -130,6 +140,10 @@ afterAll(() => {
     () => supplierQuoteVersionsRepoSnap,
   );
   mock.module('../../repositories/productsRepo.ts', () => productsRepoSnap);
+  mock.module(
+    '../../repositories/quoteCommunicationChannelsRepo.ts',
+    () => quoteCommunicationChannelsRepoSnap,
+  );
   mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
@@ -159,6 +173,8 @@ const SAMPLE_QUOTE = {
   paymentTerms: 'immediate',
   status: 'draft',
   expirationDate: '2026-12-31',
+  communicationChannelId: 'qcc_email',
+  communicationChannelName: 'Email',
   linkedOrderId: null,
   notes: null,
   createdAt: 1_700_000_000_000,
@@ -206,6 +222,8 @@ const allMocks = [
   sqRenameMock,
   sqRestoreSnapshotQuoteMock,
   sqReplaceItemsMock,
+  qccFindByIdMock,
+  qccFindDefaultMock,
   suppliersFindByIdMock,
   productsGetSnapshotsMock,
   clientsExistsByIdMock,
@@ -235,6 +253,8 @@ beforeEach(async () => {
   sqFindByIdMock.mockResolvedValue(SAMPLE_QUOTE);
   sqFindItemsForQuoteMock.mockResolvedValue([SAMPLE_ITEM]);
   sqFindIdConflictMock.mockResolvedValue(false);
+  qccFindByIdMock.mockResolvedValue({ id: 'qcc_email', name: 'Email' });
+  qccFindDefaultMock.mockResolvedValue({ id: 'qcc_email', name: 'Email' });
   // Snapshots without a client link never call existsById; default true keeps the rest happy.
   clientsExistsByIdMock.mockResolvedValue(true);
 

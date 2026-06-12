@@ -539,6 +539,8 @@ export interface Quote {
   discountType: DiscountType;
   status: 'draft' | 'sent' | 'accepted' | 'denied';
   expirationDate: string; // YYYY-MM-DD date-only string
+  communicationChannelId?: string;
+  communicationChannelName?: string;
   isExpired?: boolean;
   linkedOfferId?: string;
   notes?: string;
@@ -550,7 +552,13 @@ export type QuoteVersionReason = 'update' | 'restore';
 
 export interface QuoteVersionSnapshot {
   schemaVersion: 1;
-  quote: Omit<Quote, 'items' | 'isExpired' | 'linkedOfferId'>;
+  quote: Omit<
+    Quote,
+    'items' | 'isExpired' | 'linkedOfferId' | 'communicationChannelId' | 'communicationChannelName'
+  > & {
+    communicationChannelId?: string;
+    communicationChannelName?: string;
+  };
   items: QuoteItem[];
 }
 
@@ -947,6 +955,8 @@ export interface SupplierQuote {
     | '365gg';
   status: 'draft' | 'sent' | 'accepted' | 'denied';
   expirationDate: string;
+  communicationChannelId?: string;
+  communicationChannelName?: string;
   linkedOrderId?: string;
   notes?: string;
   createdAt: number;
@@ -957,7 +967,13 @@ export type SupplierQuoteVersionReason = 'update' | 'restore';
 
 export interface SupplierQuoteVersionSnapshot {
   schemaVersion: 1;
-  quote: Omit<SupplierQuote, 'items' | 'linkedOrderId'>;
+  quote: Omit<
+    SupplierQuote,
+    'items' | 'linkedOrderId' | 'communicationChannelId' | 'communicationChannelName'
+  > & {
+    communicationChannelId?: string;
+    communicationChannelName?: string;
+  };
   items: SupplierQuoteItem[];
 }
 

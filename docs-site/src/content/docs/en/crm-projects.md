@@ -11,6 +11,8 @@ CRM records store the data used in commercial and accounting workflows. Keep nam
 
 Avoid duplicates: before creating a new record, search for the customer or supplier first.
 
+Client and supplier quotes require the **Communication Channel** field to record how the quote was communicated or negotiated. The options are shared by both quote modules: users with quote-management permissions can use the gear **Manage** button above the field to add, rename, or remove available channels. Channels already used by existing quotes cannot be deleted.
+
 ### Protected deletion
 
 A customer or supplier cannot be deleted while any related financial document (quote, offer, order, invoice) still references it. The delete request is rejected and the document is not lost: remove or cancel the linked documents first, then delete the record. This guardrail exists because an issued accounting document must remain traceable even if the counterparty record is no longer needed.

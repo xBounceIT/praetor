@@ -12,7 +12,8 @@ beforeEach(() => {
 
 // QUOTE_LIST_PROJECTION column order:
 // id, linkedOfferId (subquery), clientId, clientName, paymentTerms, discount, discountType,
-// status, expirationDate, notes, createdAt, updatedAt
+// status, expirationDate, communicationChannelId, communicationChannelName, notes, createdAt,
+// updatedAt
 const QUOTE_BASE: readonly unknown[] = [
   'cq-1',
   null,
@@ -23,6 +24,8 @@ const QUOTE_BASE: readonly unknown[] = [
   'percentage',
   'draft',
   '2026-06-01',
+  'qcc_email',
+  'Email',
   null,
   new Date('2026-04-01T00:00:00Z'),
   new Date('2026-04-01T00:01:00Z'),
@@ -231,6 +234,7 @@ describe('create', () => {
         discountType: 'percentage',
         status: 'draft',
         expirationDate: '2026-06-01',
+        communicationChannelId: 'qcc_email',
         notes: null,
       },
       testDb,
@@ -297,6 +301,7 @@ describe('restoreSnapshotQuote', () => {
         discountType: 'percentage',
         status: 'draft',
         expirationDate: '2026-06-01',
+        communicationChannelId: 'qcc_email',
         notes: null,
       },
       testDb,
@@ -320,6 +325,7 @@ describe('restoreSnapshotQuote', () => {
         discountType: 'percentage',
         status: 'draft',
         expirationDate: '2026-06-01',
+        communicationChannelId: 'qcc_email',
         notes: null,
       },
       testDb,
