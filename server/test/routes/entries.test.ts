@@ -1937,6 +1937,26 @@ describe('POST /api/entries/recurring/generate', () => {
     }
   });
 
+  test('200: notifies tracker overtime once per generated date', async () => {
+    setupHappyPath();
+    listRecurringForUserMock.mockResolvedValue([
+      { ...dailyTask, name: 'Morning block', recurrenceDuration: 5 },
+      { ...dailyTask, id: 't-extra', name: 'Afternoon block', recurrenceDuration: 5 },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-09', toDate: '2025-06-09' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).generatedCount).toBe(2);
+    expect(notifyTrackerOvertimeForDateMock).toHaveBeenCalledTimes(1);
+    expect(notifyTrackerOvertimeForDateMock).toHaveBeenCalledWith('u1', '2025-06-09', 'u1');
+  });
+
   test('200: skips Saturdays/Sundays and Italian holidays', async () => {
     setupHappyPath();
     // 2025-06-02 (Mon, Festa della Repubblica - Italian holiday) is skipped.

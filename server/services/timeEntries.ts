@@ -767,6 +767,11 @@ export const generateRecurringEntries = async (
       skippedExistingCount: candidates.length - pending.length,
     };
   });
+  await Promise.all(
+    Array.from(new Set(inserted.map((entry) => entry.date))).map((date) =>
+      notifyTrackerOvertimeForDate(targetUserId, date, actor.id),
+    ),
+  );
   return {
     generated: inserted,
     generatedCount: inserted.length,
