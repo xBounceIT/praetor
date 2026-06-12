@@ -18,6 +18,8 @@ export type ClientQuote = {
   discountType: 'percentage' | 'currency';
   status: string;
   expirationDate: string | null;
+  communicationChannelId: string;
+  communicationChannelName: string;
   notes: string | null;
   createdAt: number;
   updatedAt: number;
@@ -61,9 +63,16 @@ export type ClientQuoteItem = {
 // the same trap (it additionally ERRORED on a JOIN subquery). Do NOT replace with ${quotes.id}.
 const outerQuoteId = sql.raw('"quotes"."id"');
 
-const linkedOfferIdSubquery = sql<
-  string | null
->`(SELECT co.id FROM customer_offers co WHERE co.linked_quote_id = ${outerQuoteId} LIMIT 1)`;
+const linkedOfferIdSubquery = sql<string | null>`(
+  SELECT co.id FROM customer_offers co WHERE co.linked_quote_id = ${outerQuoteId} LIMIT 1
+)`;
+
+const communicationChannelNameSubquery = sql<string>`(
+  SELECT qcc.name
+  FROM quote_communication_channels qcc
+  WHERE qcc.id = "quotes"."communication_channel_id"
+  LIMIT 1
+)`;
 
 // The earliest expiration among the supplier quotes this client quote SOURCES via its product
 // lines (issue #779 follow-up: the 1:1 header link was removed). The route's progression guard and
@@ -85,6 +94,8 @@ const QUOTE_LIST_PROJECTION = {
   discountType: quotes.discountType,
   status: quotes.status,
   expirationDate: quotes.expirationDate,
+  communicationChannelId: quotes.communicationChannelId,
+  communicationChannelName: communicationChannelNameSubquery,
   notes: quotes.notes,
   createdAt: quotes.createdAt,
   updatedAt: quotes.updatedAt,
@@ -103,6 +114,8 @@ const QUOTE_BASE_PROJECTION = {
   discountType: quotes.discountType,
   status: quotes.status,
   expirationDate: quotes.expirationDate,
+  communicationChannelId: quotes.communicationChannelId,
+  communicationChannelName: communicationChannelNameSubquery,
   notes: quotes.notes,
   createdAt: quotes.createdAt,
   updatedAt: quotes.updatedAt,
@@ -122,6 +135,8 @@ type ClientQuoteSelectRow = {
   discountType: string;
   status: string;
   expirationDate: string | null;
+  communicationChannelId: string;
+  communicationChannelName: string;
   notes: string | null;
   createdAt: Date | null;
   updatedAt: Date | null;
@@ -139,6 +154,8 @@ const mapQuote = (row: ClientQuoteSelectRow): ClientQuote => ({
   discountType: row.discountType === 'currency' ? 'currency' : 'percentage',
   status: row.status,
   expirationDate: normalizeNullableDateOnly(row.expirationDate, 'quote.expirationDate'),
+  communicationChannelId: row.communicationChannelId,
+  communicationChannelName: row.communicationChannelName,
   notes: row.notes,
   createdAt: row.createdAt?.getTime() ?? 0,
   updatedAt: row.updatedAt?.getTime() ?? 0,
@@ -454,6 +471,7 @@ export type NewClientQuote = {
   discountType: 'percentage' | 'currency';
   status: string;
   expirationDate: string;
+  communicationChannelId: string;
   notes: string | null;
   linkedSupplierQuoteId?: string | null;
 };
@@ -473,6 +491,7 @@ export const create = async (
       discountType: input.discountType,
       status: input.status,
       expirationDate: input.expirationDate,
+      communicationChannelId: input.communicationChannelId,
       notes: input.notes,
       linkedSupplierQuoteId: input.linkedSupplierQuoteId ?? null,
     })
@@ -488,6 +507,7 @@ export type ClientQuoteUpdate = {
   discountType?: 'percentage' | 'currency' | null;
   status?: string | null;
   expirationDate?: string | null;
+  communicationChannelId?: string | null;
   notes?: string | null;
   // `undefined` leaves the link untouched; an explicit `null` clears it (direct write, not
   // COALESCE — the 1-to-1 supplier-quote link must be removable, mirroring supplierQuotes.clientId).
@@ -496,7 +516,13 @@ export type ClientQuoteUpdate = {
 
 export type ClientQuoteRestoreFields = Pick<
   ClientQuote,
-  'clientId' | 'clientName' | 'discount' | 'discountType' | 'status' | 'notes'
+  | 'clientId'
+  | 'clientName'
+  | 'discount'
+  | 'discountType'
+  | 'status'
+  | 'communicationChannelId'
+  | 'notes'
 > & {
   paymentTerms: string;
   expirationDate: string;
@@ -517,6 +543,7 @@ export const update = async (
       discountType: sql`COALESCE(${patch.discountType ?? null}, ${quotes.discountType})`,
       status: sql`COALESCE(${patch.status ?? null}, ${quotes.status})`,
       expirationDate: sql`COALESCE(${patch.expirationDate ?? null}::date, ${quotes.expirationDate})`,
+      communicationChannelId: sql`COALESCE(${patch.communicationChannelId ?? null}, ${quotes.communicationChannelId})`,
       notes: sql`COALESCE(${patch.notes ?? null}, ${quotes.notes})`,
       // Direct write (not COALESCE) so an explicit null clears the 1-to-1 link; `undefined` keeps it.
       linkedSupplierQuoteId:
@@ -560,6 +587,7 @@ export const restoreSnapshotQuote = async (
       discountType: snapshot.discountType,
       status: snapshot.status,
       expirationDate: snapshot.expirationDate,
+      communicationChannelId: snapshot.communicationChannelId,
       notes: snapshot.notes,
       updatedAt: sql`CURRENT_TIMESTAMP`,
     })

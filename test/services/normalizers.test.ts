@@ -64,6 +64,8 @@ const baseQuote: Quote = {
   discountType: 'percentage',
   status: 'draft',
   expirationDate: '2026-12-31',
+  communicationChannelId: 'qcc_email',
+  communicationChannelName: 'Email',
   createdAt: 0,
   updatedAt: 0,
 };
@@ -157,6 +159,8 @@ const baseSupplierQuote: SupplierQuote = {
   paymentTerms: '30gg',
   status: 'draft',
   expirationDate: '2026-12-31',
+  communicationChannelId: 'qcc_email',
+  communicationChannelName: 'Email',
   createdAt: 0,
   updatedAt: 0,
 };
@@ -638,6 +642,17 @@ describe('normalizeQuote', () => {
     const result = normalizeQuote(quote);
     expect(result.items).toEqual([]);
     expect(result.discount).toBe(0);
+  });
+
+  test('preserves communication channel fields', () => {
+    const result = normalizeQuote(
+      make<Quote>(baseQuote, {
+        communicationChannelId: 'qcc_whatsapp',
+        communicationChannelName: 'WhatsApp',
+      }),
+    );
+    expect(result.communicationChannelId).toBe('qcc_whatsapp');
+    expect(result.communicationChannelName).toBe('WhatsApp');
   });
 });
 
@@ -1236,6 +1251,17 @@ describe('normalizeSupplierQuote', () => {
   test('defaults missing items to empty array', () => {
     const quote = make<SupplierQuote>(baseSupplierQuote, { items: undefined });
     expect(normalizeSupplierQuote(quote).items).toEqual([]);
+  });
+
+  test('preserves communication channel fields', () => {
+    const result = normalizeSupplierQuote(
+      make<SupplierQuote>(baseSupplierQuote, {
+        communicationChannelId: 'qcc_telefono',
+        communicationChannelName: 'Telefono',
+      }),
+    );
+    expect(result.communicationChannelId).toBe('qcc_telefono');
+    expect(result.communicationChannelName).toBe('Telefono');
   });
 });
 

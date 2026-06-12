@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
 import * as realClientOffersRepo from '../../repositories/clientOffersRepo.ts';
 import * as realClientQuotesRepo from '../../repositories/clientQuotesRepo.ts';
+import * as realQuoteCommunicationChannelsRepo from '../../repositories/quoteCommunicationChannelsRepo.ts';
 import * as realQuoteVersionsRepo from '../../repositories/quoteVersionsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
@@ -27,6 +28,7 @@ const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
 const clientOffersRepoSnap = { ...realClientOffersRepo };
 const clientQuotesRepoSnap = { ...realClientQuotesRepo };
+const quoteCommunicationChannelsRepoSnap = { ...realQuoteCommunicationChannelsRepo };
 const quoteVersionsRepoSnap = { ...realQuoteVersionsRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const supplierQuoteVersionsRepoSnap = { ...realSupplierQuoteVersionsRepo };
@@ -52,6 +54,8 @@ const cqListAllMock = mock();
 const cqListAllItemsMock = mock();
 const cqCreateMock = mock();
 const cqInsertItemsMock = mock();
+
+const qccFindByIdMock = mock();
 
 const coCreateMock = mock();
 const coInsertItemsMock = mock();
@@ -119,6 +123,10 @@ beforeAll(async () => {
     findLinkedSaleId: coFindLinkedSaleIdMock,
     deleteById: coDeleteByIdMock,
   }));
+  mock.module('../../repositories/quoteCommunicationChannelsRepo.ts', () => ({
+    ...quoteCommunicationChannelsRepoSnap,
+    findById: qccFindByIdMock,
+  }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
     findItemsByIds: sqFindItemsByIdsMock,
@@ -156,6 +164,10 @@ afterAll(() => {
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../repositories/clientQuotesRepo.ts', () => clientQuotesRepoSnap);
   mock.module('../../repositories/clientOffersRepo.ts', () => clientOffersRepoSnap);
+  mock.module(
+    '../../repositories/quoteCommunicationChannelsRepo.ts',
+    () => quoteCommunicationChannelsRepoSnap,
+  );
   mock.module('../../repositories/supplierQuotesRepo.ts', () => supplierQuotesRepoSnap);
   mock.module(
     '../../repositories/supplierQuoteVersionsRepo.ts',
@@ -209,6 +221,8 @@ const updatedQuote = (over: Record<string, unknown> = {}) => ({
   discountType: 'percentage' as const,
   status: 'sent',
   expirationDate: '2999-12-31',
+  communicationChannelId: 'qcc_email',
+  communicationChannelName: 'Email',
   notes: null,
   createdAt: 1_700_000_000_000,
   updatedAt: 1_700_000_000_000,
@@ -255,6 +269,7 @@ const allMocks = [
   cqListAllItemsMock,
   cqCreateMock,
   cqInsertItemsMock,
+  qccFindByIdMock,
   coCreateMock,
   coInsertItemsMock,
   coLockExistingByIdMock,
@@ -303,6 +318,7 @@ beforeEach(async () => {
   cqFindItemSnapshotsForQuoteMock.mockResolvedValue([]);
   cqCreateMock.mockResolvedValue(updatedQuote({ status: 'draft' }));
   cqInsertItemsMock.mockResolvedValue([]);
+  qccFindByIdMock.mockResolvedValue({ id: 'qcc_email', name: 'Email' });
   coCreateMock.mockImplementation((input: Record<string, unknown>) =>
     Promise.resolve({
       id: input.id,
@@ -994,6 +1010,7 @@ describe('POST /api/sales/client-quotes supplier sync on create (user report aft
         clientName: 'Client',
         items,
         expirationDate: '2999-12-31',
+        communicationChannelId: 'qcc_email',
         ...over,
       },
     });

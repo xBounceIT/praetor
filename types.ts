@@ -547,6 +547,8 @@ export interface Quote {
   // Effective status from the server: the stored status with the derived `expired` overlay (#779).
   effectiveStatus?: 'draft' | 'sent' | 'offer' | 'accepted' | 'denied' | 'expired';
   expirationDate: string; // YYYY-MM-DD date-only string
+  communicationChannelId?: string;
+  communicationChannelName?: string;
   isExpired?: boolean;
   linkedOfferId?: string;
   // 1-to-1 link to a supplier quote, set from the client-quote form (#779). `null`/absent = unlinked.
@@ -570,7 +572,12 @@ export interface QuoteVersionSnapshot {
     | 'effectiveStatus'
     | 'linkedSupplierQuoteId'
     | 'linkedSupplierQuoteExpired'
-  >;
+    | 'communicationChannelId'
+    | 'communicationChannelName'
+  > & {
+    communicationChannelId?: string;
+    communicationChannelName?: string;
+  };
   items: QuoteItem[];
 }
 
@@ -995,6 +1002,8 @@ export interface SupplierQuote {
   isStatusSynced?: boolean;
   linkedClientQuoteId?: string | null;
   expirationDate: string;
+  communicationChannelId?: string;
+  communicationChannelName?: string;
   linkedOrderId?: string;
   notes?: string;
   createdAt: number;
@@ -1005,7 +1014,18 @@ export type SupplierQuoteVersionReason = 'update' | 'restore';
 
 export interface SupplierQuoteVersionSnapshot {
   schemaVersion: 1;
-  quote: Omit<SupplierQuote, 'items' | 'linkedOrderId' | 'isStatusSynced' | 'linkedClientQuoteId'>;
+  quote: Omit<
+    SupplierQuote,
+    | 'items'
+    | 'linkedOrderId'
+    | 'isStatusSynced'
+    | 'linkedClientQuoteId'
+    | 'communicationChannelId'
+    | 'communicationChannelName'
+  > & {
+    communicationChannelId?: string;
+    communicationChannelName?: string;
+  };
   items: SupplierQuoteItem[];
 }
 

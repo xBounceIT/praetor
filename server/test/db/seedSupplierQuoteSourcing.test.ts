@@ -141,6 +141,20 @@ const sourcingQuoteIdsFor = (supplierQuoteId: string): string[] =>
   ].filter((id): id is string => !!id);
 
 describe('seed.sql line-sourced supplier-quote linkage (#779 / PR #812)', () => {
+  test('client and supplier demo quotes seed the required communication channel', () => {
+    const clientQuotes = parseInsertValuesBlocks(SEED_SQL, 'quotes');
+    const supplierQuotes = parseInsertValuesBlocks(SEED_SQL, 'supplier_quotes');
+    const channelConflictUpdates =
+      SEED_SQL.match(/communication_channel_id = EXCLUDED\.communication_channel_id/g) ?? [];
+
+    expect(clientQuotes.length).toBeGreaterThan(0);
+    expect(supplierQuotes.length).toBeGreaterThan(0);
+    expect(channelConflictUpdates.length).toBe(2);
+    for (const row of [...clientQuotes, ...supplierQuotes]) {
+      expect(row.communication_channel_id).toBe('qcc_email');
+    }
+  });
+
   test('parses the demo sourcing rows', () => {
     // 11 bulk rows + 1 editable stale-data row = 12 sourced demo client lines.
     expect(sourcing.length).toBe(12);

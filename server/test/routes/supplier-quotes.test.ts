@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, tes
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
 import * as realClientsRepo from '../../repositories/clientsRepo.ts';
+import * as realQuoteCommunicationChannelsRepo from '../../repositories/quoteCommunicationChannelsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
 import * as realSupplierQuoteVersionsRepo from '../../repositories/supplierQuoteVersionsRepo.ts';
@@ -21,6 +22,7 @@ const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const supplierQuoteVersionsRepoSnap = { ...realSupplierQuoteVersionsRepo };
+const quoteCommunicationChannelsRepoSnap = { ...realQuoteCommunicationChannelsRepo };
 const clientsRepoSnap = { ...realClientsRepo };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
@@ -42,6 +44,8 @@ const sqReplaceItemsMock = mock();
 const sqUpsertItemsMock = mock();
 const sqIsSourcedByClientDocumentsMock = mock();
 const sqFindSourcedItemIdsMock = mock();
+
+const qccFindByIdMock = mock();
 
 const sqvInsertMock = mock();
 const sqvBuildSnapshotMock = mock();
@@ -85,6 +89,10 @@ beforeAll(async () => {
     insert: sqvInsertMock,
     buildSnapshot: sqvBuildSnapshotMock,
   }));
+  mock.module('../../repositories/quoteCommunicationChannelsRepo.ts', () => ({
+    ...quoteCommunicationChannelsRepoSnap,
+    findById: qccFindByIdMock,
+  }));
   mock.module('../../repositories/clientsRepo.ts', () => ({
     ...clientsRepoSnap,
     findName: clientsFindNameMock,
@@ -110,6 +118,10 @@ afterAll(() => {
   mock.module(
     '../../repositories/supplierQuoteVersionsRepo.ts',
     () => supplierQuoteVersionsRepoSnap,
+  );
+  mock.module(
+    '../../repositories/quoteCommunicationChannelsRepo.ts',
+    () => quoteCommunicationChannelsRepoSnap,
   );
   mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
@@ -142,6 +154,8 @@ const DRAFT_QUOTE = {
   // Far future: effective-status guards compare against the real clock, so a near date would flip
   // this fixture to `expired` one day and break the suite (#779 second-pass review).
   expirationDate: '2999-12-31',
+  communicationChannelId: 'qcc_email',
+  communicationChannelName: 'Email',
   linkedOrderId: null,
   notes: null,
   createdAt: 1_700_000_000_000,
@@ -181,6 +195,7 @@ const allMocks = [
   sqUpdateMock,
   sqRenameMock,
   sqReplaceItemsMock,
+  qccFindByIdMock,
   sqUpsertItemsMock,
   sqIsSourcedByClientDocumentsMock,
   sqFindSourcedItemIdsMock,
@@ -206,6 +221,7 @@ beforeEach(async () => {
   }));
   sqFindItemsForQuoteMock.mockResolvedValue([SAMPLE_ITEM]);
   sqFindIdConflictMock.mockResolvedValue(false);
+  qccFindByIdMock.mockResolvedValue({ id: 'qcc_email', name: 'Email' });
   // Default: the quote is not sourced by any client line, so item edits on a draft are allowed.
   sqIsSourcedByClientDocumentsMock.mockResolvedValue(false);
   sqFindSourcedItemIdsMock.mockResolvedValue(new Set<string>());
@@ -223,7 +239,70 @@ afterEach(async () => {
 
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
 
+const CREATE_PAYLOAD = {
+  id: 'sq-new',
+  supplierId: 's1',
+  supplierName: 'Acme',
+  clientId: null,
+  expirationDate: '2026-12-31',
+  communicationChannelId: 'qcc_email',
+  items: [
+    {
+      productName: 'Service',
+      quantity: 1,
+      listPrice: 100,
+      discountPercent: 0,
+    },
+  ],
+};
+
+describe('POST /api/sales/supplier-quotes', () => {
+  test('400 requires communication channel on create', async () => {
+    const { communicationChannelId: _omitted, ...payload } = CREATE_PAYLOAD;
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes',
+      headers: authHeader(),
+      payload,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(qccFindByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('400 rejects unknown communication channel on create', async () => {
+    qccFindByIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes',
+      headers: authHeader(),
+      payload: { ...CREATE_PAYLOAD, communicationChannelId: 'qcc_missing' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'communicationChannelId does not reference an existing channel',
+    });
+  });
+});
+
 describe('PUT /api/sales/supplier-quotes/:id', () => {
+  test('400 rejects an explicitly blank communication channel on update', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { communicationChannelId: '' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'communicationChannelId is required' });
+    expect(qccFindByIdMock).not.toHaveBeenCalled();
+    expect(sqUpdateMock).not.toHaveBeenCalled();
+  });
+
   test('200 updates a draft quote with content edits', async () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);

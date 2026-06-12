@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { normalizeQuoteItem } from '../../services/api/normalizers';
+import type { QuoteCommunicationChannel } from '../../services/api/quoteCommunicationChannels';
 import type {
   Client,
   ClientOffer,
@@ -88,13 +89,23 @@ import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import ProductSelectOrFallback from './ProductSelectOrFallback';
+import QuoteCommunicationChannelField from './QuoteCommunicationChannelField';
 import QuoteVersionsPanel from './QuoteVersionsPanel';
+import {
+  DEFAULT_QUOTE_COMMUNICATION_CHANNELS,
+  noopQuoteCommunicationChannelMutation,
+} from './quoteCommunicationChannelDefaults';
 
 export interface ClientQuotesViewProps {
   quotes: Quote[];
   clients: Client[];
   products: Product[];
   supplierQuotes: SupplierQuote[];
+  communicationChannels?: QuoteCommunicationChannel[];
+  canManageCommunicationChannels?: boolean;
+  onCreateCommunicationChannel?: (data: { name: string }) => Promise<void>;
+  onUpdateCommunicationChannel?: (id: string, updates: { name: string }) => Promise<void>;
+  onDeleteCommunicationChannel?: (id: string) => Promise<void>;
   onAddQuote: (quoteData: Partial<Quote>) => void | Promise<void>;
   onUpdateQuote: (id: string, updates: Partial<Quote>) => void | Promise<void>;
   onQuoteRestored?: (quote: Quote) => void;
@@ -137,6 +148,7 @@ const getDefaultFormData = (): Partial<Quote> => ({
   discountType: 'percentage',
   status: 'draft',
   expirationDate: addMonthsToDateOnly(getLocalDateString(), 1),
+  communicationChannelId: '',
   notes: '',
 });
 
@@ -150,6 +162,8 @@ const quoteToFormData = (quote: Quote): Partial<Quote> => ({
   discountType: quote.discountType || 'percentage',
   status: quote.status,
   expirationDate: quote.expirationDate ? normalizeDateOnlyString(quote.expirationDate) : '',
+  communicationChannelId: quote.communicationChannelId ?? '',
+  communicationChannelName: quote.communicationChannelName ?? '',
   notes: quote.notes || '',
 });
 
@@ -235,6 +249,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
   clients,
   products,
   supplierQuotes,
+  communicationChannels = DEFAULT_QUOTE_COMMUNICATION_CHANNELS,
+  canManageCommunicationChannels = false,
+  onCreateCommunicationChannel = noopQuoteCommunicationChannelMutation,
+  onUpdateCommunicationChannel = noopQuoteCommunicationChannelMutation,
+  onDeleteCommunicationChannel = noopQuoteCommunicationChannelMutation,
   onAddQuote,
   onUpdateQuote,
   onQuoteRestored,
@@ -443,7 +462,11 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
   const openAddModal = () => {
     dispatch({ type: 'openAddModal' });
-    setFormData(getDefaultFormData());
+    setFormData({
+      ...getDefaultFormData(),
+      communicationChannelId: communicationChannels[0]?.id ?? '',
+      communicationChannelName: communicationChannels[0]?.name ?? '',
+    });
     setErrors({});
     setPreviewVersion(null);
   };
@@ -464,11 +487,15 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
           id: editingQuote?.id ?? version.snapshot.quote.id,
           items: version.snapshot.items.map(normalizeQuoteItem),
           status: version.snapshot.quote.status as Quote['status'],
+          communicationChannelId:
+            version.snapshot.quote.communicationChannelId ?? communicationChannels[0]?.id ?? '',
+          communicationChannelName:
+            version.snapshot.quote.communicationChannelName ?? communicationChannels[0]?.name ?? '',
         }),
       );
       setErrors({});
     },
-    [editingQuote],
+    [communicationChannels, editingQuote],
   );
 
   const handleClearPreview = useCallback(() => {
@@ -533,6 +560,10 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       newErrors.id = t('sales:clientQuotes.errors.quoteCodeRequired', {
         defaultValue: 'Quote Code is required',
       });
+    }
+
+    if (!formData.communicationChannelId) {
+      newErrors.communicationChannelId = t('sales:communicationChannels.errors.required');
     }
 
     if (!formData.items || formData.items.length === 0) {
@@ -1245,6 +1276,22 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       },
     },
     {
+      header: t('sales:communicationChannels.fieldLabel'),
+      id: 'communicationChannelName',
+      accessorFn: (row) => row.communicationChannelName ?? '',
+      className: 'whitespace-nowrap',
+      headerClassName: 'min-w-[10rem]',
+      filterFormat: (value) => (value ? String(value) : '-'),
+      cell: ({ row }) => {
+        const history = isHistoryRow(row);
+        return (
+          <span className={`text-sm font-semibold ${history ? 'text-zinc-400' : 'text-zinc-600'}`}>
+            {row.communicationChannelName || '-'}
+          </span>
+        );
+      },
+    },
+    {
       header: t('sales:clientQuotes.expirationColumn'),
       accessorKey: 'expirationDate',
       className: 'whitespace-nowrap',
@@ -1715,7 +1762,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       statusLabel={statusLabel}
                     />
                   </h4>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                     <Field data-invalid={Boolean(errors.clientId)}>
                       <SelectControl
                         id="client-quote-client"
@@ -1772,6 +1819,36 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                         disabled={isReadOnly}
                         label={t('sales:clientQuotes.paymentTerms')}
                         buttonClassName="h-9"
+                      />
+                    </Field>
+                    <Field data-invalid={Boolean(errors.communicationChannelId)}>
+                      <QuoteCommunicationChannelField
+                        id="client-quote-communication-channel"
+                        channels={communicationChannels}
+                        value={formData.communicationChannelId || ''}
+                        error={errors.communicationChannelId}
+                        disabled={isReadOnly}
+                        canManage={canManageCommunicationChannels}
+                        onChange={(value) => {
+                          const selected = communicationChannels.find(
+                            (channel) => channel.id === value,
+                          );
+                          setFormData((prev) => ({
+                            ...prev,
+                            communicationChannelId: value,
+                            communicationChannelName: selected?.name ?? '',
+                          }));
+                          if (errors.communicationChannelId) {
+                            setErrors((prev) => {
+                              const next = { ...prev };
+                              delete next.communicationChannelId;
+                              return next;
+                            });
+                          }
+                        }}
+                        onCreate={onCreateCommunicationChannel}
+                        onUpdate={onUpdateCommunicationChannel}
+                        onDelete={onDeleteCommunicationChannel}
                       />
                     </Field>
                     <Field>
