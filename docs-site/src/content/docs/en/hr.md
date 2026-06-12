@@ -31,7 +31,7 @@ For users managed by LDAP, OIDC, or SAML, name and email are controlled by the c
 
 HR detail visibility follows the employee type:
 
-- **Internal HR - View/Update** allows reading or changing HR details for internal employees and application users treated as internal employees.
+- **Internal HR - View/Update** allows reading or changing HR details for internal employees and application users treated as internal employees. Creating and deleting internal profiles instead uses **User Management - Create/Delete** permissions, even when the action starts from the HR screen.
 - **External HR - View/Update** allows reading or changing HR details for external employees.
 
 Without the matching HR permissions, HR fields are omitted from user API responses and are unavailable in the screens. Account administration controls remain governed by user administration permissions.

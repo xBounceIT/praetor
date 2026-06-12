@@ -610,6 +610,13 @@
       "when": 1781252744169,
       "tag": "0086_add_overtime_notification_events",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1781252745000,
+      "tag": "0087_remove_internal_hr_create_delete_permissions",
+      "breakpoints": true
     }
   ]
 }

@@ -75,6 +75,15 @@ describe('PERMISSION_DEFINITIONS / ALL_PERMISSIONS', () => {
     expect(ALL_PERMISSIONS).not.toContain('hr.costs_all.delete');
   });
 
+  test('hr.internal is view+update only; create/delete are user-management permissions', () => {
+    expect(ALL_PERMISSIONS).toContain('hr.internal.view');
+    expect(ALL_PERMISSIONS).toContain('hr.internal.update');
+    expect(ALL_PERMISSIONS).not.toContain('hr.internal.create');
+    expect(ALL_PERMISSIONS).not.toContain('hr.internal.delete');
+    expect(ALL_PERMISSIONS).toContain('administration.user_management.create');
+    expect(ALL_PERMISSIONS).toContain('administration.user_management.delete');
+  });
+
   test('timesheets.ril is view-only', () => {
     expect(ALL_PERMISSIONS).toContain('timesheets.ril.view');
     expect(ALL_PERMISSIONS).not.toContain('timesheets.ril.create');

@@ -295,9 +295,7 @@ const ALL_USER_PERMS = [
   'administration.user_management.delete',
   'administration.user_management_all.view',
   'hr.internal.view',
-  'hr.internal.create',
   'hr.internal.update',
-  'hr.internal.delete',
   'hr.external.view',
   'hr.external.create',
   'hr.external.update',
@@ -720,7 +718,7 @@ describe('POST /api/users', () => {
 
   test('201 creates internal employee with HR profile fields', async () => {
     getRolePermissionsMock.mockResolvedValue([
-      'hr.internal.create',
+      'administration.user_management.create',
       'hr.internal.update',
       'hr.internal.view',
       'hr.costs_all.view',
@@ -777,7 +775,10 @@ describe('POST /api/users', () => {
   });
 
   test('400 maps duplicate employee code on create', async () => {
-    getRolePermissionsMock.mockResolvedValue(['hr.internal.create', 'hr.internal.update']);
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.create',
+      'hr.internal.update',
+    ]);
     insertUserMock.mockRejectedValue(makeDbError('23505', 'idx_users_employee_code_unique'));
 
     const res = await testApp.inject({
@@ -913,9 +914,9 @@ describe('POST /api/users', () => {
   });
 
   test('403 without create permission for app_user', async () => {
-    // Allow internal create, but not app_user
+    // Allow an unrelated create path through the route guard, but not app_user creation.
     getRolePermissionsMock.mockResolvedValue([
-      'hr.internal.create',
+      'hr.external.create',
       'administration.user_management.view',
     ]);
 
@@ -927,6 +928,24 @@ describe('POST /api/users', () => {
     });
 
     expect(res.statusCode).toBe(403);
+  });
+
+  test('403 legacy hr.internal.create cannot create internal employee', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'hr.internal.create',
+      'hr.internal.update',
+      'hr.internal.view',
+    ]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: adminAuth(),
+      payload: { name: 'Internal Bob', employeeType: 'internal' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(insertUserMock).not.toHaveBeenCalled();
   });
 
   test('401 missing token', async () => {
@@ -944,7 +963,7 @@ describe('POST /api/users', () => {
     // controls whether the validated value is *applied*, not whether the input
     // is *validated*.
     getRolePermissionsMock.mockResolvedValue([
-      'hr.internal.create',
+      'administration.user_management.create',
       'administration.user_management.view',
     ]);
 
@@ -963,7 +982,7 @@ describe('POST /api/users', () => {
     // Without the cost-update permission, the row is created with 0 even when
     // the caller sent a positive number — silent-drop matches the PUT contract.
     getRolePermissionsMock.mockResolvedValue([
-      'hr.internal.create',
+      'administration.user_management.create',
       'administration.user_management.view',
     ]);
     insertUserMock.mockResolvedValue(undefined);
@@ -1008,6 +1027,20 @@ describe('DELETE /api/users/:id', () => {
     );
   });
 
+  test('204 admin deletes internal employee with user-management delete', async () => {
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, employeeType: 'internal' });
+    deleteByIdMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(deleteByIdMock).toHaveBeenCalledWith('u-target');
+  });
+
   test('400 cannot delete own account', async () => {
     const res = await testApp.inject({
       method: 'DELETE',
@@ -1031,9 +1064,9 @@ describe('DELETE /api/users/:id', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  test('403 without delete permission for target type (audits the denial)', async () => {
-    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, employeeType: 'internal' });
-    // grant only app_user delete, not internal delete
+  test('403 user-management delete does not delete external employees', async () => {
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, employeeType: 'external' });
+    // grant app/internal delete, not external delete
     getRolePermissionsMock.mockResolvedValue([
       'administration.user_management.delete',
       'administration.user_management.view',
@@ -1053,6 +1086,24 @@ describe('DELETE /api/users/:id', () => {
         entityId: 'u-target',
       }),
     );
+  });
+
+  test('403 legacy hr.internal.delete cannot delete internal employee', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'hr.internal.delete',
+      'hr.internal.view',
+      'administration.user_management.view',
+    ]);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(findCoreByIdMock).not.toHaveBeenCalled();
+    expect(deleteByIdMock).not.toHaveBeenCalled();
   });
 
   test('401 missing token', async () => {

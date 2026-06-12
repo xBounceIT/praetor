@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
 import type { User } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
@@ -120,7 +121,11 @@ describe('<InternalEmployeesView /> row click', () => {
     renderView({
       users: [],
       onAddEmployee,
-      permissions: ['hr.internal.view', 'hr.internal.create', 'hr.internal.update'],
+      permissions: [
+        'hr.internal.view',
+        'hr.internal.update',
+        'administration.user_management.create',
+      ],
     });
 
     fireEvent.click(screen.getByText('internalEmployees.addEmployee'));
@@ -152,6 +157,42 @@ describe('<InternalEmployeesView /> row click', () => {
         employeeCode: 'EMP-222',
       }),
     );
+  });
+
+  test('does not show add action for legacy hr.internal.create', () => {
+    renderView({
+      users: [],
+      permissions: ['hr.internal.view', 'hr.internal.create', 'hr.internal.update'],
+    });
+
+    expect(screen.queryByText('internalEmployees.addEmployee')).not.toBeInTheDocument();
+  });
+
+  test('shows internal delete only with user-management delete', async () => {
+    const user = userEvent.setup();
+    renderView({
+      permissions: [
+        'hr.internal.view',
+        'hr.internal.update',
+        'administration.user_management.delete',
+      ],
+    });
+
+    await user.click(screen.getByRole('button', { name: 'table.rowActions' }));
+    expect(
+      await screen.findByRole('button', { name: 'common:buttons.delete' }),
+    ).toBeInTheDocument();
+  });
+
+  test('does not show internal delete for legacy hr.internal.delete', async () => {
+    const user = userEvent.setup();
+    renderView({
+      permissions: ['hr.internal.view', 'hr.internal.update', 'hr.internal.delete'],
+    });
+
+    await user.click(screen.getByRole('button', { name: 'table.rowActions' }));
+    await screen.findByRole('button', { name: 'internalEmployees.editEmployee' });
+    expect(screen.queryByRole('button', { name: 'common:buttons.delete' })).not.toBeInTheDocument();
   });
 
   test('keeps provider-managed name and email read-only on edit', async () => {
