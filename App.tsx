@@ -78,7 +78,11 @@ import { makeQuoteHandlers } from './hooks/handlers/quoteHandlers';
 import { makeSupplierHandlers } from './hooks/handlers/supplierHandlers';
 import { makeSupplierInvoiceHandlers } from './hooks/handlers/supplierInvoiceHandlers';
 import { makeSupplierQuoteHandlers } from './hooks/handlers/supplierQuoteHandlers';
-import { makeTaskHandlers } from './hooks/handlers/taskHandlers';
+import {
+  createTaskUpdateQueueState,
+  makeTaskHandlers,
+  type TaskUpdateQueueState,
+} from './hooks/handlers/taskHandlers';
 import { makeUserHandlers } from './hooks/handlers/userHandlers';
 import { useAuth } from './hooks/useAuth';
 import { listRequest, useModuleLoader } from './hooks/useModuleLoader';
@@ -766,6 +770,11 @@ const AppContent: React.FC = () => {
   const [supplierOrders, setSupplierOrders] = useState<SupplierSaleOrder[]>([]);
   const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoice[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const taskUpdateQueueStateRef = useRef<TaskUpdateQueueState | null>(null);
+  if (taskUpdateQueueStateRef.current === null) {
+    taskUpdateQueueStateRef.current = createTaskUpdateQueueState();
+  }
+  const taskUpdateQueueState = taskUpdateQueueStateRef.current;
   // Bumped on logout/role-switch so in-flight cursor streams stop appending stale rows.
   const entriesStreamTokenRef = useRef(0);
   // Bumped on navigation/auth reset so stale module-load completions cannot commit state.
@@ -2408,8 +2417,9 @@ const AppContent: React.FC = () => {
         setProjectTasks,
         setEntries,
         generateRecurringEntries,
+        taskUpdateQueueState,
       }),
-    [projectTasks, generateRecurringEntries],
+    [projectTasks, generateRecurringEntries, taskUpdateQueueState],
   );
 
   const handleAddEntry = entryHandlers.add;
