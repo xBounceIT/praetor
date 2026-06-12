@@ -739,7 +739,7 @@ const ResalesView: React.FC<ResalesViewProps> = ({
           onChange={(value) => updateDraftActivity(row._id, 'categoryId', value as string)}
           className="min-w-[170px]"
           buttonClassName="h-8 text-xs"
-          searchable
+          searchable={false}
           placeholder={t('resales.placeholders.category')}
         />
       ),

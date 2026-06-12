@@ -62,6 +62,7 @@ describe('ResalesView wiring', () => {
     expect(source).toContain("t('resales." + "boolean.yes')");
     expect(source).toContain("t('resales." + "boolean.no')");
     expect(source).toContain("updateDraftActivity(row._id, 'dueDate', value)");
+    expect(source).toMatch(/id: 'categoryId'[\s\S]*searchable=\{false\}/);
     expect(source).not.toContain('type="date"');
     expect(source).not.toContain("t('common:buttons.manage')");
   });
