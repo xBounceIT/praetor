@@ -17,12 +17,20 @@ export type QuoteCommunicationChannel = {
   totalQuoteCount: number;
 };
 
-type ChannelRow = typeof quoteCommunicationChannels.$inferSelect & {
+type ChannelRow = {
+  id: string;
+  name: string;
+  createdAt?: string | number | Date | null;
+  updatedAt?: string | number | Date | null;
   clientQuoteCount?: string | number | null;
   supplierQuoteCount?: string | number | null;
 };
 
-const epochMs = (value: Date | null): number => value?.getTime() ?? 0;
+const epochMs = (value: string | number | Date | null | undefined): number => {
+  if (value === null || value === undefined) return 0;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
 
 const mapChannel = (row: ChannelRow): QuoteCommunicationChannel => {
   const clientQuoteCount = parseDbNumber(row.clientQuoteCount, 0);
