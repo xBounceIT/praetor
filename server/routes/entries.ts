@@ -5,7 +5,7 @@ import {
   requirePermission,
   requireScopedPermission,
 } from '../middleware/auth.ts';
-import type { TimeEntry } from '../repositories/entriesRepo.ts';
+import { dailyDurationOwnerDateKey, type TimeEntry } from '../repositories/entriesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { evaluateOvertime } from '../services/overtimeNotifications.ts';
 import {
@@ -199,18 +199,20 @@ const sanitizeListResult = (
 const sanitizeRilListResult = (result: {
   entries: TimeEntry[];
   nextCursor: string | null;
-  dailyDurationByDate?: ReadonlyMap<string, number>;
+  dailyDurationByOwnerDate?: ReadonlyMap<string, number>;
 }): { entries: SanitizedEntry[]; nextCursor: string | null } => ({
   entries: (() => {
-    const totalsByDate =
-      result.dailyDurationByDate ??
+    const totalsByOwnerDate =
+      result.dailyDurationByOwnerDate ??
       result.entries.reduce((totals, entry) => {
-        totals.set(entry.date, (totals.get(entry.date) ?? 0) + entry.duration);
+        const key = dailyDurationOwnerDateKey(entry.userId, entry.date);
+        totals.set(key, (totals.get(key) ?? 0) + entry.duration);
         return totals;
       }, new Map<string, number>());
     return result.entries.map((entry) => {
       const sanitized = sanitizeEntry(entry, false);
-      const dayTotal = totalsByDate.get(entry.date) ?? 0;
+      const dayTotal =
+        totalsByOwnerDate.get(dailyDurationOwnerDateKey(entry.userId, entry.date)) ?? 0;
       const exposesOvertimeTotal = evaluateOvertime(entry.date, dayTotal).isOvertime;
       return {
         ...sanitized,

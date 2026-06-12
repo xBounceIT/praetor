@@ -58,9 +58,13 @@ type TimeEntryRow = {
 };
 
 type DailyDurationRow = {
+  user_id: string;
   date: string | Date;
   duration: string | number | null;
 };
+
+export const dailyDurationOwnerDateKey = (userId: string, date: string): string =>
+  JSON.stringify([userId, date]);
 
 const ENTRY_COLUMNS_SQL = sql`id, user_id, date, client_id, client_name, project_id,
   project_name, task, task_id, notes, duration, hourly_cost, is_placeholder, location, created_at,
@@ -183,7 +187,7 @@ const mapDailyDurationRows = (rows: DailyDurationRow[]): Map<string, number> => 
   for (const row of rows) {
     const date = normalizeNullableDateOnly(row.date, 'entry.date');
     if (!date) throw new TypeError('Invalid date value for entry.date');
-    totals.set(date, parseDbNumber(row.duration, 0));
+    totals.set(dailyDurationOwnerDateKey(row.user_id, date), parseDbNumber(row.duration, 0));
   }
   return totals;
 };
@@ -196,14 +200,14 @@ const joinAnd = (clauses: Array<SQL | null>): SQL | null => {
 
 type DailyDurationOptions = Pick<ListEntriesOptions, 'fromDate' | 'toDate' | 'projectId'>;
 
-const sumDurationsByDate = async (
+const sumDurationsByOwnerDate = async (
   clauses: Array<SQL | null>,
   exec: DbExecutor,
 ): Promise<Map<string, number>> => {
   const where = joinAnd(clauses);
   const rows = await executeRows<DailyDurationRow>(
     exec,
-    sql`SELECT date, COALESCE(SUM(duration), 0) AS duration FROM time_entries${where ? sql` WHERE ${where}` : sql``} GROUP BY date`,
+    sql`SELECT user_id, date, COALESCE(SUM(duration), 0) AS duration FROM time_entries${where ? sql` WHERE ${where}` : sql``} GROUP BY user_id, date`,
   );
   return mapDailyDurationRows(rows);
 };
@@ -264,28 +268,28 @@ export const listForManagerView = async (
   return buildResult(rows, limit);
 };
 
-export const sumDurationsByDateAll = async (
+export const sumDurationsByOwnerDateAll = async (
   options: DailyDurationOptions = {},
   exec: DbExecutor = db,
 ): Promise<Map<string, number>> =>
-  sumDurationsByDate([...dateRangeClauses(options), projectClause(options.projectId)], exec);
+  sumDurationsByOwnerDate([...dateRangeClauses(options), projectClause(options.projectId)], exec);
 
-export const sumDurationsByDateForUser = async (
+export const sumDurationsByOwnerDateForUser = async (
   userId: string,
   options: DailyDurationOptions = {},
   exec: DbExecutor = db,
 ): Promise<Map<string, number>> =>
-  sumDurationsByDate(
+  sumDurationsByOwnerDate(
     [sql`user_id = ${userId}`, ...dateRangeClauses(options), projectClause(options.projectId)],
     exec,
   );
 
-export const sumDurationsByDateForManagerView = async (
+export const sumDurationsByOwnerDateForManagerView = async (
   managerId: string,
   options: DailyDurationOptions = {},
   exec: DbExecutor = db,
 ): Promise<Map<string, number>> =>
-  sumDurationsByDate(
+  sumDurationsByOwnerDate(
     [
       sql`(user_id = ${managerId} OR user_id IN (${managedUserIdsSubquerySql(managerId)}))`,
       ...dateRangeClauses(options),

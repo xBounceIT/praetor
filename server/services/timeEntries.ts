@@ -68,7 +68,7 @@ export class TimeEntryServiceError extends Error {
 export type ListTimeEntriesResult = {
   entries: TimeEntry[];
   nextCursor: string | null;
-  dailyDurationByDate?: Map<string, number>;
+  dailyDurationByOwnerDate?: Map<string, number>;
 };
 
 const hasPermission = (actor: AuthenticatedActor, permission: string) =>
@@ -238,19 +238,19 @@ export const listTimeEntries = async (
     : canViewAll
       ? await entriesRepo.listAll(options)
       : await entriesRepo.listForManagerView(actor.id, options);
-  const dailyDurationByDate =
+  const dailyDurationByOwnerDate =
     purpose === 'ril'
       ? userId
-        ? await entriesRepo.sumDurationsByDateForUser(userId, dailyTotalOptions)
+        ? await entriesRepo.sumDurationsByOwnerDateForUser(userId, dailyTotalOptions)
         : canViewAll
-          ? await entriesRepo.sumDurationsByDateAll(dailyTotalOptions)
-          : await entriesRepo.sumDurationsByDateForManagerView(actor.id, dailyTotalOptions)
+          ? await entriesRepo.sumDurationsByOwnerDateAll(dailyTotalOptions)
+          : await entriesRepo.sumDurationsByOwnerDateForManagerView(actor.id, dailyTotalOptions)
       : undefined;
 
   return {
     entries: result.entries,
     nextCursor: result.nextCursor ? entriesRepo.encodeCursor(result.nextCursor) : null,
-    dailyDurationByDate,
+    dailyDurationByOwnerDate,
   };
 };
 

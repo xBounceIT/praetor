@@ -583,6 +583,27 @@ describe('<RilView />', () => {
       });
     });
 
+    test('autosaves generated tracker overtime metadata without changedDays', async () => {
+      api.entries.listPage.mockResolvedValue({
+        entries: [entry({ date: '2026-05-02', duration: 4, location: 'remote' })],
+        nextCursor: null,
+      });
+
+      renderRilView();
+
+      const transferSelect = await screen.findByLabelText('ril.columns.transfer 2');
+      await waitFor(() => expect(api.rilDrafts.get).toHaveBeenCalled());
+
+      fireEvent.click(transferSelect);
+      fireEvent.click(screen.getByRole('option', { name: 'In office' }));
+
+      await waitFor(() => expect(api.rilDrafts.save).toHaveBeenCalled(), { timeout: 3000 });
+      expect(api.rilDrafts.save.mock.calls.at(-1)?.[3]).toEqual([]);
+      expect(api.rilDrafts.save.mock.calls.at(-1)?.[1]['2']).toMatchObject({
+        transfer: 'In office',
+      });
+    });
+
     test('deletes the persisted draft on reset', async () => {
       api.entries.listPage.mockResolvedValue({
         entries: [entry({ date: '2026-05-04', duration: 8 })],

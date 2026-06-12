@@ -49,9 +49,9 @@ const generalSettingsGetMock = mock();
 const entriesListAllMock = mock();
 const entriesListForUserMock = mock();
 const entriesListForManagerViewMock = mock();
-const entriesSumDurationsByDateAllMock = mock();
-const entriesSumDurationsByDateForUserMock = mock();
-const entriesSumDurationsByDateForManagerViewMock = mock();
+const entriesSumDurationsByOwnerDateAllMock = mock();
+const entriesSumDurationsByOwnerDateForUserMock = mock();
+const entriesSumDurationsByOwnerDateForManagerViewMock = mock();
 const entriesCreateMock = mock();
 const entriesCreateManyMock = mock();
 const entriesUpdateMock = mock();
@@ -100,9 +100,9 @@ beforeAll(async () => {
     listAll: entriesListAllMock,
     listForUser: entriesListForUserMock,
     listForManagerView: entriesListForManagerViewMock,
-    sumDurationsByDateAll: entriesSumDurationsByDateAllMock,
-    sumDurationsByDateForUser: entriesSumDurationsByDateForUserMock,
-    sumDurationsByDateForManagerView: entriesSumDurationsByDateForManagerViewMock,
+    sumDurationsByOwnerDateAll: entriesSumDurationsByOwnerDateAllMock,
+    sumDurationsByOwnerDateForUser: entriesSumDurationsByOwnerDateForUserMock,
+    sumDurationsByOwnerDateForManagerView: entriesSumDurationsByOwnerDateForManagerViewMock,
     create: entriesCreateMock,
     createMany: entriesCreateManyMock,
     update: entriesUpdateMock,
@@ -256,9 +256,9 @@ const allMocks = [
   entriesListAllMock,
   entriesListForUserMock,
   entriesListForManagerViewMock,
-  entriesSumDurationsByDateAllMock,
-  entriesSumDurationsByDateForUserMock,
-  entriesSumDurationsByDateForManagerViewMock,
+  entriesSumDurationsByOwnerDateAllMock,
+  entriesSumDurationsByOwnerDateForUserMock,
+  entriesSumDurationsByOwnerDateForManagerViewMock,
   entriesCreateMock,
   entriesCreateManyMock,
   entriesUpdateMock,
@@ -418,7 +418,9 @@ describe('GET /api/entries', () => {
       entries: [{ ...SAMPLE_ENTRY, date: '2026-05-04', duration: 4 }],
       nextCursor: { createdAt: '2026-05-04 12:00:00.000000', id: 'older-page' },
     });
-    entriesSumDurationsByDateForManagerViewMock.mockResolvedValue(new Map([['2026-05-04', 9]]));
+    entriesSumDurationsByOwnerDateForManagerViewMock.mockResolvedValue(
+      new Map([[realEntriesRepo.dailyDurationOwnerDateKey('u1', '2026-05-04'), 9]]),
+    );
 
     const res = await testApp.inject({
       method: 'GET',
@@ -436,10 +438,37 @@ describe('GET /api/entries', () => {
       notes: null,
     });
     expect(body.nextCursor).toContain('older-page');
-    expect(entriesSumDurationsByDateForManagerViewMock).toHaveBeenCalledWith('u1', {
+    expect(entriesSumDurationsByOwnerDateForManagerViewMock).toHaveBeenCalledWith('u1', {
       projectId: undefined,
       fromDate: '2026-05-01',
       toDate: '2026-05-31',
+    });
+  });
+
+  test('200: RIL source feed scopes overtime totals to each entry owner', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
+    entriesListForManagerViewMock.mockResolvedValue({
+      entries: [{ ...SAMPLE_ENTRY, userId: 'u1', date: '2026-05-04', duration: 4 }],
+      nextCursor: null,
+    });
+    entriesSumDurationsByOwnerDateForManagerViewMock.mockResolvedValue(
+      new Map([
+        [realEntriesRepo.dailyDurationOwnerDateKey('u1', '2026-05-04'), 4],
+        [realEntriesRepo.dailyDurationOwnerDateKey('u2', '2026-05-04'), 9],
+      ]),
+    );
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/entries?purpose=ril&fromDate=2026-05-01&toDate=2026-05-31',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).entries[0]).toMatchObject({
+      userId: 'u1',
+      date: '2026-05-04',
+      duration: 0,
     });
   });
 

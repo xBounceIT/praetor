@@ -621,7 +621,9 @@ const RilView: React.FC<RilViewProps> = ({
             };
           }),
       });
-      changedDaysRef.current.set(day, ++changedDayRevisionRef.current);
+      if (field === 'entrance' || field === 'exit') {
+        changedDaysRef.current.set(day, ++changedDayRevisionRef.current);
+      }
       scheduleDraftSave();
     },
     [lunchBreakMinutes, scheduleDraftSave],
