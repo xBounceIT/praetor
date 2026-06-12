@@ -41,6 +41,7 @@ import viewsRoutes from './routes/views.ts';
 import webhooksRoutes from './routes/webhooks.ts';
 import workUnitsRoutes from './routes/work-units.ts';
 import { ajvFormatsPlugin, ajvFormatsPluginOptions } from './utils/ajv-formats.ts';
+import { APP_VERSION } from './utils/app-version.ts';
 import { loggerOptions, serializeError } from './utils/logger.ts';
 import { GLOBAL_RATE_LIMIT } from './utils/rate-limit.ts';
 
@@ -151,7 +152,7 @@ export const buildApp = async () => {
       info: {
         title: 'Praetor API',
         description: 'Praetor API documentation',
-        version: '0.7.0',
+        version: APP_VERSION,
       },
       components: {
         securitySchemes: {

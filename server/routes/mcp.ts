@@ -26,6 +26,7 @@ import {
   TimeEntryServiceError,
   updateTimeEntry,
 } from '../services/timeEntries.ts';
+import { APP_VERSION } from '../utils/app-version.ts';
 import {
   effectiveQuoteStatusFromDate,
   effectiveSupplierQuoteStatusFromDate,
@@ -239,7 +240,7 @@ const runBulkTimeEntryTool = async <T>(
 
 const buildServer = () => {
   const server = new McpServer(
-    { name: 'praetor', version: '0.7.0' },
+    { name: 'praetor', version: APP_VERSION },
     {
       instructions:
         'Use Praetor tools to inspect and update ERP data. Tool results are scoped to the authenticated MCP token user and their current Praetor role permissions.',
