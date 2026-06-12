@@ -13,13 +13,15 @@ export type TaskHandlersDeps = {
 
 export type TaskUpdateQueueState = {
   queuedTaskUpdates: Map<string, Promise<void>>;
-  latestTaskUpdateSeqById: Map<string, number>;
+  latestTaskUpdateSeqByField: Map<string, number>;
   nextTaskUpdateSeq: number;
 };
 
+const taskUpdateFieldKey = (taskId: string, field: string): string => `${taskId}\u0000${field}`;
+
 export const createTaskUpdateQueueState = (): TaskUpdateQueueState => ({
   queuedTaskUpdates: new Map(),
-  latestTaskUpdateSeqById: new Map(),
+  latestTaskUpdateSeqByField: new Map(),
   nextTaskUpdateSeq: 0,
 });
 
@@ -33,13 +35,26 @@ export const makeTaskHandlers = (deps: TaskHandlersDeps) => {
   } = deps;
 
   const update = async (id: string, updates: Partial<ProjectTask>) => {
-    const { queuedTaskUpdates, latestTaskUpdateSeqById } = taskUpdateQueueState;
+    const { queuedTaskUpdates, latestTaskUpdateSeqByField } = taskUpdateQueueState;
+    const updateFields = Object.keys(updates);
     const updateSeq = ++taskUpdateQueueState.nextTaskUpdateSeq;
-    latestTaskUpdateSeqById.set(id, updateSeq);
+    for (const field of updateFields) {
+      latestTaskUpdateSeqByField.set(taskUpdateFieldKey(id, field), updateSeq);
+    }
     const priorUpdate = queuedTaskUpdates.get(id) ?? Promise.resolve();
     const runUpdate = async () => {
-      if (latestTaskUpdateSeqById.get(id) !== updateSeq) return;
-      const updated = await api.tasks.update(id, updates);
+      const activeUpdates =
+        updateFields.length === 0
+          ? updates
+          : (Object.fromEntries(
+              Object.entries(updates).filter(
+                ([field]) =>
+                  latestTaskUpdateSeqByField.get(taskUpdateFieldKey(id, field)) === updateSeq,
+              ),
+            ) as Partial<ProjectTask>);
+      if (updateFields.length > 0 && Object.keys(activeUpdates).length === 0) return;
+
+      const updated = await api.tasks.update(id, activeUpdates);
       setProjectTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
     };
     const updateRequest = queuedTaskUpdates.has(id)
@@ -54,8 +69,11 @@ export const makeTaskHandlers = (deps: TaskHandlersDeps) => {
       if (queuedTaskUpdates.get(id) === updateRequest) {
         queuedTaskUpdates.delete(id);
       }
-      if (latestTaskUpdateSeqById.get(id) === updateSeq) {
-        latestTaskUpdateSeqById.delete(id);
+      for (const field of updateFields) {
+        const key = taskUpdateFieldKey(id, field);
+        if (latestTaskUpdateSeqByField.get(key) === updateSeq) {
+          latestTaskUpdateSeqByField.delete(key);
+        }
       }
     }
   };

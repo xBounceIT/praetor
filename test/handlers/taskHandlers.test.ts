@@ -34,6 +34,7 @@ type TaskLike = {
   id: string;
   name: string;
   projectId: string;
+  expectedEffort?: number;
   revenue?: number;
   isRecurring?: boolean;
   recurrencePattern?: string;
@@ -168,6 +169,77 @@ describe('makeTaskHandlers.update', () => {
     } finally {
       console.error = originalError;
     }
+  });
+
+  test('preserves queued edits for different fields on the same task', async () => {
+    const requests: Array<{
+      updates: Partial<TaskLike>;
+      deferred: ReturnType<typeof deferValue<TaskLike>>;
+    }> = [];
+    apiMocks.tasksUpdate.mockImplementation((_id: string, updates: unknown) => {
+      const deferred = deferValue<TaskLike>();
+      requests.push({ updates: updates as Partial<TaskLike>, deferred });
+      return deferred.promise;
+    });
+    const tasks = makeStubSetter<TaskLike>([
+      { id: 't1', name: 'task-A', projectId: 'p1', expectedEffort: 1, revenue: 10 },
+    ]);
+    const handlers = makeTaskHandlers({
+      projectTasks: tasks.get() as never,
+      setProjectTasks: tasks.setter,
+      setEntries: makeStubSetter<EntryLike>([]).setter,
+      generateRecurringEntries: mock(() => Promise.resolve()),
+      taskUpdateQueueState: createTaskUpdateQueueState(),
+    });
+
+    const firstUpdate = handlers.update('t1', { name: 'task-renamed' });
+    const secondUpdate = handlers.update('t1', { revenue: 250 });
+    const thirdUpdate = handlers.update('t1', { expectedEffort: 8 });
+    await Promise.resolve();
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0].updates).toEqual({ name: 'task-renamed' });
+
+    requests[0].deferred.resolve({
+      id: 't1',
+      name: 'task-renamed',
+      projectId: 'p1',
+      expectedEffort: 1,
+      revenue: 10,
+    });
+    await firstUpdate;
+    await Promise.resolve();
+
+    expect(requests).toHaveLength(2);
+    expect(requests[1].updates).toEqual({ revenue: 250 });
+
+    requests[1].deferred.resolve({
+      id: 't1',
+      name: 'task-renamed',
+      projectId: 'p1',
+      expectedEffort: 1,
+      revenue: 250,
+    });
+    await secondUpdate;
+    await Promise.resolve();
+
+    expect(requests).toHaveLength(3);
+    expect(requests[2].updates).toEqual({ expectedEffort: 8 });
+
+    requests[2].deferred.resolve({
+      id: 't1',
+      name: 'task-renamed',
+      projectId: 'p1',
+      expectedEffort: 8,
+      revenue: 250,
+    });
+    await thirdUpdate;
+
+    expect(tasks.get()[0]).toMatchObject({
+      name: 'task-renamed',
+      expectedEffort: 8,
+      revenue: 250,
+    });
   });
 });
 
