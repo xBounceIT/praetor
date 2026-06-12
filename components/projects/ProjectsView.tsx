@@ -742,12 +742,9 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       cell: ({ row }) => {
         const totalEffort = parseDraftNumber(row.monthlyEffort) * parseDraftNumber(row.duration, 1);
         return (
-          <Input
-            readOnly
-            tabIndex={-1}
-            value={`${formatDraftNumber(totalEffort)}h`}
-            className="h-8 min-w-[90px] bg-muted/40 text-xs text-muted-foreground"
-          />
+          <output className="flex h-8 min-w-[90px] items-center rounded-md border border-input bg-muted/40 px-3 text-xs text-muted-foreground tabular-nums">
+            {formatDraftNumber(totalEffort)}h
+          </output>
         );
       },
     },
@@ -777,12 +774,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       cell: ({ row }) => {
         const totalRevenue = parseDraftNumber(row.revenue) * parseDraftNumber(row.duration, 1);
         return (
-          <Input
-            readOnly
-            tabIndex={-1}
-            value={`${currency}${formatDraftNumber(totalRevenue, 2)}`}
-            className="h-8 min-w-[110px] bg-muted/40 text-xs text-muted-foreground"
-          />
+          <output className="flex h-8 min-w-[110px] items-center rounded-md border border-input bg-muted/40 px-3 text-xs text-muted-foreground tabular-nums">
+            {currency}
+            {formatDraftNumber(totalRevenue, 2)}
+          </output>
         );
       },
     },

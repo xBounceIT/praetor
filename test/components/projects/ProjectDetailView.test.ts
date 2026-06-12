@@ -37,7 +37,7 @@ describe('ProjectDetailView wiring', () => {
     }
   });
 
-  test('inline tasks table edits duration and renders derived totals read-only', async () => {
+  test('inline tasks table edits duration and renders derived totals as non-interactive output', async () => {
     const source = await readProjectTasksTableSource();
     expect(source).toContain("header: t('projects:projects.duration')");
     expect(source).toContain(
@@ -48,7 +48,7 @@ describe('ProjectDetailView wiring', () => {
       "parseTaskNumber(row, 'monthlyEffort', 0) * parseTaskNumber(row, 'duration', 1)",
     );
     expect(source).toContain('projects:projects.taskTotalRevenue');
-    expect(source).toContain('readOnly');
+    expect(source).toContain('<output className="flex h-8');
   });
 
   test('fetches time entries server-side filtered by projectId for chart aggregations', async () => {

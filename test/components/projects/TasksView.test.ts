@@ -29,6 +29,7 @@ describe('TasksView', () => {
       expect(source).toContain("field: 'duration'");
       expect(source).toContain('formatNumber(totalEffort)');
       expect(source).toContain('formatNumber(totalRevenue, 2)');
+      expect(source).toContain('<output');
       expect(source).toContain('<Input');
       expect(source).toContain('<Textarea');
       expect(source).toContain('id="task-notes"');

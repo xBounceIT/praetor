@@ -546,13 +546,12 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
                   <FieldLabel htmlFor="task-expected-effort">
                     {t('projects:projects.expectedEffort')}
                   </FieldLabel>
-                  <Input
+                  <output
                     id="task-expected-effort"
-                    readOnly
-                    tabIndex={-1}
-                    value={`${formatNumber(totalEffort)}h`}
-                    className="bg-muted/40 text-muted-foreground"
-                  />
+                    className="flex h-9 w-full items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground tabular-nums"
+                  >
+                    {formatNumber(totalEffort)}h
+                  </output>
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="task-revenue">
@@ -574,13 +573,13 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
                   <FieldLabel htmlFor="task-total-revenue">
                     {`${t('projects:projects.taskTotalRevenue')} (${currency})`}
                   </FieldLabel>
-                  <Input
+                  <output
                     id="task-total-revenue"
-                    readOnly
-                    tabIndex={-1}
-                    value={`${currency}${formatNumber(totalRevenue, 2)}`}
-                    className="bg-muted/40 text-muted-foreground"
-                  />
+                    className="flex h-9 w-full items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground tabular-nums"
+                  >
+                    {currency}
+                    {formatNumber(totalRevenue, 2)}
+                  </output>
                 </Field>
               </div>
 

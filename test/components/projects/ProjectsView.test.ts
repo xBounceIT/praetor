@@ -125,7 +125,7 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain('<FieldDescription className="text-xs">');
   });
 
-  test('draft task table has editable duration and read-only derived totals', async () => {
+  test('draft task table has editable duration and non-interactive derived totals', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
     ).text();
@@ -138,7 +138,7 @@ describe('ProjectsView create-form validation', () => {
       'parseDraftNumber(row.monthlyEffort) * parseDraftNumber(row.duration, 1)',
     );
     expect(source).toContain('projects:projects.taskTotalRevenue');
-    expect(source).toContain('readOnly');
+    expect(source).toContain('<output className="flex h-8');
   });
 
   test('order selector auto-fills the client and disables the client picker while bound', async () => {
