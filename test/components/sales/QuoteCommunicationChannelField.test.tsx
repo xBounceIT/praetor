@@ -92,10 +92,14 @@ describe('<QuoteCommunicationChannelField />', () => {
     const source = await readComponentSource('sales/QuoteCommunicationChannelField.tsx');
 
     expectSourceContainsAll(source, [
-      'flex h-5 items-start justify-between gap-2',
-      'className="-mr-1 h-4 gap-1 px-1 py-0',
+      'flex h-4 items-center justify-between gap-2',
+      'className="-mr-1 h-4 gap-1 px-1 py-0 text-[10px] leading-none',
       'zIndex={90}',
     ]);
-    expectSourceOmitsAll(source, ['flex min-h-6 items-center justify-between gap-2', 'size="xs"']);
+    expectSourceOmitsAll(source, [
+      'flex min-h-6 items-center justify-between gap-2',
+      'flex h-5 items-start justify-between gap-2',
+      'size="xs"',
+    ]);
   });
 });
