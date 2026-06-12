@@ -470,6 +470,37 @@ describe('applyRilDraftToRows / extractRilDraftRows', () => {
     });
   });
 
+  test('keeps worked holiday rows with the prefilled holiday note in attendance totals', () => {
+    const rows = baseRows();
+    const draft = {
+      '1': { entrance: '08:00', exit: '17:00', notes: 'F', transfer: 'Remote working', code: 'Z' },
+    };
+
+    const applied = applyRilDraftToRows(rows, draft, 60);
+    const day1 = applied.find((row) => row.day === 1);
+
+    expect(day1).toMatchObject({
+      isHoliday: true,
+      entrance: '08:00',
+      exit: '17:00',
+      hours: '8:00',
+      hoursDecimal: 8,
+      picap: 8,
+      notes: 'F',
+      transfer: 'Remote working',
+      code: 'Z',
+      worked: true,
+    });
+    expect(day1 ? isRilAbsenceRow(day1) : true).toBe(false);
+    expect(calculateRilTotals(applied)).toMatchObject({
+      totalHours: 168,
+      totalPicap: 168,
+      workedDays: 21,
+      workdays: 21,
+      holidayWeekdays: 1,
+    });
+  });
+
   test('returns rows unchanged when the draft is null or empty', () => {
     const rows = baseRows();
 

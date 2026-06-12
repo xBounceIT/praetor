@@ -402,7 +402,7 @@ export const isRequiredRilWorkday = (row: RilRow): boolean =>
   Boolean(row.date && ((row.isWorkday && !row.isHoliday) || row.worked));
 
 export const isRilAbsenceRow = (row: RilRow): boolean =>
-  isRequiredRilWorkday(row) && row.notes.trim().length > 0;
+  Boolean(row.date && row.isWorkday && !row.isHoliday && row.notes.trim().length > 0);
 
 // Only dated rows are persisted. Non-month placeholders are read-only and never carry a draft.
 const isDraftableRilRow = (row: RilRow): boolean => Boolean(row.date);
