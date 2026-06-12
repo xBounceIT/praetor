@@ -121,6 +121,24 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
     onUpdateTask(row.id, { [field]: parsed });
   };
 
+  const parseTaskNumber = (
+    row: ProjectTask,
+    field: keyof ProjectTask,
+    fallback: number,
+  ): number => {
+    const edited = taskEdits[row.id]?.[field];
+    if (edited === '') return fallback;
+    const raw = edited ?? String(row[field] ?? fallback);
+    const parsed = Number.parseFloat(String(raw));
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+
+  const formatNumber = (value: number, minimumFractionDigits = 0) =>
+    value.toLocaleString(undefined, {
+      minimumFractionDigits,
+      maximumFractionDigits: 2,
+    });
+
   const translatedBillingTypeOptions = useBillingTypeOptions();
   const translatedBillingFrequencyOptions = useBillingFrequencyOptions();
 
@@ -198,26 +216,41 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
       ),
     },
     {
-      header: t('projects:projects.expectedEffort'),
-      id: 'expectedEffort',
-      accessorKey: 'expectedEffort',
+      header: t('projects:projects.duration'),
+      id: 'duration',
+      accessorKey: 'duration',
       disableFiltering: true,
       cell: ({ row }) => (
         <Input
           type="number"
           min="0"
-          step="1"
+          step="any"
           disabled={!canUpdate}
-          value={getTaskFieldValue(row.id, 'expectedEffort', String(row.expectedEffort ?? ''))}
-          placeholder="0"
+          value={getTaskFieldValue(row.id, 'duration', String(row.duration ?? 1))}
+          placeholder="1"
           onKeyDown={(e) => {
-            if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
+            if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
           }}
-          onChange={(e) => setTaskFieldValue(row.id, 'expectedEffort', e.target.value)}
-          onBlur={() => commitTaskField(row, 'expectedEffort', (v) => (v ? parseFloat(v) : 0))}
+          onChange={(e) => setTaskFieldValue(row.id, 'duration', e.target.value)}
+          onBlur={() => commitTaskField(row, 'duration', (v) => (v ? parseFloat(v) : 1))}
           className="h-8 min-w-[80px] text-xs"
         />
       ),
+    },
+    {
+      header: t('projects:projects.expectedEffort'),
+      id: 'expectedEffort',
+      accessorFn: (row) => (row.monthlyEffort ?? 0) * (row.duration ?? 1),
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const totalEffort =
+          parseTaskNumber(row, 'monthlyEffort', 0) * parseTaskNumber(row, 'duration', 1);
+        return (
+          <output className="flex h-8 min-w-[90px] items-center rounded-md border border-input bg-muted/40 px-3 text-xs text-muted-foreground tabular-nums">
+            {formatNumber(totalEffort)}h
+          </output>
+        );
+      },
     },
     {
       header: `${t('projects:projects.taskRevenue')} (${currency})`,
@@ -237,6 +270,22 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
           className="h-8 min-w-[80px] text-xs"
         />
       ),
+    },
+    {
+      header: `${t('projects:projects.taskTotalRevenue')} (${currency})`,
+      id: 'totalRevenue',
+      accessorFn: (row) => row.totalRevenue ?? (row.revenue ?? 0) * (row.duration ?? 1),
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const totalRevenue =
+          parseTaskNumber(row, 'revenue', 0) * parseTaskNumber(row, 'duration', 1);
+        return (
+          <output className="flex h-8 min-w-[110px] items-center rounded-md border border-input bg-muted/40 px-3 text-xs text-muted-foreground tabular-nums">
+            {currency}
+            {formatNumber(totalRevenue, 2)}
+          </output>
+        );
+      },
     },
     {
       header: t('projects:projects.taskNotes'),

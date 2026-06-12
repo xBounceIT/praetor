@@ -13,6 +13,7 @@ export type ModuleScopedStateKey =
   | 'resaleOrderOptions'
   | 'products'
   | 'quotes'
+  | 'quoteCommunicationChannels'
   | 'clientOffers'
   | 'clientsOrders'
   | 'invoices'
@@ -36,6 +37,7 @@ export const ALL_MODULE_SCOPED_KEYS: readonly ModuleScopedStateKey[] = [
   'resaleOrderOptions',
   'products',
   'quotes',
+  'quoteCommunicationChannels',
   'clientOffers',
   'clientsOrders',
   'invoices',
@@ -56,7 +58,15 @@ const MODULE_OWNED_KEYS: Record<string, readonly ModuleScopedStateKey[]> = {
   hr: ['users', 'workUnits', 'clients', 'projects', 'projectTasks'],
   administration: ['users'],
   crm: ['clients', 'suppliers'],
-  sales: ['quotes', 'clientOffers', 'supplierQuotes', 'clients', 'suppliers', 'products'],
+  sales: [
+    'quotes',
+    'quoteCommunicationChannels',
+    'clientOffers',
+    'supplierQuotes',
+    'clients',
+    'suppliers',
+    'products',
+  ],
   accounting: [
     'clientsOrders',
     'invoices',

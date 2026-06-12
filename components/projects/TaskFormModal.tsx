@@ -37,7 +37,7 @@ export type RecurringConfig = { isRecurring: boolean; pattern: 'daily' | 'weekly
 
 export type TaskFormDetails = Pick<
   ProjectTask,
-  'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
+  'monthlyEffort' | 'duration' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
 >;
 
 export type TaskFormPermissions = {
@@ -76,7 +76,7 @@ type TaskFormState = {
   billingType: StoredBillingType;
   billingFrequency: BillingFrequency;
   monthlyEffort: string;
-  expectedEffort: string;
+  duration: string;
   revenue: string;
   notes: string;
   tempIsDisabled: boolean;
@@ -87,7 +87,7 @@ type TaskFormTextField =
   | 'name'
   | 'description'
   | 'monthlyEffort'
-  | 'expectedEffort'
+  | 'duration'
   | 'revenue'
   | 'notes';
 
@@ -131,8 +131,7 @@ const createTaskFormState = (
       billingFrequency: editingTask.billingFrequency ?? DEFAULT_BILLING_FREQUENCY,
       monthlyEffort:
         editingTask.monthlyEffort !== undefined ? String(editingTask.monthlyEffort) : '',
-      expectedEffort:
-        editingTask.expectedEffort !== undefined ? String(editingTask.expectedEffort) : '',
+      duration: editingTask.duration !== undefined ? String(editingTask.duration) : '1',
       revenue: editingTask.revenue !== undefined ? String(editingTask.revenue) : '',
       notes: editingTask.notes ?? '',
       tempIsDisabled: editingTask.isDisabled || false,
@@ -151,7 +150,7 @@ const createTaskFormState = (
     billingType: seeded.billingType,
     billingFrequency: seeded.billingFrequency,
     monthlyEffort: '',
-    expectedEffort: '',
+    duration: '1',
     revenue: '',
     notes: '',
     tempIsDisabled: false,
@@ -307,7 +306,7 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
   initialProjectId,
   projectLocked = false,
 }) => {
-  const { t } = useTranslation(['projects', 'common']);
+  const { t, i18n } = useTranslation(['projects', 'common']);
   const [formState, dispatch] = useReducer(taskFormReducer, undefined, () =>
     createTaskFormState(mode, editingTask, initialProjectId, projects),
   );
@@ -319,7 +318,7 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
     billingType,
     billingFrequency,
     monthlyEffort,
-    expectedEffort,
+    duration,
     revenue,
     notes,
     tempIsDisabled,
@@ -352,7 +351,7 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
       billingType,
       billingFrequency,
       monthlyEffort: monthlyEffort ? parseFloat(monthlyEffort) : undefined,
-      expectedEffort: expectedEffort ? parseFloat(expectedEffort) : undefined,
+      duration: duration ? parseFloat(duration) : undefined,
       revenue: revenue ? parseFloat(revenue) : undefined,
       notes: notes.trim() || undefined,
     };
@@ -382,6 +381,18 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
   const isClientDisabled = client?.isDisabled || false;
   const isInheritedDisabled = isProjectDisabled || isClientDisabled;
   const isCurrentlyDisabled = tempIsDisabled || isInheritedDisabled;
+  const parseFormNumber = (value: string, fallback = 0) => {
+    if (value.trim() === '') return fallback;
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+  const totalEffort = parseFormNumber(monthlyEffort) * parseFormNumber(duration, 1);
+  const totalRevenue = parseFormNumber(revenue) * parseFormNumber(duration, 1);
+  const formatNumber = (value: number, minimumFractionDigits = 0) =>
+    value.toLocaleString(i18n.language, {
+      minimumFractionDigits,
+      maximumFractionDigits: 2,
+    });
 
   return (
     <Modal isOpen={isOpen} onClose={requestClose}>
@@ -463,7 +474,7 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
                 />
               </Field>
 
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <SelectControl
                   id="task-billing-type"
                   options={translatedBillingTypeOptions}
@@ -511,24 +522,36 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
                   />
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="task-expected-effort">
-                    {t('projects:projects.expectedEffort')}
-                  </FieldLabel>
+                  <FieldLabel htmlFor="task-duration">{t('projects:projects.duration')}</FieldLabel>
                   <Input
-                    id="task-expected-effort"
+                    id="task-duration"
                     type="number"
                     min="0"
-                    step="1"
-                    value={expectedEffort}
+                    step="any"
+                    value={duration}
+                    onKeyDown={(e) => {
+                      if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+                    }}
                     onChange={(e) =>
                       dispatch({
                         type: 'setTextField',
-                        field: 'expectedEffort',
+                        field: 'duration',
                         value: e.target.value,
                       })
                     }
-                    placeholder="0"
+                    placeholder="1"
                   />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="task-expected-effort">
+                    {t('projects:projects.expectedEffort')}
+                  </FieldLabel>
+                  <output
+                    id="task-expected-effort"
+                    className="flex h-9 w-full items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground tabular-nums"
+                  >
+                    {formatNumber(totalEffort)}h
+                  </output>
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="task-revenue">
@@ -545,6 +568,18 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
                     }
                     placeholder="0.00"
                   />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="task-total-revenue">
+                    {`${t('projects:projects.taskTotalRevenue')} (${currency})`}
+                  </FieldLabel>
+                  <output
+                    id="task-total-revenue"
+                    className="flex h-9 w-full items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground tabular-nums"
+                  >
+                    {currency}
+                    {formatNumber(totalRevenue, 2)}
+                  </output>
                 </Field>
               </div>
 

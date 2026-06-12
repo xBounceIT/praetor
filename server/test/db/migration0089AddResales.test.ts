@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { readMigrationFile } from '../helpers/schemaFiles.ts';
 
-describe('migration 0087: add resales', () => {
-  const MIGRATION = readMigrationFile('0087_add_resales.sql');
+describe('migration 0089: add resales', () => {
+  const MIGRATION = readMigrationFile('0089_add_resales.sql');
 
   test('creates resales, resale activities, and dedicated categories', () => {
     expect(MIGRATION).toContain('CREATE TABLE "resales"');

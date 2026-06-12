@@ -62,7 +62,9 @@ const taskSchema = {
     recurrenceDuration: { type: 'number' },
     expectedEffort: { type: 'number' },
     monthlyEffort: { type: 'number' },
+    duration: { type: 'number' },
     revenue: { type: 'number' },
+    totalRevenue: { type: 'number' },
     notes: { type: ['string', 'null'] },
     isDisabled: { type: 'boolean' },
     createdAt: { type: 'number' },
@@ -82,8 +84,8 @@ const taskCreateBodySchema = {
     recurrencePattern: { type: 'string' },
     recurrenceStart: { type: 'string' },
     recurrenceDuration: { type: 'number', maximum: MAX_DURATION_HOURS },
-    expectedEffort: { type: 'number' },
     monthlyEffort: { type: 'number' },
+    duration: { type: 'number' },
     revenue: { type: 'number' },
     notes: { type: 'string' },
     billingType: { type: 'string', enum: STORED_BILLING_TYPES },
@@ -102,8 +104,8 @@ const taskUpdateBodySchema = {
     recurrenceStart: { type: 'string' },
     recurrenceEnd: { type: 'string' },
     recurrenceDuration: { type: 'number', maximum: MAX_DURATION_HOURS },
-    expectedEffort: { type: 'number' },
     monthlyEffort: { type: 'number' },
+    duration: { type: 'number' },
     revenue: { type: 'number' },
     notes: { type: 'string' },
     isDisabled: { type: 'boolean' },
@@ -189,8 +191,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         recurrencePattern?: string;
         recurrenceStart?: string;
         recurrenceDuration?: number;
-        expectedEffort?: number;
         monthlyEffort?: number;
+        duration?: number;
         revenue?: number;
         notes?: string;
         billingType?: string;
@@ -203,8 +205,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         recurrencePattern,
         recurrenceStart,
         recurrenceDuration,
-        expectedEffort,
         monthlyEffort,
+        duration,
         revenue,
         notes,
         billingType,
@@ -229,24 +231,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const durationResult = optionalLocalizedNonNegativeNumber(
+      const recurrenceDurationResult = optionalLocalizedNonNegativeNumber(
         recurrenceDuration,
         'recurrenceDuration',
       );
-      if (!durationResult.ok) return badRequest(reply, durationResult.message);
-      if (durationResult.value !== null && durationResult.value > MAX_DURATION_HOURS) {
+      if (!recurrenceDurationResult.ok) return badRequest(reply, recurrenceDurationResult.message);
+      if (
+        recurrenceDurationResult.value !== null &&
+        recurrenceDurationResult.value > MAX_DURATION_HOURS
+      ) {
         return badRequest(reply, `recurrenceDuration must be ${MAX_DURATION_HOURS} hours or fewer`);
       }
-      const expectedEffortResult = optionalLocalizedNonNegativeNumber(
-        expectedEffort,
-        'expectedEffort',
-      );
-      if (!expectedEffortResult.ok) return badRequest(reply, expectedEffortResult.message);
       const monthlyEffortResult = optionalLocalizedNonNegativeNumber(
         monthlyEffort,
         'monthlyEffort',
       );
       if (!monthlyEffortResult.ok) return badRequest(reply, monthlyEffortResult.message);
+      const taskDurationResult = optionalLocalizedNonNegativeNumber(duration, 'duration');
+      if (!taskDurationResult.ok) return badRequest(reply, taskDurationResult.message);
       const revenueResult = optionalLocalizedNonNegativeNumber(revenue, 'revenue');
       if (!revenueResult.ok) return badRequest(reply, revenueResult.message);
 
@@ -302,9 +304,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               isRecurring: isRecurringValue,
               recurrencePattern: recurrencePattern || null,
               recurrenceStart: start,
-              recurrenceDuration: durationResult.value || 0,
-              expectedEffort: expectedEffortResult.value ?? 0,
+              recurrenceDuration: recurrenceDurationResult.value || 0,
               monthlyEffort: monthlyEffortResult.value ?? 0,
+              duration: taskDurationResult.value ?? 1,
               revenue: revenueResult.value ?? 0,
               notes: notes || null,
               isDisabled: false,
@@ -501,8 +503,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         recurrenceEnd?: string;
         isDisabled?: boolean;
         recurrenceDuration?: number;
-        expectedEffort?: number;
         monthlyEffort?: number;
+        duration?: number;
         revenue?: number;
         notes?: string;
         billingType?: string;
@@ -515,8 +517,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         recurrenceStart,
         recurrenceEnd,
         recurrenceDuration,
-        expectedEffort,
         monthlyEffort,
+        duration,
         revenue,
         isDisabled,
         notes,
@@ -535,24 +537,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           details: { secondaryLabel: 'task_access_denied' },
         });
       }
-      const durationResult = optionalLocalizedNonNegativeNumber(
+      const recurrenceDurationResult = optionalLocalizedNonNegativeNumber(
         recurrenceDuration,
         'recurrenceDuration',
       );
-      if (!durationResult.ok) return badRequest(reply, durationResult.message);
-      if (durationResult.value !== null && durationResult.value > MAX_DURATION_HOURS) {
+      if (!recurrenceDurationResult.ok) return badRequest(reply, recurrenceDurationResult.message);
+      if (
+        recurrenceDurationResult.value !== null &&
+        recurrenceDurationResult.value > MAX_DURATION_HOURS
+      ) {
         return badRequest(reply, `recurrenceDuration must be ${MAX_DURATION_HOURS} hours or fewer`);
       }
-      const expectedEffortResult = optionalLocalizedNonNegativeNumber(
-        expectedEffort,
-        'expectedEffort',
-      );
-      if (!expectedEffortResult.ok) return badRequest(reply, expectedEffortResult.message);
       const monthlyEffortResult = optionalLocalizedNonNegativeNumber(
         monthlyEffort,
         'monthlyEffort',
       );
       if (!monthlyEffortResult.ok) return badRequest(reply, monthlyEffortResult.message);
+      const taskDurationResult = optionalLocalizedNonNegativeNumber(duration, 'duration');
+      if (!taskDurationResult.ok) return badRequest(reply, taskDurationResult.message);
       const revenueResult = optionalLocalizedNonNegativeNumber(revenue, 'revenue');
       if (!revenueResult.ok) return badRequest(reply, revenueResult.message);
       const billingTypeResult = optionalEnum(billingType, STORED_BILLING_TYPES, 'billingType');
@@ -592,10 +594,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // optionalLocalizedNonNegativeNumber returns null when the body field is omitted; the
         // dynamic-SET in tasksRepo.update would interpret null as "set to NULL" and clobber the
         // existing recurrence_duration. Forward undefined instead so the column is left alone.
-        recurrenceDuration: durationResult.value ?? undefined,
+        recurrenceDuration: recurrenceDurationResult.value ?? undefined,
         isDisabled,
-        expectedEffort: expectedEffortResult.value ?? undefined,
         monthlyEffort: monthlyEffortResult.value ?? undefined,
+        duration: taskDurationResult.value ?? undefined,
         revenue: revenueResult.value ?? undefined,
         notes,
         billingType: billingTypeResult.value ?? undefined,
@@ -621,8 +623,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           recurrenceStart,
           recurrenceEnd,
           recurrenceDuration,
-          expectedEffort,
           monthlyEffort,
+          duration,
           revenue,
           billingType,
           billingFrequency,

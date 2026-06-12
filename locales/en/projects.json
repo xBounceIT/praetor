@@ -59,7 +59,7 @@
     "selectOffer": "Select Offer...",
     "offerRequired": "Offer reference is required",
     "projectRevenue": "Project revenue",
-    "revenueFromActivities": "Computed from the sum of activity revenues.",
+    "revenueFromActivities": "Computed from the sum of activity total revenues.",
     "revenueFromOrder": "Inherited from the linked order.",
     "revenueManualHint": "Enter the expected project revenue.",
     "projectTasks": "Project Tasks",
@@ -67,6 +67,7 @@
     "taskName": "Task Name",
     "expectedEffort": "Total effort (h)",
     "monthlyEffort": "Monthly effort (h)",
+    "duration": "Duration",
     "billingType": "Billing",
     "billingFrequency": "Frequency",
     "billingTypes": {
@@ -88,6 +89,7 @@
       "passivo": "Passive"
     },
     "taskRevenue": "Revenue",
+    "taskTotalRevenue": "Total revenue",
     "taskNotes": "Notes",
     "noTasksAdded": "No tasks added yet.",
     "progress": "Progress",

@@ -5,6 +5,7 @@ import * as realClientOffersRepo from '../../repositories/clientOffersRepo.ts';
 import * as realClientQuotesRepo from '../../repositories/clientQuotesRepo.ts';
 import * as realClientsRepo from '../../repositories/clientsRepo.ts';
 import * as realProductsRepo from '../../repositories/productsRepo.ts';
+import * as realQuoteCommunicationChannelsRepo from '../../repositories/quoteCommunicationChannelsRepo.ts';
 import * as realQuoteVersionsRepo from '../../repositories/quoteVersionsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
@@ -27,6 +28,7 @@ const clientsRepoSnap = { ...realClientsRepo };
 const clientOffersRepoSnap = { ...realClientOffersRepo };
 const clientQuotesRepoSnap = { ...realClientQuotesRepo };
 const productsRepoSnap = { ...realProductsRepo };
+const quoteCommunicationChannelsRepoSnap = { ...realQuoteCommunicationChannelsRepo };
 const quoteVersionsRepoSnap = { ...realQuoteVersionsRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const auditSnap = { ...realAudit };
@@ -54,6 +56,8 @@ const cqReplaceItemsMock = mock();
 const cqCreateMock = mock();
 const cqInsertItemsMock = mock();
 
+const qccFindByIdMock = mock();
+const qccFindDefaultMock = mock();
 const coCreateMock = mock();
 const coInsertItemsMock = mock();
 const coLockExistingByIdMock = mock();
@@ -126,6 +130,11 @@ beforeAll(async () => {
     ...productsRepoSnap,
     getSnapshots: productsGetSnapshotsMock,
   }));
+  mock.module('../../repositories/quoteCommunicationChannelsRepo.ts', () => ({
+    ...quoteCommunicationChannelsRepoSnap,
+    findById: qccFindByIdMock,
+    findDefault: qccFindDefaultMock,
+  }));
   mock.module('../../repositories/quoteVersionsRepo.ts', () => ({
     ...quoteVersionsRepoSnap,
     listForQuote: qvListForQuoteMock,
@@ -159,6 +168,10 @@ afterAll(() => {
   mock.module('../../repositories/clientOffersRepo.ts', () => clientOffersRepoSnap);
   mock.module('../../repositories/clientQuotesRepo.ts', () => clientQuotesRepoSnap);
   mock.module('../../repositories/productsRepo.ts', () => productsRepoSnap);
+  mock.module(
+    '../../repositories/quoteCommunicationChannelsRepo.ts',
+    () => quoteCommunicationChannelsRepoSnap,
+  );
   mock.module('../../repositories/quoteVersionsRepo.ts', () => quoteVersionsRepoSnap);
   mock.module('../../repositories/supplierQuotesRepo.ts', () => supplierQuotesRepoSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
@@ -192,6 +205,8 @@ const SAMPLE_QUOTE = {
   discountType: 'percentage' as const,
   status: 'draft',
   expirationDate: '2026-12-31',
+  communicationChannelId: 'qcc_email',
+  communicationChannelName: 'Email',
   notes: null,
   createdAt: 1_700_000_000_000,
   updatedAt: 1_700_000_000_000,
@@ -254,6 +269,8 @@ const allMocks = [
   cqReplaceItemsMock,
   cqCreateMock,
   cqInsertItemsMock,
+  qccFindByIdMock,
+  qccFindDefaultMock,
   coCreateMock,
   coInsertItemsMock,
   coLockExistingByIdMock,
@@ -291,6 +308,8 @@ beforeEach(async () => {
   cqFindAnyLinkedSaleMock.mockResolvedValue(null);
   // Product-only items resolve no supplier snapshots; default to an empty map.
   sqGetQuoteItemSnapshotsMock.mockResolvedValue(new Map());
+  qccFindByIdMock.mockResolvedValue({ id: 'qcc_email', name: 'Email' });
+  qccFindDefaultMock.mockResolvedValue({ id: 'qcc_email', name: 'Email' });
   // Restore's progression guard reads the SNAPSHOT's earliest sourced supplier-quote expiration;
   // default to "nothing sourced is expired" (far-future) so most tests don't trip it.
   sqFindEarliestExpirationByIdsMock.mockResolvedValue('2999-12-31');
@@ -796,6 +815,27 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
 });
 
 describe('PUT /api/sales/client-quotes/:id snapshots pre-update state', () => {
+  test('400 rejects an explicitly blank communication channel on update', async () => {
+    cqFindLinkedOfferIdMock.mockResolvedValue(null);
+    cqFindCurrentMock.mockResolvedValue({
+      status: 'draft',
+      discount: 0,
+      discountType: 'percentage',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: { communicationChannelId: '' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'communicationChannelId is required' });
+    expect(qccFindByIdMock).not.toHaveBeenCalled();
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
   test('PUT with content changes inserts a snapshot inside the transaction', async () => {
     cqFindLinkedOfferIdMock.mockResolvedValue(null);
     cqFindCurrentMock.mockResolvedValue({
@@ -860,6 +900,7 @@ describe('POST /api/sales/client-quotes - duration handling (issue #757)', () =>
     clientId: 'c1',
     clientName: 'Client',
     expirationDate: '2026-12-31',
+    communicationChannelId: 'qcc_email',
     items: [
       {
         productId: 'prod-1',
@@ -896,6 +937,37 @@ describe('POST /api/sales/client-quotes - duration handling (issue #757)', () =>
     expect(insertedItems).toHaveLength(1);
     expect(insertedItems[0].durationMonths).toBe(12);
     expect(insertedItems[0].durationUnit).toBe('years');
+  });
+
+  test('400 requires a communication channel on create', async () => {
+    setupCreateMocks();
+    const { communicationChannelId: _omitted, ...payload } = createBody();
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes',
+      headers: authHeader(),
+      payload,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(cqCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 rejects an unknown communication channel on create', async () => {
+    setupCreateMocks();
+    qccFindByIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes',
+      headers: authHeader(),
+      payload: createBody(),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain('communicationChannelId');
+    expect(cqCreateMock).not.toHaveBeenCalled();
   });
 
   test('201 preserves a unit-measured line duration (Durata applies to every unit type)', async () => {

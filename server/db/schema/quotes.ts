@@ -13,6 +13,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { clients } from './clients.ts';
 import { products } from './products.ts';
+import { quoteCommunicationChannels } from './quoteCommunicationChannels.ts';
 import { supplierQuotes } from './supplierQuotes.ts';
 
 export const quotes = pgTable(
@@ -33,6 +34,12 @@ export const quotes = pgTable(
       .default('percentage'),
     status: varchar('status', { length: 20 }).notNull().default('draft'),
     expirationDate: date('expiration_date', { mode: 'string' }).notNull(),
+    communicationChannelId: varchar('communication_channel_id', { length: 50 })
+      .notNull()
+      .references(() => quoteCommunicationChannels.id, {
+        onDelete: 'restrict',
+        onUpdate: 'cascade',
+      }),
     // 1-to-1 link to a supplier quote (issue #779). Nullable: a client quote with no supplier
     // quote is a valid state. The supplier quote's status mirrors this client quote's status
     // while linked (computed at read time via the reverse lookup). SET NULL on delete so removing
@@ -50,6 +57,7 @@ export const quotes = pgTable(
     index('idx_quotes_client_id').on(table.clientId),
     index('idx_quotes_status').on(table.status),
     index('idx_quotes_created_at').on(table.createdAt),
+    index('idx_quotes_communication_channel_id').on(table.communicationChannelId),
     // At most one client quote may point at a given supplier quote (the other half of the 1-to-1
     // link). Partial (IS NOT NULL) so many quotes can stay unlinked — Postgres allows multiple
     // NULLs but the predicate makes the intent explicit (mirrors the clients.ts unique indexes).

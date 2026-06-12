@@ -45,12 +45,12 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
               undefined,
               false,
               undefined,
-              t.expectedEffort,
               t.revenue,
               t.notes,
               t.monthlyEffort,
               t.billingType,
               t.billingFrequency,
+              t.duration,
             ),
           ),
         );
@@ -71,7 +71,7 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
     description?: string,
     details?: Pick<
       ProjectTask,
-      'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
+      'monthlyEffort' | 'duration' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
     >,
   ): Promise<ProjectTask> => {
     try {
@@ -81,12 +81,12 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
         description,
         recurringConfig?.isRecurring,
         recurringConfig?.pattern,
-        details?.expectedEffort,
         details?.revenue,
         details?.notes,
         details?.monthlyEffort,
         details?.billingType,
         details?.billingFrequency,
+        details?.duration,
       );
       setProjectTasks((prev) => [...prev, task]);
       return task;

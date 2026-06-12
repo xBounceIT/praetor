@@ -342,6 +342,8 @@ export const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({
 export const normalizeQuote = (q: Quote): Quote => ({
   ...q,
   discount: Number(q.discount || 0),
+  communicationChannelId: q.communicationChannelId ?? '',
+  communicationChannelName: q.communicationChannelName ?? '',
   items: (q.items || []).map(normalizeQuoteItem),
 });
 
@@ -393,14 +395,23 @@ export const normalizeTimeEntry = (e: TimeEntry): TimeEntry => {
   return normalized;
 };
 
-export const normalizeTask = (t: ProjectTask): ProjectTask => ({
-  ...t,
-  recurrenceDuration: t.recurrenceDuration ? Number(t.recurrenceDuration) : 0,
-  expectedEffort: t.expectedEffort !== undefined ? Number(t.expectedEffort) : undefined,
-  monthlyEffort: t.monthlyEffort !== undefined ? Number(t.monthlyEffort) : undefined,
-  revenue: t.revenue !== undefined ? Number(t.revenue) : undefined,
-  ...normalizeTaskBilling(t.billingType, t.billingFrequency),
-});
+export const normalizeTask = (t: ProjectTask): ProjectTask => {
+  const monthlyEffort = t.monthlyEffort !== undefined ? Number(t.monthlyEffort) : undefined;
+  const duration = t.duration !== undefined ? Number(t.duration) : 1;
+  const revenue = t.revenue !== undefined ? Number(t.revenue) : undefined;
+  return {
+    ...t,
+    recurrenceDuration: t.recurrenceDuration ? Number(t.recurrenceDuration) : 0,
+    expectedEffort:
+      t.expectedEffort !== undefined ? Number(t.expectedEffort) : (monthlyEffort ?? 0) * duration,
+    monthlyEffort,
+    duration,
+    revenue,
+    totalRevenue:
+      t.totalRevenue !== undefined ? Number(t.totalRevenue) : Number(revenue ?? 0) * duration,
+    ...normalizeTaskBilling(t.billingType, t.billingFrequency),
+  };
+};
 
 const normalizeProjectBilling = (
   billingType: Project['billingType'] | undefined,
@@ -489,6 +500,8 @@ export const normalizeSupplierQuote = (q: SupplierQuote): SupplierQuote => ({
   ...q,
   clientId: q.clientId ?? null,
   clientName: q.clientName ?? null,
+  communicationChannelId: q.communicationChannelId ?? '',
+  communicationChannelName: q.communicationChannelName ?? '',
   items: (q.items || []).map(normalizeSupplierQuoteItem),
 });
 

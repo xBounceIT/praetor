@@ -1,5 +1,5 @@
 {
-  "id": "82907f86-637f-47a9-b7bc-fbbbd4db2f31",
+  "id": "fb8bb07c-ffaf-4394-a8f4-f411b5450c97",
   "prevId": "3640523e-5189-4653-beea-885df845ed71",
   "version": "7",
   "dialect": "postgresql",
@@ -3250,6 +3250,67 @@
       },
       "isRLSEnabled": false
     },
+    "public.quote_communication_channels": {
+      "name": "quote_communication_channels",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(50)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "idx_quote_communication_channels_name": {
+          "name": "idx_quote_communication_channels_name",
+          "columns": [
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "quote_communication_channels_name_unique": {
+          "name": "quote_communication_channels_name_unique",
+          "nullsNotDistinct": false,
+          "columns": ["name"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.quote_items": {
       "name": "quote_items",
       "schema": "",
@@ -3499,6 +3560,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "communication_channel_id": {
+          "name": "communication_channel_id",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
         "linked_supplier_quote_id": {
           "name": "linked_supplier_quote_id",
           "type": "varchar(100)",
@@ -3572,6 +3639,21 @@
           "method": "btree",
           "with": {}
         },
+        "idx_quotes_communication_channel_id": {
+          "name": "idx_quotes_communication_channel_id",
+          "columns": [
+            {
+              "expression": "communication_channel_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "idx_quotes_linked_supplier_quote_id_unique": {
           "name": "idx_quotes_linked_supplier_quote_id_unique",
           "columns": [
@@ -3598,6 +3680,15 @@
           "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
+        },
+        "quotes_communication_channel_id_quote_communication_channels_id_fk": {
+          "name": "quotes_communication_channel_id_quote_communication_channels_id_fk",
+          "tableFrom": "quotes",
+          "tableTo": "quote_communication_channels",
+          "columnsFrom": ["communication_channel_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "cascade"
         },
         "quotes_linked_supplier_quote_id_supplier_quotes_id_fk": {
           "name": "quotes_linked_supplier_quote_id_supplier_quotes_id_fk",
@@ -3719,343 +3810,6 @@
           "value": "\"quote_versions\".\"reason\" IN ('update', 'restore')"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.resale_activities": {
-      "name": "resale_activities",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(50)",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "resale_id": {
-          "name": "resale_id",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "billing_frequency": {
-          "name": "billing_frequency",
-          "type": "varchar(20)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'one_time'"
-        },
-        "category_id": {
-          "name": "category_id",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "cost": {
-          "name": "cost",
-          "type": "numeric(15, 2)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'0'"
-        },
-        "revenue": {
-          "name": "revenue",
-          "type": "numeric(15, 2)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'0'"
-        },
-        "released": {
-          "name": "released",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "due_date": {
-          "name": "due_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "CURRENT_TIMESTAMP"
-        }
-      },
-      "indexes": {
-        "idx_resale_activities_resale_id": {
-          "name": "idx_resale_activities_resale_id",
-          "columns": [
-            {
-              "expression": "resale_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_resale_activities_category_id": {
-          "name": "idx_resale_activities_category_id",
-          "columns": [
-            {
-              "expression": "category_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "resale_activities_resale_id_resales_id_fk": {
-          "name": "resale_activities_resale_id_resales_id_fk",
-          "tableFrom": "resale_activities",
-          "tableTo": "resales",
-          "columnsFrom": ["resale_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "cascade"
-        },
-        "resale_activities_category_id_resale_categories_id_fk": {
-          "name": "resale_activities_category_id_resale_categories_id_fk",
-          "tableFrom": "resale_activities",
-          "tableTo": "resale_categories",
-          "columnsFrom": ["category_id"],
-          "columnsTo": ["id"],
-          "onDelete": "restrict",
-          "onUpdate": "cascade"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "resale_activities_billing_frequency_check": {
-          "name": "resale_activities_billing_frequency_check",
-          "value": "\"resale_activities\".\"billing_frequency\" IN ('monthly', 'quarterly', 'annual', 'one_time')"
-        },
-        "resale_activities_cost_non_negative_check": {
-          "name": "resale_activities_cost_non_negative_check",
-          "value": "\"resale_activities\".\"cost\" >= 0"
-        },
-        "resale_activities_revenue_non_negative_check": {
-          "name": "resale_activities_revenue_non_negative_check",
-          "value": "\"resale_activities\".\"revenue\" >= 0"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.resale_categories": {
-      "name": "resale_categories",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(50)",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "CURRENT_TIMESTAMP"
-        }
-      },
-      "indexes": {
-        "idx_resale_categories_name_unique": {
-          "name": "idx_resale_categories_name_unique",
-          "columns": [
-            {
-              "expression": "name",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.resales": {
-      "name": "resales",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(50)",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "client_order_id": {
-          "name": "client_order_id",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "supplier_order_id": {
-          "name": "supplier_order_id",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "due_date": {
-          "name": "due_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "CURRENT_TIMESTAMP"
-        }
-      },
-      "indexes": {
-        "idx_resales_client_order_id": {
-          "name": "idx_resales_client_order_id",
-          "columns": [
-            {
-              "expression": "client_order_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_resales_supplier_order_id": {
-          "name": "idx_resales_supplier_order_id",
-          "columns": [
-            {
-              "expression": "supplier_order_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_resales_client_supplier_order_unique": {
-          "name": "idx_resales_client_supplier_order_unique",
-          "columns": [
-            {
-              "expression": "client_order_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "supplier_order_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "resales_client_order_id_sales_id_fk": {
-          "name": "resales_client_order_id_sales_id_fk",
-          "tableFrom": "resales",
-          "tableTo": "sales",
-          "columnsFrom": ["client_order_id"],
-          "columnsTo": ["id"],
-          "onDelete": "restrict",
-          "onUpdate": "cascade"
-        },
-        "resales_supplier_order_id_supplier_sales_id_fk": {
-          "name": "resales_supplier_order_id_supplier_sales_id_fk",
-          "tableFrom": "resales",
-          "tableTo": "supplier_sales",
-          "columnsFrom": ["supplier_order_id"],
-          "columnsTo": ["id"],
-          "onDelete": "restrict",
-          "onUpdate": "cascade"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.report_chat_messages": {
@@ -6565,6 +6319,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "communication_channel_id": {
+          "name": "communication_channel_id",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
         "notes": {
           "name": "notes",
           "type": "text",
@@ -6646,6 +6406,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "idx_supplier_quotes_communication_channel_id": {
+          "name": "idx_supplier_quotes_communication_channel_id",
+          "columns": [
+            {
+              "expression": "communication_channel_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -6666,6 +6441,15 @@
           "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
+        },
+        "supplier_quotes_communication_channel_id_quote_communication_channels_id_fk": {
+          "name": "supplier_quotes_communication_channel_id_quote_communication_channels_id_fk",
+          "tableFrom": "supplier_quotes",
+          "tableTo": "quote_communication_channels",
+          "columnsFrom": ["communication_channel_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "cascade"
         }
       },
       "compositePrimaryKeys": {},

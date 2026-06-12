@@ -103,11 +103,12 @@ describe('projectMetricsRepo.listForProjects', () => {
     expect(result.get('p-order')?.budgetUsedPct).toBe(25);
   });
 
-  test('query encodes the UI semantics for task revenue, linked order total, cost, and billing', async () => {
+  test('query encodes the UI semantics for duration-scaled task revenue, linked order total, cost, and billing', async () => {
     exec.enqueue({ rows: [] });
     await projectMetricsRepo.listForProjects(['p1'], NOW, testDb);
     const sql = exec.calls[0].sql.toLowerCase();
     expect(sql).toContain('from tasks');
+    expect(sql).toContain('coalesce(t.revenue, 0) * coalesce(t.duration, 1)');
     expect(sql).toContain('sale_items');
     expect(sql).toContain('round((coalesce(te.duration');
     expect(sql).toContain("then 'mixed'");
