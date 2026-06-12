@@ -264,7 +264,7 @@ export interface Project {
   description?: string;
   isDisabled?: boolean;
   createdAt?: number;
-  orderId?: string;
+  orderId?: string | null;
   offerId?: string | null;
   startDate?: string | null;
   endDate?: string | null;

@@ -199,6 +199,7 @@ const SAMPLE_PROJECT = {
 const VALID_CREATE_PAYLOAD = {
   name: 'Site',
   clientId: 'c-1',
+  orderId: 'co-1',
   offerId: 'of-1',
   startDate: '2026-01-01',
   endDate: '2026-12-31',
@@ -254,10 +255,11 @@ beforeEach(async () => {
   isClientAssignedToUserMock.mockResolvedValue(true);
   isProjectAssignedToUserMock.mockResolvedValue(true);
   isUserManagedByMock.mockResolvedValue(true);
-  // Default: order/offer lookups return null (not in DB) so the consistency check is a no-op
-  // and the real FK violation surfaces from the repo path under test.
-  findOrderClientIdByIdMock.mockResolvedValue(null);
+  // Default: the mandatory order belongs to the request client. Individual tests override this
+  // for foreign or missing order cases.
+  findOrderClientIdByIdMock.mockResolvedValue('c-1');
   findOfferClientIdByIdMock.mockResolvedValue(null);
+  findClientLinksByIdMock.mockResolvedValue({ orderId: 'co-existing', offerId: null });
 
   testApp = await buildRouteTestApp(routePlugin, '/api/projects');
 });
@@ -436,6 +438,7 @@ describe('POST /api/projects', () => {
       payload: {
         name: 'Website',
         clientId: 'c-1',
+        orderId: 'co-1',
         offerId: 'of-1',
         startDate: '2026-01-01',
         endDate: '2026-12-31',
@@ -549,6 +552,23 @@ describe('POST /api/projects', () => {
     expect(createMock).not.toHaveBeenCalled();
   });
 
+  test('400: unknown orderId is rejected on create', async () => {
+    findOrderClientIdByIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { ...VALID_CREATE_PAYLOAD, orderId: 'co-missing' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'orderId does not belong to the specified clientId',
+    });
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
   test('201: orderId belonging to the same client is allowed', async () => {
     findOrderClientIdByIdMock.mockResolvedValue('c-1');
     createMock.mockResolvedValue(SAMPLE_PROJECT);
@@ -567,7 +587,7 @@ describe('POST /api/projects', () => {
     );
   });
 
-  test('201: empty-string orderId is treated as null (no consistency lookup)', async () => {
+  test('400: empty-string orderId is rejected on create', async () => {
     createMock.mockResolvedValue(SAMPLE_PROJECT);
 
     const res = await testApp.inject({
@@ -577,29 +597,23 @@ describe('POST /api/projects', () => {
       payload: { ...VALID_CREATE_PAYLOAD, orderId: '' },
     });
 
-    expect(res.statusCode).toBe(201);
-    expect(createMock).toHaveBeenCalledWith(
-      expect.objectContaining({ orderId: null }),
-      TX_SENTINEL,
-    );
+    expect(res.statusCode).toBe(400);
+    expect(createMock).not.toHaveBeenCalled();
     expect(findOrderClientIdByIdMock).not.toHaveBeenCalled();
   });
 
-  test('201: creates project with orderId omitted (orderId stored as null)', async () => {
+  test('400: creates project with orderId omitted is rejected', async () => {
     createMock.mockResolvedValue(SAMPLE_PROJECT);
 
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/projects',
       headers: authHeader(),
-      payload: { ...VALID_CREATE_PAYLOAD, name: 'Orderless' },
+      payload: { ...VALID_CREATE_PAYLOAD, name: 'Orderless', orderId: undefined },
     });
 
-    expect(res.statusCode).toBe(201);
-    expect(createMock).toHaveBeenCalledWith(
-      expect.objectContaining({ orderId: null }),
-      TX_SENTINEL,
-    );
+    expect(res.statusCode).toBe(400);
+    expect(createMock).not.toHaveBeenCalled();
   });
 
   test('400: offerId belonging to a different client is rejected', async () => {
@@ -661,7 +675,9 @@ describe('POST /api/projects', () => {
     expect(JSON.parse(res.body)).toEqual({ error: 'clientId is required' });
   });
 
-  test('400: missing offerId', async () => {
+  test('201: missing offerId creates project without an offer link', async () => {
+    createMock.mockResolvedValue({ ...SAMPLE_PROJECT, orderId: 'co-1', offerId: null });
+
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/projects',
@@ -669,8 +685,30 @@ describe('POST /api/projects', () => {
       payload: { ...VALID_CREATE_PAYLOAD, offerId: undefined },
     });
 
-    expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body).error).toBe('Bad Request');
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ offerId: null }),
+      TX_SENTINEL,
+    );
+    expect(findOfferClientIdByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('201: null offerId creates project without an offer link', async () => {
+    createMock.mockResolvedValue({ ...SAMPLE_PROJECT, orderId: 'co-1', offerId: null });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { ...VALID_CREATE_PAYLOAD, offerId: null },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ offerId: null }),
+      TX_SENTINEL,
+    );
+    expect(findOfferClientIdByIdMock).not.toHaveBeenCalled();
   });
 
   test('400: missing startDate', async () => {
@@ -750,6 +788,7 @@ describe('POST /api/projects', () => {
   });
 
   test('400: ForeignKeyError mapped to 400', async () => {
+    findOrderClientIdByIdMock.mockResolvedValue('c-missing');
     createMock.mockImplementation(async () => {
       throw new ForeignKeyError('Client');
     });
@@ -961,6 +1000,8 @@ describe('PUT /api/projects/:id', () => {
 
   test('200: client change triggers cascade assignments + removal', async () => {
     lockClientIdByIdMock.mockResolvedValue('c-old');
+    findClientLinksByIdMock.mockResolvedValue({ orderId: 'co-new', offerId: null });
+    findOrderClientIdByIdMock.mockResolvedValue('c-new');
     findNonTopManagerUserIdsMock.mockResolvedValue(['u2', 'u3']);
     updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, clientId: 'c-new' });
 
@@ -1013,6 +1054,24 @@ describe('PUT /api/projects/:id', () => {
       url: '/api/projects/p-1',
       headers: authHeader(),
       payload: { orderId: 'co-foreign' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'orderId does not belong to the specified clientId',
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('400: unknown orderId is rejected on update', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    findOrderClientIdByIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { orderId: 'co-missing' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -1086,7 +1145,8 @@ describe('PUT /api/projects/:id', () => {
     // inconsistent. The PUT must re-validate the existing link, not just patch values.
     lockClientIdByIdMock.mockResolvedValue('c-old');
     findNonTopManagerUserIdsMock.mockResolvedValue([]);
-    findClientLinksByIdMock.mockResolvedValue({ orderId: null, offerId: 'of-old' });
+    findClientLinksByIdMock.mockResolvedValue({ orderId: 'co-new', offerId: 'of-old' });
+    findOrderClientIdByIdMock.mockResolvedValue('c-new');
     findOfferClientIdByIdMock.mockResolvedValue('c-old');
 
     const res = await testApp.inject({
@@ -1123,7 +1183,7 @@ describe('PUT /api/projects/:id', () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 
-  test('200: client change with no existing links skips the consistency lookups', async () => {
+  test('400: client change with no existing order is rejected', async () => {
     lockClientIdByIdMock.mockResolvedValue('c-old');
     findNonTopManagerUserIdsMock.mockResolvedValue([]);
     findClientLinksByIdMock.mockResolvedValue({ orderId: null, offerId: null });
@@ -1136,12 +1196,14 @@ describe('PUT /api/projects/:id', () => {
       payload: { clientId: 'c-new' },
     });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'orderId is required' });
     expect(findOrderClientIdByIdMock).not.toHaveBeenCalled();
     expect(findOfferClientIdByIdMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
-  test('200: empty-string orderId is normalized to null on update', async () => {
+  test('400: empty-string orderId is rejected on update', async () => {
     lockClientIdByIdMock.mockResolvedValue('c-1');
     updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, orderId: null });
 
@@ -1152,17 +1214,13 @@ describe('PUT /api/projects/:id', () => {
       payload: { orderId: '' },
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(updateMock).toHaveBeenCalledWith(
-      'p-1',
-      expect.objectContaining({ orderId: null }),
-      TX_SENTINEL,
-    );
-    // No order lookup should fire when normalized to null.
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'orderId is required' });
+    expect(updateMock).not.toHaveBeenCalled();
     expect(findOrderClientIdByIdMock).not.toHaveBeenCalled();
   });
 
-  test('200: clears orderId when null is sent', async () => {
+  test('400: clearing orderId with null is rejected', async () => {
     lockClientIdByIdMock.mockResolvedValue('c-1');
     updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, orderId: null });
 
@@ -1173,12 +1231,9 @@ describe('PUT /api/projects/:id', () => {
       payload: { orderId: null },
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(updateMock).toHaveBeenCalledWith(
-      'p-1',
-      expect.objectContaining({ orderId: null }),
-      TX_SENTINEL,
-    );
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'orderId is required' });
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   test('200: leaves orderId unchanged when not provided', async () => {
@@ -1405,6 +1460,7 @@ describe('PUT /api/projects/:id', () => {
 
   test('400: ForeignKeyError mapped to 400', async () => {
     lockClientIdByIdMock.mockResolvedValue('c-1');
+    findOrderClientIdByIdMock.mockResolvedValue('c-bad');
     updateMock.mockImplementation(async () => {
       throw new ForeignKeyError('Client');
     });

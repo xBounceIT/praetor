@@ -29,11 +29,11 @@ For each project and task, you can set the billing type (retainer or time and ma
 
 Use estimated monthly effort to plan recurring load and total effort to track progress against the overall expected hours.
 
-The **Add Project** action opens a focused dialog with only what's needed to create a project: client, name, dates, offer, type, billing, optional order, optional revenue, and a draft tasks table. Submitting the dialog takes you straight to the new project's dedicated detail page.
+The **Add Project** action opens a focused dialog with only what's needed to create a project: client order, client, name, dates, optional offer, type, billing, optional revenue, and a draft tasks table. Submitting the dialog takes you straight to the new project's dedicated detail page.
 
 Click any row in the projects list to open the **project detail page**. The detail page replaces the legacy edit dialog and is laid out in two areas:
 
-- The top section lays out the project fields horizontally (client, name, description, dates, offer, type, billing, revenue, disabled toggle) next to the inline-editable project tasks table.
+- The top section lays out the project fields horizontally (client order, client, name, description, dates, offer, type, billing, revenue, disabled toggle) next to the inline-editable project tasks table.
 - Below, the **project dashboard** shows KPIs (total hours, total cost, team size, budget used %) and four charts: hours by user (broken down by task), hours by task (logged hours against the available effort), cost vs revenue, and monthly activity. Charts populate as time is logged against the project; before any entries exist, each chart shows an empty state. The page also surfaces a notice when (a) the project has more than 5,000 entries (only the most recent are loaded), (b) your role limits which users' entries you can see (totals reflect just your scope), or (c) you don't have permission to view time entries at all.
 
 Next to the project dashboard heading are two buttons, **Edit** and **Views**. **Edit** turns the whole dashboard — every KPI stat card, the project timeline, and all four charts — into a free-form layout you can rearrange. Drag a card by its header to move it anywhere on the 12-column grid, drag its right edge, bottom edge, or corner to resize it, and use the eye button on a card to hide it (or restore a hidden one). You can also move the focused card with the arrow keys, and resize it by holding **Shift** with the arrow keys. Cards float up to fill the gaps left behind. When you're done, keep the arrangement for this project or save it as a reusable view. Editing a project's dashboard creates a **per-project layout** that affects only that project. The **Views** menu lets you apply one of your saved views, choose **Use global default** (drop this project's custom layout so it follows the shared default again), or choose **Set as global default** (make the current arrangement the baseline for every project that doesn't have its own layout).
@@ -43,9 +43,10 @@ Next to the project dashboard heading are two buttons, **Edit** and **Views**. *
 When creating or editing a project you can fill in:
 
 - **Project start date** and **Project end date** — define the planned window. Both are required (at creation and on every subsequent save from the detail page) so projects always carry a planning window; the end date must not precede the start date.
-- **Offer reference** — links the project to an accepted offer. This field is required.
+- **Client order** — links the project to a confirmed customer order. This field is required at creation and when saving from the detail page; choosing an order sets the project's client from that order and locks it.
+- **Offer reference** — links the project to an accepted offer when you need to track its commercial origin. This field is optional and can stay empty.
 - **Type** — classifies the project as **Active** (Attivo) or **Passive** (Passivo). It is a required field (with the same `*` marker as Client and Project Name): the project can't be created until you pick a value, and the selected type is shown in the projects list and on the detail page. Projects that already existed before this field was introduced default to **Active**, but the **first time** one is edited from the detail page you must explicitly confirm the type: the selector starts empty and the save is blocked until you choose a value, so the choice isn't silently left at the default.
-- **Project revenue** — resolved with this precedence: (1) if the activities have a per-row revenue, the project revenue is the sum of those values shown read-only; (2) otherwise, if an order is linked, the revenue is inherited read-only from the order total; (3) otherwise you can enter it manually.
+- **Project revenue** — resolved with this precedence: (1) if the activities have a per-row revenue, the project revenue is the sum of those values shown read-only; (2) otherwise you can enter it manually. The linked order total is not imported automatically as project revenue.
 
 When a project ends, check that tasks are consistent and that no pending entries remain.
 

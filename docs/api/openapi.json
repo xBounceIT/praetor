@@ -10279,7 +10279,10 @@
                     "type": "string"
                   },
                   "offerId": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "startDate": {
                     "type": "string"
@@ -10318,7 +10321,7 @@
                 "required": [
                   "name",
                   "clientId",
-                  "offerId",
+                  "orderId",
                   "startDate",
                   "endDate",
                   "tipo"
@@ -27139,6 +27142,48 @@
                             "discount"
                           ]
                         }
+                      },
+                      "autoCreated": {
+                        "type": "object",
+                        "properties": {
+                          "clientOrder": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id"
+                            ]
+                          },
+                          "supplierOrders": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "supplierQuoteId": {
+                                  "type": "string"
+                                },
+                                "supplierName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "supplierQuoteId",
+                                "supplierName"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "clientOrder",
+                          "supplierOrders"
+                        ]
                       }
                     },
                     "required": [
@@ -27647,6 +27692,48 @@
                           "discount"
                         ]
                       }
+                    },
+                    "autoCreated": {
+                      "type": "object",
+                      "properties": {
+                        "clientOrder": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id"
+                          ]
+                        },
+                        "supplierOrders": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "supplierQuoteId": {
+                                "type": "string"
+                              },
+                              "supplierName": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "supplierQuoteId",
+                              "supplierName"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "clientOrder",
+                        "supplierOrders"
+                      ]
                     }
                   },
                   "required": [
@@ -28134,6 +28221,48 @@
                           "discount"
                         ]
                       }
+                    },
+                    "autoCreated": {
+                      "type": "object",
+                      "properties": {
+                        "clientOrder": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id"
+                          ]
+                        },
+                        "supplierOrders": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "supplierQuoteId": {
+                                "type": "string"
+                              },
+                              "supplierName": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "supplierQuoteId",
+                              "supplierName"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "clientOrder",
+                        "supplierOrders"
+                      ]
                     }
                   },
                   "required": [
@@ -28634,6 +28763,48 @@
                           "discount"
                         ]
                       }
+                    },
+                    "autoCreated": {
+                      "type": "object",
+                      "properties": {
+                        "clientOrder": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id"
+                          ]
+                        },
+                        "supplierOrders": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "supplierQuoteId": {
+                                "type": "string"
+                              },
+                              "supplierName": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "supplierQuoteId",
+                              "supplierName"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "clientOrder",
+                        "supplierOrders"
+                      ]
                     }
                   },
                   "required": [
@@ -29406,6 +29577,48 @@
                           "discount"
                         ]
                       }
+                    },
+                    "autoCreated": {
+                      "type": "object",
+                      "properties": {
+                        "clientOrder": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id"
+                          ]
+                        },
+                        "supplierOrders": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "supplierQuoteId": {
+                                "type": "string"
+                              },
+                              "supplierName": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "supplierQuoteId",
+                              "supplierName"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "clientOrder",
+                        "supplierOrders"
+                      ]
                     }
                   },
                   "required": [
@@ -31047,6 +31260,28 @@
                           ]
                         }
                       },
+                      "supplierOrders": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "supplierQuoteId": {
+                              "type": "string"
+                            },
+                            "supplierName": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "supplierQuoteId",
+                            "supplierName"
+                          ]
+                        }
+                      },
                       "warnings": {
                         "type": "array",
                         "items": {
@@ -31562,6 +31797,28 @@
                         ]
                       }
                     },
+                    "supplierOrders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "supplierQuoteId": {
+                            "type": "string"
+                          },
+                          "supplierName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "supplierQuoteId",
+                          "supplierName"
+                        ]
+                      }
+                    },
                     "warnings": {
                       "type": "array",
                       "items": {
@@ -32059,6 +32316,28 @@
                           "unitPrice",
                           "productCost",
                           "discount"
+                        ]
+                      }
+                    },
+                    "supplierOrders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "supplierQuoteId": {
+                            "type": "string"
+                          },
+                          "supplierName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "supplierQuoteId",
+                          "supplierName"
                         ]
                       }
                     },
@@ -32985,6 +33264,28 @@
                           "unitPrice",
                           "productCost",
                           "discount"
+                        ]
+                      }
+                    },
+                    "supplierOrders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "supplierQuoteId": {
+                            "type": "string"
+                          },
+                          "supplierName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "supplierQuoteId",
+                          "supplierName"
                         ]
                       }
                     },
