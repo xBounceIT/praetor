@@ -1,4 +1,4 @@
-import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus, Settings2, Trash2 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -859,6 +859,15 @@ const ResalesView: React.FC<ResalesViewProps> = ({
           <p className="text-sm text-muted-foreground">{t('resales.subtitle')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={openCategoryModal}
+            disabled={!canCreate && !canUpdate && !canDelete}
+          >
+            <Settings2 className="size-4" />
+            {t('resales.manageCategories')}
+          </Button>
           {canCreate && (
             <HeaderAddButton onClick={openCreateResale}>{t('resales.addResale')}</HeaderAddButton>
           )}

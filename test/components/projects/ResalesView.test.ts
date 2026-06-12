@@ -43,9 +43,10 @@ describe('ResalesView wiring', () => {
     expect(source).toContain('activities: activityInputs');
   });
 
-  test('manages resale categories from the create activity category control', async () => {
+  test('manages resale categories from the header and create activity category control', async () => {
     const source = await readSource();
-    expect(source).not.toContain('Settings2');
+    expect(source).toContain('Settings2');
+    expect(source).toContain('resales.manageCategories');
     expect(source).toContain('onClick={openCategoryModal}');
     expect(source).toContain("t('common:buttons.manage')");
     expect(source).toContain('rounded-md border border-border bg-muted/30 p-4');

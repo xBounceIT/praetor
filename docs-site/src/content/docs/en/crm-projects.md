@@ -59,7 +59,7 @@ Each resale shows **Resale revenue** as the sum of the revenues entered on its a
 
 Activity costs remain editable: when the sum of activity costs does not match the supplier order total, the view shows a **variance**. The variance is an operational warning and does not block saving, so you can reconcile the activity costs progressively.
 
-Resale categories are a dedicated catalog seeded with **Hardware**, **Sottoscrizione**, and **Licenza**. You manage them from the **Category** control inside the create-resale form, matching the internal-listing product category flow; a category used by activities cannot be deleted.
+Resale categories are a dedicated catalog seeded with **Hardware**, **Sottoscrizione**, and **Licenza**. You manage them from the **Resale Categories** button in the Resales view or from the **Category** control inside the create-resale form, matching the internal-listing product category flow; a category used by activities cannot be deleted.
 
 Access is controlled by separate **Resales** permissions (`projects.resales.view/create/update/delete`), granted to the Manager and Top Manager profiles by default.
 

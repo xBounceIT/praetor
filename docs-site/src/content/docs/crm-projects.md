@@ -59,7 +59,7 @@ Ogni rivendita mostra il **Ricavo Rivendita** come somma dei ricavi inseriti nel
 
 Il costo delle attività è modificabile: se la somma dei costi attività non coincide con il totale dell'ordine fornitore, la vista mostra una **varianza**. La varianza è un avviso operativo e non blocca il salvataggio, così puoi completare l'allineamento progressivamente.
 
-Le categorie Rivendite sono un catalogo dedicato, inizializzato con **Hardware**, **Sottoscrizione** e **Licenza**. Puoi gestirle dal controllo **Categoria** dentro il form di creazione rivendita, con lo stesso comportamento delle categorie prodotto del listino interno; una categoria usata da attività non può essere eliminata.
+Le categorie Rivendite sono un catalogo dedicato, inizializzato con **Hardware**, **Sottoscrizione** e **Licenza**. Puoi gestirle dal pulsante **Categorie Rivendite** nella vista Rivendite oppure dal controllo **Categoria** dentro il form di creazione rivendita, con lo stesso comportamento delle categorie prodotto del listino interno; una categoria usata da attività non può essere eliminata.
 
 L'accesso è governato dai permessi separati **Rivendite** (`projects.resales.view/create/update/delete`), assegnati per impostazione predefinita ai profili Manager e Top Manager.
 
