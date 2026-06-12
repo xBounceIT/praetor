@@ -47,10 +47,16 @@ import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
 import {
   buildProductQuickViewHref,
-  buildQuoteIdBySupplierQuoteItemId,
   buildSupplierQuoteQuickViewHref,
   resolveLinkedSupplierQuoteId,
 } from '../../utils/quickViewLinks';
+import { effectiveQuoteStatus } from '../../utils/quoteStatus';
+import {
+  buildSupplierQuoteItemIndex,
+  isSupplierLineLocked,
+  isSupplierLineStale,
+  refreshedSupplierLineFields,
+} from '../../utils/supplierLineSync';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DateField from '../shared/DateField';
@@ -69,6 +75,7 @@ import {
 } from '../shared/ModalLayout';
 import QuickViewLinkButton from '../shared/QuickViewLinkButton';
 import SelectControl from '../shared/SelectControl';
+import StaleSupplierDataButton from '../shared/StaleSupplierDataButton';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';
@@ -256,6 +263,11 @@ const EMPTY_PRICING_TOTALS: PricingTotals = {
   marginPercentage: 0,
 };
 
+// One label shape for a supplier-quote line item, shared by the picker options and the
+// display-value lookup so the two can never drift.
+const supplierQuoteItemLabel = (quote: SupplierQuote, item: SupplierQuote['items'][number]) =>
+  `${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)})`;
+
 const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   offers,
   clients,
@@ -305,26 +317,30 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   );
   const today = getLocalDateString();
 
-  const acceptedSupplierQuotes = useMemo(
+  // Lines source from DRAFT supplier quotes (#779 derived model): a supplier quote starts as
+  // draft and progresses only with the client document that uses it. Order-locked quotes are
+  // final procurement — sourcing them would mint a line whose sync the server refuses. The date
+  // check is a stale-cache belt — expired never reads as draft.
+  const sourceableSupplierQuotes = useMemo(
     () =>
       supplierQuotes.filter(
-        (q) => q.status === 'accepted' && !isDateOnlyBeforeToday(q.expirationDate, today),
+        (q) =>
+          q.status === 'draft' &&
+          !q.linkedOrderId &&
+          !isDateOnlyBeforeToday(q.expirationDate, today),
       ),
     [supplierQuotes, today],
   );
 
   const supplierQuoteItemOptions = useMemo(() => {
     const options: Array<{ id: string; name: string }> = [];
-    for (const quote of acceptedSupplierQuotes) {
+    for (const quote of sourceableSupplierQuotes) {
       for (const item of quote.items) {
-        options.push({
-          id: item.id,
-          name: `${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)})`,
-        });
+        options.push({ id: item.id, name: supplierQuoteItemLabel(quote, item) });
       }
     }
     return options;
-  }, [acceptedSupplierQuotes]);
+  }, [sourceableSupplierQuotes]);
 
   const supplierQuoteSelectOptions = useMemo(
     () => [
@@ -334,10 +350,34 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     [supplierQuoteItemOptions, t],
   );
 
+  // item-id → its CURRENT supplier quote + item, across ALL supplier quotes (not just the
+  // selectable ones), for the bidirectional-sync affordances (#779): lock detection
+  // (order-locked/frozen sourced fields) and stale-data detection (the per-line
+  // "data drifted — sync?" refresh button). Quick-view ids and display labels derive from it,
+  // so an existing line referencing a no-longer-selectable but extant quote still resolves.
+  const supplierQuoteItemIndex = useMemo(
+    () => buildSupplierQuoteItemIndex(supplierQuotes),
+    [supplierQuotes],
+  );
+
   const getSupplierQuoteItemDisplayValue = (itemId?: string | null) => {
-    if (!itemId) return t('sales:clientQuotes.noSupplierQuote');
-    const option = supplierQuoteItemOptions.find((o) => o.id === itemId);
-    return option?.name ?? t('sales:clientQuotes.noSupplierQuote');
+    const ref = itemId ? supplierQuoteItemIndex.get(itemId) : undefined;
+    return ref
+      ? supplierQuoteItemLabel(ref.quote, ref.item)
+      : t('sales:clientQuotes.noSupplierQuote');
+  };
+
+  // Pulls the linked supplier item's current quantity/cost back into the line, mirroring the
+  // linking math: the sale price is recomputed from the refreshed cost and the line's MOL (#779).
+  const refreshLineFromSupplier = (index: number, source: SupplierQuote['items'][number]) => {
+    if (isReadOnly) return;
+    setFormData((prev) => {
+      const items = [...(prev.items || [])];
+      const cur = items[index];
+      if (!cur) return prev;
+      items[index] = { ...cur, ...refreshedSupplierLineFields(cur, source) };
+      return { ...prev, items };
+    });
   };
 
   const activeProductIds = useMemo(
@@ -357,9 +397,10 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     () => new Set(supplierQuotes.map((q) => q.id)),
     [supplierQuotes],
   );
+  // O(1) item-id → parent-quote-id projection for the shared quick-view helpers.
   const quoteIdBySupplierQuoteItemId = useMemo(
-    () => buildQuoteIdBySupplierQuoteItemId(supplierQuotes),
-    [supplierQuotes],
+    () => new Map(Array.from(supplierQuoteItemIndex, ([id, ref]) => [id, ref.quote.id] as const)),
+    [supplierQuoteItemIndex],
   );
 
   const updateProductSelection = (index: number, productId: string) => {
@@ -407,13 +448,48 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     setProductRowToDelete(null);
   }, []);
 
-  const baseReadOnly = Boolean(editingOffer && editingOffer.status !== 'draft');
+  // Derived #779 status: the server-computed effectiveStatus is OR-combined with the local date
+  // derivation, so a row that crosses its expiration while the list sits unrefreshed (midnight
+  // rollover) still locks, and a server-flagged row stays locked under clock skew. Terminal
+  // accepted/denied never expire — the shared model returns them unchanged for any date.
+  const isOfferExpired = useCallback(
+    (offer: ClientOffer) =>
+      offer.effectiveStatus === 'expired' ||
+      effectiveQuoteStatus(offer.status, isDateOnlyBeforeToday(offer.expirationDate, today)) ===
+        'expired',
+    [today],
+  );
+
+  // Single derived-status policy for the Status column: the badge, the filter options, and
+  // sorting all use this value, so an expired offer surfaces as a filterable "Expired" entry
+  // instead of hiding under its stored Draft/Sent (#779).
+  const effectiveRowStatus = useCallback(
+    (offer: ClientOffer) => (isOfferExpired(offer) ? 'expired' : offer.status),
+    [isOfferExpired],
+  );
+
+  const isEditingExpired = Boolean(editingOffer && isOfferExpired(editingOffer));
+  // Expired offers are read-only EXCEPT their expiration date — extending it is the only exit
+  // from `expired` (issue #779) — so an expired DRAFT offer locks too.
+  const baseReadOnly = Boolean(
+    editingOffer && (editingOffer.status !== 'draft' || isEditingExpired),
+  );
   const isReadOnly = baseReadOnly || previewVersion !== null;
   const isClientLocked = Boolean(editingOffer?.linkedQuoteId);
+  // Expired offers only (quote-style): the expiration DateField stays enabled while the rest of
+  // the form is read-only, because extending the date is the one exit from `expired` (#779).
+  // Valid sent offers stay fully read-only in the form — exposing the date there invited no-op
+  // submits that wrote needless version snapshots and audit rows.
+  const expirationEditableWhileReadOnly = isEditingExpired && previewVersion === null;
 
-  const readOnlyReason = t('sales:clientOffers.readOnlyStatus', {
-    defaultValue: 'Read-only due to non-draft status',
-  });
+  const readOnlyReason = isEditingExpired
+    ? t('sales:clientOffers.readOnlyExpired', {
+        defaultValue:
+          'Read-only: the offer has expired — extend the expiration date to revalidate it',
+      })
+    : t('sales:clientOffers.readOnlyStatus', {
+        defaultValue: 'Read-only due to non-draft status',
+      });
   const clientLockedReason = t('sales:clientOffers.clientLockedByQuote', {
     defaultValue: 'Locked due to linked quote',
   });
@@ -480,10 +556,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
   const getStatusLabel = useCallback(
     (status: string) => {
+      if (status === 'expired') {
+        return t('sales:clientOffers.statusExpired', { defaultValue: 'Expired' });
+      }
       const option = STATUS_OPTIONS.find((o) => o.id === status);
       return option ? option.name : status;
     },
-    [STATUS_OPTIONS],
+    [STATUS_OPTIONS, t],
   );
 
   const getPaymentTermsLabel = useCallback(
@@ -697,10 +776,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     {
       header: t('sales:clientOffers.statusColumn', { defaultValue: 'Status' }),
       accessorKey: 'status',
+      // Filter/sort on the DERIVED status (#779): expired offers get their own filter option.
+      accessorFn: effectiveRowStatus,
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[9rem]',
       cell: ({ row }) => {
-        return <StatusBadge type={row.status as StatusType} label={getStatusLabel(row.status)} />;
+        const badgeStatus = effectiveRowStatus(row) as StatusType;
+        return <StatusBadge type={badgeStatus} label={getStatusLabel(badgeStatus)} />;
       },
       filterFormat: (value) => getStatusLabel(String(value ?? '')),
     },
@@ -719,6 +801,17 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
       disableFiltering: true,
       cell: ({ row }) => {
         const hasOrder = offerIdsWithOrders.has(row.id);
+        // Scaduto freezes status transitions — the only exit is extending the expiration date
+        // from the edit modal (issue #779); the server enforces the same rule with a 409.
+        const expired = isOfferExpired(row);
+        const expiredTitle = t('sales:clientOffers.expiredActionsDisabled', {
+          defaultValue: 'Expired offers cannot change status; extend the expiration date.',
+        });
+        const deleteTitle = expired
+          ? t('sales:clientOffers.expiredCannotDelete', {
+              defaultValue: 'Expired offers cannot be deleted',
+            })
+          : t('common:buttons.delete');
         const canRevertRowToDraft =
           canRevertTerminalStatus &&
           Boolean(onRevertOfferToDraft) &&
@@ -775,19 +868,23 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (expired) return;
                         handleStatusUpdate(row.id, { status: 'sent' });
                       }}
+                      disabled={expired}
                       aria-label={t('sales:clientOffers.markSent', {
                         defaultValue: 'Mark as sent',
                       })}
-                      className="p-2 rounded-lg transition-all text-blue-700 hover:text-blue-600 hover:bg-blue-50"
+                      className={`p-2 rounded-lg transition-all text-blue-700 ${expired ? 'cursor-not-allowed opacity-50' : 'hover:text-blue-600 hover:bg-blue-50'}`}
                     >
                       <i className="fa-solid fa-paper-plane"></i>
                     </button>
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>
-                  {t('sales:clientOffers.markSent', { defaultValue: 'Mark as sent' })}
+                  {expired
+                    ? expiredTitle
+                    : t('sales:clientOffers.markSent', { defaultValue: 'Mark as sent' })}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -800,21 +897,25 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (expired) return;
                           handleStatusUpdate(row.id, { status: 'accepted' });
                         }}
+                        disabled={expired}
                         aria-label={t('sales:clientOffers.markAccepted', {
                           defaultValue: 'Mark as accepted',
                         })}
-                        className="p-2 rounded-lg transition-all text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50"
+                        className={`p-2 rounded-lg transition-all text-emerald-700 ${expired ? 'cursor-not-allowed opacity-50' : 'hover:text-emerald-600 hover:bg-emerald-50'}`}
                       >
                         <i className="fa-solid fa-check"></i>
                       </button>
                     </span>
                   </TooltipTrigger>
                   <TooltipContent>
-                    {t('sales:clientOffers.markAccepted', {
-                      defaultValue: 'Mark as accepted',
-                    })}
+                    {expired
+                      ? expiredTitle
+                      : t('sales:clientOffers.markAccepted', {
+                          defaultValue: 'Mark as accepted',
+                        })}
                   </TooltipContent>
                 </Tooltip>
                 <Tooltip>
@@ -824,19 +925,23 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (expired) return;
                           handleStatusUpdate(row.id, { status: 'denied' });
                         }}
+                        disabled={expired}
                         aria-label={t('sales:clientOffers.markDenied', {
                           defaultValue: 'Mark as denied',
                         })}
-                        className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
+                        className={`p-2 rounded-lg transition-all text-red-600 ${expired ? 'cursor-not-allowed opacity-50' : 'hover:text-red-600 hover:bg-red-50'}`}
                       >
                         <i className="fa-solid fa-xmark"></i>
                       </button>
                     </span>
                   </TooltipTrigger>
                   <TooltipContent>
-                    {t('sales:clientOffers.markDenied', { defaultValue: 'Mark as denied' })}
+                    {expired
+                      ? expiredTitle
+                      : t('sales:clientOffers.markDenied', { defaultValue: 'Mark as denied' })}
                   </TooltipContent>
                 </Tooltip>
               </>
@@ -907,16 +1012,18 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (expired) return;
                         dispatch({ type: 'promptDelete', offer: row });
                       }}
-                      aria-label={t('common:buttons.delete')}
-                      className="p-2 text-red-600 rounded-lg transition-all hover:text-red-600 hover:bg-red-50"
+                      disabled={expired}
+                      aria-label={deleteTitle}
+                      className={`p-2 text-red-600 rounded-lg transition-all ${expired ? 'cursor-not-allowed opacity-50' : 'hover:text-red-600 hover:bg-red-50'}`}
                     >
                       <i className="fa-solid fa-trash-can"></i>
                     </button>
                   </span>
                 </TooltipTrigger>
-                <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
+                <TooltipContent>{deleteTitle}</TooltipContent>
               </Tooltip>
             )}
           </div>
@@ -993,6 +1100,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           current.supplierQuoteItemId = null;
           current.supplierQuoteSupplierName = null;
           current.supplierQuoteUnitPrice = null;
+          current.supplierQuoteBaseQuantity = null;
+          current.supplierQuoteBaseUnitPrice = null;
         }
       }
 
@@ -1002,6 +1111,8 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           current.supplierQuoteItemId = null;
           current.supplierQuoteSupplierName = null;
           current.supplierQuoteUnitPrice = null;
+          current.supplierQuoteBaseQuantity = null;
+          current.supplierQuoteBaseUnitPrice = null;
 
           const product = products.find((p) => p.id === current.productId);
           if (product) {
@@ -1014,7 +1125,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           return { ...prev, items };
         }
 
-        const selectedQuote = acceptedSupplierQuotes.find((quote) =>
+        const selectedQuote = sourceableSupplierQuotes.find((quote) =>
           quote.items.some((item) => item.id === value),
         );
         const selectedQuoteItem = selectedQuote?.items.find((item) => item.id === value);
@@ -1031,21 +1142,26 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
           current.supplierQuoteId = selectedQuote.id;
           current.supplierQuoteItemId = selectedQuoteItem.id;
           current.supplierQuoteSupplierName = selectedQuote.supplierName;
-          current.supplierQuoteUnitPrice = netCost;
-          current.quantity = selectedQuoteItem.quantity;
-
-          let salePrice: number;
+          current.unitType = selectedQuoteItem.unitType || 'hours';
           if (product) {
-            const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-            salePrice = calcProductSalePrice(netCost, mol);
             current.productCost = Number(product.costo);
             current.productMolPercentage = product.molPercentage;
           } else {
-            salePrice = netCost;
             current.productCost = netCost;
             current.productMolPercentage = null;
           }
-          current.unitPrice = salePrice;
+          // Same math as the refresh chip: refreshedSupplierLineFields recomputes the sale price
+          // from the picked cost and the line MOL, converting FROM the supplier item's own unit
+          // (#812 round 14) — the picked cost is priced in that unit, so converting from a
+          // hardcoded 'hours' multiplied a days-priced item by 8 on initial selection.
+          const refreshed = refreshedSupplierLineFields(current, selectedQuoteItem);
+          current.quantity = refreshed.quantity;
+          current.supplierQuoteUnitPrice = refreshed.supplierQuoteUnitPrice;
+          // Pick-time baseline: lets the server tell a deliberate pre-save edit (pushed onto the
+          // supplier item) from an untouched stale snapshot (server values win).
+          current.supplierQuoteBaseQuantity = refreshed.supplierQuoteBaseQuantity;
+          current.supplierQuoteBaseUnitPrice = refreshed.supplierQuoteBaseUnitPrice;
+          current.unitPrice = refreshed.unitPrice;
         }
       }
 
@@ -1086,6 +1202,32 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (isSubmitting) return;
+
+    // Read-only-except-date mode (sent/expired, issue #779): submitting extends ONLY the
+    // expiration date. Revalidation needs a date from today onward — a cleared or still-past
+    // date would leave the offer expired, so reject it loudly instead of silently "saving".
+    if (expirationEditableWhileReadOnly && editingOffer) {
+      if (!formData.expirationDate || isDateOnlyBeforeToday(formData.expirationDate, today)) {
+        toastError(
+          t('sales:clientOffers.expirationExtendInvalid', {
+            defaultValue: 'Set an expiration date of today or later to revalidate the offer',
+          }),
+        );
+        return;
+      }
+      dispatch({ type: 'setIsSubmitting', value: true });
+      try {
+        await onUpdateOffer(editingOffer.id, { expirationDate: formData.expirationDate });
+      } catch (err) {
+        toastError((err as Error).message || t('sales:clientOffers.failedToSave'));
+        return;
+      } finally {
+        dispatch({ type: 'setIsSubmitting', value: false });
+      }
+      closeModal();
+      return;
+    }
+    if (isReadOnly) return;
 
     const nextErrors: Record<string, string> = {};
     if (!formData.clientId) {
@@ -1198,9 +1340,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 {isReadOnly && (
                   <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
                     <span className="text-amber-700 dark:text-amber-300 text-xs font-bold">
-                      {t('sales:clientOffers.readOnlyStatus', {
-                        defaultValue: 'Read-only due to non-draft status',
-                      })}
+                      {readOnlyReason}
                     </span>
                   </div>
                 )}
@@ -1286,7 +1426,9 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         id="client-offer-expiration-date"
                         required
                         value={formData.expirationDate || ''}
-                        disabled={isReadOnly}
+                        // Editable while sent/expired so the offer's validity can be renewed —
+                        // extending the date is the only exit from `expired` (issue #779).
+                        disabled={isReadOnly && !expirationEditableWhileReadOnly}
                         onChange={(value) =>
                           setFormData((prev) => ({ ...prev, expirationDate: value }))
                         }
@@ -1374,6 +1516,17 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         const lineMargin = lineSalePrice - lineCost;
 
                         const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
+                        const linkedSupplierRef = item.supplierQuoteItemId
+                          ? supplierQuoteItemIndex.get(item.supplierQuoteItemId)
+                          : undefined;
+                        // Fail-safe lock (#779): order-locked/frozen supplier quotes — or an
+                        // unresolvable reference (no list permission, still loading) — freeze
+                        // the sourced quantity/cost; otherwise they are editable and write back.
+                        const supplierLineLocked = isSupplierLineLocked(item, linkedSupplierRef);
+                        const supplierDataStale =
+                          !isReadOnly &&
+                          !supplierLineLocked &&
+                          isSupplierLineStale(item, linkedSupplierRef?.item);
                         const supplierQuoteHref = buildSupplierQuoteQuickViewHref(
                           resolveLinkedSupplierQuoteId(item, quoteIdBySupplierQuoteItemId),
                           allSupplierQuoteIds,
@@ -1418,6 +1571,14 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                       status={readOnlyStatus}
                                       statusLabel={statusLabel}
                                     />
+                                    {supplierDataStale && linkedSupplierRef && (
+                                      <StaleSupplierDataButton
+                                        onClick={() =>
+                                          refreshLineFromSupplier(index, linkedSupplierRef.item)
+                                        }
+                                        className="ml-auto"
+                                      />
+                                    )}
                                   </div>
                                   <div className="flex items-center gap-1">
                                     <SelectControl
@@ -1435,6 +1596,10 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                         item.supplierQuoteItemId,
                                       )}
                                       displayValueIsPlaceholder={!item.supplierQuoteItemId}
+                                      // Drop the default bold (font-semibold) but keep
+                                      // font-medium so the value reads as a solid field value,
+                                      // not the washed-out gray that font-normal renders at.
+                                      valueClassName="font-medium"
                                       searchable={true}
                                       disabled={isReadOnly}
                                       className="min-w-0 flex-1"
@@ -1528,7 +1693,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     onValueChange={(value) =>
                                       updateItem(index, 'quantity', parseNumberInputValue(value))
                                     }
-                                    disabled={isReadOnly || isLinkedToSupplierQuote}
+                                    disabled={isReadOnly || supplierLineLocked}
                                     className="w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
                                   />
                                   <span className="text-xs font-semibold text-zinc-400 shrink-0">
@@ -1597,7 +1762,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                     value={cost}
                                     formatDecimals={2}
                                     onValueChange={handleCostChange}
-                                    disabled={isReadOnly || isLinkedToSupplierQuote}
+                                    disabled={isReadOnly || supplierLineLocked}
                                     className="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                   />
                                   <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
@@ -1660,6 +1825,16 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                             <div className="hidden lg:flex gap-2 items-center pt-5">
                               <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center">
                                 <div className="relative col-span-3 min-w-0">
+                                  {supplierDataStale && linkedSupplierRef && (
+                                    <StaleSupplierDataButton
+                                      onClick={() =>
+                                        refreshLineFromSupplier(index, linkedSupplierRef.item)
+                                      }
+                                      // Floats in the same gutter band as the quick-view button,
+                                      // left-aligned (#779 reverse sync affordance).
+                                      className="lg:absolute lg:left-0 lg:-top-1 lg:z-10 lg:-translate-y-full h-6 px-2 text-[10px]"
+                                    />
+                                  )}
                                   {canViewSupplierQuotes && (
                                     <QuickViewLinkButton
                                       href={supplierQuoteHref}
@@ -1685,6 +1860,10 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                       item.supplierQuoteItemId,
                                     )}
                                     displayValueIsPlaceholder={!item.supplierQuoteItemId}
+                                    // Drop the default bold (font-semibold) but keep
+                                    // font-medium so the value reads as a solid field value,
+                                    // not the washed-out gray that font-normal renders at.
+                                    valueClassName="font-medium"
                                     searchable={true}
                                     disabled={isReadOnly}
                                     className="w-full min-w-0"
@@ -1732,7 +1911,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                       onValueChange={(value) =>
                                         updateItem(index, 'quantity', parseNumberInputValue(value))
                                       }
-                                      disabled={isReadOnly || isLinkedToSupplierQuote}
+                                      disabled={isReadOnly || supplierLineLocked}
                                       className="w-full max-w-[5rem] text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                     />
                                     <span className="text-xs font-semibold text-zinc-400 shrink-0">
@@ -1782,7 +1961,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                                       value={cost}
                                       formatDecimals={2}
                                       onValueChange={handleCostChange}
-                                      disabled={isReadOnly || isLinkedToSupplierQuote}
+                                      disabled={isReadOnly || supplierLineLocked}
                                       className="w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                     />
                                     <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
@@ -1950,7 +2129,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                 <Button type="button" variant="outline" onClick={closeModal}>
                   {t('common:buttons.cancel')}
                 </Button>
-                {!isReadOnly && (
+                {(!isReadOnly || expirationEditableWhileReadOnly) && (
                   <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting
                       ? t('common:buttons.saving')
@@ -2107,7 +2286,13 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         columns={columns}
         defaultRowsPerPage={5}
         onRowClick={(row) => openEditModal(row)}
-        rowClassName={() => 'cursor-pointer hover:bg-zinc-50/50'}
+        rowClassName={(row) =>
+          // Mirror the quotes views' expired styling (#779): a light red tint; rows stay
+          // clickable — the modal is where the expiration gets extended.
+          isOfferExpired(row)
+            ? 'hover:bg-zinc-50/50 cursor-pointer bg-red-50/30'
+            : 'cursor-pointer hover:bg-zinc-50/50'
+        }
         initialFilterState={tableInitialFilterState}
       />
     </div>

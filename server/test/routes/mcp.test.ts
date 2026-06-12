@@ -413,8 +413,16 @@ describe('/api/mcp', () => {
       },
     ]);
     clientQuotesListAllItemsMock.mockResolvedValue([{ id: 'cqi-1', quoteId: 'cq-1' }]);
+    // Status is fully derived (#779): the linked client quote's `sent` drives the supplier quote.
     supplierQuotesListAllMock.mockResolvedValue([
-      { id: 'sq-1', supplierId: 's1', supplierName: 'Supplier One', status: 'received' },
+      {
+        id: 'sq-1',
+        supplierId: 's1',
+        supplierName: 'Supplier One',
+        status: 'received',
+        linkedClientQuoteId: 'cq-9',
+        linkedClientQuoteStatus: 'sent',
+      },
     ]);
     supplierQuotesListAllItemsMock.mockResolvedValue([
       { id: 'sqi-1', quoteId: 'sq-1', unitType: 'days' },

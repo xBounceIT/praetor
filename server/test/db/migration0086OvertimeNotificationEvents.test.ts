@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { readMigrationFile } from '../helpers/schemaFiles.ts';
 
-const MIGRATION = readMigrationFile('0084_add_overtime_notification_events.sql');
+const MIGRATION = readMigrationFile('0086_add_overtime_notification_events.sql');
 
-describe('migration 0084: adds overtime notification event dedupe table', () => {
+describe('migration 0086: adds overtime notification event dedupe table', () => {
   test('creates the overtime notification events table with core columns', () => {
     expect(MIGRATION).toContain('CREATE TABLE "overtime_notification_events"');
     expect(MIGRATION).toContain('"user_id" varchar(50)');

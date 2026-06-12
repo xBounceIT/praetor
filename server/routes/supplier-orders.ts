@@ -15,6 +15,7 @@ import {
   generateSupplierOrderId,
   ITEM_ID_PREFIXES,
 } from '../utils/order-ids.ts';
+import { effectiveSupplierQuoteStatusFromDate } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
@@ -345,14 +346,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: linkedQuoteIdResult.value,
         });
       }
-      if (sourceQuote.status !== 'accepted') {
+      // Effective accepted (issue #779): a supplier quote linked to an accepted client quote is
+      // orderable even if its own stored status is still draft; `accepted` is frozen so its own
+      // expiry never demotes it.
+      const sourceEffective = effectiveSupplierQuoteStatusFromDate({
+        expirationDate: sourceQuote.expirationDate,
+        linkedClientStatus: sourceQuote.linkedClientQuoteStatus,
+        linkedClientQuoteExpiration: sourceQuote.linkedClientQuoteExpiration,
+        linkedOfferStatus: sourceQuote.linkedOfferStatus,
+        linkedOfferExpiration: sourceQuote.linkedOfferExpiration,
+      });
+      if (sourceEffective !== 'accepted') {
         return replyError(request, reply, {
           statusCode: 409,
           message: 'Supplier orders can only be created from accepted quotes',
           action: 'supplier_order.create.conflict',
           entityType: 'supplier_quote',
           entityId: linkedQuoteIdResult.value,
-          details: { secondaryLabel: 'source_quote_not_accepted', fromValue: sourceQuote.status },
+          details: { secondaryLabel: 'source_quote_not_accepted', fromValue: sourceEffective },
         });
       }
       if (existingOrderId) {
@@ -402,14 +413,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         result = await withDbTransaction(async (tx): Promise<CreateOutcome> => {
           // Lock the source supplier quote so a concurrent auto-create from a client order
           // (which also locks this row) serializes with this insert.
-          const lockedQuote = await supplierQuotesRepo.lockStatusById(
+          const lockedQuote = await supplierQuotesRepo.lockEffectiveStatusById(
             linkedQuoteIdResult.value,
             tx,
           );
           if (!lockedQuote) {
             return { ok: false, status: 404, body: { error: 'Source quote not found' } };
           }
-          if (lockedQuote.status !== 'accepted') {
+          const lockedEffective = effectiveSupplierQuoteStatusFromDate({
+            expirationDate: lockedQuote.expirationDate,
+            linkedClientStatus: lockedQuote.linkedClientStatus,
+            linkedClientQuoteExpiration: lockedQuote.linkedClientQuoteExpiration,
+            linkedOfferStatus: lockedQuote.linkedOfferStatus,
+            linkedOfferExpiration: lockedQuote.linkedOfferExpiration,
+          });
+          if (lockedEffective !== 'accepted') {
             return {
               ok: false,
               status: 409,

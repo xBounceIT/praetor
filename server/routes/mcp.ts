@@ -26,7 +26,10 @@ import {
   TimeEntryServiceError,
   updateTimeEntry,
 } from '../services/timeEntries.ts';
-import { isPastLocalDate } from '../utils/date.ts';
+import {
+  effectiveQuoteStatusFromDate,
+  effectiveSupplierQuoteStatusFromDate,
+} from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { normalizeUnitType } from '../utils/unit-type.ts';
 
@@ -165,19 +168,6 @@ const groupBy = <T>(items: T[], getKey: (item: T) => string) => {
 
 const listIfAllowed = <T>(allowed: boolean, list: () => Promise<T[]>): Promise<T[]> =>
   allowed ? list() : Promise.resolve([]);
-
-const isClientQuoteExpired = (status: string, expirationDate: string | null | undefined) => {
-  if (status === 'confirmed') return false;
-  if (!expirationDate) return false;
-  return isPastLocalDate(expirationDate);
-};
-
-const normalizeSupplierQuoteStatus = (status: string) => {
-  if (status === 'received') return 'sent';
-  if (status === 'approved') return 'accepted';
-  if (status === 'rejected') return 'denied';
-  return status;
-};
 
 const canViewAllUsers = (user: McpAuthenticatedUser) =>
   hasPermission(user, 'administration.user_management_all.view') ||
@@ -373,14 +363,26 @@ const buildServer = () => {
       const supplierItemsByQuote = groupBy(supplierQuoteItems, (item) => item.quoteId);
 
       return jsonResult({
-        clientQuotes: clientQuotes.map((quote) => ({
-          ...quote,
-          items: clientItemsByQuote.get(quote.id) ?? [],
-          isExpired: isClientQuoteExpired(quote.status, quote.expirationDate),
-        })),
+        clientQuotes: clientQuotes.map((quote) => {
+          const effectiveStatus = effectiveQuoteStatusFromDate(quote.status, quote.expirationDate);
+          return {
+            ...quote,
+            items: clientItemsByQuote.get(quote.id) ?? [],
+            effectiveStatus,
+            isExpired: effectiveStatus === 'expired',
+          };
+        }),
         supplierQuotes: supplierQuotes.map((quote) => ({
           ...quote,
-          status: normalizeSupplierQuoteStatus(quote.status),
+          // Fully derived status (issue #779): unlinked → draft; linked → follows the client
+          // quote/offer chain, with the expiry overlays.
+          status: effectiveSupplierQuoteStatusFromDate({
+            expirationDate: quote.expirationDate,
+            linkedClientStatus: quote.linkedClientQuoteStatus,
+            linkedClientQuoteExpiration: quote.linkedClientQuoteExpiration,
+            linkedOfferStatus: quote.linkedOfferStatus,
+            linkedOfferExpiration: quote.linkedOfferExpiration,
+          }),
           items: (supplierItemsByQuote.get(quote.id) ?? []).map((item) => ({
             ...item,
             unitType: normalizeUnitType(item.unitType),
@@ -415,6 +417,9 @@ const buildServer = () => {
       return jsonResult({
         offers: offers.map((offer) => ({
           ...offer,
+          // Derived #779 status: `expired` overrides draft/sent once the expiration date has
+          // passed; accepted/denied are frozen and never expire.
+          effectiveStatus: effectiveQuoteStatusFromDate(offer.status, offer.expirationDate),
           items: itemsByOffer.get(offer.id) ?? [],
         })),
       });

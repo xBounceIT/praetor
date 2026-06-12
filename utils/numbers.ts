@@ -71,6 +71,19 @@ export const getEffectiveCost = (item: PricingItem): number => {
   return Number(item.productCost ?? 0);
 };
 
+// The line's cost expressed in its OWN unit. Product costs are stored on the canonical hourly
+// basis and convert into the line unit; supplier-sourced costs mirror the supplier item — whose
+// unit the line copies on pick/refresh — so they are ALREADY in the line's unit, exactly as the
+// server snapshot, the #779 forward sync and the staleness compare assume (#812 round 19).
+// Converting them from 'hours' multiplied a days-priced sourced cost by 8 in totals/margins.
+export const getEffectiveUnitCost = (
+  item: PricingItem,
+  defaultUnitType: SupplierUnitType = 'hours',
+): number =>
+  item.supplierQuoteItemId
+    ? getEffectiveCost(item)
+    : convertUnitPrice(getEffectiveCost(item), 'hours', item.unitType || defaultUnitType);
+
 export const getEffectiveMol = (item: PricingItem): number => {
   return item.productMolPercentage ? Number(item.productMolPercentage) : 0;
 };
@@ -130,7 +143,7 @@ export const getItemPricingContext = (
   defaultUnitType: SupplierUnitType = 'hours',
 ): ItemPricingContext => {
   const baseCost = getEffectiveCost(item);
-  const unitCost = convertUnitPrice(baseCost, 'hours', item.unitType || defaultUnitType);
+  const unitCost = getEffectiveUnitCost(item, defaultUnitType);
   const molPercentage = getEffectiveMol(item);
   const quantity = Number(item.quantity || 0);
   const durationMonths = getEffectiveDurationMonths(item);
@@ -162,11 +175,8 @@ export const calculatePricingTotals = (
     const lineDiscount = (lineSubtotal * (item.discount || 0)) / 100;
     subtotal += lineSubtotal - lineDiscount;
 
-    const cost = getEffectiveCost(item);
     totalCost +=
-      Number(item.quantity || 0) *
-      convertUnitPrice(cost, 'hours', item.unitType || defaultUnitType) *
-      durationMonths;
+      Number(item.quantity || 0) * getEffectiveUnitCost(item, defaultUnitType) * durationMonths;
   });
 
   const discountAmount =

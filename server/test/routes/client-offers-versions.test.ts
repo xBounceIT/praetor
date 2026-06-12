@@ -37,6 +37,7 @@ const getRolePermissionsMock = mock();
 
 const coExistsByIdMock = mock();
 const coFindExistingMock = mock();
+const cqFindItemSnapshotsForQuoteMock = mock();
 const coLockExistingByIdMock = mock();
 const coFindLinkedSaleIdMock = mock();
 const coFindFullForSnapshotMock = mock();
@@ -95,6 +96,7 @@ beforeAll(async () => {
   }));
   mock.module('../../repositories/clientQuotesRepo.ts', () => ({
     ...clientQuotesRepoSnap,
+    findItemSnapshotsForQuote: cqFindItemSnapshotsForQuoteMock,
   }));
   mock.module('../../repositories/productsRepo.ts', () => ({
     ...productsRepoSnap,
@@ -160,7 +162,8 @@ const SAMPLE_OFFER = {
   discountType: 'percentage' as const,
   status: 'draft',
   deliveryDate: null,
-  expirationDate: '2026-12-31',
+  // Far future so the derived effective status never flips this fixture to `expired` (#779).
+  expirationDate: '2999-12-31',
   notes: null,
   createdAt: 1_700_000_000_000,
   updatedAt: 1_700_000_000_000,
@@ -241,6 +244,8 @@ beforeEach(async () => {
   }));
   coFindItemsForOfferMock.mockResolvedValue([SAMPLE_ITEM]);
   coFindIdConflictMock.mockResolvedValue(false);
+  // Linked-quote sourced lines for the fresh-link inheritance exemption (#812 round 15).
+  cqFindItemSnapshotsForQuoteMock.mockResolvedValue([]);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/sales/client-offers');
 });
@@ -453,6 +458,30 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
     expect(coRestoreSnapshotOfferMock).not.toHaveBeenCalled();
     expect(coFindLinkedSaleIdMock).not.toHaveBeenCalled();
     expect(ovFindByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when the draft offer is effectively expired (issue #779)', async () => {
+    // Expired offers are content-read-only and exit only via a date extension; a restore would
+    // rewrite content, status and the date in one shot, so it is blocked like the PUT.
+    coLockExistingByIdMock.mockResolvedValue({
+      id: 'off-1',
+      linkedQuoteId: 'q-1',
+      clientId: 'c1',
+      clientName: 'Client',
+      status: 'draft',
+      expirationDate: '2000-01-01',
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers/off-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Expired');
+    expect(coRestoreSnapshotOfferMock).not.toHaveBeenCalled();
+    expect(ovInsertMock).not.toHaveBeenCalled();
   });
 
   test('409 when any linked sale exists (draft or otherwise)', async () => {

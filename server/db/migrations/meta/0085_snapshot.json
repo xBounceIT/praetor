@@ -1,6 +1,6 @@
 {
-  "id": "834cd9af-6955-492c-85b0-d785ff755e26",
-  "prevId": "b73c27a4-59e0-44d1-a5aa-0b6a958c5bd4",
+  "id": "298b7963-0270-4792-9a95-a10f587914b4",
+  "prevId": "834cd9af-6955-492c-85b0-d785ff755e26",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3253,6 +3253,22 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_quote_items_supplier_quote_id": {
+          "name": "idx_quote_items_supplier_quote_id",
+          "columns": [
+            {
+              "expression": "supplier_quote_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"quote_items\".\"supplier_quote_id\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}

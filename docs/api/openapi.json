@@ -24897,6 +24897,26 @@
                       },
                       "isExpired": {
                         "type": "boolean"
+                      },
+                      "effectiveStatus": {
+                        "type": "string",
+                        "enum": [
+                          "draft",
+                          "sent",
+                          "offer",
+                          "accepted",
+                          "denied",
+                          "expired"
+                        ]
+                      },
+                      "linkedSupplierQuoteId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "linkedSupplierQuoteExpired": {
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -24909,7 +24929,9 @@
                       "createdAt",
                       "updatedAt",
                       "items",
-                      "isExpired"
+                      "isExpired",
+                      "effectiveStatus",
+                      "linkedSupplierQuoteExpired"
                     ]
                   }
                 }
@@ -25113,7 +25135,28 @@
                           "type": "number"
                         },
                         "productMolPercentage": {
-                          "type": "number"
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "supplierQuoteUnitPrice": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "supplierQuoteBaseQuantity": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "supplierQuoteBaseUnitPrice": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
                         },
                         "discount": {
                           "type": "number"
@@ -25345,6 +25388,26 @@
                     },
                     "isExpired": {
                       "type": "boolean"
+                    },
+                    "effectiveStatus": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "sent",
+                        "offer",
+                        "accepted",
+                        "denied",
+                        "expired"
+                      ]
+                    },
+                    "linkedSupplierQuoteId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "linkedSupplierQuoteExpired": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -25357,7 +25420,9 @@
                     "createdAt",
                     "updatedAt",
                     "items",
-                    "isExpired"
+                    "isExpired",
+                    "effectiveStatus",
+                    "linkedSupplierQuoteExpired"
                   ]
                 }
               }
@@ -25541,7 +25606,28 @@
                           "type": "number"
                         },
                         "productMolPercentage": {
-                          "type": "number"
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "supplierQuoteUnitPrice": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "supplierQuoteBaseQuantity": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "supplierQuoteBaseUnitPrice": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
                         },
                         "discount": {
                           "type": "number"
@@ -25600,9 +25686,6 @@
                   },
                   "notes": {
                     "type": "string"
-                  },
-                  "isExpired": {
-                    "type": "boolean"
                   }
                 }
               }
@@ -25779,6 +25862,26 @@
                     },
                     "isExpired": {
                       "type": "boolean"
+                    },
+                    "effectiveStatus": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "sent",
+                        "offer",
+                        "accepted",
+                        "denied",
+                        "expired"
+                      ]
+                    },
+                    "linkedSupplierQuoteId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "linkedSupplierQuoteExpired": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -25791,7 +25894,9 @@
                     "createdAt",
                     "updatedAt",
                     "items",
-                    "isExpired"
+                    "isExpired",
+                    "effectiveStatus",
+                    "linkedSupplierQuoteExpired"
                   ]
                 }
               }
@@ -26684,6 +26789,26 @@
                     },
                     "isExpired": {
                       "type": "boolean"
+                    },
+                    "effectiveStatus": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "sent",
+                        "offer",
+                        "accepted",
+                        "denied",
+                        "expired"
+                      ]
+                    },
+                    "linkedSupplierQuoteId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "linkedSupplierQuoteExpired": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -26696,7 +26821,9 @@
                     "createdAt",
                     "updatedAt",
                     "items",
-                    "isExpired"
+                    "isExpired",
+                    "effectiveStatus",
+                    "linkedSupplierQuoteExpired"
                   ]
                 }
               }
@@ -26878,6 +27005,16 @@
                       "status": {
                         "type": "string"
                       },
+                      "effectiveStatus": {
+                        "type": "string",
+                        "enum": [
+                          "draft",
+                          "sent",
+                          "accepted",
+                          "denied",
+                          "expired"
+                        ]
+                      },
                       "deliveryDate": {
                         "type": [
                           "null",
@@ -27012,6 +27149,7 @@
                       "discount",
                       "discountType",
                       "status",
+                      "effectiveStatus",
                       "createdAt",
                       "updatedAt",
                       "items"
@@ -27218,19 +27356,46 @@
                           "type": "number"
                         },
                         "productMolPercentage": {
-                          "type": "number"
+                          "type": [
+                            "number",
+                            "null"
+                          ]
                         },
                         "supplierQuoteId": {
-                          "type": "string"
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "supplierQuoteItemId": {
-                          "type": "string"
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "supplierQuoteSupplierName": {
-                          "type": "string"
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "supplierQuoteUnitPrice": {
-                          "type": "number"
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "supplierQuoteBaseQuantity": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "supplierQuoteBaseUnitPrice": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
                         },
                         "unitType": {
                           "type": "string",
@@ -27347,6 +27512,16 @@
                     },
                     "status": {
                       "type": "string"
+                    },
+                    "effectiveStatus": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "sent",
+                        "accepted",
+                        "denied",
+                        "expired"
+                      ]
                     },
                     "deliveryDate": {
                       "type": [
@@ -27482,6 +27657,7 @@
                     "discount",
                     "discountType",
                     "status",
+                    "effectiveStatus",
                     "createdAt",
                     "updatedAt",
                     "items"
@@ -27665,19 +27841,46 @@
                           "type": "number"
                         },
                         "productMolPercentage": {
-                          "type": "number"
+                          "type": [
+                            "number",
+                            "null"
+                          ]
                         },
                         "supplierQuoteId": {
-                          "type": "string"
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "supplierQuoteItemId": {
-                          "type": "string"
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "supplierQuoteSupplierName": {
-                          "type": "string"
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "supplierQuoteUnitPrice": {
-                          "type": "number"
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "supplierQuoteBaseQuantity": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "supplierQuoteBaseUnitPrice": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
                         },
                         "unitType": {
                           "type": "string",
@@ -27796,6 +27999,16 @@
                     },
                     "status": {
                       "type": "string"
+                    },
+                    "effectiveStatus": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "sent",
+                        "accepted",
+                        "denied",
+                        "expired"
+                      ]
                     },
                     "deliveryDate": {
                       "type": [
@@ -27931,6 +28144,7 @@
                     "discount",
                     "discountType",
                     "status",
+                    "effectiveStatus",
                     "createdAt",
                     "updatedAt",
                     "items"
@@ -28286,6 +28500,16 @@
                     "status": {
                       "type": "string"
                     },
+                    "effectiveStatus": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "sent",
+                        "accepted",
+                        "denied",
+                        "expired"
+                      ]
+                    },
                     "deliveryDate": {
                       "type": [
                         "null",
@@ -28420,6 +28644,7 @@
                     "discount",
                     "discountType",
                     "status",
+                    "effectiveStatus",
                     "createdAt",
                     "updatedAt",
                     "items"
@@ -29047,6 +29272,16 @@
                     "status": {
                       "type": "string"
                     },
+                    "effectiveStatus": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "sent",
+                        "accepted",
+                        "denied",
+                        "expired"
+                      ]
+                    },
                     "deliveryDate": {
                       "type": [
                         "null",
@@ -29181,6 +29416,7 @@
                     "discount",
                     "discountType",
                     "status",
+                    "effectiveStatus",
                     "createdAt",
                     "updatedAt",
                     "items"
@@ -35072,6 +35308,15 @@
                       "status": {
                         "type": "string"
                       },
+                      "isStatusSynced": {
+                        "type": "boolean"
+                      },
+                      "linkedClientQuoteId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
                       "expirationDate": {
                         "type": [
                           "null",
@@ -35170,6 +35415,7 @@
                       "supplierId",
                       "supplierName",
                       "status",
+                      "isStatusSynced",
                       "createdAt",
                       "updatedAt",
                       "items"
@@ -35360,6 +35606,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },
@@ -35470,6 +35719,15 @@
                     "status": {
                       "type": "string"
                     },
+                    "isStatusSynced": {
+                      "type": "boolean"
+                    },
+                    "linkedClientQuoteId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "expirationDate": {
                       "type": [
                         "null",
@@ -35568,6 +35826,7 @@
                     "supplierId",
                     "supplierName",
                     "status",
+                    "isStatusSynced",
                     "createdAt",
                     "updatedAt",
                     "items"
@@ -35738,6 +35997,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },
@@ -35851,6 +36113,15 @@
                     "status": {
                       "type": "string"
                     },
+                    "isStatusSynced": {
+                      "type": "boolean"
+                    },
+                    "linkedClientQuoteId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "expirationDate": {
                       "type": [
                         "null",
@@ -35949,6 +36220,7 @@
                     "supplierId",
                     "supplierName",
                     "status",
+                    "isStatusSynced",
                     "createdAt",
                     "updatedAt",
                     "items"
@@ -36722,6 +36994,15 @@
                     "status": {
                       "type": "string"
                     },
+                    "isStatusSynced": {
+                      "type": "boolean"
+                    },
+                    "linkedClientQuoteId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "expirationDate": {
                       "type": [
                         "null",
@@ -36820,6 +37101,7 @@
                     "supplierId",
                     "supplierName",
                     "status",
+                    "isStatusSynced",
                     "createdAt",
                     "updatedAt",
                     "items"

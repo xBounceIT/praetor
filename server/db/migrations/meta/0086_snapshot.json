@@ -1,6 +1,6 @@
 {
-  "id": "834cd9af-6955-492c-85b0-d785ff755e26",
-  "prevId": "b73c27a4-59e0-44d1-a5aa-0b6a958c5bd4",
+  "id": "3640523e-5189-4653-beea-885df845ed71",
+  "prevId": "298b7963-0270-4792-9a95-a10f587914b4",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2169,6 +2169,136 @@
       },
       "isRLSEnabled": false
     },
+    "public.overtime_notification_events": {
+      "name": "overtime_notification_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(50)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_date": {
+          "name": "event_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hours": {
+          "name": "hours",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reasons": {
+          "name": "reasons",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "idx_overtime_notification_events_user_date": {
+          "name": "idx_overtime_notification_events_user_date",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "event_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "overtime_notification_events_user_id_users_id_fk": {
+          "name": "overtime_notification_events_user_id_users_id_fk",
+          "tableFrom": "overtime_notification_events",
+          "tableTo": "users",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "overtime_notification_events_created_by_users_id_fk": {
+          "name": "overtime_notification_events_created_by_users_id_fk",
+          "tableFrom": "overtime_notification_events",
+          "tableTo": "users",
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "overtime_notification_events_user_date_source_unique": {
+          "name": "overtime_notification_events_user_date_source_unique",
+          "nullsNotDistinct": false,
+          "columns": ["user_id", "event_date", "source"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "overtime_notification_events_source_check": {
+          "name": "overtime_notification_events_source_check",
+          "value": "\"overtime_notification_events\".\"source\" IN ('tracker', 'ril_manual')"
+        },
+        "overtime_notification_events_hours_check": {
+          "name": "overtime_notification_events_hours_check",
+          "value": "\"overtime_notification_events\".\"hours\" >= 0"
+        },
+        "overtime_notification_events_reasons_array_check": {
+          "name": "overtime_notification_events_reasons_array_check",
+          "value": "jsonb_typeof(\"overtime_notification_events\".\"reasons\") = 'array'"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.personal_access_tokens": {
       "name": "personal_access_tokens",
       "schema": "",
@@ -3253,6 +3383,22 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_quote_items_supplier_quote_id": {
+          "name": "idx_quote_items_supplier_quote_id",
+          "columns": [
+            {
+              "expression": "supplier_quote_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"quote_items\".\"supplier_quote_id\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
