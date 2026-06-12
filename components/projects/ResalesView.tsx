@@ -1293,21 +1293,21 @@ const ResalesView: React.FC<ResalesViewProps> = ({
                 onSubmit={submitCategory}
                 className="space-y-3 rounded-md border border-border bg-muted/30 p-4"
               >
-                <Field className="space-y-1.5">
-                  <FieldLabel htmlFor="resale-category-name">
-                    {t('resales.fields.categoryName')}
-                  </FieldLabel>
-                  <Input
-                    id="resale-category-name"
-                    value={categoryName}
-                    onChange={(event) => {
-                      setCategoryName(event.target.value);
-                      setCategoryError('');
-                    }}
-                  />
-                  <FieldError className="text-xs">{categoryError}</FieldError>
-                </Field>
-                <div className="flex justify-end gap-2">
+                <div className="flex items-start gap-3">
+                  <Field className="flex-1 space-y-1.5">
+                    <FieldLabel htmlFor="resale-category-name">
+                      {t('resales.fields.categoryName')}
+                    </FieldLabel>
+                    <Input
+                      id="resale-category-name"
+                      value={categoryName}
+                      onChange={(event) => {
+                        setCategoryName(event.target.value);
+                        setCategoryError('');
+                      }}
+                    />
+                    <FieldError className="text-xs">{categoryError}</FieldError>
+                  </Field>
                   {editingCategoryId && (
                     <Button
                       type="button"
@@ -1317,11 +1317,12 @@ const ResalesView: React.FC<ResalesViewProps> = ({
                         setCategoryName('');
                         setCategoryError('');
                       }}
+                      className="mt-7"
                     >
                       {t('common:buttons.cancel')}
                     </Button>
                   )}
-                  <Button type="submit" disabled={!canCreate && !canUpdate}>
+                  <Button type="submit" disabled={!canCreate && !canUpdate} className="mt-7">
                     {editingCategoryId ? t('common:buttons.save') : t('common:buttons.create')}
                   </Button>
                 </div>

@@ -49,6 +49,8 @@ describe('ResalesView wiring', () => {
     expect(source).toContain('resales.manageCategories');
     expect(source).toContain('onClick={openCategoryModal}');
     expect(source).toContain('rounded-md border border-border bg-muted/30 p-4');
+    expect(source).toContain('flex items-start gap-3');
+    expect(source).toContain('className="mt-7"');
   });
 
   test('keeps create activity rows compact and uses shared date controls', async () => {
