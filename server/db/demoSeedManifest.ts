@@ -407,6 +407,8 @@ export const DEMO_PROJECTS = [
   { id: 'dm_proj_02', name: `DM-CLI-001_DM-SVC-DEPLOY_${currentYear}` },
 ] as const;
 
+export const DEMO_TASKS = rangeIds('dm_task_', 5);
+
 export const DEMO_NOTIFICATIONS = ['dm_notif_01', 'dm_notif_02'] as const;
 
 export const DEMO_WORK_UNITS = [
@@ -450,6 +452,79 @@ export const DEMO_USER_WORK_UNITS = [
   { userId: 'u9', workUnitId: 'dm_wu_03' },
 ] as const;
 
+export const DEMO_USER_CLIENT_ASSIGNMENTS = [
+  { userId: 'u2', targetId: 'c1' },
+  { userId: 'u2', targetId: 'c2' },
+  { userId: 'u2', targetId: 'dm_cli_01' },
+  { userId: 'u3', targetId: 'c1' },
+  { userId: 'u3', targetId: 'dm_cli_01' },
+  { userId: 'u4', targetId: 'c1' },
+  { userId: 'u4', targetId: 'c2' },
+  { userId: 'u4', targetId: 'dm_cli_01' },
+  { userId: 'u5', targetId: 'c1' },
+  { userId: 'u5', targetId: 'dm_cli_01' },
+  { userId: 'u6', targetId: 'c1' },
+  { userId: 'u6', targetId: 'dm_cli_01' },
+  { userId: 'u7', targetId: 'c2' },
+  { userId: 'u8', targetId: 'c2' },
+] as const;
+
+export const DEMO_USER_PROJECT_ASSIGNMENTS = [
+  { userId: 'u2', targetId: 'p1' },
+  { userId: 'u2', targetId: 'p2' },
+  { userId: 'u2', targetId: 'p3' },
+  { userId: 'u2', targetId: 'dm_proj_01' },
+  { userId: 'u2', targetId: 'dm_proj_02' },
+  { userId: 'u3', targetId: 'p1' },
+  { userId: 'u3', targetId: 'p2' },
+  { userId: 'u3', targetId: 'dm_proj_02' },
+  { userId: 'u4', targetId: 'p1' },
+  { userId: 'u4', targetId: 'p2' },
+  { userId: 'u4', targetId: 'p3' },
+  { userId: 'u4', targetId: 'dm_proj_01' },
+  { userId: 'u4', targetId: 'dm_proj_02' },
+  { userId: 'u5', targetId: 'p1' },
+  { userId: 'u5', targetId: 'p2' },
+  { userId: 'u5', targetId: 'dm_proj_02' },
+  { userId: 'u6', targetId: 'p1' },
+  { userId: 'u6', targetId: 'p2' },
+  { userId: 'u6', targetId: 'dm_proj_01' },
+  { userId: 'u7', targetId: 'p3' },
+  { userId: 'u8', targetId: 'p3' },
+] as const;
+
+export const DEMO_USER_TASK_ASSIGNMENTS = [
+  { userId: 'u2', targetId: 't1' },
+  { userId: 'u2', targetId: 't2' },
+  { userId: 'u2', targetId: 't3' },
+  { userId: 'u2', targetId: 't4' },
+  { userId: 'u3', targetId: 't1' },
+  { userId: 'u3', targetId: 't2' },
+  { userId: 'u3', targetId: 't3' },
+  { userId: 'u4', targetId: 't1' },
+  { userId: 'u4', targetId: 't2' },
+  { userId: 'u4', targetId: 't3' },
+  { userId: 'u4', targetId: 't4' },
+  { userId: 'u5', targetId: 't1' },
+  { userId: 'u5', targetId: 't2' },
+  { userId: 'u5', targetId: 't3' },
+  { userId: 'u6', targetId: 't1' },
+  { userId: 'u6', targetId: 't2' },
+  { userId: 'u6', targetId: 't3' },
+  { userId: 'u7', targetId: 't4' },
+  { userId: 'u8', targetId: 't4' },
+  { userId: 'u2', targetId: 't5' },
+  { userId: 'u3', targetId: 't5' },
+  { userId: 'u4', targetId: 't5' },
+  { userId: 'u7', targetId: 't5' },
+  { userId: 'u8', targetId: 't5' },
+  { userId: 'u2', targetId: 'dm_task_01' },
+  { userId: 'u6', targetId: 'dm_task_02' },
+  { userId: 'u2', targetId: 'dm_task_03' },
+  { userId: 'u5', targetId: 'dm_task_04' },
+  { userId: 'u3', targetId: 'dm_task_05' },
+] as const;
+
 export const DEMO_TIME_ENTRY_IDS = rangeIds('dm_te_', 25);
 
 export const DEMO_ITEM_IDS = {
@@ -474,6 +549,7 @@ export const DEMO_IDS = {
   supplierSales: DEMO_SUPPLIER_SALES.map((item) => item.id),
   supplierInvoices: DEMO_SUPPLIER_INVOICES.map((item) => item.id),
   projects: DEMO_PROJECTS.map((item) => item.id),
+  tasks: [...DEMO_TASKS],
   notifications: [...DEMO_NOTIFICATIONS],
   workUnits: DEMO_WORK_UNITS.map((item) => item.id),
   timeEntries: [...DEMO_TIME_ENTRY_IDS],
@@ -481,10 +557,34 @@ export const DEMO_IDS = {
   settingsUserIds: [...DEMO_USER_IDS],
 } as const;
 
+export const DEMO_ASSIGNMENT_TARGET_IDS = {
+  clients: [...COMPATIBILITY_DEFAULTS.clients, ...DEMO_IDS.clients],
+  projects: [...COMPATIBILITY_DEFAULTS.projects, ...DEMO_IDS.projects],
+  tasks: [...COMPATIBILITY_DEFAULTS.tasks, ...DEMO_IDS.tasks],
+} as const;
+
+export const DEMO_TOP_MANAGER_USER_IDS = DEMO_USERS.reduce<string[]>((ids, user) => {
+  if (user.role === 'top_manager') ids.push(user.id);
+  return ids;
+}, []);
+
+type DemoUserAssignment = { userId: string; targetId: string };
+
+const countSeededAssignmentsWithTopManagers = (
+  manualAssignments: readonly DemoUserAssignment[],
+  targetIds: readonly string[],
+) =>
+  new Set([
+    ...manualAssignments.map((assignment) => `${assignment.userId}\0${assignment.targetId}`),
+    ...DEMO_TOP_MANAGER_USER_IDS.flatMap((userId) =>
+      targetIds.map((targetId) => `${userId}\0${targetId}`),
+    ),
+  ]).size;
+
 export const DEMO_EXPECTED_COUNTS = {
   users: DEMO_USERS.length,
   settings: DEMO_USERS.length,
-  clients: DEMO_CLIENTS.length,
+  clients: COMPATIBILITY_DEFAULTS.clients.length + DEMO_CLIENTS.length,
   suppliers: DEMO_SUPPLIERS.length,
   products: DEMO_PRODUCTS.length,
   quotes: DEMO_QUOTES.length,
@@ -501,10 +601,23 @@ export const DEMO_EXPECTED_COUNTS = {
   supplier_sale_items: DEMO_ITEM_IDS.supplierSaleItems.length,
   supplier_invoices: DEMO_SUPPLIER_INVOICES.length,
   supplier_invoice_items: DEMO_ITEM_IDS.supplierInvoiceItems.length,
-  projects: DEMO_PROJECTS.length,
+  projects: COMPATIBILITY_DEFAULTS.projects.length + DEMO_PROJECTS.length,
+  tasks: COMPATIBILITY_DEFAULTS.tasks.length + DEMO_TASKS.length,
   notifications: DEMO_NOTIFICATIONS.length,
   work_units: DEMO_WORK_UNITS.length,
   work_unit_managers: DEMO_WORK_UNIT_MANAGERS.length,
   user_work_units: DEMO_USER_WORK_UNITS.length,
+  user_clients: countSeededAssignmentsWithTopManagers(
+    DEMO_USER_CLIENT_ASSIGNMENTS,
+    DEMO_ASSIGNMENT_TARGET_IDS.clients,
+  ),
+  user_projects: countSeededAssignmentsWithTopManagers(
+    DEMO_USER_PROJECT_ASSIGNMENTS,
+    DEMO_ASSIGNMENT_TARGET_IDS.projects,
+  ),
+  user_tasks: countSeededAssignmentsWithTopManagers(
+    DEMO_USER_TASK_ASSIGNMENTS,
+    DEMO_ASSIGNMENT_TARGET_IDS.tasks,
+  ),
   time_entries: DEMO_TIME_ENTRY_IDS.length,
 } as const;
