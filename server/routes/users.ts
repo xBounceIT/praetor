@@ -321,10 +321,15 @@ const mergeById = <T extends { id: string }>(items: T[], extraItems: Iterable<T>
 const uniqueMissingIds = (ids: string[], existingIds: Set<string>) =>
   Array.from(new Set(ids.filter((id) => !existingIds.has(id))));
 
+const USER_MANAGEMENT_CREATE_PERMISSION = 'administration.user_management.create';
+const USER_MANAGEMENT_DELETE_PERMISSION = 'administration.user_management.delete';
+const HR_EXTERNAL_CREATE_PERMISSION = 'hr.external.create';
+const HR_EXTERNAL_DELETE_PERMISSION = 'hr.external.delete';
+
 const CREATE_PERM_BY_EMPLOYEE_TYPE: Record<usersRepo.EmployeeType, string> = {
-  app_user: 'administration.user_management.create',
-  internal: 'hr.internal.create',
-  external: 'hr.external.create',
+  app_user: USER_MANAGEMENT_CREATE_PERMISSION,
+  internal: USER_MANAGEMENT_CREATE_PERMISSION,
+  external: HR_EXTERNAL_CREATE_PERMISSION,
 };
 
 const UPDATE_PERM_BY_EMPLOYEE_TYPE: Record<usersRepo.EmployeeType, string> = {
@@ -334,9 +339,9 @@ const UPDATE_PERM_BY_EMPLOYEE_TYPE: Record<usersRepo.EmployeeType, string> = {
 };
 
 const DELETE_PERM_BY_EMPLOYEE_TYPE: Record<usersRepo.EmployeeType, string> = {
-  app_user: 'administration.user_management.delete',
-  internal: 'hr.internal.delete',
-  external: 'hr.external.delete',
+  app_user: USER_MANAGEMENT_DELETE_PERMISSION,
+  internal: USER_MANAGEMENT_DELETE_PERMISSION,
+  external: HR_EXTERNAL_DELETE_PERMISSION,
 };
 
 const HR_UPDATE_PERM_BY_EMPLOYEE_TYPE: Record<usersRepo.EmployeeType, string> = {
@@ -501,6 +506,9 @@ const parseHrDetails = (
 const hasHrDetailPatch = (fields: usersRepo.UserHrFields) =>
   HR_DETAIL_FIELDS.some((field) => fields[field] !== undefined);
 
+const hasNonEmptyHrDetailPatch = (fields: usersRepo.UserHrFields) =>
+  HR_DETAIL_FIELDS.some((field) => fields[field] !== undefined && fields[field] !== null);
+
 const getHrDateRangeError = (
   fields: usersRepo.UserHrFields,
   current?: Pick<usersRepo.UserCore, 'hireDate' | 'terminationDate'>,
@@ -633,17 +641,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
-  // POST / - Create user (admin only for app_user, manager can create internal/external)
+  // POST / - Create user (admin only for app_user/internal, manager can create external)
   fastify.post(
     '/',
     {
       onRequest: [
         authenticateToken,
-        requireAnyPermission(
-          'administration.user_management.create',
-          'hr.internal.create',
-          'hr.external.create',
-        ),
+        requireAnyPermission(USER_MANAGEMENT_CREATE_PERMISSION, HR_EXTERNAL_CREATE_PERMISSION),
       ],
       schema: {
         tags: ['users'],
@@ -700,13 +704,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const canApplyCost = hasPermission(request, 'hr.costs_all.update');
       const hrDetailsResult = parseHrDetails(body);
       if (!hrDetailsResult.ok) return badRequest(reply, hrDetailsResult.message);
+      const hasNonEmptyHrDetails = hasNonEmptyHrDetailPatch(hrDetailsResult.fields);
+      const hasInternalEmail = effectiveEmployeeType === 'internal' && emailResult.value !== null;
       const canApplyHrDetails =
-        effectiveEmployeeType === 'app_user'
-          ? canUpdateHrDetailsFor(request, effectiveEmployeeType)
-          : true;
-      const hrDetails = canApplyHrDetails ? hrDetailsResult.fields : {};
+        effectiveEmployeeType === 'external' ||
+        canUpdateHrDetailsFor(request, effectiveEmployeeType);
       const dateRangeError = getHrDateRangeError(hrDetailsResult.fields);
       if (dateRangeError) return badRequest(reply, dateRangeError);
+      if ((hasNonEmptyHrDetails || hasInternalEmail) && !canApplyHrDetails) {
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'user.create.denied',
+          entityType: 'user',
+          details: { secondaryLabel: `employee_type_${effectiveEmployeeType}` },
+        });
+      }
+      const hrDetails = canApplyHrDetails ? hrDetailsResult.fields : {};
 
       let usernameValue: string;
       let passwordHash: string;
@@ -827,17 +841,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
-  // DELETE /:id - Delete user (admin can delete any, manager can delete internal/external only)
+  // DELETE /:id - Delete user (admin can delete app/internal, external delete can delete external)
   fastify.delete(
     '/:id',
     {
       onRequest: [
         authenticateToken,
-        requireAnyPermission(
-          'administration.user_management.delete',
-          'hr.internal.delete',
-          'hr.external.delete',
-        ),
+        requireAnyPermission(USER_MANAGEMENT_DELETE_PERMISSION, HR_EXTERNAL_DELETE_PERMISSION),
       ],
       schema: {
         tags: ['users'],

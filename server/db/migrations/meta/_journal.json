@@ -638,6 +638,13 @@
       "when": 1781297227512,
       "tag": "0090_add_resale_start_date",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1781300000002,
+      "tag": "0091_remove_internal_hr_create_delete_permissions",
+      "breakpoints": true
     }
   ]
 }

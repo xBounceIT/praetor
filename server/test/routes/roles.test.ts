@@ -197,7 +197,11 @@ describe('GET /api/roles', () => {
     const body = JSON.parse(res.body);
     expect(body).toHaveLength(2);
     const adminRole = body.find((r: { id: string }) => r.id === 'admin');
-    expect(adminRole.permissions).toEqual(expect.arrayContaining(['administration.roles.view']));
+    expect(adminRole.permissions).toEqual(
+      expect.arrayContaining(['administration.roles.view', 'hr.internal.view']),
+    );
+    expect(adminRole.permissions).not.toContain('hr.internal.create');
+    expect(adminRole.permissions).not.toContain('hr.internal.delete');
     const userRole = body.find((r: { id: string }) => r.id === 'user');
     expect(userRole.permissions).toEqual(expect.arrayContaining(['timesheets.tracker.view']));
   });

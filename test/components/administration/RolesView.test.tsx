@@ -29,9 +29,10 @@ const renderRolesView = () =>
     />,
   );
 
-const openCreateAndSwitchToCrm = () => {
+const openCreateAndSwitchToModule = (module: 'crm' | 'hr') => {
   fireEvent.click(screen.getByRole('button', { name: 'common:buttons.create' }));
-  fireEvent.mouseDown(screen.getByRole('tab', { name: /layout:modules.crm/ }));
+  const tab = screen.getByRole('tab', { name: new RegExp(`layout:modules\\.${module}`) });
+  fireEvent.mouseDown(tab);
 };
 
 const findClientsAllRow = () => {
@@ -41,10 +42,17 @@ const findClientsAllRow = () => {
   return row as HTMLElement;
 };
 
+const findHrInternalRow = () => {
+  const label = screen.getByText('administration:permissions.hr.internal');
+  const row = label.closest('tr');
+  if (!row) throw new Error('hr.internal row not found');
+  return row as HTMLElement;
+};
+
 describe('<RolesView />', () => {
   test('renders create/update/delete checkboxes for all-scope permission rows', () => {
     renderRolesView();
-    openCreateAndSwitchToCrm();
+    openCreateAndSwitchToModule('crm');
 
     const row = findClientsAllRow();
     expect(within(row).getAllByRole('checkbox')).toHaveLength(4);
@@ -52,7 +60,7 @@ describe('<RolesView />', () => {
 
   test('select-all switch stays off when only some actions are checked', () => {
     renderRolesView();
-    openCreateAndSwitchToCrm();
+    openCreateAndSwitchToModule('crm');
 
     const row = findClientsAllRow();
     const [firstCheckbox] = within(row).getAllByRole('checkbox');
@@ -65,7 +73,7 @@ describe('<RolesView />', () => {
 
   test('flipping the select-all switch on checks every action in the row', () => {
     renderRolesView();
-    openCreateAndSwitchToCrm();
+    openCreateAndSwitchToModule('crm');
 
     const row = findClientsAllRow();
     const selectAllSwitch = within(row).getByRole('switch');
@@ -75,5 +83,14 @@ describe('<RolesView />', () => {
     for (const checkbox of within(row).getAllByRole('checkbox')) {
       expect(checkbox.getAttribute('data-state')).toBe('checked');
     }
+  });
+
+  test('renders N/A cells for unavailable hr.internal create/delete actions', () => {
+    renderRolesView();
+    openCreateAndSwitchToModule('hr');
+
+    const row = findHrInternalRow();
+    expect(within(row).getAllByText('common:table.empty')).toHaveLength(2);
+    expect(within(row).getAllByRole('checkbox')).toHaveLength(2);
   });
 });

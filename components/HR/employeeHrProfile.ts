@@ -130,14 +130,31 @@ export const buildEmployeeHrPayload = (
 
 export const buildEmployeeCreatePayload = (
   formData: EmployeeHrFormData,
-  options: { includeCost: boolean },
-): EmployeeCreatePayload => ({
-  ...buildEmployeeHrPayload(formData, { includeIdentity: false, includeCost: options.includeCost }),
-  name: formData.name.trim(),
-  firstName: nullableText(formData.firstName),
-  lastName: nullableText(formData.lastName),
-  email: formData.email.trim(),
-});
+  options: { includeCost: boolean; includeHrDetails?: boolean },
+): EmployeeCreatePayload => {
+  const payload: EmployeeCreatePayload = {
+    name: formData.name.trim(),
+  };
+
+  if (options.includeHrDetails ?? true) {
+    Object.assign(
+      payload,
+      buildEmployeeHrPayload(formData, {
+        includeIdentity: false,
+        includeCost: options.includeCost,
+      }),
+      {
+        firstName: nullableText(formData.firstName),
+        lastName: nullableText(formData.lastName),
+        email: formData.email.trim(),
+      },
+    );
+  } else if (options.includeCost) {
+    payload.costPerHour = formData.costPerHour ? parseFloat(formData.costPerHour) : 0;
+  }
+
+  return payload;
+};
 
 export const getEmployeeHrStatusBadgeType = (
   status: UserEmploymentStatus | null | undefined,

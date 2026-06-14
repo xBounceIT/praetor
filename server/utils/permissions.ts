@@ -61,7 +61,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { id: 'projects.assignments', actions: VIEW_UPDATE },
 
   // HR
-  { id: 'hr.internal', actions: CRUD },
+  { id: 'hr.internal', actions: VIEW_UPDATE },
   { id: 'hr.external', actions: CRUD },
   { id: 'hr.costs', actions: VIEW_UPDATE },
   { id: 'hr.costs_all', actions: VIEW_UPDATE, isScope: true },
@@ -115,6 +115,7 @@ export const ADMINISTRATION_PERMISSIONS: Permission[] = PERMISSION_DEFINITIONS.r
 );
 
 export const ADMIN_BASE_PERMISSIONS: Permission[] = [
+  buildPermission('hr.internal', 'view'),
   ...buildPermissions('settings', VIEW_UPDATE),
   ...buildPermissions('docs.api', VIEW_ONLY),
   ...buildPermissions('docs.frontend', VIEW_ONLY),
