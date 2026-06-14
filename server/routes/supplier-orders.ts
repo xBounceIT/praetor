@@ -7,14 +7,12 @@ import * as supplierOrderVersionsRepo from '../repositories/supplierOrderVersion
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { allocateDocumentCode } from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
+import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import type { DurationUnit } from '../utils/duration-unit.ts';
-import {
-  generatePrefixedId,
-  generateSupplierOrderId,
-  ITEM_ID_PREFIXES,
-} from '../utils/order-ids.ts';
+import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { effectiveSupplierQuoteStatusFromDate } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -398,8 +396,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const normalizedItems = normalizeItems(items, reply);
       if (!normalizedItems) return;
 
-      const orderId = nextIdResult.value || (await generateSupplierOrderId());
-
       type CreateOutcome =
         | { ok: false; status: number; body: Record<string, unknown> }
         | {
@@ -446,6 +442,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             };
           }
 
+          const orderId =
+            nextIdResult.value ?? (await allocateDocumentCode('supplier_order', { exec: tx }));
           const order = await supplierOrdersRepo.create(
             {
               id: orderId,
@@ -467,6 +465,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return { ok: true, order, items: createdItems };
         });
       } catch (error) {
+        const codeCollision = replyDocumentCodeCollision(
+          request,
+          reply,
+          error,
+          'supplier_order.create.conflict',
+          'supplier_order',
+        );
+        if (codeCollision) return codeCollision;
         const dup = getUniqueViolation(error);
         if (dup) {
           if (dup.constraint === 'supplier_sales_pkey' || dup.detail?.includes('(id)')) {

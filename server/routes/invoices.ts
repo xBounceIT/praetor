@@ -3,12 +3,14 @@ import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as invoicesRepo from '../repositories/invoicesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { allocateDocumentCode } from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
 import {
   type DatabaseError,
   getForeignKeyViolation,
   getUniqueViolation,
 } from '../utils/db-errors.ts';
+import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import type { DurationUnit } from '../utils/duration-unit.ts';
 import { computeInvoiceTotals, roundCurrency } from '../utils/invoice-math.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
@@ -396,71 +398,50 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const nextIdResult = optionalNonEmptyString(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
-      const issueDateYear = issueDateResult.value.split('-')[0];
-      const maxInsertAttempts = nextIdResult.value ? 1 : 5;
-      let resolvedInvoiceId: string | null = nextIdResult.value;
 
       let result: { invoice: invoicesRepo.Invoice; items: invoicesRepo.InvoiceItem[] } | null =
         null;
       try {
-        for (let attempt = 0; attempt < maxInsertAttempts; attempt++) {
-          if (!resolvedInvoiceId) {
-            resolvedInvoiceId = await invoicesRepo.generateNextId(issueDateYear);
-          }
-
-          try {
-            const idForAttempt = resolvedInvoiceId;
-            result = await withDbTransaction(async (tx) => {
-              const invoice = await invoicesRepo.create(
-                {
-                  id: idForAttempt,
-                  linkedSaleId: (linkedSaleId as string | null | undefined) || null,
-                  clientId: clientIdResult.value,
-                  clientName: clientNameResult.value,
-                  issueDate: issueDateResult.value,
-                  dueDate: dueDateResult.value,
-                  status: statusValue,
-                  subtotal: computedSubtotal,
-                  taxTotal: computedTaxTotal,
-                  total: computedTotal,
-                  amountPaid: amountPaidValue,
-                  notes: (notes as string | null | undefined) ?? null,
-                },
-                tx,
-              );
-              const items = await invoicesRepo.insertItems(
-                invoice.id,
-                buildItemsForInsert(normalizedItems),
-                tx,
-              );
-              return { invoice, items };
-            });
-            break;
-          } catch (error) {
-            const dup = getUniqueViolation(error);
-            if (
-              !nextIdResult.value &&
-              dup &&
-              isInvoiceIdConflict(dup) &&
-              attempt < maxInsertAttempts - 1
-            ) {
-              resolvedInvoiceId = null;
-              continue;
-            }
-            throw error;
-          }
-        }
-
-        if (!result) {
-          return replyError(request, reply, {
-            statusCode: 409,
-            message: 'Invoice ID already exists',
-            action: 'invoice.create.conflict',
-            entityType: 'invoice',
-            details: { secondaryLabel: 'duplicate_id' },
-          });
-        }
+        result = await withDbTransaction(async (tx) => {
+          const invoiceId =
+            nextIdResult.value ??
+            (await allocateDocumentCode('client_invoice', {
+              date: issueDateResult.value,
+              exec: tx,
+            }));
+          const invoice = await invoicesRepo.create(
+            {
+              id: invoiceId,
+              linkedSaleId: (linkedSaleId as string | null | undefined) || null,
+              clientId: clientIdResult.value,
+              clientName: clientNameResult.value,
+              issueDate: issueDateResult.value,
+              dueDate: dueDateResult.value,
+              status: statusValue,
+              subtotal: computedSubtotal,
+              taxTotal: computedTaxTotal,
+              total: computedTotal,
+              amountPaid: amountPaidValue,
+              notes: (notes as string | null | undefined) ?? null,
+            },
+            tx,
+          );
+          const items = await invoicesRepo.insertItems(
+            invoice.id,
+            buildItemsForInsert(normalizedItems),
+            tx,
+          );
+          return { invoice, items };
+        });
       } catch (error) {
+        const codeCollision = replyDocumentCodeCollision(
+          request,
+          reply,
+          error,
+          'invoice.create.conflict',
+          'invoice',
+        );
+        if (codeCollision) return codeCollision;
         const dup = getUniqueViolation(error);
         if (dup && isInvoiceIdConflict(dup)) {
           return replyError(request, reply, {

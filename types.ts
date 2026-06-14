@@ -186,6 +186,24 @@ export interface GeneralSettings {
   totpExemptRoleIds: string[];
 }
 
+export type DocumentCodeModuleId =
+  | 'client_quote'
+  | 'client_offer'
+  | 'supplier_quote'
+  | 'client_order'
+  | 'supplier_order'
+  | 'client_invoice'
+  | 'supplier_invoice';
+
+export interface DocumentCodeTemplate {
+  moduleId: DocumentCodeModuleId;
+  label: string;
+  prefix: string;
+  template: string;
+  sequencePadding: number;
+  preview: string;
+}
+
 // App-wide branding shown in the sidebar and on the login screen. `companyName` replaces
 // the "PRAETOR" wordmark; `logoUrl` (when set) replaces the bundled logo. Both fall back
 // to the bundled Praetor defaults when null. `logoUrl` is a ready-to-render, cache-busted

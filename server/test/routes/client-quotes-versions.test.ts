@@ -10,6 +10,7 @@ import * as realQuoteVersionsRepo from '../../repositories/quoteVersionsRepo.ts'
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import * as realDocumentCodes from '../../services/documentCodes.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
@@ -31,6 +32,7 @@ const productsRepoSnap = { ...realProductsRepo };
 const quoteCommunicationChannelsRepoSnap = { ...realQuoteCommunicationChannelsRepo };
 const quoteVersionsRepoSnap = { ...realQuoteVersionsRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
+const documentCodesSnap = { ...realDocumentCodes };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
 
@@ -73,6 +75,7 @@ const qvListForQuoteMock = mock();
 const qvFindByIdMock = mock();
 const qvInsertMock = mock();
 const qvBuildSnapshotMock = mock();
+const allocateDocumentCodeMock = mock();
 
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
@@ -147,6 +150,10 @@ beforeAll(async () => {
     getQuoteItemSnapshots: sqGetQuoteItemSnapshotsMock,
     findEarliestExpirationByIds: sqFindEarliestExpirationByIdsMock,
   }));
+  mock.module('../../services/documentCodes.ts', () => ({
+    ...documentCodesSnap,
+    allocateDocumentCode: allocateDocumentCodeMock,
+  }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
     logAudit: logAuditMock,
@@ -174,6 +181,7 @@ afterAll(() => {
   );
   mock.module('../../repositories/quoteVersionsRepo.ts', () => quoteVersionsRepoSnap);
   mock.module('../../repositories/supplierQuotesRepo.ts', () => supplierQuotesRepoSnap);
+  mock.module('../../services/documentCodes.ts', () => documentCodesSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
 });
@@ -284,6 +292,7 @@ const allMocks = [
   qvFindByIdMock,
   qvInsertMock,
   qvBuildSnapshotMock,
+  allocateDocumentCodeMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -297,6 +306,7 @@ beforeEach(async () => {
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
+  allocateDocumentCodeMock.mockResolvedValue('OFF-2999-0001');
   qvBuildSnapshotMock.mockImplementation((quote, items) => ({
     schemaVersion: 1,
     quote,
@@ -568,16 +578,16 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     });
 
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body).linkedOfferId).toBe('q-1-OF');
+    expect(JSON.parse(res.body).linkedOfferId).toBe('OFF-2999-0001');
     expect(coCreateMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        id: 'q-1-OF',
+        id: 'OFF-2999-0001',
         linkedQuoteId: 'q-1',
         status: 'draft',
       }),
       TX_SENTINEL,
     );
-    expect(coInsertItemsMock).toHaveBeenCalledWith('q-1-OF', expect.any(Array), TX_SENTINEL);
+    expect(coInsertItemsMock).toHaveBeenCalledWith('OFF-2999-0001', expect.any(Array), TX_SENTINEL);
   });
 
   test('409 when the quote is effectively expired (restore would rewrite frozen content)', async () => {

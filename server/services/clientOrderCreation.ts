@@ -3,13 +3,9 @@ import type { DbExecutor } from '../db/drizzle.ts';
 import * as clientsOrdersRepo from '../repositories/clientsOrdersRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { logAudit } from '../utils/audit.ts';
-import {
-  generateClientOrderId,
-  generatePrefixedId,
-  generateSupplierOrderId,
-  ITEM_ID_PREFIXES,
-} from '../utils/order-ids.ts';
+import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { effectiveSupplierQuoteStatusFromDate } from '../utils/quote-status.ts';
+import { allocateDocumentCode } from './documentCodes.ts';
 
 export type ClientOrderCreateFields = {
   id?: string | null;
@@ -38,7 +34,7 @@ export const createClientOrderRows = async (
   order: clientsOrdersRepo.ClientOrder;
   items: clientsOrdersRepo.ClientOrderItem[];
 }> => {
-  const orderId = fields.id || (await generateClientOrderId(tx));
+  const orderId = fields.id || (await allocateDocumentCode('client_order', { exec: tx }));
   const order = await clientsOrdersRepo.create(
     {
       id: orderId,
@@ -125,7 +121,7 @@ export const autoCreateSupplierOrdersForClientOrder = async (
         const supplierQuote = await supplierQuotesRepo.findById(sqId, tx);
         if (!supplierQuote) return null;
         const supplierItems = await supplierQuotesRepo.findItemsForQuote(sqId, tx);
-        const supplierOrderId = await generateSupplierOrderId(tx);
+        const supplierOrderId = await allocateDocumentCode('supplier_order', { exec: tx });
         await clientsOrdersRepo.createSupplierOrder(
           {
             id: supplierOrderId,

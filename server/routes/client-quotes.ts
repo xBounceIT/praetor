@@ -9,9 +9,11 @@ import * as quoteCommunicationChannelsRepo from '../repositories/quoteCommunicat
 import * as quoteVersionsRepo from '../repositories/quoteVersionsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { allocateDocumentCode } from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
 import { isPastLocalDate } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
+import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import { type DurationUnit, effectiveDurationMonths } from '../utils/duration-unit.ts';
 import { normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
@@ -99,11 +101,14 @@ const replyAutoOfferUniqueViolation = async (
   args: {
     action: string;
     quoteId: string;
-    offerId: string;
+    offerId?: string;
   },
 ): Promise<FastifyReply | null> => {
   if (!dup) return null;
-  if (dup.constraint === 'customer_offers_pkey' || dup.detail?.includes(`(${args.offerId})`)) {
+  if (
+    dup.constraint === 'customer_offers_pkey' ||
+    (args.offerId && dup.detail?.includes(`(${args.offerId})`))
+  ) {
     return replyError(request, reply, {
       statusCode: 409,
       message: 'Offer ID already exists',
@@ -563,7 +568,7 @@ const quoteCreateBodySchema = {
     communicationChannelId: { type: 'string' },
     notes: { type: 'string' },
   },
-  required: ['id', 'clientId', 'clientName', 'items', 'expirationDate', 'communicationChannelId'],
+  required: ['clientId', 'clientName', 'items', 'expirationDate', 'communicationChannelId'],
 } as const;
 
 const quoteUpdateBodySchema = {
@@ -689,9 +694,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     if (!quote.expirationDate) {
       throw new Error('Cannot create an offer from a quote without an expiration date');
     }
+    const offerId = await allocateDocumentCode('client_offer', { exec: tx });
     const offer = await clientOffersRepo.create(
       {
-        id: `${quote.id}-OF`,
+        id: offerId,
         linkedQuoteId: quote.id,
         clientId: quote.clientId,
         clientName: quote.clientName,
@@ -916,7 +922,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         communicationChannelId,
         notes,
       } = request.body as {
-        id: unknown;
+        id?: unknown;
         clientId: unknown;
         clientName: unknown;
         items: unknown;
@@ -929,7 +935,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes: unknown;
       };
 
-      const nextIdResult = requireNonEmptyString(nextId, 'id');
+      const nextIdResult = optionalNonEmptyString(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
 
       const clientIdResult = requireNonEmptyString(clientId, 'clientId');
@@ -997,7 +1003,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         await blockIfSourcedSupplierExpired(
           initialStatus,
           sourcedExpiration,
-          nextIdResult.value,
+          nextIdResult.value ?? 'auto',
           request,
           reply,
         )
@@ -1007,9 +1013,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       try {
         const { quote, createdItems, syncAudits } = await withDbTransaction(async (tx) => {
+          const quoteId =
+            nextIdResult.value ?? (await allocateDocumentCode('client_quote', { exec: tx }));
           const created = await clientQuotesRepo.create(
             {
-              id: nextIdResult.value,
+              id: quoteId,
               clientId: clientIdResult.value,
               clientName: clientNameResult.value,
               paymentTerms:
@@ -1058,9 +1066,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           request,
           action: 'client_quote.created',
           entityType: 'client_quote',
-          entityId: nextIdResult.value,
+          entityId: quote.id,
           details: {
-            targetLabel: nextIdResult.value,
+            targetLabel: quote.id,
             secondaryLabel: clientNameResult.value,
             changedFields: ['communicationChannelId'],
             toValue: communicationChannel.name,
@@ -1074,9 +1082,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (err instanceof SupplierItemSyncError) {
           return replySupplierItemSyncError(request, reply, err, {
             entityType: 'client_quote',
-            entityId: nextIdResult.value,
+            entityId: nextIdResult.value ?? 'auto',
           });
         }
+        const codeCollision = replyDocumentCodeCollision(
+          request,
+          reply,
+          err,
+          'client_quote.create.conflict',
+          'client_quote',
+        );
+        if (codeCollision) return codeCollision;
         const dup = getUniqueViolation(err);
         if (dup && (dup.constraint === 'quotes_pkey' || dup.detail?.includes('(id)'))) {
           return replyError(request, reply, {
@@ -1089,8 +1105,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         const autoOfferConflict = await replyAutoOfferUniqueViolation(request, reply, dup, {
           action: 'client_quote.create.conflict',
-          quoteId: nextIdResult.value,
-          offerId: `${nextIdResult.value}-OF`,
+          quoteId: nextIdResult.value ?? 'auto',
         });
         if (autoOfferConflict) return autoOfferConflict;
         request.log.error({ err }, 'CRITICAL ERROR creating quote');
@@ -1555,6 +1570,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             entityId: idResult.value,
           });
         }
+        const codeCollision = replyDocumentCodeCollision(
+          request,
+          reply,
+          err,
+          'client_quote.update.conflict',
+          'client_offer',
+        );
+        if (codeCollision) return codeCollision;
         const dup = getUniqueViolation(err);
         if (dup && (dup.constraint === 'quotes_pkey' || dup.detail?.includes('(id)'))) {
           return replyError(request, reply, {
@@ -1569,7 +1592,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const autoOfferConflict = await replyAutoOfferUniqueViolation(request, reply, dup, {
           action: 'client_quote.update.conflict',
           quoteId: idResult.value,
-          offerId: `${idResult.value}-OF`,
         });
         if (autoOfferConflict) return autoOfferConflict;
         if (err instanceof LinkedOfferRollbackError) {
@@ -1980,11 +2002,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           };
         });
       } catch (err) {
+        const codeCollision = replyDocumentCodeCollision(
+          request,
+          reply,
+          err,
+          'client_quote.restore.conflict',
+          'client_offer',
+        );
+        if (codeCollision) return codeCollision;
         const dup = getUniqueViolation(err);
         const autoOfferConflict = await replyAutoOfferUniqueViolation(request, reply, dup, {
           action: 'client_quote.restore.conflict',
           quoteId: idResult.value,
-          offerId: `${idResult.value}-OF`,
         });
         if (autoOfferConflict) return autoOfferConflict;
         if (err instanceof LinkedOfferRollbackError) {

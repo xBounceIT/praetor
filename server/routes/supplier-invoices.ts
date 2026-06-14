@@ -4,9 +4,11 @@ import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as supplierInvoicesRepo from '../repositories/supplierInvoicesRepo.ts';
 import * as supplierOrdersRepo from '../repositories/supplierOrdersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { allocateDocumentCode } from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
 import { type DatabaseError, getUniqueViolation } from '../utils/db-errors.ts';
-import { formatSequenceSuffix, generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
+import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
@@ -21,9 +23,6 @@ import {
   parseLocalizedPositiveNumber,
   requireNonEmptyString,
 } from '../utils/validation.ts';
-
-const isSupplierInvoiceIdConflict = (databaseError: DatabaseError) =>
-  databaseError.constraint === 'supplier_invoices_pkey' || databaseError.detail?.includes('(id)');
 
 const AMOUNT_PAID_EXCEEDS_TOTAL_ERROR = 'amountPaid cannot exceed total';
 const PAID_INVOICE_UNDERPAID_ERROR = 'amountPaid must be at least total when status is paid';
@@ -223,13 +222,6 @@ const normalizeItems = (
   return normalizedItems;
 };
 
-const generateSupplierInvoiceId = async (issueDate: string) => {
-  const year = issueDate.split('-')[0];
-  const maxSequence = await supplierInvoicesRepo.maxSequenceForYear(year);
-  const nextSequence = maxSequence + 1n;
-  return `SINV-${year}-${formatSequenceSuffix(nextSequence)}`;
-};
-
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
@@ -390,112 +382,83 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      const maxInsertAttempts = nextIdResult.value ? 1 : 5;
-
-      let resolvedInvoiceId: string | null = nextIdResult.value;
       let result: {
         invoice: supplierInvoicesRepo.SupplierInvoice;
         items: supplierInvoicesRepo.SupplierInvoiceItem[];
       } | null = null;
 
       try {
-        for (let attempt = 0; attempt < maxInsertAttempts; attempt++) {
-          if (!resolvedInvoiceId) {
-            resolvedInvoiceId = await generateSupplierInvoiceId(issueDateResult.value);
+        type CreateOutcome =
+          | { ok: false; status: number; body: Record<string, unknown> }
+          | {
+              ok: true;
+              invoice: supplierInvoicesRepo.SupplierInvoice;
+              items: supplierInvoicesRepo.SupplierInvoiceItem[];
+            };
+        const txResult = await withDbTransaction(async (tx): Promise<CreateOutcome> => {
+          // Lock the linked supplier order so a concurrent supplier-order restore
+          // (which gates on "no linked invoice exists") serializes against this insert.
+          if (linkedSaleIdResult.value) {
+            const lockedOrder = await supplierOrdersRepo.lockExistingById(
+              linkedSaleIdResult.value,
+              tx,
+            );
+            if (!lockedOrder) {
+              return { ok: false, status: 404, body: { error: 'Source order not found' } };
+            }
+            if (lockedOrder.status !== 'sent') {
+              return {
+                ok: false,
+                status: 409,
+                body: { error: 'Invoices can only be created from sent orders' },
+              };
+            }
+            const existingInvoiceId = await supplierInvoicesRepo.findInvoiceForLinkedSale(
+              linkedSaleIdResult.value,
+              tx,
+            );
+            if (existingInvoiceId) {
+              return {
+                ok: false,
+                status: 409,
+                body: { error: 'An invoice already exists for this order' },
+              };
+            }
           }
 
-          try {
-            const idForAttempt = resolvedInvoiceId;
-            type CreateOutcome =
-              | { ok: false; status: number; body: Record<string, unknown> }
-              | {
-                  ok: true;
-                  invoice: supplierInvoicesRepo.SupplierInvoice;
-                  items: supplierInvoicesRepo.SupplierInvoiceItem[];
-                };
-            const txResult = await withDbTransaction(async (tx): Promise<CreateOutcome> => {
-              // Lock the linked supplier order so a concurrent supplier-order restore
-              // (which gates on "no linked invoice exists") serializes against this insert.
-              if (linkedSaleIdResult.value) {
-                const lockedOrder = await supplierOrdersRepo.lockExistingById(
-                  linkedSaleIdResult.value,
-                  tx,
-                );
-                if (!lockedOrder) {
-                  return { ok: false, status: 404, body: { error: 'Source order not found' } };
-                }
-                if (lockedOrder.status !== 'sent') {
-                  return {
-                    ok: false,
-                    status: 409,
-                    body: { error: 'Invoices can only be created from sent orders' },
-                  };
-                }
-                const existingInvoiceId = await supplierInvoicesRepo.findInvoiceForLinkedSale(
-                  linkedSaleIdResult.value,
-                  tx,
-                );
-                if (existingInvoiceId) {
-                  return {
-                    ok: false,
-                    status: 409,
-                    body: { error: 'An invoice already exists for this order' },
-                  };
-                }
-              }
-
-              const invoice = await supplierInvoicesRepo.create(
-                {
-                  id: idForAttempt,
-                  linkedSaleId: linkedSaleIdResult.value || null,
-                  supplierId: supplierIdResult.value,
-                  supplierName: supplierNameResult.value,
-                  issueDate: issueDateResult.value,
-                  dueDate: dueDateResult.value,
-                  status: statusValue,
-                  subtotal: subtotalResult.value ?? 0,
-                  total: totalValue,
-                  amountPaid: amountPaidValue,
-                  notes: typeof notes === 'string' ? notes : null,
-                },
-                tx,
-              );
-              const createdItems = await supplierInvoicesRepo.insertItems(
-                invoice.id,
-                normalizedItems,
-                tx,
-              );
-              return { ok: true, invoice, items: createdItems };
-            });
-            if (!txResult.ok) {
-              return reply.code(txResult.status).send(txResult.body);
-            }
-            result = { invoice: txResult.invoice, items: txResult.items };
-            break;
-          } catch (error) {
-            const dup = getUniqueViolation(error);
-            if (
-              !nextIdResult.value &&
-              dup &&
-              isSupplierInvoiceIdConflict(dup) &&
-              attempt < maxInsertAttempts - 1
-            ) {
-              resolvedInvoiceId = null;
-              continue;
-            }
-            throw error;
-          }
+          const invoiceId =
+            nextIdResult.value ??
+            (await allocateDocumentCode('supplier_invoice', {
+              date: issueDateResult.value,
+              exec: tx,
+            }));
+          const invoice = await supplierInvoicesRepo.create(
+            {
+              id: invoiceId,
+              linkedSaleId: linkedSaleIdResult.value || null,
+              supplierId: supplierIdResult.value,
+              supplierName: supplierNameResult.value,
+              issueDate: issueDateResult.value,
+              dueDate: dueDateResult.value,
+              status: statusValue,
+              subtotal: subtotalResult.value ?? 0,
+              total: totalValue,
+              amountPaid: amountPaidValue,
+              notes: typeof notes === 'string' ? notes : null,
+            },
+            tx,
+          );
+          const createdItems = await supplierInvoicesRepo.insertItems(
+            invoice.id,
+            normalizedItems,
+            tx,
+          );
+          return { ok: true, invoice, items: createdItems };
+        });
+        if (!txResult.ok) {
+          return reply.code(txResult.status).send(txResult.body);
         }
-
-        if (!result) {
-          return replyError(request, reply, {
-            statusCode: 409,
-            message: 'Invoice ID already exists',
-            action: 'supplier_invoice.create.conflict',
-            entityType: 'supplier_invoice',
-            details: { secondaryLabel: 'duplicate_id' },
-          });
-        }
+        result = { invoice: txResult.invoice, items: txResult.items };
 
         await logAudit({
           request,
@@ -512,6 +475,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           items: result.items,
         });
       } catch (error) {
+        const codeCollision = replyDocumentCodeCollision(
+          request,
+          reply,
+          error,
+          'supplier_invoice.create.conflict',
+          'supplier_invoice',
+        );
+        if (codeCollision) return codeCollision;
         const dup = getUniqueViolation(error);
         if (dup) {
           return replyError(request, reply, {

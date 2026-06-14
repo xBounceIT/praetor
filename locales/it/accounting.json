@@ -75,6 +75,8 @@
     "editInvoice": "Modifica Fattura",
     "invoiceDetails": "Dettagli Fattura",
     "invoiceNumber": "Numero Fattura",
+    "autoCodePlaceholder": "Generato automaticamente",
+    "autoCodeDescription": "Lascia vuoto per usare il template dei codici documento.",
     "issueDate": "Data Emissione",
     "dueDate": "Data Scadenza",
     "client": "Cliente",

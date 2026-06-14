@@ -3,7 +3,7 @@ import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
-import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -556,7 +556,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
       newErrors.clientId = t('sales:clientQuotes.errors.clientRequired');
     }
 
-    if (!formData.id?.trim()) {
+    if (editingQuote && !formData.id?.trim()) {
       newErrors.id = t('sales:clientQuotes.errors.quoteCodeRequired', {
         defaultValue: 'Quote Code is required',
       });
@@ -630,6 +630,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
 
     const payload = {
       ...formData,
+      id: formData.id?.trim() || undefined,
       discount: formData.discount ? formData.discount : 0,
       items: itemsWithSnapshots,
     };
@@ -1780,7 +1781,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       <FieldError className="text-xs">{errors.clientId}</FieldError>
                     </Field>
                     <Field data-invalid={Boolean(errors.id)}>
-                      <FieldLabel htmlFor="client-quote-code" required>
+                      <FieldLabel htmlFor="client-quote-code" required={Boolean(editingQuote)}>
                         {t('sales:clientQuotes.quoteCode', { defaultValue: 'Quote Code' })}
                       </FieldLabel>
                       <Input
@@ -1797,12 +1798,21 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             });
                           }
                         }}
-                        placeholder="Q0000"
+                        placeholder={t('sales:clientQuotes.autoCodePlaceholder', {
+                          defaultValue: 'Auto-generated',
+                        })}
                         disabled={isReadOnly}
                         className={errors.id ? 'border-red-300 font-medium' : 'font-medium'}
                         aria-invalid={Boolean(errors.id)}
                       />
                       <FieldError className="text-xs">{errors.id}</FieldError>
+                      {!editingQuote && (
+                        <FieldDescription className="text-xs">
+                          {t('sales:clientQuotes.autoCodeDescription', {
+                            defaultValue: 'Leave blank to generate the next code automatically.',
+                          })}
+                        </FieldDescription>
+                      )}
                     </Field>
                     <Field>
                       <SelectControl

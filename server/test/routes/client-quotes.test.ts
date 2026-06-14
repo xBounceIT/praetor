@@ -9,6 +9,7 @@ import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
 import * as realSupplierQuoteVersionsRepo from '../../repositories/supplierQuoteVersionsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import * as realDocumentCodes from '../../services/documentCodes.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
@@ -32,6 +33,7 @@ const quoteCommunicationChannelsRepoSnap = { ...realQuoteCommunicationChannelsRe
 const quoteVersionsRepoSnap = { ...realQuoteVersionsRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const supplierQuoteVersionsRepoSnap = { ...realSupplierQuoteVersionsRepo };
+const documentCodesSnap = { ...realDocumentCodes };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
 
@@ -76,6 +78,7 @@ const sqvBuildSnapshotMock = mock();
 
 const qvInsertMock = mock();
 const qvBuildSnapshotMock = mock();
+const allocateDocumentCodeMock = mock();
 
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
@@ -148,6 +151,10 @@ beforeAll(async () => {
     insert: qvInsertMock,
     buildSnapshot: qvBuildSnapshotMock,
   }));
+  mock.module('../../services/documentCodes.ts', () => ({
+    ...documentCodesSnap,
+    allocateDocumentCode: allocateDocumentCodeMock,
+  }));
   mock.module('../../utils/audit.ts', () => ({ ...auditSnap, logAudit: logAuditMock }));
   mock.module('../../db/drizzle.ts', () => ({
     ...drizzleSnap,
@@ -174,6 +181,7 @@ afterAll(() => {
     () => supplierQuoteVersionsRepoSnap,
   );
   mock.module('../../repositories/quoteVersionsRepo.ts', () => quoteVersionsRepoSnap);
+  mock.module('../../services/documentCodes.ts', () => documentCodesSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
 });
@@ -289,6 +297,7 @@ const allMocks = [
   sqvBuildSnapshotMock,
   qvInsertMock,
   qvBuildSnapshotMock,
+  allocateDocumentCodeMock,
   logAuditMock,
 ];
 
@@ -301,6 +310,11 @@ beforeEach(async () => {
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
+  allocateDocumentCodeMock.mockImplementation(async (moduleId: string) => {
+    if (moduleId === 'client_quote') return 'PREV-2999-0001';
+    if (moduleId === 'client_offer') return 'OFF-2999-0001';
+    return `${moduleId}-generated`;
+  });
   qvBuildSnapshotMock.mockImplementation((quote, items) => ({ schemaVersion: 1, quote, items }));
 
   // Sensible defaults; individual tests override what they care about.
@@ -416,10 +430,10 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.status).toBe('offer');
-    expect(body.linkedOfferId).toBe('q-1-OF');
+    expect(body.linkedOfferId).toBe('OFF-2999-0001');
     expect(coCreateMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        id: 'q-1-OF',
+        id: 'OFF-2999-0001',
         linkedQuoteId: 'q-1',
         status: 'draft',
         expirationDate: '2999-12-31',
@@ -1080,10 +1094,10 @@ describe('POST /api/sales/client-quotes supplier sync on create (user report aft
     expect(res.statusCode).toBe(201);
     const body = JSON.parse(res.body);
     expect(body.status).toBe('offer');
-    expect(body.linkedOfferId).toBe('q-new-OF');
+    expect(body.linkedOfferId).toBe('OFF-2999-0001');
     expect(coCreateMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        id: 'q-new-OF',
+        id: 'OFF-2999-0001',
         linkedQuoteId: 'q-new',
         status: 'draft',
       }),
@@ -1096,6 +1110,21 @@ describe('POST /api/sales/client-quotes supplier sync on create (user report aft
       durationMonths: 12,
       durationUnit: 'months',
     });
+  });
+
+  test('blank quote id auto-generates from the centralized template', async () => {
+    setupCreate();
+
+    const res = await postQuote([freshLine()], { id: '' });
+
+    expect(res.statusCode).toBe(201);
+    expect(allocateDocumentCodeMock).toHaveBeenCalledWith('client_quote', {
+      exec: expect.anything(),
+    });
+    expect(cqCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'PREV-2999-0001' }),
+      expect.anything(),
+    );
   });
 
   test('an untouched line (cost == baseline) takes the live supplier value and pushes nothing', async () => {

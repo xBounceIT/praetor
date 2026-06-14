@@ -15,6 +15,7 @@ import {
 } from '../services/clientOrderCreation.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
+import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import type { DurationUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
@@ -764,6 +765,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         createdOrder = result.order;
         insertedItems = result.items;
       } catch (error) {
+        const codeCollision = replyDocumentCodeCollision(
+          request,
+          reply,
+          error,
+          'client_order.create.conflict',
+          'client_order',
+        );
+        if (codeCollision) return codeCollision;
         const dup = getUniqueViolation(error);
         if (dup) {
           if (dup.constraint === 'sales_pkey' || dup.detail?.includes('(id)')) {

@@ -2,7 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -211,12 +211,6 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   // references a now-disabled product still deep-links to that record.
   const allProductIds = useMemo(() => new Set(products.map((p) => p.id)), [products]);
 
-  const generateInvoiceId = () => {
-    const year = new Date().getFullYear();
-    const count = invoices.length + 1;
-    return `INV-${year}-${count.toString().padStart(4, '0')}`;
-  };
-
   const clearItemsError = useCallback(() => {
     if (errors.items) {
       setErrors((prev) => {
@@ -254,7 +248,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       formData: {
         clientId: '',
         clientName: '',
-        id: generateInvoiceId(),
+        id: '',
         items: [],
         issueDate,
         dueDate: addDaysToDateOnly(issueDate, 30),
@@ -409,7 +403,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
 
     const nextErrors: Record<string, string> = {};
     if (!formData.clientId) nextErrors.clientId = t('accounting:clientsInvoices.clientRequired');
-    if (!formData.id) {
+    if (editingInvoice && !formData.id) {
       nextErrors.id = t('accounting:clientsInvoices.invoiceNumberRequired');
     }
     if (!formData.issueDate) {
@@ -442,6 +436,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     const { subtotal, taxTotal, total } = calculateTotals(roundedItems);
     const payload = {
       ...formData,
+      id: formData.id?.trim() || undefined,
       items: roundedItems,
       amountPaid: Number(formData.amountPaid || 0),
       subtotal,
@@ -674,22 +669,30 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                     <FieldError className="text-xs">{errors.clientId}</FieldError>
                   </Field>
                   <Field data-invalid={Boolean(errors.id)}>
-                    <FieldLabel htmlFor="client-invoice-number" required>
+                    <FieldLabel htmlFor="client-invoice-number" required={Boolean(editingInvoice)}>
                       {t('accounting:clientsInvoices.invoiceNumber')}
                     </FieldLabel>
                     <Input
                       id="client-invoice-number"
                       type="text"
-                      required
                       value={formData.id || ''}
                       onChange={(event) =>
                         setFormData((prev) => ({ ...prev, id: event.target.value }))
                       }
                       aria-invalid={Boolean(errors.id)}
                       className="font-medium"
-                      placeholder="INV-YYYY-XXXX"
+                      placeholder={t('accounting:clientsInvoices.autoCodePlaceholder', {
+                        defaultValue: 'Auto-generated',
+                      })}
                     />
                     <FieldError className="text-xs">{errors.id}</FieldError>
+                    {!editingInvoice && (
+                      <FieldDescription className="text-xs">
+                        {t('accounting:clientsInvoices.autoCodeDescription', {
+                          defaultValue: 'Leave blank to generate the next number automatically.',
+                        })}
+                      </FieldDescription>
+                    )}
                   </Field>
                   <Field data-invalid={Boolean(errors.issueDate)}>
                     <FieldLabel htmlFor="client-invoice-issue-date" required>

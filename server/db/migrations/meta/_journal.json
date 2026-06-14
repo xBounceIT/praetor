@@ -638,6 +638,13 @@
       "when": 1781297227512,
       "tag": "0090_add_resale_start_date",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1781441032355,
+      "tag": "0091_spooky_scarecrow",
+      "breakpoints": true
     }
   ]
 }

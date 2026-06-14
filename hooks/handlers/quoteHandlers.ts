@@ -268,7 +268,6 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
           ? addMonthsToDateOnly(getLocalDateString(), 1)
           : quote.expirationDate;
       const offer = await api.clientOffers.create({
-        id: `${quote.id}-OF`,
         linkedQuoteId: quote.id,
         clientId: quote.clientId,
         clientName: quote.clientName,

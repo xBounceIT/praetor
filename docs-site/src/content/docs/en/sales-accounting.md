@@ -9,6 +9,8 @@ sidebar:
 
 Quotes and offers include products, quantities, prices, discounts, and terms. Use the catalog to start from consistent data and always check totals, margins, and validity before sending a document.
 
+In create dialogs, the **Code** field for commercial and accounting documents can be left blank: Praetor assigns the code automatically from the template configured under **Administration → General settings → Document codes**. Enter a value only when you need a manual override; that code is preserved on later updates. Automatic sequences are global for all users and separated by module and year.
+
 Each quote line includes a **Duration** column, placed between **Quantity** and **Cost**: it sets how long the service runs. A selector next to the value lets you pick the unit — **Months** or **Years** (1 year = 12 months) — using the same *value / unit* format as quantity. Duration acts as a multiplier alongside quantity, so both the line's **Total cost** and **Revenue** are computed as *unit value × Quantity × Duration (in months)*. For one-off items leave **Duration = 1 month** so totals stay identical to the previous behavior.
 
 **Duration** flows through the whole document chain: when you convert a quote into an offer and then into a sales order, the lines keep both the value and the unit (months or years) you set, so the derived document's totals match the quote. **Customer invoices** also carry the Duration column on their lines and multiply the taxable amount (and therefore VAT and total) by the corresponding months; on invoices the duration is set manually, since invoice lines are not copied automatically from an order.

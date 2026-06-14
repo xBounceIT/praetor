@@ -11,6 +11,7 @@ import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
 import * as realSupplierQuoteVersionsRepo from '../../repositories/supplierQuoteVersionsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import * as realDocumentCodes from '../../services/documentCodes.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realOrderIds from '../../utils/order-ids.ts';
 import * as realPermissions from '../../utils/permissions.ts';
@@ -37,6 +38,7 @@ const productsRepoSnap = { ...realProductsRepo };
 const offerVersionsRepoSnap = { ...realOfferVersionsRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const supplierQuoteVersionsRepoSnap = { ...realSupplierQuoteVersionsRepo };
+const documentCodesSnap = { ...realDocumentCodes };
 const auditSnap = { ...realAudit };
 const orderIdsSnap = { ...realOrderIds };
 const drizzleSnap = { ...realDrizzle };
@@ -69,6 +71,7 @@ const clientOrderLinkSaleItemsToSupplierOrderMock = mock();
 const clientOrderMapSaleItemsToSupplierItemsMock = mock();
 const generateClientOrderIdMock = mock();
 const generateSupplierOrderIdMock = mock();
+const allocateDocumentCodeMock = mock();
 
 const cqFindStatusAndClientNameMock = mock();
 const cqFindItemSnapshotsForQuoteMock = mock();
@@ -158,6 +161,10 @@ beforeAll(async () => {
     generateClientOrderId: generateClientOrderIdMock,
     generateSupplierOrderId: generateSupplierOrderIdMock,
   }));
+  mock.module('../../services/documentCodes.ts', () => ({
+    ...documentCodesSnap,
+    allocateDocumentCode: allocateDocumentCodeMock,
+  }));
   mock.module('../../repositories/supplierQuoteVersionsRepo.ts', () => ({
     ...supplierQuoteVersionsRepoSnap,
     insert: sqvInsertMock,
@@ -193,6 +200,7 @@ afterAll(() => {
     '../../repositories/supplierQuoteVersionsRepo.ts',
     () => supplierQuoteVersionsRepoSnap,
   );
+  mock.module('../../services/documentCodes.ts', () => documentCodesSnap);
   mock.module('../../repositories/productsRepo.ts', () => productsRepoSnap);
   mock.module('../../repositories/offerVersionsRepo.ts', () => offerVersionsRepoSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
@@ -294,6 +302,7 @@ const allMocks = [
   clientOrderMapSaleItemsToSupplierItemsMock,
   generateClientOrderIdMock,
   generateSupplierOrderIdMock,
+  allocateDocumentCodeMock,
   cqFindStatusAndClientNameMock,
   cqFindItemSnapshotsForQuoteMock,
   cqLockCurrentByIdMock,
@@ -382,6 +391,11 @@ beforeEach(async () => {
   clientOrderMapSaleItemsToSupplierItemsMock.mockResolvedValue(undefined);
   generateClientOrderIdMock.mockResolvedValue('ORD-2999-0001');
   generateSupplierOrderIdMock.mockResolvedValue('SORD-2999-0001');
+  allocateDocumentCodeMock.mockImplementation(async (moduleId: string) => {
+    if (moduleId === 'client_offer') return 'OFF-2999-0001';
+    if (moduleId === 'supplier_order') return 'SORD-2999-0001';
+    return 'ORD-2999-0001';
+  });
   // Linked-quote sourced lines for the fresh-link inheritance exemption (#812 round 15).
   cqFindItemSnapshotsForQuoteMock.mockResolvedValue([]);
   sqGetQuoteItemSnapshotsMock.mockResolvedValue(new Map());
@@ -859,6 +873,41 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
     expect(inserted[0].supplierQuoteId).toBe('sq-9');
     expect(inserted[0].supplierQuoteSupplierName).toBe('Snapshot Co');
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+  });
+
+  test('POST: blank offer id auto-generates from the centralized template', async () => {
+    cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'accepted', clientName: 'Client' });
+    cqLockCurrentByIdMock.mockResolvedValue({ status: 'accepted' });
+    coFindExistingForQuoteMock.mockResolvedValue(null);
+    coCreateMock.mockImplementation((input: Record<string, unknown>) =>
+      Promise.resolve(updatedOffer({ id: input.id })),
+    );
+    coInsertItemsMock.mockResolvedValue([]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(SUPPLIER_SNAPSHOT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers',
+      headers: authHeader(),
+      payload: {
+        id: '',
+        linkedQuoteId: 'q-1',
+        clientId: 'c1',
+        clientName: 'Client',
+        expirationDate: '2999-12-31',
+        items: [lineItem(5, 80)],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(allocateDocumentCodeMock).toHaveBeenCalledWith('client_offer', {
+      exec: expect.anything(),
+    });
+    expect(coCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'OFF-2999-0001' }),
+      expect.anything(),
+    );
+    expect(JSON.parse(res.body).id).toBe('OFF-2999-0001');
   });
 
   test('POST: a create-form edit away from the pick-time baseline is kept and pushed (user report after #812)', async () => {

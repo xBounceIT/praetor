@@ -686,7 +686,7 @@ describe('makeQuoteHandlers', () => {
 
     expect(apiMocks.clientOffersCreate).toHaveBeenCalled();
     const callArg = apiMocks.clientOffersCreate.mock.calls[0][0] as Record<string, unknown>;
-    expect(callArg.id).toBe('q1-OF');
+    expect(callArg.id).toBeUndefined();
     expect(callArg.linkedQuoteId).toBe('q1');
     expect(callArg.status).toBe('draft');
     const items = callArg.items as Array<Record<string, unknown>>;

@@ -1,6 +1,7 @@
 import {
   Check,
   Clock,
+  FileText,
   Globe,
   Loader2,
   Palette,
@@ -35,6 +36,7 @@ import SelectControl, { type Option } from '../shared/SelectControl';
 import Toggle from '../shared/Toggle';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import BrandingSettings from './BrandingSettings';
+import DocumentCodeSettings from './DocumentCodeSettings';
 
 export interface GeneralSettingsProps {
   settings: IGeneralSettings;
@@ -74,6 +76,7 @@ const TABS = [
   { id: 'localization', Icon: Globe, labelKey: 'general.tabs.localization' },
   { id: 'tracking', Icon: Clock, labelKey: 'general.tabs.tracking' },
   { id: 'ai', Icon: Sparkles, labelKey: 'general.tabs.ai' },
+  { id: 'documentCodes', Icon: FileText, labelKey: 'general.tabs.documentCodes' },
   { id: 'branding', Icon: Palette, labelKey: 'general.tabs.branding' },
 ] as const;
 
@@ -1024,7 +1027,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
           </Card>
         )}
 
-        {activeTab !== 'branding' && (
+        {(activeTab === 'localization' || activeTab === 'tracking' || activeTab === 'ai') && (
           <div className="flex justify-end pt-4">
             <Button type="submit" disabled={submitDisabled}>
               <SubmitIcon aria-hidden="true" className={submitIconClass} />
@@ -1033,6 +1036,10 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
           </div>
         )}
       </form>
+
+      {activeTab === 'documentCodes' && (
+        <DocumentCodeSettings animationClass={sectionAnimationClass} />
+      )}
 
       {activeTab === 'branding' && (
         <BrandingSettings
