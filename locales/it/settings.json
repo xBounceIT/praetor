@@ -229,6 +229,7 @@
         "sequenceRequired": "Il modello deve includere {SEQ}",
         "unknownPlaceholder": "Segnaposto sconosciuto {{placeholder}}",
         "invalidPlaceholder": "Sintassi segnaposto non valida",
+        "templateTextPattern": "Il testo del modello può usare solo lettere, numeri, underscore e trattini",
         "paddingRange": "Usa un numero da 1 a 9"
       }
     },

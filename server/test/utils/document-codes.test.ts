@@ -37,7 +37,7 @@ describe('document code templates', () => {
       validateDocumentCodeTemplate({
         moduleId: 'client_invoice',
         prefix: 'CI',
-        template: '{PREFIX}/{YYYY}/{SEQ}',
+        template: '{PREFIX}-{YYYY}-{SEQ}',
         sequencePadding: 6,
       }),
     ).toEqual({
@@ -45,10 +45,28 @@ describe('document code templates', () => {
       value: {
         moduleId: 'client_invoice',
         prefix: 'CI',
-        template: '{PREFIX}/{YYYY}/{SEQ}',
+        template: '{PREFIX}-{YYYY}-{SEQ}',
         sequencePadding: 6,
       },
     });
+  });
+
+  test('rejects template text that would break document id routes', () => {
+    const base = {
+      moduleId: 'client_invoice',
+      prefix: 'INV',
+      sequencePadding: 4,
+    };
+
+    for (const template of ['{PREFIX}/{YYYY}/{SEQ}', '{PREFIX}?{YYYY}_{SEQ}', '{PREFIX}#{SEQ}']) {
+      expect(validateDocumentCodeTemplate({ ...base, template })).toEqual(
+        expect.objectContaining({
+          ok: false,
+          message:
+            'template text can only contain letters, numbers, underscores, hyphens, and placeholders',
+        }),
+      );
+    }
   });
 
   test('rejects invalid template inputs', () => {

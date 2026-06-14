@@ -29,6 +29,7 @@ interface DocumentCodeSettingsProps {
 
 const KNOWN_PLACEHOLDERS = new Set(['PREFIX', 'YY', 'YYYY', 'SEQ']);
 const PREFIX_PATTERN = /^[A-Za-z0-9_-]+$/;
+const TEMPLATE_LITERAL_PATTERN = /^[A-Za-z0-9_-]*$/;
 
 const persistedShape = (templates: EditableTemplate[]) =>
   JSON.stringify(
@@ -80,11 +81,15 @@ const validateTemplates = (rows: EditableTemplate[], t: SettingsT): TemplateErro
           break;
         }
       }
+      const literalTemplateText = template.replace(/\{(?:PREFIX|YY|YYYY|SEQ)\}/g, '');
+      if (!errors[`${row.moduleId}:template`] && literalTemplateText.match(/[{}]/)) {
+        errors[`${row.moduleId}:template`] = t('general.documentCodes.errors.invalidPlaceholder');
+      }
       if (
         !errors[`${row.moduleId}:template`] &&
-        template.replace(/\{(?:PREFIX|YY|YYYY|SEQ)\}/g, '').match(/[{}]/)
+        !TEMPLATE_LITERAL_PATTERN.test(literalTemplateText)
       ) {
-        errors[`${row.moduleId}:template`] = t('general.documentCodes.errors.invalidPlaceholder');
+        errors[`${row.moduleId}:template`] = t('general.documentCodes.errors.templateTextPattern');
       }
     }
 

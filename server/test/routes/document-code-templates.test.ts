@@ -242,7 +242,7 @@ describe('PUT /api/document-code-templates', () => {
           {
             moduleId: 'client_invoice',
             prefix: 'FT',
-            template: '{PREFIX}/{YYYY}/{SEQ}',
+            template: '{PREFIX}-{YYYY}-{SEQ}',
             sequencePadding: 6,
           },
         ],
@@ -254,7 +254,7 @@ describe('PUT /api/document-code-templates', () => {
       {
         moduleId: 'client_invoice',
         prefix: 'FT',
-        template: '{PREFIX}/{YYYY}/{SEQ}',
+        template: '{PREFIX}-{YYYY}-{SEQ}',
         sequencePadding: 6,
       },
     ]);
@@ -285,6 +285,30 @@ describe('PUT /api/document-code-templates', () => {
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toContain('template must include {SEQ}');
+    expect(upsertManyMock).not.toHaveBeenCalled();
+  });
+
+  test('400 rejects template text that is unsafe in document id routes', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/document-code-templates',
+      headers: authHeader(),
+      payload: {
+        templates: [
+          {
+            moduleId: 'client_invoice',
+            prefix: 'FT',
+            template: '{PREFIX}/{YYYY}/{SEQ}',
+            sequencePadding: 4,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain(
+      'template text can only contain letters, numbers, underscores, hyphens, and placeholders',
+    );
     expect(upsertManyMock).not.toHaveBeenCalled();
   });
 

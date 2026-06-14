@@ -25121,7 +25121,8 @@
                         "type": "string"
                       },
                       "template": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Supports {PREFIX}, {YY}, {YYYY}, and required {SEQ}; literal text may contain only letters, numbers, underscores, and hyphens."
                       },
                       "sequencePadding": {
                         "type": "integer"
@@ -25327,7 +25328,8 @@
                           "type": "string"
                         },
                         "template": {
-                          "type": "string"
+                          "type": "string",
+                          "description": "Supports {PREFIX}, {YY}, {YYYY}, and required {SEQ}; literal text may contain only letters, numbers, underscores, and hyphens."
                         },
                         "sequencePadding": {
                           "type": "integer"
@@ -25380,7 +25382,8 @@
                         "type": "string"
                       },
                       "template": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Supports {PREFIX}, {YY}, {YYYY}, and required {SEQ}; literal text may contain only letters, numbers, underscores, and hyphens."
                       },
                       "sequencePadding": {
                         "type": "integer"

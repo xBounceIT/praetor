@@ -229,6 +229,7 @@
         "sequenceRequired": "Template must include {SEQ}",
         "unknownPlaceholder": "Unknown placeholder {{placeholder}}",
         "invalidPlaceholder": "Invalid placeholder syntax",
+        "templateTextPattern": "Template text can only use letters, numbers, underscores, and hyphens",
         "paddingRange": "Use a number from 1 to 9"
       }
     },

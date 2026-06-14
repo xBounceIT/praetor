@@ -16,6 +16,8 @@ import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { badRequest } from '../utils/validation.ts';
 
 const moduleIdSchema = { type: 'string', enum: DOCUMENT_CODE_MODULE_IDS } as const;
+const templateDescription =
+  'Supports {PREFIX}, {YY}, {YYYY}, and required {SEQ}; literal text may contain only letters, numbers, underscores, and hyphens.';
 
 const templateSchema = {
   type: 'object',
@@ -23,7 +25,7 @@ const templateSchema = {
     moduleId: moduleIdSchema,
     label: { type: 'string' },
     prefix: { type: 'string' },
-    template: { type: 'string' },
+    template: { type: 'string', description: templateDescription },
     sequencePadding: { type: 'integer' },
     preview: { type: 'string' },
   },
@@ -73,7 +75,7 @@ const updateTemplateSchema = {
   properties: {
     moduleId: moduleIdSchema,
     prefix: { type: 'string' },
-    template: { type: 'string' },
+    template: { type: 'string', description: templateDescription },
     sequencePadding: { type: 'integer' },
   },
   required: ['moduleId', 'prefix', 'template', 'sequencePadding'],

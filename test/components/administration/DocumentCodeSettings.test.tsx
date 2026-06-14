@@ -74,6 +74,10 @@ describe('DocumentCodeSettings', () => {
     expect(screen.getByText(/unknownPlaceholder/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /saveConfiguration/ })).toBeDisabled();
 
+    fireEvent.change(templateInput, { target: { value: '{PREFIX}/{YYYY}/{SEQ}' } });
+    expect(screen.getByText(/templateTextPattern/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /saveConfiguration/ })).toBeDisabled();
+
     fireEvent.change(templateInput, { target: { value: ' {PREFIX}_{YYYY}_{SEQ} ' } });
     fireEvent.click(screen.getByRole('button', { name: /saveConfiguration/ }));
 
