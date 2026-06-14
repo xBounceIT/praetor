@@ -43,6 +43,35 @@ describe('sales modal styling', () => {
     ]);
   });
 
+  test.each([
+    [
+      'client quotes',
+      'sales/ClientQuotesView.tsx',
+      "useDocumentCodePreview('client_quote'",
+      'clientQuoteCodePreview ??',
+    ],
+    [
+      'client offers',
+      'sales/ClientOffersView.tsx',
+      "useDocumentCodePreview('client_offer'",
+      'clientOfferCodePreview ??',
+    ],
+    [
+      'supplier quotes',
+      'sales/SupplierQuotesView.tsx',
+      "useDocumentCodePreview('supplier_quote'",
+      'supplierQuoteCodePreview ??',
+    ],
+  ])('%s code field shows the next document-code preview when blank', async (_name, path, hookSnippet, placeholderSnippet) => {
+    const source = await readComponentSource(path);
+
+    expectSourceContainsAll(source, [
+      hookSnippet,
+      placeholderSnippet,
+      'autoCodePreviewDescription',
+    ]);
+  });
+
   test('supplier quote attachment section header matches other modal section headers', async () => {
     const source = await readComponentSource('sales/SupplierQuoteAttachmentsSection.tsx');
 

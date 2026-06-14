@@ -204,6 +204,13 @@ export interface DocumentCodeTemplate {
   preview: string;
 }
 
+export interface DocumentCodePreview {
+  moduleId: DocumentCodeModuleId;
+  preview: string;
+  year: number;
+  sequence: number;
+}
+
 // App-wide branding shown in the sidebar and on the login screen. `companyName` replaces
 // the "PRAETOR" wordmark; `logoUrl` (when set) replaces the bundled logo. Both fall back
 // to the bundled Praetor defaults when null. `logoUrl` is a ready-to-render, cache-busted

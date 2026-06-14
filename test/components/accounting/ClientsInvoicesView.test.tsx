@@ -144,6 +144,17 @@ describe('ClientsInvoicesView modal styling', () => {
     ]);
   });
 
+  test('invoice number field previews the issue-date document code when blank', async () => {
+    const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
+
+    expectSourceContainsAll(source, [
+      "useDocumentCodePreview('client_invoice'",
+      'date: formData.issueDate',
+      'clientInvoiceCodePreview ??',
+      'autoCodePreviewDescription',
+    ]);
+  });
+
   // Regression: the `lg:pt-5` quick-view gutter must sit on the row flex (with `lg:items-center`,
   // alongside the trash button), not the inner grid — else the delete button misaligns above the inputs.
   test('delete button shares the floated quick-view gutter so it stays aligned with the line', async () => {

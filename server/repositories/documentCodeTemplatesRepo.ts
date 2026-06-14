@@ -1,7 +1,7 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { customerOffers } from '../db/schema/customerOffers.ts';
-import { documentCodeTemplates } from '../db/schema/documentCodes.ts';
+import { documentCodeCounters, documentCodeTemplates } from '../db/schema/documentCodes.ts';
 import { invoices } from '../db/schema/invoices.ts';
 import { quotes } from '../db/schema/quotes.ts';
 import { sales } from '../db/schema/sales.ts';
@@ -97,6 +97,23 @@ export const allocateSequence = async (
   const sequence = Number(rows[0]?.sequence);
   if (!Number.isInteger(sequence) || sequence < 1) {
     throw new Error('Document code counter did not return a valid sequence');
+  }
+  return sequence;
+};
+
+export const getNextSequence = async (
+  moduleId: DocumentCodeModuleId,
+  year: number,
+  exec: DbExecutor = db,
+): Promise<number> => {
+  const rows = await exec
+    .select({ nextSequence: documentCodeCounters.nextSequence })
+    .from(documentCodeCounters)
+    .where(and(eq(documentCodeCounters.moduleId, moduleId), eq(documentCodeCounters.year, year)))
+    .limit(1);
+  const sequence = Number(rows[0]?.nextSequence ?? 1);
+  if (!Number.isInteger(sequence) || sequence < 1) {
+    throw new Error('Document code counter did not return a valid next sequence');
   }
   return sequence;
 };

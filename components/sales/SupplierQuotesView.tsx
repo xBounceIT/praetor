@@ -7,6 +7,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useDocumentCodePreview } from '../../hooks/useDocumentCodePreview';
 import type { QuoteCommunicationChannel } from '../../services/api/quoteCommunicationChannels';
 import { supplierQuotesApi } from '../../services/api/supplierQuotes';
 import type {
@@ -379,6 +380,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     isDeleting,
     stagedAttachments,
   } = state;
+  const { preview: supplierQuoteCodePreview } = useDocumentCodePreview('supplier_quote', {
+    enabled: isModalOpen && !editingQuote,
+  });
 
   // `status` is the EFFECTIVE status (synced from the linked client quote + the `expired` overlay,
   // issue #779), so a linked supplier quote mirroring a non-draft client quote is correctly
@@ -1175,18 +1179,28 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                             dispatch({ type: 'clearError', key: 'id' });
                           }
                         }}
-                        placeholder={t('sales:supplierQuotes.autoCodePlaceholder', {
-                          defaultValue: 'Auto-generated',
-                        })}
+                        placeholder={
+                          supplierQuoteCodePreview ??
+                          t('sales:supplierQuotes.autoCodePlaceholder', {
+                            defaultValue: 'Auto-generated',
+                          })
+                        }
                         className={errors.id ? 'border-red-300' : ''}
                         aria-invalid={Boolean(errors.id)}
                       />
                       <FieldError className="text-xs">{errors.id}</FieldError>
                       {!editingQuote && (
                         <FieldDescription className="text-xs">
-                          {t('sales:supplierQuotes.autoCodeDescription', {
-                            defaultValue: 'Leave blank to generate the next code automatically.',
-                          })}
+                          {supplierQuoteCodePreview
+                            ? t('sales:supplierQuotes.autoCodePreviewDescription', {
+                                preview: supplierQuoteCodePreview,
+                                defaultValue:
+                                  'Leave blank to generate {{preview}} from the document code template.',
+                              })
+                            : t('sales:supplierQuotes.autoCodeDescription', {
+                                defaultValue:
+                                  'Leave blank to generate the next code automatically.',
+                              })}
                         </FieldDescription>
                       )}
                     </Field>

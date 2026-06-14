@@ -8,6 +8,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useDocumentCodePreview } from '../../hooks/useDocumentCodePreview';
 import { normalizeClientOfferItem } from '../../services/api/normalizers';
 import type {
   Client,
@@ -438,6 +439,9 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     isDeleting,
     isReverting,
   } = state;
+  const { preview: clientOfferCodePreview } = useDocumentCodePreview('client_offer', {
+    enabled: isModalOpen && !editingOffer,
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<Partial<ClientOffer>>(() => getDefaultFormData());
   const [previewVersion, setPreviewVersion] = useState<OfferVersion | null>(null);
@@ -1392,18 +1396,28 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         onChange={(event) =>
                           setFormData((prev) => ({ ...prev, id: event.target.value }))
                         }
-                        placeholder={t('sales:clientOffers.autoCodePlaceholder', {
-                          defaultValue: 'Auto-generated',
-                        })}
+                        placeholder={
+                          clientOfferCodePreview ??
+                          t('sales:clientOffers.autoCodePlaceholder', {
+                            defaultValue: 'Auto-generated',
+                          })
+                        }
                         className={errors.id ? 'border-red-300 font-medium' : 'font-medium'}
                         aria-invalid={Boolean(errors.id)}
                       />
                       <FieldError className="text-xs">{errors.id}</FieldError>
                       {!editingOffer && (
                         <FieldDescription className="text-xs">
-                          {t('sales:clientOffers.autoCodeDescription', {
-                            defaultValue: 'Leave blank to generate the next code automatically.',
-                          })}
+                          {clientOfferCodePreview
+                            ? t('sales:clientOffers.autoCodePreviewDescription', {
+                                preview: clientOfferCodePreview,
+                                defaultValue:
+                                  'Leave blank to generate {{preview}} from the document code template.',
+                              })
+                            : t('sales:clientOffers.autoCodeDescription', {
+                                defaultValue:
+                                  'Leave blank to generate the next code automatically.',
+                              })}
                         </FieldDescription>
                       )}
                     </Field>

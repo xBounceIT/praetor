@@ -77,6 +77,7 @@
     "invoiceNumber": "Invoice Number",
     "autoCodePlaceholder": "Auto-generated",
     "autoCodeDescription": "Leave blank to use the document code template.",
+    "autoCodePreviewDescription": "Leave blank to generate {{preview}} from the document code template.",
     "issueDate": "Issue Date",
     "dueDate": "Due Date",
     "client": "Client",

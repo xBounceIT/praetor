@@ -23,6 +23,9 @@ const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 const listMock = mock();
 const upsertManyMock = mock();
+const findByModuleIdMock = mock();
+const getNextSequenceMock = mock();
+const existsForModuleMock = mock();
 const logAuditMock = mock(async () => undefined);
 
 let routePlugin: FastifyPluginAsync;
@@ -63,6 +66,9 @@ beforeAll(async () => {
     ...repoSnap,
     list: listMock,
     upsertMany: upsertManyMock,
+    findByModuleId: findByModuleIdMock,
+    getNextSequence: getNextSequenceMock,
+    existsForModule: existsForModuleMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
@@ -97,6 +103,9 @@ const allMocks = [
   getRolePermissionsMock,
   listMock,
   upsertManyMock,
+  findByModuleIdMock,
+  getNextSequenceMock,
+  existsForModuleMock,
   logAuditMock,
 ];
 
@@ -112,6 +121,13 @@ beforeEach(async () => {
   ]);
   listMock.mockResolvedValue(TEMPLATES);
   upsertManyMock.mockResolvedValue(TEMPLATES);
+  findByModuleIdMock.mockImplementation(async (moduleId: string) => {
+    const template = TEMPLATES.find((entry) => entry.moduleId === moduleId);
+    if (!template) throw new Error(`missing template ${moduleId}`);
+    return template;
+  });
+  getNextSequenceMock.mockResolvedValue(7);
+  existsForModuleMock.mockResolvedValue(false);
   logAuditMock.mockResolvedValue(undefined);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/document-code-templates');
@@ -148,6 +164,48 @@ describe('GET /api/document-code-templates', () => {
     const res = await testApp.inject({
       method: 'GET',
       url: '/api/document-code-templates',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('GET /api/document-code-templates/preview', () => {
+  test('200 returns the next preview for a module and date', async () => {
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/document-code-templates/preview?moduleId=client_invoice&date=2025-12-31',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      moduleId: 'client_invoice',
+      preview: 'INV-2025-00007',
+      year: 2025,
+      sequence: 7,
+    });
+    expect(getNextSequenceMock).toHaveBeenCalledWith('client_invoice', 2025, expect.anything());
+  });
+
+  test('400 rejects invalid preview dates', async () => {
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/document-code-templates/preview?moduleId=client_invoice&date=not-a-date',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain('valid 4-digit year');
+  });
+
+  test('403 without administration.general.view', async () => {
+    getRolePermissionsMock.mockResolvedValue(['administration.general.update']);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/document-code-templates/preview?moduleId=client_invoice',
       headers: authHeader(),
     });
 

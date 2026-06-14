@@ -6,6 +6,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useDocumentCodePreview } from '../../hooks/useDocumentCodePreview';
 import type { Client, DurationUnit, Invoice, InvoiceItem, Product } from '../../types';
 import { addDaysToDateOnly, formatDateOnlyForLocale, getLocalDateString } from '../../utils/date';
 import {
@@ -168,6 +169,10 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   );
   const { isModalOpen, editingInvoice, isDeleteConfirmOpen, invoiceToDelete, errors, formData } =
     invoiceState;
+  const { preview: clientInvoiceCodePreview } = useDocumentCodePreview('client_invoice', {
+    date: formData.issueDate,
+    enabled: isModalOpen && !editingInvoice,
+  });
   const [productRowToDelete, setProductRowToDelete] = useState<number | null>(null);
   const setFormData = useCallback((update: StateUpdate<Partial<Invoice>>) => {
     dispatchInvoiceState({ type: 'setFormData', update });
@@ -681,16 +686,26 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
                       }
                       aria-invalid={Boolean(errors.id)}
                       className="font-medium"
-                      placeholder={t('accounting:clientsInvoices.autoCodePlaceholder', {
-                        defaultValue: 'Auto-generated',
-                      })}
+                      placeholder={
+                        clientInvoiceCodePreview ??
+                        t('accounting:clientsInvoices.autoCodePlaceholder', {
+                          defaultValue: 'Auto-generated',
+                        })
+                      }
                     />
                     <FieldError className="text-xs">{errors.id}</FieldError>
                     {!editingInvoice && (
                       <FieldDescription className="text-xs">
-                        {t('accounting:clientsInvoices.autoCodeDescription', {
-                          defaultValue: 'Leave blank to generate the next number automatically.',
-                        })}
+                        {clientInvoiceCodePreview
+                          ? t('accounting:clientsInvoices.autoCodePreviewDescription', {
+                              preview: clientInvoiceCodePreview,
+                              defaultValue:
+                                'Leave blank to generate {{preview}} from the document code template.',
+                            })
+                          : t('accounting:clientsInvoices.autoCodeDescription', {
+                              defaultValue:
+                                'Leave blank to generate the next number automatically.',
+                            })}
                       </FieldDescription>
                     )}
                   </Field>

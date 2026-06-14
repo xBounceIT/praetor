@@ -7,6 +7,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useDocumentCodePreview } from '../../hooks/useDocumentCodePreview';
 import { normalizeQuoteItem } from '../../services/api/normalizers';
 import type { QuoteCommunicationChannel } from '../../services/api/quoteCommunicationChannels';
 import type {
@@ -305,6 +306,9 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
     isSubmitting,
     isDeleting,
   } = state;
+  const { preview: clientQuoteCodePreview } = useDocumentCodePreview('client_quote', {
+    enabled: isModalOpen && !editingQuote,
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [productRowToDelete, setProductRowToDelete] = useState<number | null>(null);
 
@@ -1798,9 +1802,12 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                             });
                           }
                         }}
-                        placeholder={t('sales:clientQuotes.autoCodePlaceholder', {
-                          defaultValue: 'Auto-generated',
-                        })}
+                        placeholder={
+                          clientQuoteCodePreview ??
+                          t('sales:clientQuotes.autoCodePlaceholder', {
+                            defaultValue: 'Auto-generated',
+                          })
+                        }
                         disabled={isReadOnly}
                         className={errors.id ? 'border-red-300 font-medium' : 'font-medium'}
                         aria-invalid={Boolean(errors.id)}
@@ -1808,9 +1815,16 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = ({
                       <FieldError className="text-xs">{errors.id}</FieldError>
                       {!editingQuote && (
                         <FieldDescription className="text-xs">
-                          {t('sales:clientQuotes.autoCodeDescription', {
-                            defaultValue: 'Leave blank to generate the next code automatically.',
-                          })}
+                          {clientQuoteCodePreview
+                            ? t('sales:clientQuotes.autoCodePreviewDescription', {
+                                preview: clientQuoteCodePreview,
+                                defaultValue:
+                                  'Leave blank to generate {{preview}} from the document code template.',
+                              })
+                            : t('sales:clientQuotes.autoCodeDescription', {
+                                defaultValue:
+                                  'Leave blank to generate the next code automatically.',
+                              })}
                         </FieldDescription>
                       )}
                     </Field>
