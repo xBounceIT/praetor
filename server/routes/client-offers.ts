@@ -163,6 +163,7 @@ const offerSchema = {
       },
       required: ['clientOrder', 'supplierOrders'],
     },
+    warnings: { type: 'array', items: { type: 'string' } },
   },
   required: [
     'id',
@@ -1397,6 +1398,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             supplierOrders: CreatedSupplierOrderSummary[];
           }
         | undefined;
+      let autoCreateWarnings: string[] = [];
       if (result.createdOrder) {
         const supplierOrderResult = await autoCreateSupplierOrdersForClientOrder(
           request,
@@ -1408,6 +1410,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           clientOrder: { id: result.createdOrder.order.id },
           supplierOrders: supplierOrderResult.supplierOrders,
         };
+        autoCreateWarnings = supplierOrderResult.warnings;
         await logClientOrderCreated(request, result.createdOrder.order);
       }
 
@@ -1430,6 +1433,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         ...updatedOffer,
         items: updatedItems,
         ...(autoCreated ? { autoCreated } : {}),
+        ...(autoCreateWarnings.length > 0 ? { warnings: autoCreateWarnings } : {}),
       });
     },
   );

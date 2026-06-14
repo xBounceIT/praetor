@@ -616,6 +616,69 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
     );
   });
 
+  test('200 accepting a supplier-sourced offer returns a warning when supplier-order code allocation collides', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'sent' }));
+    coUpdateMock.mockResolvedValue(updatedOffer({ status: 'accepted' }));
+    coFindItemsForOfferMock.mockResolvedValue([
+      storedOfferItem({
+        supplierQuoteId: 'sq-1',
+        supplierQuoteItemId: 'sqi-1',
+        supplierQuoteSupplierName: 'Supplier Co',
+        supplierQuoteUnitPrice: 50,
+      }),
+    ]);
+    sqFindByIdMock.mockResolvedValue({
+      id: 'sq-1',
+      supplierId: 'sup-1',
+      supplierName: 'Supplier Co',
+      paymentTerms: '30 days',
+      expirationDate: '2999-12-31',
+      linkedClientQuoteStatus: 'offer',
+      linkedClientQuoteExpiration: '2999-12-31',
+      linkedOfferStatus: 'accepted',
+      linkedOfferExpiration: '2999-12-31',
+      notes: 'supplier notes',
+    });
+    sqLockEffectiveStatusMock.mockResolvedValue({
+      expirationDate: '2999-12-31',
+      linkedClientStatus: 'offer',
+      linkedClientQuoteExpiration: '2999-12-31',
+      linkedOfferStatus: 'accepted',
+      linkedOfferExpiration: '2999-12-31',
+    });
+    sqFindItemsForQuoteMock.mockResolvedValue([
+      {
+        id: 'sqi-1',
+        productId: 'p-1',
+        productName: 'Service',
+        quantity: 2,
+        unitPrice: 50,
+        note: null,
+        durationMonths: 1,
+        durationUnit: 'months',
+      },
+    ]);
+    allocateDocumentCodeMock.mockImplementation(async (moduleId: string) => {
+      if (moduleId === 'client_order') return 'ORD-2999-0001';
+      if (moduleId === 'supplier_order') {
+        throw new realDocumentCodes.DocumentCodeCollisionError('supplier_order');
+      }
+      return 'OFF-2999-0001';
+    });
+
+    const res = await putOffer({ status: 'accepted' });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).autoCreated).toEqual({
+      clientOrder: { id: 'ORD-2999-0001' },
+      supplierOrders: [],
+    });
+    expect(JSON.parse(res.body).warnings).toEqual([
+      'Supplier order not created for supplier quote sq-1: unable to allocate a unique supplier order code',
+    ]);
+    expect(clientOrderCreateSupplierOrderMock).not.toHaveBeenCalled();
+  });
+
   test('409 terminal offers keep the expiration date locked (they never expire)', async () => {
     coFindExistingMock.mockResolvedValue(gate({ status: 'accepted' }));
 

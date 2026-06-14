@@ -746,6 +746,7 @@ export interface ClientOfferAutoCreated {
 
 export type ClientOfferUpdateResult = ClientOffer & {
   autoCreated?: ClientOfferAutoCreated;
+  warnings?: string[];
 };
 
 export type OfferVersionReason = 'update' | 'restore';

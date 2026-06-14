@@ -470,6 +470,83 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     ]);
   });
 
+  test('201 warns when auto-created supplier order code allocation collides', async () => {
+    coInsertItemsMock.mockResolvedValue([
+      insertedItem({
+        productId: null,
+        productName: 'Sourced line',
+        supplierQuoteId: 'sq-1',
+        supplierQuoteItemId: 'sqi-1',
+      }),
+    ]);
+    sqFindByIdMock.mockResolvedValue({
+      id: 'sq-1',
+      supplierId: 'sup-1',
+      supplierName: 'Supplier Co',
+      paymentTerms: 'net30',
+      status: 'accepted',
+      expirationDate: '2999-12-31',
+      linkedOrderId: null,
+      notes: null,
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+      linkedClientQuoteId: null,
+      linkedClientQuoteStatus: 'offer',
+      linkedClientQuoteExpiration: '2999-12-31',
+      linkedOfferStatus: 'accepted',
+      linkedOfferExpiration: '2999-12-31',
+    });
+    sqLockEffectiveStatusByIdMock.mockResolvedValue({
+      expirationDate: '2999-12-31',
+      linkedClientStatus: 'offer',
+      linkedClientQuoteExpiration: '2999-12-31',
+      linkedOfferStatus: 'accepted',
+      linkedOfferExpiration: '2999-12-31',
+    });
+    sqFindItemsForQuoteMock.mockResolvedValue([
+      {
+        id: 'sqi-1',
+        productId: null,
+        productName: 'Sourced line',
+        quantity: 1,
+        unitPrice: 50,
+        note: null,
+        durationMonths: 1,
+        durationUnit: 'months',
+      },
+    ]);
+    allocateDocumentCodeMock.mockRejectedValue(
+      new realDocumentCodes.DocumentCodeCollisionError('supplier_order'),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: 'co-1',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            productId: null,
+            productName: 'Sourced line',
+            quantity: 1,
+            unitPrice: 100,
+            supplierQuoteId: 'sq-1',
+            supplierQuoteItemId: 'sqi-1',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(JSON.parse(res.body).warnings).toEqual([
+      'Supplier order not created for supplier quote sq-1: unable to allocate a unique supplier order code',
+    ]);
+    expect(coCreateSupplierOrderMock).not.toHaveBeenCalled();
+  });
+
   test('201 still creates a normal catalog-product line', async () => {
     coInsertItemsMock.mockResolvedValue([insertedItem()]);
 

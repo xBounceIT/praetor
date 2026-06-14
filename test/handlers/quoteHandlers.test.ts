@@ -610,6 +610,26 @@ describe('makeQuoteHandlers', () => {
     });
   });
 
+  test('updateClientOffer surfaces auto-create warnings', async () => {
+    apiMocks.clientOffersUpdate.mockImplementation((id: string) =>
+      Promise.resolve({
+        id,
+        linkedQuoteId: 'q-1',
+        warnings: ['Supplier order not created for supplier quote SQ-1'],
+      }),
+    );
+    apiMocks.quotesList.mockImplementation(() => Promise.resolve([]));
+    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([]));
+    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
+    const ctx = buildHandlers();
+
+    await ctx.handlers.updateClientOffer('of-1', { status: 'accepted' } as never);
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Supplier order not created for supplier quote SQ-1',
+    );
+  });
+
   test('updateClientOffer rethrows api error', async () => {
     apiMocks.clientOffersUpdate.mockImplementation(() => Promise.reject(new Error('boom')));
     const ctx = buildHandlers();
@@ -833,6 +853,32 @@ describe('makeQuoteHandlers', () => {
       supplierName: 'Supplier 2',
     });
     expect(refreshSupplierQuoteFlow).toHaveBeenCalled();
+  });
+
+  test('createClientsOrderFromOffer surfaces auto-create warnings', async () => {
+    apiMocks.clientsOrdersCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({
+        id: 'or-new',
+        ...(data as object),
+        warnings: ['Supplier order not created for supplier quote SQ-1'],
+      }),
+    );
+    const ctx = buildHandlers();
+
+    await ctx.handlers.createClientsOrderFromOffer({
+      id: 'of-1',
+      clientId: 'c1',
+      clientName: 'Acme',
+      paymentTerms: '30',
+      discount: 0,
+      linkedQuoteId: 'q1',
+      notes: '',
+      items: [],
+    } as never);
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Supplier order not created for supplier quote SQ-1',
+    );
   });
 
   test('createClientsOrderFromOffer toasts on api error', async () => {

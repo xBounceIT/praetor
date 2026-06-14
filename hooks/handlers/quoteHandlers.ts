@@ -102,6 +102,12 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     }
   };
 
+  const surfaceWarnings = (warnings?: string[]) => {
+    for (const warning of warnings ?? []) {
+      toastError(warning);
+    }
+  };
+
   const addQuote = async (quoteData: Partial<Quote>) => {
     try {
       const quote = await api.quotes.create(quoteData);
@@ -205,6 +211,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
           notifySupplierOrderCreated?.(supplierOrder);
         }
       }
+      surfaceWarnings(updated.warnings);
     } catch (err) {
       console.error('Failed to update client offer:', err);
       throw err;
@@ -346,6 +353,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       for (const supplierOrder of order.supplierOrders ?? []) {
         notifySupplierOrderCreated?.(supplierOrder);
       }
+      surfaceWarnings(order.warnings);
       // Order creation can auto-create supplier orders and consume supplier quotes.
       await refreshLinkedSupplierQuotes();
     } catch (err) {
