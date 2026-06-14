@@ -5,6 +5,7 @@ import * as realClientsOrdersRepo from '../../repositories/clientsOrdersRepo.ts'
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import * as realDocumentCodes from '../../services/documentCodes.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
@@ -20,6 +21,7 @@ const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
 const clientsOrdersRepoSnap = { ...realClientsOrdersRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
+const documentCodesSnap = { ...realDocumentCodes };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
 
@@ -39,6 +41,7 @@ const sqFindLinkedOrderIdMock = mock();
 const sqLockEffectiveStatusByIdMock = mock();
 const sqFindItemsForQuoteMock = mock();
 const sqGetQuoteItemSnapshotsMock = mock();
+const allocateDocumentCodeMock = mock();
 
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
@@ -82,6 +85,10 @@ beforeAll(async () => {
     ...auditSnap,
     logAudit: logAuditMock,
   }));
+  mock.module('../../services/documentCodes.ts', () => ({
+    ...documentCodesSnap,
+    allocateDocumentCode: allocateDocumentCodeMock,
+  }));
   mock.module('../../db/drizzle.ts', () => ({
     ...drizzleSnap,
     withDbTransaction: withDbTransactionMock,
@@ -97,6 +104,7 @@ afterAll(() => {
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../repositories/clientsOrdersRepo.ts', () => clientsOrdersRepoSnap);
   mock.module('../../repositories/supplierQuotesRepo.ts', () => supplierQuotesRepoSnap);
+  mock.module('../../services/documentCodes.ts', () => documentCodesSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
 });
@@ -169,6 +177,7 @@ const allMocks = [
   sqLockEffectiveStatusByIdMock,
   sqFindItemsForQuoteMock,
   sqGetQuoteItemSnapshotsMock,
+  allocateDocumentCodeMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -183,6 +192,7 @@ beforeEach(async () => {
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   coCreateMock.mockResolvedValue(CREATED_ORDER);
+  allocateDocumentCodeMock.mockResolvedValue('ORD-2999-0001');
   coFindItemsForOrderMock.mockResolvedValue([insertedItem()]);
   coCreateSupplierOrderMock.mockResolvedValue(undefined);
   coBulkInsertSupplierOrderItemsMock.mockResolvedValue(undefined);
@@ -220,6 +230,36 @@ afterEach(async () => {
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
 
 describe('POST /api/clients-orders product-less supplier lines (issue #783)', () => {
+  test('201 auto-generates an order id when the create payload omits it', async () => {
+    coCreateMock.mockImplementation((input: Record<string, unknown>) =>
+      Promise.resolve({ ...CREATED_ORDER, id: input.id }),
+    );
+    coInsertItemsMock.mockImplementation((orderId: string) =>
+      Promise.resolve([insertedItem({ orderId })]),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [{ productId: 'p-1', productName: 'Service', quantity: 1, unitPrice: 100 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(allocateDocumentCodeMock).toHaveBeenCalledWith('client_order', {
+      exec: expect.anything(),
+    });
+    expect(coCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'ORD-2999-0001' }),
+      expect.anything(),
+    );
+    expect(JSON.parse(res.body).id).toBe('ORD-2999-0001');
+  });
+
   test('201 creates an order from a supplier-quote line with no productId', async () => {
     // The offer→order conversion sends this exact shape: a free-form supplier line carries the
     // supplier-quote reference (supplierQuoteId + supplierQuoteItemId) but a null productId.
@@ -428,6 +468,83 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     expect(JSON.parse(res.body).warnings).toEqual([
       expect.stringContaining("its status is 'draft', not 'accepted'"),
     ]);
+  });
+
+  test('201 warns when auto-created supplier order code allocation collides', async () => {
+    coInsertItemsMock.mockResolvedValue([
+      insertedItem({
+        productId: null,
+        productName: 'Sourced line',
+        supplierQuoteId: 'sq-1',
+        supplierQuoteItemId: 'sqi-1',
+      }),
+    ]);
+    sqFindByIdMock.mockResolvedValue({
+      id: 'sq-1',
+      supplierId: 'sup-1',
+      supplierName: 'Supplier Co',
+      paymentTerms: 'net30',
+      status: 'accepted',
+      expirationDate: '2999-12-31',
+      linkedOrderId: null,
+      notes: null,
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+      linkedClientQuoteId: null,
+      linkedClientQuoteStatus: 'offer',
+      linkedClientQuoteExpiration: '2999-12-31',
+      linkedOfferStatus: 'accepted',
+      linkedOfferExpiration: '2999-12-31',
+    });
+    sqLockEffectiveStatusByIdMock.mockResolvedValue({
+      expirationDate: '2999-12-31',
+      linkedClientStatus: 'offer',
+      linkedClientQuoteExpiration: '2999-12-31',
+      linkedOfferStatus: 'accepted',
+      linkedOfferExpiration: '2999-12-31',
+    });
+    sqFindItemsForQuoteMock.mockResolvedValue([
+      {
+        id: 'sqi-1',
+        productId: null,
+        productName: 'Sourced line',
+        quantity: 1,
+        unitPrice: 50,
+        note: null,
+        durationMonths: 1,
+        durationUnit: 'months',
+      },
+    ]);
+    allocateDocumentCodeMock.mockRejectedValue(
+      new realDocumentCodes.DocumentCodeCollisionError('supplier_order'),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: 'co-1',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            productId: null,
+            productName: 'Sourced line',
+            quantity: 1,
+            unitPrice: 100,
+            supplierQuoteId: 'sq-1',
+            supplierQuoteItemId: 'sqi-1',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(JSON.parse(res.body).warnings).toEqual([
+      'Supplier order not created for supplier quote sq-1: unable to allocate a unique supplier order code',
+    ]);
+    expect(coCreateSupplierOrderMock).not.toHaveBeenCalled();
   });
 
   test('201 still creates a normal catalog-product line', async () => {

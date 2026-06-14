@@ -11,6 +11,7 @@ import clientOffersRoutes from './routes/client-offers.ts';
 import clientQuotesRoutes from './routes/client-quotes.ts';
 import clientsRoutes from './routes/clients.ts';
 import clientsOrdersRoutes from './routes/clients-orders.ts';
+import documentCodeTemplatesRoutes from './routes/document-code-templates.ts';
 import emailRoutes from './routes/email.ts';
 import entriesRoutes from './routes/entries.ts';
 import generalSettingsRoutes from './routes/general-settings.ts';
@@ -184,6 +185,7 @@ export const buildApp = async () => {
   fastify.register(ssoRoutes, { prefix: '/api/sso' });
   fastify.register(ldapRoutes, { prefix: '/api/ldap' });
   fastify.register(generalSettingsRoutes, { prefix: '/api/general-settings' });
+  fastify.register(documentCodeTemplatesRoutes, { prefix: '/api/document-code-templates' });
   fastify.register(brandingRoutes, { prefix: '/api/branding' });
   fastify.register(productsRoutes, { prefix: '/api/products' });
   fastify.register(quoteCommunicationChannelsRoutes, {

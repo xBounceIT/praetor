@@ -7,6 +7,7 @@ import * as clientProfileOptionsSchema from './schema/clientProfileOptions.ts';
 import * as clientsSchema from './schema/clients.ts';
 import * as customerOfferItemsSchema from './schema/customerOfferItems.ts';
 import * as customerOffersSchema from './schema/customerOffers.ts';
+import * as documentCodesSchema from './schema/documentCodes.ts';
 import * as emailConfigSchema from './schema/emailConfig.ts';
 import * as generalSettingsSchema from './schema/generalSettings.ts';
 import * as invoicesSchema from './schema/invoices.ts';
@@ -55,6 +56,7 @@ export const schema = {
   ...clientsSchema,
   ...customerOfferItemsSchema,
   ...customerOffersSchema,
+  ...documentCodesSchema,
   ...emailConfigSchema,
   ...generalSettingsSchema,
   ...invoicesSchema,

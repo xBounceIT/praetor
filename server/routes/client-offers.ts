@@ -15,9 +15,11 @@ import {
   createClientOrderRows,
   logClientOrderCreated,
 } from '../services/clientOrderCreation.ts';
+import { allocateDocumentCode } from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
 import { todayLocalDateOnly } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
+import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import type { DurationUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
@@ -161,6 +163,7 @@ const offerSchema = {
       },
       required: ['clientOrder', 'supplierOrders'],
     },
+    warnings: { type: 'array', items: { type: 'string' } },
   },
   required: [
     'id',
@@ -225,7 +228,7 @@ const offerCreateBodySchema = {
     expirationDate: { type: 'string', format: 'date' },
     notes: { type: 'string' },
   },
-  required: ['id', 'linkedQuoteId', 'clientId', 'clientName', 'items', 'expirationDate'],
+  required: ['linkedQuoteId', 'clientId', 'clientName', 'items', 'expirationDate'],
 } as const;
 
 const offerUpdateBodySchema = {
@@ -648,7 +651,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDate,
         notes,
       } = request.body as {
-        id: unknown;
+        id?: unknown;
         linkedQuoteId: unknown;
         clientId: unknown;
         clientName: unknown;
@@ -662,7 +665,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes: unknown;
       };
 
-      const nextIdResult = requireNonEmptyString(nextId, 'id');
+      const nextIdResult = optionalNonEmptyString(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
       const linkedQuoteIdResult = requireNonEmptyString(linkedQuoteId, 'linkedQuoteId');
       if (!linkedQuoteIdResult.ok) return badRequest(reply, linkedQuoteIdResult.message);
@@ -794,9 +797,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             };
           }
 
+          const offerId =
+            nextIdResult.value ?? (await allocateDocumentCode('client_offer', { exec: tx }));
           const offer = await clientOffersRepo.create(
             {
-              id: nextIdResult.value,
+              id: offerId,
               linkedQuoteId: linkedQuoteIdResult.value,
               clientId: clientIdResult.value,
               clientName: clientNameResult.value,
@@ -836,9 +841,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (err instanceof SupplierItemSyncError) {
           return replySupplierItemSyncError(request, reply, err, {
             entityType: 'client_offer',
-            entityId: nextIdResult.value,
+            entityId: nextIdResult.value ?? 'auto',
           });
         }
+        const codeCollision = replyDocumentCodeCollision(
+          request,
+          reply,
+          err,
+          'client_offer.create.conflict',
+          'client_offer',
+        );
+        if (codeCollision) return codeCollision;
         const dup = getUniqueViolation(err);
         if (dup && (dup.constraint === 'customer_offers_pkey' || dup.detail?.includes('(id)'))) {
           return replyError(request, reply, {
@@ -1311,6 +1324,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             entityId: idResult.value,
           });
         }
+        const codeCollision = replyDocumentCodeCollision(
+          request,
+          reply,
+          err,
+          'client_offer.update.conflict',
+          'client_order',
+        );
+        if (codeCollision) return codeCollision;
         const dup = getUniqueViolation(err);
         if (dup && (dup.constraint === 'customer_offers_pkey' || dup.detail?.includes('(id)'))) {
           return replyError(request, reply, {
@@ -1377,6 +1398,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             supplierOrders: CreatedSupplierOrderSummary[];
           }
         | undefined;
+      let autoCreateWarnings: string[] = [];
       if (result.createdOrder) {
         const supplierOrderResult = await autoCreateSupplierOrdersForClientOrder(
           request,
@@ -1388,6 +1410,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           clientOrder: { id: result.createdOrder.order.id },
           supplierOrders: supplierOrderResult.supplierOrders,
         };
+        autoCreateWarnings = supplierOrderResult.warnings;
         await logClientOrderCreated(request, result.createdOrder.order);
       }
 
@@ -1410,6 +1433,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         ...updatedOffer,
         items: updatedItems,
         ...(autoCreated ? { autoCreated } : {}),
+        ...(autoCreateWarnings.length > 0 ? { warnings: autoCreateWarnings } : {}),
       });
     },
   );

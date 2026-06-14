@@ -7,6 +7,7 @@ import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
 import * as realSupplierQuoteVersionsRepo from '../../repositories/supplierQuoteVersionsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import * as realDocumentCodes from '../../services/documentCodes.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
@@ -24,6 +25,7 @@ const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const supplierQuoteVersionsRepoSnap = { ...realSupplierQuoteVersionsRepo };
 const quoteCommunicationChannelsRepoSnap = { ...realQuoteCommunicationChannelsRepo };
 const clientsRepoSnap = { ...realClientsRepo };
+const documentCodesSnap = { ...realDocumentCodes };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
 
@@ -44,11 +46,14 @@ const sqReplaceItemsMock = mock();
 const sqUpsertItemsMock = mock();
 const sqIsSourcedByClientDocumentsMock = mock();
 const sqFindSourcedItemIdsMock = mock();
+const sqCreateMock = mock();
+const sqInsertItemsMock = mock();
 
 const qccFindByIdMock = mock();
 
 const sqvInsertMock = mock();
 const sqvBuildSnapshotMock = mock();
+const allocateDocumentCodeMock = mock();
 
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
@@ -83,6 +88,8 @@ beforeAll(async () => {
     upsertItems: sqUpsertItemsMock,
     isSourcedByClientDocuments: sqIsSourcedByClientDocumentsMock,
     findSourcedItemIds: sqFindSourcedItemIdsMock,
+    create: sqCreateMock,
+    insertItems: sqInsertItemsMock,
   }));
   mock.module('../../repositories/supplierQuoteVersionsRepo.ts', () => ({
     ...supplierQuoteVersionsRepoSnap,
@@ -100,6 +107,10 @@ beforeAll(async () => {
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
     logAudit: logAuditMock,
+  }));
+  mock.module('../../services/documentCodes.ts', () => ({
+    ...documentCodesSnap,
+    allocateDocumentCode: allocateDocumentCodeMock,
   }));
   mock.module('../../db/drizzle.ts', () => ({
     ...drizzleSnap,
@@ -124,6 +135,7 @@ afterAll(() => {
     () => quoteCommunicationChannelsRepoSnap,
   );
   mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
+  mock.module('../../services/documentCodes.ts', () => documentCodesSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
 });
@@ -199,8 +211,11 @@ const allMocks = [
   sqUpsertItemsMock,
   sqIsSourcedByClientDocumentsMock,
   sqFindSourcedItemIdsMock,
+  sqCreateMock,
+  sqInsertItemsMock,
   sqvInsertMock,
   sqvBuildSnapshotMock,
+  allocateDocumentCodeMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -226,6 +241,13 @@ beforeEach(async () => {
   sqIsSourcedByClientDocumentsMock.mockResolvedValue(false);
   sqFindSourcedItemIdsMock.mockResolvedValue(new Set<string>());
   sqUpsertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+  sqCreateMock.mockImplementation((input: Record<string, unknown>) =>
+    Promise.resolve({ ...DRAFT_QUOTE, ...input }),
+  );
+  sqInsertItemsMock.mockImplementation((quoteId: string) =>
+    Promise.resolve([{ ...SAMPLE_ITEM, quoteId }]),
+  );
+  allocateDocumentCodeMock.mockResolvedValue('FORN-2999-0001');
   // snapshotPreState calls findFullForSnapshot; default to the current draft so the
   // pre-save snapshot path doesn't crash on tests that update content.
   sqFindFullForSnapshotMock.mockResolvedValue({ quote: DRAFT_QUOTE, items: [SAMPLE_ITEM] });
@@ -285,6 +307,41 @@ describe('POST /api/sales/supplier-quotes', () => {
     expect(JSON.parse(res.body)).toEqual({
       error: 'communicationChannelId does not reference an existing channel',
     });
+  });
+
+  test('201 auto-generates a blank quote id from the centralized template', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes',
+      headers: authHeader(),
+      payload: { ...CREATE_PAYLOAD, id: '' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(allocateDocumentCodeMock).toHaveBeenCalledWith('supplier_quote', {
+      exec: expect.anything(),
+    });
+    expect(sqCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'FORN-2999-0001' }),
+      expect.anything(),
+    );
+    expect(JSON.parse(res.body).id).toBe('FORN-2999-0001');
+  });
+
+  test('201 preserves a caller-supplied quote id', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes',
+      headers: authHeader(),
+      payload: CREATE_PAYLOAD,
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(allocateDocumentCodeMock).not.toHaveBeenCalled();
+    expect(sqCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sq-new' }),
+      expect.anything(),
+    );
   });
 });
 

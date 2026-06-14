@@ -114,7 +114,7 @@ describe('ClientsInvoicesView modal styling', () => {
 
     expectSourceContainsAll(source, [
       "import { Button } from '@/components/ui/button';",
-      "import { Field, FieldError, FieldLabel } from '@/components/ui/field';",
+      "import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';",
       "import { Input } from '@/components/ui/input';",
       "import { Textarea } from '@/components/ui/textarea';",
       '<ModalContent size="full"',
@@ -141,6 +141,17 @@ describe('ClientsInvoicesView modal styling', () => {
       '<span className="size-1.5 rounded-full bg-primary"></span>',
       '<FieldLabel htmlFor="client-invoice-notes" className="sr-only">',
       'id="client-invoice-notes"',
+    ]);
+  });
+
+  test('invoice number field previews the issue-date document code when blank', async () => {
+    const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
+
+    expectSourceContainsAll(source, [
+      "useDocumentCodePreview('client_invoice'",
+      'date: formData.issueDate',
+      'clientInvoiceCodePreview ??',
+      'autoCodePreviewDescription',
     ]);
   });
 

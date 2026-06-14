@@ -20,6 +20,7 @@ export type {
   RilWeekdayTransferDefaults,
   Settings,
 } from './api/contracts';
+export { documentCodeTemplatesApi } from './api/documentCodeTemplates';
 export { emailApi } from './api/email';
 export { employeesApi } from './api/employees';
 export { entriesApi } from './api/entries';
@@ -67,6 +68,7 @@ import { clientOffersApi } from './api/clientOffers';
 import { clientQuotesApi } from './api/clientQuotes';
 import { clientsApi } from './api/clients';
 import { clientsOrdersApi } from './api/clientsOrders';
+import { documentCodeTemplatesApi } from './api/documentCodeTemplates';
 import { emailApi } from './api/email';
 import { employeesApi } from './api/employees';
 import { entriesApi } from './api/entries';
@@ -114,6 +116,7 @@ export default {
   quotes: clientQuotesApi,
   clientOffers: clientOffersApi,
   clientsOrders: clientsOrdersApi,
+  documentCodeTemplates: documentCodeTemplatesApi,
   invoices: invoicesApi,
   suppliers: suppliersApi,
   supplierQuotes: supplierQuotesApi,

@@ -15,7 +15,7 @@ describe('sales modal styling', () => {
 
     expectSourceContainsAll(source, [
       "import { Button } from '@/components/ui/button';",
-      "import { Field, FieldError, FieldLabel } from '@/components/ui/field';",
+      "import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';",
       "import { Input } from '@/components/ui/input';",
       "import { Textarea } from '@/components/ui/textarea';",
       '<ModalContent size="full"',
@@ -40,6 +40,35 @@ describe('sales modal styling', () => {
       `<FieldLabel htmlFor="${notesId}" className="sr-only">`,
       `id="${notesId}"`,
       "description={t('sales:fieldInfo.notes'",
+    ]);
+  });
+
+  test.each([
+    [
+      'client quotes',
+      'sales/ClientQuotesView.tsx',
+      "useDocumentCodePreview('client_quote'",
+      'clientQuoteCodePreview ??',
+    ],
+    [
+      'client offers',
+      'sales/ClientOffersView.tsx',
+      "useDocumentCodePreview('client_offer'",
+      'clientOfferCodePreview ??',
+    ],
+    [
+      'supplier quotes',
+      'sales/SupplierQuotesView.tsx',
+      "useDocumentCodePreview('supplier_quote'",
+      'supplierQuoteCodePreview ??',
+    ],
+  ])('%s code field shows the next document-code preview when blank', async (_name, path, hookSnippet, placeholderSnippet) => {
+    const source = await readComponentSource(path);
+
+    expectSourceContainsAll(source, [
+      hookSnippet,
+      placeholderSnippet,
+      'autoCodePreviewDescription',
     ]);
   });
 

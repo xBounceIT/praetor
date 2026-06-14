@@ -8,6 +8,7 @@ import * as realSupplierOrderVersionsRepo from '../../repositories/supplierOrder
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
 import * as realSuppliersRepo from '../../repositories/suppliersRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import * as realDocumentCodes from '../../services/documentCodes.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
@@ -27,6 +28,7 @@ const supplierOrderVersionsRepoSnap = { ...realSupplierOrderVersionsRepo };
 const suppliersRepoSnap = { ...realSuppliersRepo };
 const productsRepoSnap = { ...realProductsRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
+const documentCodesSnap = { ...realDocumentCodes };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
 
@@ -41,6 +43,9 @@ const soFindLinkedInvoiceIdMock = mock();
 const soFindFullForSnapshotMock = mock();
 const soFindItemsForOrderMock = mock();
 const soFindIdConflictMock = mock();
+const soFindExistingByLinkedQuoteMock = mock();
+const soCreateMock = mock();
+const soInsertItemsMock = mock();
 const soUpdateMock = mock();
 const soRenameMock = mock();
 const soRestoreSnapshotOrderMock = mock();
@@ -48,11 +53,14 @@ const soReplaceItemsMock = mock();
 
 const suppliersExistsByIdMock = mock();
 const productsGetSnapshotsMock = mock();
+const sqFindByIdMock = mock();
+const sqLockEffectiveStatusByIdMock = mock();
 
 const sovListForOrderMock = mock();
 const sovFindByIdMock = mock();
 const sovInsertMock = mock();
 const sovBuildSnapshotMock = mock();
+const allocateDocumentCodeMock = mock();
 
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
@@ -83,6 +91,9 @@ beforeAll(async () => {
     findFullForSnapshot: soFindFullForSnapshotMock,
     findItemsForOrder: soFindItemsForOrderMock,
     findIdConflict: soFindIdConflictMock,
+    findExistingByLinkedQuote: soFindExistingByLinkedQuoteMock,
+    create: soCreateMock,
+    insertItems: soInsertItemsMock,
     update: soUpdateMock,
     rename: soRenameMock,
     restoreSnapshotOrder: soRestoreSnapshotOrderMock,
@@ -105,6 +116,12 @@ beforeAll(async () => {
   }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
+    findById: sqFindByIdMock,
+    lockEffectiveStatusById: sqLockEffectiveStatusByIdMock,
+  }));
+  mock.module('../../services/documentCodes.ts', () => ({
+    ...documentCodesSnap,
+    allocateDocumentCode: allocateDocumentCodeMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
@@ -131,6 +148,7 @@ afterAll(() => {
     () => supplierOrderVersionsRepoSnap,
   );
   mock.module('../../repositories/supplierQuotesRepo.ts', () => supplierQuotesRepoSnap);
+  mock.module('../../services/documentCodes.ts', () => documentCodesSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
 });
@@ -204,16 +222,22 @@ const allMocks = [
   soFindFullForSnapshotMock,
   soFindItemsForOrderMock,
   soFindIdConflictMock,
+  soFindExistingByLinkedQuoteMock,
+  soCreateMock,
+  soInsertItemsMock,
   soUpdateMock,
   soRenameMock,
   soRestoreSnapshotOrderMock,
   soReplaceItemsMock,
   suppliersExistsByIdMock,
   productsGetSnapshotsMock,
+  sqFindByIdMock,
+  sqLockEffectiveStatusByIdMock,
   sovListForOrderMock,
   sovFindByIdMock,
   sovInsertMock,
   sovBuildSnapshotMock,
+  allocateDocumentCodeMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -235,6 +259,31 @@ beforeEach(async () => {
   // Default safe values for repos that PUT calls but most tests don't care about.
   soFindItemsForOrderMock.mockResolvedValue([SAMPLE_ITEM]);
   soFindIdConflictMock.mockResolvedValue(false);
+  soFindExistingByLinkedQuoteMock.mockResolvedValue(null);
+  soCreateMock.mockImplementation((input: Record<string, unknown>) =>
+    Promise.resolve({ ...SAMPLE_ORDER, ...input }),
+  );
+  soInsertItemsMock.mockImplementation((orderId: string) =>
+    Promise.resolve([{ ...SAMPLE_ITEM, orderId }]),
+  );
+  sqFindByIdMock.mockResolvedValue({
+    id: 'sq-1',
+    supplierId: 's-1',
+    supplierName: 'Acme',
+    expirationDate: '2999-12-31',
+    linkedClientQuoteStatus: 'accepted',
+    linkedClientQuoteExpiration: '2999-12-31',
+    linkedOfferStatus: null,
+    linkedOfferExpiration: null,
+  });
+  sqLockEffectiveStatusByIdMock.mockResolvedValue({
+    expirationDate: '2999-12-31',
+    linkedClientStatus: 'accepted',
+    linkedClientQuoteExpiration: '2999-12-31',
+    linkedOfferStatus: null,
+    linkedOfferExpiration: null,
+  });
+  allocateDocumentCodeMock.mockResolvedValue('SORD-2999-0001');
 
   testApp = await buildRouteTestApp(routePlugin, '/api/accounting/supplier-orders');
 });
@@ -244,6 +293,50 @@ afterEach(async () => {
 });
 
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
+
+describe('POST /api/accounting/supplier-orders', () => {
+  const validBody = {
+    linkedQuoteId: 'sq-1',
+    supplierId: 's-1',
+    supplierName: 'Acme',
+    items: [{ productName: 'Widget', quantity: 2, unitPrice: 100 }],
+  };
+
+  test('201 auto-generates an order id when omitted', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/accounting/supplier-orders',
+      headers: authHeader(),
+      payload: validBody,
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(allocateDocumentCodeMock).toHaveBeenCalledWith('supplier_order', {
+      exec: expect.anything(),
+    });
+    expect(soCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'SORD-2999-0001' }),
+      expect.anything(),
+    );
+    expect(JSON.parse(res.body).id).toBe('SORD-2999-0001');
+  });
+
+  test('201 preserves a caller-supplied order id', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/accounting/supplier-orders',
+      headers: authHeader(),
+      payload: { ...validBody, id: 'MANUAL-SO-1' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(allocateDocumentCodeMock).not.toHaveBeenCalled();
+    expect(soCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'MANUAL-SO-1' }),
+      expect.anything(),
+    );
+  });
+});
 
 describe('GET /api/accounting/supplier-orders/:id/versions', () => {
   test('200 returns versions newest-first when order exists', async () => {

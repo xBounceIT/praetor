@@ -4,6 +4,7 @@ export * from './clientProfileOptions.ts';
 export * from './clients.ts';
 export * from './customerOfferItems.ts';
 export * from './customerOffers.ts';
+export * from './documentCodes.ts';
 export * from './emailConfig.ts';
 export * from './generalSettings.ts';
 export * from './invoices.ts';

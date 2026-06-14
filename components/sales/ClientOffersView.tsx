@@ -4,10 +4,11 @@ import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
-import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useDocumentCodePreview } from '../../hooks/useDocumentCodePreview';
 import { normalizeClientOfferItem } from '../../services/api/normalizers';
 import type {
   Client,
@@ -438,6 +439,9 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     isDeleting,
     isReverting,
   } = state;
+  const { preview: clientOfferCodePreview } = useDocumentCodePreview('client_offer', {
+    enabled: isModalOpen && !editingOffer,
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<Partial<ClientOffer>>(() => getDefaultFormData());
   const [previewVersion, setPreviewVersion] = useState<OfferVersion | null>(null);
@@ -1233,7 +1237,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     if (!formData.clientId) {
       nextErrors.clientId = t('sales:clientOffers.clientRequired');
     }
-    if (!formData.id?.trim()) {
+    if (editingOffer && !formData.id?.trim()) {
       nextErrors.id = t('sales:clientOffers.offerCodeRequired', {
         defaultValue: 'Offer code is required',
       });
@@ -1249,6 +1253,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
 
     const payload: Partial<ClientOffer> = {
       ...formData,
+      id: formData.id?.trim() || undefined,
       discount: Number(formData.discount ?? 0),
       items: (formData.items || []).map((item) => ({
         ...item,
@@ -1380,7 +1385,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                       <FieldError className="text-xs">{errors.clientId}</FieldError>
                     </Field>
                     <Field data-invalid={Boolean(errors.id)}>
-                      <FieldLabel htmlFor="client-offer-code" required>
+                      <FieldLabel htmlFor="client-offer-code" required={Boolean(editingOffer)}>
                         {t('sales:clientOffers.offerCode', { defaultValue: 'Offer code' })}
                       </FieldLabel>
                       <Input
@@ -1391,11 +1396,30 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
                         onChange={(event) =>
                           setFormData((prev) => ({ ...prev, id: event.target.value }))
                         }
-                        placeholder="O0000"
+                        placeholder={
+                          clientOfferCodePreview ??
+                          t('sales:clientOffers.autoCodePlaceholder', {
+                            defaultValue: 'Auto-generated',
+                          })
+                        }
                         className={errors.id ? 'border-red-300 font-medium' : 'font-medium'}
                         aria-invalid={Boolean(errors.id)}
                       />
                       <FieldError className="text-xs">{errors.id}</FieldError>
+                      {!editingOffer && (
+                        <FieldDescription className="text-xs">
+                          {clientOfferCodePreview
+                            ? t('sales:clientOffers.autoCodePreviewDescription', {
+                                preview: clientOfferCodePreview,
+                                defaultValue:
+                                  'Leave blank to generate {{preview}} from the document code template.',
+                              })
+                            : t('sales:clientOffers.autoCodeDescription', {
+                                defaultValue:
+                                  'Leave blank to generate the next code automatically.',
+                              })}
+                        </FieldDescription>
+                      )}
                     </Field>
                     <Field>
                       <SelectControl

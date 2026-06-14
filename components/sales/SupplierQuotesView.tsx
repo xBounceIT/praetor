@@ -3,10 +3,11 @@ import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
-import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useDocumentCodePreview } from '../../hooks/useDocumentCodePreview';
 import type { QuoteCommunicationChannel } from '../../services/api/quoteCommunicationChannels';
 import { supplierQuotesApi } from '../../services/api/supplierQuotes';
 import type {
@@ -379,6 +380,9 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     isDeleting,
     stagedAttachments,
   } = state;
+  const { preview: supplierQuoteCodePreview } = useDocumentCodePreview('supplier_quote', {
+    enabled: isModalOpen && !editingQuote,
+  });
 
   // `status` is the EFFECTIVE status (synced from the linked client quote + the `expired` overlay,
   // issue #779), so a linked supplier quote mirroring a non-draft client quote is correctly
@@ -942,7 +946,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
         defaultValue: 'Customer is required',
       });
     }
-    if (!formData.id?.trim()) {
+    if (editingQuote && !formData.id?.trim()) {
       nextErrors.id = t('sales:supplierQuotes.errors.quoteCodeRequired', {
         defaultValue: 'Quote Code is required',
       });
@@ -963,6 +967,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
 
     const payload: Partial<SupplierQuote> = {
       ...formData,
+      id: formData.id?.trim() || undefined,
       items: (formData.items || []).map((item) => ({
         ...item,
         // Submit the same persisted-scale pricing the server derives, so what the user reviewed
@@ -1160,7 +1165,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                       <FieldError className="text-xs">{errors.clientId}</FieldError>
                     </Field>
                     <Field data-invalid={Boolean(errors.id)}>
-                      <FieldLabel htmlFor="supplier-quote-code" required>
+                      <FieldLabel htmlFor="supplier-quote-code" required={Boolean(editingQuote)}>
                         {t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' })}
                       </FieldLabel>
                       <Input
@@ -1174,10 +1179,30 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
                             dispatch({ type: 'clearError', key: 'id' });
                           }
                         }}
+                        placeholder={
+                          supplierQuoteCodePreview ??
+                          t('sales:supplierQuotes.autoCodePlaceholder', {
+                            defaultValue: 'Auto-generated',
+                          })
+                        }
                         className={errors.id ? 'border-red-300' : ''}
                         aria-invalid={Boolean(errors.id)}
                       />
                       <FieldError className="text-xs">{errors.id}</FieldError>
+                      {!editingQuote && (
+                        <FieldDescription className="text-xs">
+                          {supplierQuoteCodePreview
+                            ? t('sales:supplierQuotes.autoCodePreviewDescription', {
+                                preview: supplierQuoteCodePreview,
+                                defaultValue:
+                                  'Leave blank to generate {{preview}} from the document code template.',
+                              })
+                            : t('sales:supplierQuotes.autoCodeDescription', {
+                                defaultValue:
+                                  'Leave blank to generate the next code automatically.',
+                              })}
+                        </FieldDescription>
+                      )}
                     </Field>
                     <Field>
                       <SelectControl

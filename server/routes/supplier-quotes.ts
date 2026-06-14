@@ -9,8 +9,10 @@ import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import * as supplierQuoteVersionsRepo from '../repositories/supplierQuoteVersionsRepo.ts';
 import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { allocateDocumentCode } from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
+import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import type { DurationUnit } from '../utils/duration-unit.ts';
 import {
   ATTACHMENT_MAX_BYTES,
@@ -124,7 +126,6 @@ const supplierQuoteSchema = {
     items: { type: 'array', items: supplierQuoteItemSchema },
   },
   required: [
-    'id',
     'supplierId',
     'supplierName',
     'status',
@@ -173,14 +174,7 @@ const supplierQuoteCreateBodySchema = {
     communicationChannelId: { type: 'string' },
     notes: { type: 'string' },
   },
-  required: [
-    'id',
-    'supplierId',
-    'supplierName',
-    'items',
-    'expirationDate',
-    'communicationChannelId',
-  ],
+  required: ['supplierId', 'supplierName', 'items', 'expirationDate', 'communicationChannelId'],
 } as const;
 
 const supplierQuoteUpdateBodySchema = {
@@ -486,7 +480,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const supplierNameResult = requireNonEmptyString(supplierName, 'supplierName');
       if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
-      const nextIdResult = requireNonEmptyString(nextId, 'id');
+      const nextIdResult = optionalNonEmptyString(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
 
       if (!Array.isArray(items) || items.length === 0) {
@@ -520,9 +514,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
       try {
         result = await withDbTransaction(async (tx) => {
+          const quoteId =
+            nextIdResult.value ?? (await allocateDocumentCode('supplier_quote', { exec: tx }));
           const quote = await supplierQuotesRepo.create(
             {
-              id: nextIdResult.value,
+              id: quoteId,
               supplierId: supplierIdResult.value,
               supplierName: supplierNameResult.value,
               clientId: clientLink.clientId,
@@ -539,6 +535,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return { quote, items: createdItems };
         });
       } catch (error) {
+        const codeCollision = replyDocumentCodeCollision(
+          request,
+          reply,
+          error,
+          'supplier_quote.create.conflict',
+          'supplier_quote',
+        );
+        if (codeCollision) return codeCollision;
         const dup = getUniqueViolation(error);
         if (dup && (dup.constraint === 'supplier_quotes_pkey' || dup.detail?.includes('(id)'))) {
           return replyError(request, reply, {

@@ -5,6 +5,7 @@ import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSupplierInvoicesRepo from '../../repositories/supplierInvoicesRepo.ts';
 import * as realSupplierOrdersRepo from '../../repositories/supplierOrdersRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import * as realDocumentCodes from '../../services/documentCodes.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
@@ -21,6 +22,7 @@ const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
 const supplierInvoicesRepoSnap = { ...realSupplierInvoicesRepo };
 const supplierOrdersRepoSnap = { ...realSupplierOrdersRepo };
+const documentCodesSnap = { ...realDocumentCodes };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
 
@@ -42,6 +44,7 @@ const replaceItemsMock = mock();
 const findItemsForInvoiceMock = mock();
 const findStatusAndSupplierNameMock = mock();
 const deleteByIdMock = mock();
+const allocateDocumentCodeMock = mock();
 
 const findOrderByIdMock = mock();
 
@@ -90,6 +93,10 @@ beforeAll(async () => {
     ...auditSnap,
     logAudit: logAuditMock,
   }));
+  mock.module('../../services/documentCodes.ts', () => ({
+    ...documentCodesSnap,
+    allocateDocumentCode: allocateDocumentCodeMock,
+  }));
   mock.module('../../db/drizzle.ts', () => ({
     ...drizzleSnap,
     withDbTransaction: withDbTransactionMock,
@@ -105,6 +112,7 @@ afterAll(() => {
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../repositories/supplierInvoicesRepo.ts', () => supplierInvoicesRepoSnap);
   mock.module('../../repositories/supplierOrdersRepo.ts', () => supplierOrdersRepoSnap);
+  mock.module('../../services/documentCodes.ts', () => documentCodesSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
 });
@@ -189,6 +197,7 @@ const allMocks = [
   findItemsForInvoiceMock,
   findStatusAndSupplierNameMock,
   deleteByIdMock,
+  allocateDocumentCodeMock,
   findOrderByIdMock,
   logAuditMock,
   withDbTransactionMock,
@@ -203,6 +212,7 @@ beforeEach(async () => {
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
+  allocateDocumentCodeMock.mockResolvedValue('SINV-2025-0001');
 
   testApp = await buildRouteTestApp(routePlugin, '/api/supplier-invoices');
 });
@@ -272,7 +282,6 @@ describe('POST /api/supplier-invoices', () => {
   };
 
   test('201 creates invoice with auto-generated id', async () => {
-    maxSequenceForYearMock.mockResolvedValue(0n);
     createMock.mockResolvedValue(SAMPLE_INVOICE);
     insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
 
@@ -286,7 +295,10 @@ describe('POST /api/supplier-invoices', () => {
     expect(res.statusCode).toBe(201);
     const body = JSON.parse(res.body);
     expect(body.id).toBe('SINV-2025-0001');
-    expect(maxSequenceForYearMock).toHaveBeenCalledWith('2025');
+    expect(allocateDocumentCodeMock).toHaveBeenCalledWith('supplier_invoice', {
+      date: '2025-06-01',
+      exec: expect.anything(),
+    });
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'supplier_invoice.created',
@@ -295,8 +307,8 @@ describe('POST /api/supplier-invoices', () => {
     );
   });
 
-  test('201 keeps auto-generated id suffix untruncated after 9999', async () => {
-    maxSequenceForYearMock.mockResolvedValue(9999n);
+  test('201 uses the centralized allocator output unmodified', async () => {
+    allocateDocumentCodeMock.mockResolvedValue('SINV-2025-10000');
     createMock.mockImplementation(async (input: Record<string, unknown>) => ({
       ...SAMPLE_INVOICE,
       id: input.id as string,
@@ -330,7 +342,7 @@ describe('POST /api/supplier-invoices', () => {
     });
 
     expect(res.statusCode).toBe(201);
-    expect(maxSequenceForYearMock).not.toHaveBeenCalled();
+    expect(allocateDocumentCodeMock).not.toHaveBeenCalled();
     const body = JSON.parse(res.body);
     expect(body.id).toBe('CUSTOM-1');
   });
