@@ -4,6 +4,8 @@ import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import { createChildLogger, serializeError } from '../utils/logger.ts';
 import { ensureBootstrapAdmin } from './bootstrapAdmin.ts';
 import {
+  COMPATIBILITY_DEFAULTS,
+  DEMO_ASSIGNMENT_TARGET_IDS,
   DEMO_CLIENTS,
   DEMO_CUSTOMER_OFFERS,
   DEMO_EXPECTED_COUNTS,
@@ -18,6 +20,7 @@ import {
   DEMO_SUPPLIER_INVOICES,
   DEMO_SUPPLIER_SALES,
   DEMO_SUPPLIERS,
+  DEMO_TOP_MANAGER_USER_IDS,
   DEMO_USER_IDS,
   DEMO_USERS,
   DEMO_WORK_UNITS,
@@ -57,6 +60,7 @@ type VerificationStep = {
   table: string;
   countColumn?: string;
   ids: readonly string[];
+  userIds?: readonly string[];
   expected: number;
 };
 
@@ -142,13 +146,42 @@ const loadDemoStatements = () => {
   return splitSqlStatements(seedSql.slice(markerIndex));
 };
 
-const insertCompatibilityDefaults = async (client: PoolClient, counts: Record<string, number>) => {
+export const insertCompatibilityDefaults = async (
+  client: PoolClient,
+  counts: Record<string, number>,
+) => {
   const clientsResult = await executeStatement(
     client,
     `INSERT INTO clients (id, name, created_at) VALUES
         ('c1', 'Acme Corp', '2024-01-15 09:30:00'),
         ('c2', 'Global Tech', '2024-03-05 14:15:00')
-     ON CONFLICT (id) DO NOTHING`,
+     ON CONFLICT (id) DO UPDATE SET
+       name = EXCLUDED.name,
+       created_at = EXCLUDED.created_at,
+       is_disabled = FALSE,
+       type = DEFAULT,
+       contact_name = NULL,
+       client_code = NULL,
+       email = NULL,
+       phone = NULL,
+       address = NULL,
+       description = NULL,
+       ateco_code = NULL,
+       website = NULL,
+       sector = NULL,
+       number_of_employees = NULL,
+       revenue = NULL,
+       fiscal_code = NULL,
+       vat_number = NULL,
+       tax_code = NULL,
+       office_count_range = NULL,
+       contacts = DEFAULT,
+       address_country = NULL,
+       address_state = NULL,
+       address_cap = NULL,
+       address_province = NULL,
+       address_civic_number = NULL,
+       address_line = NULL`,
   );
   incrementCount(counts, 'clients', clientsResult.rowCount ?? 0);
 
@@ -160,7 +193,20 @@ const insertCompatibilityDefaults = async (client: PoolClient, counts: Record<st
         ('p1', 'Website Redesign', 'c1', 'Complete overhaul of the main marketing site.', (CURRENT_DATE - INTERVAL '30 days')::date, (CURRENT_DATE + INTERVAL '30 days')::date, 'attivo', TRUE),
         ('p2', 'Mobile App', 'c1', 'Native iOS and Android application development.', (CURRENT_DATE - INTERVAL '28 days')::date, (CURRENT_DATE + INTERVAL '28 days')::date, 'attivo', TRUE),
         ('p3', 'Internal Research', 'c2', 'Ongoing research into new market trends.', (CURRENT_DATE - INTERVAL '25 days')::date, (CURRENT_DATE + INTERVAL '25 days')::date, 'attivo', TRUE)
-     ON CONFLICT (id) DO NOTHING`,
+     ON CONFLICT (id) DO UPDATE SET
+       name = EXCLUDED.name,
+       client_id = EXCLUDED.client_id,
+       description = EXCLUDED.description,
+       start_date = EXCLUDED.start_date,
+       end_date = EXCLUDED.end_date,
+       tipo = EXCLUDED.tipo,
+       tipo_confirmed = EXCLUDED.tipo_confirmed,
+       is_disabled = FALSE,
+       order_id = NULL,
+       offer_id = NULL,
+       revenue = NULL,
+       billing_type = DEFAULT,
+       billing_frequency = DEFAULT`,
   );
   incrementCount(counts, 'projects', projectsResult.rowCount ?? 0);
 
@@ -172,7 +218,23 @@ const insertCompatibilityDefaults = async (client: PoolClient, counts: Record<st
         ('t3', 'API Integration', 'p2', 'Connecting the app to the backend services.'),
         ('t4', 'General Support', 'p3', 'Misc administrative tasks and support.'),
         ('t5', 'Market Analysis', 'p3', 'Competitive landscape and pricing research.')
-     ON CONFLICT (id) DO NOTHING`,
+     ON CONFLICT (id) DO UPDATE SET
+       name = EXCLUDED.name,
+       project_id = EXCLUDED.project_id,
+       description = EXCLUDED.description,
+       is_recurring = DEFAULT,
+       recurrence_pattern = NULL,
+       recurrence_start = NULL,
+       recurrence_end = NULL,
+       recurrence_duration = DEFAULT,
+       expected_effort = DEFAULT,
+       revenue = DEFAULT,
+       duration = DEFAULT,
+       notes = NULL,
+       is_disabled = FALSE,
+       billing_type = DEFAULT,
+       billing_frequency = DEFAULT,
+       monthly_effort = DEFAULT`,
   );
   incrementCount(counts, 'tasks', tasksResult.rowCount ?? 0);
 };
@@ -289,7 +351,7 @@ const insertDemoUsersAndSettings = async (client: PoolClient, counts: Record<str
   incrementCount(counts, 'settings', settingsResult.rowCount ?? 0);
 };
 
-const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: DemoUserCleanupIds) => {
+export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: DemoUserCleanupIds) => {
   const cleanupCountsByTable: Record<string, number> = {};
 
   incrementCount(
@@ -297,6 +359,31 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: DemoUserCle
     'time_entries',
     await executeDelete(client, 'time_entries', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_IDS.timeEntries);
+      pushTextArrayPredicate(builder, 'user_id', demoUserIds.dependentUserIds);
+    }),
+  );
+
+  incrementCount(
+    cleanupCountsByTable,
+    'user_tasks',
+    await executeDelete(client, 'user_tasks', (builder) => {
+      pushTextArrayPredicate(builder, 'user_id', demoUserIds.dependentUserIds);
+    }),
+  );
+
+  incrementCount(
+    cleanupCountsByTable,
+    'user_projects',
+    await executeDelete(client, 'user_projects', (builder) => {
+      pushTextArrayPredicate(builder, 'user_id', demoUserIds.dependentUserIds);
+    }),
+  );
+
+  incrementCount(
+    cleanupCountsByTable,
+    'user_clients',
+    await executeDelete(client, 'user_clients', (builder) => {
+      pushTextArrayPredicate(builder, 'user_id', demoUserIds.dependentUserIds);
     }),
   );
 
@@ -305,6 +392,7 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: DemoUserCle
     'user_work_units',
     await executeDelete(client, 'user_work_units', (builder) => {
       pushTextArrayPredicate(builder, 'work_unit_id', DEMO_IDS.workUnits);
+      pushTextArrayPredicate(builder, 'user_id', demoUserIds.dependentUserIds);
     }),
   );
 
@@ -313,6 +401,7 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: DemoUserCle
     'work_unit_managers',
     await executeDelete(client, 'work_unit_managers', (builder) => {
       pushTextArrayPredicate(builder, 'work_unit_id', DEMO_IDS.workUnits);
+      pushTextArrayPredicate(builder, 'user_id', demoUserIds.dependentUserIds);
     }),
   );
 
@@ -334,6 +423,7 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: DemoUserCle
     'notifications',
     await executeDelete(client, 'notifications', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_NOTIFICATIONS);
+      pushTextArrayPredicate(builder, 'user_id', demoUserIds.dependentUserIds);
     }),
   );
 
@@ -532,6 +622,7 @@ const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: DemoUserCle
     cleanupCountsByTable,
     'tasks',
     await executeDelete(client, 'tasks', (builder) => {
+      pushTextArrayPredicate(builder, 'id', DEMO_IDS.tasks);
       pushTextArrayPredicate(builder, 'project_id', DEMO_IDS.projects);
     }),
   );
@@ -630,7 +721,11 @@ const verificationSteps: VerificationStep[] = [
     ids: DEMO_IDS.settingsUserIds,
     expected: DEMO_EXPECTED_COUNTS.settings,
   },
-  { table: 'clients', ids: DEMO_IDS.clients, expected: DEMO_EXPECTED_COUNTS.clients },
+  {
+    table: 'clients',
+    ids: [...COMPATIBILITY_DEFAULTS.clients, ...DEMO_IDS.clients],
+    expected: DEMO_EXPECTED_COUNTS.clients,
+  },
   { table: 'suppliers', ids: DEMO_IDS.suppliers, expected: DEMO_EXPECTED_COUNTS.suppliers },
   { table: 'products', ids: DEMO_IDS.products, expected: DEMO_EXPECTED_COUNTS.products },
   { table: 'quotes', ids: DEMO_IDS.quotes, expected: DEMO_EXPECTED_COUNTS.quotes },
@@ -691,7 +786,16 @@ const verificationSteps: VerificationStep[] = [
     ids: DEMO_ITEM_IDS.supplierInvoiceItems,
     expected: DEMO_EXPECTED_COUNTS.supplier_invoice_items,
   },
-  { table: 'projects', ids: DEMO_IDS.projects, expected: DEMO_EXPECTED_COUNTS.projects },
+  {
+    table: 'projects',
+    ids: [...COMPATIBILITY_DEFAULTS.projects, ...DEMO_IDS.projects],
+    expected: DEMO_EXPECTED_COUNTS.projects,
+  },
+  {
+    table: 'tasks',
+    ids: [...COMPATIBILITY_DEFAULTS.tasks, ...DEMO_IDS.tasks],
+    expected: DEMO_EXPECTED_COUNTS.tasks,
+  },
   {
     table: 'notifications',
     ids: DEMO_IDS.notifications,
@@ -710,6 +814,27 @@ const verificationSteps: VerificationStep[] = [
     ids: DEMO_IDS.workUnits,
     expected: DEMO_EXPECTED_COUNTS.user_work_units,
   },
+  {
+    table: 'user_clients',
+    countColumn: 'client_id',
+    ids: DEMO_ASSIGNMENT_TARGET_IDS.clients,
+    userIds: DEMO_USER_IDS,
+    expected: DEMO_EXPECTED_COUNTS.user_clients,
+  },
+  {
+    table: 'user_projects',
+    countColumn: 'project_id',
+    ids: DEMO_ASSIGNMENT_TARGET_IDS.projects,
+    userIds: DEMO_USER_IDS,
+    expected: DEMO_EXPECTED_COUNTS.user_projects,
+  },
+  {
+    table: 'user_tasks',
+    countColumn: 'task_id',
+    ids: DEMO_ASSIGNMENT_TARGET_IDS.tasks,
+    userIds: DEMO_USER_IDS,
+    expected: DEMO_EXPECTED_COUNTS.user_tasks,
+  },
   { table: 'time_entries', ids: DEMO_IDS.timeEntries, expected: DEMO_EXPECTED_COUNTS.time_entries },
 ];
 
@@ -719,9 +844,11 @@ const verifyDemoDataset = async () => {
 
   for (const step of verificationSteps) {
     const countColumn = step.countColumn ?? 'id';
+    const userFilter = step.userIds ? ' AND user_id = ANY($2::text[])' : '';
+    const params = step.userIds ? [step.ids, step.userIds] : [step.ids];
     const result = await query(
-      `SELECT COUNT(*)::int AS count FROM ${step.table} WHERE ${countColumn} = ANY($1::text[])`,
-      [step.ids],
+      `SELECT COUNT(*)::int AS count FROM ${step.table} WHERE ${countColumn} = ANY($1::text[])${userFilter}`,
+      params,
     );
     const actual = Number(result.rows[0]?.count ?? 0);
     verificationCountsByTable[step.table] = actual;
@@ -791,8 +918,8 @@ export const runDemoSeedRefresh = async ({
     // assignment rows, so the per-user fan-outs are independent and run concurrently. This is
     // a bounded, fixed set (DEMO_USERS), so there's no connection-pool-storm risk.
     await Promise.all(
-      DEMO_USERS.filter((user) => user.role === 'top_manager').map((user) =>
-        userAssignmentsRepo.syncTopManagerAssignmentsForUser(user.id),
+      DEMO_TOP_MANAGER_USER_IDS.map((userId) =>
+        userAssignmentsRepo.syncTopManagerAssignmentsForUser(userId),
       ),
     );
   } catch (err) {
