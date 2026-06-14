@@ -59,4 +59,25 @@ describe('employeeHrProfile first/last name', () => {
     expect(payload.lastName).toBe('Doe');
     expect(payload.name).toBe('Alice Smith');
   });
+
+  test('buildEmployeeCreatePayload can omit HR detail fields for create-only access', () => {
+    const form = createEmployeeHrForm({
+      ...buildUser({
+        firstName: 'Carol',
+        lastName: 'Doe',
+        phone: '+39 02 1234',
+        jobTitle: 'Consultant',
+        employeeCode: 'EMP-123',
+      }),
+      costPerHour: 80,
+    });
+    const payload = buildEmployeeCreatePayload(form, {
+      includeCost: false,
+      includeHrDetails: false,
+    });
+
+    expect(payload).toEqual({
+      name: 'Alice Smith',
+    });
+  });
 });

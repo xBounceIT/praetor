@@ -642,8 +642,15 @@
     {
       "idx": 91,
       "version": "7",
+      "when": 1781300000002,
+      "tag": "0091_remove_internal_hr_create_delete_permissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
       "when": 1781441032355,
-      "tag": "0091_spooky_scarecrow",
+      "tag": "0092_spooky_scarecrow",
       "breakpoints": true
     }
   ]

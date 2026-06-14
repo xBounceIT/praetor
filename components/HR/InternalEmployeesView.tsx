@@ -90,9 +90,15 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
   permissions,
 }) => {
   const { t } = useTranslation(['hr', 'common']);
-  const canCreateEmployees = hasPermission(permissions, buildPermission('hr.internal', 'create'));
+  const canCreateEmployees = hasPermission(
+    permissions,
+    buildPermission('administration.user_management', 'create'),
+  );
   const canUpdateEmployees = hasPermission(permissions, buildPermission('hr.internal', 'update'));
-  const canDeleteEmployees = hasPermission(permissions, buildPermission('hr.internal', 'delete'));
+  const canDeleteEmployees = hasPermission(
+    permissions,
+    buildPermission('administration.user_management', 'delete'),
+  );
   const canViewCosts = hasPermission(permissions, buildPermission('hr.costs_all', 'view'));
   const canUpdateCosts = hasPermission(permissions, buildPermission('hr.costs_all', 'update'));
   const canManageEmployeeAssignments = hasPermission(
@@ -184,6 +190,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
         const result = await onAddEmployee(
           buildEmployeeCreatePayload(formData, {
             includeCost: canViewCosts && canUpdateCosts,
+            includeHrDetails: canUpdateEmployees,
           }),
         );
         if (result.success) {
@@ -439,6 +446,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
                 identityReadOnly={Boolean(
                   editingEmployee && editingEmployee.authMethod !== 'local',
                 )}
+                canEditHrDetails={canUpdateEmployees}
               />
             </ModalBody>
 

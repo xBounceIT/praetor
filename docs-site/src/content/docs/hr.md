@@ -31,8 +31,10 @@ Per utenti gestiti da LDAP, OIDC o SAML, nome ed email sono controllati dal prov
 
 La visibilità dei dettagli HR dipende dal tipo di dipendente:
 
-- **HR Interni - View/Update** consente di leggere o modificare i dettagli HR di dipendenti interni e utenti applicativi trattati come interni.
+- **HR Interni - View/Update** consente di leggere o modificare i dettagli HR di dipendenti interni e utenti applicativi trattati come interni. La creazione e l'eliminazione dei profili interni passano invece dai permessi **Amministrazione Utenti - Create/Delete**, anche quando l'azione parte dalla schermata HR.
 - **HR Esterni - View/Update** consente di leggere o modificare i dettagli HR dei dipendenti esterni.
+
+Il ruolo **Admin** include la vista HR Interni così le azioni di creazione/eliminazione basate su Amministrazione Utenti restano raggiungibili; la modifica dei dettagli HR continua a richiedere **HR Interni - Update**.
 
 Senza i permessi HR corretti, i campi HR non vengono restituiti dalle API utenti e non sono disponibili nelle schermate. I controlli amministrativi dell'account restano governati dai permessi di amministrazione utenti.
 
