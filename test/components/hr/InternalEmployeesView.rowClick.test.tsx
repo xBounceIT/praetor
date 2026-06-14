@@ -159,6 +159,30 @@ describe('<InternalEmployeesView /> row click', () => {
     );
   });
 
+  test('omits HR profile fields when creating with only user-management create', async () => {
+    const onAddEmployee = mock(async () => ({ success: true }));
+    renderView({
+      users: [],
+      onAddEmployee,
+      permissions: ['hr.internal.view', 'administration.user_management.create'],
+    });
+
+    fireEvent.click(screen.getByText('internalEmployees.addEmployee'));
+    expect(screen.getByLabelText('employeeProfile.phone')).toBeDisabled();
+    expect(screen.getByLabelText('employeeProfile.employeeCode')).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText('internalEmployees.name *'), {
+      target: { value: 'Luisa Bianchi' },
+    });
+    fireEvent.click(screen.getByText('internalEmployees.saveChanges'));
+
+    await waitFor(() => expect(onAddEmployee).toHaveBeenCalledTimes(1));
+    expect(onAddEmployee).toHaveBeenCalledWith({
+      name: 'Luisa Bianchi',
+      email: '',
+    });
+  });
+
   test('does not show add action for legacy hr.internal.create', () => {
     renderView({
       users: [],

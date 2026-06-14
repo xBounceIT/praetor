@@ -716,6 +716,32 @@ describe('POST /api/users', () => {
     expect(rolesFindByIdMock).not.toHaveBeenCalled();
   });
 
+  test('201 creates internal employee without HR update when only base fields are sent', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.create',
+      'hr.internal.view',
+    ]);
+    insertUserMock.mockResolvedValue(undefined);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: adminAuth(),
+      payload: { name: 'Internal Bob', employeeType: 'internal' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const [insertedRow] = insertUserMock.mock.calls[0] as [Record<string, unknown>];
+    expect(insertedRow).toEqual(
+      expect.objectContaining({
+        name: 'Internal Bob',
+        employeeType: 'internal',
+      }),
+    );
+    expect(insertedRow).not.toHaveProperty('phone');
+    expect(insertedRow).not.toHaveProperty('employeeCode');
+  });
+
   test('201 creates internal employee with HR profile fields', async () => {
     getRolePermissionsMock.mockResolvedValue([
       'administration.user_management.create',
@@ -772,6 +798,30 @@ describe('POST /api/users', () => {
         employmentStatus: 'onboarding',
       }),
     );
+  });
+
+  test('403 rejects internal HR profile fields without HR update on create', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.create',
+      'hr.internal.view',
+    ]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: adminAuth(),
+      payload: {
+        name: 'Internal Bob',
+        employeeType: 'internal',
+        phone: '+39 02 1234',
+        jobTitle: 'Consultant',
+        employeeCode: 'EMP-123',
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error).toBe('Insufficient permissions');
+    expect(insertUserMock).not.toHaveBeenCalled();
   });
 
   test('400 maps duplicate employee code on create', async () => {

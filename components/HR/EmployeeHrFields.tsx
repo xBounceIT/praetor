@@ -31,6 +31,7 @@ type EmployeeHrFieldsProps = {
   canViewCosts: boolean;
   canUpdateCosts: boolean;
   identityReadOnly: boolean;
+  canEditHrDetails?: boolean;
 };
 
 type SelectFieldProps<T extends string> = {
@@ -40,6 +41,7 @@ type SelectFieldProps<T extends string> = {
   options: readonly T[];
   optionPrefix: string;
   onChange: (value: T | '') => void;
+  disabled?: boolean;
 };
 
 const EmployeeSelectField = <T extends string>({
@@ -49,6 +51,7 @@ const EmployeeSelectField = <T extends string>({
   options,
   optionPrefix,
   onChange,
+  disabled = false,
 }: SelectFieldProps<T>) => {
   const { t } = useTranslation(['hr']);
 
@@ -57,6 +60,7 @@ const EmployeeSelectField = <T extends string>({
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <Select
         value={value || NONE_SELECT_VALUE}
+        disabled={disabled}
         onValueChange={(nextValue) =>
           onChange(nextValue === NONE_SELECT_VALUE ? '' : (nextValue as T))
         }
@@ -87,6 +91,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
   canViewCosts,
   canUpdateCosts,
   identityReadOnly,
+  canEditHrDetails = true,
 }) => {
   const { t } = useTranslation(['hr', 'common']);
 
@@ -127,7 +132,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
               value={formData.firstName}
               onChange={(e) => setField('firstName', e.target.value)}
               placeholder={t('employeeProfile.firstName')}
-              disabled={identityReadOnly}
+              disabled={identityReadOnly || !canEditHrDetails}
             />
           </Field>
 
@@ -139,7 +144,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
               value={formData.lastName}
               onChange={(e) => setField('lastName', e.target.value)}
               placeholder={t('employeeProfile.lastName')}
-              disabled={identityReadOnly}
+              disabled={identityReadOnly || !canEditHrDetails}
             />
           </Field>
 
@@ -152,7 +157,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
               onChange={(e) => setField('email', e.target.value)}
               aria-invalid={Boolean(errors.email)}
               placeholder="name@example.com"
-              disabled={identityReadOnly}
+              disabled={identityReadOnly || !canEditHrDetails}
             />
             <FieldError className="text-xs">{errors.email}</FieldError>
           </Field>
@@ -164,6 +169,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
               type="tel"
               value={formData.phone}
               onChange={(e) => setField('phone', e.target.value)}
+              disabled={!canEditHrDetails}
             />
           </Field>
         </div>
@@ -180,6 +186,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
               id={`${prefix}-job-title`}
               value={formData.jobTitle}
               onChange={(e) => setField('jobTitle', e.target.value)}
+              disabled={!canEditHrDetails}
             />
           </Field>
 
@@ -191,6 +198,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
               id={`${prefix}-department`}
               value={formData.department}
               onChange={(e) => setField('department', e.target.value)}
+              disabled={!canEditHrDetails}
             />
           </Field>
 
@@ -202,6 +210,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
               id={`${prefix}-employee-code`}
               value={formData.employeeCode}
               onChange={(e) => setField('employeeCode', e.target.value)}
+              disabled={!canEditHrDetails}
             />
           </Field>
 
@@ -211,6 +220,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
               id={`${prefix}-hire-date`}
               value={formData.hireDate}
               onChange={(value) => setField('hireDate', value)}
+              disabled={!canEditHrDetails}
             />
           </Field>
 
@@ -223,6 +233,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
               value={formData.terminationDate}
               onChange={(value) => setField('terminationDate', value)}
               aria-invalid={Boolean(errors.terminationDate)}
+              disabled={!canEditHrDetails}
             />
             <FieldError className="text-xs">{errors.terminationDate}</FieldError>
           </Field>
@@ -234,6 +245,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
             options={CONTRACT_TYPE_OPTIONS}
             optionPrefix="employeeProfile.contractTypes"
             onChange={(value) => setField('contractType', value)}
+            disabled={!canEditHrDetails}
           />
 
           <EmployeeSelectField
@@ -243,6 +255,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
             options={EMPLOYMENT_STATUS_OPTIONS}
             optionPrefix="employeeProfile.employmentStatuses"
             onChange={(value) => setField('employmentStatus', value)}
+            disabled={!canEditHrDetails}
           />
 
           <EmployeeSelectField
@@ -252,6 +265,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
             options={WORK_LOCATION_OPTIONS}
             optionPrefix="employeeProfile.workLocations"
             onChange={(value) => setField('workLocation', value)}
+            disabled={!canEditHrDetails}
           />
 
           {canViewCosts && (
@@ -291,6 +305,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
               id={`${prefix}-emergency-name`}
               value={formData.emergencyContactName}
               onChange={(e) => setField('emergencyContactName', e.target.value)}
+              disabled={!canEditHrDetails}
             />
           </Field>
 
@@ -303,6 +318,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
               type="tel"
               value={formData.emergencyContactPhone}
               onChange={(e) => setField('emergencyContactPhone', e.target.value)}
+              disabled={!canEditHrDetails}
             />
           </Field>
         </div>
@@ -314,6 +330,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
             value={formData.notes}
             onChange={(e) => setField('notes', e.target.value)}
             rows={3}
+            disabled={!canEditHrDetails}
           />
         </Field>
       </section>

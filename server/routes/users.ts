@@ -701,13 +701,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const canApplyCost = hasPermission(request, 'hr.costs_all.update');
       const hrDetailsResult = parseHrDetails(body);
       if (!hrDetailsResult.ok) return badRequest(reply, hrDetailsResult.message);
+      const hasHrDetails = hasHrDetailPatch(hrDetailsResult.fields);
       const canApplyHrDetails =
-        effectiveEmployeeType === 'app_user'
-          ? canUpdateHrDetailsFor(request, effectiveEmployeeType)
-          : true;
-      const hrDetails = canApplyHrDetails ? hrDetailsResult.fields : {};
+        effectiveEmployeeType === 'external' ||
+        canUpdateHrDetailsFor(request, effectiveEmployeeType);
       const dateRangeError = getHrDateRangeError(hrDetailsResult.fields);
       if (dateRangeError) return badRequest(reply, dateRangeError);
+      if (hasHrDetails && !canApplyHrDetails) {
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'user.create.denied',
+          entityType: 'user',
+          details: { secondaryLabel: `employee_type_${effectiveEmployeeType}` },
+        });
+      }
+      const hrDetails = canApplyHrDetails ? hrDetailsResult.fields : {};
 
       let usernameValue: string;
       let passwordHash: string;

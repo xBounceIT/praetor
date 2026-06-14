@@ -190,6 +190,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
         const result = await onAddEmployee(
           buildEmployeeCreatePayload(formData, {
             includeCost: canViewCosts && canUpdateCosts,
+            includeHrDetails: canUpdateEmployees,
           }),
         );
         if (result.success) {
@@ -445,6 +446,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
                 identityReadOnly={Boolean(
                   editingEmployee && editingEmployee.authMethod !== 'local',
                 )}
+                canEditHrDetails={canUpdateEmployees}
               />
             </ModalBody>
 
