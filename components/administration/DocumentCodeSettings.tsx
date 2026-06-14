@@ -30,6 +30,7 @@ interface DocumentCodeSettingsProps {
 const KNOWN_PLACEHOLDERS = new Set(['PREFIX', 'YY', 'YYYY', 'SEQ']);
 const PREFIX_PATTERN = /^[A-Za-z0-9_-]+$/;
 const TEMPLATE_LITERAL_PATTERN = /^[A-Za-z0-9_-]*$/;
+const YEAR_PLACEHOLDER_PATTERN = /\{(?:YY|YYYY)\}/;
 
 const persistedShape = (templates: EditableTemplate[]) =>
   JSON.stringify(
@@ -84,6 +85,9 @@ const validateTemplates = (rows: EditableTemplate[], t: SettingsT): TemplateErro
       const literalTemplateText = template.replace(/\{(?:PREFIX|YY|YYYY|SEQ)\}/g, '');
       if (!errors[`${row.moduleId}:template`] && literalTemplateText.match(/[{}]/)) {
         errors[`${row.moduleId}:template`] = t('general.documentCodes.errors.invalidPlaceholder');
+      }
+      if (!errors[`${row.moduleId}:template`] && !YEAR_PLACEHOLDER_PATTERN.test(template)) {
+        errors[`${row.moduleId}:template`] = t('general.documentCodes.errors.yearRequired');
       }
       if (
         !errors[`${row.moduleId}:template`] &&

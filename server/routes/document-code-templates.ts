@@ -17,7 +17,7 @@ import { badRequest } from '../utils/validation.ts';
 
 const moduleIdSchema = { type: 'string', enum: DOCUMENT_CODE_MODULE_IDS } as const;
 const templateDescription =
-  'Supports {PREFIX}, {YY}, {YYYY}, and required {SEQ}; literal text may contain only letters, numbers, underscores, and hyphens.';
+  'Supports {PREFIX}, {YY}, {YYYY}, and {SEQ}; {SEQ} and one year token ({YY} or {YYYY}) are required. Literal text may contain only letters, numbers, underscores, and hyphens.';
 
 const templateSchema = {
   type: 'object',

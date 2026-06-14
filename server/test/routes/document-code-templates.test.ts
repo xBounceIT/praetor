@@ -288,6 +288,28 @@ describe('PUT /api/document-code-templates', () => {
     expect(upsertManyMock).not.toHaveBeenCalled();
   });
 
+  test('400 rejects templates without a year placeholder', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/document-code-templates',
+      headers: authHeader(),
+      payload: {
+        templates: [
+          {
+            moduleId: 'client_invoice',
+            prefix: 'FT',
+            template: '{PREFIX}_{SEQ}',
+            sequencePadding: 4,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain('template must include {YY} or {YYYY}');
+    expect(upsertManyMock).not.toHaveBeenCalled();
+  });
+
   test('400 rejects template text that is unsafe in document id routes', async () => {
     const res = await testApp.inject({
       method: 'PUT',

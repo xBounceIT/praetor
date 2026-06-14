@@ -58,7 +58,11 @@ describe('document code templates', () => {
       sequencePadding: 4,
     };
 
-    for (const template of ['{PREFIX}/{YYYY}/{SEQ}', '{PREFIX}?{YYYY}_{SEQ}', '{PREFIX}#{SEQ}']) {
+    for (const template of [
+      '{PREFIX}/{YYYY}/{SEQ}',
+      '{PREFIX}?{YYYY}_{SEQ}',
+      '{PREFIX}_{YY}#{SEQ}',
+    ]) {
       expect(validateDocumentCodeTemplate({ ...base, template })).toEqual(
         expect.objectContaining({
           ok: false,
@@ -79,6 +83,9 @@ describe('document code templates', () => {
 
     expect(validateDocumentCodeTemplate({ ...base, template: 'INV' })).toEqual(
       expect.objectContaining({ ok: false, message: 'template must include {SEQ}' }),
+    );
+    expect(validateDocumentCodeTemplate({ ...base, template: '{PREFIX}_{SEQ}' })).toEqual(
+      expect.objectContaining({ ok: false, message: 'template must include {YY} or {YYYY}' }),
     );
     expect(validateDocumentCodeTemplate({ ...base, template: '{PREFIX}_{MONTH}_{SEQ}' })).toEqual(
       expect.objectContaining({ ok: false, message: 'Unknown placeholder {MONTH}' }),
@@ -104,7 +111,7 @@ describe('document code templates', () => {
     expect(
       validateDocumentCodeTemplate({
         ...base,
-        template: `${'X'.repeat(97)}{SEQ}`,
+        template: `${'X'.repeat(88)}{YYYY}{SEQ}`,
       }),
     ).toEqual(
       expect.objectContaining({
@@ -115,7 +122,7 @@ describe('document code templates', () => {
     expect(
       validateDocumentCodeTemplate({
         ...base,
-        template: `${'X'.repeat(92)}{SEQ}`,
+        template: `${'X'.repeat(90)}{YY}{SEQ}`,
       }),
     ).toEqual(
       expect.objectContaining({

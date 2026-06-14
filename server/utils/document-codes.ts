@@ -81,6 +81,7 @@ export const DOCUMENT_CODE_YEAR_MAX = 9999;
 const DOCUMENT_CODE_PLACEHOLDERS = new Set(['PREFIX', 'YY', 'YYYY', 'SEQ']);
 const PREFIX_PATTERN = /^[A-Za-z0-9_-]+$/;
 const TEMPLATE_LITERAL_PATTERN = /^[A-Za-z0-9_-]*$/;
+const YEAR_PLACEHOLDER_PATTERN = /\{(?:YY|YYYY)\}/;
 const MAX_SEQUENCE_FOR_LENGTH_CHECK = 999_999_999;
 
 export const isDocumentCodeModuleId = (value: unknown): value is DocumentCodeModuleId =>
@@ -172,6 +173,9 @@ export const validateDocumentCodeTemplate = (input: {
   const literalTemplateText = template.replace(/\{(?:PREFIX|YY|YYYY|SEQ)\}/g, '');
   if (literalTemplateText.match(/[{}]/)) {
     return { ok: false, message: 'template contains an invalid placeholder' };
+  }
+  if (!YEAR_PLACEHOLDER_PATTERN.test(template)) {
+    return { ok: false, message: 'template must include {YY} or {YYYY}' };
   }
   if (!TEMPLATE_LITERAL_PATTERN.test(literalTemplateText)) {
     return {

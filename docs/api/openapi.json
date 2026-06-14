@@ -25122,7 +25122,7 @@
                       },
                       "template": {
                         "type": "string",
-                        "description": "Supports {PREFIX}, {YY}, {YYYY}, and required {SEQ}; literal text may contain only letters, numbers, underscores, and hyphens."
+                        "description": "Supports {PREFIX}, {YY}, {YYYY}, and {SEQ}; {SEQ} and one year token ({YY} or {YYYY}) are required. Literal text may contain only letters, numbers, underscores, and hyphens."
                       },
                       "sequencePadding": {
                         "type": "integer"
@@ -25329,7 +25329,7 @@
                         },
                         "template": {
                           "type": "string",
-                          "description": "Supports {PREFIX}, {YY}, {YYYY}, and required {SEQ}; literal text may contain only letters, numbers, underscores, and hyphens."
+                          "description": "Supports {PREFIX}, {YY}, {YYYY}, and {SEQ}; {SEQ} and one year token ({YY} or {YYYY}) are required. Literal text may contain only letters, numbers, underscores, and hyphens."
                         },
                         "sequencePadding": {
                           "type": "integer"
@@ -25383,7 +25383,7 @@
                       },
                       "template": {
                         "type": "string",
-                        "description": "Supports {PREFIX}, {YY}, {YYYY}, and required {SEQ}; literal text may contain only letters, numbers, underscores, and hyphens."
+                        "description": "Supports {PREFIX}, {YY}, {YYYY}, and {SEQ}; {SEQ} and one year token ({YY} or {YYYY}) are required. Literal text may contain only letters, numbers, underscores, and hyphens."
                       },
                       "sequencePadding": {
                         "type": "integer"
