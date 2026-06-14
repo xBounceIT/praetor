@@ -200,7 +200,25 @@ describe('GET /api/document-code-templates/preview', () => {
     expect(JSON.parse(res.body).error).toContain('valid 4-digit year');
   });
 
-  test('403 without administration.general.view', async () => {
+  test('200 allows users with the requested module create permission', async () => {
+    getRolePermissionsMock.mockResolvedValue(['sales.client_quotes.create']);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/document-code-templates/preview?moduleId=client_quote',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      moduleId: 'client_quote',
+      preview: expect.stringMatching(/^PREV_\d{2}_0007$/),
+      year: expect.any(Number),
+      sequence: 7,
+    });
+  });
+
+  test('403 without administration.general.view or module create permission', async () => {
     getRolePermissionsMock.mockResolvedValue(['administration.general.update']);
 
     const res = await testApp.inject({

@@ -24868,6 +24868,7 @@
         "tags": [
           "document-code-templates"
         ],
+        "description": "Requires administration.general.view or the create permission for the requested document module.",
         "parameters": [
           {
             "schema": {

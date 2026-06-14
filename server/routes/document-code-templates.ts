@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.ts';
 import * as documentCodeTemplatesRepo from '../repositories/documentCodeTemplatesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { previewDocumentCode } from '../services/documentCodes.ts';
@@ -11,6 +11,7 @@ import {
   renderDocumentCode,
   validateDocumentCodeTemplate,
 } from '../utils/document-codes.ts';
+import { hasAnyPermission, type Permission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { badRequest } from '../utils/validation.ts';
 
@@ -50,6 +51,23 @@ const previewQuerySchema = {
   additionalProperties: false,
 } as const;
 
+const PREVIEW_ADMIN_PERMISSION = 'administration.general.view' as const;
+
+const PREVIEW_CREATE_PERMISSION_BY_MODULE = {
+  client_quote: 'sales.client_quotes.create',
+  client_offer: 'sales.client_offers.create',
+  supplier_quote: 'sales.supplier_quotes.create',
+  client_order: 'accounting.clients_orders.create',
+  supplier_order: 'accounting.supplier_orders.create',
+  client_invoice: 'accounting.clients_invoices.create',
+  supplier_invoice: 'accounting.supplier_invoices.create',
+} satisfies Record<(typeof DOCUMENT_CODE_MODULE_IDS)[number], Permission>;
+
+const PREVIEW_ROUTE_PERMISSIONS = [
+  PREVIEW_ADMIN_PERMISSION,
+  ...Object.values(PREVIEW_CREATE_PERMISSION_BY_MODULE),
+] as [Permission, ...Permission[]];
+
 const updateTemplateSchema = {
   type: 'object',
   properties: {
@@ -86,6 +104,26 @@ const withPreview = (
   }),
 });
 
+const denyPreviewPermission = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  required: Permission[],
+) => {
+  const routeLabel = `${request.method} ${(request as { routeOptions?: { url?: string } }).routeOptions?.url ?? request.url}`;
+  await logAudit({
+    request,
+    action: 'auth.permission_denied',
+    entityType: 'route',
+    entityId: routeLabel,
+    details: {
+      targetLabel: routeLabel,
+      secondaryLabel: 'permission',
+      changedFields: required.toSorted(),
+    },
+  });
+  return reply.code(403).send({ error: 'Insufficient permissions' });
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/preview',
@@ -93,11 +131,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       onRequest: [
         fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
         authenticateToken,
-        requirePermission('administration.general.view'),
+        requireAnyPermission(...PREVIEW_ROUTE_PERMISSIONS),
       ],
       schema: {
         tags: ['document-code-templates'],
         summary: 'Preview the next document code',
+        description:
+          'Requires administration.general.view or the create permission for the requested document module.',
         querystring: previewQuerySchema,
         response: {
           200: previewSchema,
@@ -112,6 +152,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
       if (query.date !== undefined && typeof query.date !== 'string') {
         return badRequest(reply, 'date must be a string');
+      }
+      const previewPermissions = [
+        PREVIEW_ADMIN_PERMISSION,
+        PREVIEW_CREATE_PERMISSION_BY_MODULE[query.moduleId],
+      ];
+      if (!hasAnyPermission(request.user?.permissions, previewPermissions)) {
+        return denyPreviewPermission(request, reply, previewPermissions);
       }
 
       try {
