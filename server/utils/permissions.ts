@@ -115,6 +115,7 @@ export const ADMINISTRATION_PERMISSIONS: Permission[] = PERMISSION_DEFINITIONS.r
 );
 
 export const ADMIN_BASE_PERMISSIONS: Permission[] = [
+  buildPermission('hr.internal', 'view'),
   ...buildPermissions('settings', VIEW_UPDATE),
   ...buildPermissions('docs.api', VIEW_ONLY),
   ...buildPermissions('docs.frontend', VIEW_ONLY),
