@@ -78,7 +78,6 @@ describe('employeeHrProfile first/last name', () => {
 
     expect(payload).toEqual({
       name: 'Alice Smith',
-      email: 'alice@example.com',
     });
   });
 });

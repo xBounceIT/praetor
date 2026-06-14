@@ -824,6 +824,29 @@ describe('POST /api/users', () => {
     expect(insertUserMock).not.toHaveBeenCalled();
   });
 
+  test('403 rejects internal email without HR update on create', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.create',
+      'hr.internal.view',
+    ]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: adminAuth(),
+      payload: {
+        name: 'Internal Bob',
+        employeeType: 'internal',
+        email: 'bob@example.com',
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error).toBe('Insufficient permissions');
+    expect(insertUserMock).not.toHaveBeenCalled();
+    expect(settingsUpsertForUserMock).not.toHaveBeenCalled();
+  });
+
   test('400 maps duplicate employee code on create', async () => {
     getRolePermissionsMock.mockResolvedValue([
       'administration.user_management.create',

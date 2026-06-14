@@ -702,12 +702,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const hrDetailsResult = parseHrDetails(body);
       if (!hrDetailsResult.ok) return badRequest(reply, hrDetailsResult.message);
       const hasHrDetails = hasHrDetailPatch(hrDetailsResult.fields);
+      const hasInternalEmail = effectiveEmployeeType === 'internal' && Object.hasOwn(body, 'email');
       const canApplyHrDetails =
         effectiveEmployeeType === 'external' ||
         canUpdateHrDetailsFor(request, effectiveEmployeeType);
       const dateRangeError = getHrDateRangeError(hrDetailsResult.fields);
       if (dateRangeError) return badRequest(reply, dateRangeError);
-      if (hasHrDetails && !canApplyHrDetails) {
+      if ((hasHrDetails || hasInternalEmail) && !canApplyHrDetails) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',

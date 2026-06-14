@@ -134,7 +134,6 @@ export const buildEmployeeCreatePayload = (
 ): EmployeeCreatePayload => {
   const payload: EmployeeCreatePayload = {
     name: formData.name.trim(),
-    email: formData.email.trim(),
   };
 
   if (options.includeHrDetails ?? true) {
@@ -147,6 +146,7 @@ export const buildEmployeeCreatePayload = (
       {
         firstName: nullableText(formData.firstName),
         lastName: nullableText(formData.lastName),
+        email: formData.email.trim(),
       },
     );
   } else if (options.includeCost) {

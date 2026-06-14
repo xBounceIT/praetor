@@ -179,7 +179,6 @@ describe('<InternalEmployeesView /> row click', () => {
     await waitFor(() => expect(onAddEmployee).toHaveBeenCalledTimes(1));
     expect(onAddEmployee).toHaveBeenCalledWith({
       name: 'Luisa Bianchi',
-      email: '',
     });
   });
 
