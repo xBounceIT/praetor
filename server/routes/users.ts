@@ -506,6 +506,9 @@ const parseHrDetails = (
 const hasHrDetailPatch = (fields: usersRepo.UserHrFields) =>
   HR_DETAIL_FIELDS.some((field) => fields[field] !== undefined);
 
+const hasNonEmptyHrDetailPatch = (fields: usersRepo.UserHrFields) =>
+  HR_DETAIL_FIELDS.some((field) => fields[field] !== undefined && fields[field] !== null);
+
 const getHrDateRangeError = (
   fields: usersRepo.UserHrFields,
   current?: Pick<usersRepo.UserCore, 'hireDate' | 'terminationDate'>,
@@ -701,14 +704,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const canApplyCost = hasPermission(request, 'hr.costs_all.update');
       const hrDetailsResult = parseHrDetails(body);
       if (!hrDetailsResult.ok) return badRequest(reply, hrDetailsResult.message);
-      const hasHrDetails = hasHrDetailPatch(hrDetailsResult.fields);
-      const hasInternalEmail = effectiveEmployeeType === 'internal' && Object.hasOwn(body, 'email');
+      const hasNonEmptyHrDetails = hasNonEmptyHrDetailPatch(hrDetailsResult.fields);
+      const hasInternalEmail = effectiveEmployeeType === 'internal' && emailResult.value !== null;
       const canApplyHrDetails =
         effectiveEmployeeType === 'external' ||
         canUpdateHrDetailsFor(request, effectiveEmployeeType);
       const dateRangeError = getHrDateRangeError(hrDetailsResult.fields);
       if (dateRangeError) return badRequest(reply, dateRangeError);
-      if ((hasHrDetails || hasInternalEmail) && !canApplyHrDetails) {
+      if ((hasNonEmptyHrDetails || hasInternalEmail) && !canApplyHrDetails) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',

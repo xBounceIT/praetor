@@ -847,6 +847,35 @@ describe('POST /api/users', () => {
     expect(settingsUpsertForUserMock).not.toHaveBeenCalled();
   });
 
+  test('201 treats blank internal HR fields as absent without HR update on create', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.create',
+      'hr.internal.view',
+    ]);
+    insertUserMock.mockResolvedValue(undefined);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: adminAuth(),
+      payload: {
+        name: 'Internal Bob',
+        employeeType: 'internal',
+        email: '',
+        phone: '',
+        employeeCode: null,
+        hireDate: '',
+        contractType: null,
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const [insertedRow] = insertUserMock.mock.calls[0] as [Record<string, unknown>];
+    expect(insertedRow).not.toHaveProperty('phone');
+    expect(insertedRow).not.toHaveProperty('employeeCode');
+    expect(insertedRow).not.toHaveProperty('contractType');
+  });
+
   test('400 maps duplicate employee code on create', async () => {
     getRolePermissionsMock.mockResolvedValue([
       'administration.user_management.create',
