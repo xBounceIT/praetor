@@ -20,13 +20,14 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
   const add = async (input: AddProjectInput): Promise<Project | null> => {
     try {
       if (!input.clientId) throw new Error('Client is required');
+      if (!input.orderId) throw new Error('Order is required');
 
       const project = await api.projects.create({
         name: input.name,
         clientId: input.clientId,
         description: input.description,
-        orderId: input.orderId || undefined,
-        offerId: input.offerId,
+        orderId: input.orderId,
+        offerId: input.offerId || null,
         startDate: input.startDate ?? null,
         endDate: input.endDate ?? null,
         revenue: input.revenue ?? null,
@@ -45,12 +46,12 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
               undefined,
               false,
               undefined,
-              t.expectedEffort,
               t.revenue,
               t.notes,
               t.monthlyEffort,
               t.billingType,
               t.billingFrequency,
+              t.duration,
             ),
           ),
         );
@@ -71,7 +72,7 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
     description?: string,
     details?: Pick<
       ProjectTask,
-      'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
+      'monthlyEffort' | 'duration' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
     >,
   ): Promise<ProjectTask> => {
     try {
@@ -81,12 +82,12 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
         description,
         recurringConfig?.isRecurring,
         recurringConfig?.pattern,
-        details?.expectedEffort,
         details?.revenue,
         details?.notes,
         details?.monthlyEffort,
         details?.billingType,
         details?.billingFrequency,
+        details?.duration,
       );
       setProjectTasks((prev) => [...prev, task]);
       return task;

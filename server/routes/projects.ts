@@ -97,6 +97,19 @@ const projectSchema = {
   ],
 } as const;
 
+const projectOrderOptionSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    clientId: { type: 'string' },
+    clientName: { type: 'string' },
+    status: { type: 'string' },
+    createdAt: { type: 'number' },
+    updatedAt: { type: 'number' },
+  },
+  required: ['id', 'clientId', 'clientName', 'status', 'createdAt', 'updatedAt'],
+} as const;
+
 const projectCreateBodySchema = {
   type: 'object',
   properties: {
@@ -104,7 +117,7 @@ const projectCreateBodySchema = {
     clientId: { type: 'string' },
     description: { type: 'string' },
     orderId: { type: 'string' },
-    offerId: { type: 'string' },
+    offerId: { type: ['string', 'null'] },
     startDate: { type: 'string' },
     endDate: { type: 'string' },
     revenue: { type: ['number', 'null'] },
@@ -112,7 +125,7 @@ const projectCreateBodySchema = {
     billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
     tipo: { type: 'string', enum: PROJECT_TIPOS },
   },
-  required: ['name', 'clientId', 'offerId', 'startDate', 'endDate', 'tipo'],
+  required: ['name', 'clientId', 'orderId', 'startDate', 'endDate', 'tipo'],
 } as const;
 
 const projectUpdateBodySchema = {
@@ -134,7 +147,9 @@ const projectUpdateBodySchema = {
 } as const;
 
 class PermissionError extends Error {}
+class OrderRequiredError extends Error {}
 class OrderClientMismatchError extends Error {}
+class OrderStatusError extends Error {}
 class OfferClientMismatchError extends Error {}
 class DateRangeError extends Error {}
 
@@ -201,6 +216,49 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
+  fastify.get(
+    '/order-options',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        authenticateToken,
+        requireAnyPermission(
+          'projects.manage.view',
+          'projects.manage_all.view',
+          'projects.manage.create',
+          'projects.manage_all.create',
+          'projects.manage.update',
+          'projects.manage_all.update',
+        ),
+      ],
+      schema: {
+        tags: ['projects'],
+        summary: 'List confirmed client orders available for project links',
+        response: {
+          200: { type: 'array', items: projectOrderOptionSchema },
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+      const options = await clientsOrdersRepo.listConfirmedProjectOptions();
+      const canViewAllOrderOptions =
+        hasPermission(request, 'accounting.clients_orders.view') ||
+        hasPermission(request, 'crm.clients_all.view') ||
+        hasPermission(request, 'projects.manage_all.view') ||
+        hasPermission(request, 'projects.manage_all.create') ||
+        hasPermission(request, 'projects.manage_all.update');
+      if (canViewAllOrderOptions) return options;
+
+      const assignedClientIds = await userAssignmentsRepo.filterAssignedClientIds(
+        request.user.id,
+        options.map((order) => order.clientId),
+      );
+      return options.filter((order) => assignedClientIds.has(order.clientId));
+    },
+  );
+
   // POST / - Create project (manager only)
   fastify.post(
     '/',
@@ -229,7 +287,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const body = request.body as {
         billingType?: string;
         billingFrequency?: string;
-        offerId?: string;
+        offerId?: string | null;
         startDate?: string;
         endDate?: string;
         revenue?: number | string | null;
@@ -255,7 +313,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const offerIdResult = requireNonEmptyString(body.offerId, 'offerId');
+      const orderIdResult = requireNonEmptyString(orderId, 'orderId');
+      if (!orderIdResult.ok) return badRequest(reply, orderIdResult.message);
+
+      const offerIdResult = optionalNonEmptyString(body.offerId, 'offerId');
       if (!offerIdResult.ok) return badRequest(reply, offerIdResult.message);
 
       const startDateResult = parseDateString(body.startDate, 'startDate');
@@ -287,14 +348,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const id = generatePrefixedId('p');
 
       // The two FK lookups are independent — run them concurrently.
-      const [orderClientId, offerClientId] = await Promise.all([
-        orderId ? clientsOrdersRepo.findClientIdById(orderId) : Promise.resolve(null),
-        clientOffersRepo.findClientIdById(offerIdResult.value),
+      const [orderLink, offerClientId] = await Promise.all([
+        clientsOrdersRepo.findProjectLinkById(orderIdResult.value),
+        offerIdResult.value
+          ? clientOffersRepo.findClientIdById(offerIdResult.value)
+          : Promise.resolve(null),
       ]);
-      if (orderId && orderClientId !== null && orderClientId !== clientIdResult.value) {
+      if (orderLink === null || orderLink.clientId !== clientIdResult.value) {
         return badRequest(reply, 'orderId does not belong to the specified clientId');
       }
-      if (offerClientId !== null && offerClientId !== clientIdResult.value) {
+      if (orderLink.status !== 'confirmed') {
+        return badRequest(reply, 'orderId must reference a confirmed client order');
+      }
+      if (offerIdResult.value && offerClientId !== null && offerClientId !== clientIdResult.value) {
         return badRequest(reply, 'offerId does not belong to the specified clientId');
       }
 
@@ -310,7 +376,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               clientId: clientIdResult.value,
               description: description || null,
               isDisabled: false,
-              orderId: orderId || null,
+              orderId: orderIdResult.value,
               offerId: offerIdResult.value,
               startDate: startDateResult.value,
               endDate: endDateResult.value,
@@ -590,22 +656,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const orderIdPatch = orderId === undefined ? undefined : orderId || null;
           const orderPatchPresent = orderIdPatch !== undefined;
           const existingLinks =
-            clientChanged && (!orderPatchPresent || !offerIdPatch.provided)
+            !orderPatchPresent || (clientChanged && !offerIdPatch.provided)
               ? await projectsRepo.findClientLinksById(idResult.value, tx)
               : null;
           const finalOrderId = orderPatchPresent ? orderIdPatch : (existingLinks?.orderId ?? null);
           const finalOfferId = offerIdPatch.provided
             ? offerIdPatch.value
-            : (existingLinks?.offerId ?? null);
+            : clientChanged
+              ? (existingLinks?.offerId ?? null)
+              : null;
 
-          const orderClientId = finalOrderId
-            ? await clientsOrdersRepo.findClientIdById(finalOrderId, tx)
-            : null;
+          if (!finalOrderId) {
+            throw new OrderRequiredError('orderId is required');
+          }
+
+          const orderLink = await clientsOrdersRepo.findProjectLinkById(finalOrderId, tx);
           const offerClientId = finalOfferId
             ? await clientOffersRepo.findClientIdById(finalOfferId, tx)
             : null;
-          if (finalOrderId && orderClientId !== null && orderClientId !== requestedClientId) {
+          if (orderLink === null || orderLink.clientId !== requestedClientId) {
             throw new OrderClientMismatchError('orderId does not belong to the specified clientId');
+          }
+          if (orderLink.status !== 'confirmed') {
+            throw new OrderStatusError('orderId must reference a confirmed client order');
           }
           if (finalOfferId && offerClientId !== null && offerClientId !== requestedClientId) {
             throw new OfferClientMismatchError('offerId does not belong to the specified clientId');
@@ -678,6 +751,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             entityId: idResult.value,
           });
         }
+        if (err instanceof OrderRequiredError) {
+          return replyError(request, reply, {
+            statusCode: 400,
+            message: err.message,
+            action: 'project.update.invalid',
+            entityType: 'project',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'order_required' },
+          });
+        }
         if (err instanceof OrderClientMismatchError) {
           return replyError(request, reply, {
             statusCode: 400,
@@ -686,6 +769,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             entityType: 'project',
             entityId: idResult.value,
             details: { secondaryLabel: 'order_client_mismatch' },
+          });
+        }
+        if (err instanceof OrderStatusError) {
+          return replyError(request, reply, {
+            statusCode: 400,
+            message: err.message,
+            action: 'project.update.invalid',
+            entityType: 'project',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'order_not_confirmed' },
           });
         }
         if (err instanceof OfferClientMismatchError) {

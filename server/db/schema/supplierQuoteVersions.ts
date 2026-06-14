@@ -15,7 +15,14 @@ import { users } from './users.ts';
 // `string | null`.
 export interface SupplierQuoteVersionSnapshot {
   schemaVersion: 1;
-  quote: Omit<SupplierQuote, 'linkedOrderId'> & { linkedOrderId?: string | null };
+  quote: Omit<
+    SupplierQuote,
+    'linkedOrderId' | 'communicationChannelId' | 'communicationChannelName'
+  > & {
+    linkedOrderId?: string | null;
+    communicationChannelId?: string;
+    communicationChannelName?: string;
+  };
   items: SupplierQuoteItem[];
 }
 

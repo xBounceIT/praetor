@@ -8,17 +8,73 @@ export type TaskHandlersDeps = {
   setProjectTasks: React.Dispatch<React.SetStateAction<ProjectTask[]>>;
   setEntries: React.Dispatch<React.SetStateAction<TimeEntry[]>>;
   generateRecurringEntries: () => Promise<void> | void;
+  taskUpdateQueueState: TaskUpdateQueueState;
 };
 
+export type TaskUpdateQueueState = {
+  queuedTaskUpdates: Map<string, Promise<void>>;
+  latestTaskUpdateSeqByField: Map<string, number>;
+  nextTaskUpdateSeq: number;
+};
+
+const taskUpdateFieldKey = (taskId: string, field: string): string => `${taskId}\u0000${field}`;
+
+export const createTaskUpdateQueueState = (): TaskUpdateQueueState => ({
+  queuedTaskUpdates: new Map(),
+  latestTaskUpdateSeqByField: new Map(),
+  nextTaskUpdateSeq: 0,
+});
+
 export const makeTaskHandlers = (deps: TaskHandlersDeps) => {
-  const { projectTasks, setProjectTasks, setEntries, generateRecurringEntries } = deps;
+  const {
+    projectTasks,
+    setProjectTasks,
+    setEntries,
+    generateRecurringEntries,
+    taskUpdateQueueState,
+  } = deps;
 
   const update = async (id: string, updates: Partial<ProjectTask>) => {
-    try {
-      const updated = await api.tasks.update(id, updates);
+    const { queuedTaskUpdates, latestTaskUpdateSeqByField } = taskUpdateQueueState;
+    const updateFields = Object.keys(updates);
+    const updateSeq = ++taskUpdateQueueState.nextTaskUpdateSeq;
+    for (const field of updateFields) {
+      latestTaskUpdateSeqByField.set(taskUpdateFieldKey(id, field), updateSeq);
+    }
+    const priorUpdate = queuedTaskUpdates.get(id) ?? Promise.resolve();
+    const runUpdate = async () => {
+      const activeUpdates =
+        updateFields.length === 0
+          ? updates
+          : (Object.fromEntries(
+              Object.entries(updates).filter(
+                ([field]) =>
+                  latestTaskUpdateSeqByField.get(taskUpdateFieldKey(id, field)) === updateSeq,
+              ),
+            ) as Partial<ProjectTask>);
+      if (updateFields.length > 0 && Object.keys(activeUpdates).length === 0) return;
+
+      const updated = await api.tasks.update(id, activeUpdates);
       setProjectTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+    };
+    const updateRequest = queuedTaskUpdates.has(id)
+      ? priorUpdate.catch(() => undefined).then(runUpdate)
+      : runUpdate();
+    queuedTaskUpdates.set(id, updateRequest);
+    try {
+      await updateRequest;
     } catch (err) {
       console.error('Failed to update task:', err);
+    } finally {
+      if (queuedTaskUpdates.get(id) === updateRequest) {
+        queuedTaskUpdates.delete(id);
+      }
+      for (const field of updateFields) {
+        const key = taskUpdateFieldKey(id, field);
+        if (latestTaskUpdateSeqByField.get(key) === updateSeq) {
+          latestTaskUpdateSeqByField.delete(key);
+        }
+      }
     }
   };
 

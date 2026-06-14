@@ -8,8 +8,12 @@ export type ModuleScopedStateKey =
   | 'suppliers'
   | 'projects'
   | 'projectTasks'
+  | 'resales'
+  | 'resaleCategories'
+  | 'resaleOrderOptions'
   | 'products'
   | 'quotes'
+  | 'quoteCommunicationChannels'
   | 'clientOffers'
   | 'clientsOrders'
   | 'invoices'
@@ -28,8 +32,12 @@ export const ALL_MODULE_SCOPED_KEYS: readonly ModuleScopedStateKey[] = [
   'suppliers',
   'projects',
   'projectTasks',
+  'resales',
+  'resaleCategories',
+  'resaleOrderOptions',
   'products',
   'quotes',
+  'quoteCommunicationChannels',
   'clientOffers',
   'clientsOrders',
   'invoices',
@@ -50,7 +58,15 @@ const MODULE_OWNED_KEYS: Record<string, readonly ModuleScopedStateKey[]> = {
   hr: ['users', 'workUnits', 'clients', 'projects', 'projectTasks'],
   administration: ['users'],
   crm: ['clients', 'suppliers'],
-  sales: ['quotes', 'clientOffers', 'supplierQuotes', 'clients', 'suppliers', 'products'],
+  sales: [
+    'quotes',
+    'quoteCommunicationChannels',
+    'clientOffers',
+    'supplierQuotes',
+    'clients',
+    'suppliers',
+    'products',
+  ],
   accounting: [
     'clientsOrders',
     'invoices',
@@ -61,7 +77,17 @@ const MODULE_OWNED_KEYS: Record<string, readonly ModuleScopedStateKey[]> = {
     'products',
   ],
   catalog: ['products'],
-  projects: ['projects', 'projectTasks', 'clients', 'users', 'workUnits', 'clientsOrders'],
+  projects: [
+    'projects',
+    'projectTasks',
+    'resales',
+    'resaleCategories',
+    'resaleOrderOptions',
+    'clients',
+    'users',
+    'workUnits',
+    'clientsOrders',
+  ],
   suppliers: ['suppliers', 'supplierQuotes', 'products'],
   reports: [],
   settings: [],

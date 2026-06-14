@@ -29,6 +29,7 @@ export const tasks = pgTable(
     recurrenceDuration: numeric('recurrence_duration', { precision: 10, scale: 2 }).default('0'),
     expectedEffort: numeric('expected_effort', { precision: 10, scale: 2 }).default('0'),
     revenue: numeric('revenue', { precision: 15, scale: 2 }).default('0'),
+    duration: numeric('duration', { precision: 10, scale: 2 }).notNull().default('1'),
     notes: text('notes'),
     isDisabled: boolean('is_disabled').default(false),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
@@ -60,6 +61,7 @@ export const tasks = pgTable(
       'tasks_recurrence_duration_max_check',
       sql`${table.recurrenceDuration} IS NULL OR (${table.recurrenceDuration} >= 0 AND ${table.recurrenceDuration} <= 24)`,
     ),
+    check('tasks_duration_non_negative_check', sql`${table.duration} >= 0`),
   ],
 );
 

@@ -60,7 +60,6 @@ import type {
   User,
 } from '../../types';
 import { formatInsertDate } from '../../utils/date';
-import { calculatePricingTotals } from '../../utils/numbers';
 import { hasPermission, hasScopedActionPermission } from '../../utils/permissions';
 import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -136,14 +135,24 @@ const formatMonthBucket = (date: string, locale: string): string => {
   return d.toLocaleString(locale, { month: 'short', year: '2-digit' });
 };
 
-type RevenueSource = 'activities' | 'order' | 'manual';
+type RevenueSource = 'activities' | 'manual';
+type RevenueLike = {
+  revenue?: number | string | null;
+  duration?: number | string | null;
+  totalRevenue?: number | string | null;
+};
 
-const sumActivityRevenue = (tasks: ReadonlyArray<{ revenue?: number | string | null }>): number =>
-  tasks.reduce((sum, t) => sum + (Number(t.revenue) || 0), 0);
+const sumActivityRevenue = (tasks: ReadonlyArray<RevenueLike>): number =>
+  tasks.reduce((sum, t) => {
+    const totalRevenue =
+      t.totalRevenue !== undefined && t.totalRevenue !== null
+        ? Number(t.totalRevenue)
+        : (Number(t.revenue) || 0) * (Number(t.duration ?? 1) || 0);
+    return sum + (Number.isFinite(totalRevenue) ? totalRevenue : 0);
+  }, 0);
 
-const resolveRevenueSource = (activitiesSum: number, hasOrder: boolean): RevenueSource => {
+const resolveRevenueSource = (activitiesSum: number): RevenueSource => {
   if (activitiesSum > 0) return 'activities';
-  if (hasOrder) return 'order';
   return 'manual';
 };
 
@@ -167,7 +176,7 @@ export interface ProjectDetailViewProps {
     description?: string,
     details?: Pick<
       ProjectTask,
-      'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
+      'monthlyEffort' | 'duration' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
     >,
   ) => Promise<ProjectTask>;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
@@ -220,6 +229,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const [description, setDescription] = useState(project.description ?? '');
   const [startDate, setStartDate] = useState(project.startDate ?? '');
   const [endDate, setEndDate] = useState(project.endDate ?? '');
+  const [orderId, setOrderId] = useState(project.orderId ?? '');
   const [offerId, setOfferId] = useState(project.offerId ?? '');
   const [revenue, setRevenue] = useState(
     project.revenue !== null && project.revenue !== undefined ? String(project.revenue) : '',
@@ -578,9 +588,29 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   }, [entries, i18n.language]);
 
   const clientOptions = clients.map((c) => ({ id: c.id, name: c.name }));
+  const orderOptions = orders.reduce<Array<{ id: string; name: string }>>((options, order) => {
+    if (order.status === 'confirmed') {
+      options.push({
+        id: order.id,
+        name: `${order.clientName} - ${formatOrderId(order.id)}`,
+      });
+    }
+    return options;
+  }, []);
+  if (orderId && !orderOptions.some((o) => o.id === orderId)) {
+    const fallback = orders.find((o) => o.id === orderId);
+    if (fallback) {
+      orderOptions.unshift({
+        id: fallback.id,
+        name: `${fallback.clientName} - ${formatOrderId(fallback.id)}`,
+      });
+    }
+  }
   // Single pass: filter to accepted/sent offers belonging to the current client and
   // shape into the option struct (vs. .filter().filter().map() iterating thrice).
-  const offerOptions: { id: string; name: string }[] = [];
+  const offerOptions: { id: string; name: string }[] = [
+    { id: '', name: t('projects:projects.noOfferLinked') },
+  ];
   for (const o of offers) {
     if (o.status !== 'sent' && o.status !== 'accepted') continue;
     if (clientId && o.clientId !== clientId) continue;
@@ -623,45 +653,32 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         ]
       : translatedBillingTypeOptions;
 
-  const linkedOrder = project.orderId ? orders.find((o) => o.id === project.orderId) : undefined;
+  const linkedOrder = orderId ? orders.find((o) => o.id === orderId) : undefined;
   const client = clients.find((c) => c.id === clientId);
   const isClientDisabled = client?.isDisabled ?? false;
   const isCurrentlyDisabled = tempIsDisabled || isClientDisabled;
 
   // Revenue precedence (mirrors ProjectsView create-flow):
   //   activitiesRevenueSum > 0 → revenue is the sum (read-only);
-  //   else linkedOrder → revenue is the order total (read-only);
   //   else → manual entry.
   // Persisting the manual `revenue` field only matters in the 'manual' branch — otherwise
   // it's recomputed on read, and writing it would shadow/override the derived value.
   const activitiesRevenueSum = sumActivityRevenue(projectTasks);
-  const orderRevenue = linkedOrder
-    ? calculatePricingTotals(
-        linkedOrder.items,
-        linkedOrder.discount,
-        'hours',
-        linkedOrder.discountType,
-      ).total
-    : 0;
-  const revenueSource = resolveRevenueSource(activitiesRevenueSum, Boolean(linkedOrder));
+  const revenueSource = resolveRevenueSource(activitiesRevenueSum);
   const revenueBySource: Record<RevenueSource, number> = {
     activities: activitiesRevenueSum,
-    order: orderRevenue,
     manual: revenue ? parseFloat(revenue) : 0,
   };
   const displayedRevenue = revenueBySource[revenueSource];
   const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : undefined;
-  const revenueHintBySource: Record<RevenueSource, string> = {
+  const revenueHintBySource: Partial<Record<RevenueSource, string>> = {
     activities: t('projects:projects.revenueFromActivities'),
-    order: t('projects:projects.revenueFromOrder'),
-    manual: t('projects:projects.revenueManualHint'),
   };
 
   // Budget % is meaningful only when cost is visible, entries loaded, AND revenue is
-  // non-zero. Denominator uses `displayedRevenue` (derived from activities sum / linked
-  // order total / manual) so the KPI reflects what the user sees in the revenue field —
-  // `project.revenue` lags for activities/order sources because we only persist it when
-  // source==='manual'.
+  // non-zero. Denominator uses `displayedRevenue` (derived from activities sum / manual)
+  // so the KPI reflects what the user sees in the revenue field — `project.revenue` lags for
+  // activity-derived revenue because we only persist it when source==='manual'.
   const budgetUsedPct = useMemo(() => {
     if (!canViewCost) return null;
     if (entriesError !== null) return null;
@@ -671,7 +688,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
 
   // Order locks the client — server enforces FK against the order's client, so let the UI
   // mirror it instead of allowing a save that the API will reject.
-  const isClientLockedByOrder = Boolean(project.orderId);
+  const isClientLockedByOrder = Boolean(orderId);
 
   // A manager who lacks `timesheets.tracker_all.view` only sees entries from themselves and
   // their managed users, so chart totals exclude any teammate outside that scope. Surface a
@@ -694,6 +711,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     description !== (project.description ?? '') ||
     startDate !== (project.startDate ?? '') ||
     endDate !== (project.endDate ?? '') ||
+    orderId !== (project.orderId ?? '') ||
     offerId !== (project.offerId ?? '') ||
     revenueChanged ||
     tempIsDisabled !== (project.isDisabled ?? false) ||
@@ -702,12 +720,30 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     // raises the save bar; for a confirmed project this fires only on an actual tipo change.
     tipo !== baselineTipo;
 
+  const clearStaleClientLinks = (nextClientId: string, keep: 'order' | 'offer' | null) => {
+    if (keep !== 'offer' && offerId) {
+      const currentOffer = offers.find((o) => o.id === offerId);
+      if (!currentOffer || currentOffer.clientId !== nextClientId) {
+        setOfferId('');
+        if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
+      }
+    }
+    if (keep !== 'order' && orderId) {
+      const currentOrder = orders.find((o) => o.id === orderId);
+      if (!currentOrder || currentOrder.clientId !== nextClientId) {
+        setOrderId('');
+        if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
+      }
+    }
+  };
+
   const handleDiscard = () => {
     setName(project.name);
     setClientId(project.clientId);
     setDescription(project.description ?? '');
     setStartDate(project.startDate ?? '');
     setEndDate(project.endDate ?? '');
+    setOrderId(project.orderId ?? '');
     setOfferId(project.offerId ?? '');
     setRevenue(
       project.revenue !== null && project.revenue !== undefined ? String(project.revenue) : '',
@@ -725,7 +761,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     const newErrors: Record<string, string> = {};
     if (!name.trim()) newErrors.name = t('common:validation.projectNameRequired');
     if (!clientId) newErrors.clientId = t('projects:projects.clientRequired');
-    if (!offerId) newErrors.offerId = t('projects:projects.offerRequired');
+    if (!orderId) newErrors.orderId = t('projects:projects.orderRequired');
     // Only enforce required dates on projects that already carry them. Legacy projects
     // predating the dates-required rule still allow null dates on the PATCH endpoint;
     // forcing dates here would block unrelated edits (rename, disable) until the
@@ -751,17 +787,18 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       clientId,
       description,
       isDisabled: tempIsDisabled,
-      offerId,
+      orderId,
+      offerId: offerId || null,
       startDate: startDate || null,
       endDate: endDate || null,
       // Guaranteed non-empty by the `!tipo` guard above. Sending it confirms the field
       // server-side (tipo_confirmed = true), clearing the forced-confirmation state.
       tipo: tipo as ProjectTipo,
     };
-    // Only touch `revenue` when the source is manual: derived values (activities
-    // sum or linked-order total) are recomputed on read. Sending `null` here would
+    // Only touch `revenue` when the source is manual: activity-derived values are
+    // recomputed on read. Sending `null` here would
     // wipe a previously stored manual revenue any time the user saves an unrelated
-    // field while activities/order momentarily satisfy the precedence.
+    // field while activities momentarily satisfy the precedence.
     if (revenueSource === 'manual') {
       updates.revenue = persistedRevenue ?? null;
     }
@@ -959,6 +996,33 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
               <SelectControl
+                id="detail-order"
+                options={orderOptions}
+                value={orderId}
+                onChange={(val) => {
+                  const nextOrderId = val as string;
+                  setOrderId(nextOrderId);
+                  if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
+                  const nextOrder = orders.find((o) => o.id === nextOrderId);
+                  if (!nextOrder) return;
+                  setClientId(nextOrder.clientId);
+                  if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+                  clearStaleClientLinks(nextOrder.clientId, 'order');
+                }}
+                label={
+                  <>
+                    {t('projects:projects.order')} <RequiredMark />
+                  </>
+                }
+                placeholder={t('projects:projects.selectOrder')}
+                searchable
+                buttonClassName="h-9"
+                disabled={!canUpdateProjects}
+              />
+              <FieldError className="text-xs">{errors.orderId}</FieldError>
+            </div>
+            <div className="space-y-1.5">
+              <SelectControl
                 id="detail-client"
                 options={clientOptions}
                 value={clientId}
@@ -966,15 +1030,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   const nextClientId = val as string;
                   setClientId(nextClientId);
                   if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
-                  // Clear a stale offerId belonging to the previous client — server enforces
-                  // the same invariant and would reject the save otherwise.
-                  if (offerId) {
-                    const current = offers.find((o) => o.id === offerId);
-                    if (!current || current.clientId !== nextClientId) {
-                      setOfferId('');
-                      if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
-                    }
-                  }
+                  clearStaleClientLinks(nextClientId, null);
                 }}
                 label={
                   <>
@@ -1082,11 +1138,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   setOfferId(val as string);
                   if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
                 }}
-                label={
-                  <>
-                    {t('projects:projects.offerReference')} <RequiredMark />
-                  </>
-                }
+                label={t('projects:projects.offerOptionalLabel')}
                 placeholder={t('projects:projects.selectOffer')}
                 searchable
                 buttonClassName="h-9"
@@ -1109,7 +1161,11 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 readOnly={revenueSource !== 'manual'}
                 onChange={(e) => setRevenue(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">{revenueHintBySource[revenueSource]}</p>
+              {revenueHintBySource[revenueSource] && (
+                <p className="text-xs text-muted-foreground">
+                  {revenueHintBySource[revenueSource]}
+                </p>
+              )}
             </Field>
             <div className="space-y-1.5">
               <SelectControl

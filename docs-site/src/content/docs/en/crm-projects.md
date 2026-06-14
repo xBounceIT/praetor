@@ -11,6 +11,8 @@ CRM records store the data used in commercial and accounting workflows. Keep nam
 
 Avoid duplicates: before creating a new record, search for the customer or supplier first.
 
+Client and supplier quotes require the **Communication Channel** field to record how the quote was communicated or negotiated. The same channel is visible in the quote tables. The options are shared by both quote modules: users with quote-management permissions can use the gear **Manage** button above the field to add, rename, or remove available channels. Channels already used by existing quotes cannot be deleted.
+
 ### Protected deletion
 
 A customer or supplier cannot be deleted while any related financial document (quote, offer, order, invoice) still references it. The delete request is rejected and the document is not lost: remove or cancel the linked documents first, then delete the record. This guardrail exists because an issued accounting document must remain traceable even if the counterparty record is no longer needed.
@@ -27,13 +29,13 @@ Projects connect customers, tasks, and time entries. Create clear reusable tasks
 
 For each project and task, you can set the billing type (retainer or time and materials) and the billing frequency (monthly or one-time) independently — both billing types support either frequency. If tasks use a billing type that differs from the project, the project is shown as mixed.
 
-Use estimated monthly effort to plan recurring load and total effort to track progress against the overall expected hours.
+Use estimated monthly effort to plan recurring load and task duration as a generic multiplier. Total effort is calculated automatically as monthly effort × duration and is used to track progress against the overall expected hours. Task total revenue is calculated the same way: revenue × duration.
 
-The **Add Project** action opens a focused dialog with only what's needed to create a project: client, name, dates, offer, type, billing, optional order, optional revenue, and a draft tasks table. Submitting the dialog takes you straight to the new project's dedicated detail page.
+The **Add Project** action opens a focused dialog with only what's needed to create a project: client order, client, name, dates, optional offer, type, billing, optional revenue, and a draft tasks table. Submitting the dialog takes you straight to the new project's dedicated detail page.
 
 Click any row in the projects list to open the **project detail page**. The detail page replaces the legacy edit dialog and is laid out in two areas:
 
-- The top section lays out the project fields horizontally (client, name, description, dates, offer, type, billing, revenue, disabled toggle) next to the inline-editable project tasks table.
+- The top section lays out the project fields horizontally (client order, client, name, description, dates, offer, type, billing, revenue, disabled toggle) next to the inline-editable project tasks table.
 - Below, the **project dashboard** shows KPIs (total hours, total cost, team size, budget used %) and four charts: hours by user (broken down by task), hours by task (logged hours against the available effort), cost vs revenue, and monthly activity. Charts populate as time is logged against the project; before any entries exist, each chart shows an empty state. The page also surfaces a notice when (a) the project has more than 5,000 entries (only the most recent are loaded), (b) your role limits which users' entries you can see (totals reflect just your scope), or (c) you don't have permission to view time entries at all.
 
 Next to the project dashboard heading are two buttons, **Edit** and **Views**. **Edit** turns the whole dashboard — every KPI stat card, the project timeline, and all four charts — into a free-form layout you can rearrange. Drag a card by its header to move it anywhere on the 12-column grid, drag its right edge, bottom edge, or corner to resize it, and use the eye button on a card to hide it (or restore a hidden one). You can also move the focused card with the arrow keys, and resize it by holding **Shift** with the arrow keys. Cards float up to fill the gaps left behind. When you're done, keep the arrangement for this project or save it as a reusable view. Editing a project's dashboard creates a **per-project layout** that affects only that project. The **Views** menu lets you apply one of your saved views, choose **Use global default** (drop this project's custom layout so it follows the shared default again), or choose **Set as global default** (make the current arrangement the baseline for every project that doesn't have its own layout).
@@ -43,11 +45,24 @@ Next to the project dashboard heading are two buttons, **Edit** and **Views**. *
 When creating or editing a project you can fill in:
 
 - **Project start date** and **Project end date** — define the planned window. Both are required (at creation and on every subsequent save from the detail page) so projects always carry a planning window; the end date must not precede the start date.
-- **Offer reference** — links the project to an accepted offer. This field is required.
+- **Client order** — links the project to a confirmed customer order. This field is required at creation and when saving from the detail page; choosing an order sets the project's client from that order and locks it.
+- **Offer reference** — links the project to an accepted offer when you need to track its commercial origin. This field is optional and can stay empty.
 - **Type** — classifies the project as **Active** (Attivo) or **Passive** (Passivo). It is a required field (with the same `*` marker as Client and Project Name): the project can't be created until you pick a value, and the selected type is shown in the projects list and on the detail page. Projects that already existed before this field was introduced default to **Active**, but the **first time** one is edited from the detail page you must explicitly confirm the type: the selector starts empty and the save is blocked until you choose a value, so the choice isn't silently left at the default.
-- **Project revenue** — resolved with this precedence: (1) if the activities have a per-row revenue, the project revenue is the sum of those values shown read-only; (2) otherwise, if an order is linked, the revenue is inherited read-only from the order total; (3) otherwise you can enter it manually.
+- **Project revenue** — resolved with this precedence: (1) if the activities have a per-row revenue, the project revenue is the read-only sum of activity total revenues (`revenue × duration`); (2) otherwise you can enter it manually. The linked order total is not imported automatically as project revenue.
 
 When a project ends, check that tasks are consistent and that no pending entries remain.
+
+### Resales
+
+The **Resales** entry in the Projects module manages economic resale operations separately from operational tasks, timesheets, and user assignments. When creating a resale, you must select a **client order**, exactly one **supplier order** linked to that client order, set the required **start date** and **resale due date**, and add at least one **resale activity** in the initial activities table: the system accepts the supplier order only when at least one client-order line references it.
+
+Each resale shows **Resale revenue** as the sum of the revenues entered on its activities. The official **Resale cost** is imported from the supplier order total and is not edited manually. The create form shows both values as read-only fields while you fill in the activities. Resale activities are entered manually and include activity name, billing frequency (monthly, quarterly, annual, or one-time), category, cost, revenue, released status, independent due date, and notes.
+
+Activity costs remain editable: when the sum of activity costs does not match the supplier order total, the view shows a **variance**. The variance is an operational warning and does not block saving, so you can reconcile the activity costs progressively.
+
+Resale categories are a dedicated catalog seeded with **Hardware**, **Sottoscrizione**, and **Licenza**. You manage them from the **Resale Categories** button in the Resales view or from the **Category** control inside the create-resale form, matching the internal-listing product category flow; a category used by activities cannot be deleted.
+
+Access is controlled by separate **Resales** permissions (`projects.resales.view/create/update/delete`), granted to the Manager and Top Manager profiles by default.
 
 ### Project rules
 

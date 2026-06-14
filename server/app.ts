@@ -22,7 +22,9 @@ import notificationsRoutes from './routes/notifications.ts';
 import productsRoutes from './routes/products.ts';
 import projectRulesRoutes from './routes/project-rules.ts';
 import projectsRoutes from './routes/projects.ts';
+import quoteCommunicationChannelsRoutes from './routes/quote-communication-channels.ts';
 import reportsRoutes from './routes/reports.ts';
+import resalesRoutes from './routes/resales.ts';
 import rilDraftsRoutes from './routes/ril-drafts.ts';
 import rolesRoutes from './routes/roles.ts';
 import settingsRoutes from './routes/settings.ts';
@@ -39,6 +41,7 @@ import viewsRoutes from './routes/views.ts';
 import webhooksRoutes from './routes/webhooks.ts';
 import workUnitsRoutes from './routes/work-units.ts';
 import { ajvFormatsPlugin, ajvFormatsPluginOptions } from './utils/ajv-formats.ts';
+import { APP_VERSION } from './utils/app-version.ts';
 import { loggerOptions, serializeError } from './utils/logger.ts';
 import { GLOBAL_RATE_LIMIT } from './utils/rate-limit.ts';
 
@@ -149,7 +152,7 @@ export const buildApp = async () => {
       info: {
         title: 'Praetor API',
         description: 'Praetor API documentation',
-        version: '0.7.0',
+        version: APP_VERSION,
       },
       components: {
         securitySchemes: {
@@ -173,6 +176,7 @@ export const buildApp = async () => {
   fastify.register(clientsRoutes, { prefix: '/api/clients' });
   fastify.register(projectsRoutes, { prefix: '/api/projects' });
   fastify.register(projectRulesRoutes, { prefix: '/api/projects' });
+  fastify.register(resalesRoutes, { prefix: '/api/projects/resales' });
   fastify.register(tasksRoutes, { prefix: '/api/tasks' });
   fastify.register(entriesRoutes, { prefix: '/api/entries' });
   fastify.register(rilDraftsRoutes, { prefix: '/api/ril-drafts' });
@@ -182,6 +186,9 @@ export const buildApp = async () => {
   fastify.register(generalSettingsRoutes, { prefix: '/api/general-settings' });
   fastify.register(brandingRoutes, { prefix: '/api/branding' });
   fastify.register(productsRoutes, { prefix: '/api/products' });
+  fastify.register(quoteCommunicationChannelsRoutes, {
+    prefix: '/api/sales/quote-communication-channels',
+  });
   fastify.register(clientQuotesRoutes, { prefix: '/api/sales/client-quotes' });
   fastify.register(clientOffersRoutes, { prefix: '/api/sales/client-offers' });
   fastify.register(workUnitsRoutes, { prefix: '/api/work-units' });

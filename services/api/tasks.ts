@@ -12,12 +12,12 @@ export const tasksApi = {
     description?: string,
     isRecurring?: boolean,
     recurrencePattern?: string,
-    expectedEffort?: number,
     revenue?: number,
     notes?: string,
     monthlyEffort?: number,
     billingType?: ProjectTask['billingType'],
     billingFrequency?: ProjectTask['billingFrequency'],
+    duration?: number,
   ): Promise<ProjectTask> =>
     fetchApi<ProjectTask>('/tasks', {
       method: 'POST',
@@ -27,12 +27,12 @@ export const tasksApi = {
         description,
         isRecurring,
         recurrencePattern,
-        expectedEffort,
         revenue,
         notes,
         monthlyEffort,
         billingType,
         billingFrequency,
+        duration,
       }),
     }).then(normalizeTask),
 

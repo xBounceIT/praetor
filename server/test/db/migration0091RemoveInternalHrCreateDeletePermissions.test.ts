@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { readMigrationFile } from '../helpers/schemaFiles.ts';
 
-const MIGRATION_SQL = readMigrationFile('0087_remove_internal_hr_create_delete_permissions.sql');
+const MIGRATION_SQL = readMigrationFile('0091_remove_internal_hr_create_delete_permissions.sql');
 
 const deletedPermissions = [...MIGRATION_SQL.matchAll(/'([^']+)'/g)].map((match) => match[1]);
 
-describe('0087 remove internal HR create/delete permissions', () => {
+describe('0091 remove internal HR create/delete permissions', () => {
   test('deletes internal create/delete permission rows globally', () => {
     expect(MIGRATION_SQL).toContain('DELETE FROM role_permissions');
     expect(deletedPermissions.toSorted()).toEqual(['hr.internal.create', 'hr.internal.delete']);

@@ -51,6 +51,10 @@ describe('PERMISSION_DEFINITIONS / ALL_PERMISSIONS', () => {
     expect(ALL_PERMISSIONS).toContain('projects.rules.create');
     expect(ALL_PERMISSIONS).toContain('projects.rules.update');
     expect(ALL_PERMISSIONS).toContain('projects.rules.delete');
+    expect(ALL_PERMISSIONS).toContain('projects.resales.view');
+    expect(ALL_PERMISSIONS).toContain('projects.resales.create');
+    expect(ALL_PERMISSIONS).toContain('projects.resales.update');
+    expect(ALL_PERMISSIONS).toContain('projects.resales.delete');
     expect(ALL_PERMISSIONS).toContain('timesheets.tracker_all.delete');
     expect(ALL_PERMISSIONS).toContain('timesheets.expired_projects.create');
     expect(ALL_PERMISSIONS).toContain('hr.work_units.delete');
@@ -246,6 +250,11 @@ describe('hasViewAccess', () => {
   test('gates the RIL page behind the dedicated RIL view permission', () => {
     expect(hasViewAccess(['timesheets.ril.view'], 'timesheets/ril')).toBe(true);
     expect(hasViewAccess(['timesheets.tracker.view'], 'timesheets/ril')).toBe(false);
+  });
+
+  test('gates project resales behind the dedicated resale view permission', () => {
+    expect(hasViewAccess(['projects.resales.view'], 'projects/resales')).toBe(true);
+    expect(hasViewAccess(['projects.manage.view'], 'projects/resales')).toBe(false);
   });
 
   test('allows administration/user-management with either base or all-scope view', () => {

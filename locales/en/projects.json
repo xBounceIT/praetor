@@ -47,8 +47,8 @@
     "assignmentSaveFailed": "Failed to save project assignments.",
     "assignmentLoadRetryHint": "Retry before saving any assignment changes.",
     "order": "Order",
-    "orderOptionalLabel": "Order (optional)",
     "selectOrder": "Select Order...",
+    "orderRequired": "Client order is required",
     "inheritedClientLabel": "Client (inherited from order)",
     "startDate": "Project start date",
     "endDate": "Project end date",
@@ -56,17 +56,18 @@
     "endDateRequired": "Project end date is required",
     "dateRangeInvalid": "End date must be on or after start date",
     "offerReference": "Offer reference",
+    "offerOptionalLabel": "Offer reference (optional)",
     "selectOffer": "Select Offer...",
-    "offerRequired": "Offer reference is required",
+    "noOfferLinked": "No offer linked",
     "projectRevenue": "Project revenue",
-    "revenueFromActivities": "Computed from the sum of activity revenues.",
-    "revenueFromOrder": "Inherited from the linked order.",
+    "revenueFromActivities": "Computed from the sum of activity total revenues.",
     "revenueManualHint": "Enter the expected project revenue.",
     "projectTasks": "Project Tasks",
     "addTaskRow": "Add Task",
     "taskName": "Task Name",
     "expectedEffort": "Total effort (h)",
     "monthlyEffort": "Monthly effort (h)",
+    "duration": "Duration",
     "billingType": "Billing",
     "billingFrequency": "Frequency",
     "billingTypes": {
@@ -88,6 +89,7 @@
       "passivo": "Passive"
     },
     "taskRevenue": "Revenue",
+    "taskTotalRevenue": "Total revenue",
     "taskNotes": "Notes",
     "noTasksAdded": "No tasks added yet.",
     "progress": "Progress",
@@ -298,6 +300,83 @@
         "saveFailed": "Unable to save project rule.",
         "deleteFailed": "Unable to delete project rule."
       }
+    }
+  },
+  "resales": {
+    "title": "Resales",
+    "subtitle": "Manage resales linked to client and supplier orders",
+    "directory": "Resales Directory",
+    "addResale": "Add Resale",
+    "createTitle": "Create Resale",
+    "manageCategories": "Resale Categories",
+    "activitiesTitle": "Resale Activities",
+    "initialActivitiesTitle": "Resale Activity",
+    "addActivity": "Add Activity",
+    "addActivityRow": "Add activity row",
+    "editActivity": "Edit Activity",
+    "noActivitiesAdded": "Add at least one activity to create the resale.",
+    "categoriesDirectory": "Categories Catalog",
+    "categoryActivityCount": "Linked activities",
+    "balanced": "Balanced",
+    "varianceHint": "Variance compares the supplier order total with the sum of activity costs. It does not block saving.",
+    "released": "Released",
+    "notReleased": "Not released",
+    "activityDueDateHint": "The activity due date is independent from the resale date.",
+    "deleteTitle": "Delete resale",
+    "deleteDescription": "Are you sure you want to delete resale {{id}} and all of its activities?",
+    "deleteActivityTitle": "Delete activity",
+    "deleteActivityDescription": "Are you sure you want to delete activity {{name}}?",
+    "billingFrequencies": {
+      "monthly": "Monthly",
+      "quarterly": "Quarterly",
+      "annual": "Annual",
+      "one_time": "One-time"
+    },
+    "columns": {
+      "clientOrder": "Client order",
+      "supplierOrder": "Supplier order",
+      "revenue": "Revenue",
+      "supplierCost": "Supplier order cost",
+      "activityCost": "Activity cost",
+      "variance": "Variance",
+      "dueDate": "Due date",
+      "activityName": "Activity name",
+      "billing": "Billing",
+      "category": "Category",
+      "cost": "Cost",
+      "released": "Released",
+      "notes": "Notes"
+    },
+    "fields": {
+      "clientOrder": "Client order",
+      "supplierOrder": "Supplier order",
+      "startDate": "Start date",
+      "dueDate": "Resale due date",
+      "resaleRevenue": "Resale Revenue",
+      "resaleCost": "Resale Cost",
+      "notes": "Notes",
+      "categoryName": "Category name"
+    },
+    "placeholders": {
+      "clientOrder": "Select client order...",
+      "supplierOrder": "Select supplier order...",
+      "category": "Select category..."
+    },
+    "boolean": {
+      "yes": "YES",
+      "no": "NO"
+    },
+    "validation": {
+      "clientOrder": "Client order is required",
+      "supplierOrder": "Supplier order is required",
+      "startDate": "Start date is required",
+      "dueDate": "Resale due date is required",
+      "activityName": "Activity name is required",
+      "activitiesRequired": "Add at least one activity to the resale",
+      "activityRows": "Complete name, category, cost, and revenue for every activity",
+      "category": "Category is required",
+      "nonNegative": "Enter a value greater than or equal to zero",
+      "categoryName": "Category name is required"
     }
   },
   "tasks": {

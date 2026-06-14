@@ -7,4 +7,11 @@ describe('layout translations', () => {
     expect(enLayout.routes.settings).toBe('Settings');
     expect(itLayout.routes.settings).toBe('Impostazioni');
   });
+
+  test('project resales route has localized sidebar and title text', () => {
+    expect(enLayout.routes.resales).toBe('Resales');
+    expect(enLayout.titles.resales).toBe('Resales');
+    expect(itLayout.routes.resales).toBe('Rivendite');
+    expect(itLayout.titles.resales).toBe('Rivendite');
+  });
 });

@@ -38,7 +38,7 @@ describe('ProjectsView (create-only dialog after detail-page revamp)', () => {
 });
 
 describe('ProjectsView create-form validation', () => {
-  test('create form requires name, client, offer, and a date range', async () => {
+  test('create form requires name, client, order, and a date range', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
     ).text();
@@ -49,7 +49,7 @@ describe('ProjectsView create-form validation', () => {
       "if (!clientId) newErrors.clientId = t('projects:projects.clientRequired')",
     );
     expect(source).toContain(
-      "if (!offerId) newErrors.offerId = t('projects:projects.offerRequired')",
+      "if (!orderId) newErrors.orderId = t('projects:projects.orderRequired')",
     );
     expect(source).toContain(
       "if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');",
@@ -60,14 +60,16 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain("newErrors.dateRange = t('projects:projects.dateRangeInvalid')");
   });
 
-  test('exposes start date, end date, offer reference, and revenue inputs', async () => {
+  test('exposes start date, end date, order, optional offer, and revenue inputs', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
     ).text();
     expect(source).toContain('id="project-start-date"');
     expect(source).toContain('id="project-end-date"');
+    expect(source).toContain('id="project-order"');
     expect(source).toContain('id="project-offer"');
     expect(source).toContain('id="project-revenue"');
+    expect(source).toContain("label={t('projects:projects.offerOptionalLabel')}");
   });
 
   test('requires a Tipo (Attivo/Passivo), exposes the selector, and forwards it (issue #784)', async () => {
@@ -93,24 +95,28 @@ describe('ProjectsView create-form validation', () => {
       expect(loc.projects.selectTipo).toBeTruthy();
       expect(loc.projects.tipoRequired).toBeTruthy();
       expect(loc.projects.tipoConfirmRequired).toBeTruthy();
+      expect(loc.projects.orderRequired).toBeTruthy();
+      expect(loc.projects.offerOptionalLabel).toBeTruthy();
+      expect(loc.projects.noOfferLinked).toBeTruthy();
       expect(loc.projects.tipoValues.attivo).toBeTruthy();
       expect(loc.projects.tipoValues.passivo).toBeTruthy();
     }
   });
 
-  test('revenue precedence: activity sum > order > manual, and read-only unless manual', async () => {
+  test('revenue precedence: activity sum > manual, and read-only unless manual', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
     ).text();
     expect(source).toContain('const resolveRevenueSource = (');
     expect(source).toContain("if (activitiesSum > 0) return 'activities';");
+    expect(source).not.toContain("return 'order';");
     expect(source).toContain("readOnly={revenueSource !== 'manual'}");
     expect(source).toContain(
       "const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : undefined;",
     );
   });
 
-  test('manual revenue source shows no helper hint, but activities/order still do', async () => {
+  test('manual revenue source shows no helper hint, but activities still do', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
     ).text();
@@ -119,10 +125,27 @@ describe('ProjectsView create-form validation', () => {
     expect(source).not.toContain("manual: t('projects:projects.revenueManualHint')");
     // Informative source hints remain.
     expect(source).toContain("activities: t('projects:projects.revenueFromActivities')");
-    expect(source).toContain("order: t('projects:projects.revenueFromOrder')");
+    const removedOrderHint = "order: t('projects:projects.revenueFrom" + "Order')";
+    expect(source).not.toContain(removedOrderHint);
     // The hint renders through the shared FieldDescription primitive, only when present.
     expect(source).toContain('{revenueHintBySource[revenueSource] && (');
     expect(source).toContain('<FieldDescription className="text-xs">');
+  });
+
+  test('draft task table has editable duration and non-interactive derived totals', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+    expect(source).toContain("header: t('projects:projects.duration')");
+    expect(source).toContain(
+      "onChange={(e) => updateDraftTask(row._id, 'duration', e.target.value)}",
+    );
+    expect(source).toContain("header: t('projects:projects.expectedEffort')");
+    expect(source).toContain(
+      'parseDraftNumber(row.monthlyEffort) * parseDraftNumber(row.duration, 1)',
+    );
+    expect(source).toContain('projects:projects.taskTotalRevenue');
+    expect(source).toContain('<output className="flex h-8');
   });
 
   test('order selector auto-fills the client and disables the client picker while bound', async () => {
@@ -143,6 +166,7 @@ describe('ProjectsView create-form validation', () => {
     );
     expect(source).toContain('if (clientId && offer.clientId !== clientId) return options;');
     expect(source).toContain("dispatch({ type: 'setClientId', value: nextOffer.clientId });");
+    expect(source).toContain("{ id: '', name: t('projects:projects.noOfferLinked') }");
   });
 
   test('changing the order or offer clears any stale sibling link via the shared helper', async () => {

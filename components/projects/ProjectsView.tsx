@@ -33,7 +33,6 @@ import type {
   User,
 } from '../../types';
 import { formatInsertDate } from '../../utils/date';
-import { calculatePricingTotals } from '../../utils/numbers';
 import { buildPermission, hasPermission, hasScopedActionPermission } from '../../utils/permissions';
 import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -62,7 +61,7 @@ type DraftTask = {
   billingType: StoredBillingType;
   billingFrequency: BillingFrequency;
   monthlyEffort: string;
-  expectedEffort: string;
+  duration: string;
   revenue: string;
   notes: string;
 };
@@ -72,7 +71,7 @@ export type DraftTaskInput = {
   billingType?: StoredBillingType;
   billingFrequency?: BillingFrequency;
   monthlyEffort?: number;
-  expectedEffort?: number;
+  duration?: number;
   revenue?: number;
   notes?: string;
 };
@@ -82,23 +81,32 @@ const tipoOptions = [
   { id: 'passivo', name: 'projects:projects.tipoValues.passivo' },
 ];
 
-type RevenueSource = 'activities' | 'order' | 'manual';
-type RevenueLike = { revenue?: number | string | null };
+type RevenueSource = 'activities' | 'manual';
+type RevenueLike = {
+  revenue?: number | string | null;
+  duration?: number | string | null;
+  totalRevenue?: number | string | null;
+};
 
 const sumActivityRevenue = (tasks: RevenueLike[]): number =>
-  tasks.reduce((sum, t) => sum + (Number(t.revenue) || 0), 0);
+  tasks.reduce((sum, t) => {
+    const totalRevenue =
+      t.totalRevenue !== undefined && t.totalRevenue !== null
+        ? Number(t.totalRevenue)
+        : (Number(t.revenue) || 0) * (t.duration === '' ? 1 : Number(t.duration ?? 1) || 0);
+    return sum + (Number.isFinite(totalRevenue) ? totalRevenue : 0);
+  }, 0);
 
-const resolveRevenueSource = (activitiesSum: number, hasOrder: boolean): RevenueSource => {
+const resolveRevenueSource = (activitiesSum: number): RevenueSource => {
   if (activitiesSum > 0) return 'activities';
-  if (hasOrder) return 'order';
   return 'manual';
 };
 
 export type AddProjectFormInput = {
   name: string;
   clientId: string;
-  offerId: string;
-  orderId?: string;
+  orderId: string;
+  offerId?: string | null;
   description?: string;
   draftTasks?: DraftTaskInput[];
   billingType?: StoredBillingType;
@@ -129,7 +137,7 @@ export interface ProjectsViewProps {
     description?: string,
     details?: Pick<
       ProjectTask,
-      'expectedEffort' | 'monthlyEffort' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
+      'monthlyEffort' | 'duration' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
     >,
   ) => Promise<ProjectTask>;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
@@ -434,7 +442,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     const newErrors: Record<string, string> = {};
     if (!name?.trim()) newErrors.name = t('common:validation.projectNameRequired');
     if (!clientId) newErrors.clientId = t('projects:projects.clientRequired');
-    if (!offerId) newErrors.offerId = t('projects:projects.offerRequired');
+    if (!orderId) newErrors.orderId = t('projects:projects.orderRequired');
     if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');
     if (!endDate) newErrors.endDate = t('projects:projects.endDateRequired');
     if (!tipo) newErrors.tipo = t('projects:projects.tipoRequired');
@@ -455,7 +463,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         billingType: task.billingType,
         billingFrequency: task.billingFrequency,
         monthlyEffort: task.monthlyEffort ? parseFloat(task.monthlyEffort) : undefined,
-        expectedEffort: task.expectedEffort ? parseFloat(task.expectedEffort) : undefined,
+        duration: task.duration ? parseFloat(task.duration) : undefined,
         revenue: task.revenue ? parseFloat(task.revenue) : undefined,
         notes: task.notes.trim() || undefined,
       });
@@ -463,8 +471,8 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     const result = await onAddProject({
       name,
       clientId,
-      orderId: orderId || undefined,
-      offerId,
+      orderId,
+      offerId: offerId || null,
       description,
       draftTasks: taskInputs.length > 0 ? taskInputs : undefined,
       billingType,
@@ -514,7 +522,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           billingType,
           billingFrequency,
           monthlyEffort: '',
-          expectedEffort: '',
+          duration: '1',
           revenue: '',
           notes: '',
         },
@@ -580,12 +588,15 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
 
   const selectedOrder = orderId ? orders.find((o) => o.id === orderId) : undefined;
 
-  const offerOptions = offers.reduce<Array<{ id: string; name: string }>>((options, offer) => {
-    if (offer.status !== 'sent' && offer.status !== 'accepted') return options;
-    if (clientId && offer.clientId !== clientId) return options;
-    options.push({ id: offer.id, name: `${offer.clientName} - ${offer.id}` });
-    return options;
-  }, []);
+  const offerOptions = offers.reduce<Array<{ id: string; name: string }>>(
+    (options, offer) => {
+      if (offer.status !== 'sent' && offer.status !== 'accepted') return options;
+      if (clientId && offer.clientId !== clientId) return options;
+      options.push({ id: offer.id, name: `${offer.clientName} - ${offer.id}` });
+      return options;
+    },
+    [{ id: '', name: t('projects:projects.noOfferLinked') }],
+  );
   if (offerId && !offerOptions.some((o) => o.id === offerId)) {
     const fallback = offers.find((o) => o.id === offerId);
     if (fallback) {
@@ -594,29 +605,29 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   }
 
   const activitiesRevenueSum = sumActivityRevenue(draftTasks);
-  const orderRevenue = selectedOrder
-    ? calculatePricingTotals(
-        selectedOrder.items,
-        selectedOrder.discount,
-        'hours',
-        selectedOrder.discountType,
-      ).total
-    : 0;
-
-  const revenueSource = resolveRevenueSource(activitiesRevenueSum, Boolean(selectedOrder));
+  const revenueSource = resolveRevenueSource(activitiesRevenueSum);
   const revenueBySource: Record<RevenueSource, number> = {
     activities: activitiesRevenueSum,
-    order: orderRevenue,
     manual: revenue ? parseFloat(revenue) : 0,
   };
-  // Activities/order hints explain why the field is read-only; the manual source is
+  // The activity hint explains why the field is read-only; the manual source is
   // omitted because the field label already says what to enter.
   const revenueHintBySource: Partial<Record<RevenueSource, string>> = {
     activities: t('projects:projects.revenueFromActivities'),
-    order: t('projects:projects.revenueFromOrder'),
   };
   const displayedRevenue = revenueBySource[revenueSource];
   const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : undefined;
+
+  const parseDraftNumber = (value: string, fallback = 0) => {
+    if (value.trim() === '') return fallback;
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+  const formatDraftNumber = (value: number, minimumFractionDigits = 0) =>
+    value.toLocaleString(i18n.language, {
+      minimumFractionDigits,
+      maximumFractionDigits: 2,
+    });
 
   const managingProject = projects.find((p) => p.id === managingProjectId);
   const assignableUsers = users.filter(
@@ -693,25 +704,39 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
       ),
     },
     {
-      header: t('projects:projects.expectedEffort'),
-      id: 'expectedEffort',
-      accessorKey: 'expectedEffort',
+      header: t('projects:projects.duration'),
+      id: 'duration',
+      accessorKey: 'duration',
       disableFiltering: true,
       cell: ({ row }) => (
         <Input
           type="number"
           min="0"
-          step="1"
+          step="any"
           required
-          value={row.expectedEffort}
-          placeholder="0"
+          value={row.duration}
+          placeholder="1"
           onKeyDown={(e) => {
-            if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
+            if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
           }}
-          onChange={(e) => updateDraftTask(row._id, 'expectedEffort', e.target.value)}
+          onChange={(e) => updateDraftTask(row._id, 'duration', e.target.value)}
           className="h-8 min-w-[80px] text-xs"
         />
       ),
+    },
+    {
+      header: t('projects:projects.expectedEffort'),
+      id: 'expectedEffort',
+      accessorFn: (row) => parseDraftNumber(row.monthlyEffort) * parseDraftNumber(row.duration, 1),
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const totalEffort = parseDraftNumber(row.monthlyEffort) * parseDraftNumber(row.duration, 1);
+        return (
+          <output className="flex h-8 min-w-[90px] items-center rounded-md border border-input bg-muted/40 px-3 text-xs text-muted-foreground tabular-nums">
+            {formatDraftNumber(totalEffort)}h
+          </output>
+        );
+      },
     },
     {
       header: `${t('projects:projects.taskRevenue')} (${currency})`,
@@ -730,6 +755,21 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           className="h-8 min-w-[80px] text-xs"
         />
       ),
+    },
+    {
+      header: `${t('projects:projects.taskTotalRevenue')} (${currency})`,
+      id: 'totalRevenue',
+      accessorFn: (row) => parseDraftNumber(row.revenue) * parseDraftNumber(row.duration, 1),
+      disableFiltering: true,
+      cell: ({ row }) => {
+        const totalRevenue = parseDraftNumber(row.revenue) * parseDraftNumber(row.duration, 1);
+        return (
+          <output className="flex h-8 min-w-[110px] items-center rounded-md border border-input bg-muted/40 px-3 text-xs text-muted-foreground tabular-nums">
+            {currency}
+            {formatDraftNumber(totalRevenue, 2)}
+          </output>
+        );
+      },
     },
     {
       header: t('projects:projects.taskNotes'),
@@ -811,7 +851,11 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                             dispatch({ type: 'patchErrors', value: { clientId: '' } });
                           clearStaleClientLinks(nextOrder.clientId, 'order');
                         }}
-                        label={t('projects:projects.orderOptionalLabel')}
+                        label={
+                          <>
+                            {t('projects:projects.order')} <RequiredMark />
+                          </>
+                        }
                         placeholder={t('projects:projects.selectOrder')}
                         searchable={true}
                         buttonClassName="h-9"
@@ -954,11 +998,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
                           }
                           clearStaleClientLinks(nextOffer.clientId, 'offer');
                         }}
-                        label={
-                          <>
-                            {t('projects:projects.offerReference')} <RequiredMark />
-                          </>
-                        }
+                        label={t('projects:projects.offerOptionalLabel')}
                         placeholder={t('projects:projects.selectOffer')}
                         searchable={true}
                         buttonClassName="h-9"

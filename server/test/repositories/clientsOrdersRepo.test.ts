@@ -70,6 +70,42 @@ describe('listAll', () => {
   });
 });
 
+describe('listConfirmedProjectOptions', () => {
+  test('returns confirmed order headers only, ordered newest first', async () => {
+    exec.enqueue({
+      rows: [
+        [
+          'co-1',
+          'c-1',
+          'Acme',
+          'confirmed',
+          new Date('2026-04-01T00:00:00Z'),
+          new Date('2026-04-01T00:01:00Z'),
+        ],
+      ],
+    });
+
+    const result = await repo.listConfirmedProjectOptions(testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+
+    expect(sql).toContain('from "sales"');
+    expect(sql).toContain('where "sales"."status" = $1');
+    expect(sql).toContain('order by "sales"."created_at" desc');
+    expect(sql).not.toContain('sale_items');
+    expect(exec.calls[0].params).toEqual(['confirmed']);
+    expect(result).toEqual([
+      {
+        id: 'co-1',
+        clientId: 'c-1',
+        clientName: 'Acme',
+        status: 'confirmed',
+        createdAt: new Date('2026-04-01T00:00:00Z').getTime(),
+        updatedAt: new Date('2026-04-01T00:01:00Z').getTime(),
+      },
+    ]);
+  });
+});
+
 describe('findOfferDetails', () => {
   test('returns offer with linkedQuoteId and status', async () => {
     exec.enqueue({ rows: [['co-1', 'cq-1', 'accepted']] });
@@ -399,6 +435,23 @@ describe('existsById', () => {
   test('returns false when not found', async () => {
     exec.enqueue({ rows: [] });
     expect(await repo.existsById('co-x', testDb)).toBe(false);
+  });
+});
+
+describe('findProjectLinkById', () => {
+  test('returns the client id and status when found', async () => {
+    exec.enqueue({ rows: [['c-1', 'confirmed']] });
+    const result = await repo.findProjectLinkById('co-1', testDb);
+
+    expect(result).toEqual({ clientId: 'c-1', status: 'confirmed' });
+    expect(exec.calls[0].sql.toLowerCase()).toContain('from "sales"');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('where "sales"."id" = $1');
+    expect(exec.calls[0].params).toEqual(['co-1']);
+  });
+
+  test('returns null when not found', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await repo.findProjectLinkById('co-missing', testDb)).toBeNull();
   });
 });
 

@@ -100,7 +100,7 @@ describe('makeProjectHandlers', () => {
     expect(projects.get()).toHaveLength(1);
   });
 
-  test('add creates project without orderId when none provided', async () => {
+  test('add creates project without offerId when none provided', async () => {
     apiMocks.projectsCreate.mockImplementation((data: unknown) =>
       Promise.resolve({ id: 'proj-new', ...(data as object) }),
     );
@@ -114,13 +114,14 @@ describe('makeProjectHandlers', () => {
     await handlers.add({
       name: 'Project Beta',
       clientId: 'client-B',
-      offerId: 'of-1',
+      orderId: 'order-1',
       tipo: 'attivo',
     });
     expect(apiMocks.projectsCreate).toHaveBeenCalled();
     const callArg = apiMocks.projectsCreate.mock.calls[0][0] as Record<string, unknown>;
     expect(callArg.clientId).toBe('client-B');
-    expect(callArg.orderId).toBeUndefined();
+    expect(callArg.orderId).toBe('order-1');
+    expect(callArg.offerId).toBeNull();
     expect(projects.get()).toHaveLength(1);
   });
 
@@ -174,10 +175,15 @@ describe('makeProjectHandlers', () => {
       orderId: 'order-1',
       offerId: 'of-1',
       tipo: 'attivo',
-      draftTasks: [{ name: 'task-A' }, { name: 'task-B' }] as never,
+      draftTasks: [
+        { name: 'task-A', duration: 3 },
+        { name: 'task-B', duration: 1 },
+      ] as never,
     });
 
     expect(apiMocks.tasksCreate).toHaveBeenCalledTimes(2);
+    expect(apiMocks.tasksCreate.mock.calls[0]?.[10]).toBe(3);
+    expect(apiMocks.tasksCreate.mock.calls[1]?.[10]).toBe(1);
     expect(tasks.get()).toHaveLength(2);
   });
 
@@ -192,11 +198,38 @@ describe('makeProjectHandlers', () => {
     const originalError = console.error;
     console.error = mock(() => {}) as unknown as typeof console.error;
     try {
-      await handlers.add({ name: 'P', clientId: '', offerId: 'of-1', tipo: 'attivo' });
+      await handlers.add({
+        name: 'P',
+        clientId: '',
+        orderId: 'order-1',
+        offerId: 'of-1',
+        tipo: 'attivo',
+      });
       expect(apiMocks.projectsCreate).not.toHaveBeenCalled();
       expect(projects.get()).toEqual([]);
       expect(toastErrorMock).toHaveBeenCalledTimes(1);
       expect((toastErrorMock.mock.calls[0]?.[0] as string) ?? '').toContain('Client is required');
+    } finally {
+      console.error = originalError;
+    }
+  });
+
+  test('add surfaces error to user via toast when orderId is missing', async () => {
+    const projects = makeStubSetter<ProjectLike>([]);
+    const handlers = makeProjectHandlers({
+      setProjects: projects.setter,
+      setProjectTasks: makeStubSetter<TaskLike>([]).setter,
+      setEntries: makeStubSetter<EntryLike>([]).setter,
+    });
+
+    const originalError = console.error;
+    console.error = mock(() => {}) as unknown as typeof console.error;
+    try {
+      await handlers.add({ name: 'P', clientId: 'c1', offerId: 'of-1', tipo: 'attivo' } as never);
+      expect(apiMocks.projectsCreate).not.toHaveBeenCalled();
+      expect(projects.get()).toEqual([]);
+      expect(toastErrorMock).toHaveBeenCalledTimes(1);
+      expect((toastErrorMock.mock.calls[0]?.[0] as string) ?? '').toContain('Order is required');
     } finally {
       console.error = originalError;
     }
@@ -240,7 +273,8 @@ describe('makeProjectHandlers', () => {
       setEntries: makeStubSetter<EntryLike>([]).setter,
     });
 
-    await handlers.addTask('New', 'p1');
+    await handlers.addTask('New', 'p1', undefined, undefined, { duration: 2 } as never);
+    expect(apiMocks.tasksCreate.mock.calls[0]?.[10]).toBe(2);
     expect(tasks.get()).toHaveLength(2);
   });
 

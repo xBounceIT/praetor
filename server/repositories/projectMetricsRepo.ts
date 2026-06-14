@@ -26,9 +26,7 @@ type ProjectMetricsRow = {
   clientIsDisabled: boolean | null;
   endDate: string | null;
   manualRevenue: string | number | null;
-  orderId: string | null;
   taskRevenue: string | number | null;
-  orderTotal: string | number | null;
   costToDate: string | number | null;
   hoursToDate: string | number | null;
   billingType: BillingType | null;
@@ -48,8 +46,6 @@ const diffCalendarDays = (endDate: string | null, now: Date): number | null => {
 const resolveRevenue = (row: ProjectMetricsRow): number | null => {
   const taskRevenue = parseNullableDbNumber(row.taskRevenue) ?? 0;
   if (taskRevenue > 0) return roundCurrency(taskRevenue);
-
-  if (row.orderId) return roundCurrency(parseNullableDbNumber(row.orderTotal) ?? 0);
 
   const manualRevenue = parseNullableDbNumber(row.manualRevenue);
   return manualRevenue === null ? null : roundCurrency(manualRevenue);
@@ -82,16 +78,10 @@ export const listForProjects = async (
   const rows = await executeRows<ProjectMetricsRow>(
     exec,
     sql`
-      WITH target_orders AS (
-        SELECT p.order_id AS id
-        FROM projects p
-        WHERE p.id = ANY(${sql.param(uniqueProjectIds)}::text[])
-          AND p.order_id IS NOT NULL
-      ),
-      task_metrics AS (
+      WITH task_metrics AS (
         SELECT
           t.project_id,
-          COALESCE(SUM(COALESCE(t.revenue, 0)), 0) AS task_revenue
+          COALESCE(SUM(COALESCE(t.revenue, 0) * COALESCE(t.duration, 1)), 0) AS task_revenue
         FROM tasks t
         WHERE t.project_id = ANY(${sql.param(uniqueProjectIds)}::text[])
         GROUP BY t.project_id
@@ -104,36 +94,6 @@ export const listForProjects = async (
         FROM time_entries te
         WHERE te.project_id = ANY(${sql.param(uniqueProjectIds)}::text[])
         GROUP BY te.project_id
-      ),
-      order_subtotals AS (
-        SELECT
-          si.sale_id,
-          COALESCE(SUM(
-            COALESCE(si.quantity, 0)
-            * COALESCE(si.unit_price, 0)
-            * (1 - COALESCE(si.discount, 0) / 100)
-          ), 0) AS subtotal
-        FROM sale_items si
-        WHERE si.sale_id IN (SELECT id FROM target_orders)
-        GROUP BY si.sale_id
-      ),
-      order_totals AS (
-        SELECT
-          s.id,
-          ROUND(
-            (
-              COALESCE(os.subtotal, 0)
-              - CASE
-                  WHEN s.discount_type = 'currency'
-                    THEN LEAST(GREATEST(COALESCE(s.discount, 0), 0), COALESCE(os.subtotal, 0))
-                  ELSE COALESCE(os.subtotal, 0) * (COALESCE(s.discount, 0) / 100)
-                END
-            )::numeric,
-            2
-          ) AS order_total
-        FROM sales s
-        LEFT JOIN order_subtotals os ON os.sale_id = s.id
-        WHERE s.id IN (SELECT id FROM target_orders)
       )
       SELECT
         p.id AS "projectId",
@@ -142,9 +102,7 @@ export const listForProjects = async (
         c.is_disabled AS "clientIsDisabled",
         p.end_date::text AS "endDate",
         p.revenue AS "manualRevenue",
-        p.order_id AS "orderId",
         tm.task_revenue AS "taskRevenue",
-        ot.order_total AS "orderTotal",
         em.cost_to_date AS "costToDate",
         em.hours_to_date AS "hoursToDate",
         CASE
@@ -165,7 +123,6 @@ export const listForProjects = async (
       INNER JOIN clients c ON c.id = p.client_id
       LEFT JOIN task_metrics tm ON tm.project_id = p.id
       LEFT JOIN entry_metrics em ON em.project_id = p.id
-      LEFT JOIN order_totals ot ON ot.id = p.order_id
       WHERE p.id = ANY(${sql.param(uniqueProjectIds)}::text[])
     `,
   );

@@ -29,9 +29,11 @@ export type Task = {
   recurrenceStart: string | undefined;
   recurrenceEnd: string | undefined;
   recurrenceDuration: number;
-  expectedEffort: number | undefined;
+  expectedEffort: number;
   monthlyEffort: number | undefined;
+  duration: number;
   revenue: number | undefined;
+  totalRevenue: number;
   notes: string | undefined;
   isDisabled: boolean;
   createdAt: number;
@@ -39,26 +41,36 @@ export type Task = {
   billingFrequency: BillingFrequency;
 };
 
-const mapRow = (row: typeof tasks.$inferSelect): Task => ({
-  id: row.id,
-  name: row.name,
-  projectId: row.projectId,
-  description: row.description,
-  isRecurring: row.isRecurring ?? false,
-  recurrencePattern: row.recurrencePattern,
-  recurrenceStart:
-    normalizeNullableDateOnly(row.recurrenceStart, 'task.recurrenceStart') ?? undefined,
-  recurrenceEnd: normalizeNullableDateOnly(row.recurrenceEnd, 'task.recurrenceEnd') ?? undefined,
-  recurrenceDuration: parseDbNumber(row.recurrenceDuration, 0),
-  expectedEffort: parseDbNumber(row.expectedEffort, undefined),
-  monthlyEffort: parseDbNumber(row.monthlyEffort, undefined),
-  revenue: parseDbNumber(row.revenue, undefined),
-  notes: row.notes ?? undefined,
-  isDisabled: row.isDisabled ?? false,
-  createdAt: row.createdAt?.getTime() ?? 0,
-  billingType: row.billingType ?? DEFAULT_BILLING_TYPE,
-  billingFrequency: row.billingFrequency ?? DEFAULT_BILLING_FREQUENCY,
-});
+const roundToTwo = (value: number): number => Math.round(value * 100) / 100;
+
+const mapRow = (row: typeof tasks.$inferSelect): Task => {
+  const monthlyEffort = parseDbNumber(row.monthlyEffort, undefined);
+  const duration = parseDbNumber(row.duration, 1);
+  const revenue = parseDbNumber(row.revenue, undefined);
+
+  return {
+    id: row.id,
+    name: row.name,
+    projectId: row.projectId,
+    description: row.description,
+    isRecurring: row.isRecurring ?? false,
+    recurrencePattern: row.recurrencePattern,
+    recurrenceStart:
+      normalizeNullableDateOnly(row.recurrenceStart, 'task.recurrenceStart') ?? undefined,
+    recurrenceEnd: normalizeNullableDateOnly(row.recurrenceEnd, 'task.recurrenceEnd') ?? undefined,
+    recurrenceDuration: parseDbNumber(row.recurrenceDuration, 0),
+    expectedEffort: roundToTwo((monthlyEffort ?? 0) * duration),
+    monthlyEffort,
+    duration,
+    revenue,
+    totalRevenue: roundToTwo((revenue ?? 0) * duration),
+    notes: row.notes ?? undefined,
+    isDisabled: row.isDisabled ?? false,
+    createdAt: row.createdAt?.getTime() ?? 0,
+    billingType: row.billingType ?? DEFAULT_BILLING_TYPE,
+    billingFrequency: row.billingFrequency ?? DEFAULT_BILLING_FREQUENCY,
+  };
+};
 
 export const listAll = async (exec: DbExecutor = db): Promise<Task[]> => {
   const rows = await exec.select().from(tasks).orderBy(tasks.name);
@@ -77,6 +89,7 @@ const taskSelectFields = {
   recurrenceDuration: tasks.recurrenceDuration,
   expectedEffort: tasks.expectedEffort,
   monthlyEffort: tasks.monthlyEffort,
+  duration: tasks.duration,
   revenue: tasks.revenue,
   notes: tasks.notes,
   isDisabled: tasks.isDisabled,
@@ -119,8 +132,8 @@ export type NewTask = {
   recurrencePattern: string | null;
   recurrenceStart: string | null;
   recurrenceDuration: number;
-  expectedEffort: number;
   monthlyEffort: number;
+  duration: number;
   revenue: number;
   notes: string | null;
   isDisabled: boolean;
@@ -141,8 +154,9 @@ export const create = async (task: NewTask, exec: DbExecutor = db): Promise<Task
         recurrencePattern: task.recurrencePattern,
         recurrenceStart: task.recurrenceStart,
         recurrenceDuration: numericForDb(task.recurrenceDuration),
-        expectedEffort: numericForDb(task.expectedEffort),
+        expectedEffort: numericForDb(roundToTwo(task.monthlyEffort * task.duration)),
         monthlyEffort: numericForDb(task.monthlyEffort),
+        duration: numericForDb(task.duration),
         revenue: numericForDb(task.revenue),
         notes: task.notes,
         isDisabled: task.isDisabled,
@@ -166,8 +180,8 @@ export type TaskUpdate = {
   recurrenceEnd?: string | null;
   recurrenceDuration?: number | null;
   isDisabled?: boolean;
-  expectedEffort?: number | null;
   monthlyEffort?: number | null;
+  duration?: number | null;
   revenue?: number | null;
   notes?: string | null;
   billingType?: StoredBillingType | null;
@@ -191,8 +205,8 @@ export const update = async (
   if (patch.recurrenceDuration !== undefined)
     set.recurrenceDuration = numericForDb(patch.recurrenceDuration);
   if (patch.isDisabled !== undefined) set.isDisabled = patch.isDisabled;
-  if (patch.expectedEffort !== undefined) set.expectedEffort = numericForDb(patch.expectedEffort);
   if (patch.monthlyEffort !== undefined) set.monthlyEffort = numericForDb(patch.monthlyEffort);
+  if (patch.duration !== undefined) set.duration = numericForDb(patch.duration);
   if (patch.revenue !== undefined) set.revenue = numericForDb(patch.revenue);
   if (patch.notes !== undefined) set.notes = patch.notes;
   // billing_type and billing_frequency are independent columns now, so each is set on its

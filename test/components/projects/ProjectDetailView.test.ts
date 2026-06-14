@@ -6,6 +6,12 @@ const readSource = async () => {
   ).text();
 };
 
+const readProjectTasksTableSource = async () => {
+  return Bun.file(
+    new URL('../../../components/projects/ProjectTasksTable.tsx', import.meta.url),
+  ).text();
+};
+
 describe('ProjectDetailView wiring', () => {
   test('declares the expected ProjectDetailViewProps surface', async () => {
     const source = await readSource();
@@ -29,6 +35,20 @@ describe('ProjectDetailView wiring', () => {
     ]) {
       expect(source).toContain(field);
     }
+  });
+
+  test('inline tasks table edits duration and renders derived totals as non-interactive output', async () => {
+    const source = await readProjectTasksTableSource();
+    expect(source).toContain("header: t('projects:projects.duration')");
+    expect(source).toContain(
+      "onChange={(e) => setTaskFieldValue(row.id, 'duration', e.target.value)}",
+    );
+    expect(source).not.toContain("commitTaskField(row, 'expectedEffort'");
+    expect(source).toContain(
+      "parseTaskNumber(row, 'monthlyEffort', 0) * parseTaskNumber(row, 'duration', 1)",
+    );
+    expect(source).toContain('projects:projects.taskTotalRevenue');
+    expect(source).toContain('<output className="flex h-8');
   });
 
   test('fetches time entries server-side filtered by projectId for chart aggregations', async () => {
@@ -125,6 +145,30 @@ describe('ProjectDetailView wiring', () => {
     expect(source).toContain("t('projects:projects.tipoConfirmHint')");
     // Picking a value (or any other edit) raises the save bar via the baseline comparison.
     expect(source).toContain('tipo !== baselineTipo');
+  });
+
+  test('requires a linked client order and keeps offer optional on save', async () => {
+    const source = await readSource();
+    expect(source).toContain("const [orderId, setOrderId] = useState(project.orderId ?? '')");
+    expect(source).toContain('id="detail-order"');
+    expect(source).toContain(
+      "if (!orderId) newErrors.orderId = t('projects:projects.orderRequired')",
+    );
+    expect(source).toContain("orderId !== (project.orderId ?? '')");
+    expect(source).toContain('orderId,');
+    expect(source).toContain('offerId: offerId || null,');
+    expect(source).toContain("label={t('projects:projects.offerOptionalLabel')}");
+    expect(source).toContain("{ id: '', name: t('projects:projects.noOfferLinked') }");
+  });
+
+  test('project revenue no longer falls back to the linked order total', async () => {
+    const source = await readSource();
+    expect(source).toContain('const resolveRevenueSource = (');
+    expect(source).toContain("if (activitiesSum > 0) return 'activities';");
+    expect(source).not.toContain("return 'order';");
+    expect(source).not.toContain('calculatePricingTotals');
+    const removedOrderHint = "order: t('projects:projects.revenueFrom" + "Order')";
+    expect(source).not.toContain(removedOrderHint);
   });
 
   test('team-size KPI and assignment fetch are gated on canManageAssignments', async () => {

@@ -29,6 +29,7 @@ export type KnownPermissionResource =
   | 'accounting.supplier_invoices'
   | 'projects.manage'
   | 'projects.manage_all'
+  | 'projects.resales'
   | 'projects.tasks'
   | 'projects.tasks_all'
   | 'projects.rules'
@@ -264,7 +265,7 @@ export interface Project {
   description?: string;
   isDisabled?: boolean;
   createdAt?: number;
-  orderId?: string;
+  orderId?: string | null;
   offerId?: string | null;
   startDate?: string | null;
   endDate?: string | null;
@@ -275,6 +276,62 @@ export interface Project {
   // False until a user explicitly confirms `tipo`. Rollout-defaulted projects start false so the
   // edit form can force a deliberate first choice; projects created in-app are true (issue #784).
   tipoConfirmed?: boolean;
+}
+
+export const RESALE_BILLING_FREQUENCIES = ['monthly', 'quarterly', 'annual', 'one_time'] as const;
+export type ResaleBillingFrequency = (typeof RESALE_BILLING_FREQUENCIES)[number];
+
+export interface ResaleCategory {
+  id: string;
+  name: string;
+  createdAt?: number | null;
+  updatedAt?: number | null;
+  activityCount?: number;
+  hasLinkedActivities?: boolean;
+}
+
+export interface ResaleActivity {
+  id: string;
+  resaleId: string;
+  name: string;
+  billingFrequency: ResaleBillingFrequency;
+  categoryId: string;
+  categoryName: string;
+  cost: number;
+  revenue: number;
+  released: boolean;
+  dueDate: string | null;
+  notes: string | null;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
+export interface Resale {
+  id: string;
+  clientOrderId: string;
+  supplierOrderId: string;
+  clientName: string;
+  supplierName: string;
+  supplierOrderCost: number;
+  activityCostTotal: number;
+  resaleRevenue: number;
+  costVariance: number;
+  startDate: string | null;
+  dueDate: string | null;
+  notes: string | null;
+  createdAt: number;
+  updatedAt: number;
+  activities: ResaleActivity[];
+}
+
+export interface ResaleOrderOption {
+  clientOrderId: string;
+  clientName: string;
+  supplierOrders: Array<{
+    id: string;
+    supplierName: string;
+    total: number;
+  }>;
 }
 
 export type ProjectRuleActionType = 'notify';
@@ -337,7 +394,9 @@ export interface ProjectTask {
   recurrenceDuration?: number;
   expectedEffort?: number;
   monthlyEffort?: number;
+  duration?: number;
   revenue?: number;
+  totalRevenue?: number;
   notes?: string;
   isDisabled?: boolean;
   createdAt?: number;
@@ -547,6 +606,8 @@ export interface Quote {
   // Effective status from the server: the stored status with the derived `expired` overlay (#779).
   effectiveStatus?: 'draft' | 'sent' | 'offer' | 'accepted' | 'denied' | 'expired';
   expirationDate: string; // YYYY-MM-DD date-only string
+  communicationChannelId?: string;
+  communicationChannelName?: string;
   isExpired?: boolean;
   linkedOfferId?: string;
   // 1-to-1 link to a supplier quote, set from the client-quote form (#779). `null`/absent = unlinked.
@@ -570,7 +631,12 @@ export interface QuoteVersionSnapshot {
     | 'effectiveStatus'
     | 'linkedSupplierQuoteId'
     | 'linkedSupplierQuoteExpired'
-  >;
+    | 'communicationChannelId'
+    | 'communicationChannelName'
+  > & {
+    communicationChannelId?: string;
+    communicationChannelName?: string;
+  };
   items: QuoteItem[];
 }
 
@@ -825,6 +891,7 @@ export type View =
   // Projects module
   | 'projects/manage'
   | 'projects/detail'
+  | 'projects/resales'
   | 'projects/tasks'
   // HR module
   | 'hr/internal'
@@ -995,6 +1062,8 @@ export interface SupplierQuote {
   isStatusSynced?: boolean;
   linkedClientQuoteId?: string | null;
   expirationDate: string;
+  communicationChannelId?: string;
+  communicationChannelName?: string;
   linkedOrderId?: string;
   notes?: string;
   createdAt: number;
@@ -1005,7 +1074,18 @@ export type SupplierQuoteVersionReason = 'update' | 'restore';
 
 export interface SupplierQuoteVersionSnapshot {
   schemaVersion: 1;
-  quote: Omit<SupplierQuote, 'items' | 'linkedOrderId' | 'isStatusSynced' | 'linkedClientQuoteId'>;
+  quote: Omit<
+    SupplierQuote,
+    | 'items'
+    | 'linkedOrderId'
+    | 'isStatusSynced'
+    | 'linkedClientQuoteId'
+    | 'communicationChannelId'
+    | 'communicationChannelName'
+  > & {
+    communicationChannelId?: string;
+    communicationChannelName?: string;
+  };
   items: SupplierQuoteItem[];
 }
 
@@ -1148,6 +1228,9 @@ export const AUDIT_ENTITY_TYPES = [
   'product_type',
   'project',
   'project_rule',
+  'resale',
+  'resale_activity',
+  'resale_category',
   'reports_ai',
   'reports_ai_message',
   'reports_ai_session',
