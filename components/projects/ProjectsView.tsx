@@ -1,3 +1,4 @@
+import { Folder, ListChecks } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +11,7 @@ import {
   RequiredMark,
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBillingFrequencyOptions, useBillingTypeOptions } from '@/hooks/useBillingOptions';
@@ -52,6 +54,7 @@ import StatusBadge from '../shared/StatusBadge';
 import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import UserAssignmentModal from '../shared/UserAssignmentModal';
 import type { RecurringConfig } from './TaskFormModal';
+import TasksView from './TasksView';
 
 const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
 
@@ -117,6 +120,8 @@ export type AddProjectFormInput = {
   tipo: ProjectTipo;
 };
 
+export type ProjectsViewTab = 'commissions' | 'tasks';
+
 export interface ProjectsViewProps {
   projects: Project[];
   clients: Client[];
@@ -144,6 +149,8 @@ export interface ProjectsViewProps {
   onDeleteTask: (id: string) => void | Promise<void>;
   onViewOrder?: (orderId: string) => void;
   onNavigateToProject?: (projectId: string) => void;
+  activeTab?: ProjectsViewTab;
+  onTabChange?: (tab: ProjectsViewTab) => void;
 }
 
 interface ProjectsViewState {
@@ -291,9 +298,17 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   onAddProject,
   onUpdateProject,
   onDeleteProject,
+  onAddTask,
+  onUpdateTask,
+  onDeleteTask,
+  onViewOrder,
   onNavigateToProject,
+  activeTab,
+  onTabChange,
 }) => {
   const { t, i18n } = useTranslation(['projects', 'common', 'form']);
+  const canViewCommissions = hasScopedActionPermission(permissions, 'projects.manage', 'view');
+  const canViewTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'view');
   const canCreateProjects = hasScopedActionPermission(permissions, 'projects.manage', 'create');
   const canUpdateProjects = hasScopedActionPermission(permissions, 'projects.manage', 'update');
   const canDeleteProjects = hasScopedActionPermission(permissions, 'projects.manage', 'delete');
@@ -323,6 +338,10 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     draftTasks,
   } = state;
 
+  const clientById = useMemo(
+    () => new Map(clients.map((client) => [client.id, client])),
+    [clients],
+  );
   const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
   const projectIdsKey = useMemo(() => projectIds.join('\u0000'), [projectIds]);
   const fetchAllHoursGenRef = useRef(0);
@@ -336,7 +355,21 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setAllProjectHours(projectIds.length === 0 ? {} : null);
   }
 
+  const [uncontrolledTab, setUncontrolledTab] = useState<ProjectsViewTab>(
+    canViewCommissions ? 'commissions' : 'tasks',
+  );
+  const canViewTab = (tab: ProjectsViewTab) =>
+    tab === 'commissions' ? canViewCommissions : canViewTasks;
+  const requestedTab = activeTab ?? uncontrolledTab;
+  const selectedTab: ProjectsViewTab = canViewTab(requestedTab)
+    ? requestedTab
+    : canViewCommissions
+      ? 'commissions'
+      : 'tasks';
+  const shouldLoadProjectHours = selectedTab === 'commissions' && canViewCommissions;
+
   useEffect(() => {
+    if (!shouldLoadProjectHours) return;
     if (!projectIdsKey) return;
     const requestProjectIds = projectIdsKey.split('\u0000');
     const gen = ++fetchAllHoursGenRef.current;
@@ -359,7 +392,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     return () => {
       abortController.abort();
     };
-  }, [projectIdsKey]);
+  }, [projectIdsKey, shouldLoadProjectHours]);
 
   const projectMedianProgress = useMemo(() => {
     if (!allProjectHours) return {};
@@ -633,6 +666,13 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const assignableUsers = users.filter(
     (u) => !u.hasTopManagerRole && !u.isAdminOnly && !u.isDisabled,
   );
+  const handleTabChange = (value: string) => {
+    if (value !== 'commissions' && value !== 'tasks') return;
+    const nextTab = value as ProjectsViewTab;
+    if (!canViewTab(nextTab)) return;
+    setUncontrolledTab(nextTab);
+    onTabChange?.(nextTab);
+  };
 
   const draftTaskColumns: Column<DraftTask>[] = [
     {
@@ -811,6 +851,251 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
           </Tooltip>
         </div>
       ),
+    },
+  ];
+
+  const projectColumns: Column<Project>[] = [
+    {
+      header: t('projects:projects.tableHeaders.client'),
+      id: 'client',
+      accessorFn: (row) => clientById.get(row.clientId)?.name || t('projects:projects.unknown'),
+      cell: ({ row }) => {
+        const client = clientById.get(row.clientId);
+        const isClientDisabled = client?.isDisabled || false;
+        return client ? (
+          <span
+            className={`text-sm font-bold ${
+              isClientDisabled
+                ? 'text-amber-500'
+                : row.isDisabled
+                  ? 'text-zinc-400'
+                  : 'text-zinc-700'
+            }`}
+          >
+            {client.name}
+            {isClientDisabled && ` ${t('projects:projects.disabledLabel')}`}
+          </span>
+        ) : (
+          <span className="text-xs text-zinc-400 italic">-</span>
+        );
+      },
+    },
+    {
+      header: t('projects:projects.tableHeaders.insertDate'),
+      id: 'createdAt',
+      accessorFn: (row) => row.createdAt ?? 0,
+      cell: ({ row }) => (
+        <span className="text-xs text-slate-500 whitespace-nowrap">
+          {row.createdAt ? formatInsertDate(row.createdAt, i18n.language) : '—'}
+        </span>
+      ),
+    },
+    {
+      header: t('projects:projects.tableHeaders.projectName'),
+      accessorKey: 'name',
+      cell: ({ row }) => (
+        <span
+          className={`text-sm font-bold ${
+            row.isDisabled ? 'text-zinc-600 line-through decoration-zinc-300' : 'text-zinc-800'
+          }`}
+        >
+          {row.name}
+        </span>
+      ),
+    },
+    {
+      header: t('projects:projects.tableHeaders.description'),
+      accessorKey: 'description',
+      cell: ({ row }) => (
+        <p
+          className={`text-xs max-w-md italic line-clamp-1 ${
+            row.isDisabled ? 'text-zinc-400' : 'text-zinc-500'
+          }`}
+        >
+          {row.description || t('projects:projects.noDescriptionProvided')}
+        </p>
+      ),
+    },
+    {
+      header: t('projects:projects.tipo'),
+      id: 'tipo',
+      accessorFn: (row) => formatTipo(row.tipo),
+      cell: ({ row }) => (
+        <span className="text-xs font-bold text-zinc-600">{formatTipo(row.tipo)}</span>
+      ),
+    },
+    {
+      header: t('projects:projects.billingType'),
+      id: 'billingType',
+      accessorFn: (row) => formatBillingType(getDerivedProjectBillingType(row)),
+      cell: ({ row }) => (
+        <span className="text-xs font-bold text-zinc-600">
+          {formatBillingType(getDerivedProjectBillingType(row))}
+        </span>
+      ),
+    },
+    {
+      header: t('projects:projects.billingFrequency'),
+      id: 'billingFrequency',
+      accessorFn: (row) => formatBillingFrequency(row.billingFrequency),
+      cell: ({ row }) => (
+        <span className="text-xs text-zinc-500">
+          {getDerivedProjectBillingType(row) === 'mixed'
+            ? '-'
+            : formatBillingFrequency(row.billingFrequency)}
+        </span>
+      ),
+    },
+    {
+      header: t('projects:projects.tableHeaders.progress'),
+      id: 'progress',
+      disableFiltering: true,
+      disableSorting: true,
+      cell: ({ row }) => {
+        if (allProjectHours === null) {
+          return (
+            <span className="text-zinc-400 text-xs">
+              <i className="fa-solid fa-spinner fa-spin"></i>
+            </span>
+          );
+        }
+        const median = projectMedianProgress[row.id];
+        if (median === null) return <span className="text-zinc-400 text-xs">-</span>;
+        const pct = Math.round(median);
+        const overBudget = median > 100;
+        return (
+          <div className="flex items-center gap-2">
+            <div className="w-16 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${overBudget ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                style={{ width: `${Math.min(pct, 100)}%` }}
+              />
+            </div>
+            <span
+              className={`text-xs font-bold tabular-nums ${overBudget ? 'text-red-600' : 'text-zinc-600'}`}
+            >
+              {pct}%
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      header: t('projects:projects.tableHeaders.status'),
+      id: 'status',
+      accessorFn: (row) => {
+        const client = clientById.get(row.clientId);
+        if (row.isDisabled) return t('projects:projects.statusDisabled');
+        if (client?.isDisabled) return t('projects:projects.statusInheritedDisable');
+        return t('projects:projects.statusActive');
+      },
+      cell: ({ row }) => {
+        const client = clientById.get(row.clientId);
+        const isClientDisabled = client?.isDisabled || false;
+        if (row.isDisabled) {
+          return <StatusBadge type="disabled" label={t('projects:projects.statusDisabled')} />;
+        }
+        if (isClientDisabled) {
+          return (
+            <StatusBadge type="inherited" label={t('projects:projects.statusInheritedDisable')} />
+          );
+        }
+        return <StatusBadge type="active" label={t('projects:projects.statusActive')} />;
+      },
+    },
+    {
+      header: t('projects:projects.tableHeaders.actions'),
+      id: 'actions',
+      align: 'right',
+      disableSorting: true,
+      disableFiltering: true,
+      cell: ({ row }) => {
+        if (!canUpdateProjects && !canDeleteProjects && !canManageAssignments) return null;
+        return (
+          <div className="flex items-center justify-end gap-2">
+            {canManageAssignments && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openAssignments(row.id);
+                      }}
+                      aria-label={t('projects:projects.manageMembers')}
+                      className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
+                    >
+                      <i className="fa-solid fa-users"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{t('projects:projects.manageMembers')}</TooltipContent>
+              </Tooltip>
+            )}
+            {canUpdateProjects &&
+              (row.isDisabled ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUpdateProject(row.id, { isDisabled: false });
+                        }}
+                        aria-label={t('projects:projects.enableProject')}
+                        className="p-2 text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
+                      >
+                        <i className="fa-solid fa-rotate-left"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('projects:projects.enableProject')}</TooltipContent>
+                </Tooltip>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUpdateProject(row.id, { isDisabled: true });
+                        }}
+                        aria-label={t('projects:projects.disableProject')}
+                        className="p-2 text-amber-700 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                      >
+                        <i className="fa-solid fa-ban"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('projects:projects.disableProject')}</TooltipContent>
+                </Tooltip>
+              ))}
+            {canDeleteProjects && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        promptDelete(row);
+                      }}
+                      aria-label={t('common:buttons.delete')}
+                      className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                    >
+                      <i className="fa-solid fa-trash-can"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -1130,289 +1415,79 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         roles={roles}
         loadAssignedUserIds={(signal) => projectsApi.getUsers(managingProjectId as string, signal)}
         saveAssignedUserIds={(ids) => projectsApi.updateUsers(managingProjectId as string, ids)}
-        entityLabel={t('common:labels.project')}
+        entityLabel={t('projects:projects.entityLabel')}
         entityName={managingProject?.name || ''}
         disabled={!canManageAssignments}
       />
 
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className="text-2xl font-semibold text-zinc-800">{t('projects:projects.title')}</h2>
-            <p className="text-zinc-500 text-sm">{t('projects:projects.subtitle')}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            {canCreateProjects && (
-              <HeaderAddButton onClick={openAddModal}>
-                {t('projects:projects.addProject')}
-              </HeaderAddButton>
-            )}
-          </div>
-        </div>
-      </div>
+      <Tabs value={selectedTab} onValueChange={handleTabChange} className="space-y-6">
+        <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b px-0">
+          {canViewCommissions && (
+            <TabsTrigger value="commissions" className="flex-none rounded-none pb-3">
+              <Folder className="size-4" aria-hidden="true" />
+              {t('projects:tabs.commissions')}
+            </TabsTrigger>
+          )}
+          {canViewTasks && (
+            <TabsTrigger value="tasks" className="flex-none rounded-none pb-3">
+              <ListChecks className="size-4" aria-hidden="true" />
+              {t('projects:tabs.tasks')}
+            </TabsTrigger>
+          )}
+        </TabsList>
 
-      <StandardTable<Project>
-        title={t('projects:projects.projectsDirectory')}
-        viewKey="projects.directory"
-        defaultRowsPerPage={5}
-        data={projects}
-        onRowClick={onNavigateToProject ? (row) => onNavigateToProject(row.id) : undefined}
-        rowClassName={(row) => (row.isDisabled ? 'opacity-70 grayscale hover:grayscale-0' : '')}
-        columns={
-          [
-            {
-              header: t('projects:projects.tableHeaders.client'),
-              id: 'client',
-              accessorFn: (row) =>
-                clients.find((c) => c.id === row.clientId)?.name || t('projects:projects.unknown'),
-              cell: ({ row }) => {
-                const client = clients.find((c: Client) => c.id === row.clientId);
-                const isClientDisabled = client?.isDisabled || false;
-                return client ? (
-                  <span
-                    className={`text-sm font-bold ${
-                      isClientDisabled
-                        ? 'text-amber-500'
-                        : row.isDisabled
-                          ? 'text-zinc-400'
-                          : 'text-zinc-700'
-                    }`}
-                  >
-                    {client.name}
-                    {isClientDisabled && ` ${t('projects:projects.disabledLabel')}`}
-                  </span>
-                ) : (
-                  <span className="text-xs text-zinc-400 italic">-</span>
-                );
-              },
-            },
-            {
-              header: t('projects:projects.tableHeaders.insertDate'),
-              id: 'createdAt',
-              accessorFn: (row) => row.createdAt ?? 0,
-              cell: ({ row }) => (
-                <span className="text-xs text-slate-500 whitespace-nowrap">
-                  {row.createdAt ? formatInsertDate(row.createdAt, i18n.language) : '—'}
-                </span>
-              ),
-            },
-            {
-              header: t('projects:projects.tableHeaders.projectName'),
-              accessorKey: 'name',
-              cell: ({ row }) => (
-                <span
-                  className={`text-sm font-bold ${
-                    row.isDisabled
-                      ? 'text-zinc-600 line-through decoration-zinc-300'
-                      : 'text-zinc-800'
-                  }`}
-                >
-                  {row.name}
-                </span>
-              ),
-            },
-            {
-              header: t('projects:projects.tableHeaders.description'),
-              accessorKey: 'description',
-              cell: ({ row }) => (
-                <p
-                  className={`text-xs max-w-md italic line-clamp-1 ${
-                    row.isDisabled ? 'text-zinc-400' : 'text-zinc-500'
-                  }`}
-                >
-                  {row.description || t('projects:projects.noDescriptionProvided')}
-                </p>
-              ),
-            },
-            {
-              header: t('projects:projects.tipo'),
-              id: 'tipo',
-              accessorFn: (row) => formatTipo(row.tipo),
-              cell: ({ row }) => (
-                <span className="text-xs font-bold text-zinc-600">{formatTipo(row.tipo)}</span>
-              ),
-            },
-            {
-              header: t('projects:projects.billingType'),
-              id: 'billingType',
-              accessorFn: (row) => formatBillingType(getDerivedProjectBillingType(row)),
-              cell: ({ row }) => (
-                <span className="text-xs font-bold text-zinc-600">
-                  {formatBillingType(getDerivedProjectBillingType(row))}
-                </span>
-              ),
-            },
-            {
-              header: t('projects:projects.billingFrequency'),
-              id: 'billingFrequency',
-              accessorFn: (row) => formatBillingFrequency(row.billingFrequency),
-              cell: ({ row }) => (
-                <span className="text-xs text-zinc-500">
-                  {getDerivedProjectBillingType(row) === 'mixed'
-                    ? '-'
-                    : formatBillingFrequency(row.billingFrequency)}
-                </span>
-              ),
-            },
-            {
-              header: t('projects:projects.tableHeaders.progress'),
-              id: 'progress',
-              disableFiltering: true,
-              disableSorting: true,
-              cell: ({ row }) => {
-                if (allProjectHours === null) {
-                  return (
-                    <span className="text-zinc-400 text-xs">
-                      <i className="fa-solid fa-spinner fa-spin"></i>
-                    </span>
-                  );
-                }
-                const median = projectMedianProgress[row.id];
-                if (median === null) return <span className="text-zinc-400 text-xs">-</span>;
-                const pct = Math.round(median);
-                const overBudget = median > 100;
-                return (
-                  <div className="flex items-center gap-2">
-                    <div className="w-16 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${overBudget ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                        style={{ width: `${Math.min(pct, 100)}%` }}
-                      />
-                    </div>
-                    <span
-                      className={`text-xs font-bold tabular-nums ${overBudget ? 'text-red-600' : 'text-zinc-600'}`}
-                    >
-                      {pct}%
-                    </span>
-                  </div>
-                );
-              },
-            },
-            {
-              header: t('projects:projects.tableHeaders.status'),
-              id: 'status',
-              accessorFn: (row) => {
-                const client = clients.find((c: Client) => c.id === row.clientId);
-                if (row.isDisabled) return t('projects:projects.statusDisabled');
-                if (client?.isDisabled) return t('projects:projects.statusInheritedDisable');
-                return t('projects:projects.statusActive');
-              },
-              cell: ({ row }) => {
-                const client = clients.find((c: Client) => c.id === row.clientId);
-                const isClientDisabled = client?.isDisabled || false;
-                if (row.isDisabled) {
-                  return (
-                    <StatusBadge type="disabled" label={t('projects:projects.statusDisabled')} />
-                  );
-                }
-                if (isClientDisabled) {
-                  return (
-                    <StatusBadge
-                      type="inherited"
-                      label={t('projects:projects.statusInheritedDisable')}
-                    />
-                  );
-                }
-                return <StatusBadge type="active" label={t('projects:projects.statusActive')} />;
-              },
-            },
-            {
-              header: t('projects:projects.tableHeaders.actions'),
-              id: 'actions',
-              align: 'right',
-              disableSorting: true,
-              disableFiltering: true,
-              cell: ({ row }) => {
-                if (!canUpdateProjects && !canDeleteProjects && !canManageAssignments) return null;
-                return (
-                  <div className="flex items-center justify-end gap-2">
-                    {canManageAssignments && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="inline-flex">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openAssignments(row.id);
-                              }}
-                              aria-label={t('projects:projects.manageMembers')}
-                              className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
-                            >
-                              <i className="fa-solid fa-users"></i>
-                            </button>
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent>{t('projects:projects.manageMembers')}</TooltipContent>
-                      </Tooltip>
-                    )}
-                    {canUpdateProjects &&
-                      (row.isDisabled ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onUpdateProject(row.id, { isDisabled: false });
-                                }}
-                                aria-label={t('projects:projects.enableProject')}
-                                className="p-2 text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
-                              >
-                                <i className="fa-solid fa-rotate-left"></i>
-                              </button>
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>{t('projects:projects.enableProject')}</TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onUpdateProject(row.id, { isDisabled: true });
-                                }}
-                                aria-label={t('projects:projects.disableProject')}
-                                className="p-2 text-amber-700 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
-                              >
-                                <i className="fa-solid fa-ban"></i>
-                              </button>
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>{t('projects:projects.disableProject')}</TooltipContent>
-                        </Tooltip>
-                      ))}
-                    {canDeleteProjects && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="inline-flex">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                promptDelete(row);
-                              }}
-                              aria-label={t('common:buttons.delete')}
-                              className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                            >
-                              <i className="fa-solid fa-trash-can"></i>
-                            </button>
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
-                      </Tooltip>
-                    )}
-                  </div>
-                );
-              },
-            },
-          ] as Column<Project>[]
-        }
-      />
+        {canViewCommissions && (
+          <TabsContent value="commissions" className="mt-0 space-y-8">
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h2 className="text-2xl font-semibold text-zinc-800">
+                    {t('projects:projects.title')}
+                  </h2>
+                  <p className="text-zinc-500 text-sm">{t('projects:projects.subtitle')}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {canCreateProjects && (
+                    <HeaderAddButton onClick={openAddModal}>
+                      {t('projects:projects.addProject')}
+                    </HeaderAddButton>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <StandardTable<Project>
+              title={t('projects:projects.projectsDirectory')}
+              viewKey="projects.directory"
+              defaultRowsPerPage={5}
+              data={projects}
+              onRowClick={onNavigateToProject ? (row) => onNavigateToProject(row.id) : undefined}
+              rowClassName={(row) =>
+                row.isDisabled ? 'opacity-70 grayscale hover:grayscale-0' : ''
+              }
+              columns={projectColumns}
+            />
+          </TabsContent>
+        )}
+
+        {canViewTasks && (
+          <TabsContent value="tasks" className="mt-0">
+            <TasksView
+              tasks={tasks}
+              projects={projects}
+              clients={clients}
+              permissions={permissions}
+              users={users}
+              roles={roles}
+              currency={currency}
+              onAddTask={onAddTask}
+              onUpdateTask={onUpdateTask}
+              onDeleteTask={onDeleteTask}
+              onViewOrder={onViewOrder}
+            />
+          </TabsContent>
+        )}
+      </Tabs>
     </div>
   );
 };

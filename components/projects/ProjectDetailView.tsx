@@ -2116,7 +2116,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           await projectsApi.updateUsers(project.id, ids);
           setAssignedUserIds(ids);
         }}
-        entityLabel={t('common:labels.project')}
+        entityLabel={t('projects:projects.entityLabel')}
         entityName={project.name}
         disabled={!canManageAssignments}
       />

@@ -9,8 +9,12 @@ describe('layout translations', () => {
   });
 
   test('project resales route has localized sidebar and title text', () => {
+    expect(enLayout.routes.commissions).toBe('Jobs');
+    expect(enLayout.titles.commissions).toBe('Jobs');
     expect(enLayout.routes.resales).toBe('Resales');
     expect(enLayout.titles.resales).toBe('Resales');
+    expect(itLayout.routes.commissions).toBe('Commesse');
+    expect(itLayout.titles.commissions).toBe('Commesse');
     expect(itLayout.routes.resales).toBe('Rivendite');
     expect(itLayout.titles.resales).toBe('Rivendite');
   });

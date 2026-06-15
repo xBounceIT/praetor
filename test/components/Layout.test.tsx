@@ -281,6 +281,28 @@ describe('<Layout />', () => {
     expect(header?.textContent).not.toBe('detail');
   });
 
+  test('projects sidebar exposes Commesse/Jobs and keeps tasks as an internal tab route', async () => {
+    const onViewChange = mock(() => {});
+    const user = userEvent.setup();
+    renderLayout({
+      activeView: 'projects/tasks',
+      onViewChange,
+      currentUser: {
+        ...mockUser,
+        permissions: ['projects.tasks.view', 'projects.resales.view'],
+      },
+    });
+
+    expect(screen.getByText('modules.projects')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'routes.commissions' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'routes.resales' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'routes.tasks' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'routes.commissions' }));
+
+    expect(onViewChange).toHaveBeenCalledWith('projects/tasks');
+  });
+
   test('permission-filtered modules hide inaccessible routes', () => {
     renderLayout();
 
