@@ -7,6 +7,7 @@ import {
   buildPermission,
   buildPermissions,
   equivalentPermissionsFor,
+  filterAdminExplicitPermissions,
   hasAnyPermission,
   hasPermission,
   hasScopedActionPermission,
@@ -122,11 +123,8 @@ describe('ADMINISTRATION_PERMISSIONS / ADMIN_BASE_PERMISSIONS', () => {
     expect(ADMINISTRATION_PERMISSIONS).toContain('administration.logs.view');
   });
 
-  test('ADMIN_BASE_PERMISSIONS covers internal HR view, settings, docs, and notifications', () => {
-    expect(ADMIN_BASE_PERMISSIONS).toContain('hr.internal.view');
-    expect(ADMIN_BASE_PERMISSIONS).not.toContain('hr.internal.update');
-    expect(ADMIN_BASE_PERMISSIONS).not.toContain('hr.internal.create');
-    expect(ADMIN_BASE_PERMISSIONS).not.toContain('hr.internal.delete');
+  test('ADMIN_BASE_PERMISSIONS covers standalone grants without HR module access', () => {
+    expect(ADMIN_BASE_PERMISSIONS.some((p) => p.startsWith('hr.'))).toBe(false);
     expect(ADMIN_BASE_PERMISSIONS).toContain('settings.view');
     expect(ADMIN_BASE_PERMISSIONS).toContain('settings.update');
     expect(ADMIN_BASE_PERMISSIONS).toContain('docs.api.view');
@@ -140,6 +138,19 @@ describe('ADMINISTRATION_PERMISSIONS / ADMIN_BASE_PERMISSIONS', () => {
       'notifications.update',
       'notifications.delete',
     ]);
+  });
+});
+
+describe('filterAdminExplicitPermissions', () => {
+  test('removes HR permissions while keeping other explicit grants', () => {
+    expect(
+      filterAdminExplicitPermissions([
+        'hr.internal.view',
+        'crm.clients.view',
+        'hr.costs_all.update',
+        'reports.ai_reporting.view',
+      ]),
+    ).toEqual(['crm.clients.view', 'reports.ai_reporting.view']);
   });
 });
 

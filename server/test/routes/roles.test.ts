@@ -182,7 +182,7 @@ describe('GET /api/roles', () => {
     ]);
     listExplicitPermissionsForRolesMock.mockResolvedValue(
       new Map([
-        ['admin', []],
+        ['admin', ['hr.internal.view']],
         ['user', ['timesheets.tracker.view']],
       ]),
     );
@@ -198,10 +198,11 @@ describe('GET /api/roles', () => {
     expect(body).toHaveLength(2);
     const adminRole = body.find((r: { id: string }) => r.id === 'admin');
     expect(adminRole.permissions).toEqual(
-      expect.arrayContaining(['administration.roles.view', 'hr.internal.view']),
+      expect.arrayContaining(['administration.roles.view', 'settings.view']),
     );
-    expect(adminRole.permissions).not.toContain('hr.internal.create');
-    expect(adminRole.permissions).not.toContain('hr.internal.delete');
+    expect(adminRole.permissions.some((permission: string) => permission.startsWith('hr.'))).toBe(
+      false,
+    );
     const userRole = body.find((r: { id: string }) => r.id === 'user');
     expect(userRole.permissions).toEqual(expect.arrayContaining(['timesheets.tracker.view']));
   });

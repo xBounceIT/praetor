@@ -44,7 +44,11 @@ describe('getRolePermissions', () => {
       isAdmin: true,
     });
     // Include an extra explicit perm plus a duplicate of an always-granted one to verify dedup.
-    listExplicitPermissionsMock.mockResolvedValueOnce(['crm.clients.view', 'notifications.view']);
+    listExplicitPermissionsMock.mockResolvedValueOnce([
+      'crm.clients.view',
+      'hr.internal.view',
+      'notifications.view',
+    ]);
 
     const perms = await getRolePermissions('admin');
 
@@ -52,6 +56,7 @@ describe('getRolePermissions', () => {
     for (const p of ADMIN_BASE_PERMISSIONS) expect(perms).toContain(p);
     for (const p of ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS) expect(perms).toContain(p);
     expect(perms).toContain('crm.clients.view');
+    expect(perms.some((permission) => permission.startsWith('hr.'))).toBe(false);
     expect(new Set(perms).size).toBe(perms.length);
   });
 

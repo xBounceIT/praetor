@@ -652,6 +652,13 @@
       "when": 1781441032355,
       "tag": "0092_spooky_scarecrow",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1781542816977,
+      "tag": "0093_remove_admin_hr_module_access",
+      "breakpoints": true
     }
   ]
 }
