@@ -8,14 +8,23 @@ import type { UserContractType, UserEmploymentStatus, UserWorkLocation } from '.
 const rangeIds = (prefix: string, count: number, pad = 2) =>
   Array.from({ length: count }, (_, index) => `${prefix}${String(index + 1).padStart(pad, '0')}`);
 
-const currentYear = new Date().getFullYear();
+export const getDemoSeedYear = () => new Date().getFullYear();
 
-const demoDocumentCode = (moduleId: DocumentCodeModuleId, sequence: number) =>
-  renderDocumentCode(DOCUMENT_CODE_MODULES[moduleId], { year: currentYear, sequence });
+const currentYear = getDemoSeedYear();
 
-const rangeDocumentCodes = (moduleId: DocumentCodeModuleId, count: number) =>
+export const demoDocumentCode = (
+  moduleId: DocumentCodeModuleId,
+  sequence: number,
+  seedYear = getDemoSeedYear(),
+) => renderDocumentCode(DOCUMENT_CODE_MODULES[moduleId], { year: seedYear, sequence });
+
+const rangeDocumentCodes = (
+  moduleId: DocumentCodeModuleId,
+  count: number,
+  seedYear = getDemoSeedYear(),
+) =>
   Array.from({ length: count }, (_, index) => ({
-    id: demoDocumentCode(moduleId, index + 1),
+    id: demoDocumentCode(moduleId, index + 1, seedYear),
   }));
 
 export const DEMO_PASSWORD_HASH = '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy';
@@ -339,64 +348,81 @@ export const DEMO_PRODUCTS = [
   { id: 'dm_prd_09', productCode: 'DM-DISABLED-001', name: 'Legacy Token Pack' },
 ] as const;
 
-export const DEMO_QUOTES = rangeDocumentCodes('client_quote', 14);
+export const buildDemoDocumentSeedManifest = (seedYear = getDemoSeedYear()) => {
+  const code = (moduleId: DocumentCodeModuleId, sequence: number) =>
+    demoDocumentCode(moduleId, sequence, seedYear);
 
-export const DEMO_CUSTOMER_OFFERS = [
-  { id: demoDocumentCode('client_offer', 1), linkedQuoteId: demoDocumentCode('client_quote', 4) },
-  { id: demoDocumentCode('client_offer', 2), linkedQuoteId: demoDocumentCode('client_quote', 5) },
-  { id: demoDocumentCode('client_offer', 3), linkedQuoteId: demoDocumentCode('client_quote', 6) },
-  { id: demoDocumentCode('client_offer', 4), linkedQuoteId: demoDocumentCode('client_quote', 7) },
-  { id: demoDocumentCode('client_offer', 5), linkedQuoteId: demoDocumentCode('client_quote', 8) },
-];
+  return {
+    quotes: rangeDocumentCodes('client_quote', 14, seedYear),
+    customerOffers: [
+      { id: code('client_offer', 1), linkedQuoteId: code('client_quote', 4) },
+      { id: code('client_offer', 2), linkedQuoteId: code('client_quote', 5) },
+      { id: code('client_offer', 3), linkedQuoteId: code('client_quote', 6) },
+      { id: code('client_offer', 4), linkedQuoteId: code('client_quote', 7) },
+      { id: code('client_offer', 5), linkedQuoteId: code('client_quote', 8) },
+    ],
+    sales: [
+      { id: code('client_order', 1), linkedOfferId: null },
+      { id: code('client_order', 2), linkedOfferId: code('client_offer', 4) },
+      { id: code('client_order', 3), linkedOfferId: null },
+      { id: code('client_order', 4), linkedOfferId: code('client_offer', 3) },
+      { id: code('client_order', 5), linkedOfferId: null },
+    ],
+    invoices: [
+      { id: 'dm_inv_01', linkedSaleId: null },
+      { id: 'dm_inv_02', linkedSaleId: null },
+      { id: 'dm_inv_03', linkedSaleId: code('client_order', 4) },
+      { id: 'dm_inv_04', linkedSaleId: null },
+      { id: 'dm_inv_05', linkedSaleId: null },
+    ],
+    supplierQuotes: rangeDocumentCodes('supplier_quote', 14, seedYear),
+    supplierSales: [
+      {
+        id: code('supplier_order', 1),
+        linkedQuoteId: code('supplier_quote', 11),
+      },
+      {
+        id: code('supplier_order', 2),
+        linkedQuoteId: code('supplier_quote', 7),
+      },
+      {
+        id: code('supplier_order', 3),
+        linkedQuoteId: code('supplier_quote', 12),
+      },
+      {
+        id: code('supplier_order', 4),
+        linkedQuoteId: code('supplier_quote', 13),
+      },
+      {
+        id: code('supplier_order', 5),
+        linkedQuoteId: code('supplier_quote', 14),
+      },
+    ],
+    supplierInvoices: [
+      { id: 'dm_sinv_01', linkedSaleId: null },
+      { id: 'dm_sinv_02', linkedSaleId: null },
+      { id: 'dm_sinv_03', linkedSaleId: code('supplier_order', 4) },
+      { id: 'dm_sinv_04', linkedSaleId: null },
+      { id: 'dm_sinv_05', linkedSaleId: null },
+    ],
+  };
+};
 
-export const DEMO_SALES = [
-  { id: demoDocumentCode('client_order', 1), linkedOfferId: null },
-  { id: demoDocumentCode('client_order', 2), linkedOfferId: demoDocumentCode('client_offer', 4) },
-  { id: demoDocumentCode('client_order', 3), linkedOfferId: null },
-  { id: demoDocumentCode('client_order', 4), linkedOfferId: demoDocumentCode('client_offer', 3) },
-  { id: demoDocumentCode('client_order', 5), linkedOfferId: null },
-];
+const DEFAULT_DEMO_DOCUMENTS = buildDemoDocumentSeedManifest(currentYear);
 
-export const DEMO_INVOICES = [
-  { id: 'dm_inv_01', linkedSaleId: null },
-  { id: 'dm_inv_02', linkedSaleId: null },
-  { id: 'dm_inv_03', linkedSaleId: demoDocumentCode('client_order', 4) },
-  { id: 'dm_inv_04', linkedSaleId: null },
-  { id: 'dm_inv_05', linkedSaleId: null },
-];
+export const DEMO_QUOTES = DEFAULT_DEMO_DOCUMENTS.quotes;
 
-export const DEMO_SUPPLIER_QUOTES = rangeDocumentCodes('supplier_quote', 14);
+export const DEMO_CUSTOMER_OFFERS = DEFAULT_DEMO_DOCUMENTS.customerOffers;
 
-export const DEMO_SUPPLIER_SALES = [
-  {
-    id: demoDocumentCode('supplier_order', 1),
-    linkedQuoteId: demoDocumentCode('supplier_quote', 11),
-  },
-  {
-    id: demoDocumentCode('supplier_order', 2),
-    linkedQuoteId: demoDocumentCode('supplier_quote', 7),
-  },
-  {
-    id: demoDocumentCode('supplier_order', 3),
-    linkedQuoteId: demoDocumentCode('supplier_quote', 12),
-  },
-  {
-    id: demoDocumentCode('supplier_order', 4),
-    linkedQuoteId: demoDocumentCode('supplier_quote', 13),
-  },
-  {
-    id: demoDocumentCode('supplier_order', 5),
-    linkedQuoteId: demoDocumentCode('supplier_quote', 14),
-  },
-];
+export const DEMO_SALES = DEFAULT_DEMO_DOCUMENTS.sales;
 
-export const DEMO_SUPPLIER_INVOICES = [
-  { id: 'dm_sinv_01', linkedSaleId: null },
-  { id: 'dm_sinv_02', linkedSaleId: null },
-  { id: 'dm_sinv_03', linkedSaleId: demoDocumentCode('supplier_order', 4) },
-  { id: 'dm_sinv_04', linkedSaleId: null },
-  { id: 'dm_sinv_05', linkedSaleId: null },
-];
+export const DEMO_INVOICES = DEFAULT_DEMO_DOCUMENTS.invoices;
+
+export const DEMO_SUPPLIER_QUOTES = DEFAULT_DEMO_DOCUMENTS.supplierQuotes;
+
+export const DEMO_SUPPLIER_SALES = DEFAULT_DEMO_DOCUMENTS.supplierSales;
+
+export const DEMO_SUPPLIER_INVOICES = DEFAULT_DEMO_DOCUMENTS.supplierInvoices;
 
 export const DEMO_PROJECTS = [
   { id: 'dm_proj_01', name: `DM-CLI-001_DM-SVC-AUDIT_${currentYear}` },
@@ -533,31 +559,39 @@ export const DEMO_ITEM_IDS = {
   supplierInvoiceItems: rangeIds('dm_sinv_item_', 6),
 } as const;
 
-export const DEMO_IDS = {
-  clients: DEMO_CLIENTS.map((item) => item.id),
-  suppliers: DEMO_SUPPLIERS.map((item) => item.id),
-  products: DEMO_PRODUCTS.map((item) => item.id),
-  quotes: DEMO_QUOTES.map((item) => item.id),
-  customerOffers: DEMO_CUSTOMER_OFFERS.map((item) => item.id),
-  sales: DEMO_SALES.map((item) => item.id),
-  invoices: DEMO_INVOICES.map((item) => item.id),
-  supplierQuotes: DEMO_SUPPLIER_QUOTES.map((item) => item.id),
-  supplierSales: DEMO_SUPPLIER_SALES.map((item) => item.id),
-  supplierInvoices: DEMO_SUPPLIER_INVOICES.map((item) => item.id),
-  projects: DEMO_PROJECTS.map((item) => item.id),
-  tasks: [...DEMO_TASKS],
-  notifications: [...DEMO_NOTIFICATIONS],
-  workUnits: DEMO_WORK_UNITS.map((item) => item.id),
-  timeEntries: [...DEMO_TIME_ENTRY_IDS],
-  users: [...DEMO_USER_IDS],
-  settingsUserIds: [...DEMO_USER_IDS],
-} as const;
+export const buildDemoIds = (seedYear = getDemoSeedYear()) => {
+  const documents = buildDemoDocumentSeedManifest(seedYear);
 
-export const DEMO_ASSIGNMENT_TARGET_IDS = {
-  clients: [...COMPATIBILITY_DEFAULTS.clients, ...DEMO_IDS.clients],
-  projects: [...COMPATIBILITY_DEFAULTS.projects, ...DEMO_IDS.projects],
-  tasks: [...COMPATIBILITY_DEFAULTS.tasks, ...DEMO_IDS.tasks],
-} as const;
+  return {
+    clients: DEMO_CLIENTS.map((item) => item.id),
+    suppliers: DEMO_SUPPLIERS.map((item) => item.id),
+    products: DEMO_PRODUCTS.map((item) => item.id),
+    quotes: documents.quotes.map((item) => item.id),
+    customerOffers: documents.customerOffers.map((item) => item.id),
+    sales: documents.sales.map((item) => item.id),
+    invoices: documents.invoices.map((item) => item.id),
+    supplierQuotes: documents.supplierQuotes.map((item) => item.id),
+    supplierSales: documents.supplierSales.map((item) => item.id),
+    supplierInvoices: documents.supplierInvoices.map((item) => item.id),
+    projects: DEMO_PROJECTS.map((item) => item.id),
+    tasks: [...DEMO_TASKS],
+    notifications: [...DEMO_NOTIFICATIONS],
+    workUnits: DEMO_WORK_UNITS.map((item) => item.id),
+    timeEntries: [...DEMO_TIME_ENTRY_IDS],
+    users: [...DEMO_USER_IDS],
+    settingsUserIds: [...DEMO_USER_IDS],
+  };
+};
+
+export const DEMO_IDS = buildDemoIds(currentYear);
+
+export const buildDemoAssignmentTargetIds = (demoIds = DEMO_IDS) => ({
+  clients: [...COMPATIBILITY_DEFAULTS.clients, ...demoIds.clients],
+  projects: [...COMPATIBILITY_DEFAULTS.projects, ...demoIds.projects],
+  tasks: [...COMPATIBILITY_DEFAULTS.tasks, ...demoIds.tasks],
+});
+
+export const DEMO_ASSIGNMENT_TARGET_IDS = buildDemoAssignmentTargetIds(DEMO_IDS);
 
 export const DEMO_TOP_MANAGER_USER_IDS = DEMO_USERS.reduce<string[]>((ids, user) => {
   if (user.role === 'top_manager') ids.push(user.id);

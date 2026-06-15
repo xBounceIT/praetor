@@ -4,26 +4,23 @@ import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import { createChildLogger, serializeError } from '../utils/logger.ts';
 import { ensureBootstrapAdmin } from './bootstrapAdmin.ts';
 import {
+  buildDemoAssignmentTargetIds,
+  buildDemoDocumentSeedManifest,
+  buildDemoIds,
   COMPATIBILITY_DEFAULTS,
-  DEMO_ASSIGNMENT_TARGET_IDS,
   DEMO_CLIENTS,
-  DEMO_CUSTOMER_OFFERS,
   DEMO_EXPECTED_COUNTS,
-  DEMO_IDS,
-  DEMO_INVOICES,
   DEMO_ITEM_IDS,
   DEMO_NOTIFICATIONS,
   DEMO_PASSWORD_HASH,
   DEMO_PRODUCTS,
   DEMO_PROJECTS,
-  DEMO_SALES,
-  DEMO_SUPPLIER_INVOICES,
-  DEMO_SUPPLIER_SALES,
   DEMO_SUPPLIERS,
   DEMO_TOP_MANAGER_USER_IDS,
   DEMO_USER_IDS,
   DEMO_USERS,
   DEMO_WORK_UNITS,
+  getDemoSeedYear,
 } from './demoSeedManifest.ts';
 import pool, { query } from './index.ts';
 
@@ -68,6 +65,9 @@ type DemoUserCleanupIds = {
   dependentUserIds: string[];
   userIdsToDelete: string[];
 };
+
+type RuntimeDemoIds = ReturnType<typeof buildDemoIds>;
+type RuntimeDemoAssignmentTargetIds = ReturnType<typeof buildDemoAssignmentTargetIds>;
 
 const nonEmpty = <T>(values: readonly (T | null | undefined)[]) =>
   values.filter((value): value is T => value !== null && value !== undefined);
@@ -136,6 +136,12 @@ const executeDelete = async (
 
 const executeStatement = async (client: PoolClient, sql: string, params?: unknown[]) =>
   client.query(sql, params);
+
+const setDemoSeedYear = async (client: PoolClient, seedYear: number) => {
+  await executeStatement(client, "SELECT set_config('praetor.demo_seed_year', $1, true)", [
+    String(seedYear),
+  ]);
+};
 
 const loadDemoStatements = () => {
   const seedSql = readFileSync(seedPath, 'utf8');
@@ -351,14 +357,67 @@ const insertDemoUsersAndSettings = async (client: PoolClient, counts: Record<str
   incrementCount(counts, 'settings', settingsResult.rowCount ?? 0);
 };
 
-export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: DemoUserCleanupIds) => {
+export const assertNoDemoDocumentIdConflicts = async (client: PoolClient, seedYear: number) => {
+  const demoIds = buildDemoIds(seedYear);
+  const result = await client.query<{ table_name: string; id: string }>(
+    `WITH conflicts AS (
+       SELECT 'quotes' AS table_name, id
+       FROM quotes
+       WHERE id = ANY($1::text[])
+         AND COALESCE(client_id, '') <> ALL($6::text[])
+       UNION ALL
+       SELECT 'customer_offers' AS table_name, id
+       FROM customer_offers
+       WHERE id = ANY($2::text[])
+         AND COALESCE(client_id, '') <> ALL($6::text[])
+       UNION ALL
+       SELECT 'sales' AS table_name, id
+       FROM sales
+       WHERE id = ANY($3::text[])
+         AND COALESCE(client_id, '') <> ALL($6::text[])
+       UNION ALL
+       SELECT 'supplier_quotes' AS table_name, id
+       FROM supplier_quotes
+       WHERE id = ANY($4::text[])
+         AND COALESCE(supplier_id, '') <> ALL($7::text[])
+       UNION ALL
+       SELECT 'supplier_sales' AS table_name, id
+       FROM supplier_sales
+       WHERE id = ANY($5::text[])
+         AND COALESCE(supplier_id, '') <> ALL($7::text[])
+     )
+     SELECT table_name, id FROM conflicts ORDER BY table_name, id LIMIT 10`,
+    [
+      demoIds.quotes,
+      demoIds.customerOffers,
+      demoIds.sales,
+      demoIds.supplierQuotes,
+      demoIds.supplierSales,
+      demoIds.clients,
+      demoIds.suppliers,
+    ],
+  );
+
+  if (result.rows.length > 0) {
+    const examples = result.rows.map((row) => `${row.table_name}:${row.id}`).join(', ');
+    throw new Error(`Demo seed document ID collision with non-demo records: ${examples}`);
+  }
+};
+
+export const cleanupDemoNamespace = async (
+  client: PoolClient,
+  demoUserIds: DemoUserCleanupIds,
+  seedYear = getDemoSeedYear(),
+) => {
+  const demoDocuments = buildDemoDocumentSeedManifest(seedYear);
+  const demoIds = buildDemoIds(seedYear);
   const cleanupCountsByTable: Record<string, number> = {};
 
   incrementCount(
     cleanupCountsByTable,
     'time_entries',
     await executeDelete(client, 'time_entries', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.timeEntries);
+      pushTextArrayPredicate(builder, 'id', demoIds.timeEntries);
       pushTextArrayPredicate(builder, 'user_id', demoUserIds.dependentUserIds);
     }),
   );
@@ -391,7 +450,7 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     cleanupCountsByTable,
     'user_work_units',
     await executeDelete(client, 'user_work_units', (builder) => {
-      pushTextArrayPredicate(builder, 'work_unit_id', DEMO_IDS.workUnits);
+      pushTextArrayPredicate(builder, 'work_unit_id', demoIds.workUnits);
       pushTextArrayPredicate(builder, 'user_id', demoUserIds.dependentUserIds);
     }),
   );
@@ -400,7 +459,7 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     cleanupCountsByTable,
     'work_unit_managers',
     await executeDelete(client, 'work_unit_managers', (builder) => {
-      pushTextArrayPredicate(builder, 'work_unit_id', DEMO_IDS.workUnits);
+      pushTextArrayPredicate(builder, 'work_unit_id', demoIds.workUnits);
       pushTextArrayPredicate(builder, 'user_id', demoUserIds.dependentUserIds);
     }),
   );
@@ -409,7 +468,7 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     cleanupCountsByTable,
     'work_units',
     await executeDelete(client, 'work_units', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.workUnits);
+      pushTextArrayPredicate(builder, 'id', demoIds.workUnits);
       pushTextArrayPredicate(
         builder,
         'name',
@@ -432,8 +491,8 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     'supplier_invoice_items',
     await executeDelete(client, 'supplier_invoice_items', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.supplierInvoiceItems);
-      pushTextArrayPredicate(builder, 'invoice_id', DEMO_IDS.supplierInvoices);
-      pushTextArrayPredicate(builder, 'product_id', DEMO_IDS.products);
+      pushTextArrayPredicate(builder, 'invoice_id', demoIds.supplierInvoices);
+      pushTextArrayPredicate(builder, 'product_id', demoIds.products);
     }),
   );
 
@@ -441,12 +500,12 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     cleanupCountsByTable,
     'supplier_invoices',
     await executeDelete(client, 'supplier_invoices', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.supplierInvoices);
-      pushTextArrayPredicate(builder, 'supplier_id', DEMO_IDS.suppliers);
+      pushTextArrayPredicate(builder, 'id', demoIds.supplierInvoices);
+      pushTextArrayPredicate(builder, 'supplier_id', demoIds.suppliers);
       pushTextArrayPredicate(
         builder,
         'linked_sale_id',
-        nonEmpty(DEMO_SUPPLIER_INVOICES.map((invoice) => invoice.linkedSaleId)),
+        nonEmpty(demoDocuments.supplierInvoices.map((invoice) => invoice.linkedSaleId)),
       );
     }),
   );
@@ -456,8 +515,8 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     'supplier_sale_items',
     await executeDelete(client, 'supplier_sale_items', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.supplierSaleItems);
-      pushTextArrayPredicate(builder, 'sale_id', DEMO_IDS.supplierSales);
-      pushTextArrayPredicate(builder, 'product_id', DEMO_IDS.products);
+      pushTextArrayPredicate(builder, 'sale_id', demoIds.supplierSales);
+      pushTextArrayPredicate(builder, 'product_id', demoIds.products);
     }),
   );
 
@@ -465,12 +524,12 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     cleanupCountsByTable,
     'supplier_sales',
     await executeDelete(client, 'supplier_sales', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.supplierSales);
-      pushTextArrayPredicate(builder, 'supplier_id', DEMO_IDS.suppliers);
+      pushTextArrayPredicate(builder, 'id', demoIds.supplierSales);
+      pushTextArrayPredicate(builder, 'supplier_id', demoIds.suppliers);
       pushTextArrayPredicate(
         builder,
         'linked_quote_id',
-        nonEmpty(DEMO_SUPPLIER_SALES.map((sale) => sale.linkedQuoteId)),
+        nonEmpty(demoDocuments.supplierSales.map((sale) => sale.linkedQuoteId)),
       );
     }),
   );
@@ -480,8 +539,8 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     'supplier_quote_items',
     await executeDelete(client, 'supplier_quote_items', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.supplierQuoteItems);
-      pushTextArrayPredicate(builder, 'quote_id', DEMO_IDS.supplierQuotes);
-      pushTextArrayPredicate(builder, 'product_id', DEMO_IDS.products);
+      pushTextArrayPredicate(builder, 'quote_id', demoIds.supplierQuotes);
+      pushTextArrayPredicate(builder, 'product_id', demoIds.products);
     }),
   );
 
@@ -489,8 +548,8 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     cleanupCountsByTable,
     'supplier_quotes',
     await executeDelete(client, 'supplier_quotes', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.supplierQuotes);
-      pushTextArrayPredicate(builder, 'supplier_id', DEMO_IDS.suppliers);
+      pushTextArrayPredicate(builder, 'id', demoIds.supplierQuotes);
+      pushTextArrayPredicate(builder, 'supplier_id', demoIds.suppliers);
     }),
   );
 
@@ -499,8 +558,8 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     'invoice_items',
     await executeDelete(client, 'invoice_items', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.invoiceItems);
-      pushTextArrayPredicate(builder, 'invoice_id', DEMO_IDS.invoices);
-      pushTextArrayPredicate(builder, 'product_id', DEMO_IDS.products);
+      pushTextArrayPredicate(builder, 'invoice_id', demoIds.invoices);
+      pushTextArrayPredicate(builder, 'product_id', demoIds.products);
     }),
   );
 
@@ -508,12 +567,12 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     cleanupCountsByTable,
     'invoices',
     await executeDelete(client, 'invoices', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.invoices);
-      pushTextArrayPredicate(builder, 'client_id', DEMO_IDS.clients);
+      pushTextArrayPredicate(builder, 'id', demoIds.invoices);
+      pushTextArrayPredicate(builder, 'client_id', demoIds.clients);
       pushTextArrayPredicate(
         builder,
         'linked_sale_id',
-        nonEmpty(DEMO_INVOICES.map((invoice) => invoice.linkedSaleId)),
+        nonEmpty(demoDocuments.invoices.map((invoice) => invoice.linkedSaleId)),
       );
     }),
   );
@@ -523,8 +582,8 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     'sale_items',
     await executeDelete(client, 'sale_items', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.saleItems);
-      pushTextArrayPredicate(builder, 'sale_id', DEMO_IDS.sales);
-      pushTextArrayPredicate(builder, 'product_id', DEMO_IDS.products);
+      pushTextArrayPredicate(builder, 'sale_id', demoIds.sales);
+      pushTextArrayPredicate(builder, 'product_id', demoIds.products);
     }),
   );
 
@@ -532,12 +591,12 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     cleanupCountsByTable,
     'sales',
     await executeDelete(client, 'sales', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.sales);
-      pushTextArrayPredicate(builder, 'client_id', DEMO_IDS.clients);
+      pushTextArrayPredicate(builder, 'id', demoIds.sales);
+      pushTextArrayPredicate(builder, 'client_id', demoIds.clients);
       pushTextArrayPredicate(
         builder,
         'linked_offer_id',
-        nonEmpty(DEMO_SALES.map((sale) => sale.linkedOfferId)),
+        nonEmpty(demoDocuments.sales.map((sale) => sale.linkedOfferId)),
       );
     }),
   );
@@ -547,8 +606,8 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     'customer_offer_items',
     await executeDelete(client, 'customer_offer_items', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.customerOfferItems);
-      pushTextArrayPredicate(builder, 'offer_id', DEMO_IDS.customerOffers);
-      pushTextArrayPredicate(builder, 'product_id', DEMO_IDS.products);
+      pushTextArrayPredicate(builder, 'offer_id', demoIds.customerOffers);
+      pushTextArrayPredicate(builder, 'product_id', demoIds.products);
     }),
   );
 
@@ -556,12 +615,12 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     cleanupCountsByTable,
     'customer_offers',
     await executeDelete(client, 'customer_offers', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.customerOffers);
-      pushTextArrayPredicate(builder, 'client_id', DEMO_IDS.clients);
+      pushTextArrayPredicate(builder, 'id', demoIds.customerOffers);
+      pushTextArrayPredicate(builder, 'client_id', demoIds.clients);
       pushTextArrayPredicate(
         builder,
         'linked_quote_id',
-        DEMO_CUSTOMER_OFFERS.map((offer) => offer.linkedQuoteId),
+        demoDocuments.customerOffers.map((offer) => offer.linkedQuoteId),
       );
     }),
   );
@@ -571,8 +630,8 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     'quote_items',
     await executeDelete(client, 'quote_items', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.quoteItems);
-      pushTextArrayPredicate(builder, 'quote_id', DEMO_IDS.quotes);
-      pushTextArrayPredicate(builder, 'product_id', DEMO_IDS.products);
+      pushTextArrayPredicate(builder, 'quote_id', demoIds.quotes);
+      pushTextArrayPredicate(builder, 'product_id', demoIds.products);
     }),
   );
 
@@ -580,8 +639,8 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     cleanupCountsByTable,
     'quotes',
     await executeDelete(client, 'quotes', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.quotes);
-      pushTextArrayPredicate(builder, 'client_id', DEMO_IDS.clients);
+      pushTextArrayPredicate(builder, 'id', demoIds.quotes);
+      pushTextArrayPredicate(builder, 'client_id', demoIds.clients);
     }),
   );
 
@@ -589,7 +648,7 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     cleanupCountsByTable,
     'products',
     await executeDelete(client, 'products', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.products);
+      pushTextArrayPredicate(builder, 'id', demoIds.products);
       pushTextArrayPredicate(
         builder,
         'product_code',
@@ -600,7 +659,7 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
         'name',
         DEMO_PRODUCTS.map((product) => product.name),
       );
-      pushTextArrayPredicate(builder, 'supplier_id', DEMO_IDS.suppliers);
+      pushTextArrayPredicate(builder, 'supplier_id', demoIds.suppliers);
     }),
   );
 
@@ -608,13 +667,13 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     cleanupCountsByTable,
     'projects',
     await executeDelete(client, 'projects', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.projects);
+      pushTextArrayPredicate(builder, 'id', demoIds.projects);
       pushTextArrayPredicate(
         builder,
         'name',
         DEMO_PROJECTS.map((project) => project.name),
       );
-      pushTextArrayPredicate(builder, 'client_id', DEMO_IDS.clients);
+      pushTextArrayPredicate(builder, 'client_id', demoIds.clients);
     }),
   );
 
@@ -622,8 +681,8 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     cleanupCountsByTable,
     'tasks',
     await executeDelete(client, 'tasks', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.tasks);
-      pushTextArrayPredicate(builder, 'project_id', DEMO_IDS.projects);
+      pushTextArrayPredicate(builder, 'id', demoIds.tasks);
+      pushTextArrayPredicate(builder, 'project_id', demoIds.projects);
     }),
   );
 
@@ -631,7 +690,7 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     cleanupCountsByTable,
     'suppliers',
     await executeDelete(client, 'suppliers', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.suppliers);
+      pushTextArrayPredicate(builder, 'id', demoIds.suppliers);
       pushTextArrayPredicate(
         builder,
         'supplier_code',
@@ -644,7 +703,7 @@ export const cleanupDemoNamespace = async (client: PoolClient, demoUserIds: Demo
     cleanupCountsByTable,
     'clients',
     await executeDelete(client, 'clients', (builder) => {
-      pushTextArrayPredicate(builder, 'id', DEMO_IDS.clients);
+      pushTextArrayPredicate(builder, 'id', demoIds.clients);
       pushTextArrayPredicate(
         builder,
         'client_code',
@@ -713,22 +772,25 @@ const executeDemoStatements = async (client: PoolClient, counts: Record<string, 
   return failedStatements;
 };
 
-const verificationSteps: VerificationStep[] = [
+const buildVerificationSteps = (
+  demoIds: RuntimeDemoIds,
+  assignmentTargetIds: RuntimeDemoAssignmentTargetIds,
+): VerificationStep[] => [
   { table: 'users', countColumn: 'id', ids: DEMO_USER_IDS, expected: DEMO_EXPECTED_COUNTS.users },
   {
     table: 'settings',
     countColumn: 'user_id',
-    ids: DEMO_IDS.settingsUserIds,
+    ids: demoIds.settingsUserIds,
     expected: DEMO_EXPECTED_COUNTS.settings,
   },
   {
     table: 'clients',
-    ids: [...COMPATIBILITY_DEFAULTS.clients, ...DEMO_IDS.clients],
+    ids: [...COMPATIBILITY_DEFAULTS.clients, ...demoIds.clients],
     expected: DEMO_EXPECTED_COUNTS.clients,
   },
-  { table: 'suppliers', ids: DEMO_IDS.suppliers, expected: DEMO_EXPECTED_COUNTS.suppliers },
-  { table: 'products', ids: DEMO_IDS.products, expected: DEMO_EXPECTED_COUNTS.products },
-  { table: 'quotes', ids: DEMO_IDS.quotes, expected: DEMO_EXPECTED_COUNTS.quotes },
+  { table: 'suppliers', ids: demoIds.suppliers, expected: DEMO_EXPECTED_COUNTS.suppliers },
+  { table: 'products', ids: demoIds.products, expected: DEMO_EXPECTED_COUNTS.products },
+  { table: 'quotes', ids: demoIds.quotes, expected: DEMO_EXPECTED_COUNTS.quotes },
   {
     table: 'quote_items',
     ids: DEMO_ITEM_IDS.quoteItems,
@@ -736,7 +798,7 @@ const verificationSteps: VerificationStep[] = [
   },
   {
     table: 'customer_offers',
-    ids: DEMO_IDS.customerOffers,
+    ids: demoIds.customerOffers,
     expected: DEMO_EXPECTED_COUNTS.customer_offers,
   },
   {
@@ -744,13 +806,13 @@ const verificationSteps: VerificationStep[] = [
     ids: DEMO_ITEM_IDS.customerOfferItems,
     expected: DEMO_EXPECTED_COUNTS.customer_offer_items,
   },
-  { table: 'sales', ids: DEMO_IDS.sales, expected: DEMO_EXPECTED_COUNTS.sales },
+  { table: 'sales', ids: demoIds.sales, expected: DEMO_EXPECTED_COUNTS.sales },
   {
     table: 'sale_items',
     ids: DEMO_ITEM_IDS.saleItems,
     expected: DEMO_EXPECTED_COUNTS.sale_items,
   },
-  { table: 'invoices', ids: DEMO_IDS.invoices, expected: DEMO_EXPECTED_COUNTS.invoices },
+  { table: 'invoices', ids: demoIds.invoices, expected: DEMO_EXPECTED_COUNTS.invoices },
   {
     table: 'invoice_items',
     ids: DEMO_ITEM_IDS.invoiceItems,
@@ -758,7 +820,7 @@ const verificationSteps: VerificationStep[] = [
   },
   {
     table: 'supplier_quotes',
-    ids: DEMO_IDS.supplierQuotes,
+    ids: demoIds.supplierQuotes,
     expected: DEMO_EXPECTED_COUNTS.supplier_quotes,
   },
   {
@@ -768,7 +830,7 @@ const verificationSteps: VerificationStep[] = [
   },
   {
     table: 'supplier_sales',
-    ids: DEMO_IDS.supplierSales,
+    ids: demoIds.supplierSales,
     expected: DEMO_EXPECTED_COUNTS.supplier_sales,
   },
   {
@@ -778,7 +840,7 @@ const verificationSteps: VerificationStep[] = [
   },
   {
     table: 'supplier_invoices',
-    ids: DEMO_IDS.supplierInvoices,
+    ids: demoIds.supplierInvoices,
     expected: DEMO_EXPECTED_COUNTS.supplier_invoices,
   },
   {
@@ -788,57 +850,60 @@ const verificationSteps: VerificationStep[] = [
   },
   {
     table: 'projects',
-    ids: [...COMPATIBILITY_DEFAULTS.projects, ...DEMO_IDS.projects],
+    ids: [...COMPATIBILITY_DEFAULTS.projects, ...demoIds.projects],
     expected: DEMO_EXPECTED_COUNTS.projects,
   },
   {
     table: 'tasks',
-    ids: [...COMPATIBILITY_DEFAULTS.tasks, ...DEMO_IDS.tasks],
+    ids: [...COMPATIBILITY_DEFAULTS.tasks, ...demoIds.tasks],
     expected: DEMO_EXPECTED_COUNTS.tasks,
   },
   {
     table: 'notifications',
-    ids: DEMO_IDS.notifications,
+    ids: demoIds.notifications,
     expected: DEMO_EXPECTED_COUNTS.notifications,
   },
-  { table: 'work_units', ids: DEMO_IDS.workUnits, expected: DEMO_EXPECTED_COUNTS.work_units },
+  { table: 'work_units', ids: demoIds.workUnits, expected: DEMO_EXPECTED_COUNTS.work_units },
   {
     table: 'work_unit_managers',
     countColumn: 'work_unit_id',
-    ids: DEMO_IDS.workUnits,
+    ids: demoIds.workUnits,
     expected: DEMO_EXPECTED_COUNTS.work_unit_managers,
   },
   {
     table: 'user_work_units',
     countColumn: 'work_unit_id',
-    ids: DEMO_IDS.workUnits,
+    ids: demoIds.workUnits,
     expected: DEMO_EXPECTED_COUNTS.user_work_units,
   },
   {
     table: 'user_clients',
     countColumn: 'client_id',
-    ids: DEMO_ASSIGNMENT_TARGET_IDS.clients,
+    ids: assignmentTargetIds.clients,
     userIds: DEMO_USER_IDS,
     expected: DEMO_EXPECTED_COUNTS.user_clients,
   },
   {
     table: 'user_projects',
     countColumn: 'project_id',
-    ids: DEMO_ASSIGNMENT_TARGET_IDS.projects,
+    ids: assignmentTargetIds.projects,
     userIds: DEMO_USER_IDS,
     expected: DEMO_EXPECTED_COUNTS.user_projects,
   },
   {
     table: 'user_tasks',
     countColumn: 'task_id',
-    ids: DEMO_ASSIGNMENT_TARGET_IDS.tasks,
+    ids: assignmentTargetIds.tasks,
     userIds: DEMO_USER_IDS,
     expected: DEMO_EXPECTED_COUNTS.user_tasks,
   },
-  { table: 'time_entries', ids: DEMO_IDS.timeEntries, expected: DEMO_EXPECTED_COUNTS.time_entries },
+  { table: 'time_entries', ids: demoIds.timeEntries, expected: DEMO_EXPECTED_COUNTS.time_entries },
 ];
 
-const verifyDemoDataset = async () => {
+const verifyDemoDataset = async (seedYear: number) => {
+  const demoIds = buildDemoIds(seedYear);
+  const assignmentTargetIds = buildDemoAssignmentTargetIds(demoIds);
+  const verificationSteps = buildVerificationSteps(demoIds, assignmentTargetIds);
   const verificationCountsByTable: Record<string, number> = {};
   const mismatches: Array<{ table: string; expected: number; actual: number }> = [];
 
@@ -875,7 +940,7 @@ const collectDemoUserCleanupIds = async (client: PoolClient) => {
      FROM users
      WHERE id = ANY($1::text[]) OR username = ANY($2::text[])
      ORDER BY id`,
-    [DEMO_IDS.users, DEMO_USERS.map((user) => user.username)],
+    [DEMO_USER_IDS, DEMO_USERS.map((user) => user.username)],
   );
   return selectDemoUserCleanupIds(result.rows);
 };
@@ -885,6 +950,7 @@ export const runDemoSeedRefresh = async ({
 }: {
   source: DemoSeedSource;
 }): Promise<DemoSeedResult> => {
+  const seedYear = getDemoSeedYear();
   const insertCountsByTable: Record<string, number> = {};
   let cleanupCountsByTable: Record<string, number> = {};
   let verificationCountsByTable: Record<string, number> = {};
@@ -901,7 +967,10 @@ export const runDemoSeedRefresh = async ({
     await client.query('BEGIN');
     inTransaction = true;
 
-    cleanupCountsByTable = await cleanupDemoNamespace(client, demoUserIds);
+    await setDemoSeedYear(client, seedYear);
+    await assertNoDemoDocumentIdConflicts(client, seedYear);
+
+    cleanupCountsByTable = await cleanupDemoNamespace(client, demoUserIds, seedYear);
     await insertCompatibilityDefaults(client, insertCountsByTable);
     await insertDemoUsersAndSettings(client, insertCountsByTable);
 
@@ -944,7 +1013,7 @@ export const runDemoSeedRefresh = async ({
   }
 
   try {
-    const verification = await verifyDemoDataset();
+    const verification = await verifyDemoDataset(seedYear);
     verificationCountsByTable = verification.verificationCountsByTable;
 
     if (verification.mismatches.length > 0) {
