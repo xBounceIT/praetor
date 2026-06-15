@@ -50,10 +50,114 @@ INSERT INTO settings (user_id, full_name, email) VALUES
 ON CONFLICT (user_id) DO NOTHING;
 
 -- Refreshable demo dataset.
--- Demo records intentionally use dm_* ids and DM-* business codes so reseeding restores the
--- curated showcase rows in place without deleting non-demo records that reference demo entities.
+-- Demo document records use the same default code templates exposed in admin settings
+-- (PREV/OFF/FORN/ORD/SORD + YY + padded sequence). Non-document demo records keep dm_* ids.
 -- The app-layer orchestrator executes these statements in a controlled refresh workflow after
 -- cleanup, verification, manager assignment, and cache invalidation steps are prepared.
+
+DROP TABLE IF EXISTS pg_temp.demo_document_codes;
+
+CREATE TEMP TABLE demo_document_codes (
+    module_id text NOT NULL,
+    sequence integer NOT NULL,
+    code text NOT NULL,
+    PRIMARY KEY (module_id, sequence)
+) ON COMMIT DROP;
+
+CREATE OR REPLACE FUNCTION pg_temp.demo_seed_year()
+RETURNS integer
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT COALESCE(
+        NULLIF(current_setting('praetor.demo_seed_year', true), '')::integer,
+        EXTRACT(YEAR FROM CURRENT_DATE)::integer
+    )
+$$;
+
+INSERT INTO demo_document_codes (module_id, sequence, code)
+SELECT
+    module_id,
+    sequence,
+    prefix || '_' || RIGHT(pg_temp.demo_seed_year()::text, 2) || '_' || LPAD(sequence::text, 4, '0')
+FROM (
+    VALUES
+        ('client_quote', 'PREV', 14),
+        ('client_offer', 'OFF', 5),
+        ('supplier_quote', 'FORN', 14),
+        ('client_order', 'ORD', 5),
+        ('supplier_order', 'SORD', 5)
+) AS modules(module_id, prefix, max_sequence)
+CROSS JOIN LATERAL generate_series(1, modules.max_sequence) AS sequence;
+
+CREATE OR REPLACE FUNCTION pg_temp.demo_document_code(_module_id text, _sequence integer)
+RETURNS text
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT codes.code
+    FROM pg_temp.demo_document_codes AS codes
+    WHERE codes.module_id = _module_id
+      AND codes.sequence = _sequence
+$$;
+
+CREATE TEMP TABLE demo_document_code_conflicts (
+    table_name text NOT NULL,
+    id text NOT NULL
+) ON COMMIT DROP;
+
+INSERT INTO demo_document_code_conflicts (table_name, id)
+SELECT 'quotes', q.id
+FROM quotes q
+JOIN pg_temp.demo_document_codes codes
+  ON codes.module_id = 'client_quote'
+ AND codes.code = q.id
+WHERE q.client_id NOT IN ('dm_cli_01', 'dm_cli_02', 'dm_cli_03', 'dm_cli_04', 'dm_cli_05')
+UNION ALL
+SELECT 'customer_offers', o.id
+FROM customer_offers o
+JOIN pg_temp.demo_document_codes codes
+  ON codes.module_id = 'client_offer'
+ AND codes.code = o.id
+WHERE o.client_id NOT IN ('dm_cli_01', 'dm_cli_02', 'dm_cli_03', 'dm_cli_04', 'dm_cli_05')
+UNION ALL
+SELECT 'sales', s.id
+FROM sales s
+JOIN pg_temp.demo_document_codes codes
+  ON codes.module_id = 'client_order'
+ AND codes.code = s.id
+WHERE s.client_id NOT IN ('dm_cli_01', 'dm_cli_02', 'dm_cli_03', 'dm_cli_04', 'dm_cli_05')
+UNION ALL
+SELECT 'supplier_quotes', sq.id
+FROM supplier_quotes sq
+JOIN pg_temp.demo_document_codes codes
+  ON codes.module_id = 'supplier_quote'
+ AND codes.code = sq.id
+WHERE sq.supplier_id NOT IN ('dm_sup_01', 'dm_sup_02', 'dm_sup_03', 'dm_sup_04', 'dm_sup_05')
+UNION ALL
+SELECT 'supplier_sales', ss.id
+FROM supplier_sales ss
+JOIN pg_temp.demo_document_codes codes
+  ON codes.module_id = 'supplier_order'
+ AND codes.code = ss.id
+WHERE ss.supplier_id NOT IN ('dm_sup_01', 'dm_sup_02', 'dm_sup_03', 'dm_sup_04', 'dm_sup_05');
+
+SELECT CASE
+    WHEN EXISTS (SELECT 1 FROM pg_temp.demo_document_code_conflicts)
+        THEN 'Demo seed document code collision with existing non-demo document rows'::integer
+    ELSE 0
+END;
+
+INSERT INTO document_code_counters (module_id, year, next_sequence, updated_at)
+VALUES
+    ('client_quote', pg_temp.demo_seed_year(), 15, CURRENT_TIMESTAMP),
+    ('client_offer', pg_temp.demo_seed_year(), 6, CURRENT_TIMESTAMP),
+    ('supplier_quote', pg_temp.demo_seed_year(), 15, CURRENT_TIMESTAMP),
+    ('client_order', pg_temp.demo_seed_year(), 6, CURRENT_TIMESTAMP),
+    ('supplier_order', pg_temp.demo_seed_year(), 6, CURRENT_TIMESTAMP)
+ON CONFLICT (module_id, year) DO UPDATE SET
+    next_sequence = GREATEST(document_code_counters.next_sequence, EXCLUDED.next_sequence),
+    updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO clients (
     id,
@@ -475,20 +579,20 @@ INSERT INTO quotes (
     created_at,
     updated_at
 ) VALUES
-    ('dm_cq_01', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 2.00, 'draft', CURRENT_DATE + INTERVAL '45 days', 'qcc_email', 'Editable draft quote with two services.', CURRENT_TIMESTAMP - INTERVAL '150 days', CURRENT_TIMESTAMP - INTERVAL '149 days'),
-    ('dm_cq_02', 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 3.00, 'sent', CURRENT_DATE + INTERVAL '22 days', 'qcc_email', 'Sent quote waiting for customer feedback.', CURRENT_TIMESTAMP - INTERVAL '130 days', CURRENT_TIMESTAMP - INTERVAL '126 days'),
-    ('dm_cq_03', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '28 days', 'qcc_email', 'Accepted quote intentionally left without an offer to expose the CTA.', CURRENT_TIMESTAMP - INTERVAL '112 days', CURRENT_TIMESTAMP - INTERVAL '108 days'),
-    ('dm_cq_04', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 4.00, 'accepted', CURRENT_DATE + INTERVAL '30 days', 'qcc_email', 'Accepted quote with a draft offer downstream.', CURRENT_TIMESTAMP - INTERVAL '101 days', CURRENT_TIMESTAMP - INTERVAL '96 days'),
-    ('dm_cq_05', 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 1.50, 'accepted', CURRENT_DATE + INTERVAL '26 days', 'qcc_email', 'Accepted quote with a sent offer downstream.', CURRENT_TIMESTAMP - INTERVAL '92 days', CURRENT_TIMESTAMP - INTERVAL '88 days'),
-    ('dm_cq_06', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '24 days', 'qcc_email', 'Accepted assessment + deployment quote that flowed into an accepted offer and a confirmed order.', CURRENT_TIMESTAMP - INTERVAL '78 days', CURRENT_TIMESTAMP - INTERVAL '72 days'),
-    ('dm_cq_07', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'accepted', CURRENT_DATE + INTERVAL '20 days', 'qcc_email', 'Accepted quote linked to an accepted offer that already generated an order.', CURRENT_TIMESTAMP - INTERVAL '66 days', CURRENT_TIMESTAMP - INTERVAL '61 days'),
-    ('dm_cq_08', 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'accepted', CURRENT_DATE + INTERVAL '12 days', 'qcc_email', 'Accepted quote linked to a denied offer.', CURRENT_TIMESTAMP - INTERVAL '58 days', CURRENT_TIMESTAMP - INTERVAL '54 days'),
-    ('dm_cq_09', 'dm_cli_02', 'Helios Energy Services S.r.l.', '30gg', 5.00, 'denied', CURRENT_DATE + INTERVAL '10 days', 'qcc_email', 'Rejected customer quote kept for history coverage.', CURRENT_TIMESTAMP - INTERVAL '36 days', CURRENT_TIMESTAMP - INTERVAL '34 days'),
-    ('dm_cq_10', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'sent', CURRENT_DATE - INTERVAL '5 days', 'qcc_email', 'Expired quote to exercise historical and expired state handling.', CURRENT_TIMESTAMP - INTERVAL '24 days', CURRENT_TIMESTAMP - INTERVAL '20 days'),
-    ('dm_cq_11', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '14 days', 'qcc_email', 'Accepted procurement driver: its 1-to-1 link keeps supplier quote dm_sq_11 in the Accepted state (#779 derived status).', CURRENT_TIMESTAMP - INTERVAL '53 days', CURRENT_TIMESTAMP - INTERVAL '49 days'),
-    ('dm_cq_12', 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '11 days', 'qcc_email', 'Accepted procurement driver for supplier quote dm_sq_12.', CURRENT_TIMESTAMP - INTERVAL '42 days', CURRENT_TIMESTAMP - INTERVAL '37 days'),
-    ('dm_cq_13', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '8 days', 'qcc_email', 'Accepted procurement driver for supplier quote dm_sq_13.', CURRENT_TIMESTAMP - INTERVAL '33 days', CURRENT_TIMESTAMP - INTERVAL '28 days'),
-    ('dm_cq_14', 'dm_cli_04', 'Giulia Ferri', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '6 days', 'qcc_email', 'Accepted procurement driver for supplier quote dm_sq_14.', CURRENT_TIMESTAMP - INTERVAL '25 days', CURRENT_TIMESTAMP - INTERVAL '21 days')
+    (pg_temp.demo_document_code('client_quote', 1), 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 2.00, 'draft', CURRENT_DATE + INTERVAL '45 days', 'qcc_email', 'Editable draft quote with two services.', CURRENT_TIMESTAMP - INTERVAL '150 days', CURRENT_TIMESTAMP - INTERVAL '149 days'),
+    (pg_temp.demo_document_code('client_quote', 2), 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 3.00, 'sent', CURRENT_DATE + INTERVAL '22 days', 'qcc_email', 'Sent quote waiting for customer feedback.', CURRENT_TIMESTAMP - INTERVAL '130 days', CURRENT_TIMESTAMP - INTERVAL '126 days'),
+    (pg_temp.demo_document_code('client_quote', 3), 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '28 days', 'qcc_email', 'Accepted quote intentionally left without an offer to expose the CTA.', CURRENT_TIMESTAMP - INTERVAL '112 days', CURRENT_TIMESTAMP - INTERVAL '108 days'),
+    (pg_temp.demo_document_code('client_quote', 4), 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 4.00, 'accepted', CURRENT_DATE + INTERVAL '30 days', 'qcc_email', 'Accepted quote with a draft offer downstream.', CURRENT_TIMESTAMP - INTERVAL '101 days', CURRENT_TIMESTAMP - INTERVAL '96 days'),
+    (pg_temp.demo_document_code('client_quote', 5), 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 1.50, 'accepted', CURRENT_DATE + INTERVAL '26 days', 'qcc_email', 'Accepted quote with a sent offer downstream.', CURRENT_TIMESTAMP - INTERVAL '92 days', CURRENT_TIMESTAMP - INTERVAL '88 days'),
+    (pg_temp.demo_document_code('client_quote', 6), 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '24 days', 'qcc_email', 'Accepted assessment + deployment quote that flowed into an accepted offer and a confirmed order.', CURRENT_TIMESTAMP - INTERVAL '78 days', CURRENT_TIMESTAMP - INTERVAL '72 days'),
+    (pg_temp.demo_document_code('client_quote', 7), 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'accepted', CURRENT_DATE + INTERVAL '20 days', 'qcc_email', 'Accepted quote linked to an accepted offer that already generated an order.', CURRENT_TIMESTAMP - INTERVAL '66 days', CURRENT_TIMESTAMP - INTERVAL '61 days'),
+    (pg_temp.demo_document_code('client_quote', 8), 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'accepted', CURRENT_DATE + INTERVAL '12 days', 'qcc_email', 'Accepted quote linked to a denied offer.', CURRENT_TIMESTAMP - INTERVAL '58 days', CURRENT_TIMESTAMP - INTERVAL '54 days'),
+    (pg_temp.demo_document_code('client_quote', 9), 'dm_cli_02', 'Helios Energy Services S.r.l.', '30gg', 5.00, 'denied', CURRENT_DATE + INTERVAL '10 days', 'qcc_email', 'Rejected customer quote kept for history coverage.', CURRENT_TIMESTAMP - INTERVAL '36 days', CURRENT_TIMESTAMP - INTERVAL '34 days'),
+    (pg_temp.demo_document_code('client_quote', 10), 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'sent', CURRENT_DATE - INTERVAL '5 days', 'qcc_email', 'Expired quote to exercise historical and expired state handling.', CURRENT_TIMESTAMP - INTERVAL '24 days', CURRENT_TIMESTAMP - INTERVAL '20 days'),
+    (pg_temp.demo_document_code('client_quote', 11), 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '14 days', 'qcc_email', 'Accepted procurement driver: its 1-to-1 link keeps the paired supplier quote in the Accepted state (#779 derived status).', CURRENT_TIMESTAMP - INTERVAL '53 days', CURRENT_TIMESTAMP - INTERVAL '49 days'),
+    (pg_temp.demo_document_code('client_quote', 12), 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '11 days', 'qcc_email', 'Accepted procurement driver for the paired supplier quote.', CURRENT_TIMESTAMP - INTERVAL '42 days', CURRENT_TIMESTAMP - INTERVAL '37 days'),
+    (pg_temp.demo_document_code('client_quote', 13), 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '8 days', 'qcc_email', 'Accepted procurement driver for the paired supplier quote.', CURRENT_TIMESTAMP - INTERVAL '33 days', CURRENT_TIMESTAMP - INTERVAL '28 days'),
+    (pg_temp.demo_document_code('client_quote', 14), 'dm_cli_04', 'Giulia Ferri', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '6 days', 'qcc_email', 'Accepted procurement driver for the paired supplier quote.', CURRENT_TIMESTAMP - INTERVAL '25 days', CURRENT_TIMESTAMP - INTERVAL '21 days')
 ON CONFLICT (id) DO UPDATE SET
     client_id = EXCLUDED.client_id,
     client_name = EXCLUDED.client_name,
@@ -526,25 +630,25 @@ SELECT
     v.note
 FROM (
     VALUES
-        ('dm_cqi_01', 'dm_cq_01', 'dm_prd_01', 5.00, 1230.00, 0.00, 'Discovery workshops and stakeholder interviews'),
-        ('dm_cqi_02', 'dm_cq_01', 'dm_prd_02', 2.00, 1715.00, 0.00, 'Deployment sprint for first release wave'),
-        ('dm_cqi_03', 'dm_cq_02', 'dm_prd_05', 12.00, 1159.00, 3.00, 'Endpoint refresh lot for field technicians'),
-        ('dm_cqi_04', 'dm_cq_03', 'dm_prd_06', 40.00, 225.00, 0.00, 'Accepted subscription bundle intentionally kept without downstream offer'),
-        ('dm_cqi_05', 'dm_cq_04', 'dm_prd_01', 3.00, 1230.00, 0.00, 'Strategic assessment package'),
-        ('dm_cqi_06', 'dm_cq_04', 'dm_prd_04', 1.00, 1090.00, 5.00, 'Executive training day'),
-        ('dm_cqi_07', 'dm_cq_05', 'dm_prd_07', 2.00, 1795.00, 0.00, 'Firewall appliances for branch perimeter refresh'),
-        ('dm_cqi_08', 'dm_cq_06', 'dm_prd_01', 4.00, 1230.00, 0.00, 'Strategy assessment lot for the operations engagement'),
-        ('dm_cqi_15', 'dm_cq_06', 'dm_prd_02', 1.00, 1715.00, 0.00, 'Deployment sprint for the phase-one rollout'),
-        ('dm_cqi_09', 'dm_cq_07', 'dm_prd_08', 2.00, 160.00, 0.00, 'Print collateral for the public-sector rollout'),
-        ('dm_cqi_10', 'dm_cq_07', 'dm_prd_02', 1.00, 1715.00, 0.00, 'Deployment sprint for the first implementation lot'),
-        ('dm_cqi_11', 'dm_cq_08', 'dm_prd_04', 2.00, 1090.00, 0.00, 'Training package for a small customer'),
-        ('dm_cqi_12', 'dm_cq_09', 'dm_prd_05', 3.00, 1159.00, 0.00, 'Rejected hardware offer kept for reporting'),
-        ('dm_cqi_13', 'dm_cq_10', 'dm_prd_03', 6.00, 835.00, 0.00, 'Managed support bundle that expired before confirmation'),
-        ('dm_cqi_14', 'dm_cq_10', 'dm_prd_08', 15.00, 160.00, 0.00, 'Print collateral add-on on the expired quote'),
-        ('dm_cqi_16', 'dm_cq_11', 'dm_prd_05', 4.00, 1180.00, 0.00, 'Hardware lot driving the editable draft supplier order'),
-        ('dm_cqi_17', 'dm_cq_12', 'dm_prd_06', 80.00, 225.00, 0.00, 'Licensing lot driving the sent supplier order'),
-        ('dm_cqi_18', 'dm_cq_13', 'dm_prd_07', 1.00, 1795.00, 0.00, 'Security appliance driving the invoiced supplier order'),
-        ('dm_cqi_19', 'dm_cq_14', 'dm_prd_05', 2.00, 1180.00, 0.00, 'Hardware lot driving the sent supplier order')
+        ('dm_cqi_01', pg_temp.demo_document_code('client_quote', 1), 'dm_prd_01', 5.00, 1230.00, 0.00, 'Discovery workshops and stakeholder interviews'),
+        ('dm_cqi_02', pg_temp.demo_document_code('client_quote', 1), 'dm_prd_02', 2.00, 1715.00, 0.00, 'Deployment sprint for first release wave'),
+        ('dm_cqi_03', pg_temp.demo_document_code('client_quote', 2), 'dm_prd_05', 12.00, 1159.00, 3.00, 'Endpoint refresh lot for field technicians'),
+        ('dm_cqi_04', pg_temp.demo_document_code('client_quote', 3), 'dm_prd_06', 40.00, 225.00, 0.00, 'Accepted subscription bundle intentionally kept without downstream offer'),
+        ('dm_cqi_05', pg_temp.demo_document_code('client_quote', 4), 'dm_prd_01', 3.00, 1230.00, 0.00, 'Strategic assessment package'),
+        ('dm_cqi_06', pg_temp.demo_document_code('client_quote', 4), 'dm_prd_04', 1.00, 1090.00, 5.00, 'Executive training day'),
+        ('dm_cqi_07', pg_temp.demo_document_code('client_quote', 5), 'dm_prd_07', 2.00, 1795.00, 0.00, 'Firewall appliances for branch perimeter refresh'),
+        ('dm_cqi_08', pg_temp.demo_document_code('client_quote', 6), 'dm_prd_01', 4.00, 1230.00, 0.00, 'Strategy assessment lot for the operations engagement'),
+        ('dm_cqi_15', pg_temp.demo_document_code('client_quote', 6), 'dm_prd_02', 1.00, 1715.00, 0.00, 'Deployment sprint for the phase-one rollout'),
+        ('dm_cqi_09', pg_temp.demo_document_code('client_quote', 7), 'dm_prd_08', 2.00, 160.00, 0.00, 'Print collateral for the public-sector rollout'),
+        ('dm_cqi_10', pg_temp.demo_document_code('client_quote', 7), 'dm_prd_02', 1.00, 1715.00, 0.00, 'Deployment sprint for the first implementation lot'),
+        ('dm_cqi_11', pg_temp.demo_document_code('client_quote', 8), 'dm_prd_04', 2.00, 1090.00, 0.00, 'Training package for a small customer'),
+        ('dm_cqi_12', pg_temp.demo_document_code('client_quote', 9), 'dm_prd_05', 3.00, 1159.00, 0.00, 'Rejected hardware offer kept for reporting'),
+        ('dm_cqi_13', pg_temp.demo_document_code('client_quote', 10), 'dm_prd_03', 6.00, 835.00, 0.00, 'Managed support bundle that expired before confirmation'),
+        ('dm_cqi_14', pg_temp.demo_document_code('client_quote', 10), 'dm_prd_08', 15.00, 160.00, 0.00, 'Print collateral add-on on the expired quote'),
+        ('dm_cqi_16', pg_temp.demo_document_code('client_quote', 11), 'dm_prd_05', 4.00, 1180.00, 0.00, 'Hardware lot driving the editable draft supplier order'),
+        ('dm_cqi_17', pg_temp.demo_document_code('client_quote', 12), 'dm_prd_06', 80.00, 225.00, 0.00, 'Licensing lot driving the sent supplier order'),
+        ('dm_cqi_18', pg_temp.demo_document_code('client_quote', 13), 'dm_prd_07', 1.00, 1795.00, 0.00, 'Security appliance driving the invoiced supplier order'),
+        ('dm_cqi_19', pg_temp.demo_document_code('client_quote', 14), 'dm_prd_05', 2.00, 1180.00, 0.00, 'Hardware lot driving the sent supplier order')
 ) AS v(id, quote_id, product_id, quantity, unit_price, discount, note)
 JOIN products p ON p.id = v.product_id
 ON CONFLICT (id) DO UPDATE SET
@@ -571,11 +675,11 @@ INSERT INTO customer_offers (
     created_at,
     updated_at
 ) VALUES
-    ('dm_co_01', 'dm_cq_04', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 4.00, 'draft', CURRENT_DATE + INTERVAL '24 days', 'Editable draft offer created from an accepted quote.', CURRENT_TIMESTAMP - INTERVAL '90 days', CURRENT_TIMESTAMP - INTERVAL '88 days'),
-    ('dm_co_02', 'dm_cq_05', 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 1.50, 'sent', CURRENT_DATE + INTERVAL '22 days', 'Sent offer waiting for customer reply.', CURRENT_TIMESTAMP - INTERVAL '80 days', CURRENT_TIMESTAMP - INTERVAL '77 days'),
-    ('dm_co_03', 'dm_cq_06', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '18 days', 'Accepted offer converted into the confirmed delivery order that spawned the demo projects.', CURRENT_TIMESTAMP - INTERVAL '68 days', CURRENT_TIMESTAMP - INTERVAL '65 days'),
-    ('dm_co_04', 'dm_cq_07', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'accepted', CURRENT_DATE + INTERVAL '16 days', 'Accepted offer already converted into an order.', CURRENT_TIMESTAMP - INTERVAL '56 days', CURRENT_TIMESTAMP - INTERVAL '52 days'),
-    ('dm_co_05', 'dm_cq_08', 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'denied', CURRENT_DATE + INTERVAL '8 days', 'Denied offer for historical state coverage.', CURRENT_TIMESTAMP - INTERVAL '46 days', CURRENT_TIMESTAMP - INTERVAL '43 days')
+    (pg_temp.demo_document_code('client_offer', 1), pg_temp.demo_document_code('client_quote', 4), 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 4.00, 'draft', CURRENT_DATE + INTERVAL '24 days', 'Editable draft offer created from an accepted quote.', CURRENT_TIMESTAMP - INTERVAL '90 days', CURRENT_TIMESTAMP - INTERVAL '88 days'),
+    (pg_temp.demo_document_code('client_offer', 2), pg_temp.demo_document_code('client_quote', 5), 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 1.50, 'sent', CURRENT_DATE + INTERVAL '22 days', 'Sent offer waiting for customer reply.', CURRENT_TIMESTAMP - INTERVAL '80 days', CURRENT_TIMESTAMP - INTERVAL '77 days'),
+    (pg_temp.demo_document_code('client_offer', 3), pg_temp.demo_document_code('client_quote', 6), 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '18 days', 'Accepted offer converted into the confirmed delivery order that spawned the demo projects.', CURRENT_TIMESTAMP - INTERVAL '68 days', CURRENT_TIMESTAMP - INTERVAL '65 days'),
+    (pg_temp.demo_document_code('client_offer', 4), pg_temp.demo_document_code('client_quote', 7), 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'accepted', CURRENT_DATE + INTERVAL '16 days', 'Accepted offer already converted into an order.', CURRENT_TIMESTAMP - INTERVAL '56 days', CURRENT_TIMESTAMP - INTERVAL '52 days'),
+    (pg_temp.demo_document_code('client_offer', 5), pg_temp.demo_document_code('client_quote', 8), 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'denied', CURRENT_DATE + INTERVAL '8 days', 'Denied offer for historical state coverage.', CURRENT_TIMESTAMP - INTERVAL '46 days', CURRENT_TIMESTAMP - INTERVAL '43 days')
 ON CONFLICT (id) DO UPDATE SET
     linked_quote_id = EXCLUDED.linked_quote_id,
     client_id = EXCLUDED.client_id,
@@ -613,14 +717,14 @@ SELECT
     v.note
 FROM (
     VALUES
-        ('dm_coi_01', 'dm_co_01', 'dm_prd_01', 3.00, 1230.00, 0.00, 'Draft offer line copied from the accepted quote'),
-        ('dm_coi_02', 'dm_co_01', 'dm_prd_04', 1.00, 1090.00, 5.00, 'Editable training line'),
-        ('dm_coi_03', 'dm_co_02', 'dm_prd_07', 2.00, 1795.00, 0.00, 'Pending security appliance offer'),
-        ('dm_coi_04', 'dm_co_03', 'dm_prd_01', 4.00, 1230.00, 5.00, 'Accepted assessment lot for the operations engagement'),
-        ('dm_coi_08', 'dm_co_03', 'dm_prd_02', 1.00, 1715.00, 5.00, 'Accepted deployment sprint for the phase-one rollout'),
-        ('dm_coi_05', 'dm_co_04', 'dm_prd_01', 2.00, 1230.00, 0.00, 'Accepted assessment lot'),
-        ('dm_coi_06', 'dm_co_04', 'dm_prd_02', 1.00, 1715.00, 0.00, 'Accepted deployment sprint'),
-        ('dm_coi_07', 'dm_co_05', 'dm_prd_04', 2.00, 1090.00, 0.00, 'Denied training offer')
+        ('dm_coi_01', pg_temp.demo_document_code('client_offer', 1), 'dm_prd_01', 3.00, 1230.00, 0.00, 'Draft offer line copied from the accepted quote'),
+        ('dm_coi_02', pg_temp.demo_document_code('client_offer', 1), 'dm_prd_04', 1.00, 1090.00, 5.00, 'Editable training line'),
+        ('dm_coi_03', pg_temp.demo_document_code('client_offer', 2), 'dm_prd_07', 2.00, 1795.00, 0.00, 'Pending security appliance offer'),
+        ('dm_coi_04', pg_temp.demo_document_code('client_offer', 3), 'dm_prd_01', 4.00, 1230.00, 5.00, 'Accepted assessment lot for the operations engagement'),
+        ('dm_coi_08', pg_temp.demo_document_code('client_offer', 3), 'dm_prd_02', 1.00, 1715.00, 5.00, 'Accepted deployment sprint for the phase-one rollout'),
+        ('dm_coi_05', pg_temp.demo_document_code('client_offer', 4), 'dm_prd_01', 2.00, 1230.00, 0.00, 'Accepted assessment lot'),
+        ('dm_coi_06', pg_temp.demo_document_code('client_offer', 4), 'dm_prd_02', 1.00, 1715.00, 0.00, 'Accepted deployment sprint'),
+        ('dm_coi_07', pg_temp.demo_document_code('client_offer', 5), 'dm_prd_04', 2.00, 1090.00, 0.00, 'Denied training offer')
 ) AS v(id, offer_id, product_id, quantity, unit_price, discount, note)
 JOIN products p ON p.id = v.product_id
 ON CONFLICT (id) DO UPDATE SET
@@ -647,11 +751,11 @@ INSERT INTO sales (
     created_at,
     updated_at
 ) VALUES
-    ('dm_so_01', NULL, NULL, 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'draft', 'Editable manual sale order used for direct accounting workflow.', CURRENT_TIMESTAMP - INTERVAL '42 days', CURRENT_TIMESTAMP - INTERVAL '41 days'),
-    ('dm_so_02', 'dm_cq_07', 'dm_co_04', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'confirmed', 'Linked order generated from an accepted offer and confirmed.', CURRENT_TIMESTAMP - INTERVAL '33 days', CURRENT_TIMESTAMP - INTERVAL '30 days'),
-    ('dm_so_03', NULL, NULL, 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 1.50, 'confirmed', 'Confirmed manual order intentionally left without an invoice.', CURRENT_TIMESTAMP - INTERVAL '28 days', CURRENT_TIMESTAMP - INTERVAL '24 days'),
-    ('dm_so_04', 'dm_cq_06', 'dm_co_03', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'confirmed', 'Confirmed order generated from the accepted Northwind offer, already invoiced, and used to generate the demo delivery projects. The linked projects keep explicit project revenue instead of importing the order total automatically.', CURRENT_TIMESTAMP - INTERVAL '21 days', CURRENT_TIMESTAMP - INTERVAL '18 days'),
-    ('dm_so_05', NULL, NULL, 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 0.00, 'denied', 'Denied order retained for accounting history coverage.', CURRENT_TIMESTAMP - INTERVAL '16 days', CURRENT_TIMESTAMP - INTERVAL '14 days')
+    (pg_temp.demo_document_code('client_order', 1), NULL, NULL, 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'draft', 'Editable manual sale order used for direct accounting workflow.', CURRENT_TIMESTAMP - INTERVAL '42 days', CURRENT_TIMESTAMP - INTERVAL '41 days'),
+    (pg_temp.demo_document_code('client_order', 2), pg_temp.demo_document_code('client_quote', 7), pg_temp.demo_document_code('client_offer', 4), 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'confirmed', 'Linked order generated from an accepted offer and confirmed.', CURRENT_TIMESTAMP - INTERVAL '33 days', CURRENT_TIMESTAMP - INTERVAL '30 days'),
+    (pg_temp.demo_document_code('client_order', 3), NULL, NULL, 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 1.50, 'confirmed', 'Confirmed manual order intentionally left without an invoice.', CURRENT_TIMESTAMP - INTERVAL '28 days', CURRENT_TIMESTAMP - INTERVAL '24 days'),
+    (pg_temp.demo_document_code('client_order', 4), pg_temp.demo_document_code('client_quote', 6), pg_temp.demo_document_code('client_offer', 3), 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'confirmed', 'Confirmed order generated from the accepted Northwind offer, already invoiced, and used to generate the demo delivery projects. The linked projects keep explicit project revenue instead of importing the order total automatically.', CURRENT_TIMESTAMP - INTERVAL '21 days', CURRENT_TIMESTAMP - INTERVAL '18 days'),
+    (pg_temp.demo_document_code('client_order', 5), NULL, NULL, 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 0.00, 'denied', 'Denied order retained for accounting history coverage.', CURRENT_TIMESTAMP - INTERVAL '16 days', CURRENT_TIMESTAMP - INTERVAL '14 days')
 ON CONFLICT (id) DO UPDATE SET
     linked_quote_id = EXCLUDED.linked_quote_id,
     linked_offer_id = EXCLUDED.linked_offer_id,
@@ -689,14 +793,14 @@ SELECT
     v.note
 FROM (
     VALUES
-        ('dm_soi_01', 'dm_so_01', 'dm_prd_08', 25.00, 160.00, 0.00, 'Draft order for event print materials'),
-        ('dm_soi_02', 'dm_so_02', 'dm_prd_01', 2.00, 1230.00, 0.00, 'Linked assessment lot on a confirmed order'),
-        ('dm_soi_03', 'dm_so_02', 'dm_prd_02', 1.00, 1715.00, 0.00, 'Linked deployment lot on a confirmed order'),
-        ('dm_soi_04', 'dm_so_03', 'dm_prd_03', 6.00, 835.00, 0.00, 'Confirmed support retainer kept open without invoice'),
-        ('dm_soi_05', 'dm_so_03', 'dm_prd_06', 20.00, 210.00, 0.00, 'Confirmed software add-on still ready for invoicing'),
-        ('dm_soi_06', 'dm_so_04', 'dm_prd_01', 4.00, 1230.00, 5.00, 'Assessment track for operations'),
-        ('dm_soi_07', 'dm_so_04', 'dm_prd_02', 1.00, 1715.00, 5.00, 'Deployment wave for phase one'),
-        ('dm_soi_08', 'dm_so_05', 'dm_prd_05', 3.00, 1159.00, 0.00, 'Denied hardware order')
+        ('dm_soi_01', pg_temp.demo_document_code('client_order', 1), 'dm_prd_08', 25.00, 160.00, 0.00, 'Draft order for event print materials'),
+        ('dm_soi_02', pg_temp.demo_document_code('client_order', 2), 'dm_prd_01', 2.00, 1230.00, 0.00, 'Linked assessment lot on a confirmed order'),
+        ('dm_soi_03', pg_temp.demo_document_code('client_order', 2), 'dm_prd_02', 1.00, 1715.00, 0.00, 'Linked deployment lot on a confirmed order'),
+        ('dm_soi_04', pg_temp.demo_document_code('client_order', 3), 'dm_prd_03', 6.00, 835.00, 0.00, 'Confirmed support retainer kept open without invoice'),
+        ('dm_soi_05', pg_temp.demo_document_code('client_order', 3), 'dm_prd_06', 20.00, 210.00, 0.00, 'Confirmed software add-on still ready for invoicing'),
+        ('dm_soi_06', pg_temp.demo_document_code('client_order', 4), 'dm_prd_01', 4.00, 1230.00, 5.00, 'Assessment track for operations'),
+        ('dm_soi_07', pg_temp.demo_document_code('client_order', 4), 'dm_prd_02', 1.00, 1715.00, 5.00, 'Deployment wave for phase one'),
+        ('dm_soi_08', pg_temp.demo_document_code('client_order', 5), 'dm_prd_05', 3.00, 1159.00, 0.00, 'Denied hardware order')
 ) AS v(id, sale_id, product_id, quantity, unit_price, discount, note)
 JOIN products p ON p.id = v.product_id
 ON CONFLICT (id) DO UPDATE SET
@@ -727,7 +831,7 @@ INSERT INTO invoices (
 ) VALUES
     ('dm_inv_01', NULL, 'dm_cli_02', 'Helios Energy Services S.r.l.', CURRENT_DATE - INTERVAL '18 days', CURRENT_DATE + INTERVAL '12 days', 'draft', 1090.00, 1090.00, 0.00, 'Editable draft invoice.', CURRENT_TIMESTAMP - INTERVAL '18 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
     ('dm_inv_02', NULL, 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', CURRENT_DATE - INTERVAL '30 days', CURRENT_DATE + INTERVAL '5 days', 'sent', 1795.00, 1795.00, 600.00, 'Partially paid invoice with remaining balance.', CURRENT_TIMESTAMP - INTERVAL '30 days', CURRENT_TIMESTAMP - INTERVAL '5 days'),
-    ('dm_inv_03', 'dm_so_04', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', CURRENT_DATE - INTERVAL '20 days', CURRENT_DATE + INTERVAL '10 days', 'paid', 6303.25, 6303.25, 6303.25, 'Fully paid invoice linked to the confirmed demo order.', CURRENT_TIMESTAMP - INTERVAL '20 days', CURRENT_TIMESTAMP - INTERVAL '2 days'),
+    ('dm_inv_03', pg_temp.demo_document_code('client_order', 4), 'dm_cli_01', 'Northwind Retail Italia S.p.A.', CURRENT_DATE - INTERVAL '20 days', CURRENT_DATE + INTERVAL '10 days', 'paid', 6303.25, 6303.25, 6303.25, 'Fully paid invoice linked to the confirmed demo order.', CURRENT_TIMESTAMP - INTERVAL '20 days', CURRENT_TIMESTAMP - INTERVAL '2 days'),
     ('dm_inv_04', NULL, 'dm_cli_01', 'Northwind Retail Italia S.p.A.', CURRENT_DATE - INTERVAL '45 days', CURRENT_DATE - INTERVAL '15 days', 'overdue', 10020.00, 10020.00, 0.00, 'Outstanding overdue invoice for collections reporting.', CURRENT_TIMESTAMP - INTERVAL '45 days', CURRENT_TIMESTAMP - INTERVAL '14 days'),
     ('dm_inv_05', NULL, 'dm_cli_04', 'Giulia Ferri', CURRENT_DATE - INTERVAL '12 days', CURRENT_DATE + INTERVAL '20 days', 'cancelled', 1600.00, 1600.00, 0.00, 'Cancelled invoice retained for status coverage.', CURRENT_TIMESTAMP - INTERVAL '12 days', CURRENT_TIMESTAMP - INTERVAL '11 days')
 ON CONFLICT (id) DO UPDATE SET
@@ -781,20 +885,20 @@ INSERT INTO supplier_quotes (
     created_at,
     updated_at
 ) VALUES
-    ('dm_sq_01', 'dm_sup_01', 'TechSource Distribution', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 'draft', CURRENT_DATE + INTERVAL '35 days', 'qcc_email', 'Editable supplier quote for hardware procurement.', CURRENT_TIMESTAMP - INTERVAL '145 days', CURRENT_TIMESTAMP - INTERVAL '144 days'),
-    ('dm_sq_02', 'dm_sup_02', 'CloudSeat Licensing', 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 'draft', CURRENT_DATE + INTERVAL '28 days', 'qcc_email', 'Sent supplier quote pending vendor response.', CURRENT_TIMESTAMP - INTERVAL '132 days', CURRENT_TIMESTAMP - INTERVAL '130 days'),
-    ('dm_sq_03', 'dm_sup_03', 'SecureEdge Systems', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 'draft', CURRENT_DATE + INTERVAL '26 days', 'qcc_email', 'Accepted supplier quote intentionally left without an offer.', CURRENT_TIMESTAMP - INTERVAL '118 days', CURRENT_TIMESTAMP - INTERVAL '114 days'),
-    ('dm_sq_04', 'dm_sup_01', 'TechSource Distribution', 'dm_cli_04', 'Giulia Ferri', '30gg', 'draft', CURRENT_DATE + INTERVAL '24 days', 'qcc_email', 'In offer: driven by the draft offer on the linked quote dm_cq_04 (#779 derived status).', CURRENT_TIMESTAMP - INTERVAL '104 days', CURRENT_TIMESTAMP - INTERVAL '100 days'),
-    ('dm_sq_05', 'dm_sup_02', 'CloudSeat Licensing', 'dm_cli_05', 'Atlas Legacy Holdings', '45gg', 'draft', CURRENT_DATE + INTERVAL '20 days', 'qcc_email', 'In offer: driven by the sent offer on the linked quote dm_cq_05.', CURRENT_TIMESTAMP - INTERVAL '94 days', CURRENT_TIMESTAMP - INTERVAL '89 days'),
-    ('dm_sq_06', 'dm_sup_03', 'SecureEdge Systems', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '60gg', 'draft', CURRENT_DATE + INTERVAL '18 days', 'qcc_email', 'Accepted supplier quote linked to an accepted offer ready for order creation.', CURRENT_TIMESTAMP - INTERVAL '82 days', CURRENT_TIMESTAMP - INTERVAL '78 days'),
-    ('dm_sq_07', 'dm_sup_04', 'PrintLogistics Hub', 'dm_cli_02', 'Helios Energy Services S.r.l.', '30gg', 'draft', CURRENT_DATE + INTERVAL '16 days', 'qcc_email', 'Accepted supplier quote linked to an order already in progress.', CURRENT_TIMESTAMP - INTERVAL '70 days', CURRENT_TIMESTAMP - INTERVAL '66 days'),
-    ('dm_sq_08', 'dm_sup_01', 'TechSource Distribution', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '30gg', 'draft', CURRENT_DATE + INTERVAL '12 days', 'qcc_email', 'Denied: driven by the denied offer on the linked quote dm_cq_08.', CURRENT_TIMESTAMP - INTERVAL '60 days', CURRENT_TIMESTAMP - INTERVAL '57 days'),
-    ('dm_sq_09', 'dm_sup_02', 'CloudSeat Licensing', 'dm_cli_04', 'Giulia Ferri', '45gg', 'draft', CURRENT_DATE + INTERVAL '9 days', 'qcc_email', 'Denied supplier quote kept for history coverage.', CURRENT_TIMESTAMP - INTERVAL '39 days', CURRENT_TIMESTAMP - INTERVAL '37 days'),
-    ('dm_sq_10', 'dm_sup_04', 'PrintLogistics Hub', 'dm_cli_05', 'Atlas Legacy Holdings', '30gg', 'draft', CURRENT_DATE - INTERVAL '6 days', 'qcc_email', 'Expired supplier quote.', CURRENT_TIMESTAMP - INTERVAL '22 days', CURRENT_TIMESTAMP - INTERVAL '19 days'),
-    ('dm_sq_11', 'dm_sup_01', 'TechSource Distribution', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 'draft', CURRENT_DATE + INTERVAL '14 days', 'qcc_email', 'Accepted supplier quote linked to a draft order for editable procurement flow.', CURRENT_TIMESTAMP - INTERVAL '52 days', CURRENT_TIMESTAMP - INTERVAL '48 days'),
-    ('dm_sq_12', 'dm_sup_02', 'CloudSeat Licensing', 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 'draft', CURRENT_DATE + INTERVAL '11 days', 'qcc_email', 'Accepted supplier quote linked to a sent licensing order without an invoice.', CURRENT_TIMESTAMP - INTERVAL '41 days', CURRENT_TIMESTAMP - INTERVAL '36 days'),
-    ('dm_sq_13', 'dm_sup_03', 'SecureEdge Systems', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 'draft', CURRENT_DATE + INTERVAL '8 days', 'qcc_email', 'Accepted supplier quote linked to a sent order already invoiced.', CURRENT_TIMESTAMP - INTERVAL '32 days', CURRENT_TIMESTAMP - INTERVAL '27 days'),
-    ('dm_sq_14', 'dm_sup_01', 'TechSource Distribution', 'dm_cli_04', 'Giulia Ferri', '30gg', 'draft', CURRENT_DATE + INTERVAL '6 days', 'qcc_email', 'Accepted supplier quote linked to a sent supplier order for history coverage.', CURRENT_TIMESTAMP - INTERVAL '24 days', CURRENT_TIMESTAMP - INTERVAL '20 days')
+    (pg_temp.demo_document_code('supplier_quote', 1), 'dm_sup_01', 'TechSource Distribution', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 'draft', CURRENT_DATE + INTERVAL '35 days', 'qcc_email', 'Editable supplier quote for hardware procurement.', CURRENT_TIMESTAMP - INTERVAL '145 days', CURRENT_TIMESTAMP - INTERVAL '144 days'),
+    (pg_temp.demo_document_code('supplier_quote', 2), 'dm_sup_02', 'CloudSeat Licensing', 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 'draft', CURRENT_DATE + INTERVAL '28 days', 'qcc_email', 'Sent supplier quote pending vendor response.', CURRENT_TIMESTAMP - INTERVAL '132 days', CURRENT_TIMESTAMP - INTERVAL '130 days'),
+    (pg_temp.demo_document_code('supplier_quote', 3), 'dm_sup_03', 'SecureEdge Systems', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 'draft', CURRENT_DATE + INTERVAL '26 days', 'qcc_email', 'Accepted supplier quote intentionally left without an offer.', CURRENT_TIMESTAMP - INTERVAL '118 days', CURRENT_TIMESTAMP - INTERVAL '114 days'),
+    (pg_temp.demo_document_code('supplier_quote', 4), 'dm_sup_01', 'TechSource Distribution', 'dm_cli_04', 'Giulia Ferri', '30gg', 'draft', CURRENT_DATE + INTERVAL '24 days', 'qcc_email', 'In offer: driven by the draft offer on the linked client quote (#779 derived status).', CURRENT_TIMESTAMP - INTERVAL '104 days', CURRENT_TIMESTAMP - INTERVAL '100 days'),
+    (pg_temp.demo_document_code('supplier_quote', 5), 'dm_sup_02', 'CloudSeat Licensing', 'dm_cli_05', 'Atlas Legacy Holdings', '45gg', 'draft', CURRENT_DATE + INTERVAL '20 days', 'qcc_email', 'In offer: driven by the sent offer on the linked client quote.', CURRENT_TIMESTAMP - INTERVAL '94 days', CURRENT_TIMESTAMP - INTERVAL '89 days'),
+    (pg_temp.demo_document_code('supplier_quote', 6), 'dm_sup_03', 'SecureEdge Systems', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '60gg', 'draft', CURRENT_DATE + INTERVAL '18 days', 'qcc_email', 'Accepted supplier quote linked to an accepted offer ready for order creation.', CURRENT_TIMESTAMP - INTERVAL '82 days', CURRENT_TIMESTAMP - INTERVAL '78 days'),
+    (pg_temp.demo_document_code('supplier_quote', 7), 'dm_sup_04', 'PrintLogistics Hub', 'dm_cli_02', 'Helios Energy Services S.r.l.', '30gg', 'draft', CURRENT_DATE + INTERVAL '16 days', 'qcc_email', 'Accepted supplier quote linked to an order already in progress.', CURRENT_TIMESTAMP - INTERVAL '70 days', CURRENT_TIMESTAMP - INTERVAL '66 days'),
+    (pg_temp.demo_document_code('supplier_quote', 8), 'dm_sup_01', 'TechSource Distribution', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '30gg', 'draft', CURRENT_DATE + INTERVAL '12 days', 'qcc_email', 'Denied: driven by the denied offer on the linked client quote.', CURRENT_TIMESTAMP - INTERVAL '60 days', CURRENT_TIMESTAMP - INTERVAL '57 days'),
+    (pg_temp.demo_document_code('supplier_quote', 9), 'dm_sup_02', 'CloudSeat Licensing', 'dm_cli_04', 'Giulia Ferri', '45gg', 'draft', CURRENT_DATE + INTERVAL '9 days', 'qcc_email', 'Denied supplier quote kept for history coverage.', CURRENT_TIMESTAMP - INTERVAL '39 days', CURRENT_TIMESTAMP - INTERVAL '37 days'),
+    (pg_temp.demo_document_code('supplier_quote', 10), 'dm_sup_04', 'PrintLogistics Hub', 'dm_cli_05', 'Atlas Legacy Holdings', '30gg', 'draft', CURRENT_DATE - INTERVAL '6 days', 'qcc_email', 'Expired supplier quote.', CURRENT_TIMESTAMP - INTERVAL '22 days', CURRENT_TIMESTAMP - INTERVAL '19 days'),
+    (pg_temp.demo_document_code('supplier_quote', 11), 'dm_sup_01', 'TechSource Distribution', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 'draft', CURRENT_DATE + INTERVAL '14 days', 'qcc_email', 'Accepted supplier quote linked to a draft order for editable procurement flow.', CURRENT_TIMESTAMP - INTERVAL '52 days', CURRENT_TIMESTAMP - INTERVAL '48 days'),
+    (pg_temp.demo_document_code('supplier_quote', 12), 'dm_sup_02', 'CloudSeat Licensing', 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 'draft', CURRENT_DATE + INTERVAL '11 days', 'qcc_email', 'Accepted supplier quote linked to a sent licensing order without an invoice.', CURRENT_TIMESTAMP - INTERVAL '41 days', CURRENT_TIMESTAMP - INTERVAL '36 days'),
+    (pg_temp.demo_document_code('supplier_quote', 13), 'dm_sup_03', 'SecureEdge Systems', 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 'draft', CURRENT_DATE + INTERVAL '8 days', 'qcc_email', 'Accepted supplier quote linked to a sent order already invoiced.', CURRENT_TIMESTAMP - INTERVAL '32 days', CURRENT_TIMESTAMP - INTERVAL '27 days'),
+    (pg_temp.demo_document_code('supplier_quote', 14), 'dm_sup_01', 'TechSource Distribution', 'dm_cli_04', 'Giulia Ferri', '30gg', 'draft', CURRENT_DATE + INTERVAL '6 days', 'qcc_email', 'Accepted supplier quote linked to a sent supplier order for history coverage.', CURRENT_TIMESTAMP - INTERVAL '24 days', CURRENT_TIMESTAMP - INTERVAL '20 days')
 ON CONFLICT (id) DO UPDATE SET
     supplier_id = EXCLUDED.supplier_id,
     supplier_name = EXCLUDED.supplier_name,
@@ -827,21 +931,21 @@ SELECT
     v.note
 FROM (
     VALUES
-        ('dm_sqi_01', 'dm_sq_01', 'dm_prd_05', 8.00, 960.00, 'Draft laptop procurement lot'),
-        ('dm_sqi_02', 'dm_sq_02', 'dm_prd_05', 12.00, 960.00, 'Hardware refresh quote pending vendor response'),
-        ('dm_sqi_03', 'dm_sq_03', 'dm_prd_06', 40.00, 180.00, 'Subscription bundle quote, accepted, no downstream order'),
-        ('dm_sqi_04', 'dm_sq_04', 'dm_prd_01', 3.00, 980.00, 'Strategic assessment quote pending supplier order creation'),
-        ('dm_sqi_05', 'dm_sq_05', 'dm_prd_07', 2.00, 1435.00, 'Firewall appliance quote pending supplier order creation'),
-        ('dm_sqi_06', 'dm_sq_06', 'dm_prd_02', 1.00, 1370.00, 'Deployment sprint quote linked to an accepted offer'),
-        ('dm_sqi_07', 'dm_sq_07', 'dm_prd_08', 200.00, 118.00, 'Accepted quote feeding an order already in progress'),
-        ('dm_sqi_08', 'dm_sq_08', 'dm_prd_04', 2.00, 870.00, 'Training package quote, denied via its offer'),
-        ('dm_sqi_09', 'dm_sq_09', 'dm_prd_05', 3.00, 925.00, 'Denied hardware quote kept for history coverage'),
-        ('dm_sqi_10', 'dm_sq_10', 'dm_prd_08', 150.00, 119.00, 'Expired print procurement request'),
-        ('dm_sqi_11', 'dm_sq_11', 'dm_prd_05', 4.00, 960.00, 'Accepted quote feeding the editable draft procurement order'),
-        ('dm_sqi_12', 'dm_sq_12', 'dm_prd_06', 80.00, 182.00, 'Accepted quote feeding the sent licensing order'),
-        ('dm_sqi_13', 'dm_sq_13', 'dm_prd_07', 1.00, 1410.00, 'Accepted quote feeding the invoiced security order'),
-        ('dm_sqi_14', 'dm_sq_13', 'dm_prd_08', 40.00, 118.00, 'Accepted quote feeding the invoiced print materials order'),
-        ('dm_sqi_15', 'dm_sq_14', 'dm_prd_05', 2.00, 965.00, 'Accepted quote feeding the sent supplier order')
+        ('dm_sqi_01', pg_temp.demo_document_code('supplier_quote', 1), 'dm_prd_05', 8.00, 960.00, 'Draft laptop procurement lot'),
+        ('dm_sqi_02', pg_temp.demo_document_code('supplier_quote', 2), 'dm_prd_05', 12.00, 960.00, 'Hardware refresh quote pending vendor response'),
+        ('dm_sqi_03', pg_temp.demo_document_code('supplier_quote', 3), 'dm_prd_06', 40.00, 180.00, 'Subscription bundle quote, accepted, no downstream order'),
+        ('dm_sqi_04', pg_temp.demo_document_code('supplier_quote', 4), 'dm_prd_01', 3.00, 980.00, 'Strategic assessment quote pending supplier order creation'),
+        ('dm_sqi_05', pg_temp.demo_document_code('supplier_quote', 5), 'dm_prd_07', 2.00, 1435.00, 'Firewall appliance quote pending supplier order creation'),
+        ('dm_sqi_06', pg_temp.demo_document_code('supplier_quote', 6), 'dm_prd_02', 1.00, 1370.00, 'Deployment sprint quote linked to an accepted offer'),
+        ('dm_sqi_07', pg_temp.demo_document_code('supplier_quote', 7), 'dm_prd_08', 200.00, 118.00, 'Accepted quote feeding an order already in progress'),
+        ('dm_sqi_08', pg_temp.demo_document_code('supplier_quote', 8), 'dm_prd_04', 2.00, 870.00, 'Training package quote, denied via its offer'),
+        ('dm_sqi_09', pg_temp.demo_document_code('supplier_quote', 9), 'dm_prd_05', 3.00, 925.00, 'Denied hardware quote kept for history coverage'),
+        ('dm_sqi_10', pg_temp.demo_document_code('supplier_quote', 10), 'dm_prd_08', 150.00, 119.00, 'Expired print procurement request'),
+        ('dm_sqi_11', pg_temp.demo_document_code('supplier_quote', 11), 'dm_prd_05', 4.00, 960.00, 'Accepted quote feeding the editable draft procurement order'),
+        ('dm_sqi_12', pg_temp.demo_document_code('supplier_quote', 12), 'dm_prd_06', 80.00, 182.00, 'Accepted quote feeding the sent licensing order'),
+        ('dm_sqi_13', pg_temp.demo_document_code('supplier_quote', 13), 'dm_prd_07', 1.00, 1410.00, 'Accepted quote feeding the invoiced security order'),
+        ('dm_sqi_14', pg_temp.demo_document_code('supplier_quote', 13), 'dm_prd_08', 40.00, 118.00, 'Accepted quote feeding the invoiced print materials order'),
+        ('dm_sqi_15', pg_temp.demo_document_code('supplier_quote', 14), 'dm_prd_05', 2.00, 965.00, 'Accepted quote feeding the sent supplier order')
 ) AS v(id, quote_id, product_id, quantity, unit_price, note)
 JOIN products p ON p.id = v.product_id
 ON CONFLICT (id) DO UPDATE SET
@@ -857,50 +961,52 @@ ON CONFLICT (id) DO UPDATE SET
 -- quote's visible state follows the most-advanced client quote whose LINES source it
 -- (quote_items.supplier_quote_id) and that quote's offer chain. The status mapping is the
 -- same as the old 1-to-1 header link; only the mechanism moved to per-line sourcing.
---   dm_sq_01 sourced by nobody              -> Draft (selectable in the client-quote dialog)
---   dm_sq_02 <- dm_cq_02 line (sent)        -> Sent
---   dm_sq_03 <- dm_cq_03 line (accepted)    -> Accepted (no offer downstream)
---   dm_sq_04 <- dm_cq_04 line (draft offer)    -> Offer
---   dm_sq_05 <- dm_cq_05 line (sent offer)     -> Offer
---   dm_sq_06 <- dm_cq_06 line (accepted offer) -> Accepted
---   dm_sq_07 <- dm_cq_07 line (accepted offer) -> Accepted (supplier order in progress)
---   dm_sq_08 <- dm_cq_08 line (denied offer)   -> Denied
---   dm_sq_09 <- dm_cq_09 line (denied quote)   -> Denied
---   dm_sq_10 sourced by nobody              -> Expired (own past expiration date)
---   dm_sq_11..14 <- dm_cq_11..14 lines      -> Accepted (drivers for the seeded supplier orders)
+--   FORN #01 sourced by nobody              -> Draft (selectable in the client-quote dialog)
+--   FORN #02 <- PREV #02 line (sent)        -> Sent
+--   FORN #03 <- PREV #03 line (accepted)    -> Accepted (no offer downstream)
+--   FORN #04 <- PREV #04 line (draft offer)    -> Offer
+--   FORN #05 <- PREV #05 line (sent offer)     -> Offer
+--   FORN #06 <- PREV #06 line (accepted offer) -> Accepted
+--   FORN #07 <- PREV #07 line (accepted offer) -> Accepted (supplier order in progress)
+--   FORN #08 <- PREV #08 line (denied offer)   -> Denied
+--   FORN #09 <- PREV #09 line (denied quote)   -> Denied
+--   FORN #10 sourced by nobody              -> Expired (own past expiration date)
+--   FORN #11..14 <- PREV #11..14 lines      -> Accepted (drivers for the seeded supplier orders)
 -- The header column is vestigial under line sourcing; null it so nothing reads a stale link.
-UPDATE quotes SET linked_supplier_quote_id = NULL WHERE id LIKE 'dm_cq_%';
+UPDATE quotes
+SET linked_supplier_quote_id = NULL
+WHERE id IN (SELECT code FROM pg_temp.demo_document_codes WHERE module_id = 'client_quote');
 
 -- One representative line of each demo client quote sources its supplier quote. The stored
 -- supplier_quote_unit_price is the supplier item's net cost and stays BELOW the line's sale
 -- price, so every sourced line shows a healthy margin. Accepted/denied client quotes are
 -- read-only, so their lines never surface the "Data drifted - sync?" chip even though the seeded
--- snapshot is a point-in-time copy; the one editable exception is dm_cq_02 below.
+-- snapshot is a point-in-time copy; the one editable exception is PREV #02 below.
 UPDATE quote_items AS qi SET
     supplier_quote_id = v.sq_id,
     supplier_quote_item_id = v.sqi_id,
     supplier_quote_supplier_name = v.supplier_name,
     supplier_quote_unit_price = v.unit_price
 FROM (VALUES
-    ('dm_cqi_04', 'dm_sq_03', 'dm_sqi_03', 'SecureEdge Systems', 180.00),
-    ('dm_cqi_05', 'dm_sq_04', 'dm_sqi_04', 'TechSource Distribution', 980.00),
-    ('dm_cqi_07', 'dm_sq_05', 'dm_sqi_05', 'CloudSeat Licensing', 1435.00),
-    ('dm_cqi_15', 'dm_sq_06', 'dm_sqi_06', 'SecureEdge Systems', 1370.00),
-    ('dm_cqi_09', 'dm_sq_07', 'dm_sqi_07', 'PrintLogistics Hub', 118.00),
-    ('dm_cqi_11', 'dm_sq_08', 'dm_sqi_08', 'TechSource Distribution', 870.00),
-    ('dm_cqi_12', 'dm_sq_09', 'dm_sqi_09', 'CloudSeat Licensing', 925.00),
-    ('dm_cqi_16', 'dm_sq_11', 'dm_sqi_11', 'TechSource Distribution', 960.00),
-    ('dm_cqi_17', 'dm_sq_12', 'dm_sqi_12', 'CloudSeat Licensing', 182.00),
-    ('dm_cqi_18', 'dm_sq_13', 'dm_sqi_13', 'SecureEdge Systems', 1410.00),
-    ('dm_cqi_19', 'dm_sq_14', 'dm_sqi_15', 'TechSource Distribution', 965.00)
+    ('dm_cqi_04', pg_temp.demo_document_code('supplier_quote', 3), 'dm_sqi_03', 'SecureEdge Systems', 180.00),
+    ('dm_cqi_05', pg_temp.demo_document_code('supplier_quote', 4), 'dm_sqi_04', 'TechSource Distribution', 980.00),
+    ('dm_cqi_07', pg_temp.demo_document_code('supplier_quote', 5), 'dm_sqi_05', 'CloudSeat Licensing', 1435.00),
+    ('dm_cqi_15', pg_temp.demo_document_code('supplier_quote', 6), 'dm_sqi_06', 'SecureEdge Systems', 1370.00),
+    ('dm_cqi_09', pg_temp.demo_document_code('supplier_quote', 7), 'dm_sqi_07', 'PrintLogistics Hub', 118.00),
+    ('dm_cqi_11', pg_temp.demo_document_code('supplier_quote', 8), 'dm_sqi_08', 'TechSource Distribution', 870.00),
+    ('dm_cqi_12', pg_temp.demo_document_code('supplier_quote', 9), 'dm_sqi_09', 'CloudSeat Licensing', 925.00),
+    ('dm_cqi_16', pg_temp.demo_document_code('supplier_quote', 11), 'dm_sqi_11', 'TechSource Distribution', 960.00),
+    ('dm_cqi_17', pg_temp.demo_document_code('supplier_quote', 12), 'dm_sqi_12', 'CloudSeat Licensing', 182.00),
+    ('dm_cqi_18', pg_temp.demo_document_code('supplier_quote', 13), 'dm_sqi_13', 'SecureEdge Systems', 1410.00),
+    ('dm_cqi_19', pg_temp.demo_document_code('supplier_quote', 14), 'dm_sqi_15', 'TechSource Distribution', 965.00)
 ) AS v(cqi_id, sq_id, sqi_id, supplier_name, unit_price)
 WHERE qi.id = v.cqi_id;
 
--- Editable stale-data demo (#779 reverse sync): dm_cq_02 is sent (still editable), so its
+-- Editable stale-data demo (#779 reverse sync): PREV #02 is sent (still editable), so its
 -- sourced line surfaces the "Data drifted - sync?" chip because the stored snapshot price (940)
 -- sits behind dm_sqi_02's current net cost (960). Refreshing pulls the live supplier values.
 UPDATE quote_items SET
-    supplier_quote_id = 'dm_sq_02',
+    supplier_quote_id = pg_temp.demo_document_code('supplier_quote', 2),
     supplier_quote_item_id = 'dm_sqi_02',
     supplier_quote_supplier_name = 'CloudSeat Licensing',
     supplier_quote_unit_price = 940.00
@@ -918,11 +1024,11 @@ INSERT INTO supplier_sales (
     created_at,
     updated_at
 ) VALUES
-    ('dm_ss_01', 'dm_sq_11', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'draft', 'Editable supplier order generated from an accepted hardware quote.', CURRENT_TIMESTAMP - INTERVAL '40 days', CURRENT_TIMESTAMP - INTERVAL '39 days'),
-    ('dm_ss_02', 'dm_sq_07', 'dm_sup_04', 'PrintLogistics Hub', '30gg', 2.00, 'sent', 'Linked supplier order already in progress.', CURRENT_TIMESTAMP - INTERVAL '31 days', CURRENT_TIMESTAMP - INTERVAL '29 days'),
-    ('dm_ss_03', 'dm_sq_12', 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.00, 'sent', 'Sent supplier order generated from an accepted licensing quote and intentionally left without an invoice.', CURRENT_TIMESTAMP - INTERVAL '27 days', CURRENT_TIMESTAMP - INTERVAL '24 days'),
-    ('dm_ss_04', 'dm_sq_13', 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'sent', 'Sent supplier order generated from an accepted security quote and already invoiced.', CURRENT_TIMESTAMP - INTERVAL '20 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
-    ('dm_ss_05', 'dm_sq_14', 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'sent', 'Sent supplier order generated from an accepted quote for history coverage.', CURRENT_TIMESTAMP - INTERVAL '15 days', CURRENT_TIMESTAMP - INTERVAL '13 days')
+    (pg_temp.demo_document_code('supplier_order', 1), pg_temp.demo_document_code('supplier_quote', 11), 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'draft', 'Editable supplier order generated from an accepted hardware quote.', CURRENT_TIMESTAMP - INTERVAL '40 days', CURRENT_TIMESTAMP - INTERVAL '39 days'),
+    (pg_temp.demo_document_code('supplier_order', 2), pg_temp.demo_document_code('supplier_quote', 7), 'dm_sup_04', 'PrintLogistics Hub', '30gg', 2.00, 'sent', 'Linked supplier order already in progress.', CURRENT_TIMESTAMP - INTERVAL '31 days', CURRENT_TIMESTAMP - INTERVAL '29 days'),
+    (pg_temp.demo_document_code('supplier_order', 3), pg_temp.demo_document_code('supplier_quote', 12), 'dm_sup_02', 'CloudSeat Licensing', '45gg', 0.00, 'sent', 'Sent supplier order generated from an accepted licensing quote and intentionally left without an invoice.', CURRENT_TIMESTAMP - INTERVAL '27 days', CURRENT_TIMESTAMP - INTERVAL '24 days'),
+    (pg_temp.demo_document_code('supplier_order', 4), pg_temp.demo_document_code('supplier_quote', 13), 'dm_sup_03', 'SecureEdge Systems', '60gg', 0.00, 'sent', 'Sent supplier order generated from an accepted security quote and already invoiced.', CURRENT_TIMESTAMP - INTERVAL '20 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
+    (pg_temp.demo_document_code('supplier_order', 5), pg_temp.demo_document_code('supplier_quote', 14), 'dm_sup_01', 'TechSource Distribution', '30gg', 0.00, 'sent', 'Sent supplier order generated from an accepted quote for history coverage.', CURRENT_TIMESTAMP - INTERVAL '15 days', CURRENT_TIMESTAMP - INTERVAL '13 days')
 ON CONFLICT (id) DO UPDATE SET
     linked_quote_id = EXCLUDED.linked_quote_id,
     supplier_id = EXCLUDED.supplier_id,
@@ -955,12 +1061,12 @@ SELECT
     v.note
 FROM (
     VALUES
-        ('dm_ssi_01', 'dm_ss_01', 'dm_prd_05', 4.00, 960.00, 0.00, 'Draft hardware procurement order'),
-        ('dm_ssi_02', 'dm_ss_02', 'dm_prd_08', 200.00, 118.00, 2.00, 'Linked print procurement order in sent status'),
-        ('dm_ssi_03', 'dm_ss_03', 'dm_prd_06', 80.00, 182.00, 0.00, 'Sent licensing order without invoice'),
-        ('dm_ssi_04', 'dm_ss_04', 'dm_prd_07', 1.00, 1410.00, 0.00, 'Sent security appliance order'),
-        ('dm_ssi_05', 'dm_ss_04', 'dm_prd_08', 40.00, 118.00, 0.00, 'Sent print materials order'),
-        ('dm_ssi_06', 'dm_ss_05', 'dm_prd_05', 2.00, 965.00, 0.00, 'Sent supplier hardware order')
+        ('dm_ssi_01', pg_temp.demo_document_code('supplier_order', 1), 'dm_prd_05', 4.00, 960.00, 0.00, 'Draft hardware procurement order'),
+        ('dm_ssi_02', pg_temp.demo_document_code('supplier_order', 2), 'dm_prd_08', 200.00, 118.00, 2.00, 'Linked print procurement order in sent status'),
+        ('dm_ssi_03', pg_temp.demo_document_code('supplier_order', 3), 'dm_prd_06', 80.00, 182.00, 0.00, 'Sent licensing order without invoice'),
+        ('dm_ssi_04', pg_temp.demo_document_code('supplier_order', 4), 'dm_prd_07', 1.00, 1410.00, 0.00, 'Sent security appliance order'),
+        ('dm_ssi_05', pg_temp.demo_document_code('supplier_order', 4), 'dm_prd_08', 40.00, 118.00, 0.00, 'Sent print materials order'),
+        ('dm_ssi_06', pg_temp.demo_document_code('supplier_order', 5), 'dm_prd_05', 2.00, 965.00, 0.00, 'Sent supplier hardware order')
 ) AS v(id, sale_id, product_id, quantity, unit_price, discount, note)
 JOIN products p ON p.id = v.product_id
 ON CONFLICT (id) DO UPDATE SET
@@ -989,7 +1095,7 @@ INSERT INTO supplier_invoices (
 ) VALUES
     ('dm_sinv_01', NULL, 'dm_sup_01', 'TechSource Distribution', CURRENT_DATE - INTERVAL '18 days', CURRENT_DATE + INTERVAL '12 days', 'draft', 1920.00, 1920.00, 0.00, 'Editable draft supplier invoice.', CURRENT_TIMESTAMP - INTERVAL '18 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
     ('dm_sinv_02', NULL, 'dm_sup_02', 'CloudSeat Licensing', CURRENT_DATE - INTERVAL '32 days', CURRENT_DATE + INTERVAL '3 days', 'sent', 14560.00, 14560.00, 4000.00, 'Partially settled supplier invoice kept in sent state.', CURRENT_TIMESTAMP - INTERVAL '32 days', CURRENT_TIMESTAMP - INTERVAL '6 days'),
-    ('dm_sinv_03', 'dm_ss_04', 'dm_sup_03', 'SecureEdge Systems', CURRENT_DATE - INTERVAL '19 days', CURRENT_DATE + INTERVAL '11 days', 'paid', 6130.00, 6130.00, 6130.00, 'Paid supplier invoice linked to a sent order.', CURRENT_TIMESTAMP - INTERVAL '19 days', CURRENT_TIMESTAMP - INTERVAL '2 days'),
+    ('dm_sinv_03', pg_temp.demo_document_code('supplier_order', 4), 'dm_sup_03', 'SecureEdge Systems', CURRENT_DATE - INTERVAL '19 days', CURRENT_DATE + INTERVAL '11 days', 'paid', 6130.00, 6130.00, 6130.00, 'Paid supplier invoice linked to a sent order.', CURRENT_TIMESTAMP - INTERVAL '19 days', CURRENT_TIMESTAMP - INTERVAL '2 days'),
     ('dm_sinv_04', NULL, 'dm_sup_04', 'PrintLogistics Hub', CURRENT_DATE - INTERVAL '48 days', CURRENT_DATE - INTERVAL '12 days', 'overdue', 23600.00, 23600.00, 0.00, 'Overdue supplier invoice kept for state coverage.', CURRENT_TIMESTAMP - INTERVAL '48 days', CURRENT_TIMESTAMP - INTERVAL '10 days'),
     ('dm_sinv_05', NULL, 'dm_sup_01', 'TechSource Distribution', CURRENT_DATE - INTERVAL '11 days', CURRENT_DATE + INTERVAL '18 days', 'cancelled', 960.00, 960.00, 0.00, 'Cancelled supplier invoice kept for state coverage.', CURRENT_TIMESTAMP - INTERVAL '11 days', CURRENT_TIMESTAMP - INTERVAL '10 days')
 ON CONFLICT (id) DO UPDATE SET
@@ -1029,8 +1135,8 @@ ON CONFLICT (id) DO UPDATE SET
     unit_price = EXCLUDED.unit_price,
     discount = EXCLUDED.discount;
 
--- Demo delivery projects generated from the confirmed order dm_so_04 (← offer dm_co_03 ←
--- quote dm_cq_06), all for client dm_cli_01. order_id/offer_id mirror the chain the app
+-- Demo delivery projects generated from the confirmed client order #04 (offer #03 <-
+-- quote #06), all for client dm_cli_01. order_id/offer_id mirror the chain the app
 -- enforces when a project is created (offer + client must match). start_date/end_date wrap
 -- the dm_te_21..dm_te_25 time entries below, and revenue splits the order/invoice total of
 -- 6303.25 across the two product lines (assessment 4674.00 + deployment 1629.25).
@@ -1056,8 +1162,8 @@ INSERT INTO projects (
         'Assessment track for operations',
         FALSE,
         CURRENT_TIMESTAMP - INTERVAL '18 days',
-        'dm_so_04',
-        'dm_co_03',
+        pg_temp.demo_document_code('client_order', 4),
+        pg_temp.demo_document_code('client_offer', 3),
         (CURRENT_DATE - INTERVAL '18 days')::date,
         (CURRENT_DATE + INTERVAL '30 days')::date,
         4674.00, 'attivo', TRUE
@@ -1069,8 +1175,8 @@ INSERT INTO projects (
         'Deployment wave for phase one',
         FALSE,
         CURRENT_TIMESTAMP - INTERVAL '18 days',
-        'dm_so_04',
-        'dm_co_03',
+        pg_temp.demo_document_code('client_order', 4),
+        pg_temp.demo_document_code('client_offer', 3),
         (CURRENT_DATE - INTERVAL '18 days')::date,
         (CURRENT_DATE + INTERVAL '60 days')::date,
         1629.25, 'attivo', TRUE
@@ -1126,7 +1232,7 @@ INSERT INTO notifications (
                 'DM-CLI-001_DM-SVC-DEPLOY_' || TO_CHAR(CURRENT_DATE, 'YYYY')
             ),
             'orderId',
-            'dm_so_04',
+            pg_temp.demo_document_code('client_order', 4),
             'clientName',
             'Northwind Retail Italia S.p.A.'
         ),
@@ -1146,7 +1252,7 @@ INSERT INTO notifications (
                 'DM-CLI-001_DM-SVC-DEPLOY_' || TO_CHAR(CURRENT_DATE, 'YYYY')
             ),
             'orderId',
-            'dm_so_04',
+            pg_temp.demo_document_code('client_order', 4),
             'clientName',
             'Northwind Retail Italia S.p.A.'
         ),

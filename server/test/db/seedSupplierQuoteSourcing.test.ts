@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { DEMO_SUPPLIER_QUOTES } from '../../db/demoSeedManifest.ts';
 import { effectiveSupplierQuoteStatus } from '../../utils/quote-status.ts';
 import {
   dateOffsetDays,
@@ -96,12 +97,12 @@ const parseSourcing = (sql: string): Sourcing[] => {
   }
 
   const single = sql.match(
-    /UPDATE quote_items SET\s+supplier_quote_id = '([^']+)',\s+supplier_quote_item_id = '([^']+)',\s+supplier_quote_supplier_name = '([^']+)',\s+supplier_quote_unit_price = ([\d.]+)\s+WHERE id = '([^']+)'/,
+    /UPDATE quote_items SET\s+supplier_quote_id = (pg_temp\.demo_document_code\('[^']+',\s*\d+\)|'[^']+'),\s+supplier_quote_item_id = '([^']+)',\s+supplier_quote_supplier_name = '([^']+)',\s+supplier_quote_unit_price = ([\d.]+)\s+WHERE id = '([^']+)'/,
   );
   if (single) {
     rows.push({
       cqiId: single[5],
-      supplierQuoteId: single[1],
+      supplierQuoteId: unquote(single[1]),
       supplierItemId: single[2],
       supplierName: single[3],
       snapshot: Number(single[4]),
@@ -113,23 +114,33 @@ const parseSourcing = (sql: string): Sourcing[] => {
 
 const sourcing = parseSourcing(SEED_SQL);
 
-// The status each demo supplier quote must DERIVE under line sourcing (mirrors the seed comment).
-const EXPECTED_STATUS: Record<string, string> = {
-  dm_sq_01: 'draft', // sourced by nobody → selectable in the client-quote dialog
-  dm_sq_02: 'sent',
-  dm_sq_03: 'accepted',
-  dm_sq_04: 'offer',
-  dm_sq_05: 'offer',
-  dm_sq_06: 'accepted',
-  dm_sq_07: 'accepted',
-  dm_sq_08: 'denied',
-  dm_sq_09: 'denied',
-  dm_sq_10: 'expired', // sourced by nobody, own expiration past
-  dm_sq_11: 'accepted',
-  dm_sq_12: 'accepted',
-  dm_sq_13: 'accepted',
-  dm_sq_14: 'accepted',
+const supplierQuoteId = (sequence: number) => {
+  const quote = DEMO_SUPPLIER_QUOTES[sequence - 1];
+  if (!quote) throw new Error(`Missing demo supplier quote sequence ${sequence}`);
+  return quote.id;
 };
+
+// The status each demo supplier quote must DERIVE under line sourcing (mirrors the seed comment).
+const EXPECTED_STATUS_BY_SEQUENCE = [
+  'draft',
+  'sent',
+  'accepted',
+  'offer',
+  'offer',
+  'accepted',
+  'accepted',
+  'denied',
+  'denied',
+  'expired',
+  'accepted',
+  'accepted',
+  'accepted',
+  'accepted',
+] as const;
+
+const EXPECTED_STATUS = Object.fromEntries(
+  EXPECTED_STATUS_BY_SEQUENCE.map((status, index) => [supplierQuoteId(index + 1), status]),
+);
 
 const sourcingFor = (supplierQuoteId: string) =>
   sourcing.filter((row) => row.supplierQuoteId === supplierQuoteId);
@@ -193,9 +204,9 @@ describe('seed.sql line-sourced supplier-quote linkage (#779 / PR #812)', () => 
     }
   });
 
-  test('dm_sq_01 (draft picker candidate) and dm_sq_10 (expired) are sourced by nobody', () => {
-    expect(sourcingFor('dm_sq_01')).toEqual([]);
-    expect(sourcingFor('dm_sq_10')).toEqual([]);
+  test('draft picker candidate and expired supplier quote are sourced by nobody', () => {
+    expect(sourcingFor(supplierQuoteId(1))).toEqual([]);
+    expect(sourcingFor(supplierQuoteId(10))).toEqual([]);
   });
 
   test('every sourced line keeps a positive margin (snapshot net cost below its sale price)', () => {
@@ -209,7 +220,7 @@ describe('seed.sql line-sourced supplier-quote linkage (#779 / PR #812)', () => 
   test('each sourced line shares its supplier item product (the resolver 400s a mismatch)', () => {
     // resolveQuoteItemSnapshots (server/routes/client-quotes.ts) rejects a sourced line whose
     // productId differs from its supplier item's, so a seeded mismatch is latent-invalid data that
-    // 400s the moment the line is edited (and breaks the editable dm_cq_02 stale-data demo).
+    // 400s the moment the line is edited (and breaks the editable PREV #02 stale-data demo).
     for (const row of sourcing) {
       const lineProduct = quoteItems.get(row.cqiId)?.productId;
       const supplierProduct = supplierItems.get(row.supplierItemId)?.productId;
@@ -221,7 +232,7 @@ describe('seed.sql line-sourced supplier-quote linkage (#779 / PR #812)', () => 
     for (const row of sourcing) {
       const live = supplierItems.get(row.supplierItemId)?.cost ?? 0;
       if (row.cqiId === 'dm_cqi_03') {
-        // dm_cq_02 is sent (editable) → its line intentionally lags so the refresh chip shows.
+        // PREV #02 is sent (editable) -> its line intentionally lags so the refresh chip shows.
         expect(row.snapshot).toBeLessThan(live);
       } else {
         // Read-only (accepted/denied) quotes never show the chip, but the snapshot still mirrors

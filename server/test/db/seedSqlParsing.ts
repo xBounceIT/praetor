@@ -3,6 +3,12 @@
 // literals and nested parentheses. Used by seedTaskReferences.test.ts and
 // seedProjectCoherence.test.ts.
 
+import {
+  DOCUMENT_CODE_MODULES,
+  isDocumentCodeModuleId,
+  renderDocumentCode,
+} from '../../utils/document-codes.ts';
+
 type TopLevelEvent = { type: 'comma' | 'open' | 'close'; index: number };
 
 // Walk a SQL fragment yielding top-level commas and the outer `(...)` boundaries while
@@ -55,6 +61,16 @@ const splitTopLevelCommas = (input: string): string[] => {
 // cells (NULL, numbers, expressions) are returned trimmed as-is.
 export const unquote = (value: string): string => {
   const trimmed = value.trim();
+  const documentCode = trimmed.match(/^pg_temp\.demo_document_code\('([^']+)',\s*(\d+)\)$/);
+  if (documentCode) {
+    const moduleId = documentCode[1];
+    if (isDocumentCodeModuleId(moduleId)) {
+      return renderDocumentCode(DOCUMENT_CODE_MODULES[moduleId], {
+        year: new Date().getFullYear(),
+        sequence: Number(documentCode[2]),
+      });
+    }
+  }
   const m = trimmed.match(/^'((?:''|[^'])*)'$/);
   return m ? m[1].replace(/''/g, "'") : trimmed;
 };

@@ -190,8 +190,12 @@ describe('demoSeedManifest stays in sync with seed.sql', () => {
     );
   });
 
-  test('dm_so_04 linked offer matches DEMO_SALES', () => {
-    const manifest = DEMO_SALES.find((sale) => sale.id === 'dm_so_04');
-    expect(sales.get('dm_so_04')?.linkedOfferId).toBe(manifest?.linkedOfferId ?? null);
+  test('delivery order linked offer matches DEMO_SALES', () => {
+    const orderId = projects.get('dm_proj_01')?.orderId;
+    expect(orderId).toBeTruthy();
+    const manifest = DEMO_SALES.find((sale) => sale.id === orderId);
+    expect(orderId ? sales.get(orderId)?.linkedOfferId : null).toBe(
+      manifest?.linkedOfferId ?? null,
+    );
   });
 });
