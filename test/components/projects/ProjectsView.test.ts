@@ -7,7 +7,7 @@ describe('ProjectsView (create-only dialog after detail-page revamp)', () => {
     ).text();
 
     expect(source).toContain('import { Tabs, TabsContent, TabsList, TabsTrigger }');
-    expect(source).toContain("import { Folder } from 'lucide-react'");
+    expect(source).toContain("import { Folder, ListChecks } from 'lucide-react'");
     expect(source).toContain("export type ProjectsViewTab = 'commissions' | 'tasks'");
     expect(source).toContain('activeTab?: ProjectsViewTab');
     expect(source).toContain(
@@ -21,6 +21,7 @@ describe('ProjectsView (create-only dialog after detail-page revamp)', () => {
     expect(source).toContain('value="commissions"');
     expect(source).toContain('value="tasks"');
     expect(source).toContain('<Folder className="size-4" aria-hidden="true" />');
+    expect(source).toContain('<ListChecks className="size-4" aria-hidden="true" />');
     expect(source).toContain('<TasksView');
   });
 

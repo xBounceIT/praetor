@@ -1,10 +1,104 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import React from 'react';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import type { Resale } from '../../../types';
+import { installI18nMock } from '../../helpers/i18n';
+
+installI18nMock();
+
+mock.module('../../../services/api/views', () => ({
+  viewsApi: {
+    list: () => Promise.resolve([]),
+    create: () => Promise.reject(new Error('not used')),
+    update: () => Promise.reject(new Error('not used')),
+    remove: () => Promise.resolve(),
+    directory: () => Promise.resolve([]),
+    getShares: () => Promise.resolve([]),
+    replaceShares: () => Promise.resolve([]),
+  },
+}));
+
+const ResalesView = (await import('../../../components/projects/ResalesView')).default;
 
 const readSource = async () => {
   return Bun.file(new URL('../../../components/projects/ResalesView.tsx', import.meta.url)).text();
 };
 
+const resale: Resale = {
+  id: 'resale-1',
+  clientOrderId: 'CO-1',
+  supplierOrderId: 'SO-1',
+  clientName: 'Acme Corp',
+  supplierName: 'Northwind Supplies',
+  supplierOrderCost: 1200,
+  activityCostTotal: 500,
+  resaleRevenue: 1500,
+  costVariance: 700,
+  startDate: '2026-06-01',
+  dueDate: '2026-06-30',
+  notes: null,
+  createdAt: 1780300800000,
+  updatedAt: 1780300800000,
+  activities: [
+    {
+      id: 'activity-1',
+      resaleId: 'resale-1',
+      name: 'License renewal',
+      billingFrequency: 'one_time',
+      categoryId: 'cat-1',
+      categoryName: 'Licenses',
+      cost: 500,
+      revenue: 1500,
+      released: true,
+      dueDate: '2026-06-30',
+      notes: null,
+    },
+  ],
+};
+
+const renderResalesView = (resales: Resale[] = []) =>
+  render(
+    React.createElement(
+      TooltipProvider,
+      null,
+      React.createElement(ResalesView, {
+        resales,
+        categories: [{ id: 'cat-1', name: 'Licenses' }],
+        orderOptions: [],
+        permissions: ['projects.resales.view'],
+        currency: 'EUR',
+        onAddResale: async () => null,
+        onDeleteResale: async () => {},
+        onAddActivity: async () => null,
+        onUpdateActivity: async () => null,
+        onDeleteActivity: async () => null,
+        onCreateCategory: async () => null,
+        onUpdateCategory: async () => null,
+        onDeleteCategory: async () => {},
+      }),
+    ),
+  );
+
 describe('ResalesView wiring', () => {
+  test('renders Rivendite and disabled Attività tabs until a resale row is selected', async () => {
+    const user = userEvent.setup();
+    renderResalesView([resale]);
+
+    expect(screen.getByRole('tab', { name: 'resales.tabs.archive' })).toBeDefined();
+    const activitiesTab = screen.getByRole('tab', { name: 'resales.tabs.activities' });
+    expect(activitiesTab).toHaveAttribute('disabled');
+    expect(screen.getByText('resales.title')).toBeDefined();
+
+    const resaleRow = screen.getByText('CO-1').closest('tr');
+    expect(resaleRow).not.toBeNull();
+    await user.click(resaleRow as HTMLTableRowElement);
+
+    expect(activitiesTab).not.toHaveAttribute('disabled');
+    expect(screen.getByText('License renewal')).toBeDefined();
+  });
+
   test('organizes resales and selected resale activities as internal tabs', async () => {
     const source = await readSource();
     expect(source).toContain('import { Tabs, TabsContent, TabsList, TabsTrigger }');
