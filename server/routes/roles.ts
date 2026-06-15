@@ -9,6 +9,7 @@ import {
   ADMIN_BASE_PERMISSIONS,
   ADMINISTRATION_PERMISSIONS,
   ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS,
+  filterAdminExplicitPermissions,
   isPermissionKnown,
   isTopManagerOnlyPermission,
   normalizePermission,
@@ -69,16 +70,17 @@ const idParamSchema = {
 
 const buildRolePayload = (row: rolesRepo.Role, explicitPerms: string[]) => {
   const normalized = explicitPerms.map(normalizePermission);
+  const explicit = row.isAdmin ? filterAdminExplicitPermissions(normalized) : normalized;
   const permissions = row.isAdmin
     ? Array.from(
         new Set([
           ...ADMINISTRATION_PERMISSIONS,
           ...ADMIN_BASE_PERMISSIONS,
-          ...normalized,
+          ...explicit,
           ...ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS,
         ]),
       )
-    : Array.from(new Set([...normalized, ...ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS]));
+    : Array.from(new Set([...explicit, ...ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS]));
 
   return {
     id: row.id,

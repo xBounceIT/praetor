@@ -115,7 +115,6 @@ export const ADMINISTRATION_PERMISSIONS: Permission[] = PERMISSION_DEFINITIONS.r
 );
 
 export const ADMIN_BASE_PERMISSIONS: Permission[] = [
-  buildPermission('hr.internal', 'view'),
   ...buildPermissions('settings', VIEW_UPDATE),
   ...buildPermissions('docs.api', VIEW_ONLY),
   ...buildPermissions('docs.frontend', VIEW_ONLY),
@@ -126,6 +125,9 @@ export const ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS: Permission[] = buildPermis
   'notifications',
   VIEW_UPDATE_DELETE,
 );
+
+export const filterAdminExplicitPermissions = (permissions: Permission[]): Permission[] =>
+  permissions.filter((permission) => !permission.startsWith('hr.'));
 
 const LEGACY_PERMISSION_REWRITES: ReadonlyArray<{ from: string; to: string }> = [
   { from: 'configuration.', to: 'administration.' },
@@ -194,9 +196,10 @@ export const getRolePermissions = async (roleId: string): Promise<Permission[]> 
   if (!role) return [];
 
   const explicit = rawExplicit.map((p) => normalizePermission(p) as Permission);
+  const effectiveExplicit = role.isAdmin ? filterAdminExplicitPermissions(explicit) : explicit;
 
   const withNotifications = Array.from(
-    new Set([...explicit, ...ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS]),
+    new Set([...effectiveExplicit, ...ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS]),
   );
 
   if (role.isAdmin) {
