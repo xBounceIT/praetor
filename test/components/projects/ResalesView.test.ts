@@ -116,6 +116,14 @@ describe('ResalesView wiring', () => {
     expect(source).toContain('resales.selectResaleForActivities');
   });
 
+  test('opens the activities tab after a resale is created', async () => {
+    const source = await readSource();
+
+    expect(source).toMatch(
+      /if \(created\) \{\s*setSelectedResaleId\(created\.id\);\s*setActiveTab\('activities'\);/,
+    );
+  });
+
   test('declares the expected economic-only resales props surface', async () => {
     const source = await readSource();
     expect(source).toContain('export interface ResalesViewProps');

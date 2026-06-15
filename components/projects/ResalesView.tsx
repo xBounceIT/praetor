@@ -359,6 +359,7 @@ const ResalesView: React.FC<ResalesViewProps> = ({
     });
     if (created) {
       setSelectedResaleId(created.id);
+      setActiveTab('activities');
       closeResaleModal();
     }
   };

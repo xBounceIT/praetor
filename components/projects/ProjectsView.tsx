@@ -355,7 +355,21 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     setAllProjectHours(projectIds.length === 0 ? {} : null);
   }
 
+  const [uncontrolledTab, setUncontrolledTab] = useState<ProjectsViewTab>(
+    canViewCommissions ? 'commissions' : 'tasks',
+  );
+  const canViewTab = (tab: ProjectsViewTab) =>
+    tab === 'commissions' ? canViewCommissions : canViewTasks;
+  const requestedTab = activeTab ?? uncontrolledTab;
+  const selectedTab: ProjectsViewTab = canViewTab(requestedTab)
+    ? requestedTab
+    : canViewCommissions
+      ? 'commissions'
+      : 'tasks';
+  const shouldLoadProjectHours = selectedTab === 'commissions' && canViewCommissions;
+
   useEffect(() => {
+    if (!shouldLoadProjectHours) return;
     if (!projectIdsKey) return;
     const requestProjectIds = projectIdsKey.split('\u0000');
     const gen = ++fetchAllHoursGenRef.current;
@@ -378,7 +392,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     return () => {
       abortController.abort();
     };
-  }, [projectIdsKey]);
+  }, [projectIdsKey, shouldLoadProjectHours]);
 
   const projectMedianProgress = useMemo(() => {
     if (!allProjectHours) return {};
@@ -652,18 +666,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const assignableUsers = users.filter(
     (u) => !u.hasTopManagerRole && !u.isAdminOnly && !u.isDisabled,
   );
-  const [uncontrolledTab, setUncontrolledTab] = useState<ProjectsViewTab>(
-    canViewCommissions ? 'commissions' : 'tasks',
-  );
-  const canViewTab = (tab: ProjectsViewTab) =>
-    tab === 'commissions' ? canViewCommissions : canViewTasks;
-  const requestedTab = activeTab ?? uncontrolledTab;
-  const selectedTab: ProjectsViewTab = canViewTab(requestedTab)
-    ? requestedTab
-    : canViewCommissions
-      ? 'commissions'
-      : 'tasks';
-
   const handleTabChange = (value: string) => {
     if (value !== 'commissions' && value !== 'tasks') return;
     const nextTab = value as ProjectsViewTab;

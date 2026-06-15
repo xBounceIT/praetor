@@ -25,6 +25,20 @@ describe('ProjectsView (create-only dialog after detail-page revamp)', () => {
     expect(source).toContain('<TasksView');
   });
 
+  test('loads project progress hours only for the commissions tab', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+
+    expect(source).toContain(
+      "const shouldLoadProjectHours = selectedTab === 'commissions' && canViewCommissions;",
+    );
+    expect(source).toMatch(
+      /useEffect\(\(\) => \{\s*if \(!shouldLoadProjectHours\) return;[\s\S]*tasksApi\.getHoursForProjects/,
+    );
+    expect(source).toContain('}, [projectIdsKey, shouldLoadProjectHours]);');
+  });
+
   test('modal title is the create-new-project label only', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
