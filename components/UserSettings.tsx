@@ -1,6 +1,7 @@
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
 import {
   AlertCircle,
+  CalendarDays,
   Check,
   Contrast,
   Globe,
@@ -11,7 +12,6 @@ import {
   type LucideIcon,
   Moon,
   Palette,
-  Plane,
   RefreshCw,
   Save,
   Shield,
@@ -806,7 +806,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
             onClick={() => handleTabChange('ril')}
             className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'ril' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
           >
-            <i className="fa-solid fa-plane-departure mr-2"></i>
+            <CalendarDays aria-hidden="true" className="inline size-4 mr-2 align-[-2px]" />
             {t('ril.title')}
             {activeTab === 'ril' && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
@@ -1837,7 +1837,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
         <Card className="gap-0 overflow-hidden rounded-lg bg-background py-0 animate-in fade-in slide-in-from-right-4 duration-300">
           <CardHeader className="border-b bg-muted/40 px-6 py-4 [.border-b]:pb-4">
             <CardTitle className="flex items-center gap-3 text-base">
-              <Plane aria-hidden="true" className="size-4 text-praetor" />
+              <CalendarDays aria-hidden="true" className="size-4 text-praetor" />
               {t('ril.title')}
             </CardTitle>
             <CardDescription>{t('ril.description')}</CardDescription>
