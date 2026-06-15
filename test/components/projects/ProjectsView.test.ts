@@ -1,6 +1,27 @@
 import { describe, expect, test } from 'bun:test';
 
 describe('ProjectsView (create-only dialog after detail-page revamp)', () => {
+  test('renders commesse and task tabs while reusing the task view internally', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+
+    expect(source).toContain('import { Tabs, TabsContent, TabsList, TabsTrigger }');
+    expect(source).toContain("export type ProjectsViewTab = 'commissions' | 'tasks'");
+    expect(source).toContain('activeTab?: ProjectsViewTab');
+    expect(source).toContain(
+      "const canViewCommissions = hasScopedActionPermission(permissions, 'projects.manage', 'view')",
+    );
+    expect(source).toContain(
+      "const canViewTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'view')",
+    );
+    expect(source).toContain('{canViewCommissions && (');
+    expect(source).toContain('{canViewTasks && (');
+    expect(source).toContain('value="commissions"');
+    expect(source).toContain('value="tasks"');
+    expect(source).toContain('<TasksView');
+  });
+
   test('modal title is the create-new-project label only', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
@@ -98,8 +119,14 @@ describe('ProjectsView create-form validation', () => {
       expect(loc.projects.orderRequired).toBeTruthy();
       expect(loc.projects.offerOptionalLabel).toBeTruthy();
       expect(loc.projects.noOfferLinked).toBeTruthy();
+      expect(loc.projects.entityLabel).toBeTruthy();
+      expect(loc.tabs.commissions).toBeTruthy();
+      expect(loc.tabs.tasks).toBeTruthy();
       expect(loc.projects.tipoValues.attivo).toBeTruthy();
       expect(loc.projects.tipoValues.passivo).toBeTruthy();
+      expect(loc.resales.tabs.archive).toBeTruthy();
+      expect(loc.resales.tabs.activities).toBeTruthy();
+      expect(loc.resales.selectResaleForActivities).toBeTruthy();
     }
   });
 

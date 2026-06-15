@@ -48,9 +48,8 @@ import NotFound from './components/NotFound';
 // actually navigates to a project detail page — keeps the initial app bundle slim.
 const ProjectDetailView = lazy(() => import('./components/projects/ProjectDetailView'));
 
-import ProjectsView from './components/projects/ProjectsView';
+import ProjectsView, { type ProjectsViewTab } from './components/projects/ProjectsView';
 import ResalesView from './components/projects/ResalesView';
-import TasksView from './components/projects/TasksView';
 import AiReportingView from './components/reports/AiReportingView';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
 import ClientOffersView from './components/sales/ClientOffersView';
@@ -1009,6 +1008,10 @@ const AppContent: React.FC = () => {
       React.startTransition(() => setViewingUserId(currentUser.id));
     }
   }, []);
+  const setProjectsViewTab = useCallback(
+    (tab: ProjectsViewTab) => setActiveView(tab === 'tasks' ? 'projects/tasks' : 'projects/manage'),
+    [setActiveView],
+  );
 
   // Latest-value refs for handler factories. The handlers read these BEFORE
   // and AFTER awaited API calls; getters backed by refs let the memoized
@@ -3179,8 +3182,8 @@ const AppContent: React.FC = () => {
                 />
               )}
 
-            {hasViewAccess(currentUser.permissions, 'projects/manage') &&
-              activeView === 'projects/manage' && (
+            {(activeView === 'projects/manage' || activeView === 'projects/tasks') &&
+              hasViewAccess(currentUser.permissions, activeView) && (
                 <ProjectsView
                   projects={projects}
                   clients={clients}
@@ -3196,7 +3199,9 @@ const AppContent: React.FC = () => {
                   onDeleteProject={handleDeleteProject}
                   onAddTask={addProjectTask}
                   onUpdateTask={handleUpdateTask}
-                  onDeleteTask={handleDeleteProjectTask}
+                  onDeleteTask={handleDeleteProjectTaskWithToast}
+                  activeTab={activeView === 'projects/tasks' ? 'tasks' : 'commissions'}
+                  onTabChange={setProjectsViewTab}
                   onViewOrder={(orderId) => {
                     setClientsOrderFilterId(orderId);
                     setActiveView('accounting/clients-orders');
@@ -3232,7 +3237,9 @@ const AppContent: React.FC = () => {
                       onDeleteProject={handleDeleteProject}
                       onAddTask={addProjectTask}
                       onUpdateTask={handleUpdateTask}
-                      onDeleteTask={handleDeleteProjectTask}
+                      onDeleteTask={handleDeleteProjectTaskWithToast}
+                      activeTab="commissions"
+                      onTabChange={setProjectsViewTab}
                       onViewOrder={(orderId) => {
                         setClientsOrderFilterId(orderId);
                         setActiveView('accounting/clients-orders');
@@ -3276,26 +3283,6 @@ const AppContent: React.FC = () => {
                   </Suspense>
                 );
               })()}
-
-            {hasViewAccess(currentUser.permissions, 'projects/tasks') &&
-              activeView === 'projects/tasks' && (
-                <TasksView
-                  tasks={projectTasks}
-                  projects={projects}
-                  clients={clients}
-                  permissions={currentUser.permissions || []}
-                  users={availableUsers}
-                  roles={roles}
-                  currency={generalSettings.currency}
-                  onAddTask={addProjectTask}
-                  onUpdateTask={handleUpdateTask}
-                  onDeleteTask={handleDeleteProjectTaskWithToast}
-                  onViewOrder={(orderId) => {
-                    setClientsOrderFilterId(orderId);
-                    setActiveView('accounting/clients-orders');
-                  }}
-                />
-              )}
 
             {hasViewAccess(currentUser.permissions, 'projects/resales') &&
               activeView === 'projects/resales' && (

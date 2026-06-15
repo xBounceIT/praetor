@@ -12,6 +12,7 @@ import {
   RequiredMark,
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { CreateResaleBody, UpsertResaleActivityBody } from '@/services/api/resales';
@@ -106,6 +107,11 @@ const initialActivityForm: ActivityFormState = {
   errors: {},
 };
 
+type ResalesViewTab = 'archive' | 'activities';
+
+const isResalesViewTab = (value: string): value is ResalesViewTab =>
+  value === 'archive' || value === 'activities';
+
 export interface ResalesViewProps {
   resales: Resale[];
   categories: ResaleCategory[];
@@ -152,6 +158,7 @@ const ResalesView: React.FC<ResalesViewProps> = ({
   const canUpdate = hasPermission(permissions, buildPermission('projects.resales', 'update'));
   const canDelete = hasPermission(permissions, buildPermission('projects.resales', 'delete'));
 
+  const [activeTab, setActiveTab] = useState<ResalesViewTab>('archive');
   const [selectedResaleId, setSelectedResaleId] = useState<string | null>(null);
   const [resaleForm, setResaleForm] = useState<ResaleFormState>(initialResaleForm);
   const [isResaleModalOpen, setIsResaleModalOpen] = useState(false);
@@ -167,6 +174,16 @@ const ResalesView: React.FC<ResalesViewProps> = ({
   const selectedResale = selectedResaleId
     ? resales.find((resale) => resale.id === selectedResaleId)
     : null;
+  const selectedTab: ResalesViewTab = selectedResale ? activeTab : 'archive';
+  const clearSelectedResale = () => {
+    setSelectedResaleId(null);
+    setActiveTab('archive');
+  };
+  const handleTabChange = (value: string) => {
+    if (!isResalesViewTab(value)) return;
+    if (value === 'activities' && !selectedResale) return;
+    setActiveTab(value);
+  };
 
   const formatMoney = useCallback(
     (value: number) =>
@@ -875,101 +892,134 @@ const ResalesView: React.FC<ResalesViewProps> = ({
         </div>
       </div>
 
-      <StandardTable<Resale>
-        title={t('resales.directory')}
-        viewKey="projects.resales"
-        data={resales}
-        columns={resaleColumns}
-        defaultRowsPerPage={5}
-        onRowClick={(row) => setSelectedResaleId(row.id)}
-      />
+      <Tabs value={selectedTab} onValueChange={handleTabChange} className="space-y-6">
+        <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b px-0">
+          <TabsTrigger value="archive" className="flex-none rounded-none pb-3">
+            <i className="fa-solid fa-table-list" aria-hidden="true"></i>
+            {t('resales.tabs.archive')}
+          </TabsTrigger>
+          <TabsTrigger
+            value="activities"
+            className="flex-none rounded-none pb-3"
+            disabled={!selectedResale}
+          >
+            <i className="fa-solid fa-list-check" aria-hidden="true"></i>
+            {t('resales.tabs.activities')}
+          </TabsTrigger>
+        </TabsList>
 
-      {selectedResale && (
-        <section className="space-y-4 border-t border-border pt-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 space-y-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedResaleId(null)}
-                className="-ml-2"
-              >
-                <ArrowLeft className="size-4" />
-                {t('common:buttons.back')}
-              </Button>
-              <h3 className="text-xl font-semibold text-foreground">
-                {selectedResale.clientOrderId} / {selectedResale.supplierOrderId}
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                {selectedResale.clientName} · {selectedResale.supplierName}
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-4">
-            <div className="rounded-lg border border-border bg-background p-4">
-              <p className="text-xs font-medium uppercase text-muted-foreground">
-                {t('resales.columns.revenue')}
-              </p>
-              <p className="mt-2 font-mono text-xl font-semibold">
-                {formatMoney(selectedResale.resaleRevenue)}
-              </p>
-            </div>
-            <div className="rounded-lg border border-border bg-background p-4">
-              <p className="text-xs font-medium uppercase text-muted-foreground">
-                {t('resales.columns.supplierCost')}
-              </p>
-              <p className="mt-2 font-mono text-xl font-semibold">
-                {formatMoney(selectedResale.supplierOrderCost)}
-              </p>
-            </div>
-            <div className="rounded-lg border border-border bg-background p-4">
-              <p className="text-xs font-medium uppercase text-muted-foreground">
-                {t('resales.columns.activityCost')}
-              </p>
-              <p className="mt-2 font-mono text-xl font-semibold">
-                {formatMoney(selectedResale.activityCostTotal)}
-              </p>
-            </div>
-            <div className="rounded-lg border border-border bg-background p-4">
-              <p className="text-xs font-medium uppercase text-muted-foreground">
-                {t('resales.columns.variance')}
-              </p>
-              <div className="mt-2">
-                {Math.abs(selectedResale.costVariance) > 0.009 ? (
-                  <StatusBadge type="pending" label={formatMoney(selectedResale.costVariance)} />
-                ) : (
-                  <StatusBadge type="active" label={t('resales.balanced')} />
-                )}
-              </div>
-              {Math.abs(selectedResale.costVariance) > 0.009 && (
-                <p className="mt-2 text-xs text-muted-foreground">{t('resales.varianceHint')}</p>
-              )}
-            </div>
-          </div>
-
-          <StandardTable<ResaleActivity>
-            title={t('resales.activitiesTitle')}
-            data={selectedResale.activities}
-            columns={activityColumns}
+        <TabsContent value="archive" className="mt-0">
+          <StandardTable<Resale>
+            title={t('resales.directory')}
+            viewKey="projects.resales"
+            data={resales}
+            columns={resaleColumns}
             defaultRowsPerPage={5}
-            headerAction={
-              canCreate ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={openCreateActivity}
-                  className={TABLE_CONTROL_BUTTON_CLASSNAME}
-                >
-                  <Plus className="size-4" />
-                  {t('resales.addActivity')}
-                </Button>
-              ) : undefined
-            }
+            onRowClick={(row) => {
+              setSelectedResaleId(row.id);
+              setActiveTab('activities');
+            }}
           />
-        </section>
-      )}
+        </TabsContent>
+
+        <TabsContent value="activities" className="mt-0">
+          {selectedResale ? (
+            <section className="space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 space-y-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearSelectedResale}
+                    className="-ml-2"
+                  >
+                    <ArrowLeft className="size-4" />
+                    {t('common:buttons.back')}
+                  </Button>
+                  <h3 className="text-xl font-semibold text-foreground">
+                    {selectedResale.clientOrderId} / {selectedResale.supplierOrderId}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedResale.clientName} · {selectedResale.supplierName}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="rounded-lg border border-border bg-background p-4">
+                  <p className="text-xs font-medium uppercase text-muted-foreground">
+                    {t('resales.columns.revenue')}
+                  </p>
+                  <p className="mt-2 font-mono text-xl font-semibold">
+                    {formatMoney(selectedResale.resaleRevenue)}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-background p-4">
+                  <p className="text-xs font-medium uppercase text-muted-foreground">
+                    {t('resales.columns.supplierCost')}
+                  </p>
+                  <p className="mt-2 font-mono text-xl font-semibold">
+                    {formatMoney(selectedResale.supplierOrderCost)}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-background p-4">
+                  <p className="text-xs font-medium uppercase text-muted-foreground">
+                    {t('resales.columns.activityCost')}
+                  </p>
+                  <p className="mt-2 font-mono text-xl font-semibold">
+                    {formatMoney(selectedResale.activityCostTotal)}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-background p-4">
+                  <p className="text-xs font-medium uppercase text-muted-foreground">
+                    {t('resales.columns.variance')}
+                  </p>
+                  <div className="mt-2">
+                    {Math.abs(selectedResale.costVariance) > 0.009 ? (
+                      <StatusBadge
+                        type="pending"
+                        label={formatMoney(selectedResale.costVariance)}
+                      />
+                    ) : (
+                      <StatusBadge type="active" label={t('resales.balanced')} />
+                    )}
+                  </div>
+                  {Math.abs(selectedResale.costVariance) > 0.009 && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {t('resales.varianceHint')}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <StandardTable<ResaleActivity>
+                title={t('resales.activitiesTitle')}
+                data={selectedResale.activities}
+                columns={activityColumns}
+                defaultRowsPerPage={5}
+                headerAction={
+                  canCreate ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={openCreateActivity}
+                      className={TABLE_CONTROL_BUTTON_CLASSNAME}
+                    >
+                      <Plus className="size-4" />
+                      {t('resales.addActivity')}
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </section>
+          ) : (
+            <div className="rounded-md border border-dashed border-border bg-muted/20 px-4 py-8 text-sm text-muted-foreground">
+              {t('resales.selectResaleForActivities')}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       <Modal isOpen={isResaleModalOpen} onClose={closeResaleModal}>
         {isResaleModalOpen && (
@@ -1362,7 +1412,9 @@ const ResalesView: React.FC<ResalesViewProps> = ({
         onConfirm={async () => {
           if (resaleToDelete) {
             await onDeleteResale(resaleToDelete.id);
-            if (selectedResaleId === resaleToDelete.id) setSelectedResaleId(null);
+            if (selectedResaleId === resaleToDelete.id) {
+              clearSelectedResale();
+            }
           }
           setResaleToDelete(null);
         }}

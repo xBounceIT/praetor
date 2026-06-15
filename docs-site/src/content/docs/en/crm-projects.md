@@ -1,6 +1,6 @@
 ---
 title: CRM, catalog, and projects
-description: Managing customers, suppliers, products, projects, tasks, and competence centers.
+description: Managing customers, suppliers, products, jobs, tasks, and competence centers.
 sidebar:
   order: 3
 ---
@@ -23,38 +23,38 @@ The catalog contains products, categories, units, and pricing logic. Catalog dat
 
 Update the listing when costs, margins, or sales conditions change so new documents start from reliable data.
 
-## Projects and tasks
+## Jobs and tasks
 
-Projects connect customers, tasks, and time entries. Create clear reusable tasks with names that describe the actual work.
+Jobs connect customers, tasks, and time entries. The module remains named **Projects**, but its operational pages are **Jobs** and **Resales**. Inside **Jobs**, use the **Jobs** and **Tasks** tabs to switch between the jobs archive and task management.
 
-For each project and task, you can set the billing type (retainer or time and materials) and the billing frequency (monthly or one-time) independently — both billing types support either frequency. If tasks use a billing type that differs from the project, the project is shown as mixed.
+For each job and task, you can set the billing type (retainer or time and materials) and the billing frequency (monthly or one-time) independently — both billing types support either frequency. If tasks use a billing type that differs from the job, the job is shown as mixed.
 
 Use estimated monthly effort to plan recurring load and task duration as a generic multiplier. Total effort is calculated automatically as monthly effort × duration and is used to track progress against the overall expected hours. Task total revenue is calculated the same way: revenue × duration.
 
-The **Add Project** action opens a focused dialog with only what's needed to create a project: client order, client, name, dates, optional offer, type, billing, optional revenue, and a draft tasks table. Submitting the dialog takes you straight to the new project's dedicated detail page.
+The **Add Job** action opens a focused dialog with only what's needed to create a job: client order, client, name, dates, optional offer, type, billing, optional revenue, and a draft tasks table. Submitting the dialog takes you straight to the new job's dedicated detail page.
 
-Click any row in the projects list to open the **project detail page**. The detail page replaces the legacy edit dialog and is laid out in two areas:
+Click any row in the jobs archive to open the **job detail page**. The detail page replaces the legacy edit dialog and is laid out in two areas:
 
-- The top section lays out the project fields horizontally (client order, client, name, description, dates, offer, type, billing, revenue, disabled toggle) next to the inline-editable project tasks table.
-- Below, the **project dashboard** shows KPIs (total hours, total cost, team size, budget used %) and four charts: hours by user (broken down by task), hours by task (logged hours against the available effort), cost vs revenue, and monthly activity. Charts populate as time is logged against the project; before any entries exist, each chart shows an empty state. The page also surfaces a notice when (a) the project has more than 5,000 entries (only the most recent are loaded), (b) your role limits which users' entries you can see (totals reflect just your scope), or (c) you don't have permission to view time entries at all.
+- The top section lays out the job fields horizontally (client order, client, name, description, dates, offer, type, billing, revenue, disabled toggle) next to the inline-editable job tasks table.
+- Below, the **job dashboard** shows KPIs (total hours, total cost, team size, budget used %) and four charts: hours by user (broken down by task), hours by task (logged hours against the available effort), cost vs revenue, and monthly activity. Charts populate as time is logged against the job; before any entries exist, each chart shows an empty state. The page also surfaces a notice when (a) the job has more than 5,000 entries (only the most recent are loaded), (b) your role limits which users' entries you can see (totals reflect just your scope), or (c) you don't have permission to view time entries at all.
 
-Next to the project dashboard heading are two buttons, **Edit** and **Views**. **Edit** turns the whole dashboard — every KPI stat card, the project timeline, and all four charts — into a free-form layout you can rearrange. Drag a card by its header to move it anywhere on the 12-column grid, drag its right edge, bottom edge, or corner to resize it, and use the eye button on a card to hide it (or restore a hidden one). You can also move the focused card with the arrow keys, and resize it by holding **Shift** with the arrow keys. Cards float up to fill the gaps left behind. When you're done, keep the arrangement for this project or save it as a reusable view. Editing a project's dashboard creates a **per-project layout** that affects only that project. The **Views** menu lets you apply one of your saved views, choose **Use global default** (drop this project's custom layout so it follows the shared default again), or choose **Set as global default** (make the current arrangement the baseline for every project that doesn't have its own layout).
+Next to the job dashboard heading are two buttons, **Edit** and **Views**. **Edit** turns the whole dashboard — every KPI stat card, the job timeline, and all four charts — into a free-form layout you can rearrange. Drag a card by its header to move it anywhere on the 12-column grid, drag its right edge, bottom edge, or corner to resize it, and use the eye button on a card to hide it (or restore a hidden one). You can also move the focused card with the arrow keys, and resize it by holding **Shift** with the arrow keys. Cards float up to fill the gaps left behind. When you're done, keep the arrangement for this job or save it as a reusable view. Editing a job's dashboard creates a **per-job layout** that affects only that job. The **Views** menu lets you apply one of your saved views, choose **Use global default** (drop this job's custom layout so it follows the shared default again), or choose **Set as global default** (make the current arrangement the baseline for every job that doesn't have its own layout).
 
-**Named saved views** are stored on the server and owned by whoever creates them: they stay available from any device and can be shared. From the **Views** menu the owner can **share** a view with specific users, granting each one **read** access (apply only) or **write** access (edit, rename, and re-save it — and the change then applies to everyone the view is shared with). Only the owner can **delete** a view or manage its sharing; shared views show the author's initials in a small avatar (hover to see their full name) alongside your access level. Read recipients can still **duplicate** the view into their own editable copy. Edits made by write recipients propagate to others the next time they load or apply the view, not in real time. The **per-project layout** and your **personal global default**, by contrast, stay stored locally in your browser and private to each user. On narrow screens the cards stack in a single column and drag-and-drop editing is unavailable.
+**Named saved views** are stored on the server and owned by whoever creates them: they stay available from any device and can be shared. From the **Views** menu the owner can **share** a view with specific users, granting each one **read** access (apply only) or **write** access (edit, rename, and re-save it — and the change then applies to everyone the view is shared with). Only the owner can **delete** a view or manage its sharing; shared views show the author's initials in a small avatar (hover to see their full name) alongside your access level. Read recipients can still **duplicate** the view into their own editable copy. Edits made by write recipients propagate to others the next time they load or apply the view, not in real time. The **per-job layout** and your **personal global default**, by contrast, stay stored locally in your browser and private to each user. On narrow screens the cards stack in a single column and drag-and-drop editing is unavailable.
 
-When creating or editing a project you can fill in:
+When creating or editing a job you can fill in:
 
-- **Project start date** and **Project end date** — define the planned window. Both are required (at creation and on every subsequent save from the detail page) so projects always carry a planning window; the end date must not precede the start date.
-- **Client order** — links the project to a confirmed customer order. This field is required at creation and when saving from the detail page; choosing an order sets the project's client from that order and locks it.
-- **Offer reference** — links the project to an accepted offer when you need to track its commercial origin. This field is optional and can stay empty.
-- **Type** — classifies the project as **Active** (Attivo) or **Passive** (Passivo). It is a required field (with the same `*` marker as Client and Project Name): the project can't be created until you pick a value, and the selected type is shown in the projects list and on the detail page. Projects that already existed before this field was introduced default to **Active**, but the **first time** one is edited from the detail page you must explicitly confirm the type: the selector starts empty and the save is blocked until you choose a value, so the choice isn't silently left at the default.
-- **Project revenue** — resolved with this precedence: (1) if the activities have a per-row revenue, the project revenue is the read-only sum of activity total revenues (`revenue × duration`); (2) otherwise you can enter it manually. The linked order total is not imported automatically as project revenue.
+- **Job start date** and **Job end date** — define the planned window. Both are required (at creation and on every subsequent save from the detail page) so jobs always carry a planning window; the end date must not precede the start date.
+- **Client order** — links the job to a confirmed customer order. This field is required at creation and when saving from the detail page; choosing an order sets the job's client from that order and locks it.
+- **Offer reference** — links the job to an accepted offer when you need to track its commercial origin. This field is optional and can stay empty.
+- **Type** — classifies the job as **Active** (Attivo) or **Passive** (Passivo). It is a required field (with the same `*` marker as Client and Job Name): the job can't be created until you pick a value, and the selected type is shown in the jobs archive and on the detail page. Jobs that already existed before this field was introduced default to **Active**, but the **first time** one is edited from the detail page you must explicitly confirm the type: the selector starts empty and the save is blocked until you choose a value, so the choice isn't silently left at the default.
+- **Job revenue** — resolved with this precedence: (1) if the activities have a per-row revenue, the job revenue is the read-only sum of activity total revenues (`revenue × duration`); (2) otherwise you can enter it manually. The linked order total is not imported automatically as job revenue.
 
-When a project ends, check that tasks are consistent and that no pending entries remain.
+When a job ends, check that tasks are consistent and that no pending entries remain.
 
 ### Resales
 
-The **Resales** entry in the Projects module manages economic resale operations separately from operational tasks, timesheets, and user assignments. When creating a resale, you must select a **client order**, exactly one **supplier order** linked to that client order, set the required **start date** and **resale due date**, and add at least one **resale activity** in the initial activities table: the system accepts the supplier order only when at least one client-order line references it.
+The **Resales** entry in the Projects module manages economic resale operations separately from operational tasks, timesheets, and user assignments. The page is split into **Archive** and **Activities** tabs: Archive shows resales, while Activities becomes available after selecting a resale and contains the economic summary plus resale activities. When creating a resale, you must select a **client order**, exactly one **supplier order** linked to that client order, set the required **start date** and **resale due date**, and add at least one **resale activity** in the initial activities table: the system accepts the supplier order only when at least one client-order line references it.
 
 Each resale shows **Resale revenue** as the sum of the revenues entered on its activities. The official **Resale cost** is imported from the supplier order total and is not edited manually. The create form shows both values as read-only fields while you fill in the activities. Resale activities are entered manually and include activity name, billing frequency (monthly, quarterly, annual, or one-time), category, cost, revenue, released status, independent due date, and notes.
 
@@ -64,16 +64,16 @@ Resale categories are a dedicated catalog seeded with **Hardware**, **Sottoscriz
 
 Access is controlled by separate **Resales** permissions (`projects.resales.view/create/update/delete`), granted to the Manager and Top Manager profiles by default.
 
-### Project rules
+### Job rules
 
-The **Project rules** section on the detail page lets you create automatic controls for a project. A rule compares one or more project fields (revenue, logged hours, days until deadline, billing, or status; cost fields require the **Cost reports** permission) against thresholds, values, or compatible fields and can combine conditions with **AND** or **OR**. When the rule becomes true, it sends a notification to selected assigned users or to users with selected roles. The section is shown and edited through the **Project Rules** permission (`projects.rules`), granted to Managers and Top Managers by default. Notifications fire only on the transition from not met to met, so they are not duplicated while the rule remains true. Re-enabling a rule or changing its condition prepares it to notify again on the next scheduled check.
+The **Job rules** section on the detail page lets you create automatic controls for a job. A rule compares one or more job fields (revenue, logged hours, days until deadline, billing, or status; cost fields require the **Cost reports** permission) against thresholds, values, or compatible fields and can combine conditions with **AND** or **OR**. When the rule becomes true, it sends a notification to selected assigned users or to users with selected roles. The section is shown and edited through the **Project Rules** permission (`projects.rules`), granted to Managers and Top Managers by default. Notifications fire only on the transition from not met to met, so they are not duplicated while the rule remains true. Re-enabling a rule or changing its condition prepares it to notify again on the next scheduled check.
 
 ### Assigning users
 
-The **Assign Users** command manages who is assigned to a project or one of its activities. Access to this dialog is governed by the **Project Assignments** permission: the **View** action lets a role open the assignments of any project or activity regardless of its own membership, while **Update** lets it edit them. Managers and Top Managers hold both by default, so they can manage assignments even when they are not members of the project or activity.
+The **Assign Users** command manages who is assigned to a job or one of its activities. Access to this dialog is governed by the **Project Assignments** permission: the **View** action lets a role open the assignments of any job or activity regardless of its own membership, while **Update** lets it edit them. Managers and Top Managers hold both by default, so they can manage assignments even when they are not members of the job or activity.
 
 ## Competence centers
 
-Competence centers connect people, costs, and assignments. They support HR analysis and economic project control.
+Competence centers connect people, costs, and assignments. They support HR analysis and economic job control.
 
 Only users with the right permissions should change costs, assignments, or historical data.

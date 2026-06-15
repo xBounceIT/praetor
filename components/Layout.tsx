@@ -13,7 +13,6 @@ import {
   GitFork,
   Handshake,
   ListChecks,
-  ListTodo,
   type LucideIcon,
   Mail,
   PackageOpen,
@@ -58,6 +57,7 @@ interface RouteConfig {
   label: string;
   icon: LucideIcon;
   title?: string;
+  activeViews?: Partial<Record<View, true>>;
 }
 
 const fallbackRouteTitleKey = (view: View) =>
@@ -138,8 +138,12 @@ const Layout: React.FC<LayoutProps> = ({
     applyTheme(getTheme());
   }, []);
 
-  const modules: Module[] = useMemo(
-    () => [
+  const modules: Module[] = useMemo(() => {
+    const commissionsView: View = hasViewAccess(currentUser.permissions, 'projects/manage')
+      ? 'projects/manage'
+      : 'projects/tasks';
+
+    return [
       {
         id: 'hr',
         name: t('modules.hr'),
@@ -220,16 +224,15 @@ const Layout: React.FC<LayoutProps> = ({
         icon: FolderTree,
         routes: [
           {
-            view: 'projects/manage',
-            label: t('routes.projects'),
+            view: commissionsView,
+            label: t('routes.commissions'),
             icon: Folder,
-            title: t('titles.projects'),
-          },
-          {
-            view: 'projects/tasks',
-            label: t('routes.tasks'),
-            icon: ListTodo,
-            title: t('titles.tasks'),
+            title: t('titles.commissions'),
+            activeViews: {
+              'projects/detail': true,
+              'projects/manage': true,
+              'projects/tasks': true,
+            },
           },
           {
             view: 'projects/resales',
@@ -298,9 +301,8 @@ const Layout: React.FC<LayoutProps> = ({
           },
         ],
       },
-    ],
-    [t],
-  );
+    ];
+  }, [currentUser.permissions, t]);
 
   const roleLabel = useMemo(() => {
     const fromAvailable = currentUser.availableRoles?.find((r) => r.id === currentUser.role);
@@ -321,7 +323,8 @@ const Layout: React.FC<LayoutProps> = ({
       const routes: SidebarRouteItem[] = [];
 
       for (const route of module.routes) {
-        if (route.view === activeView) matchedRoute = route;
+        const isRouteActive = route.view === activeView || route.activeViews?.[activeView] === true;
+        if (isRouteActive) matchedRoute = route;
 
         if (!hasViewAccess(currentUser.permissions, route.view)) continue;
         const isDisabledAiReporting =
@@ -331,7 +334,7 @@ const Layout: React.FC<LayoutProps> = ({
           title: route.label,
           view: route.view,
           icon: route.icon,
-          isActive: activeView === route.view,
+          isActive: isRouteActive,
           disabled: isDisabledAiReporting,
           disabledTooltip: isDisabledAiReporting ? t('sidebar.aiReportingDisabled') : undefined,
         });
