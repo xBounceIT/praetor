@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
 import type { User } from '../../../types';
@@ -226,6 +226,35 @@ describe('<UserManagement />', () => {
 
     expect(props.onUpdateUser).toHaveBeenCalledWith('u2', { isDisabled: true });
     expect(usersApiMock.getRoles).not.toHaveBeenCalled();
+  });
+
+  test('delete confirmation uses shadcn dialog primitives and confirms selected user', async () => {
+    const user = userEvent.setup();
+    const props = renderUserManagement();
+    const bobRow = getRowFor('Bob Brown');
+    const actionButton = bobRow.querySelector('[aria-label="table.rowActions"]');
+    if (!actionButton) throw new Error('Could not find row actions button');
+
+    await user.click(actionButton);
+    await user.click(await screen.findByRole('button', { name: 'hr:workforce.deleteUser' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.getAttribute('data-slot')).toBe('dialog-content');
+    expect(dialog.getAttribute('data-shadcn-theme-scope')).toBe('');
+    expect(screen.getByText('hr:workforce.deleteConfirmMessage')).toBeInTheDocument();
+
+    const cancelButton = within(dialog).getByRole('button', { name: 'common:buttons.cancel' });
+    const confirmButton = within(dialog).getByRole('button', { name: 'hr:workforce.yesDelete' });
+    expect(cancelButton.getAttribute('data-slot')).toBe('button');
+    expect(cancelButton.getAttribute('data-variant')).toBe('outline');
+    expect(confirmButton.getAttribute('data-slot')).toBe('button');
+    expect(confirmButton.getAttribute('data-variant')).toBe('destructive');
+    expect(within(dialog).queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+
+    await user.click(confirmButton);
+
+    expect(props.onDeleteUser).toHaveBeenCalledWith('u2');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
   test('locks synced identity fields for non-local users and omits them from account updates', async () => {
@@ -651,7 +680,7 @@ describe('<UserManagement />', () => {
 });
 
 describe('UserManagement dark-mode form chrome', () => {
-  test('edit, delete, and role-assignment modal chrome uses theme tokens, not light zinc', async () => {
+  test('edit and role-assignment modal chrome uses theme tokens, not light zinc', async () => {
     const source = await readComponentSource('administration/UserManagement.tsx');
 
     // Modal panels, the roles list box, section labels, and the role-selector cards adapt to the

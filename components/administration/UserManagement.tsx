@@ -1,4 +1,4 @@
-import { Eye, EyeOff, UserPlus } from 'lucide-react';
+import { Eye, EyeOff, Trash2, TriangleAlert, UserPlus } from 'lucide-react';
 import React, { useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -1295,40 +1295,35 @@ const UserManagement: React.FC<UserManagementProps> = ({
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
-      {/* Delete Confirmation Modal */}
-      <Modal isOpen={isDeleteConfirmOpen} onClose={cancelDelete}>
-        <div className="bg-card rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 text-center space-y-4">
-            <div className="size-12 bg-red-500/10 rounded-full flex items-center justify-center mx-auto">
-              <i className="fa-solid fa-triangle-exclamation text-red-600 dark:text-red-400 text-xl"></i>
+      <Dialog
+        open={isDeleteConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            cancelDelete();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
+          <DialogHeader className="items-center text-center sm:text-center">
+            <div className="mb-1 flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <TriangleAlert aria-hidden="true" />
             </div>
-            <div>
-              <h3 className="text-lg font-semibold text-foreground">
-                {t('hr:workforce.deleteUser')}
-              </h3>
-              <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                {t('hr:workforce.deleteConfirmMessage', { name: userToDelete?.name })}
-              </p>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                type="button"
-                onClick={cancelDelete}
-                className="flex-1 py-3 text-sm font-bold text-muted-foreground hover:bg-muted rounded-xl transition-colors"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                className="flex-1 py-3 bg-red-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
-              >
-                {t('hr:workforce.yesDelete')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Modal>
+            <DialogTitle>{t('hr:workforce.deleteUser')}</DialogTitle>
+            <DialogDescription className="leading-relaxed">
+              {t('hr:workforce.deleteConfirmMessage', { name: userToDelete?.name })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-center">
+            <Button type="button" variant="outline" onClick={cancelDelete}>
+              {t('common:buttons.cancel')}
+            </Button>
+            <Button type="button" variant="destructive" onClick={handleDelete}>
+              <Trash2 data-icon="inline-start" aria-hidden="true" />
+              {t('hr:workforce.yesDelete')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={!!authMethodUser}
