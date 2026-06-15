@@ -7,6 +7,7 @@ describe('ProjectsView (create-only dialog after detail-page revamp)', () => {
     ).text();
 
     expect(source).toContain('import { Tabs, TabsContent, TabsList, TabsTrigger }');
+    expect(source).toContain("import { Folder } from 'lucide-react'");
     expect(source).toContain("export type ProjectsViewTab = 'commissions' | 'tasks'");
     expect(source).toContain('activeTab?: ProjectsViewTab');
     expect(source).toContain(
@@ -19,6 +20,7 @@ describe('ProjectsView (create-only dialog after detail-page revamp)', () => {
     expect(source).toContain('{canViewTasks && (');
     expect(source).toContain('value="commissions"');
     expect(source).toContain('value="tasks"');
+    expect(source).toContain('<Folder className="size-4" aria-hidden="true" />');
     expect(source).toContain('<TasksView');
   });
 
@@ -124,10 +126,11 @@ describe('ProjectsView create-form validation', () => {
       expect(loc.tabs.tasks).toBeTruthy();
       expect(loc.projects.tipoValues.attivo).toBeTruthy();
       expect(loc.projects.tipoValues.passivo).toBeTruthy();
-      expect(loc.resales.tabs.archive).toBeTruthy();
       expect(loc.resales.tabs.activities).toBeTruthy();
       expect(loc.resales.selectResaleForActivities).toBeTruthy();
     }
+    expect(en.resales.tabs.archive).toBe('Resales');
+    expect(it.resales.tabs.archive).toBe('Rivendite');
   });
 
   test('revenue precedence: activity sum > manual, and read-only unless manual', async () => {

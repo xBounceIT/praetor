@@ -5,14 +5,18 @@ const readSource = async () => {
 };
 
 describe('ResalesView wiring', () => {
-  test('organizes archive and selected resale activities as internal tabs', async () => {
+  test('organizes resales and selected resale activities as internal tabs', async () => {
     const source = await readSource();
     expect(source).toContain('import { Tabs, TabsContent, TabsList, TabsTrigger }');
+    expect(source).toContain('ShoppingCart');
+    expect(source).toContain('ListChecks');
     expect(source).toContain("type ResalesViewTab = 'archive' | 'activities'");
     expect(source).toContain('const [activeTab, setActiveTab] = useState<ResalesViewTab>');
     expect(source).toContain('const handleTabChange = (value: string) => {');
     expect(source).toContain('value="archive"');
     expect(source).toContain('value="activities"');
+    expect(source).toContain('<TabsContent value="archive" className="mt-0 space-y-6">');
+    expect(source).toContain("t('resales." + "title')");
     expect(source).toContain('disabled={!selectedResale}');
     expect(source).toContain("setActiveTab('activities');");
     expect(source).toContain('resales.selectResaleForActivities');

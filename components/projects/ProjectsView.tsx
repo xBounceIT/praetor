@@ -1,3 +1,4 @@
+import { Folder } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -1421,7 +1422,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
         <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b px-0">
           {canViewCommissions && (
             <TabsTrigger value="commissions" className="flex-none rounded-none pb-3">
-              <i className="fa-solid fa-briefcase" aria-hidden="true"></i>
+              <Folder className="size-4" aria-hidden="true" />
               {t('projects:tabs.commissions')}
             </TabsTrigger>
           )}

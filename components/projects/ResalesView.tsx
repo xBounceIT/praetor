@@ -1,4 +1,4 @@
-import { ArrowLeft, Pencil, Plus, Settings2, Trash2 } from 'lucide-react';
+import { ArrowLeft, ListChecks, Pencil, Plus, Settings2, ShoppingCart, Trash2 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -871,31 +871,10 @@ const ResalesView: React.FC<ResalesViewProps> = ({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold text-foreground">{t('resales.title')}</h2>
-          <p className="text-sm text-muted-foreground">{t('resales.subtitle')}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={openCategoryModal}
-            disabled={!canCreate && !canUpdate && !canDelete}
-          >
-            <Settings2 className="size-4" />
-            {t('resales.manageCategories')}
-          </Button>
-          {canCreate && (
-            <HeaderAddButton onClick={openCreateResale}>{t('resales.addResale')}</HeaderAddButton>
-          )}
-        </div>
-      </div>
-
       <Tabs value={selectedTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b px-0">
           <TabsTrigger value="archive" className="flex-none rounded-none pb-3">
-            <i className="fa-solid fa-table-list" aria-hidden="true"></i>
+            <ShoppingCart className="size-4" aria-hidden="true" />
             {t('resales.tabs.archive')}
           </TabsTrigger>
           <TabsTrigger
@@ -903,12 +882,35 @@ const ResalesView: React.FC<ResalesViewProps> = ({
             className="flex-none rounded-none pb-3"
             disabled={!selectedResale}
           >
-            <i className="fa-solid fa-list-check" aria-hidden="true"></i>
+            <ListChecks className="size-4" aria-hidden="true" />
             {t('resales.tabs.activities')}
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="archive" className="mt-0">
+        <TabsContent value="archive" className="mt-0 space-y-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-2xl font-semibold text-foreground">{t('resales.title')}</h2>
+              <p className="text-sm text-muted-foreground">{t('resales.subtitle')}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={openCategoryModal}
+                disabled={!canCreate && !canUpdate && !canDelete}
+              >
+                <Settings2 className="size-4" />
+                {t('resales.manageCategories')}
+              </Button>
+              {canCreate && (
+                <HeaderAddButton onClick={openCreateResale}>
+                  {t('resales.addResale')}
+                </HeaderAddButton>
+              )}
+            </div>
+          </div>
+
           <StandardTable<Resale>
             title={t('resales.directory')}
             viewKey="projects.resales"

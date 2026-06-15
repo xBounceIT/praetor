@@ -311,7 +311,7 @@
     "title": "Rivendite",
     "subtitle": "Gestisci rivendite collegate agli ordini cliente e fornitore",
     "tabs": {
-      "archive": "Archivio",
+      "archive": "Rivendite",
       "activities": "Attività"
     },
     "directory": "Archivio Rivendite",
@@ -335,7 +335,7 @@
     "deleteDescription": "Sei sicuro di voler eliminare la rivendita {{id}} e tutte le sue attività?",
     "deleteActivityTitle": "Elimina attività",
     "deleteActivityDescription": "Sei sicuro di voler eliminare l'attività {{name}}?",
-    "selectResaleForActivities": "Seleziona una rivendita dall'archivio per gestire le sue attività.",
+    "selectResaleForActivities": "Seleziona una rivendita dalla tab Rivendite per gestire le sue attività.",
     "billingFrequencies": {
       "monthly": "Mensile",
       "quarterly": "Trimestrale",

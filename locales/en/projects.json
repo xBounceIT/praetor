@@ -311,7 +311,7 @@
     "title": "Resales",
     "subtitle": "Manage resales linked to client and supplier orders",
     "tabs": {
-      "archive": "Archive",
+      "archive": "Resales",
       "activities": "Activities"
     },
     "directory": "Resales Directory",
@@ -335,7 +335,7 @@
     "deleteDescription": "Are you sure you want to delete resale {{id}} and all of its activities?",
     "deleteActivityTitle": "Delete activity",
     "deleteActivityDescription": "Are you sure you want to delete activity {{name}}?",
-    "selectResaleForActivities": "Select a resale from the archive to manage its activities.",
+    "selectResaleForActivities": "Select a resale from the Resales tab to manage its activities.",
     "billingFrequencies": {
       "monthly": "Monthly",
       "quarterly": "Quarterly",
