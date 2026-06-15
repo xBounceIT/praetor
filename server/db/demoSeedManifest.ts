@@ -1,9 +1,22 @@
+import {
+  DOCUMENT_CODE_MODULES,
+  type DocumentCodeModuleId,
+  renderDocumentCode,
+} from '../utils/document-codes.ts';
 import type { UserContractType, UserEmploymentStatus, UserWorkLocation } from './schema/users.ts';
 
 const rangeIds = (prefix: string, count: number, pad = 2) =>
   Array.from({ length: count }, (_, index) => `${prefix}${String(index + 1).padStart(pad, '0')}`);
 
 const currentYear = new Date().getFullYear();
+
+const demoDocumentCode = (moduleId: DocumentCodeModuleId, sequence: number) =>
+  renderDocumentCode(DOCUMENT_CODE_MODULES[moduleId], { year: currentYear, sequence });
+
+const rangeDocumentCodes = (moduleId: DocumentCodeModuleId, count: number) =>
+  Array.from({ length: count }, (_, index) => ({
+    id: demoDocumentCode(moduleId, index + 1),
+  }));
 
 export const DEMO_PASSWORD_HASH = '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy';
 
@@ -326,81 +339,64 @@ export const DEMO_PRODUCTS = [
   { id: 'dm_prd_09', productCode: 'DM-DISABLED-001', name: 'Legacy Token Pack' },
 ] as const;
 
-export const DEMO_QUOTES = [
-  { id: 'dm_cq_01' },
-  { id: 'dm_cq_02' },
-  { id: 'dm_cq_03' },
-  { id: 'dm_cq_04' },
-  { id: 'dm_cq_05' },
-  { id: 'dm_cq_06' },
-  { id: 'dm_cq_07' },
-  { id: 'dm_cq_08' },
-  { id: 'dm_cq_09' },
-  { id: 'dm_cq_10' },
-  // Accepted "procurement drivers" (#779 derived supplier statuses): their 1-to-1 links keep
-  // the order-backed supplier quotes dm_sq_11..14 in the Accepted state.
-  { id: 'dm_cq_11' },
-  { id: 'dm_cq_12' },
-  { id: 'dm_cq_13' },
-  { id: 'dm_cq_14' },
-] as const;
+export const DEMO_QUOTES = rangeDocumentCodes('client_quote', 14);
 
 export const DEMO_CUSTOMER_OFFERS = [
-  { id: 'dm_co_01', linkedQuoteId: 'dm_cq_04' },
-  { id: 'dm_co_02', linkedQuoteId: 'dm_cq_05' },
-  { id: 'dm_co_03', linkedQuoteId: 'dm_cq_06' },
-  { id: 'dm_co_04', linkedQuoteId: 'dm_cq_07' },
-  { id: 'dm_co_05', linkedQuoteId: 'dm_cq_08' },
-] as const;
+  { id: demoDocumentCode('client_offer', 1), linkedQuoteId: demoDocumentCode('client_quote', 4) },
+  { id: demoDocumentCode('client_offer', 2), linkedQuoteId: demoDocumentCode('client_quote', 5) },
+  { id: demoDocumentCode('client_offer', 3), linkedQuoteId: demoDocumentCode('client_quote', 6) },
+  { id: demoDocumentCode('client_offer', 4), linkedQuoteId: demoDocumentCode('client_quote', 7) },
+  { id: demoDocumentCode('client_offer', 5), linkedQuoteId: demoDocumentCode('client_quote', 8) },
+];
 
 export const DEMO_SALES = [
-  { id: 'dm_so_01', linkedOfferId: null },
-  { id: 'dm_so_02', linkedOfferId: 'dm_co_04' },
-  { id: 'dm_so_03', linkedOfferId: null },
-  { id: 'dm_so_04', linkedOfferId: 'dm_co_03' },
-  { id: 'dm_so_05', linkedOfferId: null },
-] as const;
+  { id: demoDocumentCode('client_order', 1), linkedOfferId: null },
+  { id: demoDocumentCode('client_order', 2), linkedOfferId: demoDocumentCode('client_offer', 4) },
+  { id: demoDocumentCode('client_order', 3), linkedOfferId: null },
+  { id: demoDocumentCode('client_order', 4), linkedOfferId: demoDocumentCode('client_offer', 3) },
+  { id: demoDocumentCode('client_order', 5), linkedOfferId: null },
+];
 
 export const DEMO_INVOICES = [
   { id: 'dm_inv_01', linkedSaleId: null },
   { id: 'dm_inv_02', linkedSaleId: null },
-  { id: 'dm_inv_03', linkedSaleId: 'dm_so_04' },
+  { id: 'dm_inv_03', linkedSaleId: demoDocumentCode('client_order', 4) },
   { id: 'dm_inv_04', linkedSaleId: null },
   { id: 'dm_inv_05', linkedSaleId: null },
-] as const;
+];
 
-export const DEMO_SUPPLIER_QUOTES = [
-  { id: 'dm_sq_01' },
-  { id: 'dm_sq_02' },
-  { id: 'dm_sq_03' },
-  { id: 'dm_sq_04' },
-  { id: 'dm_sq_05' },
-  { id: 'dm_sq_06' },
-  { id: 'dm_sq_07' },
-  { id: 'dm_sq_08' },
-  { id: 'dm_sq_09' },
-  { id: 'dm_sq_10' },
-  { id: 'dm_sq_11' },
-  { id: 'dm_sq_12' },
-  { id: 'dm_sq_13' },
-  { id: 'dm_sq_14' },
-] as const;
+export const DEMO_SUPPLIER_QUOTES = rangeDocumentCodes('supplier_quote', 14);
 
 export const DEMO_SUPPLIER_SALES = [
-  { id: 'dm_ss_01', linkedQuoteId: 'dm_sq_11' },
-  { id: 'dm_ss_02', linkedQuoteId: 'dm_sq_07' },
-  { id: 'dm_ss_03', linkedQuoteId: 'dm_sq_12' },
-  { id: 'dm_ss_04', linkedQuoteId: 'dm_sq_13' },
-  { id: 'dm_ss_05', linkedQuoteId: 'dm_sq_14' },
-] as const;
+  {
+    id: demoDocumentCode('supplier_order', 1),
+    linkedQuoteId: demoDocumentCode('supplier_quote', 11),
+  },
+  {
+    id: demoDocumentCode('supplier_order', 2),
+    linkedQuoteId: demoDocumentCode('supplier_quote', 7),
+  },
+  {
+    id: demoDocumentCode('supplier_order', 3),
+    linkedQuoteId: demoDocumentCode('supplier_quote', 12),
+  },
+  {
+    id: demoDocumentCode('supplier_order', 4),
+    linkedQuoteId: demoDocumentCode('supplier_quote', 13),
+  },
+  {
+    id: demoDocumentCode('supplier_order', 5),
+    linkedQuoteId: demoDocumentCode('supplier_quote', 14),
+  },
+];
 
 export const DEMO_SUPPLIER_INVOICES = [
   { id: 'dm_sinv_01', linkedSaleId: null },
   { id: 'dm_sinv_02', linkedSaleId: null },
-  { id: 'dm_sinv_03', linkedSaleId: 'dm_ss_04' },
+  { id: 'dm_sinv_03', linkedSaleId: demoDocumentCode('supplier_order', 4) },
   { id: 'dm_sinv_04', linkedSaleId: null },
   { id: 'dm_sinv_05', linkedSaleId: null },
-] as const;
+];
 
 export const DEMO_PROJECTS = [
   { id: 'dm_proj_01', name: `DM-CLI-001_DM-SVC-AUDIT_${currentYear}` },

@@ -9,14 +9,24 @@ import {
 } from '../../db/demoSeed.ts';
 import {
   COMPATIBILITY_DEFAULTS,
+  DEMO_CUSTOMER_OFFERS,
   DEMO_EXPECTED_COUNTS,
   DEMO_IDS,
+  DEMO_QUOTES,
+  DEMO_SALES,
+  DEMO_SUPPLIER_QUOTES,
+  DEMO_SUPPLIER_SALES,
   DEMO_TOP_MANAGER_USER_IDS,
   DEMO_USER_CLIENT_ASSIGNMENTS,
   DEMO_USER_PROJECT_ASSIGNMENTS,
   DEMO_USER_TASK_ASSIGNMENTS,
   DEMO_USERS,
 } from '../../db/demoSeedManifest.ts';
+import {
+  DOCUMENT_CODE_MODULES,
+  type DocumentCodeModuleId,
+  renderDocumentCode,
+} from '../../utils/document-codes.ts';
 import { parseInsertValuesBlocks } from './seedSqlParsing.ts';
 
 const SERVER_ROOT = join(import.meta.dirname, '..', '..');
@@ -32,6 +42,14 @@ const CONTRACT_TYPES = new Set([
 ]);
 const EMPLOYMENT_STATUSES = new Set(['active', 'onboarding', 'on_leave', 'terminated']);
 const WORK_LOCATIONS = new Set(['office', 'remote', 'hybrid', 'customer_site', 'other']);
+
+const documentCodesFor = (moduleId: DocumentCodeModuleId, count: number) =>
+  Array.from({ length: count }, (_, index) =>
+    renderDocumentCode(DOCUMENT_CODE_MODULES[moduleId], {
+      year: new Date().getFullYear(),
+      sequence: index + 1,
+    }),
+  );
 
 type QueryCall = { sql: string; params: unknown[] | undefined };
 
@@ -130,6 +148,48 @@ describe('cleanupDemoNamespace', () => {
 });
 
 describe('demoSeedManifest assignment coverage', () => {
+  test('manifest document IDs use the admin default document code templates', () => {
+    expect(DEMO_QUOTES.map((row) => row.id)).toEqual(documentCodesFor('client_quote', 14));
+    expect(DEMO_CUSTOMER_OFFERS.map((row) => row.id)).toEqual(documentCodesFor('client_offer', 5));
+    expect(DEMO_SUPPLIER_QUOTES.map((row) => row.id)).toEqual(
+      documentCodesFor('supplier_quote', 14),
+    );
+    expect(DEMO_SALES.map((row) => row.id)).toEqual(documentCodesFor('client_order', 5));
+    expect(DEMO_SUPPLIER_SALES.map((row) => row.id)).toEqual(documentCodesFor('supplier_order', 5));
+  });
+
+  test('seed.sql document rows and counters match the default-code manifest', () => {
+    expect(parseInsertValuesBlocks(SEED_SQL, 'quotes').map((row) => row.id)).toEqual(
+      DEMO_QUOTES.map((row) => row.id),
+    );
+    expect(parseInsertValuesBlocks(SEED_SQL, 'customer_offers').map((row) => row.id)).toEqual(
+      DEMO_CUSTOMER_OFFERS.map((row) => row.id),
+    );
+    expect(parseInsertValuesBlocks(SEED_SQL, 'supplier_quotes').map((row) => row.id)).toEqual(
+      DEMO_SUPPLIER_QUOTES.map((row) => row.id),
+    );
+    expect(parseInsertValuesBlocks(SEED_SQL, 'sales').map((row) => row.id)).toEqual(
+      DEMO_SALES.map((row) => row.id),
+    );
+    expect(parseInsertValuesBlocks(SEED_SQL, 'supplier_sales').map((row) => row.id)).toEqual(
+      DEMO_SUPPLIER_SALES.map((row) => row.id),
+    );
+
+    const counters = Object.fromEntries(
+      parseInsertValuesBlocks(SEED_SQL, 'document_code_counters').map((row) => [
+        row.module_id,
+        Number(row.next_sequence),
+      ]),
+    );
+    expect(counters).toEqual({
+      client_quote: 15,
+      client_offer: 6,
+      supplier_quote: 15,
+      client_order: 6,
+      supplier_order: 6,
+    });
+  });
+
   test('seed.sql task ids match the compatibility and demo task manifests', () => {
     expect(
       parseInsertValuesBlocks(SEED_SQL, 'tasks')
